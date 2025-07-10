@@ -405,13 +405,30 @@ async def openai_chat(messages, config, model=None):
         return data["choices"][0]["message"]["content"]
 
 # ---- Vision-Language Inference via OpenAI API ----
-async def openai_vl_inference(image_path, prompt, config):
+async def get_vision_caption(image_path, prompt, config):
+    """
+    Get a caption/description of the image using the vision-language model.
+    
+    Args:
+        image_path: Path to the image file
+        prompt: Optional user prompt, falls back to VL_PROMPT from config
+        config: Configuration dictionary
+        
+    Returns:
+        str: The generated caption/description or error message
+    """
     import base64
     api_key = config["OPENAI_API_KEY"]
     api_base = config.get("OPENAI_API_BASE", "https://api.openai.com/v1")
     model = config.get("VL_MODEL", "gpt-4-vision-preview")
-    with open(image_path, "rb") as f:
-        image_bytes = f.read()
+    
+    try:
+        with open(image_path, "rb") as f:
+            image_bytes = f.read()
+    except Exception as e:
+        logging.error(f"Error reading image file {image_path}: {e}")
+        return None
+        
     image_b64 = base64.b64encode(image_bytes).decode("utf-8")
     
     # Use the VL-specific prompt if no user prompt is provided
@@ -420,7 +437,6 @@ async def openai_vl_inference(image_path, prompt, config):
     payload = {
         "model": model,
         "messages": [
-            {"role": "system", "content": config["SYSTEM_PROMPT"]},
             {
                 "role": "user",
                 "content": [
@@ -430,33 +446,40 @@ async def openai_vl_inference(image_path, prompt, config):
             }
         ],
         "max_tokens": 1024,
-        "temperature": config.get("TEMPERATURE", 0.7)
+        "temperature": 0.1  # Lower temperature for more factual descriptions
     }
+    
     headers = {"Authorization": f"Bearer {api_key}"}
-    async with httpx.AsyncClient(timeout=60) as client:
-        resp = await client.post(f"{api_base}/chat/completions", json=payload, headers=headers)
-        # Handle error codes and sanitize output
-        if resp.status_code != 200:
-            try:
-                data = resp.json()
-                # Alibaba OpenRouter/vision error handler
-                if data.get("error", {}).get("code") == 400 or data.get("error", {}).get("code") == "data_inspection_failed":
-                    err_message = (
-                        "nice attempt, BUT THEY ZOGGED ME VRO, sadly that content’s not allowed. keep it legal and respectful, ok? "
-                        "try another image or check if it violates the content rules."
-                    )
-                    return err_message
-                # General OpenAI error
-                if data.get("error", {}).get("message"):
-                    err_message = data["error"]["message"]
-                    # Keep it short and in character
-                    return f"Sorry, I couldn't process that image: {err_message}."
-            except Exception:
-                pass
-            # Fallback
-            return "Sorry, I couldn't process that image."
-        data = resp.json()
-        return data["choices"][0]["message"]["content"]
+    
+    try:
+        async with httpx.AsyncClient(timeout=60) as client:
+            resp = await client.post(
+                f"{api_base}/chat/completions", 
+                json=payload, 
+                headers=headers
+            )
+            
+            if resp.status_code != 200:
+                try:
+                    data = resp.json()
+                    if data.get("error", {}).get("code") in (400, "data_inspection_failed"):
+                        return "[Image contains content that cannot be processed]"
+                    if data.get("error", {}).get("message"):
+                        logging.error(f"VL API error: {data['error']['message']}")
+                except Exception as e:
+                    logging.error(f"Error parsing VL API error response: {e}")
+                return None
+                
+            data = resp.json()
+            return data["choices"][0]["message"]["content"].strip()
+            
+    except Exception as e:
+        logging.error(f"Error in VL API call: {e}")
+        return None
+
+# Kept for backward compatibility
+async def openai_vl_inference(image_path, prompt, config):
+    return await get_vision_caption(image_path, prompt, config)
 
 
 # ---- Main Hybrid Handler ----
@@ -506,38 +529,64 @@ async def process_message(message: Message, is_dm: bool):
         context.append({"role": "system", "content": user_context.strip()})
     context[0]['content'] = system_prompt_with_user.strip()
 
-    # ---- VL: Image message handling via OpenAI API ----
-    image_attachments = [
-        att for att in message.attachments if att.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.webp'))
-    ]
-    if image_attachments:
-        img_bytes = await image_attachments[0].read()
-        temp_img_path = f"temp_{user_id}_{int(time.time())}_{image_attachments[0].filename}"
-        with open(temp_img_path, 'wb') as f:
-            f.write(img_bytes)
-        
-        # Use the message content as the prompt if provided, otherwise let openai_vl_inference use the VL_PROMPT
-        user_prompt = message.content.strip() if message.content.strip() else None
-        reply = await openai_vl_inference(temp_img_path, user_prompt, config)
-        
-        # Clean up the temporary image file
-        try:
-            os.remove(temp_img_path)
-        except Exception as e:
-            logging.error(f"Error removing temporary image file {temp_img_path}: {e}")
-        
-        # Process and send the reply
-        if reply:
-            reply = clean_response(reply).strip()
-            await send_in_chunks(message.channel, reply, reference=message)
-        else:
-            await message.channel.send("I couldn't process that image. Please try again.")
-        return
-
-    # ---- TEXT: Use selected backend ----
+    # Process all attachments
     total_text_content = ""
-    if message.attachments:
-        for attachment in message.attachments:
+    
+    # Separate image and text attachments
+    image_attachments = [
+        att for att in message.attachments 
+        if att.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.webp'))
+    ]
+    
+    text_attachments = [
+        att for att in message.attachments 
+        if att.filename.lower().endswith(('.txt', '.md', '.log', '.json', '.csv', '.py', '.js', '.html', '.css'))
+    ]
+    
+    # Process image attachments first
+    if image_attachments:
+        # For now, we'll only process the first image
+        img_attachment = image_attachments[0]
+        temp_img_path = f"temp_{user_id}_{int(time.time())}_{img_attachment.filename}"
+        
+        try:
+            # Download the image
+            img_bytes = await img_attachment.read()
+            with open(temp_img_path, 'wb') as f:
+                f.write(img_bytes)
+            
+            # Get vision caption (use message content as prompt if provided)
+            user_prompt = message.content.strip() or None
+            vision_caption = await get_vision_caption(temp_img_path, user_prompt, config)
+            
+            # Compose the enhanced message
+            original_content = message.content.strip()
+            if vision_caption:
+                if original_content:
+                    # If there was an original message, append the image description
+                    message.content = f"{original_content}\n[Image description: {vision_caption}]"
+                else:
+                    # If no original message, just use the image description
+                    message.content = f"[Image description: {vision_caption}]"
+            else:
+                # If VL processing failed, use original content or a default message
+                message.content = original_content or "I've received an image but couldn't process it."
+            
+        except Exception as e:
+            logging.error(f"Error processing image: {e}")
+            # Continue with original message if there was an error
+            message.content = message.content or "I received an image but there was an error processing it."
+            
+        finally:
+            # Clean up the temporary file
+            try:
+                os.remove(temp_img_path)
+            except Exception as e:
+                logging.error(f"Error removing temporary file {temp_img_path}: {e}")
+    
+    # Process text attachments if any
+    if text_attachments:
+        for attachment in text_attachments:
             if attachment.size > config["MAX_FILE_SIZE"]:
                 await message.channel.send(
                     f"File {attachment.filename} is too big. Maximum size is {config['MAX_FILE_SIZE'] // (1024 * 1024)} MB."
@@ -549,20 +598,25 @@ async def process_message(message: Message, is_dm: bool):
                     await message.channel.send(f"{attachment.filename} isn't a text file.")
                     return
                 file_text = file_content.decode('utf-8')
-                total_text_content += f"\n\n{attachment.filename}\n{file_text}\n"
+                total_text_content += f"\n\n{attachment.filename}\n{file_text}"
+                
                 if len(total_text_content) > config["MAX_TEXT_ATTACHMENT_SIZE"]:
                     await message.channel.send(
                         f"Files are too big. Maximum total size is {config['MAX_TEXT_ATTACHMENT_SIZE']} characters."
                     )
                     return
+                    
             except Exception as e:
                 logging.error(f"Error reading attachment {attachment.filename}: {e}")
                 await message.channel.send(f"Error reading file {attachment.filename}")
                 return
-        content = message.content + "\n\n" + total_text_content[:config["MAX_TEXT_ATTACHMENT_SIZE"]]
-    else:
-        content = message.content
-    context.append({'role': 'user', 'content': content.strip()})
+    
+    # Combine message content with any text from attachments
+    if total_text_content:
+        message.content = f"{message.content}\n\n[Attached files content:]{total_text_content}"
+    
+    # Add the final message content to the context
+    context.append({'role': 'user', 'content': message.content.strip()})
     async with message.channel.typing():
         messages = [
             {"role": msg['role'], "content": msg['content']}
