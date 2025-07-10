@@ -653,18 +653,26 @@ async def periodic_save():
 
 @bot.event
 async def on_message(message: Message):
-    if message.author.bot:
-        return
-    log_user_message(message)
-    if isinstance(message.channel, discord.DMChannel):
-        log_dm_message(message)
-    is_dm = isinstance(message.channel, discord.DMChannel)
-    is_guild_mention = (not is_dm and hasattr(message, 'mentions') and bot.user in message.mentions)
-    if not is_dm and (message.content.startswith('!') or message.is_system()):
-        return
-    if is_dm or is_guild_mention:
-        await process_message(message, is_dm)
-    await bot.process_commands(message)
+    try:
+        if message.author.bot:
+            return
+        log_user_message(message)
+        if isinstance(message.channel, discord.DMChannel):
+            log_dm_message(message)
+        is_dm = isinstance(message.channel, discord.DMChannel)
+        is_guild_mention = (not is_dm and hasattr(message, 'mentions') and bot.user in message.mentions)
+        # If command: process commands (even in DMs!)
+        if message.content.startswith('!'):
+            await bot.process_commands(message)
+            return
+        # If DM or mention, process as a chat message (but also process commands)
+        if is_dm or is_guild_mention:
+            await process_message(message, is_dm)
+        # Always call process_commands (in case a command is hidden in normal text)
+        await bot.process_commands(message)
+    except Exception as e:
+        logging.error(f"Discord event error in on_message: {e}", exc_info=True)
+
 
 @bot.event
 async def on_error(event, *args, **kwargs):
