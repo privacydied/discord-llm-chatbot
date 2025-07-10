@@ -31,6 +31,15 @@ def load_prompt_file():
         logging.warning(f"Prompt file '{prompt_path}' not found, using fallback prompt.")
         return "You are an AI assistant on Discord."
 
+def load_vl_prompt():
+    vl_prompt_path = os.getenv('VL_PROMPT_FILE', 'prompts/vl-prompt.txt')
+    try:
+        with open(vl_prompt_path, 'r', encoding='utf-8') as f:
+            return f.read().strip()
+    except FileNotFoundError:
+        logging.warning(f"VL prompt file '{vl_prompt_path}' not found, using default VL prompt.")
+        return "Describe this image in detail."
+
 def load_config():
     load_dotenv(override=True)
     return {
@@ -42,6 +51,7 @@ def load_config():
         "OPENAI_API_BASE": os.getenv('OPENAI_API_BASE', 'https://api.openai.com/v1'),
         "OPENAI_TEXT_MODEL": os.getenv('OPENAI_TEXT_MODEL', 'gpt-4o'),
         "VL_MODEL": os.getenv('VL_MODEL', 'gpt-4-vision-preview'),  # Could be DashScope or OpenAI
+        "VL_PROMPT": load_vl_prompt(),
         "TEMPERATURE": float(os.getenv('TEMPERATURE', '0.7')),
         "TIMEOUT": float(os.getenv('TIMEOUT', '120.0')),
         "CHANGE_NICKNAME": os.getenv('CHANGE_NICKNAME', 'True').lower() == 'true',
@@ -403,6 +413,10 @@ async def openai_vl_inference(image_path, prompt, config):
     with open(image_path, "rb") as f:
         image_bytes = f.read()
     image_b64 = base64.b64encode(image_bytes).decode("utf-8")
+    
+    # Use the VL-specific prompt if no user prompt is provided
+    user_prompt = prompt or config.get("VL_PROMPT", "Describe this image in detail.")
+    
     payload = {
         "model": model,
         "messages": [
@@ -410,7 +424,7 @@ async def openai_vl_inference(image_path, prompt, config):
             {
                 "role": "user",
                 "content": [
-                    {"type": "text", "text": prompt or "Describe this image."},
+                    {"type": "text", "text": user_prompt},
                     {"type": "image_url", "image_url": f"data:image/jpeg;base64,{image_b64}"}
                 ]
             }
@@ -501,11 +515,23 @@ async def process_message(message: Message, is_dm: bool):
         temp_img_path = f"temp_{user_id}_{int(time.time())}_{image_attachments[0].filename}"
         with open(temp_img_path, 'wb') as f:
             f.write(img_bytes)
-        prompt = message.content.strip() if message.content.strip() else "Describe this image."
-        reply = await openai_vl_inference(temp_img_path, prompt, config)
-        os.remove(temp_img_path)
-        reply = clean_response(reply).strip()
-        await send_in_chunks(message.channel, reply, reference=message)
+        
+        # Use the message content as the prompt if provided, otherwise let openai_vl_inference use the VL_PROMPT
+        user_prompt = message.content.strip() if message.content.strip() else None
+        reply = await openai_vl_inference(temp_img_path, user_prompt, config)
+        
+        # Clean up the temporary image file
+        try:
+            os.remove(temp_img_path)
+        except Exception as e:
+            logging.error(f"Error removing temporary image file {temp_img_path}: {e}")
+        
+        # Process and send the reply
+        if reply:
+            reply = clean_response(reply).strip()
+            await send_in_chunks(message.channel, reply, reference=message)
+        else:
+            await message.channel.send("I couldn't process that image. Please try again.")
         return
 
     # ---- TEXT: Use selected backend ----
