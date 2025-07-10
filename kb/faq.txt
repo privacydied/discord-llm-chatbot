@@ -1,0 +1,141 @@
+# FAQ — rdr2 Discord RAG LLM Bot (Codename: cock)
+by @privacydied
+http://privacydied.net
+pry@privacydied.net
+
+---
+
+### **General**
+
+#### **Q: What exactly does this bot do?**
+A: It’s a Discord chatbot that can use local or cloud LLMs (Ollama, OpenAI, etc.), perform RAG (retrieval-augmented generation) from your own text notes, analyze images, auto-search DuckDuckGo, and save user memories—all with hot-reload config and a modular codebase.
+
+---
+
+### **Setup & Operation**
+
+#### **Q: What are the dependencies?**
+A: Python 3.8+, plus these pip packages:
+- `discord.py`
+- `httpx`
+- `python-dotenv`
+
+#### **Q: How do I run it?**
+A: 
+1. Fill out your `.env` file (see `README.md`).
+2. Add `.txt` files to the `kb/` folder for RAG.
+3. Start the bot:  
+
+
+#### **Q: Can I run it with only local models?**
+A: Yes! Use Ollama as your backend and don’t enable DuckDuckGo or OpenAI Vision. The bot will never send data outside your network unless you tell it to.
+
+---
+
+### **RAG (Retrieval-Augmented Generation)**
+
+#### **Q: How does RAG work in this bot?**
+A: The bot scans your `kb/` folder for `.txt` files. On each message, it does a keyword search and injects matching lines/paragraphs into the prompt. The LLM gets your custom notes as context before it answers.
+
+#### **Q: Does it use embeddings or vectors?**
+A: No, just classic keyword search for simplicity and speed. For advanced/semantic search, you’d need to add vector DB logic (ChromaDB, LlamaIndex, etc).
+
+#### **Q: How do I add new knowledge?**
+A: Drop `.txt` files in the `kb/` folder. Organize by topic, use plain text or markdown.
+
+#### **Q: Can I control which notes are injected?**
+A: Not per-query, but you can organize your files and use keywords wisely to influence what gets matched.
+
+---
+
+### **Vision/Images**
+
+#### **Q: Can the bot describe images?**
+A: Yes, with OpenAI Vision models enabled and a valid OpenAI API key. Just upload an image in chat or DM.
+
+#### **Q: Does image processing work offline?**
+A: No, image-to-text requires an online Vision API (OpenAI, etc). You can skip this feature for a fully offline setup.
+
+---
+
+### **User Memories & Logs**
+
+#### **Q: What does the bot remember about users?**
+A: Usernames, important facts ("my name is X", "I live in Y"), preferences, tone, total messages, and a short message history—all saved in `user_profiles/`.
+
+#### **Q: How do I see or clear my memories?**
+A:
+- `!show-memories` — Lists your memories/preferences.
+- `!remember ...` — Adds a memory.
+- `!forget` — Clears all your memories/preferences.
+
+---
+
+### **Privacy & Security**
+
+#### **Q: Does it log or share my data with third parties?**
+A: No, unless you explicitly use OpenAI APIs or DuckDuckGo search. All user profiles and logs are local files.
+
+#### **Q: Can I disable web search?**
+A: Yes, set up your `.env` so `should_auto_search` returns `None`, or just ignore search features.
+
+#### **Q: Is it safe to run this on a public server?**
+A: The code is secure by default, but **manage your Discord token carefully** and audit user-uploaded file handling if you deploy to large or open servers.
+
+---
+
+### **Customization**
+
+#### **Q: How do I change the system prompt?**
+A: Edit `prompt.txt` (or whichever file you set in `PROMPT_FILE`). The bot hot-reloads it on every run.
+
+#### **Q: Can I add new commands?**
+A: Yes, add functions decorated with `@bot.command` in the main Python file.
+
+#### **Q: How do I use a different LLM backend?**
+A: Implement a new async function (see `ollama_chat` and `openai_chat`), then switch `TEXT_BACKEND` in your `.env`.
+
+---
+
+### **Troubleshooting**
+
+#### **Q: The bot doesn’t respond!**
+A: Check:
+- Discord token correct in `.env`?
+- All dependencies installed?
+- API keys valid?
+- Sufficient Discord permissions?
+
+#### **Q: Image description isn’t working.**
+A: Make sure `OPENAI_API_KEY` is set and you have access to OpenAI’s Vision models.  
+Otherwise, remove/skip the VL logic for a local-only bot.
+
+#### **Q: RAG isn’t injecting context.**
+A: Make sure you have at least one `.txt` file in the `kb/` directory, and your queries use keywords that match something in your notes.
+
+---
+
+### **Advanced**
+
+#### **Q: How do I upgrade to vector RAG?**
+A: Integrate with a Python vector DB such as [chromadb](https://www.trychroma.com/) or [llama_index](https://github.com/jerryjliu/llama_index). Swap out the keyword-search logic for semantic search.
+
+#### **Q: Can it support slash commands?**
+A: Yes, with a bit of work—check Discord.py docs for application commands.
+
+#### **Q: How do I make it persistent across reboots?**
+A: Run via `systemd`, PM2, Docker, or a tmux/screen session.
+
+---
+
+### **License & Attribution**
+
+MIT License.  
+You can use, fork, and extend for any purpose.
+
+---
+
+**Got more questions?**  
+Open an issue or PR, or ask in your Discord server!
+
+

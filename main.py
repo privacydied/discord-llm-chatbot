@@ -7,15 +7,88 @@ import asyncio
 import logging
 import base64
 import pathlib
-from typing import Any, Callable, Coroutine, Dict, List, Optional, TypeVar
+import glob
+from typing import Any, Callable, Coroutine, Dict, List, Optional, TypeVar, Tuple
 from functools import wraps
+from dataclasses import dataclass
 from dotenv import load_dotenv
 from discord import Intents, Message
 from discord.ext import commands
 import discord
 from datetime import datetime
 import httpx
-from collections import defaultdict
+from collections import defaultdict, Counter
+
+# ---- RAG (Retrieval Augmented Generation) ----
+@dataclass
+class KnowledgeSnippet:
+    """Represents a snippet of text from the knowledge base."""
+    text: str
+    source_file: str
+    line_number: int
+
+class KnowledgeBase:
+    def __init__(self, kb_dir: str = "kb"):
+        self.kb_dir = kb_dir
+        self.knowledge: List[KnowledgeSnippet] = []
+        self._load_knowledge_base()
+    
+    def _load_knowledge_base(self) -> None:
+        """Load all .txt and .md files from the knowledge base directory."""
+        self.knowledge = []
+        if not os.path.exists(self.kb_dir):
+            logging.warning(f"Knowledge base directory '{self.kb_dir}' not found.")
+            return
+            
+        for ext in ('*.txt', '*.md'):
+            for file_path in glob.glob(os.path.join(self.kb_dir, '**', ext), recursive=True):
+                try:
+                    with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                        for i, line in enumerate(f, 1):
+                            line = line.strip()
+                            if line:  # Skip empty lines
+                                self.knowledge.append(
+                                    KnowledgeSnippet(
+                                        text=line,
+                                        source_file=os.path.basename(file_path),
+                                        line_number=i
+                                    )
+                                )
+                except Exception as e:
+                    logging.error(f"Error reading {file_path}: {e}")
+    
+    def get_relevant_snippets(self, query: str, top_k: int = 3) -> List[KnowledgeSnippet]:
+        """
+        Retrieve the most relevant snippets from the knowledge base.
+        
+        Args:
+            query: The user's query
+            top_k: Maximum number of snippets to return
+            
+        Returns:
+            List of relevant KnowledgeSnippet objects
+        """
+        if not query or not self.knowledge:
+            return []
+            
+        # Simple keyword matching - can be replaced with more sophisticated retrieval
+        query_terms = set(re.findall(r'\w+', query.lower()))
+        
+        scored_snippets = []
+        for snippet in self.knowledge:
+            snippet_terms = set(re.findall(r'\w+', snippet.text.lower()))
+            common_terms = query_terms & snippet_terms
+            if common_terms:
+                # Simple scoring: number of matching terms divided by snippet length
+                score = len(common_terms) / (len(snippet_terms) + 1)
+                scored_snippets.append((score, snippet))
+        
+        # Sort by score (highest first) and take top_k
+        scored_snippets.sort(key=lambda x: x[0], reverse=True)
+        return [snippet for _, snippet in scored_snippets[:top_k]]
+
+# Initialize the knowledge base
+knowledge_base = KnowledgeBase()
 
 T = TypeVar('T', bound=Callable[..., Coroutine[Any, Any, Any]])
 
@@ -525,6 +598,18 @@ async def process_message(message: Message, is_dm: bool):
         add_memory(user_id, memory)
     user_context = get_user_context(user_id)
     system_prompt_with_user = build_system_prompt(message, config)
+    
+    # Add RAG-retrieved knowledge if available
+    if message.content.strip():
+        relevant_snippets = knowledge_base.get_relevant_snippets(message.content)
+        if relevant_snippets:
+            knowledge_text = "\n".join(
+                f"- {snippet.text} (from {snippet.source_file}:{snippet.line_number})"
+                for snippet in relevant_snippets
+            )
+            system_prompt_with_user += "\n\nRetrieved knowledge:\n" + knowledge_text
+    
+    # Update context with user context and system prompt
     if user_context:
         context.append({"role": "system", "content": user_context.strip()})
     context[0]['content'] = system_prompt_with_user.strip()
