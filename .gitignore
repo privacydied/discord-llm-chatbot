@@ -1,0 +1,6 @@
+.env
+dm_logs/*
+prompts/*
+!prompts/grok.txt
+user_logs/*
+user_profiles/*
