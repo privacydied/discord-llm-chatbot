@@ -617,57 +617,115 @@ async def process_message(message: Message, is_dm: bool):
     # Process all attachments
     total_text_content = ""
     
-    # Separate image and text attachments
-    image_attachments = [
-        att for att in message.attachments 
-        if att.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.webp'))
-    ]
+    # Import mimetypes for MIME type detection
+    import mimetypes
     
-    text_attachments = [
-        att for att in message.attachments 
-        if att.filename.lower().endswith(('.txt', '.md', '.log', '.json', '.csv', '.py', '.js', '.html', '.css'))
-    ]
+    # Separate image and text attachments with robust MIME type checking
+    image_attachments = []
+    text_attachments = []
+    other_attachments = []
     
-    # Process image attachments first
+    for att in message.attachments:
+        # Check content type first, then fall back to extension
+        is_image = (hasattr(att, 'content_type') and att.content_type and att.content_type.startswith('image/'))
+        
+        # If content_type check fails, check file extension
+        if not is_image and hasattr(att, 'filename'):
+            mime_type, _ = mimetypes.guess_type(att.filename)
+            is_image = mime_type and mime_type.startswith('image/')
+        
+        if is_image:
+            image_attachments.append(att)
+        elif att.filename.lower().endswith(('.txt', '.md', '.log', '.json', '.csv', '.py', '.js', '.html', '.css')):
+            text_attachments.append(att)
+        else:
+            other_attachments.append(att)
+    
+    # Log warning for non-image attachments that weren't processed as text
+    for att in other_attachments:
+        logging.warning(f"Unprocessed attachment type: {att.filename} (content_type: {getattr(att, 'content_type', 'unknown')})")
+    
+    # Process image attachments if any
+    temp_img_path = None
     if image_attachments:
-        # For now, we'll only process the first image
+        # Notify if multiple images were attached
+        if len(image_attachments) > 1:
+            await message.channel.send("I'll analyze the first image you sent. Please send other images one at a time for analysis.")
+        
+        # Process the first image
         img_attachment = image_attachments[0]
         temp_img_path = f"temp_{user_id}_{int(time.time())}_{img_attachment.filename}"
         
         try:
-            # Download the image
-            img_bytes = await img_attachment.read()
-            with open(temp_img_path, 'wb') as f:
-                f.write(img_bytes)
+            # Check file size before downloading
+            if img_attachment.size > config["MAX_FILE_SIZE"]:
+                await message.channel.send(f"The image is too large (max {config['MAX_FILE_SIZE'] // (1024*1024)}MB). Please send a smaller image.")
+                return
+                
+            # Download the image with timeout
+            try:
+                img_bytes = await asyncio.wait_for(img_attachment.read(), timeout=30.0)
+                with open(temp_img_path, 'wb') as f:
+                    f.write(img_bytes)
+            except asyncio.TimeoutError:
+                await message.channel.send("Sorry, the image took too long to download. Please try again.")
+                return
+            except Exception as e:
+                logging.error(f"Error downloading image: {e}")
+                await message.channel.send("Sorry, I couldn't process that image. Please try another one.")
+                return
             
-            # Get vision caption (use message content as prompt if provided)
-            user_prompt = message.content.strip() or None
-            vision_caption = await get_vision_caption(temp_img_path, user_prompt, config)
+            # Get MIME type for the downloaded file
+            mime_type, _ = mimetypes.guess_type(img_attachment.filename)
+            if not mime_type or not mime_type.startswith('image/'):
+                mime_type = 'application/octet-stream'
             
-            # Compose the enhanced message
-            original_content = message.content.strip()
-            if vision_caption:
+            # Always use the VL model for image analysis
+            try:
+                # Get the VL prompt from config (loaded from file via VL_PROMPT_FILE)
+                vl_prompt = config.get("VL_PROMPT", "Describe this image in detail.")
+                vision_caption = await get_vision_caption(temp_img_path, vl_prompt, config)
+                
+                if not vision_caption:
+                    logging.error("VL model returned empty caption")
+                    # Continue with original message content if VL fails
+                    vision_caption = "[Image processing failed]"
+                
+                # Format the message content based on whether there was original text
+                original_content = message.content.strip()
                 if original_content:
-                    # If there was an original message, append the image description
                     message.content = f"{original_content}\n[Image description: {vision_caption}]"
                 else:
-                    # If no original message, just use the image description
                     message.content = f"[Image description: {vision_caption}]"
-            else:
-                # If VL processing failed, use original content or a default message
-                message.content = original_content or "I've received an image but couldn't process it."
+                
+                # Add to context with MIME type information
+                context.append({
+                    "role": "user",
+                    "content": message.content,  # Use the formatted message content
+                    "mime_type": mime_type,
+                    "size_bytes": img_attachment.size
+                })
+                
+            except Exception as e:
+                # Log the error but don't show it to the user
+                logging.error(f"Error in vision-language model: {e}", exc_info=True)
+                # Continue with original message content if VL processing fails
+                if not message.content.strip():
+                    message.content = "[Image processing failed]"
             
         except Exception as e:
-            logging.error(f"Error processing image: {e}")
-            # Continue with original message if there was an error
-            message.content = message.content or "I received an image but there was an error processing it."
-            
+            logging.error(f"Error processing image: {e}", exc_info=True)
+            # Continue with original message content if there's an error
+            if not message.content.strip():
+                message.content = "[Image processing failed]"
         finally:
             # Clean up the temporary file
-            try:
-                os.remove(temp_img_path)
-            except Exception as e:
-                logging.error(f"Error removing temporary file {temp_img_path}: {e}")
+            if temp_img_path and os.path.exists(temp_img_path):
+                try:
+                    os.remove(temp_img_path)
+                except Exception as e:
+                    logging.error(f"Error removing temporary file {temp_img_path}: {e}")
+                    # Continue execution even if cleanup fails
     
     # Process text attachments if any
     if text_attachments:
