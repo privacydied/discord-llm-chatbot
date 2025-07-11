@@ -22,6 +22,9 @@ from discord.ext import commands
 import discord
 from datetime import datetime
 import httpx
+import requests
+from bs4 import BeautifulSoup
+from urllib.parse import urlparse
 from collections import defaultdict, Counter
 
 # ---- RAG (Retrieval Augmented Generation) ----
@@ -359,6 +362,82 @@ def convert_audio_to_wav(input_path: str, keep_failed: bool = False) -> Tuple[Op
             except Exception as cleanup_err:
                 logging.error(f"Failed to clean up output file: {cleanup_err}")
         return None, "An unexpected error occurred while processing the audio file."
+
+def is_url(string: str) -> bool:
+    """Check if a string is a valid URL."""
+    try:
+        result = urlparse(string)
+        return all([result.scheme in ['http', 'https'], result.netloc])
+    except ValueError:
+        return False
+
+
+def read_webpage(url: str) -> tuple[str, str]:
+    """
+    Fetch and extract text content from a webpage.
+    
+    Args:
+        url: The URL of the webpage to read
+        
+    Returns:
+        tuple: (content, title) where:
+            - content: Extracted text content (up to 8000 chars)
+            - title: Page title or empty string if not found
+    """
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    }
+    
+    try:
+        # Fetch the webpage with timeout
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+        
+        # Parse HTML with BeautifulSoup
+        soup = BeautifulSoup(response.content, 'html.parser')
+        
+        # Remove unwanted elements
+        for element in soup(['script', 'style', 'noscript', 'nav', 'footer', 'header', 'iframe']):
+            element.decompose()
+        
+        # Get page title
+        title = soup.title.string.strip() if soup.title else ''
+        
+        # Extract and clean text
+        text = '\n'.join(
+            line.strip() for line in 
+            soup.get_text(separator='\n', strip=True).splitlines() 
+            if line.strip()
+        )
+        
+        # Truncate to 8000 chars, not cutting words in the middle if possible
+        if len(text) > 8000:
+            truncated = text[:8000]
+            last_space = truncated.rfind(' ')
+            if last_space > 7500:  # Only truncate at space if it's not too far back
+                text = truncated[:last_space] + '...'
+            else:
+                text = truncated + '...'
+        
+        # Check if the page seems to have little content
+        if len(text) < 100 and not title:
+            return "This page may be paywalled or has little visible text.", ""
+            
+        return text, title
+        
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Error fetching {url}: {str(e)}")
+        if isinstance(e, requests.exceptions.Timeout):
+            return "The request to this webpage timed out. Please try again later.", ""
+        elif hasattr(e.response, 'status_code'):
+            if e.response.status_code == 404:
+                return "This page could not be found (404 error).", ""
+            return f"Could not read this page (HTTP {e.response.status_code}).", ""
+        return "Could not read this page. It may be unavailable or the URL might be incorrect.", ""
+    except Exception as e:
+        logging.error(f"Error processing {url}: {str(e)}")
+        return "An error occurred while processing this page.", ""
+
 
 def is_audio_file(filename: str, content_type: Optional[str] = None) -> bool:
     """Check if a file is an audio file based on extension and/or content type."""
@@ -1027,6 +1106,33 @@ async def process_message(message: Message, is_dm: bool):
 
     # Initialize total_text_content with the message content
     total_text_content = message.content.strip()
+    
+    # Extract and process URLs in the message
+    urls = [word for word in message.content.split() if is_url(word)]
+    if urls:
+        for url in urls:
+            try:
+                # Notify user that we're processing the URL
+                processing_msg = await message.channel.send(f"🌐 Reading webpage: {url}")
+                
+                # Read the webpage content
+                content, title = read_webpage(url)
+                
+                # Format the content for the context
+                url_content = f"[Webpage: {title or 'No title'}]\n{content}"
+                
+                # Add to context as system message
+                context.append({
+                    "role": "system",
+                    "content": f"User shared a webpage. Content:\n{url_content}"
+                })
+                
+                # Update the processing message
+                await processing_msg.edit(content=f"✅ Processed: {title or url}")
+                
+            except Exception as e:
+                logging.error(f"Error processing URL {url}: {str(e)}")
+                await message.channel.send(f"❌ Could not read webpage: {url}")
     
     # Separate attachments by type
     image_attachments = []
