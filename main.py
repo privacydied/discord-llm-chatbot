@@ -48,7 +48,7 @@ except ImportError as e:
 from urllib.parse import urlparse
 from collections import defaultdict, Counter
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from http.client import HTTPResponse
 from io import StringIO
 from typing import Dict, List, Optional, Tuple, Union, Any, Callable
@@ -1135,7 +1135,7 @@ def log_dm_message(message: Message):
     username = str(message.author).replace("#", "_")
     filename = DM_LOGS_DIR / f"{message.author.id}_{username}.jsonl"
     log_entry = {
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "user_id": str(message.author.id),
         "username": str(message.author),
         "content": message.content,
@@ -1154,7 +1154,7 @@ def log_user_message(message: Message):
     user_id = str(message.author.id)
     log_path = USER_LOGS_DIR / f"{user_id}.jsonl"
     log_entry = {
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "channel_id": str(message.channel.id),
         "guild_id": str(message.guild.id) if message.guild else None,
         "content": message.content,

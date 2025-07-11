@@ -1473,3 +1473,83 @@ Traceback (most recent call last):
     logging.warning(f"PDF processing disabled: {e}")
     ^^^^^^^
 NameError: name 'logging' is not defined. Did you forget to import 'logging'?
+2025-07-11 22:00:27,666 - root - WARNING - PDF processing disabled: failed to find libmagic.  Check your installation
+2025-07-11 22:00:27,710 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+2025-07-11 22:00:27,714 - discord.client - INFO - logging in using static token
+2025-07-11 22:00:28,619 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 26a2039aa285616ff1409ab284703642).
+2025-07-11 22:00:30,633 - root - INFO - Ronin is now running! (hot config)
+2025-07-11 22:00:37,380 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 22:02:24,540 - root - INFO - Bot shutdown complete.
+2025-07-11 22:02:26,046 - root - WARNING - PDF processing disabled: failed to find libmagic.  Check your installation
+2025-07-11 22:02:26,089 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+2025-07-11 22:02:26,092 - discord.client - INFO - logging in using static token
+2025-07-11 22:02:26,809 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: f0013840f0f30a552a7ef3af88f12674).
+2025-07-11 22:02:28,823 - root - INFO - Ronin is now running! (hot config)
+2025-07-11 22:02:49,358 - root - ERROR - Discord event error in on_message: name 'timezone' is not defined
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2053, in on_message
+    log_user_message(message)
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1157, in log_user_message
+    "timestamp": datetime.now(timezone.utc).isoformat(),
+                              ^^^^^^^^
+NameError: name 'timezone' is not defined
+2025-07-11 22:03:20,500 - root - INFO - Bot shutdown complete.
+2025-07-11 22:03:45,460 - root - WARNING - PDF processing disabled: failed to find libmagic.  Check your installation
+2025-07-11 22:03:45,502 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+2025-07-11 22:03:45,506 - discord.client - INFO - logging in using static token
+2025-07-11 22:03:46,328 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: d9886a3da4bedf8913502cab37bdfb55).
+2025-07-11 22:03:48,336 - root - INFO - Ronin is now running! (hot config)
+2025-07-11 22:04:49,133 - root - INFO - Bot shutdown complete.
+2025-07-11 22:16:38,020 - root - WARNING - PDF processing disabled: failed to find libmagic.  Check your installation
+2025-07-11 22:16:38,020 - root - WARNING - PDF processing disabled: failed to find libmagic.  Check your installation
+2025-07-11 22:16:38,096 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+2025-07-11 22:16:38,096 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+[2025-07-11 22:16:38] [INFO    ] discord.client: logging in using static token
+2025-07-11 22:16:38,102 - discord.client - INFO - logging in using static token
+2025-07-11 22:16:38,102 - discord.client - INFO - logging in using static token
+[2025-07-11 22:16:39] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: 04862bf1fe0fae191495a7a4073fda39).
+2025-07-11 22:16:39,088 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 04862bf1fe0fae191495a7a4073fda39).
+2025-07-11 22:16:39,088 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 04862bf1fe0fae191495a7a4073fda39).
+2025-07-11 22:16:41,101 - root - INFO - Ronin is now running! (hot config)
+2025-07-11 22:16:41,101 - root - INFO - Ronin is now running! (hot config)
+2025-07-11 22:16:48,721 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 22:16:48,721 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 22:21:24,222 - root - WARNING - PDF processing disabled: failed to find libmagic.  Check your installation
+2025-07-11 22:21:24,274 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+2025-07-11 22:21:24,278 - discord.client - INFO - logging in using static token
+2025-07-11 22:21:25,097 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 39fc24b20b68fb148507d15ec356da2b).
+2025-07-11 22:21:27,110 - root - INFO - Ronin is now running! (hot config)
+2025-07-11 22:21:35,859 - root - INFO - Bot shutdown complete.
+2025-07-11 22:27:26,132 - root - WARNING - PDF processing disabled: failed to find libmagic.  Check your installation
+2025-07-11 22:27:26,132 - root - WARNING - PDF processing disabled: failed to find libmagic.  Check your installation
+2025-07-11 22:27:26,176 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+2025-07-11 22:27:26,176 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+[2025-07-11 22:27:26] [INFO    ] discord.client: logging in using static token
+2025-07-11 22:27:26,179 - discord.client - INFO - logging in using static token
+2025-07-11 22:27:26,179 - discord.client - INFO - logging in using static token
+[2025-07-11 22:27:26] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: 214afac6e5f8c5a24dd5fa0a601acb53).
+2025-07-11 22:27:26,916 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 214afac6e5f8c5a24dd5fa0a601acb53).
+2025-07-11 22:27:26,916 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 214afac6e5f8c5a24dd5fa0a601acb53).
+2025-07-11 22:27:28,928 - root - INFO - Ronin is now running! (hot config)
+2025-07-11 22:27:28,928 - root - INFO - Ronin is now running! (hot config)
+2025-07-11 22:33:51,161 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+2025-07-11 22:33:51,166 - discord.client - INFO - logging in using static token
+2025-07-11 22:33:52,098 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 0b15fca25480376dc2e245f1444e5be7).
+2025-07-11 22:33:54,114 - root - INFO - Ronin is now running! (hot config)
+2025-07-11 22:34:07,580 - root - INFO - Successfully processed PDF: Barclays Online Banking (1 pages, 2126 chars)
+2025-07-11 22:34:09,249 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 22:34:35,152 - root - INFO - Bot shutdown complete.
+2025-07-11 22:37:38,543 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+2025-07-11 22:37:38,543 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+[2025-07-11 22:37:38] [INFO    ] discord.client: logging in using static token
+2025-07-11 22:37:38,548 - discord.client - INFO - logging in using static token
+2025-07-11 22:37:38,548 - discord.client - INFO - logging in using static token
+[2025-07-11 22:37:39] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: 730c86d5f43e0864e6152aa151e7d6b3).
+2025-07-11 22:37:39,296 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 730c86d5f43e0864e6152aa151e7d6b3).
+2025-07-11 22:37:39,296 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 730c86d5f43e0864e6152aa151e7d6b3).
+2025-07-11 22:37:41,305 - root - INFO - Ronin is now running! (hot config)
+2025-07-11 22:37:41,305 - root - INFO - Ronin is now running! (hot config)
+2025-07-11 22:38:40,020 - root - INFO - Successfully processed PDF: Untitled (123 pages, 301003 chars)
+2025-07-11 22:38:40,020 - root - INFO - Successfully processed PDF: Untitled (123 pages, 301003 chars)
+2025-07-11 22:38:41,935 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 22:38:41,935 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
