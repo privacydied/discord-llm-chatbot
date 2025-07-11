@@ -1294,3 +1294,22 @@ ModuleNotFoundError: No module named 'requests'
 2025-07-11 20:34:35,503 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
 2025-07-11 20:35:01,280 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
 2025-07-11 20:36:33,344 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 20:39:54,284 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 20:41:19,207 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 20:42:54,797 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 20:48:34,494 - WARNING - PyNaCl is not installed, voice will NOT be supported
+[2025-07-11 20:48:34] [INFO    ] discord.client: logging in using static token
+2025-07-11 20:48:34,500 - INFO - logging in using static token
+[2025-07-11 20:48:36] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: f4bb072955a4ae0fcb8af03c5194b624).
+2025-07-11 20:48:36,683 - INFO - Shard ID None has connected to Gateway (Session ID: f4bb072955a4ae0fcb8af03c5194b624).
+2025-07-11 20:48:38,698 - INFO - Ronin is now running! (hot config)
+/volume1/py/discord-llm-chatbot/main.py:1056: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+2025-07-11 20:48:58,848 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 20:49:13,925 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 20:50:00,842 - ERROR - Error processing URL https://archive.is/DLqEA: too many values to unpack (expected 2)
+2025-07-11 20:50:03,762 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 20:50:22,850 - ERROR - Error processing URL https://veresov.pro/cmustdie/: too many values to unpack (expected 2)
+2025-07-11 20:50:30,896 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 20:50:52,135 - ERROR - Error processing URL https://www.stallman.org/: too many values to unpack (expected 2)
+2025-07-11 20:50:54,068 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"

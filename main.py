@@ -27,6 +27,134 @@ from bs4 import BeautifulSoup
 from urllib.parse import urlparse
 from collections import defaultdict, Counter
 
+from datetime import datetime, timedelta
+from http.client import HTTPResponse
+from io import StringIO
+from typing import Dict, List, Optional, Tuple, Union, Any, Callable
+from bs4 import BeautifulSoup
+from urllib.parse import urlparse, urljoin, urlunparse
+from urllib.robotparser import RobotFileParser
+from urllib.request import urlopen, Request
+from urllib.error import URLError, HTTPError
+import socket
+import tempfile
+import hashlib
+from fake_useragent import UserAgent
+import cachetools
+from collections import defaultdict, Counter, namedtuple
+
+# Optional Playwright import
+try:
+    from playwright.sync_api import sync_playwright
+    PLAYWRIGHT_AVAILABLE = True
+except ImportError:
+    PLAYWRIGHT_AVAILABLE = False
+
+# Types
+WebpageResult = Dict[str, Any]
+CacheBackend = Any  # Type for cache backends
+
+# Constants
+DEFAULT_TIMEOUT = 10  # seconds
+CACHE_TTL = 3600  # 1 hour in seconds
+RATE_LIMIT_WINDOW = 60  # seconds
+MAX_RETRIES = 2
+MIN_CONTENT_LENGTH = 50  # Minimum characters to consider content valid
+
+# Cache for rate limiting
+rate_limits = {}
+
+# Default cache (in-memory)
+memory_cache = cachetools.TTLCache(maxsize=1000, ttl=CACHE_TTL)
+
+# Default user agents
+DEFAULT_USER_AGENTS = [
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.1 Safari/605.1.15',
+]
+
+# Helper functions
+def get_domain(url: str) -> str:
+    """Extract domain from URL."""
+    parsed = urlparse(url)
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+def normalize_url(url: str) -> str:
+    """Normalize URL for consistent cache keys."""
+    parsed = urlparse(url)
+    return urlunparse(parsed._replace(fragment='', query=''))
+
+def get_cache_key(url: str) -> str:
+    """Generate a cache key from URL."""
+    return hashlib.md5(normalize_url(url).encode()).hexdigest()
+
+def is_rate_limited(domain: str, window: int = RATE_LIMIT_WINDOW) -> bool:
+    """Check if we're rate limited for this domain."""
+    now = time.time()
+    last_request = rate_limits.get(domain, 0)
+    
+    if now - last_request < window:
+        return True
+    
+    rate_limits[domain] = now
+    return False
+
+def check_robots_txt(url: str, user_agent: str = '*') -> Tuple[bool, str]:
+    """Check if URL is allowed by robots.txt."""
+    try:
+        domain = get_domain(url)
+        robots_url = f"{domain}/robots.txt"
+        
+        # Check cache first
+        cache_key = f"robots:{domain}"
+        if cache_key in memory_cache:
+            return memory_cache[cache_key]
+        
+        # Fetch robots.txt
+        rp = RobotFileParser()
+        rp.set_url(robots_url)
+        
+        try:
+            rp.read()
+            can_fetch = rp.can_fetch(user_agent, url)
+            result = (can_fetch, "" if can_fetch else f"Blocked by {robots_url}")
+            memory_cache[cache_key] = result
+            return result
+        except Exception as e:
+            # If we can't read robots.txt, assume it's allowed
+            return True, f"Could not parse robots.txt: {str(e)}"
+    except Exception as e:
+        return True, f"Error checking robots.txt: {str(e)}"
+
+def get_random_user_agent() -> str:
+    """Get a random user agent."""
+    try:
+        return UserAgent().random
+    except:
+        return random.choice(DEFAULT_USER_AGENTS)
+
+def extract_with_playwright(url: str, timeout: int = 30000) -> Tuple[str, str]:
+    """Extract page content using Playwright (for JS-heavy sites)."""
+    if not PLAYWRIGHT_AVAILABLE:
+        return "", "Playwright not available"
+    
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        context = browser.new_context()
+        page = context.new_page()
+        
+        try:
+            page.goto(url, timeout=timeout, wait_until="networkidle")
+            title = page.title()
+            content = page.content()
+            return content, title
+        except Exception as e:
+            return "", f"Playwright error: {str(e)}"
+        finally:
+            browser.close()
+
 # ---- RAG (Retrieval Augmented Generation) ----
 @dataclass
 class KnowledgeSnippet:
@@ -372,32 +500,104 @@ def is_url(string: str) -> bool:
         return False
 
 
-def read_webpage(url: str) -> tuple[str, str]:
+def read_webpage(
+    url: str,
+    timeout: int = DEFAULT_TIMEOUT,
+    use_playwright: bool = False,
+    user_agents: Optional[List[str]] = None,
+    proxies: Optional[Dict[str, str]] = None,
+    debug: bool = False
+) -> Dict[str, Any]:
     """
-    Fetch and extract text content from a webpage.
+    Fetch and extract text content from a webpage with enhanced features.
     
     Args:
         url: The URL of the webpage to read
+        timeout: Request timeout in seconds
+        use_playwright: Whether to try Playwright for JS-heavy sites
+        user_agents: List of user agents to rotate through
+        proxies: Proxy configuration (e.g., {'http': 'http://proxy:port'})
+        debug: Enable debug mode for detailed output
         
     Returns:
-        tuple: (content, title) where:
-            - content: Extracted text content (up to 8000 chars)
-            - title: Page title or empty string if not found
+        Dict containing:
+        - text: Extracted text content (empty string if failed)
+        - title: Page title (empty string if not found)
+        - error: Error message if any (None if successful)
+        - source: Source of the content ('cache', 'direct', 'playwright')
+        - cached: Whether the response was served from cache
+        - debug_info: Additional debug information if debug=True
     """
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    # Initialize result
+    result = {
+        'text': '',
+        'title': '',
+        'error': None,
+        'source': 'direct',
+        'cached': False,
+        'debug_info': {}
     }
     
+    # Generate cache key
+    cache_key = get_cache_key(url)
+    domain = get_domain(url)
+    
+    # Check cache first
+    if cache_key in memory_cache:
+        result.update(memory_cache[cache_key])
+        result['cached'] = True
+        result['source'] = 'cache'
+        if debug:
+            result['debug_info']['cache_hit'] = True
+        return result
+    
+    # Check rate limiting
+    if is_rate_limited(domain):
+        result['error'] = f"Rate limited for domain: {domain}"
+        return result
+    
+    # Check robots.txt
+    allowed, robots_msg = check_robots_txt(url)
+    if not allowed:
+        result['error'] = f"Blocked by robots.txt: {robots_msg}"
+        return result
+    
+    # Prepare request
+    headers = {
+        'User-Agent': user_agents[0] if user_agents and len(user_agents) > 0 else get_random_user_agent(),
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'DNT': '1',  # Do Not Track
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+    }
+    
+    # Try direct fetch first
     try:
-        # Fetch the webpage with timeout
-        response = requests.get(url, headers=headers, timeout=10)
+        if debug:
+            result['debug_info']['fetch_attempt'] = 'direct'
+        
+        response = requests.get(
+            url,
+            headers=headers,
+            timeout=timeout,
+            proxies=proxies,
+            allow_redirects=True,
+            stream=True
+        )
         response.raise_for_status()
         
-        # Parse HTML with BeautifulSoup
+        # Check content type
+        content_type = response.headers.get('content-type', '').lower()
+        if 'text/html' not in content_type:
+            result['error'] = f"Unsupported content type: {content_type}"
+            return result
+        
+        # Parse HTML
         soup = BeautifulSoup(response.content, 'html.parser')
         
         # Remove unwanted elements
-        for element in soup(['script', 'style', 'noscript', 'nav', 'footer', 'header', 'iframe']):
+        for element in soup(['script', 'style', 'noscript', 'nav', 'footer', 'header', 'iframe', 'svg']):
             element.decompose()
         
         # Get page title
@@ -410,33 +610,106 @@ def read_webpage(url: str) -> tuple[str, str]:
             if line.strip()
         )
         
-        # Truncate to 8000 chars, not cutting words in the middle if possible
+        # Check if content seems valid
+        if len(text) < MIN_CONTENT_LENGTH and not title:
+            if use_playwright and PLAYWRIGHT_AVAILABLE:
+                if debug:
+                    result['debug_info']['fallback_reason'] = 'low_content_length'
+                return _try_playwright_fallback(url, timeout, result, debug)
+            result['error'] = "Page may be paywalled, empty, or require JavaScript"
+            return result
+            
+        # Truncate if needed
         if len(text) > 8000:
             truncated = text[:8000]
             last_space = truncated.rfind(' ')
-            if last_space > 7500:  # Only truncate at space if it's not too far back
+            if last_space > 7500:
                 text = truncated[:last_space] + '...'
             else:
                 text = truncated + '...'
         
-        # Check if the page seems to have little content
-        if len(text) < 100 and not title:
-            return "This page may be paywalled or has little visible text.", ""
-            
-        return text, title
+        # Update result
+        result.update({
+            'text': text,
+            'title': title,
+            'source': 'direct',
+            'cached': False
+        })
         
-    except requests.exceptions.RequestException as e:
-        logging.error(f"Error fetching {url}: {str(e)}")
+        # Cache successful response
+        memory_cache[cache_key] = result.copy()
+        return result
+        
+    except (requests.exceptions.RequestException, Exception) as e:
+        if debug:
+            result['debug_info']['error'] = str(e)
+            result['debug_info']['error_type'] = e.__class__.__name__
+        
+        # Try Playwright if enabled and this looks like a JS-heavy site
+        if use_playwright and PLAYWRIGHT_AVAILABLE:
+            if debug:
+                result['debug_info']['fallback_reason'] = f'direct_fetch_failed: {str(e)}'
+            return _try_playwright_fallback(url, timeout, result, debug)
+            
+        # Handle specific errors
         if isinstance(e, requests.exceptions.Timeout):
-            return "The request to this webpage timed out. Please try again later.", ""
-        elif hasattr(e.response, 'status_code'):
+            result['error'] = f"Request timed out after {timeout} seconds"
+        elif hasattr(e, 'response') and hasattr(e.response, 'status_code'):
             if e.response.status_code == 404:
-                return "This page could not be found (404 error).", ""
-            return f"Could not read this page (HTTP {e.response.status_code}).", ""
-        return "Could not read this page. It may be unavailable or the URL might be incorrect.", ""
+                result['error'] = "Page not found (404)"
+            else:
+                result['error'] = f"HTTP {e.response.status_code} error"
+        else:
+            result['error'] = f"Failed to fetch page: {str(e)}"
+            
+        return result
+
+def _try_playwright_fallback(url: str, timeout: int, result: Dict[str, Any], debug: bool) -> Dict[str, Any]:
+    """Try to fetch content using Playwright as a fallback."""
+    if not PLAYWRIGHT_AVAILABLE:
+        result['error'] = "Playwright not available for JavaScript rendering"
+        return result
+    
+    try:
+        content, title = extract_with_playwright(url, timeout * 1000)  # Convert to ms
+        
+        if not content and not title:
+            result['error'] = "Playwright failed to extract content"
+            return result
+            
+        # Parse with BeautifulSoup to clean up
+        soup = BeautifulSoup(content, 'html.parser')
+        
+        # Remove unwanted elements
+        for element in soup(['script', 'style', 'noscript', 'nav', 'footer', 'header', 'iframe', 'svg']):
+            element.decompose()
+        
+        # Extract text
+        text = '\n'.join(
+            line.strip() for line in 
+            soup.get_text(separator='\n', strip=True).splitlines() 
+            if line.strip()
+        )
+        
+        # Update result
+        result.update({
+            'text': text,
+            'title': title or result.get('title', ''),
+            'source': 'playwright',
+            'cached': False
+        })
+        
+        # Cache successful response
+        cache_key = get_cache_key(url)
+        memory_cache[cache_key] = result.copy()
+        
+        return result
+        
     except Exception as e:
-        logging.error(f"Error processing {url}: {str(e)}")
-        return "An error occurred while processing this page.", ""
+        if debug:
+            result['debug_info']['playwright_error'] = str(e)
+        result['error'] = f"Playwright fallback failed: {str(e)}"
+        return result
 
 
 def is_audio_file(filename: str, content_type: Optional[str] = None) -> bool:
