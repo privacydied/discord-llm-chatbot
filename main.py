@@ -123,7 +123,7 @@ async def transcribe_audio(
     config: dict, 
     original_filename: Optional[str] = None,
     keep_converted: bool = False
-) -> tuple[Optional[str], Optional[str]]:
+) -> Tuple[Optional[str], Optional[str]]:
     """
     Transcribe audio using the Whisper API with robust error handling and validation.
     
@@ -185,22 +185,34 @@ async def transcribe_audio(
         
         try:
             with open(converted_path, "rb") as audio_file:
+                # Prepare the multipart form data
                 files = {
                     "file": (filename, audio_file, "audio/wav"),
-                    "model": (None, whisper_model),
-                    "response_format": (None, "text"),
                 }
                 
-                # Log the request details (without sensitive data)
-                log_files = {k: (v[0], f"<{len(v[1])} bytes>" if k == "file" else v[1]) 
-                            for k, v in files.items()}
-                logging.info(f"Sending request to Whisper API: {url} with files: {log_files}")
+                # Prepare the form data (all non-file fields)
+                data = {
+                    "model": whisper_model,
+                    "response_format": "text",
+                }
+                
+                # Log the request details (without file content)
+                log_data = {
+                    "file": f"<{os.path.getsize(converted_path)} bytes>",
+                    **data
+                }
+                logging.info(f"Sending request to Whisper API: {url} with data: {log_data}")
                 
                 # Make the API request with timeout
                 timeout = config.get("TIMEOUT", 30.0)
                 async with httpx.AsyncClient(timeout=timeout) as client:
                     start_time = time.time()
-                    response = await client.post(url, headers=headers, files=files)
+                    response = await client.post(
+                        url,
+                        headers=headers,
+                        files=files,
+                        data=data
+                    )
                     process_time = time.time() - start_time
                     
                     logging.info(f"Whisper API response in {process_time:.2f}s: {response.status_code}")
@@ -247,7 +259,7 @@ async def transcribe_audio(
             except Exception as e:
                 logging.warning(f"Failed to clean up temporary file {converted_path}: {e}")
 
-def convert_audio_to_wav(input_path: str, keep_failed: bool = False) -> Optional[Tuple[str, str]]:
+def convert_audio_to_wav(input_path: str, keep_failed: bool = False) -> Tuple[Optional[str], Optional[str]]:
     """
     Convert any audio file to a Whisper-compatible WAV file using ffmpeg.
     
@@ -256,30 +268,30 @@ def convert_audio_to_wav(input_path: str, keep_failed: bool = False) -> Optional
         keep_failed: If True, keep failed conversion files for debugging
         
     Returns:
-        Tuple of (output_path, ffmpeg_log) if successful, or (None, error_message) on failure
+        Tuple of (output_path, error_message) where:
+        - output_path: Path to the converted WAV file on success, None on failure
+        - error_message: None on success, user-friendly error message on failure
     """
+    if not shutil.which('ffmpeg'):
+        error_msg = "Audio processing is not properly configured. Please contact support."
+        logging.error("ffmpeg is not installed. Please install ffmpeg to enable audio conversion.")
+        return None, error_msg
+    
     # Verify input file exists and has content
     try:
         input_size = os.path.getsize(input_path)
         if input_size < 1024:  # 1KB minimum size
-            error_msg = f"Input file too small ({input_size} bytes), likely corrupted or empty"
-            logging.warning(error_msg)
-            return None, error_msg
+            logging.warning(f"Input file too small ({input_size} bytes), likely corrupted or empty")
+            return None, "The audio file is too small or corrupted. Please try with a different file."
     except OSError as e:
-        error_msg = f"Failed to access input file: {e}"
-        logging.error(error_msg)
-        return None, error_msg
-
-    if not shutil.which('ffmpeg'):
-        error_msg = "ffmpeg is not installed. Please install ffmpeg to enable audio conversion."
-        logging.error(error_msg)
-        return None, error_msg
+        logging.error(f"Failed to access input file: {e}")
+        return None, "Could not read the audio file. Please check the file and try again."
     
     output_path = None
     try:
         # Create a temporary file for the output with a predictable name for debugging
         temp_dir = tempfile.gettempdir()
-        temp_prefix = f"discord_audio_{int(time.time())}_"
+        temp_prefix = f"discord_audio_{os.getpid()}_{int(time.time())}_"
         temp_fd, output_path = tempfile.mkstemp(prefix=temp_prefix, suffix='.wav')
         os.close(temp_fd)  # We'll let ffmpeg create the file
         
@@ -287,7 +299,7 @@ def convert_audio_to_wav(input_path: str, keep_failed: bool = False) -> Optional
         cmd = [
             'ffmpeg',
             '-hide_banner',  # Less verbose output
-            '-loglevel', 'info',  # But still log important info
+            '-loglevel', 'warning',  # Only show warnings and errors
             '-y',  # Overwrite output file if it exists
             '-i', input_path,  # Input file
             '-ar', '16000',  # Sample rate: 16kHz (Whisper's expected rate)
@@ -300,53 +312,53 @@ def convert_audio_to_wav(input_path: str, keep_failed: bool = False) -> Optional
         
         logging.info(f"Running ffmpeg command: {' '.join(cmd)}")
         
-        # Run ffmpeg and capture both stdout and stderr
+        # Run ffmpeg and capture both stdout and stderr separately
         result = subprocess.run(
             cmd,
             stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,  # Combine stdout and stderr
+            stderr=subprocess.PIPE,
             text=True,
-            check=False  # We'll handle non-zero exit codes ourselves
+            check=False
         )
         
-        ffmpeg_log = result.stdout
+        # Always log the full ffmpeg output at debug level
+        if result.stderr:
+            logging.debug(f"ffmpeg stderr (exit code {result.returncode}):\n{result.stderr}")
+        if result.stdout:
+            logging.debug(f"ffmpeg stdout:\n{result.stdout}")
         
-        # Check if output file was created and has content
+        # Check if output file was created
         if not os.path.exists(output_path):
-            error_msg = f"FFmpeg failed to create output file. Command: {' '.join(cmd)}"
-            logging.error(f"{error_msg}\nFFmpeg output:\n{ffmpeg_log}")
-            return None, error_msg
+            logging.error(f"FFmpeg failed to create output file. Command: {' '.join(cmd)}")
+            return None, "Failed to process the audio file. The format might not be supported."
             
         output_size = os.path.getsize(output_path)
-        logging.info(f"Output file created: {output_path} ({output_size} bytes)")
+        logging.info(f"Output file created: {output_path} (size: {output_size} bytes)")
         
-        if output_size < 1024:  # 1KB minimum size for WAV header + some audio data
-            error_msg = f"Output file too small ({output_size} bytes), conversion likely failed"
-            logging.error(f"{error_msg}\nFFmpeg output:\n{ffmpeg_log}")
-            if not keep_failed:
-                os.unlink(output_path)
-                output_path = None
-            return None, error_msg
-        
+        # Only fail on non-zero exit code
         if result.returncode != 0:
-            error_msg = f"FFmpeg exited with code {result.returncode}"
-            logging.error(f"{error_msg}\nFFmpeg output:\n{ffmpeg_log}")
+            logging.error(f"FFmpeg failed with code {result.returncode}")
             if not keep_failed:
-                os.unlink(output_path)
-                output_path = None
-            return None, error_msg
-            
-        return output_path, ffmpeg_log
+                try:
+                    os.unlink(output_path)
+                except Exception as e:
+                    logging.error(f"Failed to clean up output file: {e}")
+            return None, "Failed to process the audio file. The format might not be supported."
+        
+        # Log a warning if the output file is very small but don't fail
+        if output_size < 1024:  # 1KB minimum size for WAV header + some audio data
+            logging.warning(f"Output file is very small ({output_size} bytes), but ffmpeg reported success.")
+        
+        return output_path, None
         
     except Exception as e:
-        error_msg = f"Error during audio conversion: {str(e)}"
-        logging.error(error_msg, exc_info=True)
+        logging.error(f"Unexpected error during audio conversion: {e}", exc_info=True)
         if output_path and os.path.exists(output_path) and not keep_failed:
             try:
                 os.unlink(output_path)
             except Exception as cleanup_err:
                 logging.error(f"Failed to clean up output file: {cleanup_err}")
-        return None, error_msg
+        return None, "An unexpected error occurred while processing the audio file."
 
 def is_audio_file(filename: str, content_type: Optional[str] = None) -> bool:
     """Check if a file is an audio file based on extension and/or content type."""

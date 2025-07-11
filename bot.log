@@ -213,3 +213,478 @@ size=     187kB time=00:00:05.99 bitrate= 256.1kbits/s speed= 152x
 video:0kB audio:187kB subtitle:0kB other streams:0kB global headers:0kB muxing overhead: 0.022937%
 
 2025-07-11 15:39:50,231 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+/volume1/py/discord-llm-chatbot/main.py:553: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+2025-07-11 15:43:25,962 - WARNING - PyNaCl is not installed, voice will NOT be supported
+[2025-07-11 15:43:25] [INFO    ] discord.client: logging in using static token
+2025-07-11 15:43:25,965 - INFO - logging in using static token
+[2025-07-11 15:43:26] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: 5c9f91cb816f0d39ddfda4f36ab22462).
+2025-07-11 15:43:26,823 - INFO - Shard ID None has connected to Gateway (Session ID: 5c9f91cb816f0d39ddfda4f36ab22462).
+2025-07-11 15:43:28,835 - INFO - Ronin is now running! (hot config)
+/volume1/py/discord-llm-chatbot/main.py:557: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+/volume1/py/discord-llm-chatbot/main.py:538: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+2025-07-11 15:43:41,201 - INFO - Downloaded audio file: /tmp/tmpqmxxnwzj.wav (1151054 bytes)
+2025-07-11 15:43:41,473 - INFO - Processing audio file: /tmp/tmpqmxxnwzj.wav (size: 1151054 bytes)
+2025-07-11 15:43:41,474 - INFO - Running ffmpeg command: ffmpeg -hide_banner -loglevel info -y -i /tmp/tmpqmxxnwzj.wav -ar 16000 -ac 1 -c:a pcm_s16le -f wav -fflags +bitexact /tmp/discord_audio_1752248621_m8brnkhr.wav
+2025-07-11 15:43:41,495 - INFO - Output file created: /tmp/discord_audio_1752248621_m8brnkhr.wav (191874 bytes)
+2025-07-11 15:43:41,495 - ERROR - Error during audio conversion: name 'ffmpeg_log' is not defined
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 343, in convert_audio_to_wav
+    return output_path, ffmpeg_log
+                        ^^^^^^^^^^
+NameError: name 'ffmpeg_log' is not defined
+2025-07-11 15:43:41,500 - ERROR - Failed to convert audio file: Error during audio conversion: name 'ffmpeg_log' is not defined
+2025-07-11 15:43:41,500 - ERROR - Transcription failed: Failed to convert audio file: Error during audio conversion: name 'ffmpeg_log' is not defined
+2025-07-11 15:43:44,700 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+/volume1/py/discord-llm-chatbot/main.py:557: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+/volume1/py/discord-llm-chatbot/main.py:538: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+2025-07-11 15:43:54,844 - INFO - Downloaded audio file: /tmp/tmpvjwh_tdg.opus (63840 bytes)
+2025-07-11 15:43:55,107 - INFO - Processing audio file: /tmp/tmpvjwh_tdg.opus (size: 63840 bytes)
+2025-07-11 15:43:55,107 - INFO - Running ffmpeg command: ffmpeg -hide_banner -loglevel info -y -i /tmp/tmpvjwh_tdg.opus -ar 16000 -ac 1 -c:a pcm_s16le -f wav -fflags +bitexact /tmp/discord_audio_1752248635_elugii2q.wav
+2025-07-11 15:43:55,155 - INFO - Output file created: /tmp/discord_audio_1752248635_elugii2q.wav (192082 bytes)
+2025-07-11 15:43:55,155 - ERROR - Error during audio conversion: name 'ffmpeg_log' is not defined
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 343, in convert_audio_to_wav
+    return output_path, ffmpeg_log
+                        ^^^^^^^^^^
+NameError: name 'ffmpeg_log' is not defined
+2025-07-11 15:43:55,161 - ERROR - Failed to convert audio file: Error during audio conversion: name 'ffmpeg_log' is not defined
+2025-07-11 15:43:55,161 - ERROR - Transcription failed: Failed to convert audio file: Error during audio conversion: name 'ffmpeg_log' is not defined
+2025-07-11 15:43:58,542 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 15:47:02,533 - WARNING - PyNaCl is not installed, voice will NOT be supported
+[2025-07-11 15:47:02] [INFO    ] discord.client: logging in using static token
+2025-07-11 15:47:02,536 - INFO - logging in using static token
+[2025-07-11 15:47:03] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: 656be2921d8691a022d78ab84654a55e).
+2025-07-11 15:47:03,378 - INFO - Shard ID None has connected to Gateway (Session ID: 656be2921d8691a022d78ab84654a55e).
+2025-07-11 15:47:05,390 - INFO - Ronin is now running! (hot config)
+/volume1/py/discord-llm-chatbot/main.py:560: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+/volume1/py/discord-llm-chatbot/main.py:541: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+2025-07-11 15:47:10,980 - INFO - Downloaded audio file: /tmp/tmp280e8sck.wav (1151054 bytes)
+2025-07-11 15:47:11,145 - INFO - Processing audio file: /tmp/tmp280e8sck.wav (size: 1151054 bytes)
+2025-07-11 15:47:11,146 - INFO - Running ffmpeg command: ffmpeg -hide_banner -loglevel info -y -i /tmp/tmp280e8sck.wav -ar 16000 -ac 1 -c:a pcm_s16le -f wav -fflags +bitexact /tmp/discord_audio_1752248831_u_13j85d.wav
+2025-07-11 15:47:11,167 - INFO - ffmpeg completed with warnings:
+Guessed Channel Layout for Input Stream #0.0 : stereo
+Input #0, wav, from '/tmp/tmp280e8sck.wav':
+  Metadata:
+    encoder         : Lavf61.7.100
+  Duration: 00:00:05.99, bitrate: 1536 kb/s
+    Stream #0:0: Audio: pcm_s16le ([1][0][0][0] / 0x0001), 48000 Hz, stereo, s16, 1536 kb/s
+Stream mapping:
+  Stream #0:0 -> #0:0 (pcm_s16le (native) -> pcm_s16le (native))
+Press [q] to stop, [?] for help
+Output #0, wav, to '/tmp/discord_audio_1752248831_u_13j85d.wav':
+    Stream #0:0: Audio: pcm_s16le ([1][0][0][0] / 0x0001), 16000 Hz, mono, s16, 256 kb/s
+    Metadata:
+      encoder         : Lavc pcm_s16le
+size=     187kB time=00:00:05.99 bitrate= 256.1kbits/s speed=1.1e+03x    
+video:0kB audio:187kB subtitle:0kB other streams:0kB global headers:0kB muxing overhead: 0.022937%
+
+2025-07-11 15:47:11,167 - INFO - Output file created: /tmp/discord_audio_1752248831_u_13j85d.wav (191874 bytes)
+2025-07-11 15:47:11,167 - ERROR - Failed to convert audio file: Guessed Channel Layout for Input Stream #0.0 : stereo
+Input #0, wav, from '/tmp/tmp280e8sck.wav':
+  Metadata:
+    encoder         : Lavf61.7.100
+  Duration: 00:00:05.99, bitrate: 1536 kb/s
+    Stream #0:0: Audio: pcm_s16le ([1][0][0][0] / 0x0001), 48000 Hz, stereo, s16, 1536 kb/s
+Stream mapping:
+  Stream #0:0 -> #0:0 (pcm_s16le (native) -> pcm_s16le (native))
+Press [q] to stop, [?] for help
+Output #0, wav, to '/tmp/discord_audio_1752248831_u_13j85d.wav':
+    Stream #0:0: Audio: pcm_s16le ([1][0][0][0] / 0x0001), 16000 Hz, mono, s16, 256 kb/s
+    Metadata:
+      encoder         : Lavc pcm_s16le
+size=     187kB time=00:00:05.99 bitrate= 256.1kbits/s speed=1.1e+03x    
+video:0kB audio:187kB subtitle:0kB other streams:0kB global headers:0kB muxing overhead: 0.022937%
+
+2025-07-11 15:47:11,168 - ERROR - Transcription failed: Failed to convert audio file: Guessed Channel Layout for Input Stream #0.0 : stereo
+Input #0, wav, from '/tmp/tmp280e8sck.wav':
+  Metadata:
+    encoder         : Lavf61.7.100
+  Duration: 00:00:05.99, bitrate: 1536 kb/s
+    Stream #0:0: Audio: pcm_s16le ([1][0][0][0] / 0x0001), 48000 Hz, stereo, s16, 1536 kb/s
+Stream mapping:
+  Stream #0:0 -> #0:0 (pcm_s16le (native) -> pcm_s16le (native))
+Press [q] to stop, [?] for help
+Output #0, wav, to '/tmp/discord_audio_1752248831_u_13j85d.wav':
+    Stream #0:0: Audio: pcm_s16le ([1][0][0][0] / 0x0001), 16000 Hz, mono, s16, 256 kb/s
+    Metadata:
+      encoder         : Lavc pcm_s16le
+size=     187kB time=00:00:05.99 bitrate= 256.1kbits/s speed=1.1e+03x    
+video:0kB audio:187kB subtitle:0kB other streams:0kB global headers:0kB muxing overhead: 0.022937%
+
+2025-07-11 15:47:20,132 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+/volume1/py/discord-llm-chatbot/main.py:560: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+/volume1/py/discord-llm-chatbot/main.py:541: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+2025-07-11 15:47:27,470 - INFO - Downloaded audio file: /tmp/tmpo8pnwncm.opus (63840 bytes)
+2025-07-11 15:47:27,658 - INFO - Processing audio file: /tmp/tmpo8pnwncm.opus (size: 63840 bytes)
+2025-07-11 15:47:27,658 - INFO - Running ffmpeg command: ffmpeg -hide_banner -loglevel info -y -i /tmp/tmpo8pnwncm.opus -ar 16000 -ac 1 -c:a pcm_s16le -f wav -fflags +bitexact /tmp/discord_audio_1752248847_l4n58sbl.wav
+2025-07-11 15:47:27,685 - INFO - ffmpeg completed with warnings:
+Input #0, ogg, from '/tmp/tmpo8pnwncm.opus':
+  Duration: 00:00:06.00, start: 0.001000, bitrate: 85 kb/s
+    Stream #0:0: Audio: opus, 48000 Hz, stereo, fltp
+    Metadata:
+      ENCODER         : Lavc61.19.101 libopus
+Stream mapping:
+  Stream #0:0 -> #0:0 (opus (native) -> pcm_s16le (native))
+Press [q] to stop, [?] for help
+Output #0, wav, to '/tmp/discord_audio_1752248847_l4n58sbl.wav':
+    Stream #0:0: Audio: pcm_s16le ([1][0][0][0] / 0x0001), 16000 Hz, mono, s16, 256 kb/s
+    Metadata:
+      encoder         : Lavc pcm_s16le
+size=     188kB time=00:00:05.99 bitrate= 256.3kbits/s speed= 273x    
+video:0kB audio:188kB subtitle:0kB other streams:0kB global headers:0kB muxing overhead: 0.022912%
+
+2025-07-11 15:47:27,685 - INFO - Output file created: /tmp/discord_audio_1752248847_l4n58sbl.wav (192082 bytes)
+2025-07-11 15:47:27,685 - ERROR - Failed to convert audio file: Input #0, ogg, from '/tmp/tmpo8pnwncm.opus':
+  Duration: 00:00:06.00, start: 0.001000, bitrate: 85 kb/s
+    Stream #0:0: Audio: opus, 48000 Hz, stereo, fltp
+    Metadata:
+      ENCODER         : Lavc61.19.101 libopus
+Stream mapping:
+  Stream #0:0 -> #0:0 (opus (native) -> pcm_s16le (native))
+Press [q] to stop, [?] for help
+Output #0, wav, to '/tmp/discord_audio_1752248847_l4n58sbl.wav':
+    Stream #0:0: Audio: pcm_s16le ([1][0][0][0] / 0x0001), 16000 Hz, mono, s16, 256 kb/s
+    Metadata:
+      encoder         : Lavc pcm_s16le
+size=     188kB time=00:00:05.99 bitrate= 256.3kbits/s speed= 273x    
+video:0kB audio:188kB subtitle:0kB other streams:0kB global headers:0kB muxing overhead: 0.022912%
+
+2025-07-11 15:47:27,686 - ERROR - Transcription failed: Failed to convert audio file: Input #0, ogg, from '/tmp/tmpo8pnwncm.opus':
+  Duration: 00:00:06.00, start: 0.001000, bitrate: 85 kb/s
+    Stream #0:0: Audio: opus, 48000 Hz, stereo, fltp
+    Metadata:
+      ENCODER         : Lavc61.19.101 libopus
+Stream mapping:
+  Stream #0:0 -> #0:0 (opus (native) -> pcm_s16le (native))
+Press [q] to stop, [?] for help
+Output #0, wav, to '/tmp/discord_audio_1752248847_l4n58sbl.wav':
+    Stream #0:0: Audio: pcm_s16le ([1][0][0][0] / 0x0001), 16000 Hz, mono, s16, 256 kb/s
+    Metadata:
+      encoder         : Lavc pcm_s16le
+size=     188kB time=00:00:05.99 bitrate= 256.3kbits/s speed= 273x    
+video:0kB audio:188kB subtitle:0kB other streams:0kB global headers:0kB muxing overhead: 0.022912%
+
+2025-07-11 15:47:30,127 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+/volume1/py/discord-llm-chatbot/main.py:560: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+/volume1/py/discord-llm-chatbot/main.py:541: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+2025-07-11 15:49:55,981 - INFO - Added memory for user 254254168234131456: im black, biracial and from london
+2025-07-11 15:50:20,642 - WARNING - PyNaCl is not installed, voice will NOT be supported
+[2025-07-11 15:50:20] [INFO    ] discord.client: logging in using static token
+2025-07-11 15:50:20,645 - INFO - logging in using static token
+[2025-07-11 15:50:21] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: 51c488ee91f321e1976260a0c369104f).
+2025-07-11 15:50:21,452 - INFO - Shard ID None has connected to Gateway (Session ID: 51c488ee91f321e1976260a0c369104f).
+2025-07-11 15:50:23,469 - INFO - Ronin is now running! (hot config)
+/volume1/py/discord-llm-chatbot/main.py:553: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+/volume1/py/discord-llm-chatbot/main.py:534: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+2025-07-11 15:50:29,348 - INFO - Downloaded audio file: /tmp/tmploi1ejey.wav (1151054 bytes)
+2025-07-11 15:50:29,832 - INFO - Processing audio file: /tmp/tmploi1ejey.wav (size: 1151054 bytes)
+2025-07-11 15:50:29,832 - INFO - Running ffmpeg command: ffmpeg -hide_banner -loglevel warning -y -i /tmp/tmploi1ejey.wav -ar 16000 -ac 1 -c:a pcm_s16le -f wav -fflags +bitexact /tmp/discord_audio_25350_1752249029_p2e64ywr.wav
+2025-07-11 15:50:29,854 - INFO - Output file created: /tmp/discord_audio_25350_1752249029_p2e64ywr.wav (size: 191874 bytes)
+2025-07-11 15:50:29,854 - INFO - Converted file: /tmp/discord_audio_25350_1752249029_p2e64ywr.wav (size: 191874 bytes)
+2025-07-11 15:50:29,854 - ERROR - Unexpected error during Whisper API request: object of type '_io.BufferedReader' has no len()
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 195, in transcribe_audio
+    log_files = {k: (v[0], f"<{len(v[1])} bytes>" if k == "file" else v[1])
+                              ^^^^^^^^^
+TypeError: object of type '_io.BufferedReader' has no len()
+2025-07-11 15:50:29,855 - ERROR - Transcription failed: Unexpected error during Whisper API request: object of type '_io.BufferedReader' has no len()
+2025-07-11 15:50:31,137 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+/volume1/py/discord-llm-chatbot/main.py:553: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+/volume1/py/discord-llm-chatbot/main.py:534: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+2025-07-11 15:50:45,040 - INFO - Downloaded audio file: /tmp/tmpbmldxx0l.opus (63840 bytes)
+2025-07-11 15:50:45,228 - INFO - Processing audio file: /tmp/tmpbmldxx0l.opus (size: 63840 bytes)
+2025-07-11 15:50:45,228 - INFO - Running ffmpeg command: ffmpeg -hide_banner -loglevel warning -y -i /tmp/tmpbmldxx0l.opus -ar 16000 -ac 1 -c:a pcm_s16le -f wav -fflags +bitexact /tmp/discord_audio_25350_1752249045_xmepelv6.wav
+2025-07-11 15:50:45,254 - INFO - Output file created: /tmp/discord_audio_25350_1752249045_xmepelv6.wav (size: 192082 bytes)
+2025-07-11 15:50:45,255 - INFO - Converted file: /tmp/discord_audio_25350_1752249045_xmepelv6.wav (size: 192082 bytes)
+2025-07-11 15:50:45,255 - ERROR - Unexpected error during Whisper API request: object of type '_io.BufferedReader' has no len()
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 195, in transcribe_audio
+    log_files = {k: (v[0], f"<{len(v[1])} bytes>" if k == "file" else v[1])
+                              ^^^^^^^^^
+TypeError: object of type '_io.BufferedReader' has no len()
+2025-07-11 15:50:45,255 - ERROR - Transcription failed: Unexpected error during Whisper API request: object of type '_io.BufferedReader' has no len()
+2025-07-11 15:50:46,864 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+/volume1/py/discord-llm-chatbot/main.py:553: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+/volume1/py/discord-llm-chatbot/main.py:534: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+2025-07-11 15:51:15,607 - INFO - Downloaded audio file: /tmp/tmpkq7y574p.ogg (120911 bytes)
+2025-07-11 15:51:15,776 - INFO - Processing audio file: /tmp/tmpkq7y574p.ogg (size: 120911 bytes)
+2025-07-11 15:51:15,776 - INFO - Running ffmpeg command: ffmpeg -hide_banner -loglevel warning -y -i /tmp/tmpkq7y574p.ogg -ar 16000 -ac 1 -c:a pcm_s16le -f wav -fflags +bitexact /tmp/discord_audio_25350_1752249075_4snugi0y.wav
+2025-07-11 15:51:15,801 - INFO - Output file created: /tmp/discord_audio_25350_1752249075_4snugi0y.wav (size: 240044 bytes)
+2025-07-11 15:51:15,802 - INFO - Converted file: /tmp/discord_audio_25350_1752249075_4snugi0y.wav (size: 240044 bytes)
+2025-07-11 15:51:15,802 - ERROR - Unexpected error during Whisper API request: object of type '_io.BufferedReader' has no len()
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 195, in transcribe_audio
+    log_files = {k: (v[0], f"<{len(v[1])} bytes>" if k == "file" else v[1])
+                              ^^^^^^^^^
+TypeError: object of type '_io.BufferedReader' has no len()
+2025-07-11 15:51:15,802 - ERROR - Transcription failed: Unexpected error during Whisper API request: object of type '_io.BufferedReader' has no len()
+2025-07-11 15:51:25,042 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+/volume1/py/discord-llm-chatbot/main.py:553: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+/volume1/py/discord-llm-chatbot/main.py:534: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+2025-07-11 15:51:59,816 - INFO - Downloaded audio file: /tmp/tmpp0_z3gk1.ogg (237797 bytes)
+2025-07-11 15:52:00,198 - INFO - Processing audio file: /tmp/tmpp0_z3gk1.ogg (size: 237797 bytes)
+2025-07-11 15:52:00,199 - INFO - Running ffmpeg command: ffmpeg -hide_banner -loglevel warning -y -i /tmp/tmpp0_z3gk1.ogg -ar 16000 -ac 1 -c:a pcm_s16le -f wav -fflags +bitexact /tmp/discord_audio_25350_1752249120_rnyj0r0f.wav
+2025-07-11 15:52:00,245 - INFO - Output file created: /tmp/discord_audio_25350_1752249120_rnyj0r0f.wav (size: 472364 bytes)
+2025-07-11 15:52:00,245 - INFO - Converted file: /tmp/discord_audio_25350_1752249120_rnyj0r0f.wav (size: 472364 bytes)
+2025-07-11 15:52:00,245 - ERROR - Unexpected error during Whisper API request: object of type '_io.BufferedReader' has no len()
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 195, in transcribe_audio
+    log_files = {k: (v[0], f"<{len(v[1])} bytes>" if k == "file" else v[1])
+                              ^^^^^^^^^
+TypeError: object of type '_io.BufferedReader' has no len()
+2025-07-11 15:52:00,246 - ERROR - Transcription failed: Unexpected error during Whisper API request: object of type '_io.BufferedReader' has no len()
+2025-07-11 15:52:01,744 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 15:55:14,703 - WARNING - PyNaCl is not installed, voice will NOT be supported
+[2025-07-11 15:55:14] [INFO    ] discord.client: logging in using static token
+2025-07-11 15:55:14,706 - INFO - logging in using static token
+[2025-07-11 15:55:15] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: a1f03a81843514767436c0f3eb933f15).
+2025-07-11 15:55:15,641 - INFO - Shard ID None has connected to Gateway (Session ID: a1f03a81843514767436c0f3eb933f15).
+2025-07-11 15:55:17,653 - INFO - Ronin is now running! (hot config)
+/volume1/py/discord-llm-chatbot/main.py:565: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+/volume1/py/discord-llm-chatbot/main.py:546: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+2025-07-11 15:55:23,708 - INFO - Downloaded audio file: /tmp/tmppwl48nqe.wav (1151054 bytes)
+2025-07-11 15:55:23,908 - INFO - Processing audio file: /tmp/tmppwl48nqe.wav (size: 1151054 bytes)
+2025-07-11 15:55:23,908 - INFO - Running ffmpeg command: ffmpeg -hide_banner -loglevel warning -y -i /tmp/tmppwl48nqe.wav -ar 16000 -ac 1 -c:a pcm_s16le -f wav -fflags +bitexact /tmp/discord_audio_5294_1752249323_ol6mup3w.wav
+2025-07-11 15:55:23,929 - INFO - Output file created: /tmp/discord_audio_5294_1752249323_ol6mup3w.wav (size: 191874 bytes)
+2025-07-11 15:55:23,929 - INFO - Converted file: /tmp/discord_audio_5294_1752249323_ol6mup3w.wav (size: 191874 bytes)
+2025-07-11 15:55:23,929 - INFO - Sending request to Whisper API: http://0.0.0.0:18129/v1//audio/transcriptions with data: {'file': '<191874 bytes>', 'model': 'Systran/faster-distil-whisper-small.en', 'response_format': 'text'}
+2025-07-11 15:55:23,966 - INFO - HTTP Request: POST http://0.0.0.0:18129/v1//audio/transcriptions "HTTP/1.1 404 Not Found"
+2025-07-11 15:55:23,966 - INFO - Whisper API response in 0.01s: 404
+2025-07-11 15:55:23,967 - ERROR - Whisper API error 404: {"detail":"Not Found"}. Full response: {"detail":"Not Found"}
+2025-07-11 15:55:23,967 - ERROR - Transcription failed: Whisper API error 404: {"detail":"Not Found"}
+2025-07-11 15:55:27,958 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+/volume1/py/discord-llm-chatbot/main.py:565: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+/volume1/py/discord-llm-chatbot/main.py:546: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+2025-07-11 15:55:33,185 - INFO - Downloaded audio file: /tmp/tmpnx7nro31.opus (63840 bytes)
+2025-07-11 15:55:33,370 - INFO - Processing audio file: /tmp/tmpnx7nro31.opus (size: 63840 bytes)
+2025-07-11 15:55:33,370 - INFO - Running ffmpeg command: ffmpeg -hide_banner -loglevel warning -y -i /tmp/tmpnx7nro31.opus -ar 16000 -ac 1 -c:a pcm_s16le -f wav -fflags +bitexact /tmp/discord_audio_5294_1752249333_9en307bf.wav
+2025-07-11 15:55:33,399 - INFO - Output file created: /tmp/discord_audio_5294_1752249333_9en307bf.wav (size: 192082 bytes)
+2025-07-11 15:55:33,399 - INFO - Converted file: /tmp/discord_audio_5294_1752249333_9en307bf.wav (size: 192082 bytes)
+2025-07-11 15:55:33,399 - INFO - Sending request to Whisper API: http://0.0.0.0:18129/v1//audio/transcriptions with data: {'file': '<192082 bytes>', 'model': 'Systran/faster-distil-whisper-small.en', 'response_format': 'text'}
+2025-07-11 15:55:33,432 - INFO - HTTP Request: POST http://0.0.0.0:18129/v1//audio/transcriptions "HTTP/1.1 404 Not Found"
+2025-07-11 15:55:33,432 - INFO - Whisper API response in 0.00s: 404
+2025-07-11 15:55:33,432 - ERROR - Whisper API error 404: {"detail":"Not Found"}. Full response: {"detail":"Not Found"}
+2025-07-11 15:55:33,433 - ERROR - Transcription failed: Whisper API error 404: {"detail":"Not Found"}
+2025-07-11 15:55:38,431 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+/volume1/py/discord-llm-chatbot/main.py:565: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+/volume1/py/discord-llm-chatbot/main.py:546: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+2025-07-11 15:56:38,085 - INFO - Downloaded audio file: /tmp/tmpl_vennhs.opus (118969 bytes)
+2025-07-11 15:56:38,324 - INFO - Processing audio file: /tmp/tmpl_vennhs.opus (size: 118969 bytes)
+2025-07-11 15:56:38,325 - INFO - Running ffmpeg command: ffmpeg -hide_banner -loglevel warning -y -i /tmp/tmpl_vennhs.opus -ar 16000 -ac 1 -c:a pcm_s16le -f wav -fflags +bitexact /tmp/discord_audio_5294_1752249398_eg_q_nbm.wav
+2025-07-11 15:56:38,374 - INFO - Output file created: /tmp/discord_audio_5294_1752249398_eg_q_nbm.wav (size: 400208 bytes)
+2025-07-11 15:56:38,374 - INFO - Converted file: /tmp/discord_audio_5294_1752249398_eg_q_nbm.wav (size: 400208 bytes)
+2025-07-11 15:56:38,374 - INFO - Sending request to Whisper API: http://0.0.0.0:18129/v1//audio/transcriptions with data: {'file': '<400208 bytes>', 'model': 'Systran/faster-distil-whisper-small.en', 'response_format': 'text'}
+2025-07-11 15:56:38,413 - INFO - HTTP Request: POST http://0.0.0.0:18129/v1//audio/transcriptions "HTTP/1.1 404 Not Found"
+2025-07-11 15:56:38,413 - INFO - Whisper API response in 0.00s: 404
+2025-07-11 15:56:38,413 - ERROR - Whisper API error 404: {"detail":"Not Found"}. Full response: {"detail":"Not Found"}
+2025-07-11 15:56:38,414 - ERROR - Transcription failed: Whisper API error 404: {"detail":"Not Found"}
+2025-07-11 15:56:39,630 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+/volume1/py/discord-llm-chatbot/main.py:565: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+/volume1/py/discord-llm-chatbot/main.py:546: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+2025-07-11 15:57:00,679 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 15:57:47,421 - INFO - Downloaded audio file: /tmp/tmpl2tb2kth.opus (118969 bytes)
+2025-07-11 15:57:47,580 - ERROR - Missing required Whisper API configuration
+2025-07-11 15:57:47,580 - ERROR - Transcription failed: Missing required Whisper API configuration
+2025-07-11 15:57:48,992 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 16:00:32,563 - INFO - Downloaded audio file: /tmp/tmp1vag7i2d.opus (118969 bytes)
+2025-07-11 16:00:32,760 - ERROR - Missing required Whisper API configuration
+2025-07-11 16:00:32,760 - ERROR - Transcription failed: Missing required Whisper API configuration
+2025-07-11 16:00:34,358 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 16:01:55,270 - INFO - Downloaded audio file: /tmp/tmpecchq57v.opus (79693 bytes)
+2025-07-11 16:01:55,427 - ERROR - Missing required Whisper API configuration
+2025-07-11 16:01:55,427 - ERROR - Transcription failed: Missing required Whisper API configuration
+2025-07-11 16:01:58,403 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 16:05:47,119 - INFO - Downloaded audio file: /tmp/tmpqhmqd9m0.opus (79693 bytes)
+2025-07-11 16:05:47,287 - INFO - Processing audio file: /tmp/tmpqhmqd9m0.opus (size: 79693 bytes)
+2025-07-11 16:05:47,287 - INFO - Running ffmpeg command: ffmpeg -hide_banner -loglevel warning -y -i /tmp/tmpqhmqd9m0.opus -ar 16000 -ac 1 -c:a pcm_s16le -f wav -fflags +bitexact /tmp/discord_audio_5294_1752249947_bl63wjys.wav
+2025-07-11 16:05:47,323 - INFO - Output file created: /tmp/discord_audio_5294_1752249947_bl63wjys.wav (size: 272124 bytes)
+2025-07-11 16:05:47,323 - INFO - Converted file: /tmp/discord_audio_5294_1752249947_bl63wjys.wav (size: 272124 bytes)
+2025-07-11 16:05:47,323 - INFO - Sending request to Whisper API: http://localhost:18129/v1//audio/transcriptions with data: {'file': '<272124 bytes>', 'model': 'Systran/faster-distil-whisper-small.en', 'response_format': 'text'}
+2025-07-11 16:05:47,362 - INFO - HTTP Request: POST http://localhost:18129/v1//audio/transcriptions "HTTP/1.1 404 Not Found"
+2025-07-11 16:05:47,362 - INFO - Whisper API response in 0.01s: 404
+2025-07-11 16:05:47,363 - ERROR - Whisper API error 404: {"detail":"Not Found"}. Full response: {"detail":"Not Found"}
+2025-07-11 16:05:47,363 - ERROR - Transcription failed: Whisper API error 404: {"detail":"Not Found"}
+2025-07-11 16:05:55,546 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+/volume1/py/discord-llm-chatbot/main.py:565: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+/volume1/py/discord-llm-chatbot/main.py:546: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+2025-07-11 16:06:43,346 - INFO - Downloaded audio file: /tmp/tmpq5ntur9y.opus (79693 bytes)
+2025-07-11 16:06:43,529 - INFO - Processing audio file: /tmp/tmpq5ntur9y.opus (size: 79693 bytes)
+2025-07-11 16:06:43,529 - INFO - Running ffmpeg command: ffmpeg -hide_banner -loglevel warning -y -i /tmp/tmpq5ntur9y.opus -ar 16000 -ac 1 -c:a pcm_s16le -f wav -fflags +bitexact /tmp/discord_audio_5294_1752250003_ld61lw0f.wav
+2025-07-11 16:06:43,563 - INFO - Output file created: /tmp/discord_audio_5294_1752250003_ld61lw0f.wav (size: 272124 bytes)
+2025-07-11 16:06:43,563 - INFO - Converted file: /tmp/discord_audio_5294_1752250003_ld61lw0f.wav (size: 272124 bytes)
+2025-07-11 16:06:43,563 - INFO - Sending request to Whisper API: http://localhost:18129/v1//audio/transcriptions with data: {'file': '<272124 bytes>', 'model': 'Systran/faster-distil-whisper-small.en', 'response_format': 'text'}
+2025-07-11 16:06:43,595 - INFO - HTTP Request: POST http://localhost:18129/v1//audio/transcriptions "HTTP/1.1 404 Not Found"
+2025-07-11 16:06:43,596 - INFO - Whisper API response in 0.00s: 404
+2025-07-11 16:06:43,596 - ERROR - Whisper API error 404: {"detail":"Not Found"}. Full response: {"detail":"Not Found"}
+2025-07-11 16:06:43,596 - ERROR - Transcription failed: Whisper API error 404: {"detail":"Not Found"}
+2025-07-11 16:06:47,053 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+/volume1/py/discord-llm-chatbot/main.py:565: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+2025-07-11 16:07:13,824 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+/volume1/py/discord-llm-chatbot/main.py:546: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+2025-07-11 16:07:14,797 - INFO - Downloaded audio file: /tmp/tmpps_8mxuz.opus (79693 bytes)
+2025-07-11 16:07:14,963 - INFO - Processing audio file: /tmp/tmpps_8mxuz.opus (size: 79693 bytes)
+2025-07-11 16:07:14,963 - INFO - Running ffmpeg command: ffmpeg -hide_banner -loglevel warning -y -i /tmp/tmpps_8mxuz.opus -ar 16000 -ac 1 -c:a pcm_s16le -f wav -fflags +bitexact /tmp/discord_audio_5294_1752250034_hjk0b5wl.wav
+2025-07-11 16:07:14,997 - INFO - Output file created: /tmp/discord_audio_5294_1752250034_hjk0b5wl.wav (size: 272124 bytes)
+2025-07-11 16:07:14,997 - INFO - Converted file: /tmp/discord_audio_5294_1752250034_hjk0b5wl.wav (size: 272124 bytes)
+2025-07-11 16:07:14,997 - INFO - Sending request to Whisper API: http://localhost:18129/v1/audio/transcriptions with data: {'file': '<272124 bytes>', 'model': 'Systran/faster-distil-whisper-small.en', 'response_format': 'text'}
+2025-07-11 16:07:25,437 - INFO - HTTP Request: POST http://localhost:18129/v1/audio/transcriptions "HTTP/1.1 200 OK"
+2025-07-11 16:07:25,438 - INFO - Whisper API response in 10.41s: 200
+2025-07-11 16:07:25,438 - INFO - Transcription successful. Length: 62 characters
+2025-07-11 16:07:25,597 - ERROR - Failed to edit message: 403 Forbidden (error code: 50005): Cannot edit a message authored by another user
+2025-07-11 16:07:25,778 - INFO - Successfully transcribed audio message (length: 62 chars)
+2025-07-11 16:07:28,703 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+/volume1/py/discord-llm-chatbot/main.py:565: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+2025-07-11 16:07:29,324 - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=wait%20what%20is%20cp%3F&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 200 OK"
+2025-07-11 16:07:31,785 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 16:08:31,757 - INFO - Added memory for user 196966835365609472: Preferred name: Scared
+2025-07-11 16:08:33,029 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+[2025-07-11 16:08:43] [INFO    ] discord.gateway: Shard ID None has successfully RESUMED session a1f03a81843514767436c0f3eb933f15.
+2025-07-11 16:08:43,340 - INFO - Shard ID None has successfully RESUMED session a1f03a81843514767436c0f3eb933f15.
+2025-07-11 16:10:37,104 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 16:11:21,197 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 16:11:23,417 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 16:11:37,402 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 16:12:09,901 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 16:12:40,592 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 16:12:59,623 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 16:13:15,224 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 16:13:41,731 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 16:14:02,840 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 16:14:17,644 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 16:14:31,562 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 16:15:15,710 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 16:15:24,718 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 16:16:11,742 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 16:16:26,309 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 16:16:34,237 - WARNING - PyNaCl is not installed, voice will NOT be supported
+[2025-07-11 16:16:34] [INFO    ] discord.client: logging in using static token
+2025-07-11 16:16:34,240 - INFO - logging in using static token
+[2025-07-11 16:16:35] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: 6453c0bc965b059a6f3e05b419d3b3b3).
+2025-07-11 16:16:35,107 - INFO - Shard ID None has connected to Gateway (Session ID: 6453c0bc965b059a6f3e05b419d3b3b3).
+/volume1/py/discord-llm-chatbot/main.py:565: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+2025-07-11 16:16:37,122 - INFO - Ronin is now running! (hot config)
+/volume1/py/discord-llm-chatbot/main.py:546: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+2025-07-11 16:16:45,015 - ERROR - Discord event error in on_message: cannot access local variable 'total_text_content' where it is not associated with a value
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1288, in on_message
+    await process_message(message, is_dm)
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1153, in process_message
+    if total_text_content:
+       ^^^^^^^^^^^^^^^^^^
+UnboundLocalError: cannot access local variable 'total_text_content' where it is not associated with a value
+2025-07-11 16:16:57,569 - ERROR - Discord event error in on_message: cannot access local variable 'total_text_content' where it is not associated with a value
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1288, in on_message
+    await process_message(message, is_dm)
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1153, in process_message
+    if total_text_content:
+       ^^^^^^^^^^^^^^^^^^
+UnboundLocalError: cannot access local variable 'total_text_content' where it is not associated with a value
+2025-07-11 16:17:19,353 - ERROR - Discord event error in on_message: cannot access local variable 'total_text_content' where it is not associated with a value
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1288, in on_message
+    await process_message(message, is_dm)
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1153, in process_message
+    if total_text_content:
+       ^^^^^^^^^^^^^^^^^^
+UnboundLocalError: cannot access local variable 'total_text_content' where it is not associated with a value
+2025-07-11 16:17:39,743 - ERROR - Discord event error in on_message: cannot access local variable 'total_text_content' where it is not associated with a value
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1288, in on_message
+    await process_message(message, is_dm)
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1153, in process_message
+    if total_text_content:
+       ^^^^^^^^^^^^^^^^^^
+UnboundLocalError: cannot access local variable 'total_text_content' where it is not associated with a value
+2025-07-11 16:18:56,919 - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=how%20do%20i%20finance%20a%20real%20estate%20deal%20for%20a%20building%20worth%203m%20that%20can%20serve%20as%20a%20harem%20for%20trans%20latina%20baddies%20that%20can%20live%20with%20me%20while%20also%20finessing%20my%20lps%20and%20make%20them%20think%20this%20is%20producing%20income&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 200 OK"
+2025-07-11 16:18:56,921 - ERROR - Discord event error in on_message: cannot access local variable 'total_text_content' where it is not associated with a value
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1288, in on_message
+    await process_message(message, is_dm)
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1153, in process_message
+    if total_text_content:
+       ^^^^^^^^^^^^^^^^^^
+UnboundLocalError: cannot access local variable 'total_text_content' where it is not associated with a value
+2025-07-11 16:22:02,731 - WARNING - PyNaCl is not installed, voice will NOT be supported
+[2025-07-11 16:22:02] [INFO    ] discord.client: logging in using static token
+2025-07-11 16:22:02,734 - INFO - logging in using static token
+[2025-07-11 16:22:03] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: f7e12f947c0f65d946e017d900c5a443).
+2025-07-11 16:22:03,489 - INFO - Shard ID None has connected to Gateway (Session ID: f7e12f947c0f65d946e017d900c5a443).
+2025-07-11 16:22:05,501 - INFO - Ronin is now running! (hot config)
+/volume1/py/discord-llm-chatbot/main.py:565: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+/volume1/py/discord-llm-chatbot/main.py:546: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+2025-07-11 16:22:07,964 - ERROR - Discord event error in on_message: cannot access local variable 'total_text_content' where it is not associated with a value
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1232, in on_message
+    await process_message(message, is_dm)
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1097, in process_message
+    if total_text_content:
+       ^^^^^^^^^^^^^^^^^^
+UnboundLocalError: cannot access local variable 'total_text_content' where it is not associated with a value
+2025-07-11 16:22:30,907 - ERROR - Discord event error in on_message: cannot access local variable 'total_text_content' where it is not associated with a value
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1232, in on_message
+    await process_message(message, is_dm)
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1097, in process_message
+    if total_text_content:
+       ^^^^^^^^^^^^^^^^^^
+UnboundLocalError: cannot access local variable 'total_text_content' where it is not associated with a value
+2025-07-11 16:23:42,960 - WARNING - PyNaCl is not installed, voice will NOT be supported
+[2025-07-11 16:23:42] [INFO    ] discord.client: logging in using static token
+2025-07-11 16:23:42,963 - INFO - logging in using static token
+[2025-07-11 16:23:43] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: ea79074153be046351a261c081e30231).
+2025-07-11 16:23:43,785 - INFO - Shard ID None has connected to Gateway (Session ID: ea79074153be046351a261c081e30231).
+/volume1/py/discord-llm-chatbot/main.py:565: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+2025-07-11 16:23:45,796 - INFO - Ronin is now running! (hot config)
+/volume1/py/discord-llm-chatbot/main.py:546: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+2025-07-11 16:23:48,614 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 16:23:54,466 - INFO - Downloaded audio file: /tmp/tmpsg_1oead.opus (79693 bytes)
+2025-07-11 16:23:54,696 - INFO - Processing audio file: /tmp/tmpsg_1oead.opus (size: 79693 bytes)
+2025-07-11 16:23:54,696 - INFO - Running ffmpeg command: ffmpeg -hide_banner -loglevel warning -y -i /tmp/tmpsg_1oead.opus -ar 16000 -ac 1 -c:a pcm_s16le -f wav -fflags +bitexact /tmp/discord_audio_15834_1752251034_v3y6tpb0.wav
+2025-07-11 16:23:54,731 - INFO - Output file created: /tmp/discord_audio_15834_1752251034_v3y6tpb0.wav (size: 272124 bytes)
+2025-07-11 16:23:54,731 - INFO - Converted file: /tmp/discord_audio_15834_1752251034_v3y6tpb0.wav (size: 272124 bytes)
+2025-07-11 16:23:54,731 - INFO - Sending request to Whisper API: http://localhost:18129/v1/audio/transcriptions with data: {'file': '<272124 bytes>', 'model': 'Systran/faster-distil-whisper-small.en', 'response_format': 'text'}
+2025-07-11 16:24:03,967 - INFO - HTTP Request: POST http://localhost:18129/v1/audio/transcriptions "HTTP/1.1 200 OK"
+2025-07-11 16:24:03,967 - INFO - Whisper API response in 9.21s: 200
+2025-07-11 16:24:03,967 - INFO - Transcription successful. Length: 62 characters
+2025-07-11 16:24:04,138 - ERROR - Failed to edit message: 403 Forbidden (error code: 50005): Cannot edit a message authored by another user
+2025-07-11 16:24:04,352 - INFO - Successfully transcribed audio message (length: 62 chars)
+2025-07-11 16:24:05,748 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
