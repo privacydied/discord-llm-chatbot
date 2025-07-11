@@ -1358,3 +1358,118 @@ Please use the Async API instead.
 2025-07-11 21:04:58,020 - ERROR - Error processing URL https://x.com/tszzl/status/1943514043559612761: Blocked by robots.txt: Blocked by https://x.com/robots.txt
 2025-07-11 21:05:00,280 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
 2025-07-11 21:05:38,220 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:06:58,701 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:07:12,851 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:07:21,472 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:09:30,870 - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=how%20ould%20you%20improve%20this%20web%20scraping%20logic%3F&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 200 OK"
+2025-07-11 21:09:33,715 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:10:59,626 - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=look%20at%20this%20windsurf%20%27fix%20code%27%20prompt%20to%20improve%20the%20logic%20of%20your%20webscraping%20what%20would%20you%20add%2C%20do%20not%20send%20me%20code%20simlpy%20improve%20the%20prompt%3A%0A%0A%60%60%60fix%20code%3A%0A-%20rotate%20user-agents.%20randomize%20on%20every%20request.%20include%20chrome%2C%20firefox%2C%20edge%2C%20safari%2C%20android%2Fios%2C%20even%20old%20devices%20like%20nokia%20and%20weird%20bots.%0A-%20implement%20a%20proxy%20pool.%20use%20paid%2Fresidential%20proxies%20%28like%20luminati%2C%20smartproxy%2C%20etc%29%20if%20possible.%20rotate%20proxy%20per%20request.%20tor%20allowed%20as%20a%20fallback.%0A-%20add%20human-like%20rate%20limiting%3A%20random%20sleep%202%E2%80%9310%20seconds%20between%20requests%3B%20slow%20down%20more%20if%20site%20sends%20429%2F503.%20prefer%20off-peak%20hours%20for%20crawling.%0A-%20use%20a%20headless%20browser%20%28playwright%2Fpuppeteer%29%20for%20sites%20needing%20js%20rendering.%20simulate%20mouse%2C%20scrolling%2C%20timezone%2Flocale%2C%20and%20rotate%20browser%20fingerprints.%0A-%20cache%20responses%20locally%20%28by%20url%20or%20hash%29.%20reuse%20cached%20html%20if%20it%20exists%20and%20is%20recent%2C%20instead%20of%20re-scraping%20the%20same%20page.%0A-%20add%20stealth%3A%20spoof%20referer%2C%20set%20cookies%2C%20block%20analytics%2C%20disable%20images%2Fscripts%20when%20not%20needed.%20handle%20cookies%2Fsession%20persistence%20per%20proxy%20session.%0A-%20code%20must%20be%20modular.%20all%20config%20%28ua%20list%2C%20proxies%2C%20cache%20path%2C%20timeouts%29%20in%20one%20place.%0A-%20don%E2%80%99t%20leave%20todos.%20fill%20in%20all%20implementation%20details.%0A-%20use%20robust%20error%20handling%20and%20logging.%20no%20silent%20fails.%60%60%60&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 302 Found"
+2025-07-11 21:11:09,982 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:15:45,711 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:16:12,525 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:16:33,239 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:16:47,740 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:17:33,964 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:19:37,525 - WARNING - PyNaCl is not installed, voice will NOT be supported
+[2025-07-11 21:19:37] [INFO    ] discord.client: logging in using static token
+2025-07-11 21:19:37,528 - INFO - logging in using static token
+[2025-07-11 21:19:38] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: 2aee2f9bd2dd3c0f1bf3429d7f57c361).
+2025-07-11 21:19:38,355 - INFO - Shard ID None has connected to Gateway (Session ID: 2aee2f9bd2dd3c0f1bf3429d7f57c361).
+2025-07-11 21:19:40,370 - INFO - Ronin is now running! (hot config)
+/volume1/py/discord-llm-chatbot/main.py:1057: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+2025-07-11 21:20:13,018 - ERROR - Error processing URL https://x.com/yutongwu111140/status/1943615182061642058: Blocked by robots.txt: Blocked by https://x.com/robots.txt
+2025-07-11 21:20:15,282 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:20:58,427 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:21:18,358 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:21:20,988 - ERROR - Error in VL API call: 'choices'
+2025-07-11 21:21:20,988 - ERROR - VL model returned empty caption
+2025-07-11 21:21:24,006 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:21:56,485 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:22:57,308 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:23:14,374 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:25:34,418 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:28:53,993 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:29:16,471 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:29:34,011 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:30:05,710 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:30:09,630 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:31:05,342 - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=what%20is%20the%20most%20precient%2Fproblematic%20points%2Fsubpoints%20in%20this%20section%20of%20the%20report&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 200 OK"
+2025-07-11 21:31:12,006 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:32:27,998 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:35:53,215 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:36:00,972 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:36:54,476 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:38:40,924 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:41:11,583 - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=how%20does%20nsm%20200%20compare%20to%20today%20given%20that%20current%20statistics%20happens%20to%20have%20normal%20if%20not%20low%20birthrates%20across%20the%20whole%20world%20including%20both%20global%20north%20and%20global%20south&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 200 OK"
+2025-07-11 21:41:21,963 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+/volume1/py/discord-llm-chatbot/main.py:1038: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+2025-07-11 21:44:00,149 - WARNING - Unprocessed attachment type: Transaction-1.pdf (content_type: application/pdf)
+2025-07-11 21:44:02,572 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:45:51,908 - WARNING - Unprocessed attachment type: 2015.217942.What-Is.pdf (content_type: application/pdf)
+2025-07-11 21:45:53,217 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:46:06,209 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:48:42,083 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:49:01,259 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:49:20,555 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:49:46,318 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:50:01,210 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:50:08,272 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:50:12,234 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:50:22,095 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:50:28,928 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:51:20,060 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:51:33,901 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:51:56,067 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:52:23,685 - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=what%20is%20the%20fifth%20hole&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 200 OK"
+2025-07-11 21:52:24,977 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:53:28,693 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:53:33,424 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:53:46,638 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:53:57,843 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:54:17,788 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:55:15,687 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:55:18,239 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:55:31,779 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:55:40,835 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:56:18,201 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:56:21,655 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 12, in <module>
+    from pdf_processor import PDFProcessor
+  File "/volume1/py/discord-llm-chatbot/pdf_processor.py", line 18, in <module>
+    import magic
+  File "/volume1/py/discord-llm-chatbot/.venv/lib/python3.12/site-packages/magic/__init__.py", line 209, in <module>
+    libmagic = loader.load_lib()
+               ^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/.venv/lib/python3.12/site-packages/magic/loader.py", line 49, in load_lib
+    raise ImportError('failed to find libmagic.  Check your installation')
+ImportError: failed to find libmagic.  Check your installation
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 15, in <module>
+    logging.warning(f"PDF processing disabled: {e}")
+    ^^^^^^^
+NameError: name 'logging' is not defined. Did you forget to import 'logging'?
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 12, in <module>
+    from pdf_processor import PDFProcessor
+  File "/volume1/py/discord-llm-chatbot/pdf_processor.py", line 18, in <module>
+    import magic
+  File "/volume1/py/discord-llm-chatbot/.venv/lib/python3.12/site-packages/magic/__init__.py", line 209, in <module>
+    libmagic = loader.load_lib()
+               ^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/.venv/lib/python3.12/site-packages/magic/loader.py", line 49, in load_lib
+    raise ImportError('failed to find libmagic.  Check your installation')
+ImportError: failed to find libmagic.  Check your installation
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 15, in <module>
+    logging.warning(f"PDF processing disabled: {e}")
+    ^^^^^^^
+NameError: name 'logging' is not defined. Did you forget to import 'logging'?

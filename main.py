@@ -3,8 +3,8 @@ import re
 import json
 import time
 import random
-import asyncio
 import logging
+import asyncio
 import base64
 import pathlib
 import glob
@@ -12,18 +12,39 @@ import tempfile
 import mimetypes
 import subprocess
 import shutil
-from typing import Optional, Tuple
-from typing import Any, Callable, Coroutine, Dict, List, TypeVar, Union
+from pathlib import Path
+from typing import Dict, List, Optional, Any, Tuple, Union, Callable, Coroutine, TypeVar
 from functools import wraps
 from dataclasses import dataclass
+from datetime import datetime
+from urllib.parse import urlparse
+
+# Third-party imports
 from dotenv import load_dotenv
 from discord import Intents, Message, File
 from discord.ext import commands
 import discord
-from datetime import datetime
 import httpx
 import requests
 from bs4 import BeautifulSoup
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler('bot.log')
+    ]
+)
+
+# PDF Processing
+try:
+    from pdf_processor import PDFProcessor
+    PDF_PROCESSOR_AVAILABLE = True
+except ImportError as e:
+    logging.warning(f"PDF processing disabled: {e}")
+    PDF_PROCESSOR_AVAILABLE = False
 from urllib.parse import urlparse
 from collections import defaultdict, Counter
 
@@ -500,6 +521,74 @@ def is_url(string: str) -> bool:
         return False
 
 
+async def process_pdf(
+    source: Union[str, bytes],
+    is_url: bool = False,
+    debug: bool = False
+) -> Dict[str, Any]:
+    """
+    Process a PDF file or URL and extract text and metadata.
+    
+    Args:
+        source: Path to PDF file, URL, or PDF content as bytes
+        is_url: Whether source is a URL
+        debug: Enable debug mode for detailed output
+        
+    Returns:
+        Dict containing:
+        - text: Extracted text content
+        - title: PDF title or filename
+        - error: Error message if any
+        - source: Source URL or 'uploaded_file'
+        - pages: Number of pages
+        - is_scanned: Whether OCR was used
+        - metadata: PDF metadata
+    """
+    if not PDF_PROCESSOR_AVAILABLE:
+        return {
+            'text': '',
+            'title': 'PDF Processing Unavailable',
+            'error': 'PDF processing dependencies not installed',
+            'source': 'pdf',
+            'pages': 0,
+            'is_scanned': False,
+            'metadata': {}
+        }
+    
+    try:
+        processor = PDFProcessor()
+        result = processor.process_pdf(source, is_url=is_url)
+        
+        if debug:
+            logging.info(f"PDF processing result: {result.get('pages', 0)} pages, "
+                       f"scanned: {result.get('is_scanned', False)}")
+        
+        return {
+            'text': result.get('text', ''),
+            'title': result.get('metadata', {}).get('title', 
+                   os.path.basename(source) if isinstance(source, str) else 'PDF Document'),
+            'error': result.get('error'),
+            'source': 'pdf',
+            'pages': result.get('pages', 0),
+            'is_scanned': result.get('is_scanned', False),
+            'metadata': result.get('metadata', {})
+        }
+        
+    except Exception as e:
+        error_msg = f"Error processing PDF: {str(e)}"
+        if debug:
+            logging.error(error_msg, exc_info=True)
+        return {
+            'text': '',
+            'title': 'Error Processing PDF',
+            'error': error_msg,
+            'source': 'pdf',
+            'pages': 0,
+            'is_scanned': False,
+            'metadata': {}
+        }
+
+
 async def read_webpage(
     url: str,
     timeout: int = DEFAULT_TIMEOUT,
@@ -509,10 +598,10 @@ async def read_webpage(
     debug: bool = False
 ) -> Dict[str, Any]:
     """
-    Fetch and extract text content from a webpage with enhanced features.
+    Fetch and extract text content from a webpage or PDF with enhanced features.
     
     Args:
-        url: The URL of the webpage to read
+        url: The URL of the webpage/PDF to read
         timeout: Request timeout in seconds
         use_playwright: Whether to try Playwright for JS-heavy sites
         user_agents: List of user agents to rotate through
@@ -524,19 +613,30 @@ async def read_webpage(
         - text: Extracted text content (empty string if failed)
         - title: Page title (empty string if not found)
         - error: Error message if any (None if successful)
-        - source: Source of the content ('cache', 'direct', 'playwright')
+        - source: Source of the content ('cache', 'direct', 'playwright', 'pdf')
         - cached: Whether the response was served from cache
         - debug_info: Additional debug information if debug=True
     """
+    # Check if this is a PDF URL
+    is_pdf = url.lower().endswith('.pdf') or 'application/pdf' in url
+    
     # Initialize result
     result = {
         'text': '',
         'title': '',
         'error': None,
-        'source': 'direct',
+        'source': 'pdf' if is_pdf else 'direct',
         'cached': False,
         'debug_info': {}
     }
+    
+    # Handle PDF URLs
+    if is_pdf and PDF_PROCESSOR_AVAILABLE:
+        if debug:
+            logging.info(f"Processing PDF URL: {url}")
+        pdf_result = await process_pdf(url, is_url=True, debug=debug)
+        result.update(pdf_result)
+        return result
     
     # Generate cache key
     cache_key = get_cache_key(url)
@@ -1426,6 +1526,7 @@ async def process_message(message: Message, is_dm: bool):
     # Separate attachments by type
     image_attachments = []
     media_attachments = []  # Combined audio and video attachments
+    pdf_attachments = []
     text_attachments = []
     other_attachments = []
     
@@ -1437,6 +1538,9 @@ async def process_message(message: Message, is_dm: bool):
         # Check if it's a media file (audio or video)
         if is_audio_file(filename, content_type) or is_video_file(filename, content_type):
             media_attachments.append(att)
+        # Check if it's a PDF
+        elif (content_type == 'application/pdf' or filename.endswith('.pdf')):
+            pdf_attachments.append(att)
         # Check if it's an image
         elif (content_type and content_type.startswith('image/')) or \
              (filename and any(ext in filename for ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp'])):
@@ -1707,6 +1811,91 @@ async def process_message(message: Message, is_dm: bool):
     # Clean up image file if it exists
     if 'temp_img_path' in locals() and temp_img_path:
         safe_remove(temp_img_path)
+    
+    # Process PDF attachments if any
+    if pdf_attachments:
+        if len(pdf_attachments) > 1:
+            await message.channel.send("I'll process the first PDF file. Please send other files one at a time.")
+        
+        # Process the first PDF attachment
+        pdf_attachment = pdf_attachments[0]
+        temp_pdf_path = None
+        
+        try:
+            # Create a temporary file to store the downloaded PDF
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_pdf:
+                temp_pdf_path = temp_pdf.name
+                
+                # Download the PDF file with timeout
+                pdf_bytes = await asyncio.wait_for(pdf_attachment.read(), timeout=120.0)
+                temp_pdf.write(pdf_bytes)
+                
+            # Check file size after downloading
+            if pdf_attachment.size < 1024:  # 1KB minimum
+                await message.channel.send("The PDF file is too small to process. Please try with a different file.")
+                return
+                
+            if pdf_attachment.size > config["MAX_FILE_SIZE"]:
+                await message.channel.send(
+                    f"The PDF file is too large (max {config['MAX_FILE_SIZE'] // (1024*1024)}MB). "
+                    "Please send a smaller file."
+                )
+                return
+            
+            # Send a processing message
+            processing_msg = await message.channel.send("📄 Processing PDF... This may take a moment...")
+            
+            # Process the PDF file
+            pdf_result = await process_pdf(temp_pdf_path, debug=config.get("DEBUG", False))
+            
+            if pdf_result.get('error'):
+                await processing_msg.edit(content=f"❌ Error processing PDF: {pdf_result['error']}")
+                return
+                
+            # Add the PDF content to the total text
+            pdf_title = pdf_result.get('title', 'PDF Document')
+            pdf_pages = pdf_result.get('pages', 0)
+            is_scanned = pdf_result.get('is_scanned', False)
+            
+            pdf_summary = (
+                f"📄 **{pdf_title}** ({pdf_pages} page{'s' if pdf_pages != 1 else ''})\n"
+                f"*This is a {'scanned ' if is_scanned else ''}PDF document*\n\n"
+                f"{pdf_result.get('text', '')}"
+            )
+            
+            # Truncate if too long
+            if len(pdf_summary) > 1500:
+                pdf_summary = pdf_summary[:1497] + "..."
+                
+            if total_text_content:
+                total_text_content = f"{total_text_content}\n\n{'-'*20}\n{pdf_summary}"
+            else:
+                total_text_content = pdf_summary
+                
+            # Update the processing message to show completion
+            try:
+                await processing_msg.edit(content=f"✅ PDF processing complete! Extracted {pdf_pages} pages.")
+            except Exception as e:
+                logging.error(f"Failed to update processing message: {e}")
+            
+            logging.info(f"Successfully processed PDF: {pdf_title} ({pdf_pages} pages, {len(pdf_result.get('text', ''))} chars)")
+            
+        except asyncio.TimeoutError:
+            await message.channel.send("The PDF file took too long to process. Please try again with a smaller file.")
+            logging.error(f"PDF processing timed out: {pdf_attachment.filename}")
+            
+        except Exception as e:
+            error_msg = f"An error occurred while processing the PDF: {str(e)}"
+            logging.error(f"Error processing PDF: {error_msg}", exc_info=True)
+            await message.channel.send(f"❌ {error_msg}")
+            
+        finally:
+            # Clean up the temporary file
+            if temp_pdf_path and os.path.exists(temp_pdf_path):
+                try:
+                    os.unlink(temp_pdf_path)
+                except Exception as e:
+                    logging.error(f"Error cleaning up temporary PDF file {temp_pdf_path}: {e}")
     
     # Process text attachments if any
     if text_attachments:
