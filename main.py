@@ -451,7 +451,7 @@ def process_media_file(input_path: str, keep_failed: bool = False) -> Tuple[Opti
             output_path = temp_out.name
         
         # Build ffmpeg command with explicit audio stream selection and better error handling
-        # Using chained atempo filters for >2x speed-up (1.5 * 2 = 3x)
+        # Using a single atempo filter for 1.75x speed-up
         cmd = [
             'ffmpeg',
             '-y',                    # Overwrite output file if it exists
@@ -460,7 +460,7 @@ def process_media_file(input_path: str, keep_failed: bool = False) -> Tuple[Opti
             '-c:a', 'pcm_s16le',     # 16-bit PCM
             '-ar', '16000',          # 16kHz sample rate
             '-ac', '1',             # Mono
-            '-af', 'atempo=1.5,atempo=2.0',  # 3x speed (1.5 * 2 = 3)
+            '-af', 'atempo=1.75',    # 1.75x speed
             '-f', 'wav',            # Output format
             output_path
         ]

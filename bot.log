@@ -1190,3 +1190,49 @@ UnboundLocalError: cannot access local variable 'error_msg' where it is not asso
 2025-07-11 20:10:25,059 - INFO - Output file created: /tmp/discord_audio_1302_1752264625_26rijp98.wav (size: 657014 bytes)
 2025-07-11 20:10:25,059 - INFO - Converted file: /tmp/discord_audio_1302_1752264625_26rijp98.wav (size: 657014 bytes)
 2025-07-11 20:10:25,059 - INFO - Sending request to Whisper API: http://localhost:18129/v1/audio/transcriptions with data: {'file': '<657014 bytes>', 'model': 'Systran/faster-distil-whisper-small.en', 'response_format': 'text'}
+2025-07-11 20:10:51,037 - INFO - HTTP Request: POST http://localhost:18129/v1/audio/transcriptions "HTTP/1.1 200 OK"
+2025-07-11 20:10:51,037 - INFO - Whisper API response in 25.95s: 200
+2025-07-11 20:10:51,037 - INFO - Transcription successful. Length: 326 characters
+2025-07-11 20:10:51,244 - INFO - Successfully transcribed audio message (length: 326 chars)
+2025-07-11 20:10:52,893 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+/volume1/py/discord-llm-chatbot/main.py:704: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+2025-07-11 20:12:00,712 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 20:12:56,713 - WARNING - PyNaCl is not installed, voice will NOT be supported
+[2025-07-11 20:12:56] [INFO    ] discord.client: logging in using static token
+2025-07-11 20:12:56,716 - INFO - logging in using static token
+[2025-07-11 20:12:57] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: 6e5bb8d1d995698847bf2d7b394c16cf).
+2025-07-11 20:12:57,895 - INFO - Shard ID None has connected to Gateway (Session ID: 6e5bb8d1d995698847bf2d7b394c16cf).
+2025-07-11 20:12:59,906 - INFO - Ronin is now running! (hot config)
+/volume1/py/discord-llm-chatbot/main.py:704: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+2025-07-11 20:13:05,674 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 20:13:08,745 - INFO - Running FFmpeg command: ffmpeg -y -i /tmp/tmpsmc_8ikf.mp3 -map 0:a:0 -c:a pcm_s16le -ar 16000 -ac 1 -af atempo=1.75 -f wav /tmp/tmpktdsuqlj.wav
+2025-07-11 20:13:08,890 - INFO - Processing audio file: /tmp/tmpktdsuqlj.wav (size: 1125784 bytes)
+2025-07-11 20:13:08,890 - INFO - Running ffmpeg command: ffmpeg -hide_banner -loglevel warning -y -i /tmp/tmpktdsuqlj.wav -ar 16000 -ac 1 -c:a pcm_s16le -f wav -fflags +bitexact /tmp/discord_audio_27108_1752264788_s810xcx5.wav
+2025-07-11 20:13:08,921 - INFO - Output file created: /tmp/discord_audio_27108_1752264788_s810xcx5.wav (size: 1125750 bytes)
+2025-07-11 20:13:08,921 - INFO - Converted file: /tmp/discord_audio_27108_1752264788_s810xcx5.wav (size: 1125750 bytes)
+2025-07-11 20:13:08,921 - INFO - Sending request to Whisper API: http://localhost:18129/v1/audio/transcriptions with data: {'file': '<1125750 bytes>', 'model': 'Systran/faster-distil-whisper-small.en', 'response_format': 'text'}
+2025-07-11 20:13:42,383 - INFO - HTTP Request: POST http://localhost:18129/v1/audio/transcriptions "HTTP/1.1 200 OK"
+2025-07-11 20:13:42,384 - INFO - Whisper API response in 33.43s: 200
+2025-07-11 20:13:42,384 - INFO - Transcription successful. Length: 488 characters
+2025-07-11 20:13:42,601 - INFO - Successfully transcribed audio message (length: 488 chars)
+2025-07-11 20:13:44,392 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+/volume1/py/discord-llm-chatbot/main.py:704: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+2025-07-11 20:14:05,327 - INFO - Running FFmpeg command: ffmpeg -y -i /tmp/tmp8dnsztdr.mov -map 0:a:0 -c:a pcm_s16le -ar 16000 -ac 1 -af atempo=1.75 -f wav /tmp/tmp0hobgqc1.wav
+2025-07-11 20:14:05,438 - INFO - Processing audio file: /tmp/tmp0hobgqc1.wav (size: 657854 bytes)
+2025-07-11 20:14:05,439 - INFO - Running ffmpeg command: ffmpeg -hide_banner -loglevel warning -y -i /tmp/tmp0hobgqc1.wav -ar 16000 -ac 1 -c:a pcm_s16le -f wav -fflags +bitexact /tmp/discord_audio_27108_1752264845_x61eptkq.wav
+2025-07-11 20:14:05,462 - INFO - Output file created: /tmp/discord_audio_27108_1752264845_x61eptkq.wav (size: 657820 bytes)
+2025-07-11 20:14:05,462 - INFO - Converted file: /tmp/discord_audio_27108_1752264845_x61eptkq.wav (size: 657820 bytes)
+2025-07-11 20:14:05,462 - INFO - Sending request to Whisper API: http://localhost:18129/v1/audio/transcriptions with data: {'file': '<657820 bytes>', 'model': 'Systran/faster-distil-whisper-small.en', 'response_format': 'text'}
+/volume1/py/discord-llm-chatbot/main.py:704: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+2025-07-11 20:14:28,626 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 20:14:29,492 - INFO - HTTP Request: POST http://localhost:18129/v1/audio/transcriptions "HTTP/1.1 200 OK"
+2025-07-11 20:14:29,493 - INFO - Whisper API response in 24.00s: 200
+2025-07-11 20:14:29,493 - INFO - Transcription successful. Length: 389 characters
+2025-07-11 20:14:29,724 - INFO - Successfully transcribed video message (length: 389 chars)
+2025-07-11 20:14:33,513 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 20:14:50,539 - INFO - Added memory for user 237780805340889088: Preferred name: Going
+2025-07-11 20:15:01,713 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
