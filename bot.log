@@ -15,3 +15,201 @@
 2025-07-11 12:46:14,502 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
 2025-07-11 12:48:19,348 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
 2025-07-11 12:58:30,217 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 13:27:10,928 - WARNING - PyNaCl is not installed, voice will NOT be supported
+[2025-07-11 13:27:10] [INFO    ] discord.client: logging in using static token
+2025-07-11 13:27:10,931 - INFO - logging in using static token
+[2025-07-11 13:27:11] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: cbb54cf489e27b63d5fbacf742c9bd44).
+2025-07-11 13:27:11,871 - INFO - Shard ID None has connected to Gateway (Session ID: cbb54cf489e27b63d5fbacf742c9bd44).
+2025-07-11 13:27:13,884 - INFO - Ronin is now running! (hot config)
+/volume1/py/discord-llm-chatbot/main.py:362: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+/volume1/py/discord-llm-chatbot/main.py:343: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+2025-07-11 13:27:25,067 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 13:27:43,052 - ERROR - Error in Whisper transcription: [Errno -2] Name or service not known
+2025-07-11 13:27:43,052 - ERROR - Failed to transcribe audio
+2025-07-11 13:27:45,200 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 13:34:46,140 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 13:36:16,992 - ERROR - Missing required Whisper API configuration
+2025-07-11 13:36:16,993 - ERROR - Failed to transcribe audio
+2025-07-11 13:36:24,116 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 14:23:42,948 - WARNING - PyNaCl is not installed, voice will NOT be supported
+[2025-07-11 14:23:42] [INFO    ] discord.client: logging in using static token
+2025-07-11 14:23:42,952 - INFO - logging in using static token
+[2025-07-11 14:23:43] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: 120c18e007f3190e40d81c8c5162142c).
+2025-07-11 14:23:43,723 - INFO - Shard ID None has connected to Gateway (Session ID: 120c18e007f3190e40d81c8c5162142c).
+2025-07-11 14:23:45,744 - INFO - Ronin is now running! (hot config)
+2025-07-11 14:25:19,369 - WARNING - PyNaCl is not installed, voice will NOT be supported
+[2025-07-11 14:25:19] [INFO    ] discord.client: logging in using static token
+2025-07-11 14:25:19,373 - INFO - logging in using static token
+[2025-07-11 14:25:20] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: 89374386f5cd21b01f68ec161c69c7a5).
+2025-07-11 14:25:20,134 - INFO - Shard ID None has connected to Gateway (Session ID: 89374386f5cd21b01f68ec161c69c7a5).
+2025-07-11 14:25:22,155 - INFO - Ronin is now running! (hot config)
+/volume1/py/discord-llm-chatbot/main.py:362: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+/volume1/py/discord-llm-chatbot/main.py:343: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+/volume1/py/discord-llm-chatbot/main.py:362: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+2025-07-11 14:26:33,285 - ERROR - Discord event error in on_message: Expecting value: line 1 column 1 (char 0)
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1017, in on_message
+    await process_message(message, is_dm)
+  File "/volume1/py/discord-llm-chatbot/main.py", line 637, in process_message
+    profile = get_profile(user_id, username)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/main.py", line 239, in get_profile
+    data = json.load(f)
+           ^^^^^^^^^^^^
+  File "/var/services/homes/pry/.local/share/uv/python/cpython-3.12.11-linux-x86_64-gnu/lib/python3.12/json/__init__.py", line 293, in load
+    return loads(fp.read(),
+           ^^^^^^^^^^^^^^^^
+  File "/var/services/homes/pry/.local/share/uv/python/cpython-3.12.11-linux-x86_64-gnu/lib/python3.12/json/__init__.py", line 346, in loads
+    return _default_decoder.decode(s)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/services/homes/pry/.local/share/uv/python/cpython-3.12.11-linux-x86_64-gnu/lib/python3.12/json/decoder.py", line 338, in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/services/homes/pry/.local/share/uv/python/cpython-3.12.11-linux-x86_64-gnu/lib/python3.12/json/decoder.py", line 356, in raw_decode
+    raise JSONDecodeError("Expecting value", s, err.value) from None
+json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+/volume1/py/discord-llm-chatbot/main.py:343: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+2025-07-11 14:26:35,478 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 14:26:35,576 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 14:27:01,612 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 14:27:04,746 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 14:27:30,608 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 14:27:32,734 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 14:27:59,098 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 14:27:59,951 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 14:28:40,181 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 14:28:41,141 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 14:29:01,050 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 14:29:01,439 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 14:29:51,988 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 14:29:55,292 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 14:30:01,069 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 14:30:02,718 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 14:33:54,663 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 14:34:10,036 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 14:34:20,596 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 14:35:30,657 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 14:44:03,268 - WARNING - PyNaCl is not installed, voice will NOT be supported
+[2025-07-11 14:44:03] [INFO    ] discord.client: logging in using static token
+2025-07-11 14:44:03,272 - INFO - logging in using static token
+[2025-07-11 14:44:04] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: ad2108d41bda04b702beeaa7f32445e9).
+2025-07-11 14:44:04,126 - INFO - Shard ID None has connected to Gateway (Session ID: ad2108d41bda04b702beeaa7f32445e9).
+2025-07-11 14:44:06,134 - INFO - Ronin is now running! (hot config)
+/volume1/py/discord-llm-chatbot/main.py:362: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+/volume1/py/discord-llm-chatbot/main.py:343: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+2025-07-11 14:47:44,712 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 14:47:45,963 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 14:48:31,363 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 14:50:10,842 - ERROR - Missing required Whisper API configuration
+2025-07-11 14:50:10,843 - ERROR - Failed to transcribe audio
+2025-07-11 14:50:13,296 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 14:51:36,023 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 14:51:45,557 - ERROR - Missing required Whisper API configuration
+2025-07-11 14:51:45,557 - ERROR - Failed to transcribe audio
+2025-07-11 14:51:50,529 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 14:55:12,187 - ERROR - Missing required Whisper API configuration
+2025-07-11 14:55:12,187 - ERROR - Failed to transcribe audio
+2025-07-11 14:55:14,721 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+[2025-07-11 15:01:35] [INFO    ] discord.gateway: Shard ID None has successfully RESUMED session 120c18e007f3190e40d81c8c5162142c.
+2025-07-11 15:01:35,835 - INFO - Shard ID None has successfully RESUMED session 120c18e007f3190e40d81c8c5162142c.
+2025-07-11 15:09:59,392 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 15:11:15,481 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 15:11:36,662 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 15:12:30,697 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 15:13:06,619 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 15:13:29,863 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 15:22:41,881 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 500 Internal Server Error"
+2025-07-11 15:22:57,989 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 15:23:35,140 - ERROR - Missing required Whisper API configuration
+2025-07-11 15:23:35,140 - ERROR - Failed to transcribe audio
+2025-07-11 15:23:36,489 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 15:23:56,980 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 15:24:14,572 - WARNING - PyNaCl is not installed, voice will NOT be supported
+[2025-07-11 15:24:14] [INFO    ] discord.client: logging in using static token
+2025-07-11 15:24:14,575 - INFO - logging in using static token
+[2025-07-11 15:24:15] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: fb8866c59bed41eea6eb12ba86a5ee3a).
+2025-07-11 15:24:15,555 - INFO - Shard ID None has connected to Gateway (Session ID: fb8866c59bed41eea6eb12ba86a5ee3a).
+2025-07-11 15:24:17,569 - INFO - Ronin is now running! (hot config)
+/volume1/py/discord-llm-chatbot/main.py:444: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+/volume1/py/discord-llm-chatbot/main.py:425: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+2025-07-11 15:24:22,009 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 15:24:30,433 - ERROR - Missing required Whisper API configuration
+2025-07-11 15:24:30,433 - ERROR - Failed to transcribe audio
+2025-07-11 15:24:34,110 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 15:25:42,446 - ERROR - Missing required Whisper API configuration
+2025-07-11 15:25:42,447 - ERROR - Failed to transcribe audio
+2025-07-11 15:25:45,135 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 15:26:13,829 - ERROR - Missing required Whisper API configuration
+2025-07-11 15:26:13,829 - ERROR - Failed to transcribe audio
+2025-07-11 15:26:16,639 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 15:29:53,740 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 15:32:26,275 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 15:33:26,228 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 15:33:44,608 - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=penis%20size%20by%20race&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 200 OK"
+2025-07-11 15:33:46,653 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+[2025-07-11 15:34:02] [INFO    ] discord.gateway: Shard ID None has successfully RESUMED session fb8866c59bed41eea6eb12ba86a5ee3a.
+2025-07-11 15:34:02,168 - INFO - Shard ID None has successfully RESUMED session fb8866c59bed41eea6eb12ba86a5ee3a.
+2025-07-11 15:34:08,018 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 15:34:35,676 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 15:38:31,979 - WARNING - PyNaCl is not installed, voice will NOT be supported
+[2025-07-11 15:38:31] [INFO    ] discord.client: logging in using static token
+2025-07-11 15:38:31,982 - INFO - logging in using static token
+[2025-07-11 15:38:32] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: 9b2118a8cde9acddfbadcea6237e7d91).
+2025-07-11 15:38:32,782 - INFO - Shard ID None has connected to Gateway (Session ID: 9b2118a8cde9acddfbadcea6237e7d91).
+2025-07-11 15:38:34,797 - INFO - Ronin is now running! (hot config)
+/volume1/py/discord-llm-chatbot/main.py:553: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+/volume1/py/discord-llm-chatbot/main.py:534: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+2025-07-11 15:38:41,431 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 15:39:02,757 - INFO - Downloaded audio file: /tmp/tmp8bh4lw0l.wav (1151054 bytes)
+2025-07-11 15:39:03,020 - ERROR - Missing required Whisper API configuration
+2025-07-11 15:39:03,021 - ERROR - Transcription failed: Missing required Whisper API configuration
+2025-07-11 15:39:05,079 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 15:39:48,275 - INFO - Downloaded audio file: /tmp/tmp27c3dwk2.wav (1151054 bytes)
+2025-07-11 15:39:48,449 - INFO - Processing audio file: /tmp/tmp27c3dwk2.wav (size: 1151054 bytes)
+2025-07-11 15:39:48,449 - INFO - Running ffmpeg command: ffmpeg -hide_banner -loglevel info -y -i /tmp/tmp27c3dwk2.wav -ar 16000 -ac 1 -c:a pcm_s16le -f wav -fflags +bitexact /tmp/discord_audio_1752248388_ndaclmn7.wav
+2025-07-11 15:39:48,595 - INFO - Output file created: /tmp/discord_audio_1752248388_ndaclmn7.wav (191874 bytes)
+2025-07-11 15:39:48,595 - ERROR - Failed to convert audio file: Guessed Channel Layout for Input Stream #0.0 : stereo
+Input #0, wav, from '/tmp/tmp27c3dwk2.wav':
+  Metadata:
+    encoder         : Lavf61.7.100
+  Duration: 00:00:05.99, bitrate: 1536 kb/s
+    Stream #0:0: Audio: pcm_s16le ([1][0][0][0] / 0x0001), 48000 Hz, stereo, s16, 1536 kb/s
+Stream mapping:
+  Stream #0:0 -> #0:0 (pcm_s16le (native) -> pcm_s16le (native))
+Press [q] to stop, [?] for help
+Output #0, wav, to '/tmp/discord_audio_1752248388_ndaclmn7.wav':
+    Stream #0:0: Audio: pcm_s16le ([1][0][0][0] / 0x0001), 16000 Hz, mono, s16, 256 kb/s
+    Metadata:
+      encoder         : Lavc pcm_s16le
+size=     187kB time=00:00:05.99 bitrate= 256.1kbits/s speed= 152x    
+video:0kB audio:187kB subtitle:0kB other streams:0kB global headers:0kB muxing overhead: 0.022937%
+
+2025-07-11 15:39:48,595 - ERROR - Transcription failed: Failed to convert audio file: Guessed Channel Layout for Input Stream #0.0 : stereo
+Input #0, wav, from '/tmp/tmp27c3dwk2.wav':
+  Metadata:
+    encoder         : Lavf61.7.100
+  Duration: 00:00:05.99, bitrate: 1536 kb/s
+    Stream #0:0: Audio: pcm_s16le ([1][0][0][0] / 0x0001), 48000 Hz, stereo, s16, 1536 kb/s
+Stream mapping:
+  Stream #0:0 -> #0:0 (pcm_s16le (native) -> pcm_s16le (native))
+Press [q] to stop, [?] for help
+Output #0, wav, to '/tmp/discord_audio_1752248388_ndaclmn7.wav':
+    Stream #0:0: Audio: pcm_s16le ([1][0][0][0] / 0x0001), 16000 Hz, mono, s16, 256 kb/s
+    Metadata:
+      encoder         : Lavc pcm_s16le
+size=     187kB time=00:00:05.99 bitrate= 256.1kbits/s speed= 152x    
+video:0kB audio:187kB subtitle:0kB other streams:0kB global headers:0kB muxing overhead: 0.022937%
+
+2025-07-11 15:39:50,231 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"

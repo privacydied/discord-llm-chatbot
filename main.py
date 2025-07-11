@@ -8,11 +8,16 @@ import logging
 import base64
 import pathlib
 import glob
-from typing import Any, Callable, Coroutine, Dict, List, Optional, TypeVar, Tuple
+import tempfile
+import mimetypes
+import subprocess
+import shutil
+from typing import Optional, Tuple
+from typing import Any, Callable, Coroutine, Dict, List, TypeVar, Union
 from functools import wraps
 from dataclasses import dataclass
 from dotenv import load_dotenv
-from discord import Intents, Message
+from discord import Intents, Message, File
 from discord.ext import commands
 import discord
 from datetime import datetime
@@ -113,6 +118,257 @@ def load_vl_prompt():
         logging.warning(f"VL prompt file '{vl_prompt_path}' not found, using default VL prompt.")
         return "Describe this image in detail."
 
+async def transcribe_audio(
+    audio_path: str, 
+    config: dict, 
+    original_filename: Optional[str] = None,
+    keep_converted: bool = False
+) -> tuple[Optional[str], Optional[str]]:
+    """
+    Transcribe audio using the Whisper API with robust error handling and validation.
+    
+    Args:
+        audio_path: Path to the audio file to transcribe
+        config: Configuration dictionary containing Whisper settings
+        original_filename: Original filename (for logging and model selection)
+        keep_converted: If True, keep the converted WAV file for debugging
+        
+    Returns:
+        Tuple of (transcript, error_message) where:
+        - transcript is the transcribed text if successful, None otherwise
+        - error_message is None if successful, or contains an error message
+    """
+    # Validate configuration
+    whisper_api_key = config.get("WHISPER_API_KEY")
+    whisper_api_base = config.get("WHISPER_API_BASE")
+    whisper_model = str(config.get("WHISPER_MODEL", "whisper-1"))  # Ensure model is a string
+    
+    if not all([whisper_api_key, whisper_api_base, whisper_model]):
+        error_msg = "Missing required Whisper API configuration"
+        logging.error(error_msg)
+        return None, error_msg
+    
+    # Validate input file
+    if not os.path.exists(audio_path):
+        error_msg = f"Audio file not found: {audio_path}"
+        logging.error(error_msg)
+        return None, error_msg
+    
+    converted_path = None
+    try:
+        # Always convert to WAV for consistency, even if the file already has a .wav extension
+        logging.info(f"Processing audio file: {audio_path} (size: {os.path.getsize(audio_path)} bytes)")
+        converted_path, conversion_error = convert_audio_to_wav(audio_path, keep_failed=keep_converted)
+        
+        if not converted_path or conversion_error:
+            error_msg = f"Failed to convert audio file: {conversion_error or 'Unknown error'}"
+            logging.error(error_msg)
+            return None, error_msg
+        
+        # Verify the converted file
+        if not os.path.exists(converted_path):
+            error_msg = "Converted file not found after successful conversion"
+            logging.error(error_msg)
+            return None, error_msg
+            
+        converted_size = os.path.getsize(converted_path)
+        logging.info(f"Converted file: {converted_path} (size: {converted_size} bytes)")
+        
+        # Prepare the API request
+        url = f"{whisper_api_base}/audio/transcriptions"
+        headers = {
+            "Authorization": f"Bearer {whisper_api_key}",
+        }
+        
+        # Use the original filename if available, otherwise use the WAV filename
+        filename = original_filename if original_filename else os.path.basename(audio_path)
+        
+        try:
+            with open(converted_path, "rb") as audio_file:
+                files = {
+                    "file": (filename, audio_file, "audio/wav"),
+                    "model": (None, whisper_model),
+                    "response_format": (None, "text"),
+                }
+                
+                # Log the request details (without sensitive data)
+                log_files = {k: (v[0], f"<{len(v[1])} bytes>" if k == "file" else v[1]) 
+                            for k, v in files.items()}
+                logging.info(f"Sending request to Whisper API: {url} with files: {log_files}")
+                
+                # Make the API request with timeout
+                timeout = config.get("TIMEOUT", 30.0)
+                async with httpx.AsyncClient(timeout=timeout) as client:
+                    start_time = time.time()
+                    response = await client.post(url, headers=headers, files=files)
+                    process_time = time.time() - start_time
+                    
+                    logging.info(f"Whisper API response in {process_time:.2f}s: {response.status_code}")
+                    
+                    if response.status_code != 200:
+                        error_detail = response.text[:500]  # Limit error detail length
+                        error_msg = (
+                            f"Whisper API error {response.status_code}: {error_detail}"
+                        )
+                        logging.error(f"{error_msg}. Full response: {response.text}")
+                        return None, error_msg
+                    
+                    # Success!
+                    transcript = response.text.strip()
+                    logging.info(f"Transcription successful. Length: {len(transcript)} characters")
+                    return transcript, None
+                    
+        except httpx.TimeoutException:
+            error_msg = f"Whisper API request timed out after {timeout} seconds"
+            logging.error(error_msg)
+            return None, error_msg
+            
+        except httpx.RequestError as e:
+            error_msg = f"Request to Whisper API failed: {str(e)}"
+            logging.error(error_msg, exc_info=True)
+            return None, error_msg
+            
+        except Exception as e:
+            error_msg = f"Unexpected error during Whisper API request: {str(e)}"
+            logging.error(error_msg, exc_info=True)
+            return None, error_msg
+            
+    except Exception as e:
+        error_msg = f"Error during audio transcription: {str(e)}"
+        logging.error(error_msg, exc_info=True)
+        return None, error_msg
+        
+    finally:
+        # Clean up the converted file if it was created and we're not keeping it
+        if converted_path and os.path.exists(converted_path) and not keep_converted:
+            try:
+                os.unlink(converted_path)
+                logging.debug(f"Cleaned up temporary file: {converted_path}")
+            except Exception as e:
+                logging.warning(f"Failed to clean up temporary file {converted_path}: {e}")
+
+def convert_audio_to_wav(input_path: str, keep_failed: bool = False) -> Optional[Tuple[str, str]]:
+    """
+    Convert any audio file to a Whisper-compatible WAV file using ffmpeg.
+    
+    Args:
+        input_path: Path to the input audio file
+        keep_failed: If True, keep failed conversion files for debugging
+        
+    Returns:
+        Tuple of (output_path, ffmpeg_log) if successful, or (None, error_message) on failure
+    """
+    # Verify input file exists and has content
+    try:
+        input_size = os.path.getsize(input_path)
+        if input_size < 1024:  # 1KB minimum size
+            error_msg = f"Input file too small ({input_size} bytes), likely corrupted or empty"
+            logging.warning(error_msg)
+            return None, error_msg
+    except OSError as e:
+        error_msg = f"Failed to access input file: {e}"
+        logging.error(error_msg)
+        return None, error_msg
+
+    if not shutil.which('ffmpeg'):
+        error_msg = "ffmpeg is not installed. Please install ffmpeg to enable audio conversion."
+        logging.error(error_msg)
+        return None, error_msg
+    
+    output_path = None
+    try:
+        # Create a temporary file for the output with a predictable name for debugging
+        temp_dir = tempfile.gettempdir()
+        temp_prefix = f"discord_audio_{int(time.time())}_"
+        temp_fd, output_path = tempfile.mkstemp(prefix=temp_prefix, suffix='.wav')
+        os.close(temp_fd)  # We'll let ffmpeg create the file
+        
+        # Build the ffmpeg command with explicit settings for Whisper compatibility
+        cmd = [
+            'ffmpeg',
+            '-hide_banner',  # Less verbose output
+            '-loglevel', 'info',  # But still log important info
+            '-y',  # Overwrite output file if it exists
+            '-i', input_path,  # Input file
+            '-ar', '16000',  # Sample rate: 16kHz (Whisper's expected rate)
+            '-ac', '1',  # Mono audio
+            '-c:a', 'pcm_s16le',  # 16-bit little-endian PCM
+            '-f', 'wav',  # Force WAV format
+            '-fflags', '+bitexact',  # Ensure consistent output
+            output_path
+        ]
+        
+        logging.info(f"Running ffmpeg command: {' '.join(cmd)}")
+        
+        # Run ffmpeg and capture both stdout and stderr
+        result = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,  # Combine stdout and stderr
+            text=True,
+            check=False  # We'll handle non-zero exit codes ourselves
+        )
+        
+        ffmpeg_log = result.stdout
+        
+        # Check if output file was created and has content
+        if not os.path.exists(output_path):
+            error_msg = f"FFmpeg failed to create output file. Command: {' '.join(cmd)}"
+            logging.error(f"{error_msg}\nFFmpeg output:\n{ffmpeg_log}")
+            return None, error_msg
+            
+        output_size = os.path.getsize(output_path)
+        logging.info(f"Output file created: {output_path} ({output_size} bytes)")
+        
+        if output_size < 1024:  # 1KB minimum size for WAV header + some audio data
+            error_msg = f"Output file too small ({output_size} bytes), conversion likely failed"
+            logging.error(f"{error_msg}\nFFmpeg output:\n{ffmpeg_log}")
+            if not keep_failed:
+                os.unlink(output_path)
+                output_path = None
+            return None, error_msg
+        
+        if result.returncode != 0:
+            error_msg = f"FFmpeg exited with code {result.returncode}"
+            logging.error(f"{error_msg}\nFFmpeg output:\n{ffmpeg_log}")
+            if not keep_failed:
+                os.unlink(output_path)
+                output_path = None
+            return None, error_msg
+            
+        return output_path, ffmpeg_log
+        
+    except Exception as e:
+        error_msg = f"Error during audio conversion: {str(e)}"
+        logging.error(error_msg, exc_info=True)
+        if output_path and os.path.exists(output_path) and not keep_failed:
+            try:
+                os.unlink(output_path)
+            except Exception as cleanup_err:
+                logging.error(f"Failed to clean up output file: {cleanup_err}")
+        return None, error_msg
+
+def is_audio_file(filename: str, content_type: Optional[str] = None) -> bool:
+    """Check if a file is an audio file based on extension and/or content type."""
+    audio_extensions = {'.wav', '.mp3', '.m4a', '.ogg', '.flac', '.opus', '.m4b', '.aac', '.wma', '.webm'}
+    audio_content_types = {
+        'audio/wav', 'audio/mpeg', 'audio/mp4', 'audio/ogg', 'audio/webm',
+        'audio/flac', 'audio/opus', 'audio/x-wav', 'audio/x-m4a', 'audio/aac',
+        'audio/x-m4b', 'audio/x-ms-wma', 'audio/aacp', 'audio/mp4a-latm',
+        'audio/mpeg3', 'audio/x-mpeg-3', 'audio/x-m4p', 'audio/x-m4b', 'audio/x-m4r'
+    }
+    
+    # Check by extension
+    ext = os.path.splitext(filename.lower())[1]
+    if ext in audio_extensions:
+        return True
+        
+    # Check by content type if provided
+    if content_type and any(ct in content_type.lower() for ct in audio_content_types):
+        return True
+        
+    return False
+
 def load_config():
     load_dotenv(override=True)
     return {
@@ -123,14 +379,18 @@ def load_config():
         "OPENAI_API_KEY": os.getenv('OPENAI_API_KEY'),
         "OPENAI_API_BASE": os.getenv('OPENAI_API_BASE', 'https://api.openai.com/v1'),
         "OPENAI_TEXT_MODEL": os.getenv('OPENAI_TEXT_MODEL', 'gpt-4o'),
-        "VL_MODEL": os.getenv('VL_MODEL', 'gpt-4-vision-preview'),  # Could be DashScope or OpenAI
+        "VL_MODEL": os.getenv('VL_MODEL', 'gpt-4-vision-preview'),
         "VL_PROMPT": load_vl_prompt(),
+        "WHISPER_API_KEY": os.getenv('WHISPER_API_KEY'),
+        "WHISPER_API_BASE": os.getenv('WHISPER_API_BASE'),
+        "WHISPER_MODEL": os.getenv('WHISPER_MODEL', 'whisper-1'),
         "TEMPERATURE": float(os.getenv('TEMPERATURE', '0.7')),
         "TIMEOUT": float(os.getenv('TIMEOUT', '120.0')),
         "CHANGE_NICKNAME": os.getenv('CHANGE_NICKNAME', 'True').lower() == 'true',
         "MAX_CONVERSATION_LENGTH": int(os.getenv('MAX_CONVERSATION_LENGTH', '30')),
+        "MAX_FILE_SIZE": int(os.getenv('MAX_FILE_SIZE', '20')) * 1024 * 1024,  # 20MB default for general files
+        "MAX_AUDIO_SIZE": int(os.getenv('MAX_AUDIO_SIZE', '50')) * 1024 * 1024,  # 50MB default for audio files
         "MAX_TEXT_ATTACHMENT_SIZE": int(os.getenv('MAX_TEXT_ATTACHMENT_SIZE', '20000')),
-        "MAX_FILE_SIZE": int(os.getenv('MAX_FILE_SIZE', str(2 * 1024 * 1024))),
         "SYSTEM_PROMPT": load_prompt_file(),
         "MAX_USER_MEMORY": int(os.getenv('MAX_USER_MEMORY', '10')),
         "MEMORY_SAVE_INTERVAL": int(os.getenv('MEMORY_SAVE_INTERVAL', '30')),
@@ -617,31 +877,132 @@ async def process_message(message: Message, is_dm: bool):
     # Process all attachments
     total_text_content = ""
     
-    # Import mimetypes for MIME type detection
-    import mimetypes
-    
-    # Separate image and text attachments with robust MIME type checking
+    # Separate attachments by type
     image_attachments = []
+    audio_attachments = []
     text_attachments = []
     other_attachments = []
     
     for att in message.attachments:
-        # Check content type first, then fall back to extension
-        is_image = (hasattr(att, 'content_type') and att.content_type and att.content_type.startswith('image/'))
+        # Get content type and filename
+        content_type = getattr(att, 'content_type', '')
+        filename = getattr(att, 'filename', '')
         
-        # If content_type check fails, check file extension
-        if not is_image and hasattr(att, 'filename'):
-            mime_type, _ = mimetypes.guess_type(att.filename)
-            is_image = mime_type and mime_type.startswith('image/')
+        # Check if it's an audio file (using our enhanced detection)
+        if is_audio_file(filename, content_type):
+            audio_attachments.append(att)
+        # Check if it's an image
+        is_image = (content_type and content_type.startswith('image/')) or \
+                  (filename and any(ext in filename for ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp']))
         
-        if is_image:
-            image_attachments.append(att)
-        elif att.filename.lower().endswith(('.txt', '.md', '.log', '.json', '.csv', '.py', '.js', '.html', '.css')):
-            text_attachments.append(att)
-        else:
-            other_attachments.append(att)
+        # Check if it's an audio file
+        is_audio = is_audio_file(filename, content_type)
+        
+        if len(audio_attachments) > 1:
+            await message.channel.send("I'll process the first audio file. Please send other audio files one at a time.")
+        
+        # Process the first audio attachment if present
+        if audio_attachments:
+            audio_attachment = audio_attachments[0]
+            temp_path = None
+            try:
+                # Notify user we're processing the audio
+                processing_msg = await message.channel.send("🎤 Processing audio message...")
+                
+                # Create a temporary file to save the audio with original extension
+                file_ext = os.path.splitext(audio_attachment.filename)[1] or '.bin'
+                with tempfile.NamedTemporaryFile(delete=False, suffix=file_ext) as temp_file:
+                    temp_path = temp_file.name
+                
+                # Download the audio file with progress feedback
+                await message.channel.typing()
+                await audio_attachment.save(temp_path)
+                file_size = os.path.getsize(temp_path)
+                logging.info(f"Downloaded audio file: {temp_path} ({file_size} bytes)")
+                
+                # Validate file size
+                max_audio_size = config.get("MAX_AUDIO_SIZE", 50 * 1024 * 1024)  # Default 50MB
+                if file_size > max_audio_size:
+                    error_msg = f"Audio file is too large ({file_size/1024/1024:.1f}MB > {max_audio_size/1024/1024}MB limit)"
+                    logging.warning(error_msg)
+                    await processing_msg.edit(content=f"❌ {error_msg}")
+                    return
+                
+                if file_size < 1024:  # 1KB
+                    error_msg = "Audio file is too small, it might be corrupted"
+                    logging.warning(f"{error_msg} ({file_size} bytes)")
+                    await processing_msg.edit(content=f"❌ {error_msg}")
+                    return
+                
+                # Transcribe the audio with progress updates
+                await processing_msg.edit(content="🔊 Transcribing audio (this may take a moment)...")
+                
+                # Keep the converted file for debugging if in debug mode
+                keep_converted = config.get("DEBUG", False)
+                transcript, error = await transcribe_audio(
+                    temp_path, 
+                    config, 
+                    original_filename=audio_attachment.filename,
+                    keep_converted=keep_converted
+                )
+                
+                # Handle transcription result
+                if transcript:
+                    # Truncate very long transcripts in the message
+                    display_transcript = (transcript[:500] + '...') if len(transcript) > 500 else transcript
+                    
+                    # Add the transcription to the message content
+                    if message.content:
+                        new_content = f"{message.content}\n\n🎤 **Audio transcription:** {display_transcript}"
+                    else:
+                        new_content = f"🎤 **Audio transcription:** {display_transcript}"
+                    
+                    # Try to edit the original message to include the transcription
+                    try:
+                        await message.edit(content=new_content)
+                        await processing_msg.delete()  # Remove the processing message
+                    except Exception as e:
+                        logging.error(f"Failed to edit message: {e}")
+                        # If we can't edit, update the processing message with the transcript
+                        await processing_msg.edit(content=f"🎤 **Audio transcription:** {display_transcript}")
+                    
+                    # If transcript was truncated, send the full version in a follow-up message
+                    if len(transcript) > 500:
+                        await message.channel.send(f"Full transcription:\n{transcript}")
+                    
+                    logging.info(f"Successfully transcribed audio message (length: {len(transcript)} chars)")
+                else:
+                    error_msg = error or "Failed to transcribe audio"
+                    logging.error(f"Transcription failed: {error_msg}")
+                    await processing_msg.edit(content=f"❌ Failed to transcribe audio: {error_msg}")
+            
+            except Exception as e:
+                error_msg = str(e) or "Unknown error"
+                logging.error(f"Error processing audio attachment: {error_msg}", exc_info=True)
+                
+                # Try to provide a more user-friendly error message
+                if "No space left on device" in error_msg:
+                    user_error = "Not enough disk space to process audio"
+                elif "timeout" in error_msg.lower():
+                    user_error = "Audio processing timed out"
+                else:
+                    user_error = "An error occurred while processing the audio"
+                
+                try:
+                    await processing_msg.edit(content=f"❌ {user_error}. Please try again later.")
+                except:
+                    await message.channel.send(f"❌ {user_error}. Please try again later.")
+            
+            finally:
+                # Clean up the temporary file
+                if temp_path and os.path.exists(temp_path):
+                    try:
+                        os.unlink(temp_path)
+                        logging.debug(f"Cleaned up temporary file: {temp_path}")
+                    except Exception as e:
+                        logging.error(f"Error cleaning up temporary file {temp_path}: {e}")
     
-    # Log warning for non-image attachments that weren't processed as text
+    # Log warning for unprocessed attachments
     for att in other_attachments:
         logging.warning(f"Unprocessed attachment type: {att.filename} (content_type: {getattr(att, 'content_type', 'unknown')})")
     
@@ -654,19 +1015,59 @@ async def process_message(message: Message, is_dm: bool):
         
         # Process the first image
         img_attachment = image_attachments[0]
-        temp_img_path = f"temp_{user_id}_{int(time.time())}_{img_attachment.filename}"
         
-        try:
-            # Check file size before downloading
-            if img_attachment.size > config["MAX_FILE_SIZE"]:
-                await message.channel.send(f"The image is too large (max {config['MAX_FILE_SIZE'] // (1024*1024)}MB). Please send a smaller image.")
-                return
-                
-            # Download the image with timeout
+        # Create a temporary file with proper cleanup
+        with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(img_attachment.filename)[1]) as temp_img:
+            temp_img_path = temp_img.name
+            
             try:
+                # Download the image with timeout
                 img_bytes = await asyncio.wait_for(img_attachment.read(), timeout=30.0)
-                with open(temp_img_path, 'wb') as f:
-                    f.write(img_bytes)
+                temp_img.write(img_bytes)
+                
+                # Check file size after downloading
+                if img_attachment.size > config["MAX_FILE_SIZE"]:
+                    await message.channel.send(f"The image is too large (max {config['MAX_FILE_SIZE'] // (1024*1024)}MB). Please send a smaller image.")
+                    return
+                    
+                # Get MIME type for the downloaded file
+                mime_type, _ = mimetypes.guess_type(img_attachment.filename)
+                if not mime_type or not mime_type.startswith('image/'):
+                    mime_type = 'application/octet-stream'
+                
+                # Always use the VL model for image analysis
+                try:
+                    # Get the VL prompt from config (loaded from file via VL_PROMPT_FILE)
+                    vl_prompt = config.get("VL_PROMPT", "Describe this image in detail.")
+                    vision_caption = await get_vision_caption(temp_img_path, vl_prompt, config)
+                    
+                    if not vision_caption:
+                        logging.error("VL model returned empty caption")
+                        # Continue with original message content if VL fails
+                        vision_caption = "[Image processing failed]"
+                    
+                    # Format the message content based on whether there was original text
+                    original_content = message.content.strip()
+                    if original_content:
+                        message.content = f"{original_content}\n[Image description: {vision_caption}]"
+                    else:
+                        message.content = f"[Image description: {vision_caption}]"
+                    
+                    # Add to context with MIME type information
+                    context.append({
+                        "role": "user",
+                        "content": message.content,  # Use the formatted message content
+                        "mime_type": mime_type,
+                        "size_bytes": img_attachment.size
+                    })
+                    
+                except Exception as e:
+                    # Log the error but don't show it to the user
+                    logging.error(f"Error in vision-language model: {e}", exc_info=True)
+                    # Continue with original message content if VL processing fails
+                    if not message.content.strip():
+                        message.content = "[Image processing failed]"
+                
             except asyncio.TimeoutError:
                 await message.channel.send("Sorry, the image took too long to download. Please try again.")
                 return
@@ -675,57 +1076,17 @@ async def process_message(message: Message, is_dm: bool):
                 await message.channel.send("Sorry, I couldn't process that image. Please try another one.")
                 return
             
-            # Get MIME type for the downloaded file
-            mime_type, _ = mimetypes.guess_type(img_attachment.filename)
-            if not mime_type or not mime_type.startswith('image/'):
-                mime_type = 'application/octet-stream'
-            
-            # Always use the VL model for image analysis
+    # Clean up temporary files after all processing
+    def safe_remove(filepath):
+        if filepath and os.path.exists(filepath):
             try:
-                # Get the VL prompt from config (loaded from file via VL_PROMPT_FILE)
-                vl_prompt = config.get("VL_PROMPT", "Describe this image in detail.")
-                vision_caption = await get_vision_caption(temp_img_path, vl_prompt, config)
-                
-                if not vision_caption:
-                    logging.error("VL model returned empty caption")
-                    # Continue with original message content if VL fails
-                    vision_caption = "[Image processing failed]"
-                
-                # Format the message content based on whether there was original text
-                original_content = message.content.strip()
-                if original_content:
-                    message.content = f"{original_content}\n[Image description: {vision_caption}]"
-                else:
-                    message.content = f"[Image description: {vision_caption}]"
-                
-                # Add to context with MIME type information
-                context.append({
-                    "role": "user",
-                    "content": message.content,  # Use the formatted message content
-                    "mime_type": mime_type,
-                    "size_bytes": img_attachment.size
-                })
-                
+                os.remove(filepath)
             except Exception as e:
-                # Log the error but don't show it to the user
-                logging.error(f"Error in vision-language model: {e}", exc_info=True)
-                # Continue with original message content if VL processing fails
-                if not message.content.strip():
-                    message.content = "[Image processing failed]"
-            
-        except Exception as e:
-            logging.error(f"Error processing image: {e}", exc_info=True)
-            # Continue with original message content if there's an error
-            if not message.content.strip():
-                message.content = "[Image processing failed]"
-        finally:
-            # Clean up the temporary file
-            if temp_img_path and os.path.exists(temp_img_path):
-                try:
-                    os.remove(temp_img_path)
-                except Exception as e:
-                    logging.error(f"Error removing temporary file {temp_img_path}: {e}")
-                    # Continue execution even if cleanup fails
+                logging.error(f"Error removing temporary file {filepath}: {e}")
+    
+    # Clean up image file if it exists
+    if 'temp_img_path' in locals() and temp_img_path:
+        safe_remove(temp_img_path)
     
     # Process text attachments if any
     if text_attachments:
