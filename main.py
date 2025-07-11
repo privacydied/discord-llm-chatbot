@@ -381,6 +381,145 @@ def is_audio_file(filename: str, content_type: Optional[str] = None) -> bool:
         
     return False
 
+def is_video_file(filename: str, content_type: Optional[str] = None) -> bool:
+    """Check if a file is a video file based on extension and/or content type."""
+    video_extensions = {'.mp4', '.mov', '.mkv', '.webm', '.avi', '.wmv', '.flv', '.m4v'}
+    video_content_types = {
+        'video/mp4', 'video/mov', 'video/mkv', 'video/webm', 'video/avi', 'video/wmv', 'video/flv', 'video/m4v'
+    }
+    
+    # Check by extension
+    ext = os.path.splitext(filename.lower())[1]
+    if ext in video_extensions:
+        return True
+        
+    # Check by content type if provided
+    if content_type and any(ct in content_type.lower() for ct in video_content_types):
+        return True
+        
+    return False
+
+def process_media_file(input_path: str, keep_failed: bool = False) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Process audio or video file for transcription.
+    
+    Args:
+        input_path: Path to the input media file
+        keep_failed: If True, keep failed conversion files for debugging
+        
+    Returns:
+        Tuple of (output_path, error_message) where:
+        - output_path: Path to the processed WAV file on success, None on failure.
+                      The caller is responsible for cleaning up this file after use.
+        - error_message: None on success, user-friendly error message on failure
+    """
+    output_path = None
+    temp_files = []
+    error_msg = None  # Initialize error_msg at function start
+    
+    try:
+        if not os.path.exists(input_path):
+            error_msg = f"Input file not found: {input_path}"
+            logging.error(error_msg)
+            return None, error_msg
+            
+        # First, probe the input file to check for audio streams
+        probe_cmd = [
+            'ffprobe',
+            '-v', 'error',
+            '-select_streams', 'a',  # Only check audio streams
+            '-show_entries', 'stream=codec_type',
+            '-of', 'default=noprint_wrappers=1:nokey=1',
+            input_path
+        ]
+        
+        probe_result = subprocess.run(
+            probe_cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        
+        # Check if there are any audio streams
+        if not probe_result.stdout.strip():
+            error_msg = "No audio stream found in the media file"
+            logging.error(error_msg)
+            return None, error_msg
+        
+        # Create a temporary output file
+        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_out:
+            output_path = temp_out.name
+        
+        # Build ffmpeg command with explicit audio stream selection and better error handling
+        # Using chained atempo filters for >2x speed-up (1.5 * 2 = 3x)
+        cmd = [
+            'ffmpeg',
+            '-y',                    # Overwrite output file if it exists
+            '-i', input_path,        # Input file
+            '-map', '0:a:0',         # Select first audio stream
+            '-c:a', 'pcm_s16le',     # 16-bit PCM
+            '-ar', '16000',          # 16kHz sample rate
+            '-ac', '1',             # Mono
+            '-af', 'atempo=1.5,atempo=2.0',  # 3x speed (1.5 * 2 = 3)
+            '-f', 'wav',            # Output format
+            output_path
+        ]
+        
+        # Run ffmpeg with timeout
+        logging.info(f"Running FFmpeg command: {' '.join(cmd)}")
+        result = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=300  # 5 minute timeout
+        )
+        
+        # Check if conversion was successful
+        if result.returncode != 0:
+            error_msg = (
+                f"FFmpeg failed with return code {result.returncode}. "
+                f"Error: {result.stderr[-500:] if result.stderr else 'No error output'}"
+            )
+            logging.error(f"Media processing failed: {error_msg}")
+            return None, f"Failed to process media: {error_msg}"
+            
+        if not os.path.exists(output_path):
+            error_msg = "FFmpeg did not create the output file"
+            logging.error(error_msg)
+            return None, error_msg
+            
+        if os.path.getsize(output_path) == 0:
+            error_msg = "Output file is empty"
+            logging.error(error_msg)
+            return None, error_msg
+            
+        # On success, return the path to the output file - caller is responsible for cleanup
+        return output_path, None
+        
+    except subprocess.TimeoutExpired:
+        error_msg = "Media processing timed out (took longer than 5 minutes)"
+        logging.error(error_msg)
+        return None, error_msg
+        
+    except Exception as e:
+        error_msg = f"Error processing media file: {str(e)}"
+        logging.error(error_msg, exc_info=True)
+        return None, error_msg
+        
+    finally:
+        # Only clean up temporary files if there was an error and we're not keeping failed files
+        try:
+            if (output_path is None or error_msg is not None) and not keep_failed:
+                for temp_file in [f for f in temp_files if f and os.path.exists(f)]:
+                    try:
+                        os.unlink(temp_file)
+                    except Exception as e:
+                        logging.error(f"Error cleaning up temporary file {temp_file}: {e}")
+        except Exception as e:
+            logging.error(f"Error during cleanup: {e}")
+            # Don't raise, just log the cleanup error
+
 def load_config():
     load_dotenv(override=True)
     return {
@@ -891,18 +1030,18 @@ async def process_message(message: Message, is_dm: bool):
     
     # Separate attachments by type
     image_attachments = []
-    audio_attachments = []
+    media_attachments = []  # Combined audio and video attachments
     text_attachments = []
     other_attachments = []
     
     for att in message.attachments:
         # Get content type and filename
         content_type = getattr(att, 'content_type', '')
-        filename = getattr(att, 'filename', '')
+        filename = getattr(att, 'filename', '').lower()
         
-        # Check if it's an audio file (using our enhanced detection)
-        if is_audio_file(filename, content_type):
-            audio_attachments.append(att)
+        # Check if it's a media file (audio or video)
+        if is_audio_file(filename, content_type) or is_video_file(filename, content_type):
+            media_attachments.append(att)
         # Check if it's an image
         elif (content_type and content_type.startswith('image/')) or \
              (filename and any(ext in filename for ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp'])):
@@ -914,102 +1053,179 @@ async def process_message(message: Message, is_dm: bool):
         else:
             other_attachments.append(att)
         
-        if len(audio_attachments) > 1:
-            await message.channel.send("I'll process the first audio file. Please send other audio files one at a time.")
+    # Process media attachments if any (audio or video)
+    if media_attachments:
+        if len(media_attachments) > 1:
+            await message.channel.send("I'll process the first media file. Please send other files one at a time.")
         
-        # Process the first audio attachment if present
-        if audio_attachments:
-            audio_attachment = audio_attachments[0]
-            temp_path = None
-            try:
-                # Notify user we're processing the audio
-                processing_msg = await message.channel.send("🎤 Processing audio message...")
+        # Process the first media attachment (audio or video)
+        media_attachment = media_attachments[0]
+        is_video = is_video_file(media_attachment.filename, getattr(media_attachment, 'content_type', ''))
+        media_type = "video" if is_video else "audio"
+        temp_path = None
+        
+        try:
+            # Create a temporary file to store the downloaded media
+            with tempfile.NamedTemporaryFile(delete=False, 
+                                          suffix=os.path.splitext(media_attachment.filename)[1]) as temp_media:
+                temp_path = temp_media.name
                 
-                # Create a temporary file to save the audio with original extension
-                file_ext = os.path.splitext(audio_attachment.filename)[1] or '.bin'
-                with tempfile.NamedTemporaryFile(delete=False, suffix=file_ext) as temp_file:
-                    temp_path = temp_file.name
+                # Download the media file with timeout
+                media_bytes = await asyncio.wait_for(media_attachment.read(), timeout=120.0)
+                temp_media.write(media_bytes)
                 
-                # Download the audio file with progress feedback
-                await message.channel.typing()
-                await audio_attachment.save(temp_path)
-                file_size = os.path.getsize(temp_path)
-                logging.info(f"Downloaded audio file: {temp_path} ({file_size} bytes)")
+            # Check file size after downloading
+            if media_attachment.size < 1024:  # 1KB minimum
+                await message.channel.send(f"The {media_type} file is too small to process. Please try with a different file.")
+                return
                 
-                # Validate file size
-                max_audio_size = config.get("MAX_AUDIO_SIZE", 50 * 1024 * 1024)  # Default 50MB
-                if file_size > max_audio_size:
-                    error_msg = f"Audio file is too large ({file_size/1024/1024:.1f}MB > {max_audio_size/1024/1024}MB limit)"
-                    logging.warning(error_msg)
-                    await processing_msg.edit(content=f"❌ {error_msg}")
-                    return
-                
-                if file_size < 1024:  # 1KB
-                    error_msg = "Audio file is too small, it might be corrupted"
-                    logging.warning(f"{error_msg} ({file_size} bytes)")
-                    await processing_msg.edit(content=f"❌ {error_msg}")
-                    return
-                
-                # Transcribe the audio with progress updates
-                await processing_msg.edit(content="🔊 Transcribing audio (this may take a moment)...")
-                
-                # Keep the converted file for debugging if in debug mode
-                keep_converted = config.get("DEBUG", False)
-                transcript, error = await transcribe_audio(
-                    temp_path, 
-                    config, 
-                    original_filename=audio_attachment.filename,
-                    keep_converted=keep_converted
+            if media_attachment.size > config["MAX_FILE_SIZE"]:
+                await message.channel.send(
+                    f"The {media_type} file is too large (max {config['MAX_FILE_SIZE'] // (1024*1024)}MB). "
+                    "Please send a smaller file."
                 )
-                
-                # Handle transcription result
-                if transcript:
-                    # Truncate very long transcripts in the message
-                    display_transcript = (transcript[:500] + '...') if len(transcript) > 500 else transcript
-                    
-                    # Add the transcription to the total text content
-                    if total_text_content:
-                        total_text_content = f"{total_text_content}\n\n🎤 Audio transcription: {transcript}"
-                    else:
-                        total_text_content = f"🎤 Audio transcription: {transcript}"
-                    
-                    # Update the processing message to show completion
-                    try:
-                        await processing_msg.edit(content="✅ Audio transcription complete!")
-                    except Exception as e:
-                        logging.error(f"Failed to update processing message: {e}")
-                    
-                    logging.info(f"Successfully transcribed audio message (length: {len(transcript)} chars)")
-                else:
-                    error_msg = error or "Failed to transcribe audio"
-                    logging.error(f"Transcription failed: {error_msg}")
-                    await processing_msg.edit(content=f"❌ Failed to transcribe audio: {error_msg}")
+                return
             
-            except Exception as e:
-                error_msg = str(e) or "Unknown error"
-                logging.error(f"Error processing audio attachment: {error_msg}", exc_info=True)
+            # Send a processing message
+            processing_msg = await message.channel.send(f"🔊 Processing {media_type}... This may take a moment...")
+            
+            # Process the media file (convert to WAV, speed up, etc.)
+            processed_path, error_msg = process_media_file(temp_path, config.get("DEBUG", False))
+            
+            if not processed_path or error_msg:
+                await processing_msg.edit(content=f"❌ Error processing {media_type}: {error_msg}")
+                return
+            
+            # Transcribe the processed audio
+            transcript, error_msg = await transcribe_audio(
+                processed_path, 
+                config, 
+                original_filename=media_attachment.filename,
+                keep_converted=config.get("DEBUG", False)
+            )
+            
+            # Clean up the processed file if not in debug mode
+            if not config.get("DEBUG", False) and os.path.exists(processed_path):
+                os.unlink(processed_path)
+            
+            if transcript:
+                # Add the transcription to the total text content
+                transcript_prefix = f"🎥 Video transcription" if is_video else "🎤 Audio transcription"
                 
-                # Try to provide a more user-friendly error message
-                if "No space left on device" in error_msg:
-                    user_error = "Not enough disk space to process audio"
-                elif "timeout" in error_msg.lower():
-                    user_error = "Audio processing timed out"
+                if total_text_content:
+                    total_text_content = f"{total_text_content}\n\n{transcript_prefix}: {transcript}"
                 else:
-                    user_error = "An error occurred while processing the audio"
+                    total_text_content = f"{transcript_prefix}: {transcript}"
                 
+                # Update the processing message to show completion
                 try:
-                    await processing_msg.edit(content=f"❌ {user_error}. Please try again later.")
-                except:
-                    await message.channel.send(f"❌ {user_error}. Please try again later.")
+                    await processing_msg.edit(content=f"✅ {media_type.capitalize()} transcription complete!")
+                except Exception as e:
+                    logging.error(f"Failed to update processing message: {e}")
+                
+                logging.info(f"Successfully transcribed {media_type} message (length: {len(transcript)} chars)")
+            else:
+                user_error = f"Could not transcribe {media_type}: {error_msg or 'Unknown error'}"
+                logging.error(f"Transcription failed: {user_error}")
+                await processing_msg.edit(content=f"❌ {user_error}")
+        
+        except asyncio.TimeoutError:
+            user_error = f"The {media_type} file took too long to process. Please try again with a smaller file."
+            await message.channel.send(user_error)
+            logging.error(f"{media_type.capitalize()} processing timed out: {media_attachment.filename}")
+        
+        except Exception as e:
+            user_error = f"An error occurred while processing the {media_type}: {str(e)}"
+            logging.error(f"Error processing {media_type}: {user_error}", exc_info=True)
+            await message.channel.send(f"❌ {user_error}")
+        
+        finally:
+            # Clean up the temporary file
+            if temp_path and os.path.exists(temp_path):
+                try:
+                    os.unlink(temp_path)
+                except Exception as e:
+                    logging.error(f"Error cleaning up temporary file {temp_path}: {e}")
+    
+    # Process image attachments if any
+    temp_img_path = None
+    if image_attachments:
+        if len(image_attachments) > 1:
+            await message.channel.send("I'll analyze the first image you sent. Please send other images one at a time for analysis.")
+        
+        # Process the first image
+        img_attachment = image_attachments[0]
+        
+        try:
+            # Create a temporary file with proper cleanup
+            with tempfile.NamedTemporaryFile(delete=False, 
+                                          suffix=os.path.splitext(img_attachment.filename)[1]) as temp_img:
+                temp_img_path = temp_img.name
+                
+                # Download the image with timeout
+                img_bytes = await asyncio.wait_for(img_attachment.read(), timeout=30.0)
+                temp_img.write(img_bytes)
+                
+            # Check file size after downloading
+            if img_attachment.size > config["MAX_FILE_SIZE"]:
+                await message.channel.send(
+                    f"The image is too large (max {config['MAX_FILE_SIZE'] // (1024*1024)}MB). "
+                    "Please send a smaller image."
+                )
+                return
             
-            finally:
-                # Clean up the temporary file
-                if temp_path and os.path.exists(temp_path):
-                    try:
-                        os.unlink(temp_path)
-                        logging.debug(f"Cleaned up temporary file: {temp_path}")
-                    except Exception as e:
-                        logging.error(f"Error cleaning up temporary file {temp_path}: {e}")
+            # Get MIME type for the downloaded file
+            mime_type, _ = mimetypes.guess_type(img_attachment.filename)
+            if not mime_type or not mime_type.startswith('image/'):
+                mime_type = 'application/octet-stream'
+            
+            # Always use the VL model for image analysis
+            try:
+                # Get the VL prompt from config (loaded from file via VL_PROMPT_FILE)
+                vl_prompt = config.get("VL_PROMPT", "Describe this image in detail.")
+                vision_caption = await get_vision_caption(temp_img_path, vl_prompt, config)
+                
+                if not vision_caption:
+                    logging.error("VL model returned empty caption")
+                    # Continue with original message content if VL fails
+                    vision_caption = "[Image processing failed]"
+                
+                # Format the message content based on whether there was original text
+                if total_text_content:
+                    total_text_content = f"{total_text_content}\n\n[Image description: {vision_caption}]"
+                else:
+                    total_text_content = f"[Image description: {vision_caption}]"
+                
+                # Add to context with MIME type information
+                context.append({
+                    "role": "user",
+                    "content": total_text_content,
+                    "mime_type": mime_type,
+                    "size_bytes": img_attachment.size
+                })
+                
+            except Exception as e:
+                # Log the error but don't show it to the user
+                logging.error(f"Error in vision-language model: {e}", exc_info=True)
+                # Continue with original message content if VL processing fails
+                if not total_text_content:
+                    total_text_content = "[Image processing failed]"
+        
+        except asyncio.TimeoutError:
+            await message.channel.send("Sorry, the image took too long to download. Please try again.")
+            return
+        except Exception as e:
+            logging.error(f"Error downloading image: {e}")
+            await message.channel.send("Sorry, I couldn't process that image. Please try another one.")
+            return
+        
+        finally:
+            # Clean up the temporary file
+            if temp_img_path and os.path.exists(temp_img_path):
+                try:
+                    os.unlink(temp_img_path)
+                except Exception as e:
+                    logging.error(f"Error cleaning up temporary file {temp_img_path}: {e}")
     
     # Log warning for unprocessed attachments
     for att in other_attachments:
