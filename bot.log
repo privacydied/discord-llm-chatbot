@@ -1,0 +1,17 @@
+2025-07-11 12:39:49,496 - WARNING - PyNaCl is not installed, voice will NOT be supported
+[2025-07-11 12:39:49] [INFO    ] discord.client: logging in using static token
+2025-07-11 12:39:49,499 - INFO - logging in using static token
+[2025-07-11 12:39:50] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: 82784ed8ad949c6b5fe4d4074d8e197b).
+2025-07-11 12:39:50,268 - INFO - Shard ID None has connected to Gateway (Session ID: 82784ed8ad949c6b5fe4d4074d8e197b).
+2025-07-11 12:39:52,282 - INFO - cock is now running! (hot config)
+/volume1/py/discord-llm-chatbot/main.py:293: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+2025-07-11 12:39:58,717 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 12:40:51,782 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 12:44:11,209 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 12:45:10,879 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 12:45:38,555 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 12:45:59,786 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 12:46:14,502 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 12:48:19,348 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 12:58:30,217 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
