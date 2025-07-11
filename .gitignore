@@ -5,3 +5,5 @@ prompts/*
 !prompts/vl-prompt.txt
 user_logs/*
 user_profiles/*
+bot.log
+bot.pid

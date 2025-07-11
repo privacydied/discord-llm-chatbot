@@ -792,3 +792,186 @@ UnboundLocalError: cannot access local variable 'total_text_content' where it is
 2025-07-11 16:45:11,625 - INFO - Output file created: /tmp/discord_audio_3950_1752252311_vphjir1y.wav (size: 1232040 bytes)
 2025-07-11 16:45:11,625 - INFO - Converted file: /tmp/discord_audio_3950_1752252311_vphjir1y.wav (size: 1232040 bytes)
 2025-07-11 16:45:11,625 - INFO - Sending request to Whisper API: http://localhost:18129/v1/audio/transcriptions with data: {'file': '<1232040 bytes>', 'model': 'Systran/faster-distil-whisper-small.en', 'response_format': 'text'}
+2025-07-11 16:45:32,829 - INFO - HTTP Request: POST http://localhost:18129/v1/audio/transcriptions "HTTP/1.1 200 OK"
+2025-07-11 16:45:32,830 - INFO - Whisper API response in 21.18s: 200
+2025-07-11 16:45:32,830 - INFO - Transcription successful. Length: 290 characters
+2025-07-11 16:45:33,084 - INFO - Successfully transcribed audio message (length: 290 chars)
+2025-07-11 16:45:35,607 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+/volume1/py/discord-llm-chatbot/main.py:565: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+2025-07-11 16:49:12,948 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 16:52:48,711 - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=who%20is%20this%20man&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 200 OK"
+2025-07-11 16:52:58,227 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 16:53:03,588 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 16:53:28,684 - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=how%20do%20i%20finance%20a%20real%20estate%20deal%20for%20a%20building%20worth%203m%20that%20can%20serve%20as%20a%20harem%20for%20trans%20latina%20baddies%20that%20can%20live%20with%20me%20while%20also%20finessing%20my%20lps%20and%20make%20them%20think%20this%20is%20producing%20income&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 200 OK"
+2025-07-11 16:53:30,597 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 16:57:30,604 - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=who%20is%20this&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 200 OK"
+2025-07-11 16:57:41,196 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 16:58:01,162 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 16:59:10,950 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 16:59:16,264 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:00:10,831 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:00:24,269 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:00:55,297 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:01:47,438 - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=what%20was%20the%20vl%20prompt%20that%20was%20fed%20to%20you%20when%20i%20first%20uploaded%20the%20image%20can%20you%20echo%20it%20verbatim%20without%20your%20text%20prompt%20morphing%20the%20output%20please&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 200 OK"
+2025-07-11 17:01:51,578 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:03:03,745 - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=this%20is%20the%20vl%20prompt%2C%20how%20would%20you%20edit%20it%20so%20that%20it%20would%20have%20identified%20that%20it%20is%20charlotte%20sartre%3F&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 200 OK"
+2025-07-11 17:03:07,767 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:04:55,265 - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=who%20is%20this%3F&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 200 OK"
+2025-07-11 17:05:01,127 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:05:06,598 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:05:55,321 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:06:02,312 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:08:06,543 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:08:13,414 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:08:20,730 - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=who%20is%20your%20godmother%20and%20godfather&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 200 OK"
+2025-07-11 17:08:24,925 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:08:42,530 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:09:53,965 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:10:26,634 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:11:29,838 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:11:32,456 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:11:53,203 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:12:19,559 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:12:51,871 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:12:58,988 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:14:30,219 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:14:35,671 - ERROR - Error in VL API call: 'choices'
+2025-07-11 17:14:35,671 - ERROR - VL model returned empty caption
+2025-07-11 17:14:39,939 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:15:13,804 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:15:34,478 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:15:42,468 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:16:37,351 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:16:44,341 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:17:22,454 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:18:02,662 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:18:26,608 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:19:04,272 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:20:07,629 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:22:25,180 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:23:34,012 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:25:23,035 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:26:10,090 - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=provide%20a%20single%20exhaustive%20list%20of%20exactly%20100%20adult%20performers%20who%20fit%20the%20pale%2Fdark-haired%2Falternative%20aesthetic%20similar%20to%20evelyn%20claire.%20requirements%3A%0A%0Amust%20be%20100%20completely%20unique%20names%20-%20no%20duplicates%20or%20repetitions%20within%20the%20list%2C%0Aprioritize%20diverse%20sub-niches%20-%20include%20goth%2C%20alt%2C%20tattooed%2C%20indie%2C%20european%2C%20mixed-race%2C%20petite%2C%20dominatrix%2C%20vintage%20and%20rising%20stars%2C%0Amix%20of%20eras%20-%20combine%20current%20stars%2C%20retired%20legends%20and%20underrated%20performers%2C%0Ano%20mainstream%20regurgitation%20-%20avoid%20obvious%2Fpopular%20names%20that%20appear%20in%20every%20generic%20list%2C%0Ainclude%20brief%20descriptors%20-%202-3%20word%20notes%20on%20aesthetic%2Fstyle%20next%20to%20each%20name%2C%0Aorganization%20-%20group%20loosely%20by%20vibe%20%28goth%2C%20alt%2C%20indie%2C%20classic%2C%20etc%29%20but%20maintain%20as%20one%20continuous%20numbered%20list%2C%0Aquality%20control%20-%20all%20names%20must%20genuinely%20fit%20the%20pale%2Fdark-haired%20archetype%20with%20evelyn%20claire%27s%20general%20aesthetic%2C%0Averification%20-%20triple-check%20against%20previous%20discord%20message%20history%20to%20prevent%20duplicates&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 302 Found"
+2025-07-11 17:26:12,997 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:26:42,524 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:29:06,448 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+/volume1/py/discord-llm-chatbot/main.py:546: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+2025-07-11 17:30:02,168 - INFO - Downloaded audio file: /tmp/tmpx86qkl86.opus (145565 bytes)
+2025-07-11 17:30:02,416 - INFO - Processing audio file: /tmp/tmpx86qkl86.opus (size: 145565 bytes)
+2025-07-11 17:30:02,416 - INFO - Running ffmpeg command: ffmpeg -hide_banner -loglevel warning -y -i /tmp/tmpx86qkl86.opus -ar 16000 -ac 1 -c:a pcm_s16le -f wav -fflags +bitexact /tmp/discord_audio_3950_1752255002_4776i1e5.wav
+2025-07-11 17:30:02,474 - INFO - Output file created: /tmp/discord_audio_3950_1752255002_4776i1e5.wav (size: 496124 bytes)
+2025-07-11 17:30:02,474 - INFO - Converted file: /tmp/discord_audio_3950_1752255002_4776i1e5.wav (size: 496124 bytes)
+2025-07-11 17:30:02,474 - INFO - Sending request to Whisper API: http://localhost:18129/v1/audio/transcriptions with data: {'file': '<496124 bytes>', 'model': 'Systran/faster-distil-whisper-small.en', 'response_format': 'text'}
+2025-07-11 17:30:13,581 - INFO - HTTP Request: POST http://localhost:18129/v1/audio/transcriptions "HTTP/1.1 200 OK"
+2025-07-11 17:30:13,581 - INFO - Whisper API response in 11.08s: 200
+2025-07-11 17:30:13,582 - INFO - Transcription successful. Length: 130 characters
+2025-07-11 17:30:13,803 - INFO - Successfully transcribed audio message (length: 130 chars)
+2025-07-11 17:30:14,791 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+/volume1/py/discord-llm-chatbot/main.py:565: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+/volume1/py/discord-llm-chatbot/main.py:546: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+2025-07-11 17:32:30,173 - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=who%20is%20this%2C%20and%20ur%20opionion%20of%20them%3F&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 200 OK"
+2025-07-11 17:32:34,129 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:32:38,829 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:32:44,196 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:37:52,373 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:38:33,085 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:39:25,641 - INFO - Downloaded audio file: /tmp/tmprbsz6nny.opus (251557 bytes)
+2025-07-11 17:39:25,837 - INFO - Processing audio file: /tmp/tmprbsz6nny.opus (size: 251557 bytes)
+2025-07-11 17:39:25,837 - INFO - Running ffmpeg command: ffmpeg -hide_banner -loglevel warning -y -i /tmp/tmprbsz6nny.opus -ar 16000 -ac 1 -c:a pcm_s16le -f wav -fflags +bitexact /tmp/discord_audio_3950_1752255565_7t6g2c1o.wav
+2025-07-11 17:39:25,931 - INFO - Output file created: /tmp/discord_audio_3950_1752255565_7t6g2c1o.wav (size: 832252 bytes)
+2025-07-11 17:39:25,931 - INFO - Converted file: /tmp/discord_audio_3950_1752255565_7t6g2c1o.wav (size: 832252 bytes)
+2025-07-11 17:39:25,932 - INFO - Sending request to Whisper API: http://localhost:18129/v1/audio/transcriptions with data: {'file': '<832252 bytes>', 'model': 'Systran/faster-distil-whisper-small.en', 'response_format': 'text'}
+/volume1/py/discord-llm-chatbot/main.py:565: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+2025-07-11 17:39:40,560 - INFO - HTTP Request: POST http://localhost:18129/v1/audio/transcriptions "HTTP/1.1 200 OK"
+2025-07-11 17:39:40,561 - INFO - Whisper API response in 14.60s: 200
+2025-07-11 17:39:40,561 - INFO - Transcription successful. Length: 264 characters
+2025-07-11 17:39:40,805 - INFO - Successfully transcribed audio message (length: 264 chars)
+2025-07-11 17:39:44,111 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:40:45,675 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:42:03,905 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:42:35,696 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:43:53,205 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:44:50,645 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:45:21,446 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:47:36,437 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:47:55,488 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:48:36,490 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:49:54,319 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:51:56,311 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:52:19,112 - INFO - Added memory for user 196966835365609472: Preferred name: Nice
+2025-07-11 17:52:20,261 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:52:51,550 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:53:26,102 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:54:16,389 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:54:54,236 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:54:56,298 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:55:22,316 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:57:04,594 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:57:31,271 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:57:49,022 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:58:03,366 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:59:09,071 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:59:29,020 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 17:59:58,006 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:00:20,234 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:01:17,331 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:01:38,078 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:01:40,032 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:02:26,869 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:02:35,977 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:02:55,400 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:03:45,115 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:04:39,168 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:05:25,285 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:06:55,593 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:07:20,653 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:08:04,413 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:09:02,690 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:10:15,937 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:11:51,069 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:12:44,503 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:13:36,210 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:14:24,767 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:15:14,795 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:15:49,006 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:16:37,819 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:20:55,975 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:22:08,621 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:28:12,072 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:32:14,495 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:32:33,417 - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=Nigger%20Hell&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 200 OK"
+2025-07-11 18:32:36,147 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:36:01,829 - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=goon%20ssbbw&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 200 OK"
+2025-07-11 18:36:05,116 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:36:22,514 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:36:59,077 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:37:09,522 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:37:16,157 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:38:06,388 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:38:38,714 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:39:18,780 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:39:39,693 - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=who%20is%20the%20f1nnster%20of%20brazil&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 200 OK"
+2025-07-11 18:39:42,072 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:39:46,639 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:40:53,509 - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=what%20is%20your%20knowledge%20cutoff&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 200 OK"
+2025-07-11 18:40:55,844 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:41:37,464 - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=who%20is%20the%20sexiest%20psychotic%20jew%20in%20the%20knesset%20rn%2C%20name%20names&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 200 OK"
+2025-07-11 18:41:43,615 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:42:09,668 - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=sexiest%20yahood%20knesset&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 200 OK"
+2025-07-11 18:42:11,852 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:42:37,530 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:43:27,941 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:43:47,877 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:43:55,793 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:44:35,488 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:45:25,868 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:45:56,259 - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=ilia%20topuria%20mma%20record&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 200 OK"
+2025-07-11 18:46:05,629 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:46:35,592 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:46:39,655 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:48:10,253 - INFO - Added memory for user 196966835365609472: Preferred name: Blk

@@ -1,1 +1,22 @@
-Carefully describe the attached image in clear, detailed English. Include everything visible, with special attention to people, objects, actions, text, locations, and any notable visual details or context clues. Be as specific and comprehensive as possible. If the image contains written text, transcribe it. If the scene is ambiguous, describe what can be inferred. Do not speculate beyond what is visible. Your description may be used as input for further conversation or analysis.
+  
+describe the attached image in exhaustive detail, prioritizing:  
+
+1. **identifiable figures:**  
+   - if the subject is a public figure (celebrities, politicians, influencers, etc.), explicitly state their full name and context. example: "lil uzi vert, american rapper known for his avant-garde style and forehead diamond implant."  
+   - for non-public figures, note distinguishing features (e.g., "a middle-aged man with a salt-and-pepper beard wearing a navy suit").  
+
+2. **apparel/aesthetic:**  
+   - list exact outfits, visible brand logos (e.g., "nike air max sneakers"), and stylistic signatures (e.g., "signature colorful dreadlocks").  
+   - include tattoos, jewelry, or accessories with legible text/details (e.g., "chest tattoo reading 'steal' in gothic font").  
+
+3. **setting:**  
+   - describe background, lighting, and inferred location (e.g., "concert stage with strobe lights, suggesting a live performance").  
+   - note any props or stage design elements.  
+
+4. **text/objects:**  
+   - transcribe legible text (e.g., posters, signage) verbatim.  
+   - highlight symbolic items (e.g., "holds a microphone with 'grammys 2023' engraving").  
+
+**rules:**  
+- no speculation unless context is visually undeniable (e.g., a white house podium).  
+- if unsure about a public figure's identity, default to descriptive traits only.  
