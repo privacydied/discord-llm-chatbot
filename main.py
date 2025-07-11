@@ -886,8 +886,8 @@ async def process_message(message: Message, is_dm: bool):
         context.append({"role": "system", "content": user_context.strip()})
     context[0]['content'] = system_prompt_with_user.strip()
 
-    # Process all attachments
-    total_text_content = ""
+    # Initialize total_text_content with the message content
+    total_text_content = message.content.strip()
     
     # Separate attachments by type
     image_attachments = []
@@ -904,11 +904,15 @@ async def process_message(message: Message, is_dm: bool):
         if is_audio_file(filename, content_type):
             audio_attachments.append(att)
         # Check if it's an image
-        is_image = (content_type and content_type.startswith('image/')) or \
-                  (filename and any(ext in filename for ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp']))
-        
-        # Check if it's an audio file
-        is_audio = is_audio_file(filename, content_type)
+        elif (content_type and content_type.startswith('image/')) or \
+             (filename and any(ext in filename for ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp'])):
+            image_attachments.append(att)
+        # Check if it's a text file
+        elif (content_type and content_type.startswith('text/')) or \
+             (filename and any(ext in filename for ext in ['.txt', '.md', '.log'])):
+            text_attachments.append(att)
+        else:
+            other_attachments.append(att)
         
         if len(audio_attachments) > 1:
             await message.channel.send("I'll process the first audio file. Please send other audio files one at a time.")
@@ -963,24 +967,17 @@ async def process_message(message: Message, is_dm: bool):
                     # Truncate very long transcripts in the message
                     display_transcript = (transcript[:500] + '...') if len(transcript) > 500 else transcript
                     
-                    # Add the transcription to the message content
-                    if message.content:
-                        new_content = f"{message.content}\n\n🎤 **Audio transcription:** {display_transcript}"
+                    # Add the transcription to the total text content
+                    if total_text_content:
+                        total_text_content = f"{total_text_content}\n\n🎤 Audio transcription: {transcript}"
                     else:
-                        new_content = f"🎤 **Audio transcription:** {display_transcript}"
+                        total_text_content = f"🎤 Audio transcription: {transcript}"
                     
-                    # Try to edit the original message to include the transcription
+                    # Update the processing message to show completion
                     try:
-                        await message.edit(content=new_content)
-                        await processing_msg.delete()  # Remove the processing message
+                        await processing_msg.edit(content="✅ Audio transcription complete!")
                     except Exception as e:
-                        logging.error(f"Failed to edit message: {e}")
-                        # If we can't edit, update the processing message with the transcript
-                        await processing_msg.edit(content=f"🎤 **Audio transcription:** {display_transcript}")
-                    
-                    # If transcript was truncated, send the full version in a follow-up message
-                    if len(transcript) > 500:
-                        await message.channel.send(f"Full transcription:\n{transcript}")
+                        logging.error(f"Failed to update processing message: {e}")
                     
                     logging.info(f"Successfully transcribed audio message (length: {len(transcript)} chars)")
                 else:
@@ -1127,12 +1124,13 @@ async def process_message(message: Message, is_dm: bool):
                 await message.channel.send(f"Error reading file {attachment.filename}")
                 return
     
-    # Combine message content with any text from attachments
+    # Update message content with any processed text from attachments and transcriptions
     if total_text_content:
-        message.content = f"{message.content}\n\n[Attached files content:]{total_text_content}"
+        message.content = total_text_content.strip()
     
     # Add the final message content to the context
-    context.append({'role': 'user', 'content': message.content.strip()})
+    if message.content.strip():
+        context.append({'role': 'user', 'content': message.content.strip()})
     async with message.channel.typing():
         messages = [
             {"role": msg['role'], "content": msg['content']}

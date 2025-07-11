@@ -688,3 +688,107 @@ UnboundLocalError: cannot access local variable 'total_text_content' where it is
 2025-07-11 16:24:04,138 - ERROR - Failed to edit message: 403 Forbidden (error code: 50005): Cannot edit a message authored by another user
 2025-07-11 16:24:04,352 - INFO - Successfully transcribed audio message (length: 62 chars)
 2025-07-11 16:24:05,748 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+/volume1/py/discord-llm-chatbot/main.py:565: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+2025-07-11 16:35:02,290 - WARNING - PyNaCl is not installed, voice will NOT be supported
+[2025-07-11 16:35:02] [INFO    ] discord.client: logging in using static token
+2025-07-11 16:35:02,293 - INFO - logging in using static token
+[2025-07-11 16:35:03] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: def5af1596045b133117d2e1b3f806b2).
+2025-07-11 16:35:03,126 - INFO - Shard ID None has connected to Gateway (Session ID: def5af1596045b133117d2e1b3f806b2).
+2025-07-11 16:35:05,137 - INFO - Ronin is now running! (hot config)
+/volume1/py/discord-llm-chatbot/main.py:565: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+/volume1/py/discord-llm-chatbot/main.py:546: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+2025-07-11 16:35:06,536 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 16:35:11,669 - INFO - Downloaded audio file: /tmp/tmpp49kexdf.opus (79693 bytes)
+2025-07-11 16:35:11,868 - INFO - Processing audio file: /tmp/tmpp49kexdf.opus (size: 79693 bytes)
+2025-07-11 16:35:11,869 - INFO - Running ffmpeg command: ffmpeg -hide_banner -loglevel warning -y -i /tmp/tmpp49kexdf.opus -ar 16000 -ac 1 -c:a pcm_s16le -f wav -fflags +bitexact /tmp/discord_audio_15260_1752251711_pqvk78hs.wav
+2025-07-11 16:35:11,903 - INFO - Output file created: /tmp/discord_audio_15260_1752251711_pqvk78hs.wav (size: 272124 bytes)
+2025-07-11 16:35:11,903 - INFO - Converted file: /tmp/discord_audio_15260_1752251711_pqvk78hs.wav (size: 272124 bytes)
+2025-07-11 16:35:11,903 - INFO - Sending request to Whisper API: http://localhost:18129/v1/audio/transcriptions with data: {'file': '<272124 bytes>', 'model': 'Systran/faster-distil-whisper-small.en', 'response_format': 'text'}
+2025-07-11 16:35:22,462 - INFO - HTTP Request: POST http://localhost:18129/v1/audio/transcriptions "HTTP/1.1 200 OK"
+2025-07-11 16:35:22,462 - INFO - Whisper API response in 10.53s: 200
+2025-07-11 16:35:22,462 - INFO - Transcription successful. Length: 62 characters
+2025-07-11 16:35:22,648 - ERROR - Failed to edit message: 403 Forbidden (error code: 50005): Cannot edit a message authored by another user
+2025-07-11 16:35:22,834 - INFO - Successfully transcribed audio message (length: 62 chars)
+2025-07-11 16:35:24,035 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+/volume1/py/discord-llm-chatbot/main.py:565: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+/volume1/py/discord-llm-chatbot/main.py:546: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+2025-07-11 16:35:47,044 - INFO - Downloaded audio file: /tmp/tmp0jjsxcql.opus (118969 bytes)
+2025-07-11 16:35:47,216 - INFO - Processing audio file: /tmp/tmp0jjsxcql.opus (size: 118969 bytes)
+2025-07-11 16:35:47,216 - INFO - Running ffmpeg command: ffmpeg -hide_banner -loglevel warning -y -i /tmp/tmp0jjsxcql.opus -ar 16000 -ac 1 -c:a pcm_s16le -f wav -fflags +bitexact /tmp/discord_audio_15260_1752251747_8qd9qsp8.wav
+2025-07-11 16:35:47,269 - INFO - Output file created: /tmp/discord_audio_15260_1752251747_8qd9qsp8.wav (size: 400208 bytes)
+2025-07-11 16:35:47,270 - INFO - Converted file: /tmp/discord_audio_15260_1752251747_8qd9qsp8.wav (size: 400208 bytes)
+2025-07-11 16:35:47,270 - INFO - Sending request to Whisper API: http://localhost:18129/v1/audio/transcriptions with data: {'file': '<400208 bytes>', 'model': 'Systran/faster-distil-whisper-small.en', 'response_format': 'text'}
+2025-07-11 16:35:57,132 - INFO - HTTP Request: POST http://localhost:18129/v1/audio/transcriptions "HTTP/1.1 200 OK"
+2025-07-11 16:35:57,133 - INFO - Whisper API response in 9.83s: 200
+2025-07-11 16:35:57,133 - INFO - Transcription successful. Length: 121 characters
+2025-07-11 16:35:57,393 - ERROR - Failed to edit message: 403 Forbidden (error code: 50005): Cannot edit a message authored by another user
+2025-07-11 16:35:57,691 - INFO - Successfully transcribed audio message (length: 121 chars)
+2025-07-11 16:35:58,591 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+/volume1/py/discord-llm-chatbot/main.py:565: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+/volume1/py/discord-llm-chatbot/main.py:546: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+2025-07-11 16:36:34,113 - INFO - Downloaded audio file: /tmp/tmpj442tl2t.ogg (140231 bytes)
+2025-07-11 16:36:34,271 - INFO - Processing audio file: /tmp/tmpj442tl2t.ogg (size: 140231 bytes)
+2025-07-11 16:36:34,272 - INFO - Running ffmpeg command: ffmpeg -hide_banner -loglevel warning -y -i /tmp/tmpj442tl2t.ogg -ar 16000 -ac 1 -c:a pcm_s16le -f wav -fflags +bitexact /tmp/discord_audio_15260_1752251794_uoh2plwy.wav
+2025-07-11 16:36:34,300 - INFO - Output file created: /tmp/discord_audio_15260_1752251794_uoh2plwy.wav (size: 278444 bytes)
+2025-07-11 16:36:34,300 - INFO - Converted file: /tmp/discord_audio_15260_1752251794_uoh2plwy.wav (size: 278444 bytes)
+2025-07-11 16:36:34,300 - INFO - Sending request to Whisper API: http://localhost:18129/v1/audio/transcriptions with data: {'file': '<278444 bytes>', 'model': 'Systran/faster-distil-whisper-small.en', 'response_format': 'text'}
+/volume1/py/discord-llm-chatbot/main.py:565: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+2025-07-11 16:36:43,009 - INFO - HTTP Request: POST http://localhost:18129/v1/audio/transcriptions "HTTP/1.1 200 OK"
+2025-07-11 16:36:43,009 - INFO - Whisper API response in 8.68s: 200
+2025-07-11 16:36:43,010 - INFO - Transcription successful. Length: 72 characters
+2025-07-11 16:36:43,203 - ERROR - Failed to edit message: 400 Bad Request (error code: 50162): Voice messages cannot be edited
+2025-07-11 16:36:43,400 - INFO - Successfully transcribed audio message (length: 72 chars)
+2025-07-11 16:36:45,166 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 16:37:53,622 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 16:42:12,134 - WARNING - PyNaCl is not installed, voice will NOT be supported
+[2025-07-11 16:42:12] [INFO    ] discord.client: logging in using static token
+2025-07-11 16:42:12,137 - INFO - logging in using static token
+[2025-07-11 16:42:12] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: f8270c231e412b6c474fd6ce59b5eb4e).
+2025-07-11 16:42:12,919 - INFO - Shard ID None has connected to Gateway (Session ID: f8270c231e412b6c474fd6ce59b5eb4e).
+2025-07-11 16:42:14,961 - INFO - Ronin is now running! (hot config)
+/volume1/py/discord-llm-chatbot/main.py:565: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+/volume1/py/discord-llm-chatbot/main.py:546: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+2025-07-11 16:42:22,211 - INFO - Downloaded audio file: /tmp/tmp_i881e2v.opus (79693 bytes)
+2025-07-11 16:42:22,407 - INFO - Processing audio file: /tmp/tmp_i881e2v.opus (size: 79693 bytes)
+2025-07-11 16:42:22,408 - INFO - Running ffmpeg command: ffmpeg -hide_banner -loglevel warning -y -i /tmp/tmp_i881e2v.opus -ar 16000 -ac 1 -c:a pcm_s16le -f wav -fflags +bitexact /tmp/discord_audio_3950_1752252142_o5pfk4jh.wav
+2025-07-11 16:42:22,442 - INFO - Output file created: /tmp/discord_audio_3950_1752252142_o5pfk4jh.wav (size: 272124 bytes)
+2025-07-11 16:42:22,443 - INFO - Converted file: /tmp/discord_audio_3950_1752252142_o5pfk4jh.wav (size: 272124 bytes)
+2025-07-11 16:42:22,443 - INFO - Sending request to Whisper API: http://localhost:18129/v1/audio/transcriptions with data: {'file': '<272124 bytes>', 'model': 'Systran/faster-distil-whisper-small.en', 'response_format': 'text'}
+2025-07-11 16:42:32,342 - INFO - HTTP Request: POST http://localhost:18129/v1/audio/transcriptions "HTTP/1.1 200 OK"
+2025-07-11 16:42:32,343 - INFO - Whisper API response in 9.87s: 200
+2025-07-11 16:42:32,343 - INFO - Transcription successful. Length: 62 characters
+2025-07-11 16:42:32,545 - INFO - Successfully transcribed audio message (length: 62 chars)
+2025-07-11 16:42:35,261 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+/volume1/py/discord-llm-chatbot/main.py:565: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+/volume1/py/discord-llm-chatbot/main.py:546: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+2025-07-11 16:43:02,482 - INFO - Downloaded audio file: /tmp/tmp4o1femgu.ogg (118013 bytes)
+2025-07-11 16:43:02,753 - INFO - Processing audio file: /tmp/tmp4o1femgu.ogg (size: 118013 bytes)
+2025-07-11 16:43:02,753 - INFO - Running ffmpeg command: ffmpeg -hide_banner -loglevel warning -y -i /tmp/tmp4o1femgu.ogg -ar 16000 -ac 1 -c:a pcm_s16le -f wav -fflags +bitexact /tmp/discord_audio_3950_1752252182_9gkwmqx4.wav
+2025-07-11 16:43:02,778 - INFO - Output file created: /tmp/discord_audio_3950_1752252182_9gkwmqx4.wav (size: 234284 bytes)
+2025-07-11 16:43:02,778 - INFO - Converted file: /tmp/discord_audio_3950_1752252182_9gkwmqx4.wav (size: 234284 bytes)
+2025-07-11 16:43:02,778 - INFO - Sending request to Whisper API: http://localhost:18129/v1/audio/transcriptions with data: {'file': '<234284 bytes>', 'model': 'Systran/faster-distil-whisper-small.en', 'response_format': 'text'}
+/volume1/py/discord-llm-chatbot/main.py:565: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+2025-07-11 16:43:11,822 - INFO - HTTP Request: POST http://localhost:18129/v1/audio/transcriptions "HTTP/1.1 200 OK"
+2025-07-11 16:43:11,822 - INFO - Whisper API response in 9.01s: 200
+2025-07-11 16:43:11,823 - INFO - Transcription successful. Length: 31 characters
+2025-07-11 16:43:11,997 - INFO - Successfully transcribed audio message (length: 31 chars)
+2025-07-11 16:43:13,130 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 16:45:11,228 - INFO - Downloaded audio file: /tmp/tmpib6c2sux.opus (407487 bytes)
+2025-07-11 16:45:11,488 - INFO - Processing audio file: /tmp/tmpib6c2sux.opus (size: 407487 bytes)
+2025-07-11 16:45:11,488 - INFO - Running ffmpeg command: ffmpeg -hide_banner -loglevel warning -y -i /tmp/tmpib6c2sux.opus -ar 16000 -ac 1 -c:a pcm_s16le -f wav -fflags +bitexact /tmp/discord_audio_3950_1752252311_vphjir1y.wav
+2025-07-11 16:45:11,625 - INFO - Output file created: /tmp/discord_audio_3950_1752252311_vphjir1y.wav (size: 1232040 bytes)
+2025-07-11 16:45:11,625 - INFO - Converted file: /tmp/discord_audio_3950_1752252311_vphjir1y.wav (size: 1232040 bytes)
+2025-07-11 16:45:11,625 - INFO - Sending request to Whisper API: http://localhost:18129/v1/audio/transcriptions with data: {'file': '<1232040 bytes>', 'model': 'Systran/faster-distil-whisper-small.en', 'response_format': 'text'}
