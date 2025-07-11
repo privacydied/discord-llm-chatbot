@@ -1313,3 +1313,48 @@ ModuleNotFoundError: No module named 'requests'
 2025-07-11 20:50:30,896 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
 2025-07-11 20:50:52,135 - ERROR - Error processing URL https://www.stallman.org/: too many values to unpack (expected 2)
 2025-07-11 20:50:54,068 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 20:52:56,893 - ERROR - Error processing URL https://example.com/: too many values to unpack (expected 2)
+2025-07-11 20:52:59,543 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 20:53:16,932 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 20:57:42,610 - WARNING - PyNaCl is not installed, voice will NOT be supported
+[2025-07-11 20:57:42] [INFO    ] discord.client: logging in using static token
+2025-07-11 20:57:42,613 - INFO - logging in using static token
+[2025-07-11 20:57:43] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: 8d22b430b5f8db0c8b2032061a551990).
+2025-07-11 20:57:43,499 - INFO - Shard ID None has connected to Gateway (Session ID: 8d22b430b5f8db0c8b2032061a551990).
+2025-07-11 20:57:45,511 - INFO - Ronin is now running! (hot config)
+/volume1/py/discord-llm-chatbot/main.py:1056: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+2025-07-11 20:58:18,717 - ERROR - Error processing URL https://archive.is/DLqEA: Playwright fallback failed: It looks like you are using Playwright Sync API inside the asyncio loop.
+Please use the Async API instead.
+2025-07-11 20:58:20,661 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 20:59:06,112 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:01:43,228 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:03:08,764 - WARNING - PyNaCl is not installed, voice will NOT be supported
+[2025-07-11 21:03:08] [INFO    ] discord.client: logging in using static token
+2025-07-11 21:03:08,768 - INFO - logging in using static token
+[2025-07-11 21:03:09] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: e65a3fdfee42a8e77d94e379049a60ed).
+2025-07-11 21:03:09,673 - INFO - Shard ID None has connected to Gateway (Session ID: e65a3fdfee42a8e77d94e379049a60ed).
+2025-07-11 21:03:11,683 - INFO - Ronin is now running! (hot config)
+/volume1/py/discord-llm-chatbot/main.py:1057: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+2025-07-11 21:03:22,042 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:03:33,286 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:03:41,479 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:03:43,188 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:03:46,428 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:03:50,697 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:04:24,674 - ERROR - Error processing URL http://archive.today/2025.01.30-012851/https://veresov.pro/cmustdie/: Playwright fallback failed: Executable doesn't exist at /root/.cache/ms-playwright/chromium-1105/chrome-linux/chrome
+╔════════════════════════════════════════════════════════════╗
+║ Looks like Playwright was just installed or updated.       ║
+║ Please run the following command to download new browsers: ║
+║                                                            ║
+║     playwright install                                     ║
+║                                                            ║
+║ <3 Playwright Team                                         ║
+╚════════════════════════════════════════════════════════════╝
+2025-07-11 21:04:26,138 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+/volume1/py/discord-llm-chatbot/main.py:1057: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+2025-07-11 21:04:58,020 - ERROR - Error processing URL https://x.com/tszzl/status/1943514043559612761: Blocked by robots.txt: Blocked by https://x.com/robots.txt
+2025-07-11 21:05:00,280 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 21:05:38,220 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"

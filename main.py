@@ -45,7 +45,7 @@ from collections import defaultdict, Counter, namedtuple
 
 # Optional Playwright import
 try:
-    from playwright.sync_api import sync_playwright
+    from playwright.async_api import async_playwright
     PLAYWRIGHT_AVAILABLE = True
 except ImportError:
     PLAYWRIGHT_AVAILABLE = False
@@ -135,25 +135,25 @@ def get_random_user_agent() -> str:
     except:
         return random.choice(DEFAULT_USER_AGENTS)
 
-def extract_with_playwright(url: str, timeout: int = 30000) -> Tuple[str, str]:
+async def extract_with_playwright(url: str, timeout: int = 30000) -> Tuple[str, str]:
     """Extract page content using Playwright (for JS-heavy sites)."""
     if not PLAYWRIGHT_AVAILABLE:
         return "", "Playwright not available"
     
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        context = browser.new_context()
-        page = context.new_page()
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        context = await browser.new_context()
+        page = await context.new_page()
         
         try:
-            page.goto(url, timeout=timeout, wait_until="networkidle")
-            title = page.title()
-            content = page.content()
+            await page.goto(url, timeout=timeout, wait_until="networkidle")
+            title = await page.title()
+            content = await page.content()
             return content, title
         except Exception as e:
             return "", f"Playwright error: {str(e)}"
         finally:
-            browser.close()
+            await browser.close()
 
 # ---- RAG (Retrieval Augmented Generation) ----
 @dataclass
@@ -500,7 +500,7 @@ def is_url(string: str) -> bool:
         return False
 
 
-def read_webpage(
+async def read_webpage(
     url: str,
     timeout: int = DEFAULT_TIMEOUT,
     use_playwright: bool = False,
@@ -615,7 +615,7 @@ def read_webpage(
             if use_playwright and PLAYWRIGHT_AVAILABLE:
                 if debug:
                     result['debug_info']['fallback_reason'] = 'low_content_length'
-                return _try_playwright_fallback(url, timeout, result, debug)
+                return await _try_playwright_fallback(url, timeout, result, debug)
             result['error'] = "Page may be paywalled, empty, or require JavaScript"
             return result
             
@@ -649,7 +649,7 @@ def read_webpage(
         if use_playwright and PLAYWRIGHT_AVAILABLE:
             if debug:
                 result['debug_info']['fallback_reason'] = f'direct_fetch_failed: {str(e)}'
-            return _try_playwright_fallback(url, timeout, result, debug)
+            return await _try_playwright_fallback(url, timeout, result, debug)
             
         # Handle specific errors
         if isinstance(e, requests.exceptions.Timeout):
@@ -664,36 +664,37 @@ def read_webpage(
             
         return result
 
-def _try_playwright_fallback(url: str, timeout: int, result: Dict[str, Any], debug: bool) -> Dict[str, Any]:
+async def _try_playwright_fallback(url: str, timeout: int, result: Dict[str, Any], debug: bool) -> Dict[str, Any]:
     """Try to fetch content using Playwright as a fallback."""
     if not PLAYWRIGHT_AVAILABLE:
         result['error'] = "Playwright not available for JavaScript rendering"
         return result
     
     try:
-        content, title = extract_with_playwright(url, timeout * 1000)  # Convert to ms
+        content, title = await extract_with_playwright(url, timeout * 1000)  # Convert to ms
         
         if not content and not title:
-            result['error'] = "Playwright failed to extract content"
+            result['error'] = "Playwright returned empty content"
             return result
             
-        # Parse with BeautifulSoup to clean up
+        # Parse the content with BeautifulSoup
         soup = BeautifulSoup(content, 'html.parser')
         
-        # Remove unwanted elements
-        for element in soup(['script', 'style', 'noscript', 'nav', 'footer', 'header', 'iframe', 'svg']):
+        # Remove script, style, and other non-content elements
+        for element in soup(["script", "style", "nav", "footer", "header", "iframe", "noscript"]):
             element.decompose()
+            
+        # Get text content
+        text = '\n'.join(p.get_text().strip() for p in soup.find_all(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'article', 'section']))
+        text = '\n'.join(line for line in text.split('\n') if line.strip())
         
-        # Extract text
-        text = '\n'.join(
-            line.strip() for line in 
-            soup.get_text(separator='\n', strip=True).splitlines() 
-            if line.strip()
-        )
-        
-        # Update result
+        if not text.strip() and not title:
+            result['error'] = "No readable content found on page"
+            return result
+            
+        # Update result with Playwright data
         result.update({
-            'text': text,
+            'text': text[:8000],
             'title': title or result.get('title', ''),
             'source': 'playwright',
             'cached': False
@@ -1388,24 +1389,39 @@ async def process_message(message: Message, is_dm: bool):
                 # Notify user that we're processing the URL
                 processing_msg = await message.channel.send(f"🌐 Reading webpage: {url}")
                 
-                # Read the webpage content
-                content, title = read_webpage(url)
+                # Read the webpage content with error handling
+                result = await read_webpage(url, use_playwright=True, debug=True)
+                
+                if result.get('error'):
+                    # If there was an error, notify the user
+                    error_msg = result.get('error', 'Unknown error')
+                    await processing_msg.edit(content=f"❌ Error reading {url}: {error_msg}")
+                    logging.error(f"Error processing URL {url}: {error_msg}")
+                    continue
+                    
+                # Extract content and title from the result
+                content = result.get('text', '')
+                title = result.get('title', 'No title')
+                source = result.get('source', 'webpage')
                 
                 # Format the content for the context
-                url_content = f"[Webpage: {title or 'No title'}]\n{content}"
+                url_content = f"[Webpage: {title}]\n{content}"
                 
                 # Add to context as system message
                 context.append({
                     "role": "system",
-                    "content": f"User shared a webpage. Content:\n{url_content}"
+                    "content": f"User shared a {source} page. Content:\n{url_content}"
                 })
                 
-                # Update the processing message
-                await processing_msg.edit(content=f"✅ Processed: {title or url}")
+                # Update the processing message with success
+                await processing_msg.edit(content=f"✅ Processed: {title}")
                 
             except Exception as e:
-                logging.error(f"Error processing URL {url}: {str(e)}")
-                await message.channel.send(f"❌ Could not read webpage: {url}")
+                logging.error(f"Error processing URL {url}", exc_info=True)
+                try:
+                    await processing_msg.edit(content=f"❌ Error processing {url}: {str(e)}")
+                except:
+                    await message.channel.send(f"❌ Error processing {url}: {str(e)}")
     
     # Separate attachments by type
     image_attachments = []
