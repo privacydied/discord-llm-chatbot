@@ -975,3 +975,57 @@ UnboundLocalError: cannot access local variable 'total_text_content' where it is
 2025-07-11 18:46:35,592 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
 2025-07-11 18:46:39,655 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
 2025-07-11 18:48:10,253 - INFO - Added memory for user 196966835365609472: Preferred name: Blk
+2025-07-11 18:48:12,620 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:48:38,970 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:49:50,975 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:50:14,833 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:50:23,025 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:51:16,769 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:51:42,281 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:52:36,971 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:53:00,715 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:54:06,220 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:54:32,481 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:54:50,320 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:55:29,880 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:55:52,710 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:55:54,008 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:56:23,869 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:56:47,890 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:57:22,812 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 18:58:25,193 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 19:00:52,263 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 19:01:00,413 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 19:01:46,200 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 19:01:57,073 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 19:04:30,846 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 19:07:16,696 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 19:07:24,200 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 19:08:40,489 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 19:09:07,304 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 19:09:13,249 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 19:09:13,417 - ERROR - Error in VL API call: 'choices'
+2025-07-11 19:09:13,418 - ERROR - VL model returned empty caption
+2025-07-11 19:09:19,351 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 19:09:48,822 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 19:10:44,268 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 19:11:21,292 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 19:11:32,319 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 19:12:46,738 - INFO - Added memory for user 196966835365609472: Preferred name: On
+2025-07-11 19:12:50,004 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 19:13:23,545 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 19:14:06,425 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 19:14:16,063 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 19:14:30,381 - INFO - Downloaded audio file: /tmp/tmp8y2k9dou.mp3 (493092 bytes)
+2025-07-11 19:14:30,575 - INFO - Processing audio file: /tmp/tmp8y2k9dou.mp3 (size: 493092 bytes)
+2025-07-11 19:14:30,575 - INFO - Running ffmpeg command: ffmpeg -hide_banner -loglevel warning -y -i /tmp/tmp8y2k9dou.mp3 -ar 16000 -ac 1 -c:a pcm_s16le -f wav -fflags +bitexact /tmp/discord_audio_3950_1752261270_da7k7wuh.wav
+2025-07-11 19:14:30,650 - INFO - Output file created: /tmp/discord_audio_3950_1752261270_da7k7wuh.wav (size: 1969840 bytes)
+2025-07-11 19:14:30,650 - INFO - Converted file: /tmp/discord_audio_3950_1752261270_da7k7wuh.wav (size: 1969840 bytes)
+2025-07-11 19:14:30,650 - INFO - Sending request to Whisper API: http://localhost:18129/v1/audio/transcriptions with data: {'file': '<1969840 bytes>', 'model': 'Systran/faster-distil-whisper-small.en', 'response_format': 'text'}
+/volume1/py/discord-llm-chatbot/main.py:565: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+2025-07-11 19:15:29,582 - INFO - HTTP Request: POST http://localhost:18129/v1/audio/transcriptions "HTTP/1.1 200 OK"
+2025-07-11 19:15:29,590 - INFO - Whisper API response in 58.91s: 200
+2025-07-11 19:15:29,590 - INFO - Transcription successful. Length: 1506 characters
+2025-07-11 19:15:29,960 - INFO - Successfully transcribed audio message (length: 1506 chars)
+2025-07-11 19:15:30,904 - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
