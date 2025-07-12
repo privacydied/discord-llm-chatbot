@@ -4944,3 +4944,229 @@ Traceback (most recent call last):
 NameError: name 'server_profiles_last_saved' is not defined
 2025-07-12 19:34:49,198 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
 2025-07-12 19:34:49,198 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:36:11,545 - root - ERROR - Error updating server profile for guild 1156692144740892796: name 'server_profiles_last_saved' is not defined
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1821, in process_message
+    if not save_server_profile(guild_id):
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1168, in save_server_profile
+    if not force and guild_id in server_profiles_last_saved:
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+NameError: name 'server_profiles_last_saved' is not defined
+2025-07-12 19:36:11,545 - root - ERROR - Error updating server profile for guild 1156692144740892796: name 'server_profiles_last_saved' is not defined
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1821, in process_message
+    if not save_server_profile(guild_id):
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1168, in save_server_profile
+    if not force and guild_id in server_profiles_last_saved:
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+NameError: name 'server_profiles_last_saved' is not defined
+2025-07-12 19:36:17,659 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:36:17,659 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:36:17,712 - root - ERROR - Error in VL API call: 'choices'
+2025-07-12 19:36:17,712 - root - ERROR - Error in VL API call: 'choices'
+2025-07-12 19:36:17,712 - root - ERROR - VL model returned empty caption
+2025-07-12 19:36:17,712 - root - ERROR - VL model returned empty caption
+2025-07-12 19:36:23,152 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:36:23,152 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:36:28,190 - root - ERROR - Error in VL API call: 'choices'
+2025-07-12 19:36:28,190 - root - ERROR - Error in VL API call: 'choices'
+2025-07-12 19:36:28,191 - root - ERROR - VL model returned empty caption
+2025-07-12 19:36:28,191 - root - ERROR - VL model returned empty caption
+2025-07-12 19:36:36,304 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:36:36,304 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:40:05,843 - root - ERROR - Error updating server profile for guild 1156692144740892796: name 'server_profiles_last_saved' is not defined
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1821, in process_message
+    "content": message.content,
+       ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1168, in save_server_profile
+    if not guild_id:
+                     
+NameError: name 'server_profiles_last_saved' is not defined
+2025-07-12 19:40:05,843 - root - ERROR - Error updating server profile for guild 1156692144740892796: name 'server_profiles_last_saved' is not defined
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1821, in process_message
+    "content": message.content,
+       ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1168, in save_server_profile
+    if not guild_id:
+                     
+NameError: name 'server_profiles_last_saved' is not defined
+2025-07-12 19:40:07,234 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:40:07,234 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:40:35,141 - root - ERROR - Error updating server profile for guild 1156692144740892796: name 'server_profiles_last_saved' is not defined
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1821, in process_message
+    "content": message.content,
+       ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1168, in save_server_profile
+    if not guild_id:
+                     
+NameError: name 'server_profiles_last_saved' is not defined
+2025-07-12 19:40:35,141 - root - ERROR - Error updating server profile for guild 1156692144740892796: name 'server_profiles_last_saved' is not defined
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1821, in process_message
+    "content": message.content,
+       ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1168, in save_server_profile
+    if not guild_id:
+                     
+NameError: name 'server_profiles_last_saved' is not defined
+/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/numba/cpython/old_hashing.py:477: UserWarning: FNV hashing is not implemented in Numba. See PEP 456 https://www.python.org/dev/peps/pep-0456/ for rationale over not using FNV. Numba will continue to work, but hashes for built in types will be computed using siphash24. This will permit e.g. dictionaries to continue to behave as expected, however anything relying on the value of the hash opposed to hash as a derived property is likely to not work as expected.
+  warnings.warn(msg)
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1036, in <module>
+    server_lock = threading.Lock()
+                  ^^^^^^^^^
+NameError: name 'threading' is not defined
+/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/numba/cpython/old_hashing.py:477: UserWarning: FNV hashing is not implemented in Numba. See PEP 456 https://www.python.org/dev/peps/pep-0456/ for rationale over not using FNV. Numba will continue to work, but hashes for built in types will be computed using siphash24. This will permit e.g. dictionaries to continue to behave as expected, however anything relying on the value of the hash opposed to hash as a derived property is likely to not work as expected.
+  warnings.warn(msg)
+[2025-07-12 19:42:13] [INFO    ] discord.client: logging in using static token
+2025-07-12 19:42:13,640 - discord.client - INFO - logging in using static token
+2025-07-12 19:42:13,640 - discord.client - INFO - logging in using static token
+[2025-07-12 19:42:14] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: d061f246d60cd6a70e6537c0fad0e35f).
+2025-07-12 19:42:14,443 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: d061f246d60cd6a70e6537c0fad0e35f).
+2025-07-12 19:42:14,443 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: d061f246d60cd6a70e6537c0fad0e35f).
+2025-07-12 19:42:16,465 - root - INFO - Ronin is now running! (hot config)
+2025-07-12 19:42:16,465 - root - INFO - Ronin is now running! (hot config)
+2025-07-12 19:42:36,555 - discord.client - INFO - logging in using static token
+2025-07-12 19:42:37,413 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: f1edd5a995212c303986d1f6793e6d1f).
+2025-07-12 19:42:39,427 - root - INFO - Ronin is now running! (hot config)
+2025-07-12 19:42:46,473 - asyncio - ERROR - Task exception was never retrieved
+future: <Task finished name='Task-10' coro=<periodic_save() done, defined at /volume1/py/discord-llm-chatbot/main.py:2723> exception=NameError("name 'user_cache' is not defined")>
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2727, in periodic_save
+    save_all_profiles()
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1344, in save_all_profiles
+    for user_id in list(user_cache.keys()):
+                        ^^^^^^^^^^
+NameError: name 'user_cache' is not defined
+2025-07-12 19:42:46,473 - asyncio - ERROR - Task exception was never retrieved
+future: <Task finished name='Task-10' coro=<periodic_save() done, defined at /volume1/py/discord-llm-chatbot/main.py:2723> exception=NameError("name 'user_cache' is not defined")>
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2727, in periodic_save
+    save_all_profiles()
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1344, in save_all_profiles
+    for user_id in list(user_cache.keys()):
+                        ^^^^^^^^^^
+NameError: name 'user_cache' is not defined
+2025-07-12 19:42:51,414 - root - ERROR - Discord event error in on_message: name 'user_cache' is not defined
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2745, in on_message
+    await process_message(message, is_dm)
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1792, in process_message
+    profile = get_profile(user_id, username)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1295, in get_profile
+    if user_id in user_cache:
+                  ^^^^^^^^^^
+NameError: name 'user_cache' is not defined
+2025-07-12 19:42:51,414 - root - ERROR - Discord event error in on_message: name 'user_cache' is not defined
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2745, in on_message
+    await process_message(message, is_dm)
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1792, in process_message
+    profile = get_profile(user_id, username)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1295, in get_profile
+    if user_id in user_cache:
+                  ^^^^^^^^^^
+NameError: name 'user_cache' is not defined
+2025-07-12 19:42:51,415 - root - ERROR - Discord event error in on_message: name 'user_cache' is not defined
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2745, in on_message
+    await process_message(message, is_dm)
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1792, in process_message
+    profile = get_profile(user_id, username)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1295, in get_profile
+    if user_id in user_cache:
+                  ^^^^^^^^^^
+NameError: name 'user_cache' is not defined
+2025-07-12 19:43:09,434 - asyncio - ERROR - Task exception was never retrieved
+future: <Task finished name='Task-10' coro=<periodic_save() done, defined at /volume1/py/discord-llm-chatbot/main.py:2723> exception=NameError("name 'user_cache' is not defined")>
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2727, in periodic_save
+    async def periodic_save():
+            ^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1344, in save_all_profiles
+    with open(file_path, "w", encoding="utf-8") as f:
+                        ^^^^^^^^^^
+NameError: name 'user_cache' is not defined
+2025-07-12 19:45:42,227 - discord.client - INFO - logging in using static token
+2025-07-12 19:45:43,193 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: a60c32a54dab05a1dfbdd2304be3d324).
+2025-07-12 19:45:45,206 - root - INFO - Ronin is now running! (hot config)
+2025-07-12 19:45:47,027 - root - ERROR - Discord event error in on_message: name 'ensure_profile_schema' is not defined
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2928, in on_message
+    await process_message(message, is_dm)
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1975, in process_message
+    profile = get_profile(user_id, username)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1362, in get_profile
+    profile = ensure_profile_schema(profile, user_id, username)
+              ^^^^^^^^^^^^^^^^^^^^^
+NameError: name 'ensure_profile_schema' is not defined
+2025-07-12 19:45:54,817 - root - INFO - SIGINT received, saving all modified profiles...
+2025-07-12 19:45:54,817 - root - INFO - Flushing all modified profiles to disk...
+2025-07-12 19:45:54,818 - root - INFO - Successfully flushed all profiles to disk
+2025-07-12 19:45:54,818 - root - INFO - Successfully saved all profiles. Shutting down...
+2025-07-12 19:47:11,087 - discord.client - INFO - logging in using static token
+2025-07-12 19:47:11,787 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 727b50118d2393ff8ff3600163ce50cb).
+2025-07-12 19:47:13,837 - root - INFO - Ronin is now running! (hot config)
+2025-07-12 19:47:28,031 - root - ERROR - Discord event error in on_message: 'str' object has no attribute 'get'
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2997, in on_message
+    await process_message(message, is_dm)
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2049, in process_message
+    save_profile(user_id)
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1484, in save_profile
+    user_id = str(profile.get('discord_id'))
+                  ^^^^^^^^^^^
+AttributeError: 'str' object has no attribute 'get'
+2025-07-12 19:49:17,333 - root - INFO - SIGINT received, saving all modified profiles...
+2025-07-12 19:49:17,334 - root - INFO - Flushing all modified profiles to disk...
+2025-07-12 19:49:17,449 - root - INFO - Successfully flushed all profiles to disk
+2025-07-12 19:49:17,450 - root - INFO - Successfully saved all profiles. Shutting down...
+2025-07-12 19:49:30,530 - discord.client - INFO - logging in using static token
+2025-07-12 19:49:31,463 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: f0435029226c2eb276dd0e2b6eaeb0b2).
+2025-07-12 19:49:33,477 - root - INFO - Ronin is now running! (hot config)
+2025-07-12 19:49:39,857 - root - ERROR - Discord event error in on_message: 'first_seen'
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2997, in on_message
+    await process_message(message, is_dm)
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2117, in process_message
+    user_context = get_user_context(user_id)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1732, in get_user_context
+    days_known = (datetime.now() - datetime.fromisoformat(profile["first_seen"])).days
+                                                          ~~~~~~~^^^^^^^^^^^^^^
+KeyError: 'first_seen'
+2025-07-12 19:51:10,882 - root - INFO - SIGINT received, saving all modified profiles...
+2025-07-12 19:51:10,882 - root - INFO - Flushing all modified profiles to disk...
+2025-07-12 19:51:11,162 - root - INFO - Successfully flushed all profiles to disk
+2025-07-12 19:51:11,162 - root - INFO - Successfully saved all profiles. Shutting down...
+2025-07-12 19:51:23,828 - discord.client - INFO - logging in using static token
+2025-07-12 19:51:25,717 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 383e551ded418c372e18dfea6e2866d5).
+2025-07-12 19:51:27,730 - root - INFO - Ronin is now running! (hot config)
+2025-07-12 19:51:29,197 - root - ERROR - Discord event error in on_message: 'tone'
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 3000, in on_message
+    await process_message(message, is_dm)
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2121, in process_message
+    system_prompt_with_user = build_system_prompt(message, config)
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1894, in build_system_prompt
+    last_tone = profile['tone']
+                ~~~~~~~^^^^^^^^
+KeyError: 'tone'
+2025-07-12 19:56:44,096 - root - INFO - SIGINT received, saving all modified profiles...
+2025-07-12 19:56:44,097 - root - INFO - Flushing all modified profiles to disk...
+2025-07-12 19:56:44,099 - root - INFO - Successfully flushed all profiles to disk
+2025-07-12 19:56:44,099 - root - INFO - Successfully saved all profiles. Shutting down...
+2025-07-12 19:56:59,046 - discord.client - INFO - logging in using static token
+2025-07-12 19:56:59,786 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 12cd39b8081a8cfe378b219fd6e53ed9).
+2025-07-12 19:57:01,799 - root - INFO - Ronin is now running! (hot config)
+2025-07-12 19:57:05,943 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
