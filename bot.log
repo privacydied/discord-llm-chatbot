@@ -4528,3 +4528,135 @@ aiohttp.client_exceptions.ClientConnectionResetError: Cannot write to closing tr
 2025-07-12 18:36:56,991 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
 2025-07-12 18:38:22,249 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
 2025-07-12 18:38:22,249 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:38:49,418 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:38:49,418 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+[2025-07-12 18:39:05] [INFO    ] discord.gateway: Shard ID None has successfully RESUMED session a8394a8a9c3ddcc0daf8c58e9b108d11.
+2025-07-12 18:39:05,356 - discord.gateway - INFO - Shard ID None has successfully RESUMED session a8394a8a9c3ddcc0daf8c58e9b108d11.
+2025-07-12 18:39:05,356 - discord.gateway - INFO - Shard ID None has successfully RESUMED session a8394a8a9c3ddcc0daf8c58e9b108d11.
+2025-07-12 18:39:23,955 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:39:23,955 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:39:51,303 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:39:51,303 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:40:04,288 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:40:04,288 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:40:15,435 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:40:15,435 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:40:56,011 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:40:56,011 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:41:41,334 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:41:41,334 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+[2025-07-12 18:43:54] [INFO    ] discord.gateway: Shard ID None has successfully RESUMED session a8394a8a9c3ddcc0daf8c58e9b108d11.
+2025-07-12 18:43:54,242 - discord.gateway - INFO - Shard ID None has successfully RESUMED session a8394a8a9c3ddcc0daf8c58e9b108d11.
+2025-07-12 18:43:54,242 - discord.gateway - INFO - Shard ID None has successfully RESUMED session a8394a8a9c3ddcc0daf8c58e9b108d11.
+2025-07-12 18:45:50,224 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:45:50,224 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:45:50,252 - root - ERROR - Error in VL API call: 'choices'
+2025-07-12 18:45:50,252 - root - ERROR - Error in VL API call: 'choices'
+2025-07-12 18:45:50,252 - root - ERROR - VL model returned empty caption
+2025-07-12 18:45:50,252 - root - ERROR - VL model returned empty caption
+2025-07-12 18:45:56,968 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:45:56,968 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:46:08,435 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:46:08,435 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:49:06,674 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:49:06,674 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:51:05,077 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:51:05,077 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:51:16,374 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:51:16,374 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:51:25,881 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:51:25,881 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:51:41,276 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:51:41,276 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:51:50,753 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:51:50,753 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:51:58,256 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:51:58,256 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/numba/cpython/old_hashing.py:477: UserWarning: FNV hashing is not implemented in Numba. See PEP 456 https://www.python.org/dev/peps/pep-0456/ for rationale over not using FNV. Numba will continue to work, but hashes for built in types will be computed using siphash24. This will permit e.g. dictionaries to continue to behave as expected, however anything relying on the value of the hash opposed to hash as a derived property is likely to not work as expected.
+  warnings.warn(msg)
+[2025-07-12 18:52:35] [INFO    ] discord.client: logging in using static token
+2025-07-12 18:52:35,004 - discord.client - INFO - logging in using static token
+2025-07-12 18:52:35,004 - discord.client - INFO - logging in using static token
+[2025-07-12 18:52:35] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: cc375f7c6de98eb58d23742e58970a9a).
+2025-07-12 18:52:35,791 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: cc375f7c6de98eb58d23742e58970a9a).
+2025-07-12 18:52:35,791 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: cc375f7c6de98eb58d23742e58970a9a).
+2025-07-12 18:52:37,814 - root - INFO - Ronin is now running! (hot config)
+2025-07-12 18:52:37,814 - root - INFO - Ronin is now running! (hot config)
+2025-07-12 18:53:28,549 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:53:28,549 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:53:40,804 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:53:40,804 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:53:54,219 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:53:54,219 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:54:06,139 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:54:06,139 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:54:18,462 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:54:18,462 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:54:27,504 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:54:27,504 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:54:49,977 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:54:49,977 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:55:01,542 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:55:01,542 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:55:15,585 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:55:15,585 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:55:16,168 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:55:16,168 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:55:38,349 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:55:38,349 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:55:40,951 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:55:40,951 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/numba/cpython/old_hashing.py:477: UserWarning: FNV hashing is not implemented in Numba. See PEP 456 https://www.python.org/dev/peps/pep-0456/ for rationale over not using FNV. Numba will continue to work, but hashes for built in types will be computed using siphash24. This will permit e.g. dictionaries to continue to behave as expected, however anything relying on the value of the hash opposed to hash as a derived property is likely to not work as expected.
+  warnings.warn(msg)
+[2025-07-12 18:56:10] [INFO    ] discord.client: logging in using static token
+2025-07-12 18:56:10,035 - discord.client - INFO - logging in using static token
+2025-07-12 18:56:10,035 - discord.client - INFO - logging in using static token
+[2025-07-12 18:56:10] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: 45a1d1c903fd9f9cc40272d21b85b326).
+2025-07-12 18:56:10,837 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 45a1d1c903fd9f9cc40272d21b85b326).
+2025-07-12 18:56:10,837 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 45a1d1c903fd9f9cc40272d21b85b326).
+2025-07-12 18:56:12,858 - root - INFO - Ronin is now running! (hot config)
+2025-07-12 18:56:12,858 - root - INFO - Ronin is now running! (hot config)
+2025-07-12 18:56:48,622 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:56:48,622 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:56:56,792 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:56:56,792 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:57:11,310 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:57:11,310 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:57:28,788 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:57:28,788 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:57:49,026 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:57:49,026 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:58:20,301 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:58:20,301 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:58:21,106 - root - ERROR - Error in VL API call: 'choices'
+2025-07-12 18:58:21,106 - root - ERROR - Error in VL API call: 'choices'
+2025-07-12 18:58:21,107 - root - ERROR - VL model returned empty caption
+2025-07-12 18:58:21,107 - root - ERROR - VL model returned empty caption
+2025-07-12 18:58:23,628 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:58:23,628 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:58:29,963 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:58:29,963 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:59:42,502 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:59:42,502 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:00:00,515 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:00:00,515 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:00:16,327 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:00:16,327 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:00:52,269 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:00:52,269 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:01:11,353 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:01:11,353 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:01:30,989 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:01:30,989 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/numba/cpython/old_hashing.py:477: UserWarning: FNV hashing is not implemented in Numba. See PEP 456 https://www.python.org/dev/peps/pep-0456/ for rationale over not using FNV. Numba will continue to work, but hashes for built in types will be computed using siphash24. This will permit e.g. dictionaries to continue to behave as expected, however anything relying on the value of the hash opposed to hash as a derived property is likely to not work as expected.
+  warnings.warn(msg)
+[2025-07-12 19:02:14] [INFO    ] discord.client: logging in using static token
+2025-07-12 19:02:14,969 - discord.client - INFO - logging in using static token
+2025-07-12 19:02:14,969 - discord.client - INFO - logging in using static token
+[2025-07-12 19:02:15] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: 00dd9448379be90825d4c56835288159).
+2025-07-12 19:02:15,763 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 00dd9448379be90825d4c56835288159).
+2025-07-12 19:02:15,763 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 00dd9448379be90825d4c56835288159).
+2025-07-12 19:02:17,778 - root - INFO - Ronin is now running! (hot config)
+2025-07-12 19:02:17,778 - root - INFO - Ronin is now running! (hot config)
+2025-07-12 19:02:59,895 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:02:59,895 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"

@@ -1014,9 +1014,105 @@ def load_config():
     }
 
 USER_PROFILE_DIR = pathlib.Path("user_profiles"); USER_PROFILE_DIR.mkdir(exist_ok=True)
+SERVER_PROFILE_DIR = pathlib.Path("server_profiles"); SERVER_PROFILE_DIR.mkdir(exist_ok=True)
 USER_LOGS_DIR = pathlib.Path("user_logs"); USER_LOGS_DIR.mkdir(exist_ok=True)
 DM_LOGS_DIR = pathlib.Path("dm_logs"); DM_LOGS_DIR.mkdir(exist_ok=True)
 user_cache: Dict[str, dict] = {}
+server_cache: Dict[str, dict] = {}
+
+def default_server_profile(guild_id: Optional[str] = None) -> dict:
+    """Create a new server profile with default values."""
+    return {
+        "guild_id": guild_id if guild_id else "",
+        "memories": [],
+        "history": [],
+        "preferences": {},
+        "context_notes": [],
+        "total_messages": 0,
+        "last_updated": datetime.now().isoformat()
+    }
+
+def ensure_server_profile_schema(profile: dict, guild_id: Optional[str] = None) -> dict:
+    """Ensure a server profile has all required fields, adding any that are missing."""
+    default = default_server_profile(guild_id)
+    
+    # If the profile is empty, return a fresh default
+    if not profile:
+        return default.copy()
+        
+    # Ensure all required fields exist with default values if missing
+    for key, default_value in default.items():
+        if key not in profile:
+            profile[key] = default_value.copy() if hasattr(default_value, 'copy') else default_value
+    
+    # Remove any extra fields that shouldn't be there
+    for key in list(profile.keys()):
+        if key not in default:
+            del profile[key]
+    
+    return profile
+
+def get_server_profile(guild_id: Optional[str] = None) -> dict:
+    """
+    Get or create a server profile, ensuring it has all required fields.
+    
+    Args:
+        guild_id: The Discord guild ID (server ID)
+        
+    Returns:
+        dict: The server profile with all required fields
+    """
+    if not guild_id:
+        return default_server_profile()
+        
+    # Return cached version if available
+    if guild_id in server_cache:
+        return server_cache[guild_id]
+        
+    file_path = SERVER_PROFILE_DIR / f"{guild_id}.json"
+    
+    try:
+        if file_path.exists():
+            with open(file_path, 'r', encoding='utf-8') as f:
+                # Load and validate the profile
+                profile = json.load(f)
+                server_cache[guild_id] = ensure_server_profile_schema(profile, guild_id)
+        else:
+            # Create a new profile if none exists
+            server_cache[guild_id] = default_server_profile(guild_id)
+            save_server_profile(guild_id)
+    except Exception as e:
+        logging.error(f"Error loading server profile {guild_id}: {e}")
+        server_cache[guild_id] = default_server_profile(guild_id)
+    
+    return server_cache[guild_id]
+
+def save_server_profile(guild_id: str) -> None:
+    """
+    Save a server profile to disk, ensuring it has all required fields.
+    
+    Args:
+        guild_id: The Discord guild ID (server ID)
+    """
+    if not guild_id:
+        return
+        
+    profile = server_cache.get(guild_id)
+    if not profile:
+        return
+        
+    # Ensure the profile has all required fields before saving
+    profile = ensure_server_profile_schema(profile, guild_id)
+    
+    # Update the last_updated timestamp
+    profile["last_updated"] = datetime.now().isoformat()
+    
+    file_path = SERVER_PROFILE_DIR / f"{guild_id}.json"
+    try:
+        with open(file_path, 'w', encoding='utf-8') as f:
+            json.dump(profile, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        logging.error(f"Error saving server profile {guild_id}: {e}")
 
 def default_profile(user_id=None, username=None):
     return {
@@ -1069,8 +1165,10 @@ def save_profile(user_id: str):
         json.dump(profile, f, indent=2, ensure_ascii=False)
 
 def save_all_profiles():
-    for user_id in user_cache:
+    for user_id in list(user_cache.keys()):
         save_profile(user_id)
+    for guild_id in list(server_cache.keys()):
+        save_server_profile(guild_id)
 
 # ---- Memory Extraction ----
 def extract_memory_from_message(message_content, user_profile):
@@ -1106,18 +1204,58 @@ def extract_memory_from_message(message_content, user_profile):
             memories.append(f"Location: {location}")
     return memories
 
-def add_memory(user_id, memory_text):
+def add_memory(user_id: str, memory_text: str, guild_id: Optional[str] = None, username: Optional[str] = None) -> None:
+    """
+    Add a memory for a user and optionally to a server.
+    
+    Args:
+        user_id: Discord user ID
+        memory_text: The memory text to add
+        guild_id: Optional server ID to also add the memory to
+        username: Optional username for server memory context
+    """
     config = load_config()
+    
+    # Add to user's personal memories
     profile = get_profile(user_id)
+    
+    # Check for duplicate memories (case-insensitive partial match)
+    memory_lower = memory_text.lower()
     for existing_memory in profile["memories"]:
-        if memory_text.lower() in existing_memory.lower() or existing_memory.lower() in memory_text.lower():
+        if memory_lower in existing_memory.lower() or existing_memory.lower() in memory_lower:
             return
+            
     timestamped_memory = f"[{datetime.now().strftime('%Y-%m-%d')}] {memory_text}"
+    
+    # Add to user's memories with limit enforcement
     profile["memories"].append(timestamped_memory)
     if len(profile["memories"]) > config["MAX_USER_MEMORY"]:
-        profile["memories"].pop(0)
+        profile["memories"] = profile["memories"][-config["MAX_USER_MEMORY"]:]
     save_profile(user_id)
-    logging.info(f"Added memory for user {user_id}: {memory_text}")
+    
+    # Add to server memories if guild_id is provided
+    if guild_id and username:
+        server_profile = get_server_profile(guild_id)
+        
+        # Create server memory entry with user context
+        server_memory = f"[{datetime.now().strftime('%Y-%m-%d %H:%M')}] [user: {user_id} | name: {username}] {memory_text}"
+        
+        # Add to server memories, avoiding duplicates
+        if not any(server_memory.lower() in m.lower() for m in server_profile["memories"]):
+            server_profile["memories"].append(server_memory)
+            
+            # Enforce server memory limit
+            if len(server_profile["memories"]) > config["MAX_SERVER_MEMORY"]:
+                server_profile["memories"] = server_profile["memories"][-config["MAX_SERVER_MEMORY"]:]
+            
+            # Update server stats
+            server_profile["total_messages"] = server_profile.get("total_messages", 0) + 1
+            server_profile["last_updated"] = datetime.now().isoformat()
+            
+            # Save the updated profile
+            save_server_profile(guild_id)
+    
+    logging.info(f"Added memory for user {user_id} in server {guild_id or 'DM'}: {memory_text}")
 
 def get_user_context(user_id):
     profile = get_profile(user_id)
@@ -1670,8 +1808,7 @@ async def process_message(message: Message, is_dm: bool):
         
         try:
             # Create a temporary file with proper cleanup
-            with tempfile.NamedTemporaryFile(delete=False, 
-                                          suffix=os.path.splitext(img_attachment.filename)[1]) as temp_img:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(img_attachment.filename)[1]) as temp_img:
                 temp_img_path = temp_img.name
                 
                 # Download the image with timeout
@@ -2206,32 +2343,77 @@ async def send_tts_audio(target, text: str):
 
 @bot.command(name='memories')
 async def show_memories(ctx):
+    """Show all your memories."""
     user_id = str(ctx.author.id)
-    profile = get_profile(user_id, str(ctx.author))
+    profile = get_profile(user_id)
     memories = profile["memories"]
+    
     if not memories:
-        await ctx.send("I don't have any memories about you yet!")
+        await ctx.reply("You don't have any memories yet!")
         return
-    embed = discord.Embed(
-        title=f"What I remember about {ctx.author.display_name}",
-        color=discord.Color.blue()
-    )
-    memories_text = "\n".join(f"• {memory}" for memory in memories)
-    embed.add_field(name="Memories", value=memories_text or "No memories yet", inline=False)
-    embed.add_field(name="Total Messages", value=profile["total_messages"], inline=True)
-    embed.add_field(name="First Seen", value=profile["first_seen"][:10], inline=True)
-    embed.add_field(name="Current Tone", value=profile["tone"].capitalize(), inline=True)
-    if profile["preferences"]:
-        prefs = "\n".join(f"• {k}: {v}" for k, v in profile["preferences"].items())
-        embed.add_field(name="Preferences", value=prefs, inline=False)
-    await ctx.send(embed=embed)
+        
+    memory_text = "\n".join(f"• {mem}" for mem in memories)
+    
+    # Split into chunks if too long
+    if len(memory_text) > 1900:
+        chunks = [memory_text[i:i+1900] for i in range(0, len(memory_text), 1900)]
+        for i, chunk in enumerate(chunks, 1):
+            await ctx.send(f"**Your memories (part {i}/{len(chunks)}):**\n```\n{chunk}\n```")
+    else:
+        await ctx.reply(f"**Your memories:**\n```\n{memory_text}\n```")
+
+@bot.command(name='servermemories')
+async def show_server_memories(ctx):
+    """Show all memories in this server."""
+    if not ctx.guild:
+        await ctx.reply("This command can only be used in a server!")
+        return
+        
+    guild_id = str(ctx.guild.id)
+    server_profile = get_server_profile(guild_id)
+    memories = server_profile["memories"]
+    
+    if not memories:
+        await ctx.reply("This server doesn't have any memories yet!")
+        return
+        
+    memory_text = "\n".join(f"• {mem}" for mem in memories)
+    
+    # Split into chunks if too long
+    if len(memory_text) > 1900:
+        chunks = [memory_text[i:i+1900] for i in range(0, len(memory_text), 1900)]
+        for i, chunk in enumerate(chunks, 1):
+            await ctx.send(f"**Server memories (part {i}/{len(chunks)}):**\n```\n{chunk}\n```")
+    else:
+        await ctx.reply(f"**Server memories:**\n```\n{memory_text}\n```")
+
+@bot.command(name='clearservermemories')
+@commands.has_permissions(administrator=True)
+async def clear_server_memories(ctx):
+    """[Admin] Clear all memories in this server."""
+    if not ctx.guild:
+        await ctx.reply("This command can only be used in a server!")
+        return
+        
+    guild_id = str(ctx.guild.id)
+    server_profile = get_server_profile(guild_id)
+    count = len(server_profile["memories"])
+    server_profile["memories"] = []
+    server_profile["last_updated"] = datetime.now().isoformat()
+    save_server_profile(guild_id)
+    
+    await ctx.reply(f"✅ Cleared {count} memories from this server.")
 
 @bot.command(name='remember')
 async def manual_memory(ctx, *, memory_text):
+    """Manually add a memory."""
     user_id = str(ctx.author.id)
-    add_memory(user_id, memory_text)
+    username = ctx.author.display_name
+    guild_id = str(ctx.guild.id) if ctx.guild else None
+    
+    add_memory(user_id, memory_text, guild_id, username)
     save_profile(user_id)
-    await ctx.send(f"✅ I'll remember: {memory_text}")
+    await ctx.reply("✅ Memory added!", mention_author=False)
 
 @bot.command(name='preference')
 async def set_preference(ctx, key, *, value):
