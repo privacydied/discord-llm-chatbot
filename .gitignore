@@ -7,3 +7,4 @@ user_logs/*
 user_profiles/*
 bot.log
 bot.pid
+server_profiles/*
