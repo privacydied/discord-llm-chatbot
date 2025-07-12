@@ -6,7 +6,8 @@ LOGFILE="$BOT_DIR/bot.log"
 
 case "$1" in
   start)
-    cd "$BOT_DIR"
+    export TESSDATA_PREFIX=/opt/share/
+	cd "$BOT_DIR"
     . venv/bin/activate
     nohup venv/bin/python main.py >> "$LOGFILE" 2>&1 &
     echo $! > "$BOT_DIR/bot.pid"

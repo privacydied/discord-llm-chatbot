@@ -1553,3 +1553,623 @@ NameError: name 'timezone' is not defined
 2025-07-11 22:38:40,020 - root - INFO - Successfully processed PDF: Untitled (123 pages, 301003 chars)
 2025-07-11 22:38:41,935 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
 2025-07-11 22:38:41,935 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 22:40:37,809 - root - INFO - Successfully processed PDF: National Security Study Memoranda 200 (2 pages, 2758 chars)
+2025-07-11 22:40:37,809 - root - INFO - Successfully processed PDF: National Security Study Memoranda 200 (2 pages, 2758 chars)
+2025-07-11 22:40:39,831 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 22:40:39,831 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 22:46:52,839 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 22:46:52,839 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 22:47:00,042 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 22:47:00,042 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 22:47:06,211 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 22:47:06,211 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 22:53:55,388 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 22:53:55,388 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 22:56:30,065 - root - INFO - Successfully processed PDF: Microsoft Word - The Protocols of the Learned Elders of Zion.doc (42 pages, 39589 chars)
+2025-07-11 22:56:30,065 - root - INFO - Successfully processed PDF: Microsoft Word - The Protocols of the Learned Elders of Zion.doc (42 pages, 39589 chars)
+2025-07-11 22:56:32,551 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 22:56:32,551 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 22:57:22,112 - root - INFO - Successfully processed PDF: Unabomber Manifesto (38 pages, 211163 chars)
+2025-07-11 22:57:22,112 - root - INFO - Successfully processed PDF: Unabomber Manifesto (38 pages, 211163 chars)
+2025-07-11 22:57:23,978 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 22:57:23,978 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 22:58:26,161 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 22:58:26,161 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 22:58:27,529 - root - INFO - Successfully processed PDF: Simple Sabotage Field Menu (20 pages, 56072 chars)
+2025-07-11 22:58:27,529 - root - INFO - Successfully processed PDF: Simple Sabotage Field Menu (20 pages, 56072 chars)
+2025-07-11 22:58:30,780 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 22:58:30,780 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 22:58:36,686 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 22:58:36,686 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 22:58:42,543 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 22:58:42,543 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 22:59:55,603 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 22:59:55,603 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:00:05,348 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:00:05,348 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:00:51,769 - pdf_processor - ERROR - Error processing PDF: tesseract is not installed or it's not in your PATH. See README file for more information.
+2025-07-11 23:00:51,769 - pdf_processor - ERROR - Error processing PDF: tesseract is not installed or it's not in your PATH. See README file for more information.
+2025-07-11 23:01:04,356 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:01:04,356 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:01:08,364 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:01:08,364 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:01:53,797 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:01:53,797 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:02:05,068 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:02:05,068 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:02:47,149 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:02:47,149 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:03:03,340 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:03:03,340 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:03:12,880 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:03:12,880 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:03:21,810 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:03:21,810 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:03:58,071 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:03:58,071 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:05:41,971 - root - INFO - Added memory for user 196966835365609472: Preferred name: Telling
+2025-07-11 23:05:41,971 - root - INFO - Added memory for user 196966835365609472: Preferred name: Telling
+2025-07-11 23:05:45,455 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:05:45,455 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:05:52,540 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:05:52,540 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:05:59,843 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:05:59,843 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:06:29,022 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:06:29,022 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:06:37,838 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:06:37,838 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:06:44,142 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:06:44,142 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:07:06,657 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:07:06,657 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:07:39,312 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:07:39,312 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:12:20,355 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+2025-07-11 23:12:20,355 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+[2025-07-11 23:12:20] [INFO    ] discord.client: logging in using static token
+2025-07-11 23:12:20,359 - discord.client - INFO - logging in using static token
+2025-07-11 23:12:20,359 - discord.client - INFO - logging in using static token
+[2025-07-11 23:12:21] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: cd97c1a5cd0e8d4c62a41620f2c8c830).
+2025-07-11 23:12:21,087 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: cd97c1a5cd0e8d4c62a41620f2c8c830).
+2025-07-11 23:12:21,087 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: cd97c1a5cd0e8d4c62a41620f2c8c830).
+2025-07-11 23:12:23,098 - root - INFO - Ronin is now running! (hot config)
+2025-07-11 23:12:23,098 - root - INFO - Ronin is now running! (hot config)
+2025-07-11 23:12:35,055 - pdf_processor - ERROR - Error processing PDF: (1, 'Error opening data file ./eng.traineddata Please make sure the TESSDATA_PREFIX environment variable is set to your "tessdata" directory. Failed loading language \'eng\' Tesseract couldn\'t load any languages! Could not initialize tesseract.')
+2025-07-11 23:12:35,055 - pdf_processor - ERROR - Error processing PDF: (1, 'Error opening data file ./eng.traineddata Please make sure the TESSDATA_PREFIX environment variable is set to your "tessdata" directory. Failed loading language \'eng\' Tesseract couldn\'t load any languages! Could not initialize tesseract.')
+2025-07-11 23:17:59,442 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:17:59,442 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:18:03,376 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+2025-07-11 23:18:03,376 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+[2025-07-11 23:18:03] [INFO    ] discord.client: logging in using static token
+2025-07-11 23:18:03,381 - discord.client - INFO - logging in using static token
+2025-07-11 23:18:03,381 - discord.client - INFO - logging in using static token
+[2025-07-11 23:18:04] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: 6ae62e933c70a14366706795c4d8b981).
+2025-07-11 23:18:04,258 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 6ae62e933c70a14366706795c4d8b981).
+2025-07-11 23:18:04,258 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 6ae62e933c70a14366706795c4d8b981).
+2025-07-11 23:18:06,279 - root - INFO - Ronin is now running! (hot config)
+2025-07-11 23:18:06,279 - root - INFO - Ronin is now running! (hot config)
+2025-07-11 23:18:25,771 - pdf_processor - ERROR - Error processing PDF: (1, 'Error opening data file ./eng.traineddata Please make sure the TESSDATA_PREFIX environment variable is set to your "tessdata" directory. Failed loading language \'eng\' Tesseract couldn\'t load any languages! Could not initialize tesseract.')
+2025-07-11 23:18:25,771 - pdf_processor - ERROR - Error processing PDF: (1, 'Error opening data file ./eng.traineddata Please make sure the TESSDATA_PREFIX environment variable is set to your "tessdata" directory. Failed loading language \'eng\' Tesseract couldn\'t load any languages! Could not initialize tesseract.')
+2025-07-11 23:18:34,432 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:18:34,432 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:18:47,555 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+2025-07-11 23:18:47,555 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+[2025-07-11 23:18:47] [INFO    ] discord.client: logging in using static token
+2025-07-11 23:18:47,560 - discord.client - INFO - logging in using static token
+2025-07-11 23:18:47,560 - discord.client - INFO - logging in using static token
+[2025-07-11 23:18:48] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: bae1e916ef5c306fe65504ab0f3a8e91).
+2025-07-11 23:18:48,348 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: bae1e916ef5c306fe65504ab0f3a8e91).
+2025-07-11 23:18:48,348 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: bae1e916ef5c306fe65504ab0f3a8e91).
+2025-07-11 23:18:50,358 - root - INFO - Ronin is now running! (hot config)
+2025-07-11 23:18:50,358 - root - INFO - Ronin is now running! (hot config)
+2025-07-11 23:19:00,822 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:19:00,822 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:19:12,763 - pdf_processor - ERROR - Error processing PDF: (1, 'Error opening data file ./eng.traineddata Please make sure the TESSDATA_PREFIX environment variable is set to your "tessdata" directory. Failed loading language \'eng\' Tesseract couldn\'t load any languages! Could not initialize tesseract.')
+2025-07-11 23:19:12,763 - pdf_processor - ERROR - Error processing PDF: (1, 'Error opening data file ./eng.traineddata Please make sure the TESSDATA_PREFIX environment variable is set to your "tessdata" directory. Failed loading language \'eng\' Tesseract couldn\'t load any languages! Could not initialize tesseract.')
+2025-07-11 23:20:42,403 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:20:42,403 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:20:51,396 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:20:51,396 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:20:54,552 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+2025-07-11 23:20:54,552 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+[2025-07-11 23:20:54] [INFO    ] discord.client: logging in using static token
+2025-07-11 23:20:54,556 - discord.client - INFO - logging in using static token
+2025-07-11 23:20:54,556 - discord.client - INFO - logging in using static token
+[2025-07-11 23:20:55] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: 5033c5e76b372f40d76a9cc5b94fa946).
+2025-07-11 23:20:55,440 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 5033c5e76b372f40d76a9cc5b94fa946).
+2025-07-11 23:20:55,440 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 5033c5e76b372f40d76a9cc5b94fa946).
+2025-07-11 23:20:57,465 - root - INFO - Ronin is now running! (hot config)
+2025-07-11 23:20:57,465 - root - INFO - Ronin is now running! (hot config)
+2025-07-11 23:21:01,935 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:21:01,935 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:21:01,975 - root - ERROR - Error in VL API call: 'choices'
+2025-07-11 23:21:01,975 - root - ERROR - Error in VL API call: 'choices'
+2025-07-11 23:21:01,975 - root - ERROR - VL model returned empty caption
+2025-07-11 23:21:01,975 - root - ERROR - VL model returned empty caption
+2025-07-11 23:21:06,266 - pdf_processor - ERROR - Error processing PDF: (1, 'Error opening data file /opt/share/eng.traineddata Please make sure the TESSDATA_PREFIX environment variable is set to your "tessdata" directory. Failed loading language \'eng\' Tesseract couldn\'t load any languages! Could not initialize tesseract.')
+2025-07-11 23:21:06,266 - pdf_processor - ERROR - Error processing PDF: (1, 'Error opening data file /opt/share/eng.traineddata Please make sure the TESSDATA_PREFIX environment variable is set to your "tessdata" directory. Failed loading language \'eng\' Tesseract couldn\'t load any languages! Could not initialize tesseract.')
+2025-07-11 23:21:11,122 - httpx - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=who%20is%20the%20hottest%20anime%20girl&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 200 OK"
+2025-07-11 23:21:11,122 - httpx - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=who%20is%20the%20hottest%20anime%20girl&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 200 OK"
+2025-07-11 23:21:12,068 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:21:12,068 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:21:12,707 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:21:12,707 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:21:34,407 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:21:34,407 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:21:37,567 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+2025-07-11 23:21:37,567 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+[2025-07-11 23:21:37] [INFO    ] discord.client: logging in using static token
+2025-07-11 23:21:37,571 - discord.client - INFO - logging in using static token
+2025-07-11 23:21:37,571 - discord.client - INFO - logging in using static token
+[2025-07-11 23:21:38] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: 6bb7ce4ba83dfec0220e47a6b1b249ba).
+2025-07-11 23:21:38,324 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 6bb7ce4ba83dfec0220e47a6b1b249ba).
+2025-07-11 23:21:38,324 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 6bb7ce4ba83dfec0220e47a6b1b249ba).
+2025-07-11 23:21:40,337 - root - INFO - Ronin is now running! (hot config)
+2025-07-11 23:21:40,337 - root - INFO - Ronin is now running! (hot config)
+2025-07-11 23:21:49,575 - pdf_processor - ERROR - Error processing PDF: (1, 'Error opening data file /opt/share/eng.traineddata Please make sure the TESSDATA_PREFIX environment variable is set to your "tessdata" directory. Failed loading language \'eng\' Tesseract couldn\'t load any languages! Could not initialize tesseract.')
+2025-07-11 23:21:49,575 - pdf_processor - ERROR - Error processing PDF: (1, 'Error opening data file /opt/share/eng.traineddata Please make sure the TESSDATA_PREFIX environment variable is set to your "tessdata" directory. Failed loading language \'eng\' Tesseract couldn\'t load any languages! Could not initialize tesseract.')
+2025-07-11 23:23:21,977 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+2025-07-11 23:23:21,977 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+[2025-07-11 23:23:21] [INFO    ] discord.client: logging in using static token
+2025-07-11 23:23:21,981 - discord.client - INFO - logging in using static token
+2025-07-11 23:23:21,981 - discord.client - INFO - logging in using static token
+[2025-07-11 23:23:22] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: 9eda1fc3e3c7e1de4da33d5e6f056771).
+2025-07-11 23:23:22,873 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 9eda1fc3e3c7e1de4da33d5e6f056771).
+2025-07-11 23:23:22,873 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 9eda1fc3e3c7e1de4da33d5e6f056771).
+2025-07-11 23:23:24,889 - root - INFO - Ronin is now running! (hot config)
+2025-07-11 23:23:24,889 - root - INFO - Ronin is now running! (hot config)
+2025-07-11 23:23:34,620 - pdf_processor - ERROR - Error processing PDF: (1, 'Error opening data file /opt/share/eng.traineddata Please make sure the TESSDATA_PREFIX environment variable is set to your "tessdata" directory. Failed loading language \'eng\' Tesseract couldn\'t load any languages! Could not initialize tesseract.')
+2025-07-11 23:23:34,620 - pdf_processor - ERROR - Error processing PDF: (1, 'Error opening data file /opt/share/eng.traineddata Please make sure the TESSDATA_PREFIX environment variable is set to your "tessdata" directory. Failed loading language \'eng\' Tesseract couldn\'t load any languages! Could not initialize tesseract.')
+2025-07-11 23:24:50,924 - root - ERROR - Error processing URL https://x.com/mudshevik/status/1941486569761952024?s=46: Blocked by robots.txt: Blocked by https://x.com/robots.txt
+2025-07-11 23:24:50,924 - root - ERROR - Error processing URL https://x.com/mudshevik/status/1941486569761952024?s=46: Blocked by robots.txt: Blocked by https://x.com/robots.txt
+2025-07-11 23:24:52,783 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:24:52,783 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:26:21,565 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:26:21,565 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:27:45,831 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+2025-07-11 23:27:45,831 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+[2025-07-11 23:27:45] [INFO    ] discord.client: logging in using static token
+2025-07-11 23:27:45,837 - discord.client - INFO - logging in using static token
+2025-07-11 23:27:45,837 - discord.client - INFO - logging in using static token
+[2025-07-11 23:27:46] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: b682772818d6701bd468c1b57fceeea0).
+2025-07-11 23:27:46,584 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: b682772818d6701bd468c1b57fceeea0).
+2025-07-11 23:27:46,584 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: b682772818d6701bd468c1b57fceeea0).
+2025-07-11 23:27:48,599 - root - INFO - Ronin is now running! (hot config)
+2025-07-11 23:27:48,599 - root - INFO - Ronin is now running! (hot config)
+2025-07-11 23:28:02,836 - pdf_processor - ERROR - Error processing PDF: (1, 'Error opening data file ./eng.traineddata Please make sure the TESSDATA_PREFIX environment variable is set to your "tessdata" directory. Failed loading language \'eng\' Tesseract couldn\'t load any languages! Could not initialize tesseract.')
+2025-07-11 23:28:02,836 - pdf_processor - ERROR - Error processing PDF: (1, 'Error opening data file ./eng.traineddata Please make sure the TESSDATA_PREFIX environment variable is set to your "tessdata" directory. Failed loading language \'eng\' Tesseract couldn\'t load any languages! Could not initialize tesseract.')
+2025-07-11 23:28:10,343 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:28:10,343 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:28:18,645 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:28:18,645 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:28:24,805 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:28:24,805 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:29:08,057 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:29:08,057 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:30:22,082 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:30:22,082 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:30:34,770 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+2025-07-11 23:30:34,770 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+[2025-07-11 23:30:34] [INFO    ] discord.client: logging in using static token
+2025-07-11 23:30:34,774 - discord.client - INFO - logging in using static token
+2025-07-11 23:30:34,774 - discord.client - INFO - logging in using static token
+[2025-07-11 23:30:35] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: 44a356fe42ee86812b84bd10be52d7d7).
+2025-07-11 23:30:35,508 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 44a356fe42ee86812b84bd10be52d7d7).
+2025-07-11 23:30:35,508 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 44a356fe42ee86812b84bd10be52d7d7).
+2025-07-11 23:30:37,521 - root - INFO - Ronin is now running! (hot config)
+2025-07-11 23:30:37,521 - root - INFO - Ronin is now running! (hot config)
+2025-07-11 23:30:47,754 - pdf_processor - ERROR - Error processing PDF: (1, 'Error opening data file ./eng.traineddata Please make sure the TESSDATA_PREFIX environment variable is set to your "tessdata" directory. Failed loading language \'eng\' Tesseract couldn\'t load any languages! Could not initialize tesseract.')
+2025-07-11 23:30:47,754 - pdf_processor - ERROR - Error processing PDF: (1, 'Error opening data file ./eng.traineddata Please make sure the TESSDATA_PREFIX environment variable is set to your "tessdata" directory. Failed loading language \'eng\' Tesseract couldn\'t load any languages! Could not initialize tesseract.')
+2025-07-11 23:31:25,822 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+2025-07-11 23:31:25,822 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+[2025-07-11 23:31:25] [INFO    ] discord.client: logging in using static token
+2025-07-11 23:31:25,826 - discord.client - INFO - logging in using static token
+2025-07-11 23:31:25,826 - discord.client - INFO - logging in using static token
+[2025-07-11 23:31:26] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: 712385c4926de015a6c8165d412ac2a4).
+2025-07-11 23:31:26,586 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 712385c4926de015a6c8165d412ac2a4).
+2025-07-11 23:31:26,586 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 712385c4926de015a6c8165d412ac2a4).
+2025-07-11 23:31:28,599 - root - INFO - Ronin is now running! (hot config)
+2025-07-11 23:31:28,599 - root - INFO - Ronin is now running! (hot config)
+2025-07-11 23:31:39,013 - pdf_processor - ERROR - Error processing PDF: (1, 'Error opening data file ./eng.traineddata Please make sure the TESSDATA_PREFIX environment variable is set to your "tessdata" directory. Failed loading language \'eng\' Tesseract couldn\'t load any languages! Could not initialize tesseract.')
+2025-07-11 23:31:39,013 - pdf_processor - ERROR - Error processing PDF: (1, 'Error opening data file ./eng.traineddata Please make sure the TESSDATA_PREFIX environment variable is set to your "tessdata" directory. Failed loading language \'eng\' Tesseract couldn\'t load any languages! Could not initialize tesseract.')
+2025-07-11 23:32:24,416 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+2025-07-11 23:32:24,421 - discord.client - INFO - logging in using static token
+2025-07-11 23:32:25,176 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 85efcc4bf1a3352819695b32b97d3dca).
+2025-07-11 23:32:27,188 - root - INFO - Ronin is now running! (hot config)
+2025-07-11 23:32:37,163 - pdf_processor - ERROR - Error processing PDF: (1, 'Error opening data file ./eng.traineddata Please make sure the TESSDATA_PREFIX environment variable is set to your "tessdata" directory. Failed loading language \'eng\' Tesseract couldn\'t load any languages! Could not initialize tesseract.')
+2025-07-11 23:32:37,163 - pdf_processor - ERROR - Error processing PDF: (1, 'Error opening data file ./eng.traineddata Please make sure the TESSDATA_PREFIX environment variable is set to your "tessdata" directory. Failed loading language \'eng\' Tesseract couldn\'t load any languages! Could not initialize tesseract.')
+2025-07-11 23:33:16,252 - discord.gateway - WARNING - Shard ID None heartbeat blocked for more than 10 seconds.
+Loop thread traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2090, in <module>
+    main()
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2080, in main
+    bot.run(config["DISCORD_TOKEN"])
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/discord/client.py", line 860, in run
+    asyncio.run(runner())
+  File "/opt/lib/python3.11/asyncio/runners.py", line 190, in run
+  File "/opt/lib/python3.11/asyncio/runners.py", line 118, in run
+  File "/opt/lib/python3.11/asyncio/base_events.py", line 641, in run_until_complete
+  File "/opt/lib/python3.11/asyncio/base_events.py", line 608, in run_forever
+  File "/opt/lib/python3.11/asyncio/base_events.py", line 1936, in _run_once
+  File "/opt/lib/python3.11/asyncio/events.py", line 84, in _run
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/discord/client.py", line 441, in _run_event
+    await coro(*args, **kwargs)
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2064, in on_message
+    await process_message(message, is_dm)
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1849, in process_message
+    pdf_result = await process_pdf(temp_pdf_path, debug=config.get("DEBUG", False))
+  File "/volume1/py/discord-llm-chatbot/main.py", line 560, in process_pdf
+    result = processor.process_pdf(source, is_url=is_url)
+  File "/volume1/py/discord-llm-chatbot/pdf_processor.py", line 204, in process_pdf
+    result['text'], result['is_scanned'] = self._extract_text_with_pymupdf(doc)
+  File "/volume1/py/discord-llm-chatbot/pdf_processor.py", line 116, in _extract_text_with_pymupdf
+    page_text = pytesseract.image_to_string(img, lang=self.ocr_lang)
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/pytesseract/pytesseract.py", line 423, in image_to_string
+    return {
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/pytesseract/pytesseract.py", line 426, in <lambda>
+    Output.STRING: lambda: run_and_get_output(*args),
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/pytesseract/pytesseract.py", line 288, in run_and_get_output
+    run_tesseract(**kwargs)
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/pytesseract/pytesseract.py", line 262, in run_tesseract
+    with timeout_manager(proc, timeout) as error_string:
+  File "/opt/lib/python3.11/contextlib.py", line 137, in __enter__
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/pytesseract/pytesseract.py", line 127, in timeout_manager
+    yield proc.communicate()[1]
+  File "/opt/lib/python3.11/subprocess.py", line 1209, in communicate
+  File "/opt/lib/python3.11/subprocess.py", line 2115, in _communicate
+  File "/opt/lib/python3.11/selectors.py", line 415, in select
+
+2025-07-11 23:33:26,253 - discord.gateway - WARNING - Shard ID None heartbeat blocked for more than 20 seconds.
+Loop thread traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2090, in <module>
+    main()
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2080, in main
+    bot.run(config["DISCORD_TOKEN"])
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/discord/client.py", line 860, in run
+    asyncio.run(runner())
+  File "/opt/lib/python3.11/asyncio/runners.py", line 190, in run
+  File "/opt/lib/python3.11/asyncio/runners.py", line 118, in run
+  File "/opt/lib/python3.11/asyncio/base_events.py", line 641, in run_until_complete
+  File "/opt/lib/python3.11/asyncio/base_events.py", line 608, in run_forever
+  File "/opt/lib/python3.11/asyncio/base_events.py", line 1936, in _run_once
+  File "/opt/lib/python3.11/asyncio/events.py", line 84, in _run
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/discord/client.py", line 441, in _run_event
+    await coro(*args, **kwargs)
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2064, in on_message
+    await process_message(message, is_dm)
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1849, in process_message
+    pdf_result = await process_pdf(temp_pdf_path, debug=config.get("DEBUG", False))
+  File "/volume1/py/discord-llm-chatbot/main.py", line 560, in process_pdf
+    result = processor.process_pdf(source, is_url=is_url)
+  File "/volume1/py/discord-llm-chatbot/pdf_processor.py", line 204, in process_pdf
+    result['text'], result['is_scanned'] = self._extract_text_with_pymupdf(doc)
+  File "/volume1/py/discord-llm-chatbot/pdf_processor.py", line 116, in _extract_text_with_pymupdf
+    page_text = pytesseract.image_to_string(img, lang=self.ocr_lang)
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/pytesseract/pytesseract.py", line 423, in image_to_string
+    return {
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/pytesseract/pytesseract.py", line 426, in <lambda>
+    Output.STRING: lambda: run_and_get_output(*args),
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/pytesseract/pytesseract.py", line 288, in run_and_get_output
+    run_tesseract(**kwargs)
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/pytesseract/pytesseract.py", line 262, in run_tesseract
+    with timeout_manager(proc, timeout) as error_string:
+  File "/opt/lib/python3.11/contextlib.py", line 137, in __enter__
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/pytesseract/pytesseract.py", line 127, in timeout_manager
+    yield proc.communicate()[1]
+  File "/opt/lib/python3.11/subprocess.py", line 1209, in communicate
+  File "/opt/lib/python3.11/subprocess.py", line 2115, in _communicate
+  File "/opt/lib/python3.11/selectors.py", line 415, in select
+
+2025-07-11 23:33:36,254 - discord.gateway - WARNING - Shard ID None heartbeat blocked for more than 30 seconds.
+Loop thread traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2090, in <module>
+    main()
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2080, in main
+    bot.run(config["DISCORD_TOKEN"])
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/discord/client.py", line 860, in run
+    asyncio.run(runner())
+  File "/opt/lib/python3.11/asyncio/runners.py", line 190, in run
+  File "/opt/lib/python3.11/asyncio/runners.py", line 118, in run
+  File "/opt/lib/python3.11/asyncio/base_events.py", line 641, in run_until_complete
+  File "/opt/lib/python3.11/asyncio/base_events.py", line 608, in run_forever
+  File "/opt/lib/python3.11/asyncio/base_events.py", line 1936, in _run_once
+  File "/opt/lib/python3.11/asyncio/events.py", line 84, in _run
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/discord/client.py", line 441, in _run_event
+    await coro(*args, **kwargs)
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2064, in on_message
+    await process_message(message, is_dm)
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1849, in process_message
+    pdf_result = await process_pdf(temp_pdf_path, debug=config.get("DEBUG", False))
+  File "/volume1/py/discord-llm-chatbot/main.py", line 560, in process_pdf
+    result = processor.process_pdf(source, is_url=is_url)
+  File "/volume1/py/discord-llm-chatbot/pdf_processor.py", line 204, in process_pdf
+    result['text'], result['is_scanned'] = self._extract_text_with_pymupdf(doc)
+  File "/volume1/py/discord-llm-chatbot/pdf_processor.py", line 116, in _extract_text_with_pymupdf
+    page_text = pytesseract.image_to_string(img, lang=self.ocr_lang)
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/pytesseract/pytesseract.py", line 423, in image_to_string
+    return {
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/pytesseract/pytesseract.py", line 426, in <lambda>
+    Output.STRING: lambda: run_and_get_output(*args),
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/pytesseract/pytesseract.py", line 288, in run_and_get_output
+    run_tesseract(**kwargs)
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/pytesseract/pytesseract.py", line 262, in run_tesseract
+    with timeout_manager(proc, timeout) as error_string:
+  File "/opt/lib/python3.11/contextlib.py", line 137, in __enter__
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/pytesseract/pytesseract.py", line 127, in timeout_manager
+    yield proc.communicate()[1]
+  File "/opt/lib/python3.11/subprocess.py", line 1209, in communicate
+  File "/opt/lib/python3.11/subprocess.py", line 2115, in _communicate
+  File "/opt/lib/python3.11/selectors.py", line 415, in select
+
+2025-07-11 23:33:46,255 - discord.gateway - WARNING - Shard ID None heartbeat blocked for more than 40 seconds.
+Loop thread traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2090, in <module>
+    main()
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2080, in main
+    bot.run(config["DISCORD_TOKEN"])
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/discord/client.py", line 860, in run
+    asyncio.run(runner())
+  File "/opt/lib/python3.11/asyncio/runners.py", line 190, in run
+  File "/opt/lib/python3.11/asyncio/runners.py", line 118, in run
+  File "/opt/lib/python3.11/asyncio/base_events.py", line 641, in run_until_complete
+  File "/opt/lib/python3.11/asyncio/base_events.py", line 608, in run_forever
+  File "/opt/lib/python3.11/asyncio/base_events.py", line 1936, in _run_once
+  File "/opt/lib/python3.11/asyncio/events.py", line 84, in _run
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/discord/client.py", line 441, in _run_event
+    await coro(*args, **kwargs)
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2064, in on_message
+    await process_message(message, is_dm)
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1849, in process_message
+    pdf_result = await process_pdf(temp_pdf_path, debug=config.get("DEBUG", False))
+  File "/volume1/py/discord-llm-chatbot/main.py", line 560, in process_pdf
+    result = processor.process_pdf(source, is_url=is_url)
+  File "/volume1/py/discord-llm-chatbot/pdf_processor.py", line 204, in process_pdf
+    result['text'], result['is_scanned'] = self._extract_text_with_pymupdf(doc)
+  File "/volume1/py/discord-llm-chatbot/pdf_processor.py", line 116, in _extract_text_with_pymupdf
+    page_text = pytesseract.image_to_string(img, lang=self.ocr_lang)
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/pytesseract/pytesseract.py", line 423, in image_to_string
+    return {
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/pytesseract/pytesseract.py", line 426, in <lambda>
+    Output.STRING: lambda: run_and_get_output(*args),
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/pytesseract/pytesseract.py", line 288, in run_and_get_output
+    run_tesseract(**kwargs)
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/pytesseract/pytesseract.py", line 262, in run_tesseract
+    with timeout_manager(proc, timeout) as error_string:
+  File "/opt/lib/python3.11/contextlib.py", line 137, in __enter__
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/pytesseract/pytesseract.py", line 127, in timeout_manager
+    yield proc.communicate()[1]
+  File "/opt/lib/python3.11/subprocess.py", line 1209, in communicate
+  File "/opt/lib/python3.11/subprocess.py", line 2115, in _communicate
+  File "/opt/lib/python3.11/selectors.py", line 415, in select
+
+2025-07-11 23:33:52,767 - root - INFO - Successfully processed PDF: ANALYSIS AND ASSESSMENT OF GATEWAY PROCESS (29 pages, 89424 chars)
+2025-07-11 23:33:52,867 - discord.gateway - INFO - Shard ID None has successfully RESUMED session 85efcc4bf1a3352819695b32b97d3dca.
+2025-07-11 23:33:55,472 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:34:05,398 - root - INFO - Bot shutdown complete.
+2025-07-11 23:34:14,901 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+2025-07-11 23:34:14,901 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+[2025-07-11 23:34:14] [INFO    ] discord.client: logging in using static token
+2025-07-11 23:34:14,906 - discord.client - INFO - logging in using static token
+2025-07-11 23:34:14,906 - discord.client - INFO - logging in using static token
+[2025-07-11 23:34:15] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: 5c72da330b94f0a0a90e9eb6352b401b).
+2025-07-11 23:34:15,772 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 5c72da330b94f0a0a90e9eb6352b401b).
+2025-07-11 23:34:15,772 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 5c72da330b94f0a0a90e9eb6352b401b).
+2025-07-11 23:34:17,784 - root - INFO - Ronin is now running! (hot config)
+2025-07-11 23:34:17,784 - root - INFO - Ronin is now running! (hot config)
+2025-07-11 23:36:50,189 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:36:50,189 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:37:23,518 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:37:23,518 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:37:31,265 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:37:31,265 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:37:36,620 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:37:36,620 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:42:36,974 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:42:36,974 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:43:17,545 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:43:17,545 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:43:23,300 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:43:23,300 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:43:24,332 - root - ERROR - Error in VL API call: 'choices'
+2025-07-11 23:43:24,332 - root - ERROR - Error in VL API call: 'choices'
+2025-07-11 23:43:24,333 - root - ERROR - VL model returned empty caption
+2025-07-11 23:43:24,333 - root - ERROR - VL model returned empty caption
+2025-07-11 23:43:27,732 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:43:27,732 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:44:36,407 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+2025-07-11 23:44:36,407 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+[2025-07-11 23:44:36] [INFO    ] discord.client: logging in using static token
+2025-07-11 23:44:36,411 - discord.client - INFO - logging in using static token
+2025-07-11 23:44:36,411 - discord.client - INFO - logging in using static token
+[2025-07-11 23:44:37] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: d91dfe1c460019d3b51a965a7b1609d1).
+2025-07-11 23:44:37,151 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: d91dfe1c460019d3b51a965a7b1609d1).
+2025-07-11 23:44:37,151 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: d91dfe1c460019d3b51a965a7b1609d1).
+2025-07-11 23:44:39,166 - root - INFO - Ronin is now running! (hot config)
+2025-07-11 23:44:39,166 - root - INFO - Ronin is now running! (hot config)
+/volume1/py/discord-llm-chatbot/main.py:1849: RuntimeWarning: coroutine 'PDFProcessor.process_pdf' was never awaited
+  pdf_result = await process_pdf(temp_pdf_path, debug=config.get("DEBUG", False))
+RuntimeWarning: Enable tracemalloc to get the object allocation traceback
+2025-07-11 23:45:08,685 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:45:08,685 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:47:23,448 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:47:23,448 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:48:29,903 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:48:29,903 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:48:37,006 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:48:37,006 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:48:40,145 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:48:40,145 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:49:34,856 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:49:34,856 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:49:35,089 - root - ERROR - Error in VL API call: 'choices'
+2025-07-11 23:49:35,089 - root - ERROR - Error in VL API call: 'choices'
+2025-07-11 23:49:35,089 - root - ERROR - VL model returned empty caption
+2025-07-11 23:49:35,089 - root - ERROR - VL model returned empty caption
+2025-07-11 23:49:41,987 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:49:41,987 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:49:49,980 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:49:49,980 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:52:11,437 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:52:11,437 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:52:11,460 - root - ERROR - Error in VL API call: 'choices'
+2025-07-11 23:52:11,460 - root - ERROR - Error in VL API call: 'choices'
+2025-07-11 23:52:11,460 - root - ERROR - VL model returned empty caption
+2025-07-11 23:52:11,460 - root - ERROR - VL model returned empty caption
+2025-07-11 23:52:15,534 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:52:15,534 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:52:24,292 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:52:24,292 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:53:18,411 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+2025-07-11 23:53:18,411 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+[2025-07-11 23:53:18] [INFO    ] discord.client: logging in using static token
+2025-07-11 23:53:18,415 - discord.client - INFO - logging in using static token
+2025-07-11 23:53:18,415 - discord.client - INFO - logging in using static token
+[2025-07-11 23:53:19] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: 66fb9451c716829e4ac9d97c79d5d059).
+2025-07-11 23:53:19,444 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 66fb9451c716829e4ac9d97c79d5d059).
+2025-07-11 23:53:19,444 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 66fb9451c716829e4ac9d97c79d5d059).
+2025-07-11 23:53:21,456 - root - INFO - Ronin is now running! (hot config)
+2025-07-11 23:53:21,456 - root - INFO - Ronin is now running! (hot config)
+2025-07-11 23:53:49,388 - pdf_processor - ERROR - Error processing PDF: (1, 'Error opening data file ./eng.traineddata Please make sure the TESSDATA_PREFIX environment variable is set to your "tessdata" directory. Failed loading language \'eng\' Tesseract couldn\'t load any languages! Could not initialize tesseract.')
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/pdf_processor.py", line 214, in process_pdf
+    result['text'], result['is_scanned'] = await self._extract_text_with_pymupdf(doc)
+                                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/pdf_processor.py", line 126, in _extract_text_with_pymupdf
+    page_text = await self._ocr_image(img)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/pdf_processor.py", line 101, in _ocr_image
+    return await loop.run_in_executor(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/lib/python3.11/concurrent/futures/thread.py", line 58, in run
+  File "/volume1/py/discord-llm-chatbot/pdf_processor.py", line 103, in <lambda>
+    lambda: pytesseract.image_to_string(img, lang=self.ocr_lang)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/pytesseract/pytesseract.py", line 423, in image_to_string
+    return {
+           ^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/pytesseract/pytesseract.py", line 426, in <lambda>
+    Output.STRING: lambda: run_and_get_output(*args),
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/pytesseract/pytesseract.py", line 288, in run_and_get_output
+    run_tesseract(**kwargs)
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/pytesseract/pytesseract.py", line 264, in run_tesseract
+    raise TesseractError(proc.returncode, get_errors(error_string))
+pytesseract.pytesseract.TesseractError: (1, 'Error opening data file ./eng.traineddata Please make sure the TESSDATA_PREFIX environment variable is set to your "tessdata" directory. Failed loading language \'eng\' Tesseract couldn\'t load any languages! Could not initialize tesseract.')
+2025-07-11 23:53:49,388 - pdf_processor - ERROR - Error processing PDF: (1, 'Error opening data file ./eng.traineddata Please make sure the TESSDATA_PREFIX environment variable is set to your "tessdata" directory. Failed loading language \'eng\' Tesseract couldn\'t load any languages! Could not initialize tesseract.')
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/pdf_processor.py", line 214, in process_pdf
+    result['text'], result['is_scanned'] = await self._extract_text_with_pymupdf(doc)
+                                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/pdf_processor.py", line 126, in _extract_text_with_pymupdf
+    page_text = await self._ocr_image(img)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/pdf_processor.py", line 101, in _ocr_image
+    return await loop.run_in_executor(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/lib/python3.11/concurrent/futures/thread.py", line 58, in run
+  File "/volume1/py/discord-llm-chatbot/pdf_processor.py", line 103, in <lambda>
+    lambda: pytesseract.image_to_string(img, lang=self.ocr_lang)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/pytesseract/pytesseract.py", line 423, in image_to_string
+    return {
+           ^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/pytesseract/pytesseract.py", line 426, in <lambda>
+    Output.STRING: lambda: run_and_get_output(*args),
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/pytesseract/pytesseract.py", line 288, in run_and_get_output
+    run_tesseract(**kwargs)
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/pytesseract/pytesseract.py", line 264, in run_tesseract
+    raise TesseractError(proc.returncode, get_errors(error_string))
+pytesseract.pytesseract.TesseractError: (1, 'Error opening data file ./eng.traineddata Please make sure the TESSDATA_PREFIX environment variable is set to your "tessdata" directory. Failed loading language \'eng\' Tesseract couldn\'t load any languages! Could not initialize tesseract.')
+2025-07-11 23:54:04,366 - root - INFO - Successfully processed PDF: National Security Study Memoranda 200 (2 pages, 2758 chars)
+2025-07-11 23:54:04,366 - root - INFO - Successfully processed PDF: National Security Study Memoranda 200 (2 pages, 2758 chars)
+2025-07-11 23:54:10,777 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:54:10,777 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:54:28,372 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+2025-07-11 23:54:28,377 - discord.client - INFO - logging in using static token
+2025-07-11 23:54:29,649 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: ab868e0f40d7d702e612d90e255765dd).
+2025-07-11 23:54:31,662 - root - INFO - Ronin is now running! (hot config)
+2025-07-11 23:56:00,479 - root - INFO - Successfully processed PDF: ANALYSIS AND ASSESSMENT OF GATEWAY PROCESS (29 pages, 89424 chars)
+2025-07-11 23:56:02,734 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-11 23:58:47,873 - root - INFO - Bot shutdown complete.
+2025-07-11 23:58:55,994 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+2025-07-11 23:58:55,994 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+[2025-07-11 23:58:55] [INFO    ] discord.client: logging in using static token
+2025-07-11 23:58:55,999 - discord.client - INFO - logging in using static token
+2025-07-11 23:58:55,999 - discord.client - INFO - logging in using static token
+[2025-07-11 23:58:56] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: aa826be481d11b7153aa0525fbfd6a1d).
+2025-07-11 23:58:56,721 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: aa826be481d11b7153aa0525fbfd6a1d).
+2025-07-11 23:58:56,721 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: aa826be481d11b7153aa0525fbfd6a1d).
+2025-07-11 23:58:58,735 - root - INFO - Ronin is now running! (hot config)
+2025-07-11 23:58:58,735 - root - INFO - Ronin is now running! (hot config)
+2025-07-11 23:59:20,987 - pdf_processor - ERROR - Error processing PDF: (1, 'Error opening data file /opt/share/eng.traineddata Please make sure the TESSDATA_PREFIX environment variable is set to your "tessdata" directory. Failed loading language \'eng\' Tesseract couldn\'t load any languages! Could not initialize tesseract.')
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/pdf_processor.py", line 214, in process_pdf
+    result['text'], result['is_scanned'] = await self._extract_text_with_pymupdf(doc)
+                                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/pdf_processor.py", line 126, in _extract_text_with_pymupdf
+    page_text = await self._ocr_image(img)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/pdf_processor.py", line 101, in _ocr_image
+    return await loop.run_in_executor(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/lib/python3.11/concurrent/futures/thread.py", line 58, in run
+  File "/volume1/py/discord-llm-chatbot/pdf_processor.py", line 103, in <lambda>
+    lambda: pytesseract.image_to_string(img, lang=self.ocr_lang)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/pytesseract/pytesseract.py", line 423, in image_to_string
+    return {
+           ^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/pytesseract/pytesseract.py", line 426, in <lambda>
+    Output.STRING: lambda: run_and_get_output(*args),
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/pytesseract/pytesseract.py", line 288, in run_and_get_output
+    run_tesseract(**kwargs)
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/pytesseract/pytesseract.py", line 264, in run_tesseract
+    raise TesseractError(proc.returncode, get_errors(error_string))
+pytesseract.pytesseract.TesseractError: (1, 'Error opening data file /opt/share/eng.traineddata Please make sure the TESSDATA_PREFIX environment variable is set to your "tessdata" directory. Failed loading language \'eng\' Tesseract couldn\'t load any languages! Could not initialize tesseract.')
+2025-07-11 23:59:20,987 - pdf_processor - ERROR - Error processing PDF: (1, 'Error opening data file /opt/share/eng.traineddata Please make sure the TESSDATA_PREFIX environment variable is set to your "tessdata" directory. Failed loading language \'eng\' Tesseract couldn\'t load any languages! Could not initialize tesseract.')
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/pdf_processor.py", line 214, in process_pdf
+    result['text'], result['is_scanned'] = await self._extract_text_with_pymupdf(doc)
+                                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/pdf_processor.py", line 126, in _extract_text_with_pymupdf
+    page_text = await self._ocr_image(img)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/pdf_processor.py", line 101, in _ocr_image
+    return await loop.run_in_executor(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/lib/python3.11/concurrent/futures/thread.py", line 58, in run
+  File "/volume1/py/discord-llm-chatbot/pdf_processor.py", line 103, in <lambda>
+    lambda: pytesseract.image_to_string(img, lang=self.ocr_lang)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/pytesseract/pytesseract.py", line 423, in image_to_string
+    return {
+           ^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/pytesseract/pytesseract.py", line 426, in <lambda>
+    Output.STRING: lambda: run_and_get_output(*args),
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/pytesseract/pytesseract.py", line 288, in run_and_get_output
+    run_tesseract(**kwargs)
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/pytesseract/pytesseract.py", line 264, in run_tesseract
+    raise TesseractError(proc.returncode, get_errors(error_string))
+pytesseract.pytesseract.TesseractError: (1, 'Error opening data file /opt/share/eng.traineddata Please make sure the TESSDATA_PREFIX environment variable is set to your "tessdata" directory. Failed loading language \'eng\' Tesseract couldn\'t load any languages! Could not initialize tesseract.')
+2025-07-12 00:01:49,350 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:01:49,350 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:02:04,913 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:02:04,913 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:02:37,088 - root - INFO - Added memory for user 196966835365609472: Preferred name: Half
+2025-07-12 00:02:37,088 - root - INFO - Added memory for user 196966835365609472: Preferred name: Half
+2025-07-12 00:02:39,048 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:02:39,048 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:02:54,471 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+2025-07-12 00:02:54,471 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+[2025-07-12 00:02:54] [INFO    ] discord.client: logging in using static token
+2025-07-12 00:02:54,475 - discord.client - INFO - logging in using static token
+2025-07-12 00:02:54,475 - discord.client - INFO - logging in using static token
+[2025-07-12 00:02:55] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: fff9259294725c603790815b5657ab31).
+2025-07-12 00:02:55,955 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: fff9259294725c603790815b5657ab31).
+2025-07-12 00:02:55,955 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: fff9259294725c603790815b5657ab31).
+2025-07-12 00:02:57,967 - root - INFO - Ronin is now running! (hot config)
+2025-07-12 00:02:57,967 - root - INFO - Ronin is now running! (hot config)

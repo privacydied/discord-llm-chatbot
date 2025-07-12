@@ -1,16 +1,18 @@
 """
 PDF processing module with text extraction, OCR fallback, and metadata handling.
 """
+import asyncio
 import io
 import os
 import re
 import hashlib
 import logging
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union, Callable, Awaitable
 from datetime import datetime
 from pathlib import Path
 import tempfile
 from urllib.parse import urlparse
+from concurrent.futures import ThreadPoolExecutor
 
 import fitz  # PyMuPDF
 import pytesseract
@@ -93,7 +95,15 @@ class PDFProcessor:
         
         return meta
     
-    def _extract_text_with_pymupdf(self, doc: fitz.Document) -> Tuple[str, bool]:
+    async def _ocr_image(self, img: Image.Image) -> str:
+        """Run OCR on an image in a thread pool."""
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(
+            None,  # Uses default ThreadPoolExecutor
+            lambda: pytesseract.image_to_string(img, lang=self.ocr_lang)
+        )
+    
+    async def _extract_text_with_pymupdf(self, doc: fitz.Document) -> Tuple[str, bool]:
         """Extract text from PDF using PyMuPDF.
         
         Returns:
@@ -113,7 +123,7 @@ class PDFProcessor:
                 # Try OCR as fallback
                 pix = page.get_pixmap()
                 img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-                page_text = pytesseract.image_to_string(img, lang=self.ocr_lang)
+                page_text = await self._ocr_image(img)
             else:
                 is_scanned = False
             
@@ -136,8 +146,8 @@ class PDFProcessor:
         
         return text.strip()
     
-    def _process_large_pdf(self, doc: fitz.Document, max_pages: int = 40) -> str:
-        """Process large PDFs by extracting key sections."""
+    async def _process_large_pdf_async(self, doc: fitz.Document, max_pages: int = 40) -> str:
+        """Process large PDFs by extracting key sections asynchronously."""
         # Get table of contents
         toc = doc.get_toc()
         
@@ -155,11 +165,12 @@ class PDFProcessor:
             
             return "\n\n".join(text_parts)
         
-        # Otherwise, extract sections from TOC
-        return self._extract_text_with_pymupdf(doc)[0]  # Fallback to full extraction
+        # Otherwise, extract sections from TOC using async extraction
+        text, _ = await self._extract_text_with_pymupdf(doc)
+        return text
     
-    def process_pdf(self, source: Union[str, bytes], is_url: bool = False) -> Dict:
-        """Process a PDF file or URL and extract text and metadata.
+    async def process_pdf(self, source: Union[str, bytes], is_url: bool = False) -> Dict:
+        """Process a PDF file or URL and extract text and metadata asynchronously.
         
         Args:
             source: Path to PDF file, URL, or PDF content as bytes
@@ -195,15 +206,14 @@ class PDFProcessor:
             result['metadata'] = self._extract_metadata(doc)
             result['pages'] = len(doc)
             
-            # Process content based on size
+            # Process content based on size asynchronously
             if len(doc) > 40:  # Large PDF
-                result['text'] = self._process_large_pdf(doc)
+                result['text'] = await self._process_large_pdf_async(doc)
                 result['is_large'] = True
-            else:
-                # Small PDF, process all pages
-                result['text'], result['is_scanned'] = self._extract_text_with_pymupdf(doc)
+            else:  # Small to medium PDF
+                result['text'], result['is_scanned'] = await self._extract_text_with_pymupdf(doc)
             
-            # Clean and format text
+            # Clean up text
             result['text'] = self._clean_text(result['text'])
             
             # Cache the result
@@ -212,9 +222,10 @@ class PDFProcessor:
             return result
             
         except Exception as e:
-            logger.error(f"Error processing PDF: {e}")
+            logger.error(f"Error processing PDF: {e}", exc_info=True)
             result['error'] = str(e)
             return result
+            
         finally:
             if 'doc' in locals():
                 doc.close()

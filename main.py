@@ -554,15 +554,19 @@ async def process_pdf(
             'is_scanned': False,
             'metadata': {}
         }
-    
     try:
         processor = PDFProcessor()
-        result = processor.process_pdf(source, is_url=is_url)
+        # Ensure we await the coroutine
+        result = await processor.process_pdf(source, is_url=is_url)
         
         if debug:
             logging.info(f"PDF processing result: {result.get('pages', 0)} pages, "
                        f"scanned: {result.get('is_scanned', False)}")
         
+        # Ensure we have a proper dict with all required keys
+        if not isinstance(result, dict):
+            raise ValueError("Invalid PDF processing result")
+            
         return {
             'text': result.get('text', ''),
             'title': result.get('metadata', {}).get('title', 
@@ -573,7 +577,6 @@ async def process_pdf(
             'is_scanned': result.get('is_scanned', False),
             'metadata': result.get('metadata', {})
         }
-        
     except Exception as e:
         error_msg = f"Error processing PDF: {str(e)}"
         if debug:
