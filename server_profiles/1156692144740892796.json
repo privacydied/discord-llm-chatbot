@@ -1,5 +1,74 @@
 {
   "guild_id": "1156692144740892796",
-  "memories": [],
-  "last_updated": "2025-07-12T18:56:15.072739"
+  "memories": [
+    "[2025-07-12 19:57] privacydied: <@1392310898311303259> yo",
+    "[2025-07-12 19:58] privacydied: just chillin nigga",
+    "[2025-07-12 19:59] privacydied: i gave u server memory instead of just user memory but now i gotta split ur code base cus ur 3000+ lines",
+    "[2025-07-12 20:03] privacydied: is that a lot",
+    "[2025-07-12 20:04] privacydied: ",
+    "[2025-07-12 20:35] privacydied: hell yeah dude i split ur 3000 line code into \n\nbot/\n  __init__.py\n  main.py             # Discord bot setup, command registration, on_ready\n  config.py           # load_config, environment stuff\n  memory.py           # user/server profile logic, get_profile, save_profile, add_memory\n  context.py          # conversation context, context_key, should_reset_context\n  tts.py              # TTS-related code (synthesize_speech, handle_tts_reply, tts preferences)\n  search.py           # ddg_search, should_auto_search\n  web.py              # read_webpage, is_url, web extraction logic\n  pdf_utils.py        # process_pdf, is_pdf, PDFProcessor, etc\n  ollama.py           # ollama_chat, openai_chat, get_vision_caption, openai_vl_inference\n  commands/\n    __init__.py\n    memory_cmds.py    # !memories, !servermemories, !remember, !forget, !reset, !preference, !clearservermemories\n    tts_cmds.py       # !say, !tts, !tts-all, related helpers\n  utils.py            # helpers like clean_response, send_in_chunks, is_text_file, file chunking, etc.\n  logs.py             # log_user_message, log_dm_message, logging helpers\n\ni think ur faster now",
+    "[2025-07-12 20:37] ilovebullet123: <@1392310898311303259> If an american got their citizenship removed for supporting palestine what countries do you think would take them in as a refugee"
+  ],
+  "last_updated": "2025-07-12T20:37:08.325600",
+  "history": [
+    {
+      "timestamp": "2025-07-12T19:57:49.981612",
+      "user_id": "254254168234131456",
+      "username": "privacydied",
+      "content": "<@1392310898311303259> yo",
+      "channel_id": "1392318624508678154",
+      "message_id": "1393682787411955812"
+    },
+    {
+      "timestamp": "2025-07-12T19:58:11.282236",
+      "user_id": "254254168234131456",
+      "username": "privacydied",
+      "content": "just chillin nigga",
+      "channel_id": "1392318624508678154",
+      "message_id": "1393682876804890715"
+    },
+    {
+      "timestamp": "2025-07-12T19:59:37.960657",
+      "user_id": "254254168234131456",
+      "username": "privacydied",
+      "content": "i gave u server memory instead of just user memory but now i gotta split ur code base cus ur 3000+ lines",
+      "channel_id": "1392318624508678154",
+      "message_id": "1393683240266629120"
+    },
+    {
+      "timestamp": "2025-07-12T20:03:14.790941",
+      "user_id": "254254168234131456",
+      "username": "privacydied",
+      "content": "is that a lot",
+      "channel_id": "1392318624508678154",
+      "message_id": "1393684148819984438"
+    },
+    {
+      "timestamp": "2025-07-12T20:04:35.423683",
+      "user_id": "254254168234131456",
+      "username": "privacydied",
+      "content": "",
+      "channel_id": "1392318624508678154",
+      "message_id": "1393684487409500355"
+    },
+    {
+      "timestamp": "2025-07-12T20:35:55.974859",
+      "user_id": "254254168234131456",
+      "username": "privacydied",
+      "content": "hell yeah dude i split ur 3000 line code into \n\nbot/\n  __init__.py\n  main.py             # Discord bot setup, command registration, on_ready\n  config.py           # load_config, environment stuff\n  memory.py           # user/server profile logic, get_profile, save_profile, add_memory\n  context.py          # conversation context, context_key, should_reset_context\n  tts.py              # TTS-related code (synthesize_speech, handle_tts_reply, tts preferences)\n  search.py           # ddg_search, should_auto_search\n  web.py              # read_webpage, is_url, web extraction logic\n  pdf_utils.py        # process_pdf, is_pdf, PDFProcessor, etc\n  ollama.py           # ollama_chat, openai_chat, get_vision_caption, openai_vl_inference\n  commands/\n    __init__.py\n    memory_cmds.py    # !memories, !servermemories, !remember, !forget, !reset, !preference, !clearservermemories\n    tts_cmds.py       # !say, !tts, !tts-all, related helpers\n  utils.py            # helpers like clean_response, send_in_chunks, is_text_file, file chunking, etc.\n  logs.py             # log_user_message, log_dm_message, logging helpers\n\ni think ur faster now",
+      "channel_id": "1392318624508678154",
+      "message_id": "1393692375347367977"
+    },
+    {
+      "timestamp": "2025-07-12T20:37:08.325494",
+      "user_id": "1249019892582322257",
+      "username": "ilovebullet123",
+      "content": "<@1392310898311303259> If an american got their citizenship removed for supporting palestine what countries do you think would take them in as a refugee",
+      "channel_id": "1392318624508678154",
+      "message_id": "1393692678721376488"
+    }
+  ],
+  "preferences": {},
+  "context_notes": [],
+  "total_messages": 0
 }

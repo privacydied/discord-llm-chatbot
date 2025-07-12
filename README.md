@@ -1,53 +1,147 @@
-# Discord Multimodal AI ChatBot (Ollama + OpenRouter + OpenAI)
+# Discord LLM ChatBot
 
-This is an **advanced, multimodal Discord chatbot** that can use **Ollama (local), OpenRouter, or OpenAI** as a backend for text conversation and image (vision-language) understanding.
-It features **automatic memory extraction**, per-user persistent memory, rich logging, smart context, permission & rate limiting, file & image processing, and auto web search.
-
-> **Supports**:
->
-> * Ollama (local models: Qwen, Llama, Mistral, etc.)
-> * OpenRouter (huge model hub: Qwen, Llama, Claude, etc.)
-> * OpenAI API (GPT-4o, GPT-4V, etc.)
-> * Vision-Language for images: Qwen2.5-VL, Llama3-Vision, GPT-4V, etc.
-
----
+An advanced Discord chatbot with memory, web search, file processing, and AI-powered responses using Ollama as the backend.
 
 ## ✨ Features
 
-* **Hybrid backend:** Switch text backend between Ollama (local) or OpenAI/OpenRouter (cloud)
-* **Multimodal:** Automatically uses vision-language models for images, text models for chat
-* **Automatic internet search:** Uses DuckDuckGo to fetch up-to-date answers for questions that require it
-* **Per-user persistent memory:** Remembers facts, preferences, context, and "memories" about each user in their own file
-* **Memory extraction:** Extracts facts/traits from regular conversation, not just manual commands
-* **Manual memory management:** Users can add, view, or wipe their own memories with commands
-* **Personalized conversation:** Maintains contextual tone, stats, and user notes per server or DM
-* **User and DM logging:** All user and DM messages logged per-user (JSONL), DM logs in separate folder
-* **File & image attachment support:** Reads and summarizes text files, can analyze attached images using vision models
-* **Smart context:** Separate context/memory for each user per channel/DM, auto-prunes old messages
-* **Permission system:** Commands like memory wipe require admin unless self-initiated
-* **Rate limiting:** Prevents abuse and API spam
-* **Robust error handling:** Friendly and in-character error messages (never dumps ugly API JSON)
-* **Dynamic prompt loading:** Reloads your system prompt file on each reset
-* **Bot nickname auto-update:** Can change its nickname to match the model (optional)
-* **Web search command:** `!search` uses DuckDuckGo for facts/news
-* **Full slash and prefix command support**
-* **Batch processing:** Efficiently handles large sets of messages for memory extraction
+- **AI-Powered Chat**: Natural conversations powered by Ollama's language models
+- **Persistent Memory**: Remembers context and user preferences across conversations
+- **Text-to-Speech**: Optional TTS functionality with DIA TTS
+- **Web Search**: Integrated web search for up-to-date information
+- **File Processing**: Read and process text files and PDFs
+- **Modular Architecture**: Clean, organized codebase for easy extension
+- **User Profiles**: Per-user settings and memory storage
+- **Server Profiles**: Server-specific configuration and memory
+- **Rate Limiting**: Built-in protection against API abuse
+- **Comprehensive Logging**: Detailed logs for debugging and moderation
 
----
+## 🚀 Quick Start
 
-## Prerequisites
+### Prerequisites
 
-* **Python 3.8+**
-* **A Discord bot token** (see [Discord Developer Portal](https://discord.com/developers/applications))
-* **Ollama installed locally** (for local LLM inference, [see here](https://ollama.com/))
-* **OpenAI or OpenRouter API Key** (for cloud models, vision-language, and text)
-* **Discord server with proper bot permissions**
+- Python 3.12+
+- Discord Bot Token ([Get one here](https://discord.com/developers/applications))
+- Ollama installed and running ([Installation Guide](https://ollama.com/))
 
----
+### Installation
 
-## 🚀 Setup Instructions
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/yourusername/discord-llm-chatbot.git
+   cd discord-llm-chatbot
+   ```
 
-### 1. Clone the Repository
+2. Create a virtual environment and activate it:
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
+
+3. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. Create a `.env` file with your configuration:
+   ```env
+   DISCORD_TOKEN=your_discord_token_here
+   OLLAMA_BASE_URL=http://localhost:11434
+   OLLAMA_MODEL=llama3  # or your preferred model
+   ```
+
+5. Run the bot:
+   ```bash
+   python -m bot
+   ```
+
+## 🛠️ Configuration
+
+### Environment Variables
+
+| Variable | Description | Required | Default |
+|----------|-------------|----------|---------|
+| `DISCORD_TOKEN` | Your Discord bot token | ✅ | - |
+| `OLLAMA_BASE_URL` | URL to your Ollama server | ❌ | `http://localhost:11434` |
+| `OLLAMA_MODEL` | Default Ollama model to use | ❌ | `llama3` |
+| `COMMAND_PREFIX` | Bot command prefix | ❌ | `!` |
+| `USER_PROFILE_DIR` | Directory for user profiles | ❌ | `user_profiles` |
+| `SERVER_PROFILE_DIR` | Directory for server profiles | ❌ | `server_profiles` |
+| `USER_LOGS_DIR` | Directory for user logs | ❌ | `user_logs` |
+| `TEMP_DIR` | Directory for temporary files | ❌ | `temp` |
+| `MAX_MEMORIES` | Maximum memories per user | ❌ | `100` |
+| `MAX_SERVER_MEMORY` | Maximum memories per server | ❌ | `100` |
+
+## 🤖 Commands
+
+### User Commands
+- `!help` - Show help information
+- `!ping` - Check if the bot is alive
+- `!tts [on/off]` - Toggle TTS for your messages
+- `!memory add <text>` - Add a memory
+- `!memory list` - List your memories
+- `!memory clear` - Clear your memories
+- `!search <query>` - Search the web
+- `!say <text>` - Convert text to speech
+
+### Admin Commands
+- `!tts-all [on/off]` - Toggle TTS for all users (admin only)
+- `!servermemories` - View server memories (admin only)
+- `!clearservermemories` - Clear server memories (admin only)
+
+## 🏗️ Project Structure
+
+```
+bot/
+  ├── __init__.py         # Package initialization
+  ├── main.py            # Bot entry point
+  ├── config.py          # Configuration loading
+  ├── memory.py          # User/server profile management
+  ├── context.py         # Conversation context
+  ├── tts.py             # Text-to-speech functionality
+  ├── search.py          # Web search functionality
+  ├── web.py             # Web content extraction
+  ├── pdf_utils.py       # PDF processing
+  ├── ollama.py          # AI model interactions
+  ├── utils.py           # Utility functions
+  ├── logs.py            # Logging setup
+  └── commands/          # Command handlers
+       ├── __init__.py   # Command registration
+       ├── memory_cmds.py
+       └── tts_cmds.py
+```
+
+## 📚 Documentation
+
+### Memory System
+The bot maintains two types of memory:
+1. **User Memory**: Personal memories and preferences for each user
+2. **Server Memory**: Shared memories within a server
+
+Memories are stored as JSON files in the respective profile directories and loaded on demand.
+
+### TTS System
+The bot supports text-to-speech using DIA TTS. Users can enable/disable TTS for their messages, and server admins can control global TTS settings.
+
+### Search System
+Integrated web search allows the bot to provide up-to-date information by querying search engines and extracting relevant content.
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+## 📜 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- [Ollama](https://ollama.com/) for the amazing local LLM framework
+- [Discord.py](https://github.com/Rapptz/discord.py) for the Discord API wrapper
+- [DIA TTS](https://github.com/diart-team/dia-tts) for text-to-speech functionality
 
 ```sh
 git clone https://github.com/Amine-LG/Discord-Ollama-ChatBot.git
