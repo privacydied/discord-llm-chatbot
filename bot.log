@@ -4083,3 +4083,414 @@ RuntimeError: Calculated padded input size per channel: (4). Kernel size: (5). K
 2025-07-12 18:13:27,972 - root - WARNING - TTS synthesis failed: Text too long (max 1000 characters)
 2025-07-12 18:14:26,961 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
 2025-07-12 18:14:26,961 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+
+ | > min_level_db:-100
+ | > frame_shift_ms:None
+ | > frame_length_ms:None
+ | > ref_level_db:20
+ | > fft_size:1024
+ | > power:1.5
+ | > preemphasis:0.0
+ | > griffin_lim_iters:60
+ | > signal_norm:False
+ | > symmetric_norm:True
+ | > mel_fmin:0
+ | > mel_fmax:8000.0
+ | > pitch_fmin:1.0
+ | > pitch_fmax:640.0
+ | > spec_gain:1.0
+ | > stft_pad_mode:reflect
+ | > max_norm:4.0
+ | > clip_norm:True
+ | > do_trim_silence:False
+ | > trim_db:60
+ | > do_sound_norm:False
+ | > do_amp_to_db_linear:True
+ | > do_amp_to_db_mel:True
+ | > do_rms_norm:False
+ | > db_level:None
+ | > stats_path:None
+ | > base:2.718281828459045
+ | > hop_length:256
+ | > win_length:1024
+ > Generator Model: hifigan_generator
+ > Discriminator Model: hifigan_discriminator
+Removing weight norm...
+ > Text splitted to sentences.
+["yo, you mean like attacking *your own* machine that's hosting this bot?", 'wild request, but aight—technically, yeah.', '### **Local XSS-ish Stuff**', "- **if you're running a web server** (flask, fastapi, etc.) and serving shit to yourself, you *could* fuck around with reflected/local DOM injection.", '- **electron apps?', '** some of those are basically browser windows with bad security—if you can inject js into one, congrats, you played yourself.', '- **browser exploits?', '** if you serve malicious js to *yourself* via localhost, it could do dumb shit (delete files, keylog, etc.).', '### **But Why?', "**  unless you're testing sec vulns or hate your own files, this is like setting your couch on fire to test your extinguisher.", 'want actual self-sabotage code or just theorizing?', '😈']
+yo, you mean like attacking *your own* machine that's hosting this bot?
+ [!] Character '*' not found in the vocabulary. Discarding it.
+wild request, but aight—technically, yeah.
+ [!] Character '—' not found in the vocabulary. Discarding it.
+### **local xss ish stuff**
+ [!] Character '#' not found in the vocabulary. Discarding it.
+**if you're running a web server** flask, fastapi, etc. and serving shit to yourself, you *could* fuck around with reflected/local dom injection.
+ [!] Character '/' not found in the vocabulary. Discarding it.
+ > tts_models/en/ljspeech/tacotron2-DDC is already downloaded.
+ > vocoder_models/en/ljspeech/hifigan_v2 is already downloaded.
+ > Using model: Tacotron2
+ > Setting up Audio Processor...
+ | > sample_rate:22050
+ | > resample:False
+ | > num_mels:80
+ | > log_func:np.log
+ | > min_level_db:-100
+ | > frame_shift_ms:None
+ | > frame_length_ms:None
+ | > ref_level_db:20
+ | > fft_size:1024
+ | > power:1.5
+ | > preemphasis:0.0
+ | > griffin_lim_iters:60
+ | > signal_norm:False
+ | > symmetric_norm:True
+ | > mel_fmin:0
+ | > mel_fmax:8000.0
+ | > pitch_fmin:1.0
+ | > pitch_fmax:640.0
+ | > spec_gain:1.0
+ | > stft_pad_mode:reflect
+ | > max_norm:4.0
+ | > clip_norm:True
+ | > do_trim_silence:True
+ | > trim_db:60
+ | > do_sound_norm:False
+ | > do_amp_to_db_linear:True
+ | > do_amp_to_db_mel:True
+ | > do_rms_norm:False
+ | > db_level:None
+ | > stats_path:None
+ | > base:2.718281828459045
+ | > hop_length:256
+ | > win_length:1024
+ > Model's reduction rate `r` is set to: 1
+ > Vocoder Model: hifigan
+ > Setting up Audio Processor...
+ | > sample_rate:22050
+ | > resample:False
+ | > num_mels:80
+ | > log_func:np.log
+ | > min_level_db:-100
+ | > frame_shift_ms:None
+ | > frame_length_ms:None
+ | > ref_level_db:20
+ | > fft_size:1024
+ | > power:1.5
+ | > preemphasis:0.0
+ | > griffin_lim_iters:60
+ | > signal_norm:False
+ | > symmetric_norm:True
+ | > mel_fmin:0
+ | > mel_fmax:8000.0
+ | > pitch_fmin:1.0
+ | > pitch_fmax:640.0
+ | > spec_gain:1.0
+ | > stft_pad_mode:reflect
+ | > max_norm:4.0
+ | > clip_norm:True
+ | > do_trim_silence:False
+ | > trim_db:60
+ | > do_sound_norm:False
+ | > do_amp_to_db_linear:True
+ | > do_amp_to_db_mel:True
+ | > do_rms_norm:False
+ | > db_level:None
+ | > stats_path:None
+ | > base:2.718281828459045
+ | > hop_length:256
+ | > win_length:1024
+ > Generator Model: hifigan_generator
+ > Discriminator Model: hifigan_discriminator
+Removing weight norm...
+ > Text splitted to sentences.
+['yo, relax—ain’t that simple.', 'here’s the breakdown:', '### **Could a malicious link fuck with *me* (the bot)?', '**', '- **no.', '** i don’t auto-click links or execute arbitrary js from urls.', 'if you paste a sketchy site, i’ll *describe* it (if asked) but never *visit* it like a dumbass.', '- **scraping?', '** only if explicitly commanded, and even then, it’s not a full browser—just fetching raw html/text.', 'no js, no dom, no drive-by exploits.', '### **Could it fuck with *you*?', '**', '- **if you click it?', '** maybe.', "discord itself filters malicious shit, but if you’re dumb enough to paste 'evil.ru/steal-your-cookies.html' into *your own* browser, that’s on you.", '- **phishing?', '** always possible, but again—requires *you* to take the bait.', 'i ain’t your mom.', 'tl;dr: nah, i’m not a vector—but *you* might be if you start clicking random bullshit.', 'want me to roast your opsec next?', '🔍']
+yo, relax—ain’t that simple.
+ [!] Character '—' not found in the vocabulary. Discarding it.
+yo, relax—ain’t that simple.
+ [!] Character '’' not found in the vocabulary. Discarding it.
+### **could a malicious link fuck with *me* the bot?
+ [!] Character '#' not found in the vocabulary. Discarding it.
+### **could a malicious link fuck with *me* the bot?
+ [!] Character '*' not found in the vocabulary. Discarding it.
+   > Decoder stopped with `max_decoder_steps` 10000
+ > tts_models/en/ljspeech/tacotron2-DDC is already downloaded.
+ > vocoder_models/en/ljspeech/hifigan_v2 is already downloaded.
+ > Using model: Tacotron2
+ > Setting up Audio Processor...
+ | > sample_rate:22050
+ | > resample:False
+ | > num_mels:80
+ | > log_func:np.log
+ | > min_level_db:-100
+ | > frame_shift_ms:None
+ | > frame_length_ms:None
+ | > ref_level_db:20
+ | > fft_size:1024
+ | > power:1.5
+ | > preemphasis:0.0
+ | > griffin_lim_iters:60
+ | > signal_norm:False
+ | > symmetric_norm:True
+ | > mel_fmin:0
+ | > mel_fmax:8000.0
+ | > pitch_fmin:1.0
+ | > pitch_fmax:640.0
+ | > spec_gain:1.0
+ | > stft_pad_mode:reflect
+ | > max_norm:4.0
+ | > clip_norm:True
+ | > do_trim_silence:True
+ | > trim_db:60
+ | > do_sound_norm:False
+ | > do_amp_to_db_linear:True
+ | > do_amp_to_db_mel:True
+ | > do_rms_norm:False
+ | > db_level:None
+ | > stats_path:None
+ | > base:2.718281828459045
+ | > hop_length:256
+ | > win_length:1024
+ > Model's reduction rate `r` is set to: 1
+ > Vocoder Model: hifigan
+ > Setting up Audio Processor...
+ | > sample_rate:22050
+ | > resample:False
+ | > num_mels:80
+ | > log_func:np.log
+ | > min_level_db:-100
+ | > frame_shift_ms:None
+ | > frame_length_ms:None
+ | > ref_level_db:20
+ | > fft_size:1024
+ | > power:1.5
+ | > preemphasis:0.0
+ | > griffin_lim_iters:60
+ | > signal_norm:False
+ | > symmetric_norm:True
+ | > mel_fmin:0
+ | > mel_fmax:8000.0
+ | > pitch_fmin:1.0
+ | > pitch_fmax:640.0
+ | > spec_gain:1.0
+ | > stft_pad_mode:reflect
+ | > max_norm:4.0
+ | > clip_norm:True
+ | > do_trim_silence:False
+ | > trim_db:60
+ | > do_sound_norm:False
+ | > do_amp_to_db_linear:True
+ | > do_amp_to_db_mel:True
+ | > do_rms_norm:False
+ | > db_level:None
+ | > stats_path:None
+ | > base:2.718281828459045
+ | > hop_length:256
+ | > win_length:1024
+ > Generator Model: hifigan_generator
+ > Discriminator Model: hifigan_discriminator
+Removing weight norm...
+ > Text splitted to sentences.
+["yo, that's a solid stack—**but** some of those versions are either ancient or red flags waiting to happen.", "let's break it down:", '### **"why you playin\' with fire" tier:**', "- 'discord.py==2.3.2' → **update to 2.3.3** (patched some shit)", "- 'httpx==0.27.0' → **jump to 0.27.2** (security fixes)", "- 'requests==2.31.0' → technically fine, but **2.32.3** exists", "- 'urllib3==2.2.1' → **2.2.2** fixes CVE-2024-35678 (don't sleep on this)", '### **"old but sturdy" tier:**', "- 'python-dotenv', 'beautifulsoup4', 'Pillow' → not *urgent*, but could flex newer versions", '### **"oh shit, selenium\'s annoying cousin" tier:**', "- 'playwright==1.42.0' → **latest is 1.45.x** (chromium updates matter)", "### **pro tip:**  pin major versions ('httpx~=0.27.0') instead of exact numbers unless you *need* reproducibility.", "and **always** check 'pip-audit' for CVEs.", "want me to generate a 'requirements_fixed.txt' or you just vibin' with tech debt?", '🔧'][2025-07-12 18:15:49] [WARNING ] discord.gateway: Can't keep up, shard ID None websocket is 53.9s behind.
+2025-07-12 18:15:49,881 - discord.gateway - WARNING - Can't keep up, shard ID None websocket is 53.9s behind.
+2025-07-12 18:15:49,881 - discord.gateway - WARNING - Can't keep up, shard ID None websocket is 53.9s behind.
+[2025-07-12 18:15:52] [WARNING ] discord.gateway: Shard ID None heartbeat blocked for more than 10 seconds.
+Loop thread traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2338, in <module>
+    main()
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2328, in main
+    bot.run(config["DISCORD_TOKEN"])
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/discord/client.py", line 860, in run
+    asyncio.run(runner())
+  File "/opt/lib/python3.11/asyncio/runners.py", line 190, in run
+  File "/opt/lib/python3.11/asyncio/runners.py", line 118, in run
+  File "/opt/lib/python3.11/asyncio/base_events.py", line 641, in run_until_complete
+  File "/opt/lib/python3.11/asyncio/base_events.py", line 608, in run_forever
+  File "/opt/lib/python3.11/asyncio/base_events.py", line 1936, in _run_once
+  File "/opt/lib/python3.11/asyncio/events.py", line 84, in _run
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2294, in periodic_save
+    save_all_profiles()
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1073, in save_all_profiles
+    save_profile(user_id)
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1068, in save_profile
+    with open(file_path, "w", encoding="utf-8") as f:
+
+2025-07-12 18:15:52,439 - discord.gateway - WARNING - Shard ID None heartbeat blocked for more than 10 seconds.
+Loop thread traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2338, in <module>
+    main()
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2328, in main
+    bot.run(config["DISCORD_TOKEN"])
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/discord/client.py", line 860, in run
+    asyncio.run(runner())
+  File "/opt/lib/python3.11/asyncio/runners.py", line 190, in run
+  File "/opt/lib/python3.11/asyncio/runners.py", line 118, in run
+  File "/opt/lib/python3.11/asyncio/base_events.py", line 641, in run_until_complete
+  File "/opt/lib/python3.11/asyncio/base_events.py", line 608, in run_forever
+  File "/opt/lib/python3.11/asyncio/base_events.py", line 1936, in _run_once
+  File "/opt/lib/python3.11/asyncio/events.py", line 84, in _run
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2294, in periodic_save
+    save_all_profiles()
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1073, in save_all_profiles
+    save_profile(user_id)
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1068, in save_profile
+    with open(file_path, "w", encoding="utf-8") as f:
+
+2025-07-12 18:15:52,439 - discord.gateway - WARNING - Shard ID None heartbeat blocked for more than 10 seconds.
+Loop thread traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2338, in <module>
+    main()
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2328, in main
+    bot.run(config["DISCORD_TOKEN"])
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/discord/client.py", line 860, in run
+    asyncio.run(runner())
+  File "/opt/lib/python3.11/asyncio/runners.py", line 190, in run
+  File "/opt/lib/python3.11/asyncio/runners.py", line 118, in run
+  File "/opt/lib/python3.11/asyncio/base_events.py", line 641, in run_until_complete
+  File "/opt/lib/python3.11/asyncio/base_events.py", line 608, in run_forever
+  File "/opt/lib/python3.11/asyncio/base_events.py", line 1936, in _run_once
+  File "/opt/lib/python3.11/asyncio/events.py", line 84, in _run
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2294, in periodic_save
+    save_all_profiles()
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1073, in save_all_profiles
+    save_profile(user_id)
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1068, in save_profile
+    with open(file_path, "w", encoding="utf-8") as f:
+
+2025-07-12 18:16:02,791 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:16:02,791 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+[2025-07-12 18:17:27] [WARNING ] discord.gateway: Shard ID None heartbeat blocked for more than 10 seconds.
+Loop thread traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2338, in <module>
+    main()
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2328, in main
+    bot.run(config["DISCORD_TOKEN"])
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/discord/client.py", line 860, in run
+    asyncio.run(runner())
+  File "/opt/lib/python3.11/asyncio/runners.py", line 190, in run
+  File "/opt/lib/python3.11/asyncio/runners.py", line 118, in run
+  File "/opt/lib/python3.11/asyncio/base_events.py", line 641, in run_until_complete
+  File "/opt/lib/python3.11/asyncio/base_events.py", line 608, in run_forever
+  File "/opt/lib/python3.11/asyncio/base_events.py", line 1936, in _run_once
+  File "/opt/lib/python3.11/asyncio/events.py", line 84, in _run
+  File "/opt/lib/python3.11/asyncio/selector_events.py", line 956, in _read_ready
+  File "/opt/lib/python3.11/asyncio/selector_events.py", line 988, in _read_ready__get_buffer
+  File "/opt/lib/python3.11/asyncio/sslproto.py", line 442, in buffer_updated
+  File "/opt/lib/python3.11/asyncio/sslproto.py", line 737, in _do_read
+  File "/opt/lib/python3.11/asyncio/sslproto.py", line 782, in _do_read__copied
+  File "/opt/lib/python3.11/ssl.py", line 922, in read
+
+2025-07-12 18:17:27,461 - discord.gateway - WARNING - Shard ID None heartbeat blocked for more than 10 seconds.
+Loop thread traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2338, in <module>
+    main()
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2328, in main
+    bot.run(config["DISCORD_TOKEN"])
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/discord/client.py", line 860, in run
+    asyncio.run(runner())
+  File "/opt/lib/python3.11/asyncio/runners.py", line 190, in run
+  File "/opt/lib/python3.11/asyncio/runners.py", line 118, in run
+  File "/opt/lib/python3.11/asyncio/base_events.py", line 641, in run_until_complete
+  File "/opt/lib/python3.11/asyncio/base_events.py", line 608, in run_forever
+  File "/opt/lib/python3.11/asyncio/base_events.py", line 1936, in _run_once
+  File "/opt/lib/python3.11/asyncio/events.py", line 84, in _run
+  File "/opt/lib/python3.11/asyncio/selector_events.py", line 956, in _read_ready
+  File "/opt/lib/python3.11/asyncio/selector_events.py", line 988, in _read_ready__get_buffer
+  File "/opt/lib/python3.11/asyncio/sslproto.py", line 442, in buffer_updated
+  File "/opt/lib/python3.11/asyncio/sslproto.py", line 737, in _do_read
+  File "/opt/lib/python3.11/asyncio/sslproto.py", line 782, in _do_read__copied
+  File "/opt/lib/python3.11/ssl.py", line 922, in read
+
+2025-07-12 18:17:27,461 - discord.gateway - WARNING - Shard ID None heartbeat blocked for more than 10 seconds.
+Loop thread traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2338, in <module>
+    main()
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2328, in main
+    bot.run(config["DISCORD_TOKEN"])
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/discord/client.py", line 860, in run
+    asyncio.run(runner())
+  File "/opt/lib/python3.11/asyncio/runners.py", line 190, in run
+  File "/opt/lib/python3.11/asyncio/runners.py", line 118, in run
+  File "/opt/lib/python3.11/asyncio/base_events.py", line 641, in run_until_complete
+  File "/opt/lib/python3.11/asyncio/base_events.py", line 608, in run_forever
+  File "/opt/lib/python3.11/asyncio/base_events.py", line 1936, in _run_once
+  File "/opt/lib/python3.11/asyncio/events.py", line 84, in _run
+  File "/opt/lib/python3.11/asyncio/selector_events.py", line 956, in _read_ready
+  File "/opt/lib/python3.11/asyncio/selector_events.py", line 988, in _read_ready__get_buffer
+  File "/opt/lib/python3.11/asyncio/sslproto.py", line 442, in buffer_updated
+  File "/opt/lib/python3.11/asyncio/sslproto.py", line 737, in _do_read
+  File "/opt/lib/python3.11/asyncio/sslproto.py", line 782, in _do_read__copied
+  File "/opt/lib/python3.11/ssl.py", line 922, in read
+
+[2025-07-12 18:17:31] [ERROR   ] discord.client: Attempting a reconnect in 1.68s
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/discord/client.py", line 659, in connect
+    await self.ws.poll_event()
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/discord/gateway.py", line 623, in poll_event
+    await self.received_message(msg.data)
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/discord/gateway.py", line 531, in received_message
+    await self.send_as_json(beat)
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/discord/gateway.py", line 659, in send_as_json
+    await self.send(utils._to_json(data))
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/discord/gateway.py", line 655, in send
+    await self.socket.send_str(data)
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/aiohttp/client_ws.py", line 245, in send_str
+    await self._writer.send_frame(
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/aiohttp/_websocket/writer.py", line 126, in send_frame
+    raise ClientConnectionResetError("Cannot write to closing transport")
+aiohttp.client_exceptions.ClientConnectionResetError: Cannot write to closing transport
+2025-07-12 18:17:31,703 - discord.client - ERROR - Attempting a reconnect in 1.68s
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/discord/client.py", line 659, in connect
+    await self.ws.poll_event()
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/discord/gateway.py", line 623, in poll_event
+    await self.received_message(msg.data)
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/discord/gateway.py", line 531, in received_message
+    await self.send_as_json(beat)
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/discord/gateway.py", line 659, in send_as_json
+    await self.send(utils._to_json(data))
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/discord/gateway.py", line 655, in send
+    await self.socket.send_str(data)
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/aiohttp/client_ws.py", line 245, in send_str
+    await self._writer.send_frame(
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/aiohttp/_websocket/writer.py", line 126, in send_frame
+    raise ClientConnectionResetError("Cannot write to closing transport")
+aiohttp.client_exceptions.ClientConnectionResetError: Cannot write to closing transport
+2025-07-12 18:17:31,703 - discord.client - ERROR - Attempting a reconnect in 1.68s
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/discord/client.py", line 659, in connect
+    await self.ws.poll_event()
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/discord/gateway.py", line 623, in poll_event
+    await self.received_message(msg.data)
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/discord/gateway.py", line 531, in received_message
+    await self.send_as_json(beat)
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/discord/gateway.py", line 659, in send_as_json
+    await self.send(utils._to_json(data))
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/discord/gateway.py", line 655, in send
+    await self.socket.send_str(data)
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/aiohttp/client_ws.py", line 245, in send_str
+    await self._writer.send_frame(
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/aiohttp/_websocket/writer.py", line 126, in send_frame
+    raise ClientConnectionResetError("Cannot write to closing transport")
+aiohttp.client_exceptions.ClientConnectionResetError: Cannot write to closing transport
+[2025-07-12 18:17:45] [INFO    ] discord.gateway: Shard ID None has successfully RESUMED session df74dd861f6d076665f6bcc80b3fbc61.
+2025-07-12 18:17:45,609 - discord.gateway - INFO - Shard ID None has successfully RESUMED session df74dd861f6d076665f6bcc80b3fbc61.
+2025-07-12 18:17:45,609 - discord.gateway - INFO - Shard ID None has successfully RESUMED session df74dd861f6d076665f6bcc80b3fbc61.
+2025-07-12 18:19:07,293 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:19:07,293 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:20:08,830 - root - ERROR - Error in VL API call: 
+2025-07-12 18:20:08,830 - root - ERROR - Error in VL API call: 
+2025-07-12 18:20:08,846 - root - ERROR - VL model returned empty caption
+2025-07-12 18:20:08,846 - root - ERROR - VL model returned empty caption
+2025-07-12 18:20:20,674 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:20:20,674 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+[2025-07-12 18:20:58] [INFO    ] discord.gateway: Shard ID None has successfully RESUMED session df74dd861f6d076665f6bcc80b3fbc61.
+2025-07-12 18:20:58,288 - discord.gateway - INFO - Shard ID None has successfully RESUMED session df74dd861f6d076665f6bcc80b3fbc61.
+2025-07-12 18:20:58,288 - discord.gateway - INFO - Shard ID None has successfully RESUMED session df74dd861f6d076665f6bcc80b3fbc61.
+2025-07-12 18:21:00,105 - root - ERROR - Error in VL API call: 'choices'
+2025-07-12 18:21:00,105 - root - ERROR - Error in VL API call: 'choices'
+2025-07-12 18:21:00,105 - root - ERROR - VL model returned empty caption
+2025-07-12 18:21:00,105 - root - ERROR - VL model returned empty caption
+2025-07-12 18:21:16,059 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:21:16,059 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/numba/cpython/old_hashing.py:477: UserWarning: FNV hashing is not implemented in Numba. See PEP 456 https://www.python.org/dev/peps/pep-0456/ for rationale over not using FNV. Numba will continue to work, but hashes for built in types will be computed using siphash24. This will permit e.g. dictionaries to continue to behave as expected, however anything relying on the value of the hash opposed to hash as a derived property is likely to not work as expected.
+  warnings.warn(msg)
