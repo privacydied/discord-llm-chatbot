@@ -1927,9 +1927,7 @@ async def process_message(message: Message, is_dm: bool):
                 total_text_content += f"\n\n{attachment.filename}\n{file_text}"
                 
                 if len(total_text_content) > config["MAX_TEXT_ATTACHMENT_SIZE"]:
-                    await message.channel.send(
-                        f"Files are too big. Maximum total size is {config['MAX_TEXT_ATTACHMENT_SIZE']} characters."
-                    )
+                    await message.channel.send("❌ Total attachment size exceeds the maximum allowed.")
                     return
                     
             except Exception as e:
@@ -1958,7 +1956,20 @@ async def process_message(message: Message, is_dm: bool):
         response = clean_response(response).strip()
         if not is_dm and should_include_mention(message, response, len(context)):
             response = f"{user_mention} {response}"
-        await send_in_chunks(message.channel, response, reference=message)
+            
+        # Send the response with TTS if enabled
+        if isinstance(message.channel, discord.DMChannel) or message.guild is None:
+            # In DMs, just send the response directly
+            await handle_tts_reply(message.channel, response, author_id=str(message.author.id))
+        else:
+            # In guild, send with reference to the original message
+            await handle_tts_reply(
+                message.channel, 
+                response, 
+                reference=message,
+                author_id=str(message.author.id)
+            )
+            
         context.append({"role": "assistant", "content": response.strip()})
         if len(context) > CONTEXT_MAXLEN:
             system_prompt = context[0]
@@ -1966,6 +1977,52 @@ async def process_message(message: Message, is_dm: bool):
             context.append(system_prompt)
         if random.random() < 0.1:
             save_all_profiles()
+
+# ---- TTS Preferences Storage ----
+tts_prefs = {
+    'global_enabled': True,  # Global TTS toggle (admins can change this)
+    'users': {}  # user_id -> bool (whether TTS is enabled for them)
+}
+
+# File to persist TTS preferences
+TTS_PREFS_FILE = 'tts_prefs.json'
+
+def load_tts_prefs():
+    """Load TTS preferences from JSON file."""
+    try:
+        if os.path.exists(TTS_PREFS_FILE):
+            with open(TTS_PREFS_FILE, 'r') as f:
+                prefs = json.load(f)
+                tts_prefs.update(prefs)
+    except Exception as e:
+        logging.error(f"Error loading TTS preferences: {e}")
+
+async def save_tts_prefs():
+    """Save TTS preferences to JSON file."""
+    try:
+        with open(TTS_PREFS_FILE, 'w') as f:
+            json.dump(tts_prefs, f, indent=2)
+    except Exception as e:
+        logging.error(f"Error saving TTS preferences: {e}")
+
+def is_tts_enabled(user_id: str) -> bool:
+    """Check if TTS is enabled for a user."""
+    if not tts_prefs['global_enabled']:
+        return False
+    return tts_prefs['users'].get(str(user_id), False)
+
+def set_tts_enabled(user_id: str, enabled: bool) -> None:
+    """Set TTS preference for a user."""
+    tts_prefs['users'][str(user_id)] = enabled
+    asyncio.create_task(save_tts_prefs())
+
+def set_global_tts(enabled: bool) -> None:
+    """Set global TTS setting."""
+    tts_prefs['global_enabled'] = enabled
+    asyncio.create_task(save_tts_prefs())
+
+# Load preferences when module loads
+load_tts_prefs()
 
 # ---- TTS Functions ----
 async def synthesize_speech(text: str) -> Tuple[Optional[Path], Optional[str]]:
@@ -2030,36 +2087,120 @@ async def say_tts(ctx, *, message: str):
     Convert text to speech using DIA TTS and send as an audio file.
     Usage: !say [your message]
     """
-    # Check if DIA is available
-    if not DIA_AVAILABLE:
-        await ctx.reply("TTS failed: DIA TTS is not installed. Please install it with: pip install TTS")
-        return
+    await handle_tts_reply(ctx, message)
+
+@bot.command(name='tts')
+async def tts_toggle(ctx, setting: str = None):
+    """
+    Toggle TTS for your messages.
+    Usage: !tts [on|off]  (or just !tts to toggle)
+    """
+    user_id = str(ctx.author.id)
+    current_setting = is_tts_enabled(user_id)
     
-    # Show typing indicator while processing
-    async with ctx.typing():
+    # Determine new setting
+    if setting is None:
+        new_setting = not current_setting
+    else:
+        new_setting = setting.lower() in ('on', 'true', 'enable', '1')
+    
+    set_tts_enabled(user_id, new_setting)
+    
+    if new_setting:
+        await ctx.reply("✅ TTS enabled for your messages! I'll read my replies to you aloud.", mention_author=False)
+    else:
+        await ctx.reply("🔇 TTS disabled for your messages.", mention_author=False)
+
+@bot.command(name='tts-all')
+@commands.has_permissions(administrator=True)
+async def tts_global_toggle(ctx, setting: str):
+    """
+    [Admin] Enable/disable TTS for all users.
+    Usage: !tts-all [on|off]
+    """
+    if setting.lower() in ('on', 'true', 'enable', '1'):
+        set_global_tts(True)
+        await ctx.reply("🌍 TTS enabled globally for all users who have it enabled.", mention_author=False)
+    else:
+        set_global_tts(False)
+        await ctx.reply("🌍 TTS disabled globally for all users.", mention_author=False)
+
+@tts_global_toggle.error
+async def tts_global_error(ctx, error):
+    if isinstance(error, commands.MissingPermissions):
+        await ctx.reply("❌ You don't have permission to use this command.", mention_author=False)
+    else:
+        await ctx.reply(f"❌ Error: {str(error)}", mention_author=False)
+
+async def handle_tts_reply(target, text: str, author_id: str = None, **kwargs):
+    """
+    Send a message with optional TTS if enabled for the user.
+    
+    Args:
+        target: Discord channel or context object to send the message to
+        text: Text to send (and potentially speak)
+        author_id: ID of the user who should receive TTS (if enabled)
+        **kwargs: Additional arguments to pass to the send method
+    """
+    # Get the author ID if not provided
+    if author_id is None and hasattr(target, 'author'):
+        author_id = str(target.author.id)
+    
+    # Send the text message
+    try:
+        # For channel objects (TextChannel, DMChannel, etc.)
+        if hasattr(target, 'send'):
+            # Handle reference if provided
+            if 'reference' in kwargs and hasattr(kwargs['reference'], 'to_reference'):
+                kwargs['reference'] = kwargs['reference'].to_reference()
+            reply = await target.send(text, **{k: v for k, v in kwargs.items() if k != 'author_id'})
+        else:
+            logging.error("Target does not have a send method")
+            return None
+            
+    except Exception as e:
+        logging.error(f"Failed to send message: {e}")
+        return None
+    
+    # Check if we should send TTS
+    if not DIA_AVAILABLE or not author_id or not is_tts_enabled(author_id):
+        return reply
+    
+    # Generate and send TTS in the background
+    asyncio.create_task(send_tts_audio(target, text))
+    return reply
+
+async def send_tts_audio(target, text: str):
+    """
+    Generate and send TTS audio for a message.
+    
+    Args:
+        target: Discord channel or context object to send the TTS to
+        text: Text to convert to speech
+    """
+    output_path = None
+    try:
         # Generate TTS audio
-        output_path, error = await synthesize_speech(message)
+        output_path, error = await synthesize_speech(text)
         
         if error or not output_path:
-            await ctx.reply(f"TTS failed: {error}")
+            logging.warning(f"TTS synthesis failed: {error}")
             return
             
-        try:
-            # Send the audio file
-            with open(output_path, 'rb') as audio_file:
-                await ctx.reply(
-                    f"Here's your TTS message:",
-                    file=discord.File(audio_file, filename="tts_message.wav"),
-                    mention_author=False
-                )
-        except Exception as e:
-            logging.error(f"Failed to send TTS audio: {e}\n{traceback.format_exc()}")
-            await ctx.reply(f"Failed to send TTS audio: {e}")
-        finally:
-            # Clean up the temp file
+        # Send the audio file
+        with open(output_path, 'rb') as audio_file:
+            await target.send(
+                "🔊 TTS:",
+                file=discord.File(audio_file, filename="tts_message.wav"),
+                mention_author=False
+            )
+    except Exception as e:
+        logging.error(f"Error in TTS audio generation: {e}\n{traceback.format_exc()}")
+    finally:
+        # Clean up the temp file
+        if output_path and isinstance(output_path, Path) and output_path.exists():
             try:
-                if output_path and output_path.exists():
-                    output_path.unlink()
+                output_path.unlink()
             except Exception as e:
                 logging.error(f"Failed to clean up TTS temp file: {e}")
 

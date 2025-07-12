@@ -3205,4 +3205,881 @@ ValueError:  [!] Model file not found in the output path
   0%|          | 0.00/3.80M [00:00<?, ?iB/s][A100%|██████████| 113M/113M [00:05<00:00, 19.3MiB/s]
 
  80%|███████▉  | 3.03M/3.80M [00:00<00:00, 30.3MiB/s][A
-100%|██████████| 3.80M/3.80M [00:14<00:00, 30.3MiB/s][A
+100%|██████████| 3.80M/3.80M [00:14<00:00, 30.3MiB/s][A[2025-07-12 17:22:59] [INFO    ] discord.gateway: Shard ID None has successfully RESUMED session e8f44a0dbad4ebfe11d5b76f991d6f4d.
+2025-07-12 17:22:59,913 - discord.gateway - INFO - Shard ID None has successfully RESUMED session e8f44a0dbad4ebfe11d5b76f991d6f4d.
+2025-07-12 17:22:59,913 - discord.gateway - INFO - Shard ID None has successfully RESUMED session e8f44a0dbad4ebfe11d5b76f991d6f4d.
+/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/numba/cpython/old_hashing.py:477: UserWarning: FNV hashing is not implemented in Numba. See PEP 456 https://www.python.org/dev/peps/pep-0456/ for rationale over not using FNV. Numba will continue to work, but hashes for built in types will be computed using siphash24. This will permit e.g. dictionaries to continue to behave as expected, however anything relying on the value of the hash opposed to hash as a derived property is likely to not work as expected.
+  warnings.warn(msg)
+[2025-07-12 17:37:44] [INFO    ] discord.client: logging in using static token
+2025-07-12 17:37:44,953 - discord.client - INFO - logging in using static token
+2025-07-12 17:37:44,953 - discord.client - INFO - logging in using static token
+[2025-07-12 17:37:46] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: d6b1e16177392c0aaeee227b3346f37a).
+2025-07-12 17:37:46,014 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: d6b1e16177392c0aaeee227b3346f37a).
+2025-07-12 17:37:46,014 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: d6b1e16177392c0aaeee227b3346f37a).
+2025-07-12 17:37:48,033 - root - INFO - Ronin is now running! (hot config)
+2025-07-12 17:37:48,033 - root - INFO - Ronin is now running! (hot config)
+2025-07-12 17:37:56,840 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 17:37:56,840 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 17:37:57,345 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 17:37:57,345 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 17:37:57,536 - root - ERROR - Discord event error in on_message: 'DMChannel' object has no attribute 'reply'
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2275, in on_message
+    await process_message(message, is_dm)
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1960, in process_message
+    await handle_tts_reply(message.channel, response, reference=message)
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2133, in handle_tts_reply
+    reply = await ctx.reply(text, **kwargs)
+                  ^^^^^^^^^
+AttributeError: 'DMChannel' object has no attribute 'reply'
+2025-07-12 17:37:57,536 - root - ERROR - Discord event error in on_message: 'DMChannel' object has no attribute 'reply'
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2275, in on_message
+    await process_message(message, is_dm)
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1960, in process_message
+    await handle_tts_reply(message.channel, response, reference=message)
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2133, in handle_tts_reply
+    reply = await ctx.reply(text, **kwargs)
+                  ^^^^^^^^^
+AttributeError: 'DMChannel' object has no attribute 'reply'
+2025-07-12 17:38:07,058 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 17:38:07,058 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 17:38:15,898 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 17:38:15,898 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 17:38:16,907 - root - ERROR - Discord event error in on_message: 'TextChannel' object has no attribute 'reply'
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2275, in on_message
+    await process_message(message, is_dm)
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1960, in process_message
+    await handle_tts_reply(message.channel, response, reference=message)
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2133, in handle_tts_reply
+    reply = await ctx.reply(text, **kwargs)
+                  ^^^^^^^^^
+AttributeError: 'TextChannel' object has no attribute 'reply'
+2025-07-12 17:38:16,907 - root - ERROR - Discord event error in on_message: 'TextChannel' object has no attribute 'reply'
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2275, in on_message
+    await process_message(message, is_dm)
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1960, in process_message
+    await handle_tts_reply(message.channel, response, reference=message)
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2133, in handle_tts_reply
+    reply = await ctx.reply(text, **kwargs)
+                  ^^^^^^^^^
+AttributeError: 'TextChannel' object has no attribute 'reply'
+2025-07-12 17:38:46,657 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 17:38:46,657 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 17:38:47,051 - root - ERROR - Discord event error in on_message: 'TextChannel' object has no attribute 'reply'
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2275, in on_message
+    await process_message(message, is_dm)
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1960, in process_message
+    await handle_tts_reply(message.channel, response, reference=message)
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2133, in handle_tts_reply
+    reply = await ctx.reply(text, **kwargs)
+                  ^^^^^^^^^
+AttributeError: 'TextChannel' object has no attribute 'reply'
+2025-07-12 17:38:47,051 - root - ERROR - Discord event error in on_message: 'TextChannel' object has no attribute 'reply'
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2275, in on_message
+    await process_message(message, is_dm)
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1960, in process_message
+    await handle_tts_reply(message.channel, response, reference=message)
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2133, in handle_tts_reply
+    reply = await ctx.reply(text, **kwargs)
+                  ^^^^^^^^^
+AttributeError: 'TextChannel' object has no attribute 'reply'
+2025-07-12 17:47:47,275 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 17:47:47,275 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 17:47:47,480 - root - ERROR - Discord event error in on_message: 'TextChannel' object has no attribute 'reply'
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2275, in on_message
+    await process_message(message, is_dm)
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1960, in process_message
+    await handle_tts_reply(message.channel, response, reference=message)
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2133, in handle_tts_reply
+    reply = await ctx.reply(text, **kwargs)
+                  ^^^^^^^^^
+AttributeError: 'TextChannel' object has no attribute 'reply'
+2025-07-12 17:47:47,480 - root - ERROR - Discord event error in on_message: 'TextChannel' object has no attribute 'reply'
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2275, in on_message
+    await process_message(message, is_dm)
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1960, in process_message
+    await handle_tts_reply(message.channel, response, reference=message)
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2133, in handle_tts_reply
+    reply = await ctx.reply(text, **kwargs)
+                  ^^^^^^^^^
+AttributeError: 'TextChannel' object has no attribute 'reply'
+/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/numba/cpython/old_hashing.py:477: UserWarning: FNV hashing is not implemented in Numba. See PEP 456 https://www.python.org/dev/peps/pep-0456/ for rationale over not using FNV. Numba will continue to work, but hashes for built in types will be computed using siphash24. This will permit e.g. dictionaries to continue to behave as expected, however anything relying on the value of the hash opposed to hash as a derived property is likely to not work as expected.
+  warnings.warn(msg)
+[2025-07-12 17:51:31] [INFO    ] discord.client: logging in using static token
+2025-07-12 17:51:31,843 - discord.client - INFO - logging in using static token
+2025-07-12 17:51:31,843 - discord.client - INFO - logging in using static token
+[2025-07-12 17:51:32] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: df74dd861f6d076665f6bcc80b3fbc61).
+2025-07-12 17:51:32,815 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: df74dd861f6d076665f6bcc80b3fbc61).
+2025-07-12 17:51:32,815 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: df74dd861f6d076665f6bcc80b3fbc61).
+2025-07-12 17:51:34,828 - root - INFO - Ronin is now running! (hot config)
+2025-07-12 17:51:34,828 - root - INFO - Ronin is now running! (hot config)
+2025-07-12 17:51:47,286 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 17:51:47,286 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 17:56:00,724 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 17:56:00,724 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 17:56:11,141 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 17:56:11,141 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 17:56:18,653 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 17:56:18,653 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:01:56,708 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:01:56,708 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:03:26,997 - root - ERROR - Error in VL API call: 'choices'
+2025-07-12 18:03:26,997 - root - ERROR - Error in VL API call: 'choices'
+2025-07-12 18:03:26,997 - root - ERROR - VL model returned empty caption
+2025-07-12 18:03:26,997 - root - ERROR - VL model returned empty caption
+2025-07-12 18:03:31,956 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:03:31,956 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:03:38,655 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:03:38,655 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+ > tts_models/en/ljspeech/tacotron2-DDC is already downloaded.
+ > vocoder_models/en/ljspeech/hifigan_v2 is already downloaded.
+ > Using model: Tacotron2
+ > Setting up Audio Processor...
+ | > sample_rate:22050
+ | > resample:False
+ | > num_mels:80
+ | > log_func:np.log
+ | > min_level_db:-100
+ | > frame_shift_ms:None
+ | > frame_length_ms:None
+ | > ref_level_db:20
+ | > fft_size:1024
+ | > power:1.5
+ | > preemphasis:0.0
+ | > griffin_lim_iters:60
+ | > signal_norm:False
+ | > symmetric_norm:True
+ | > mel_fmin:0
+ | > mel_fmax:8000.0
+ | > pitch_fmin:1.0
+ | > pitch_fmax:640.0
+ | > spec_gain:1.0
+ | > stft_pad_mode:reflect
+ | > max_norm:4.0
+ | > clip_norm:True
+ | > do_trim_silence:True
+ | > trim_db:60
+ | > do_sound_norm:False
+ | > do_amp_to_db_linear:True
+ | > do_amp_to_db_mel:True
+ | > do_rms_norm:False
+ | > db_level:None
+ | > stats_path:None
+ | > base:2.718281828459045
+ | > hop_length:256
+ | > win_length:1024
+ > Model's reduction rate `r` is set to: 1
+ > Vocoder Model: hifigan
+ > Setting up Audio Processor...
+ | > sample_rate:22050
+ | > resample:False
+ | > num_mels:80
+ | > log_func:np.log
+ | > min_level_db:-100
+ | > frame_shift_ms:None
+ | > frame_length_ms:None
+ | > ref_level_db:20
+ | > fft_size:1024
+ | > power:1.5
+ | > preemphasis:0.0
+ | > griffin_lim_iters:60
+ | > signal_norm:False
+ | > symmetric_norm:True
+ | > mel_fmin:0
+ | > mel_fmax:8000.0
+ | > pitch_fmin:1.0
+ | > pitch_fmax:640.0
+ | > spec_gain:1.0
+ | > stft_pad_mode:reflect
+ | > max_norm:4.0
+ | > clip_norm:True
+ | > do_trim_silence:False
+ | > trim_db:60
+ | > do_sound_norm:False
+ | > do_amp_to_db_linear:True
+ | > do_amp_to_db_mel:True
+ | > do_rms_norm:False
+ | > db_level:None
+ | > stats_path:None
+ | > base:2.718281828459045
+ | > hop_length:256
+ | > win_length:1024
+ > Generator Model: hifigan_generator
+ > Discriminator Model: hifigan_discriminator
+Removing weight norm...
+ > Text splitted to sentences.
+['im gay']
+ > Processing time: 2.106189489364624
+ > Real-time factor: 1.5236705459478332
+ > tts_models/en/ljspeech/tacotron2-DDC is already downloaded.
+ > vocoder_models/en/ljspeech/hifigan_v2 is already downloaded.
+ > Using model: Tacotron2
+ > Setting up Audio Processor...
+ | > sample_rate:22050
+ | > resample:False
+ | > num_mels:80
+ | > log_func:np.log
+ | > min_level_db:-100
+ | > frame_shift_ms:None
+ | > frame_length_ms:None
+ | > ref_level_db:20
+ | > fft_size:1024
+ | > power:1.5
+ | > preemphasis:0.0
+ | > griffin_lim_iters:60
+ | > signal_norm:False
+ | > symmetric_norm:True
+ | > mel_fmin:0
+ | > mel_fmax:8000.0
+ | > pitch_fmin:1.0
+ | > pitch_fmax:640.0
+ | > spec_gain:1.0
+ | > stft_pad_mode:reflect
+ | > max_norm:4.0
+ | > clip_norm:True
+ | > do_trim_silence:True
+ | > trim_db:60
+ | > do_sound_norm:False
+ | > do_amp_to_db_linear:True
+ | > do_amp_to_db_mel:True
+ | > do_rms_norm:False
+ | > db_level:None
+ | > stats_path:None
+ | > base:2.718281828459045
+ | > hop_length:256
+ | > win_length:1024
+ > Model's reduction rate `r` is set to: 1
+ > Vocoder Model: hifigan
+ > Setting up Audio Processor...
+ | > sample_rate:22050
+ | > resample:False
+ | > num_mels:80
+ | > log_func:np.log
+ | > min_level_db:-100
+ | > frame_shift_ms:None
+ | > frame_length_ms:None
+ | > ref_level_db:20
+ | > fft_size:1024
+ | > power:1.5
+ | > preemphasis:0.0
+ | > griffin_lim_iters:60
+ | > signal_norm:False
+ | > symmetric_norm:True
+ | > mel_fmin:0
+ | > mel_fmax:8000.0
+ | > pitch_fmin:1.0
+ | > pitch_fmax:640.0
+ | > spec_gain:1.0
+ | > stft_pad_mode:reflect
+ | > max_norm:4.0
+ | > clip_norm:True
+ | > do_trim_silence:False
+ | > trim_db:60
+ | > do_sound_norm:False
+ | > do_amp_to_db_linear:True
+ | > do_amp_to_db_mel:True
+ | > do_rms_norm:False
+ | > db_level:None
+ | > stats_path:None
+ | > base:2.718281828459045
+ | > hop_length:256
+ | > win_length:1024
+ > Generator Model: hifigan_generator
+ > Discriminator Model: hifigan_discriminator
+Removing weight norm...
+ > Text splitted to sentences.
+["i'm gay with my father"]
+ > Processing time: 4.164530038833618
+ > Real-time factor: 1.9175552822477715
+ > tts_models/en/ljspeech/tacotron2-DDC is already downloaded.
+ > vocoder_models/en/ljspeech/hifigan_v2 is already downloaded.
+ > Using model: Tacotron2
+ > Setting up Audio Processor...
+ | > sample_rate:22050
+ | > resample:False
+ | > num_mels:80
+ | > log_func:np.log
+ | > min_level_db:-100
+ | > frame_shift_ms:None
+ | > frame_length_ms:None
+ | > ref_level_db:20
+ | > fft_size:1024
+ | > power:1.5
+ | > preemphasis:0.0
+ | > griffin_lim_iters:60
+ | > signal_norm:False
+ | > symmetric_norm:True
+ | > mel_fmin:0
+ | > mel_fmax:8000.0
+ | > pitch_fmin:1.0
+ | > pitch_fmax:640.0
+ | > spec_gain:1.0
+ | > stft_pad_mode:reflect
+ | > max_norm:4.0
+ | > clip_norm:True
+ | > do_trim_silence:True
+ | > trim_db:60
+ | > do_sound_norm:False
+ | > do_amp_to_db_linear:True
+ | > do_amp_to_db_mel:True
+ | > do_rms_norm:False
+ | > db_level:None
+ | > stats_path:None
+ | > base:2.718281828459045
+ | > hop_length:256
+ | > win_length:1024
+ > Model's reduction rate `r` is set to: 1
+ > Vocoder Model: hifigan
+ > Setting up Audio Processor...
+ | > sample_rate:22050
+ | > resample:False
+ | > num_mels:80
+ | > log_func:np.log
+ | > min_level_db:-100
+ | > frame_shift_ms:None
+ | > frame_length_ms:None
+ | > ref_level_db:20
+ | > fft_size:1024
+ | > power:1.5
+ | > preemphasis:0.0
+ | > griffin_lim_iters:60
+ | > signal_norm:False
+ | > symmetric_norm:True
+ | > mel_fmin:0
+ | > mel_fmax:8000.0
+ | > pitch_fmin:1.0
+ | > pitch_fmax:640.0
+ | > spec_gain:1.0
+ | > stft_pad_mode:reflect
+ | > max_norm:4.0
+ | > clip_norm:True
+ | > do_trim_silence:False
+ | > trim_db:60
+ | > do_sound_norm:False
+ | > do_amp_to_db_linear:True
+ | > do_amp_to_db_mel:True
+ | > do_rms_norm:False
+ | > db_level:None
+ | > stats_path:None
+ | > base:2.718281828459045
+ | > hop_length:256
+ | > win_length:1024
+ > Generator Model: hifigan_generator
+ > Discriminator Model: hifigan_discriminator
+Removing weight norm...
+ > Text splitted to sentences.
+['speak a little Chinese for ‘em Derek']
+speak a little chinese for ‘em derek
+ [!] Character '‘' not found in the vocabulary. Discarding it.
+ > tts_models/en/ljspeech/tacotron2-DDC is already downloaded.
+ > vocoder_models/en/ljspeech/hifigan_v2 is already downloaded.
+ > Using model: Tacotron2
+ > Setting up Audio Processor...
+ | > sample_rate:22050
+ | > resample:False
+ | > num_mels:80
+ | > log_func:np.log
+ | > min_level_db:-100
+ | > frame_shift_ms:None
+ | > frame_length_ms:None
+ | > ref_level_db:20
+ | > fft_size:1024
+ | > power:1.5
+ | > preemphasis:0.0
+ | > griffin_lim_iters:60
+ | > signal_norm:False
+ | > symmetric_norm:True
+ | > mel_fmin:0
+ | > mel_fmax:8000.0
+ | > pitch_fmin:1.0
+ | > pitch_fmax:640.0
+ | > spec_gain:1.0
+ | > stft_pad_mode:reflect
+ | > max_norm:4.0
+ | > clip_norm:True
+ | > do_trim_silence:True
+ | > trim_db:60
+ | > do_sound_norm:False
+ | > do_amp_to_db_linear:True
+ | > do_amp_to_db_mel:True
+ | > do_rms_norm:False
+ | > db_level:None
+ | > stats_path:None
+ | > base:2.718281828459045
+ | > hop_length:256
+ | > win_length:1024
+ > Processing time: 6.915703296661377
+ > Real-time factor: 2.2904839235067196
+ > Model's reduction rate `r` is set to: 1
+ > Vocoder Model: hifigan
+ > Setting up Audio Processor...
+ | > sample_rate:22050
+ | > resample:False
+ | > num_mels:80
+ | > log_func:np.log
+ | > min_level_db:-100
+ | > frame_shift_ms:None
+ | > frame_length_ms:None
+ | > ref_level_db:20
+ | > fft_size:1024
+ | > power:1.5
+ | > preemphasis:0.0
+ | > griffin_lim_iters:60
+ | > signal_norm:False
+ | > symmetric_norm:True
+ | > mel_fmin:0
+ | > mel_fmax:8000.0
+ | > pitch_fmin:1.0
+ | > pitch_fmax:640.0
+ | > spec_gain:1.0
+ | > stft_pad_mode:reflect
+ | > max_norm:4.0
+ | > clip_norm:True
+ | > do_trim_silence:False
+ | > trim_db:60
+ | > do_sound_norm:False
+ | > do_amp_to_db_linear:True
+ | > do_amp_to_db_mel:True
+ | > do_rms_norm:False
+ | > db_level:None
+ | > stats_path:None
+ | > base:2.718281828459045
+ | > hop_length:256
+ | > win_length:1024
+ > Generator Model: hifigan_generator
+ > Discriminator Model: hifigan_discriminator
+Removing weight norm...
+ > Text splitted to sentences.
+['speak a little Chinese for ‘em Derek']
+speak a little chinese for ‘em derek
+ [!] Character '‘' not found in the vocabulary. Discarding it.
+ > Processing time: 6.540260553359985
+ > Real-time factor: 2.191416624142774
+ > tts_models/en/ljspeech/tacotron2-DDC is already downloaded.2025-07-12 18:03:58,853 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:03:58,853 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:09:35,982 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:09:35,982 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:10:06,016 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:10:06,016 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:10:35,645 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:10:35,645 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:11:14,895 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:11:14,895 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+
+ > vocoder_models/en/ljspeech/hifigan_v2 is already downloaded.
+ > Using model: Tacotron2
+ > Setting up Audio Processor...
+ | > sample_rate:22050
+ | > resample:False
+ | > num_mels:80
+ | > log_func:np.log
+ | > min_level_db:-100
+ | > frame_shift_ms:None
+ | > frame_length_ms:None
+ | > ref_level_db:20
+ | > fft_size:1024
+ | > power:1.5
+ | > preemphasis:0.0
+ | > griffin_lim_iters:60
+ | > signal_norm:False
+ | > symmetric_norm:True
+ | > mel_fmin:0
+ | > mel_fmax:8000.0
+ | > pitch_fmin:1.0
+ | > pitch_fmax:640.0
+ | > spec_gain:1.0
+ | > stft_pad_mode:reflect
+ | > max_norm:4.0
+ | > clip_norm:True
+ | > do_trim_silence:True
+ | > trim_db:60
+ | > do_sound_norm:False
+ | > do_amp_to_db_linear:True
+ | > do_amp_to_db_mel:True
+ | > do_rms_norm:False
+ | > db_level:None
+ | > stats_path:None
+ | > base:2.718281828459045
+ | > hop_length:256
+ | > win_length:1024
+ > Model's reduction rate `r` is set to: 1
+ > Vocoder Model: hifigan
+ > Setting up Audio Processor...
+ | > sample_rate:22050
+ | > resample:False
+ | > num_mels:80
+ | > log_func:np.log
+ | > min_level_db:-100
+ | > frame_shift_ms:None
+ | > frame_length_ms:None
+ | > ref_level_db:20
+ | > fft_size:1024
+ | > power:1.5
+ | > preemphasis:0.0
+ | > griffin_lim_iters:60
+ | > signal_norm:False
+ | > symmetric_norm:True
+ | > mel_fmin:0
+ | > mel_fmax:8000.0
+ | > pitch_fmin:1.0
+ | > pitch_fmax:640.0
+ | > spec_gain:1.0
+ | > stft_pad_mode:reflect
+ | > max_norm:4.0
+ | > clip_norm:True
+ | > do_trim_silence:False
+ | > trim_db:60
+ | > do_sound_norm:False
+ | > do_amp_to_db_linear:True
+ | > do_amp_to_db_mel:True
+ | > do_rms_norm:False
+ | > db_level:None
+ | > stats_path:None
+ | > base:2.718281828459045
+ | > hop_length:256
+ | > win_length:1024
+ > Generator Model: hifigan_generator
+ > Discriminator Model: hifigan_discriminator
+Removing weight norm...
+ > Text splitted to sentences.
+['yo, my bad—looks like the image shit itself.', 'either the file’s fried or the universe decided you didn’t need that visual trauma.', 'want me to improvise some chaos instead?', '🔥⚡💀 (disclaimer: may contain traces of bad decisions)']
+yo, my bad—looks like the image shit itself.
+ [!] Character '—' not found in the vocabulary. Discarding it.
+ > tts_models/en/ljspeech/tacotron2-DDC is already downloaded.
+ > vocoder_models/en/ljspeech/hifigan_v2 is already downloaded.
+ > Using model: Tacotron2
+ > Setting up Audio Processor...
+ | > sample_rate:22050
+ | > resample:False
+ | > num_mels:80
+ | > log_func:np.log
+ | > min_level_db:-100
+ | > frame_shift_ms:None
+ | > frame_length_ms:None
+ | > ref_level_db:20
+ | > fft_size:1024
+ | > power:1.5
+ | > preemphasis:0.0
+ | > griffin_lim_iters:60
+ | > signal_norm:False
+ | > symmetric_norm:True
+ | > mel_fmin:0
+ | > mel_fmax:8000.0
+ | > pitch_fmin:1.0
+ | > pitch_fmax:640.0
+ | > spec_gain:1.0
+ | > stft_pad_mode:reflect
+ | > max_norm:4.0
+ | > clip_norm:True
+ | > do_trim_silence:True
+ | > trim_db:60
+ | > do_sound_norm:False
+ | > do_amp_to_db_linear:True
+ | > do_amp_to_db_mel:True
+ | > do_rms_norm:False
+ | > db_level:None
+ | > stats_path:None
+ | > base:2.718281828459045
+ | > hop_length:256
+ | > win_length:1024
+ > Model's reduction rate `r` is set to: 1
+ > Vocoder Model: hifigan
+ > Setting up Audio Processor...
+ | > sample_rate:22050
+ | > resample:False
+ | > num_mels:80
+ | > log_func:np.log
+ | > min_level_db:-100
+ | > frame_shift_ms:None
+ | > frame_length_ms:None
+ | > ref_level_db:20
+ | > fft_size:1024
+ | > power:1.5
+ | > preemphasis:0.0
+ | > griffin_lim_iters:60
+ | > signal_norm:False
+ | > symmetric_norm:True
+ | > mel_fmin:0
+ | > mel_fmax:8000.0
+ | > pitch_fmin:1.0
+ | > pitch_fmax:640.0
+ | > spec_gain:1.0
+ | > stft_pad_mode:reflect
+ | > max_norm:4.0
+ | > clip_norm:True
+ | > do_trim_silence:False
+ | > trim_db:60
+ | > do_sound_norm:False
+ | > do_amp_to_db_linear:True
+ | > do_amp_to_db_mel:True
+ | > do_rms_norm:False
+ | > db_level:None
+ | > stats_path:None
+ | > base:2.718281828459045
+ | > hop_length:256
+ | > win_length:1024
+ > Generator Model: hifigan_generator
+ > Discriminator Model: hifigan_discriminator
+Removing weight norm...
+ > Text splitted to sentences.
+['aight, cool.', "least you ain't gotta suffer through whatever glitch-art hell that was.", 'holler if you need some *intentional* nonsense later.']
+holler if you need some *intentional* nonsense later.
+ [!] Character '*' not found in the vocabulary. Discarding it.
+either the file’s fried or the universe decided you didn’t need that visual trauma.
+ [!] Character '’' not found in the vocabulary. Discarding it.
+ > Processing time: 32.13687586784363
+ > Real-time factor: 3.024559998318104
+🔥⚡💀 disclaimer, may contain traces of bad decisions
+ [!] Character '🔥' not found in the vocabulary. Discarding it.
+🔥⚡💀 disclaimer, may contain traces of bad decisions
+ [!] Character '⚡' not found in the vocabulary. Discarding it.
+🔥⚡💀 disclaimer, may contain traces of bad decisions
+ [!] Character '💀' not found in the vocabulary. Discarding it.
+ > Processing time: 82.84530472755432
+ > Real-time factor: 2.860859616559607
+ > tts_models/en/ljspeech/tacotron2-DDC is already downloaded.
+ > vocoder_models/en/ljspeech/hifigan_v2 is already downloaded.
+ > Using model: Tacotron2
+ > Setting up Audio Processor...
+ | > sample_rate:22050
+ | > resample:False
+ | > num_mels:80
+ | > log_func:np.log
+ | > min_level_db:-100
+ | > frame_shift_ms:None
+ | > frame_length_ms:None
+ | > ref_level_db:20
+ | > fft_size:1024
+ | > power:1.5
+ | > preemphasis:0.0
+ | > griffin_lim_iters:60
+ | > signal_norm:False
+ | > symmetric_norm:True
+ | > mel_fmin:0
+ | > mel_fmax:8000.0
+ | > pitch_fmin:1.0
+ | > pitch_fmax:640.0
+ | > spec_gain:1.0
+ | > stft_pad_mode:reflect
+ | > max_norm:4.0
+ | > clip_norm:True
+ | > do_trim_silence:True
+ | > trim_db:60
+ | > do_sound_norm:False
+ | > do_amp_to_db_linear:True
+ | > do_amp_to_db_mel:True
+ | > do_rms_norm:False
+ | > db_level:None
+ | > stats_path:None
+ | > base:2.718281828459045
+ | > hop_length:256
+ | > win_length:1024
+ > Model's reduction rate `r` is set to: 1
+ > Vocoder Model: hifigan
+ > Setting up Audio Processor...
+ | > sample_rate:22050
+ | > resample:False
+ | > num_mels:80
+ | > log_func:np.log
+ | > min_level_db:-100
+ | > frame_shift_ms:None
+ | > frame_length_ms:None
+ | > ref_level_db:20
+ | > fft_size:1024
+ | > power:1.5
+ | > preemphasis:0.0
+ | > griffin_lim_iters:60
+ | > signal_norm:False
+ | > symmetric_norm:True
+ | > mel_fmin:0
+ | > mel_fmax:8000.0
+ | > pitch_fmin:1.0
+ | > pitch_fmax:640.0
+ | > spec_gain:1.0
+ | > stft_pad_mode:reflect
+ | > max_norm:4.0
+ | > clip_norm:True
+ | > do_trim_silence:False
+ | > trim_db:60
+ | > do_sound_norm:False
+ | > do_amp_to_db_linear:True
+ | > do_amp_to_db_mel:True
+ | > do_rms_norm:False
+ | > db_level:None
+ | > stats_path:None
+ | > base:2.718281828459045
+ | > hop_length:256
+ | > win_length:1024
+ > Generator Model: hifigan_generator
+ > Discriminator Model: hifigan_discriminator
+Removing weight norm...
+ > Text splitted to sentences.
+["oh, you tryna get 'httpx' installed?", "yeah, that's easy.", 'just run:', '"\'bash', 'pip install httpx', '"\'', 'if you on python 3.8+, you good.', 'need anything else or you just flexing your package manager skills?']
+ > tts_models/en/ljspeech/tacotron2-DDC is already downloaded.
+ > vocoder_models/en/ljspeech/hifigan_v2 is already downloaded.
+ > Using model: Tacotron2
+ > Setting up Audio Processor...
+ | > sample_rate:22050
+ | > resample:False
+ | > num_mels:80
+ | > log_func:np.log
+ | > min_level_db:-100
+ | > frame_shift_ms:None
+ | > frame_length_ms:None
+ | > ref_level_db:20
+ | > fft_size:1024
+ | > power:1.5
+ | > preemphasis:0.0
+ | > griffin_lim_iters:60
+ | > signal_norm:False
+ | > symmetric_norm:True
+ | > mel_fmin:0
+ | > mel_fmax:8000.0
+ | > pitch_fmin:1.0
+ | > pitch_fmax:640.0
+ | > spec_gain:1.0
+ | > stft_pad_mode:reflect
+ | > max_norm:4.0
+ | > clip_norm:True
+ | > do_trim_silence:True
+ | > trim_db:60
+ | > do_sound_norm:False
+ | > do_amp_to_db_linear:True
+ | > do_amp_to_db_mel:True
+ | > do_rms_norm:False
+ | > db_level:None
+ | > stats_path:None
+ | > base:2.718281828459045
+ | > hop_length:256
+ | > win_length:1024
+ > Model's reduction rate `r` is set to: 1
+ > Vocoder Model: hifigan
+ > Setting up Audio Processor...
+ | > sample_rate:22050
+ | > resample:False
+ | > num_mels:80
+ | > log_func:np.log2025-07-12 18:12:20,038 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:12:20,038 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:12:59,366 - root - ERROR - TTS synthesis failed: TTS synthesis error: Calculated padded input size per channel: (4). Kernel size: (5). Kernel size can't be greater than actual input size
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2070, in synthesize_speech
+    await loop.run_in_executor(None, _synthesize)
+  File "/opt/lib/python3.11/concurrent/futures/thread.py", line 58, in run
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2063, in _synthesize
+    tts.tts_to_file(
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/api.py", line 334, in tts_to_file
+    wav = self.tts(
+          ^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/api.py", line 276, in tts
+    wav = self.synthesizer.tts(
+          ^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/utils/synthesizer.py", line 398, in tts
+    outputs = synthesis(
+              ^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/tts/utils/synthesis.py", line 221, in synthesis
+    outputs = run_model_torch(
+              ^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/tts/utils/synthesis.py", line 53, in run_model_torch
+    outputs = _func(
+              ^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/torch/utils/_contextlib.py", line 116, in decorate_context
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/tts/models/tacotron2.py", line 248, in inference
+    encoder_outputs = self.encoder.inference(embedded_inputs)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/tts/layers/tacotron/tacotron2.py", line 108, in inference
+    o = layer(o)
+        ^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1739, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1750, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/tts/layers/tacotron/tacotron2.py", line 40, in forward
+    o = self.convolution1d(x)
+        ^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1739, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1750, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/torch/nn/modules/conv.py", line 375, in forward
+    return self._conv_forward(input, self.weight, self.bias)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/torch/nn/modules/conv.py", line 370, in _conv_forward
+    return F.conv1d(
+           ^^^^^^^^^
+RuntimeError: Calculated padded input size per channel: (4). Kernel size: (5). Kernel size can't be greater than actual input size
+
+2025-07-12 18:12:59,366 - root - ERROR - TTS synthesis failed: TTS synthesis error: Calculated padded input size per channel: (4). Kernel size: (5). Kernel size can't be greater than actual input size
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2070, in synthesize_speech
+    await loop.run_in_executor(None, _synthesize)
+  File "/opt/lib/python3.11/concurrent/futures/thread.py", line 58, in run
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2063, in _synthesize
+    tts.tts_to_file(
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/api.py", line 334, in tts_to_file
+    wav = self.tts(
+          ^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/api.py", line 276, in tts
+    wav = self.synthesizer.tts(
+          ^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/utils/synthesizer.py", line 398, in tts
+    outputs = synthesis(
+              ^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/tts/utils/synthesis.py", line 221, in synthesis
+    outputs = run_model_torch(
+              ^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/tts/utils/synthesis.py", line 53, in run_model_torch
+    outputs = _func(
+              ^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/torch/utils/_contextlib.py", line 116, in decorate_context
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/tts/models/tacotron2.py", line 248, in inference
+    encoder_outputs = self.encoder.inference(embedded_inputs)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/tts/layers/tacotron/tacotron2.py", line 108, in inference
+    o = layer(o)
+        ^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1739, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1750, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/tts/layers/tacotron/tacotron2.py", line 40, in forward
+    o = self.convolution1d(x)
+        ^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1739, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1750, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/torch/nn/modules/conv.py", line 375, in forward
+    return self._conv_forward(input, self.weight, self.bias)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/torch/nn/modules/conv.py", line 370, in _conv_forward
+    return F.conv1d(
+           ^^^^^^^^^
+RuntimeError: Calculated padded input size per channel: (4). Kernel size: (5). Kernel size can't be greater than actual input size
+
+2025-07-12 18:12:59,367 - root - WARNING - TTS synthesis failed: TTS synthesis error: Calculated padded input size per channel: (4). Kernel size: (5). Kernel size can't be greater than actual input size
+2025-07-12 18:12:59,367 - root - WARNING - TTS synthesis failed: TTS synthesis error: Calculated padded input size per channel: (4). Kernel size: (5). Kernel size can't be greater than actual input size
+2025-07-12 18:13:20,108 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:13:20,108 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:13:27,972 - root - WARNING - TTS synthesis failed: Text too long (max 1000 characters)
+2025-07-12 18:13:27,972 - root - WARNING - TTS synthesis failed: Text too long (max 1000 characters)
+2025-07-12 18:14:26,961 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:14:26,961 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
