@@ -12,6 +12,16 @@ import tempfile
 import mimetypes
 import subprocess
 import shutil
+import traceback
+from typing import Optional, Tuple
+from pathlib import Path
+
+# DIA TTS imports with error handling
+try:
+    from TTS.api import TTS
+    DIA_AVAILABLE = True
+except (ImportError, ModuleNotFoundError):
+    DIA_AVAILABLE = False
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Tuple, Union, Callable, Coroutine, TypeVar
 from functools import wraps
@@ -1957,9 +1967,103 @@ async def process_message(message: Message, is_dm: bool):
         if random.random() < 0.1:
             save_all_profiles()
 
+# ---- TTS Functions ----
+async def synthesize_speech(text: str) -> Tuple[Optional[Path], Optional[str]]:
+    """
+    Synthesize speech from text using DIA TTS.
+    
+    Args:
+        text: Text to synthesize
+        
+    Returns:
+        Tuple of (output_path, error_message) where:
+        - output_path: Path to the generated WAV file on success, None on failure
+        - error_message: None on success, error message on failure
+    """
+    if not DIA_AVAILABLE:
+        return None, "DIA TTS is not installed. Please install it with: pip install TTS"
+    
+    if not text or not text.strip():
+        return None, "No text provided for TTS"
+        
+    # Limit text length to prevent abuse
+    if len(text) > 1000:
+        return None, "Text too long (max 1000 characters)"
+    
+    temp_dir = Path(tempfile.gettempdir()) / "discord_tts"
+    temp_dir.mkdir(exist_ok=True, parents=True)
+    
+    try:
+        # Generate a unique filename
+        timestamp = int(time.time())
+        output_path = temp_dir / f"tts_{timestamp}.wav"
+        
+        # Initialize TTS with DIA model
+        tts = TTS("tts_models/en/ljspeech/tacotron2-DDC")
+        
+        # Run TTS in a thread pool since it's blocking
+        def _synthesize():
+            tts.tts_to_file(
+                text=text,
+                file_path=str(output_path),
+                speaker_wav=None,  # Use default voice
+            )
+        
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, _synthesize)
+        
+        if not output_path.exists() or output_path.stat().st_size == 0:
+            return None, "Failed to generate TTS audio"
+            
+        return output_path, None
+        
+    except Exception as e:
+        error_msg = f"TTS synthesis error: {str(e)}"
+        logging.error(f"TTS synthesis failed: {error_msg}\n{traceback.format_exc()}")
+        return None, error_msg
+
 # ---- Commands ----
 
-@bot.command(name='show-memories')
+@bot.command(name='say')
+async def say_tts(ctx, *, message: str):
+    """
+    Convert text to speech using DIA TTS and send as an audio file.
+    Usage: !say [your message]
+    """
+    # Check if DIA is available
+    if not DIA_AVAILABLE:
+        await ctx.reply("TTS failed: DIA TTS is not installed. Please install it with: pip install TTS")
+        return
+    
+    # Show typing indicator while processing
+    async with ctx.typing():
+        # Generate TTS audio
+        output_path, error = await synthesize_speech(message)
+        
+        if error or not output_path:
+            await ctx.reply(f"TTS failed: {error}")
+            return
+            
+        try:
+            # Send the audio file
+            with open(output_path, 'rb') as audio_file:
+                await ctx.reply(
+                    f"Here's your TTS message:",
+                    file=discord.File(audio_file, filename="tts_message.wav"),
+                    mention_author=False
+                )
+        except Exception as e:
+            logging.error(f"Failed to send TTS audio: {e}\n{traceback.format_exc()}")
+            await ctx.reply(f"Failed to send TTS audio: {e}")
+        finally:
+            # Clean up the temp file
+            try:
+                if output_path and output_path.exists():
+                    output_path.unlink()
+            except Exception as e:
+                logging.error(f"Failed to clean up TTS temp file: {e}")
+
+@bot.command(name='memories')
 async def show_memories(ctx):
     user_id = str(ctx.author.id)
     profile = get_profile(user_id, str(ctx.author))

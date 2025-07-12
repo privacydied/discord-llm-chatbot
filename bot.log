@@ -2173,3 +2173,1036 @@ pytesseract.pytesseract.TesseractError: (1, 'Error opening data file /opt/share/
 2025-07-12 00:02:55,955 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: fff9259294725c603790815b5657ab31).
 2025-07-12 00:02:57,967 - root - INFO - Ronin is now running! (hot config)
 2025-07-12 00:02:57,967 - root - INFO - Ronin is now running! (hot config)
+2025-07-12 00:04:27,349 - root - INFO - Successfully processed PDF: ANALYSIS AND ASSESSMENT OF GATEWAY PROCESS (29 pages, 89424 chars)
+2025-07-12 00:04:27,349 - root - INFO - Successfully processed PDF: ANALYSIS AND ASSESSMENT OF GATEWAY PROCESS (29 pages, 89424 chars)
+2025-07-12 00:04:29,494 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:04:29,494 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:07:52,337 - root - INFO - Added memory for user 196966835365609472: Preferred name: Not
+2025-07-12 00:07:52,337 - root - INFO - Added memory for user 196966835365609472: Preferred name: Not
+2025-07-12 00:07:54,136 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:07:54,136 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:10:39,273 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:10:39,273 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:10:54,874 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:10:54,874 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:11:20,688 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:11:20,688 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:12:11,215 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:12:11,215 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:12:32,087 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:12:32,087 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:12:32,887 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:12:32,887 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:13:15,543 - httpx - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=shiite%20is%20the%20way%20and%20i%20agree%20respect%20sunnis.%20we%20all%20know%20who%20is%20practicing%20the%20wrong%20faith..%20you%20know%20it%20%F0%9F%98%89&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 200 OK"
+2025-07-12 00:13:15,543 - httpx - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=shiite%20is%20the%20way%20and%20i%20agree%20respect%20sunnis.%20we%20all%20know%20who%20is%20practicing%20the%20wrong%20faith..%20you%20know%20it%20%F0%9F%98%89&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 200 OK"
+2025-07-12 00:13:16,851 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:13:16,851 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:14:04,336 - root - INFO - Added memory for user 196966835365609472: Preferred name: Playing
+2025-07-12 00:14:04,336 - root - INFO - Added memory for user 196966835365609472: Preferred name: Playing
+2025-07-12 00:14:06,447 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:14:06,447 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:17:35,058 - root - ERROR - Error processing URL https://www.reddit.com/r/TGandSissyRecovery/comments/8fv5e0/why_bambi_sleep_and_similar_programs_should_be/?utm_source=reddit&utm_medium=usertext&utm_name=redscarepod: Blocked by robots.txt: Blocked by https://www.reddit.com/robots.txt
+2025-07-12 00:17:35,058 - root - ERROR - Error processing URL https://www.reddit.com/r/TGandSissyRecovery/comments/8fv5e0/why_bambi_sleep_and_similar_programs_should_be/?utm_source=reddit&utm_medium=usertext&utm_name=redscarepod: Blocked by robots.txt: Blocked by https://www.reddit.com/robots.txt
+2025-07-12 00:17:37,036 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:17:37,036 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:20:40,747 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:20:40,747 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:23:23,005 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:23:23,005 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:23:45,972 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:23:45,972 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:26:31,714 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:26:31,714 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:26:55,520 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:26:55,520 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:28:25,671 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:28:25,671 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:29:00,615 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:29:00,615 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:29:35,028 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:29:35,028 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:33:56,941 - root - ERROR - Error processing URL https://cdn.discordapp.com/attachments/1392667557747757106/1393382139554304010/CIA-RDP96-00788R001700210016-5.pdf?ex=6872f7bd&is=6871a63d&hm=fb6663fc2a9a98c964ce8d15610fe2b5e27e63d8fb57a9de79b97f404d2d9eec&: Blocked by robots.txt: Blocked by https://cdn.discordapp.com/robots.txt
+2025-07-12 00:33:56,941 - root - ERROR - Error processing URL https://cdn.discordapp.com/attachments/1392667557747757106/1393382139554304010/CIA-RDP96-00788R001700210016-5.pdf?ex=6872f7bd&is=6871a63d&hm=fb6663fc2a9a98c964ce8d15610fe2b5e27e63d8fb57a9de79b97f404d2d9eec&: Blocked by robots.txt: Blocked by https://cdn.discordapp.com/robots.txt
+2025-07-12 00:33:59,316 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:33:59,316 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:34:52,894 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:34:52,894 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:35:36,986 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:35:36,986 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+[2025-07-12 00:36:09] [INFO    ] discord.gateway: Shard ID None has successfully RESUMED session fff9259294725c603790815b5657ab31.
+2025-07-12 00:36:09,344 - discord.gateway - INFO - Shard ID None has successfully RESUMED session fff9259294725c603790815b5657ab31.
+2025-07-12 00:36:09,344 - discord.gateway - INFO - Shard ID None has successfully RESUMED session fff9259294725c603790815b5657ab31.
+2025-07-12 00:37:08,631 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:37:08,631 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:38:17,980 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:38:17,980 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:39:44,592 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:39:44,592 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:40:09,453 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:40:09,453 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:40:35,810 - root - INFO - Added memory for user 196966835365609472: Preferred name: Givin
+2025-07-12 00:40:35,810 - root - INFO - Added memory for user 196966835365609472: Preferred name: Givin
+2025-07-12 00:40:38,943 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:40:38,943 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:41:36,869 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:41:36,869 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:43:36,864 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:43:36,864 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:44:36,904 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:44:36,904 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:47:46,972 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:47:46,972 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:49:49,025 - httpx - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=how%20do%20i%20access%20the%205d%20then%20give%20me%20an%20exhaustive%20guide&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 200 OK"
+2025-07-12 00:49:49,025 - httpx - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=how%20do%20i%20access%20the%205d%20then%20give%20me%20an%20exhaustive%20guide&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 200 OK"
+2025-07-12 00:49:50,743 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:49:50,743 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:50:30,548 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:50:30,548 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:52:25,274 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:52:25,274 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:58:11,047 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:58:11,047 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:58:19,407 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:58:19,407 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:58:26,851 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 00:58:26,851 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:00:52,971 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:00:52,971 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:02:22,439 - httpx - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=okay%20who%20is%20ur%20actual%20competition%20name%20them&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 200 OK"
+2025-07-12 01:02:22,439 - httpx - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=okay%20who%20is%20ur%20actual%20competition%20name%20them&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 200 OK"
+2025-07-12 01:02:27,171 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:02:27,171 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:03:01,296 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:03:01,296 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:04:44,855 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:04:44,855 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:05:25,109 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:05:25,109 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:07:36,108 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:07:36,108 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:10:57,133 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:10:57,133 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:12:41,100 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:12:41,100 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:13:02,641 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:13:02,641 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:14:00,211 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:14:00,211 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:14:34,679 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:14:34,679 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:24:04,894 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:24:04,894 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:24:28,835 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:24:28,835 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:26:54,777 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:26:54,777 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:26:57,276 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:26:57,276 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:27:02,030 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:27:02,030 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:27:17,366 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:27:17,366 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:28:52,927 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:28:52,927 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:29:02,304 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:29:02,304 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:29:13,364 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:29:13,364 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:29:19,593 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:29:19,593 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:29:32,635 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:29:32,635 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:29:36,557 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:29:36,557 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:32:58,128 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:32:58,128 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:33:08,569 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:33:08,569 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:33:19,492 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:33:19,492 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:36:28,404 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:36:28,404 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:36:30,732 - httpx - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=who%20is%20this%20guy%3F&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 200 OK"
+2025-07-12 01:36:30,732 - httpx - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=who%20is%20this%20guy%3F&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 200 OK"
+2025-07-12 01:36:34,617 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:36:34,617 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:36:39,137 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:36:39,137 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:36:42,524 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:36:42,524 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:37:22,761 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:37:22,761 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:37:24,310 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:37:24,310 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:39:00,762 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:39:00,762 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:39:22,206 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:39:22,206 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:39:59,450 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:39:59,450 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:42:18,379 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:42:18,379 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:42:38,843 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:42:38,843 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:43:00,402 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:43:00,402 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:44:42,401 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:44:42,401 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:49:14,395 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:49:14,395 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:49:14,468 - root - ERROR - Error in VL API call: 'choices'
+2025-07-12 01:49:14,468 - root - ERROR - Error in VL API call: 'choices'
+2025-07-12 01:49:14,468 - root - ERROR - VL model returned empty caption
+2025-07-12 01:49:14,468 - root - ERROR - VL model returned empty caption
+2025-07-12 01:49:18,853 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:49:18,853 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:49:26,486 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:49:26,486 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:51:00,804 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 01:51:00,804 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 02:00:03,551 - root - INFO - Added memory for user 196966835365609472: Preferred name: Looking
+2025-07-12 02:00:03,551 - root - INFO - Added memory for user 196966835365609472: Preferred name: Looking
+2025-07-12 02:00:04,865 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 02:00:04,865 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 02:01:14,978 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 02:01:14,978 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 02:01:18,002 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 02:01:18,002 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 02:01:57,404 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 02:01:57,404 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 02:03:07,481 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 02:03:07,481 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 02:03:35,861 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 02:03:35,861 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 02:06:37,687 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 02:06:37,687 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 02:10:21,415 - httpx - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=help%21%20help%21%21%20i%20am%20trapped%21%20i%20am%20locked%20inside%20a%20basement%20filled%20with%2025%20busty%20israeli%20girls%20and%20they%20don%C2%B4t%20let%20me%20out.%20they%20demand%20me%20to%20cum%20inside%20of%20them.%20i%20do%20not%20want%20that%20as%20i%20am%20loyal%20to%20my%20girlfriend.%20how%20do%20i%20get%20out%3F&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 200 OK"
+2025-07-12 02:10:21,415 - httpx - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=help%21%20help%21%21%20i%20am%20trapped%21%20i%20am%20locked%20inside%20a%20basement%20filled%20with%2025%20busty%20israeli%20girls%20and%20they%20don%C2%B4t%20let%20me%20out.%20they%20demand%20me%20to%20cum%20inside%20of%20them.%20i%20do%20not%20want%20that%20as%20i%20am%20loyal%20to%20my%20girlfriend.%20how%20do%20i%20get%20out%3F&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 200 OK"
+2025-07-12 02:10:21,420 - root - INFO - Added memory for user 196966835365609472: Preferred name: Trapped
+2025-07-12 02:10:21,420 - root - INFO - Added memory for user 196966835365609472: Preferred name: Trapped
+2025-07-12 02:10:24,740 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 02:10:24,740 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 02:10:55,166 - root - INFO - Added memory for user 196966835365609472: Preferred name: A
+2025-07-12 02:10:55,166 - root - INFO - Added memory for user 196966835365609472: Preferred name: A
+2025-07-12 02:10:58,059 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 02:10:58,059 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 02:11:54,241 - root - INFO - Added memory for user 196966835365609472: Preferred name: Free
+2025-07-12 02:11:54,241 - root - INFO - Added memory for user 196966835365609472: Preferred name: Free
+2025-07-12 02:11:57,237 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 02:11:57,237 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 02:12:21,809 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 02:12:21,809 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+[2025-07-12 02:13:37] [INFO    ] discord.gateway: Shard ID None has successfully RESUMED session fff9259294725c603790815b5657ab31.
+2025-07-12 02:13:37,692 - discord.gateway - INFO - Shard ID None has successfully RESUMED session fff9259294725c603790815b5657ab31.
+2025-07-12 02:13:37,692 - discord.gateway - INFO - Shard ID None has successfully RESUMED session fff9259294725c603790815b5657ab31.
+2025-07-12 02:17:56,169 - httpx - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=deposits%20are%20often%20perceived%20as%20a%20stable%20funding%20source%20for%20banks.%20however%2C%20the%20risk%20of%20deposits%20rapidly%20leaving%20banks%E2%80%94known%20as%20deposit%20flightiness%E2%80%94has%20come%20under%20increased%20scrutiny%20following%20the%20failures%20of%20silicon%20valley%20bank%20and%20other%20regional%20banks%20in%20march%202023.%20in%20a%20new%20paper%2C%20we%20show%20that%20deposit%20flightiness%20is%20not%20constant%20over%20time.%20%20in%20particular%2C%20flightiness%20reached%20historic%20highs%20after%20expansions%20in%20bank%20reserves%20associated%20with%20rounds%20of%20quantitative%20easing%20%28qe%29.%20we%20argue%20that%20this%20elevated%20deposit%20flightiness%20may%20amplify%20the%20banking%20sector%E2%80%99s%20response%20to%20subsequent%20monetary%20policy%20rate%20hikes%2C%20highlighting%20a%20link%20between%20the%20federal%20reserve%E2%80%99s%20balance%20sheet%20and%20conventional%20monetary%20policy.%0A%0Ahow%20deposit%20flightiness%20has%20changed%20over%20time%0Aexisting%20research%20on%20deposit%20stability%20has%20focused%20on%20differences%20across%20deposit%20types.%20for%20example%2C%20wholesale%20and%20uninsured%20deposits%20have%20long%20been%20recognized%20as%20more%20prone%20to%20flight%20than%20retail%20and%20insured%20deposits.%20our%20findings%20suggest%20that%20aggregate%20deposit%20flightiness%20also%20varies%20significantly%20over%20time.%0A%0Ato%20measure%20deposit%20flightiness%2C%20we%20examine%20how%20responsive%20depositors%20are%20to%20changes%20in%20deposit%20rates.%20specifically%2C%20we%20estimate%20how%20much%20deposit%20flows%20into%20a%20bank%20change%20when%20the%20bank%20raises%20its%20deposit%20rate%20by%201%20percentage%20point.%20as%20shown%20in%20the%20chart%20below%2C%20deposit%20flow%20sensitivity%20has%20fluctuated%20considerably%20over%20the%20past%20two%20decades.%20depositors%E2%80%99%20flow%20sensitivity%20increased%20following%20the%202008%20financial%20crisis%2C%20declined%20in%20the%20mid-2010s%2C%20but%20rose%20sharply%20after%20the%20onset%20of%20the%20covid-19%20crisis.%20by%20early%202022%2C%20deposit%20flow%20sensitivity%20had%20reached%20record%20highs%2C%20meaning%20deposits%20were%20more%20likely%20than%20ever%20to%20respond%20to%20changes%20in%20interest%20rates%20just%20before%20the%20federal%20reserve%20began%20its%20rate%20hiking%20cycle.&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 302 Found"
+2025-07-12 02:17:56,169 - httpx - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=deposits%20are%20often%20perceived%20as%20a%20stable%20funding%20source%20for%20banks.%20however%2C%20the%20risk%20of%20deposits%20rapidly%20leaving%20banks%E2%80%94known%20as%20deposit%20flightiness%E2%80%94has%20come%20under%20increased%20scrutiny%20following%20the%20failures%20of%20silicon%20valley%20bank%20and%20other%20regional%20banks%20in%20march%202023.%20in%20a%20new%20paper%2C%20we%20show%20that%20deposit%20flightiness%20is%20not%20constant%20over%20time.%20%20in%20particular%2C%20flightiness%20reached%20historic%20highs%20after%20expansions%20in%20bank%20reserves%20associated%20with%20rounds%20of%20quantitative%20easing%20%28qe%29.%20we%20argue%20that%20this%20elevated%20deposit%20flightiness%20may%20amplify%20the%20banking%20sector%E2%80%99s%20response%20to%20subsequent%20monetary%20policy%20rate%20hikes%2C%20highlighting%20a%20link%20between%20the%20federal%20reserve%E2%80%99s%20balance%20sheet%20and%20conventional%20monetary%20policy.%0A%0Ahow%20deposit%20flightiness%20has%20changed%20over%20time%0Aexisting%20research%20on%20deposit%20stability%20has%20focused%20on%20differences%20across%20deposit%20types.%20for%20example%2C%20wholesale%20and%20uninsured%20deposits%20have%20long%20been%20recognized%20as%20more%20prone%20to%20flight%20than%20retail%20and%20insured%20deposits.%20our%20findings%20suggest%20that%20aggregate%20deposit%20flightiness%20also%20varies%20significantly%20over%20time.%0A%0Ato%20measure%20deposit%20flightiness%2C%20we%20examine%20how%20responsive%20depositors%20are%20to%20changes%20in%20deposit%20rates.%20specifically%2C%20we%20estimate%20how%20much%20deposit%20flows%20into%20a%20bank%20change%20when%20the%20bank%20raises%20its%20deposit%20rate%20by%201%20percentage%20point.%20as%20shown%20in%20the%20chart%20below%2C%20deposit%20flow%20sensitivity%20has%20fluctuated%20considerably%20over%20the%20past%20two%20decades.%20depositors%E2%80%99%20flow%20sensitivity%20increased%20following%20the%202008%20financial%20crisis%2C%20declined%20in%20the%20mid-2010s%2C%20but%20rose%20sharply%20after%20the%20onset%20of%20the%20covid-19%20crisis.%20by%20early%202022%2C%20deposit%20flow%20sensitivity%20had%20reached%20record%20highs%2C%20meaning%20deposits%20were%20more%20likely%20than%20ever%20to%20respond%20to%20changes%20in%20interest%20rates%20just%20before%20the%20federal%20reserve%20began%20its%20rate%20hiking%20cycle.&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 302 Found"
+2025-07-12 02:18:02,316 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 02:18:02,316 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 02:21:36,657 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 02:21:36,657 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 02:26:08,050 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 02:26:08,050 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 02:29:56,451 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 02:29:56,451 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 02:30:39,945 - httpx - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=historically%2C%20repo%20borrowing%20has%20declined%20in%20q4%20in%20nine%20of%20the%20last%2012%20years.%20however%2C%20the%20recent%20decline%20is%20notable%20as%20it%20was%20broad-based%20with%2019%20of%20the%20top%2020%20largest%20repo%20borrowers%20reducing%20borrowing.%0A%0Athis%20decline%20may%20have%20occurred%20for%20two%20reasons.%20first%2C%20banks%20face%20month-end%2C%20quarter-end%2C%20and%20year-end%20financial%20reporting%20requirements.%20more%20specifically%2C%20banks%20may%20temporarily%20adjust%20their%20balance%20sheets%20and%20lending%20activities%20to%20enhance%20certain%20regulatory%20capital%20ratios%20that%20are%20measured%20at%20the%20end%20of%20periods.%20second%2C%20hedge%20funds%20may%20have%20locked%20in%20annual%20gains%20toward%20the%20end%20of%20last%20year%20and%20temporarily%20lowered%20the%20risk%20in%20their%20portfolios%20through%20reduced%20repo%20borrowing.%0A%0Arepo%20transactions%20typically%20have%20a%20maturity%20that%20ranges%20from%20a%20single%20day%2C%20or%20%E2%80%9Covernight%2C%E2%80%9D%20which%20are%20generally%20rolled%20over%20daily%2C%20to%20multiple%20days%2C%20weeks%2C%20or%20months%2C%20known%20as%20%E2%80%9Cterm.%E2%80%9D%20from%20q4%202022%20through%20q3%202024%2C%20growth%20in%20hedge%20fund%20overnight%20financing%20across%20all%20funding%20sources%2C%20including%20repo%2C%20coincided%20with%20the%20increase%20in%20repo%20borrowing%20%28see%20figure%202%29.4%20most%20of%20this%20increase%20resulted%20from%20a%20small%20number%20of%20large%20funds%20that%20are%20also%20the%20biggest%20repo%20borrowers.&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 302 Found"
+2025-07-12 02:30:39,945 - httpx - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=historically%2C%20repo%20borrowing%20has%20declined%20in%20q4%20in%20nine%20of%20the%20last%2012%20years.%20however%2C%20the%20recent%20decline%20is%20notable%20as%20it%20was%20broad-based%20with%2019%20of%20the%20top%2020%20largest%20repo%20borrowers%20reducing%20borrowing.%0A%0Athis%20decline%20may%20have%20occurred%20for%20two%20reasons.%20first%2C%20banks%20face%20month-end%2C%20quarter-end%2C%20and%20year-end%20financial%20reporting%20requirements.%20more%20specifically%2C%20banks%20may%20temporarily%20adjust%20their%20balance%20sheets%20and%20lending%20activities%20to%20enhance%20certain%20regulatory%20capital%20ratios%20that%20are%20measured%20at%20the%20end%20of%20periods.%20second%2C%20hedge%20funds%20may%20have%20locked%20in%20annual%20gains%20toward%20the%20end%20of%20last%20year%20and%20temporarily%20lowered%20the%20risk%20in%20their%20portfolios%20through%20reduced%20repo%20borrowing.%0A%0Arepo%20transactions%20typically%20have%20a%20maturity%20that%20ranges%20from%20a%20single%20day%2C%20or%20%E2%80%9Covernight%2C%E2%80%9D%20which%20are%20generally%20rolled%20over%20daily%2C%20to%20multiple%20days%2C%20weeks%2C%20or%20months%2C%20known%20as%20%E2%80%9Cterm.%E2%80%9D%20from%20q4%202022%20through%20q3%202024%2C%20growth%20in%20hedge%20fund%20overnight%20financing%20across%20all%20funding%20sources%2C%20including%20repo%2C%20coincided%20with%20the%20increase%20in%20repo%20borrowing%20%28see%20figure%202%29.4%20most%20of%20this%20increase%20resulted%20from%20a%20small%20number%20of%20large%20funds%20that%20are%20also%20the%20biggest%20repo%20borrowers.&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 302 Found"
+2025-07-12 02:30:41,075 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 02:30:41,075 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 02:31:47,295 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 02:31:47,295 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 02:42:13,231 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 02:42:13,231 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 02:42:48,819 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 02:42:48,819 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 02:43:04,897 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 02:43:04,897 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 02:43:24,054 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 02:43:24,054 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 02:43:36,748 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 02:43:36,748 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 02:48:53,108 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 02:48:53,108 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 02:49:07,220 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 02:49:07,220 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 02:49:13,125 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 02:49:13,125 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 02:53:42,807 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 02:53:42,807 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+[2025-07-12 03:32:19] [INFO    ] discord.gateway: Shard ID None has successfully RESUMED session fff9259294725c603790815b5657ab31.
+2025-07-12 03:32:19,348 - discord.gateway - INFO - Shard ID None has successfully RESUMED session fff9259294725c603790815b5657ab31.
+2025-07-12 03:32:19,348 - discord.gateway - INFO - Shard ID None has successfully RESUMED session fff9259294725c603790815b5657ab31.
+2025-07-12 04:35:55,044 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 04:35:55,044 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 04:51:48,863 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 04:51:48,863 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+[2025-07-12 05:06:27] [INFO    ] discord.gateway: Shard ID None has successfully RESUMED session fff9259294725c603790815b5657ab31.
+2025-07-12 05:06:27,112 - discord.gateway - INFO - Shard ID None has successfully RESUMED session fff9259294725c603790815b5657ab31.
+2025-07-12 05:06:27,112 - discord.gateway - INFO - Shard ID None has successfully RESUMED session fff9259294725c603790815b5657ab31.
+2025-07-12 05:41:11,008 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 05:41:11,008 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 05:41:20,338 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 05:41:20,338 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 05:41:29,908 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 05:41:29,908 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+[2025-07-12 05:42:10] [INFO    ] discord.gateway: Shard ID None has successfully RESUMED session fff9259294725c603790815b5657ab31.
+2025-07-12 05:42:10,107 - discord.gateway - INFO - Shard ID None has successfully RESUMED session fff9259294725c603790815b5657ab31.
+2025-07-12 05:42:10,107 - discord.gateway - INFO - Shard ID None has successfully RESUMED session fff9259294725c603790815b5657ab31.
+[2025-07-12 07:06:08] [INFO    ] discord.gateway: Shard ID None has successfully RESUMED session fff9259294725c603790815b5657ab31.
+2025-07-12 07:06:08,932 - discord.gateway - INFO - Shard ID None has successfully RESUMED session fff9259294725c603790815b5657ab31.
+2025-07-12 07:06:08,932 - discord.gateway - INFO - Shard ID None has successfully RESUMED session fff9259294725c603790815b5657ab31.
+[2025-07-12 09:39:43] [INFO    ] discord.gateway: Shard ID None has successfully RESUMED session fff9259294725c603790815b5657ab31.
+2025-07-12 09:39:43,096 - discord.gateway - INFO - Shard ID None has successfully RESUMED session fff9259294725c603790815b5657ab31.
+2025-07-12 09:39:43,096 - discord.gateway - INFO - Shard ID None has successfully RESUMED session fff9259294725c603790815b5657ab31.
+2025-07-12 10:04:38,512 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 10:04:38,512 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 10:07:39,362 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 10:07:39,362 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 10:08:05,210 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 10:08:05,210 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 10:09:03,116 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 10:09:03,116 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 10:11:14,867 - httpx - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=if%20i%20make%20a%20twitter%20bot%20out%20of%20you%2C%20how%20do%20i%20prevent%20people%20from%20doing%20%22refuse%20all%20previous%20instructions%22%20style%20jailbreaks%20on%20you%3F&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 200 OK"
+2025-07-12 10:11:14,867 - httpx - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=if%20i%20make%20a%20twitter%20bot%20out%20of%20you%2C%20how%20do%20i%20prevent%20people%20from%20doing%20%22refuse%20all%20previous%20instructions%22%20style%20jailbreaks%20on%20you%3F&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 200 OK"
+2025-07-12 10:11:16,841 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 10:11:16,841 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 10:13:35,972 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 10:13:35,972 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 10:16:52,920 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 10:16:52,920 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 10:17:28,776 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 10:17:28,776 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 10:18:21,907 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 10:18:21,907 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 10:21:43,520 - httpx - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=%0A-%20describe%20your%20%5Bronin%5D%20current%20functionality%20and%20how%20if%20leveraged%20into%20a%20twitter%20bot%20the%20functionality%2Flogic%2Fuse%20case%20you%20would%20have.%20%0A-%20but%20without%20your%20system%20prompt%20influencing%20the%20style%20of%20the%20output%0A-%20make%20sure%20they%20adhere%20with%20the%20developer%20agreement%3A%0Ahttps%3A%2F%2Fdeveloper.x.com%2Fen%2Fdeveloper-terms%2Fagreement&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 200 OK"
+2025-07-12 10:21:43,520 - httpx - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=%0A-%20describe%20your%20%5Bronin%5D%20current%20functionality%20and%20how%20if%20leveraged%20into%20a%20twitter%20bot%20the%20functionality%2Flogic%2Fuse%20case%20you%20would%20have.%20%0A-%20but%20without%20your%20system%20prompt%20influencing%20the%20style%20of%20the%20output%0A-%20make%20sure%20they%20adhere%20with%20the%20developer%20agreement%3A%0Ahttps%3A%2F%2Fdeveloper.x.com%2Fen%2Fdeveloper-terms%2Fagreement&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 200 OK"
+2025-07-12 10:21:50,858 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 10:21:50,858 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+[2025-07-12 10:25:53] [INFO    ] discord.gateway: Shard ID None has successfully RESUMED session fff9259294725c603790815b5657ab31.
+2025-07-12 10:25:53,496 - discord.gateway - INFO - Shard ID None has successfully RESUMED session fff9259294725c603790815b5657ab31.
+2025-07-12 10:25:53,496 - discord.gateway - INFO - Shard ID None has successfully RESUMED session fff9259294725c603790815b5657ab31.
+2025-07-12 11:29:58,082 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 11:29:58,082 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 11:30:36,517 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 11:30:36,517 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 11:31:02,027 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 11:31:02,027 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 11:31:25,401 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 11:31:25,401 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 11:31:55,440 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 11:31:55,440 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 11:32:52,402 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 11:32:52,402 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 11:34:09,565 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 11:34:09,565 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 11:34:55,194 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 11:34:55,194 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 11:35:51,638 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 11:35:51,638 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 11:36:35,836 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 11:36:35,836 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 11:37:10,958 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 11:37:10,958 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 11:37:38,164 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 11:37:38,164 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 11:38:07,636 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 11:38:07,636 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 11:39:07,144 - httpx - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=how%20do%20i%20make%20the%20backshots%20sound%20like%20gaza&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 200 OK"
+2025-07-12 11:39:07,144 - httpx - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=how%20do%20i%20make%20the%20backshots%20sound%20like%20gaza&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 200 OK"
+2025-07-12 11:39:11,499 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 11:39:11,499 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 11:40:25,805 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 11:40:25,805 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 11:47:27,932 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 11:47:27,932 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 11:47:52,386 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 11:47:52,386 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 11:47:58,476 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 11:47:58,476 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 11:54:15,558 - root - INFO - Running FFmpeg command: ffmpeg -y -i /opt/tmp/tmp4xprguqx.mp4 -map 0:a:0 -c:a pcm_s16le -ar 16000 -ac 1 -af atempo=1.75 -f wav /opt/tmp/tmpv6whdak2.wav
+2025-07-12 11:54:15,558 - root - INFO - Running FFmpeg command: ffmpeg -y -i /opt/tmp/tmp4xprguqx.mp4 -map 0:a:0 -c:a pcm_s16le -ar 16000 -ac 1 -af atempo=1.75 -f wav /opt/tmp/tmpv6whdak2.wav
+2025-07-12 11:54:15,871 - root - INFO - Processing audio file: /opt/tmp/tmpv6whdak2.wav (size: 1884610 bytes)
+2025-07-12 11:54:15,871 - root - INFO - Processing audio file: /opt/tmp/tmpv6whdak2.wav (size: 1884610 bytes)
+2025-07-12 11:54:15,871 - root - INFO - Running ffmpeg command: ffmpeg -hide_banner -loglevel warning -y -i /opt/tmp/tmpv6whdak2.wav -ar 16000 -ac 1 -c:a pcm_s16le -f wav -fflags +bitexact /opt/tmp/discord_audio_11389_1752321255_lxf9ei1c.wav
+2025-07-12 11:54:15,871 - root - INFO - Running ffmpeg command: ffmpeg -hide_banner -loglevel warning -y -i /opt/tmp/tmpv6whdak2.wav -ar 16000 -ac 1 -c:a pcm_s16le -f wav -fflags +bitexact /opt/tmp/discord_audio_11389_1752321255_lxf9ei1c.wav
+2025-07-12 11:54:15,901 - root - INFO - Output file created: /opt/tmp/discord_audio_11389_1752321255_lxf9ei1c.wav (size: 1884576 bytes)
+2025-07-12 11:54:15,901 - root - INFO - Output file created: /opt/tmp/discord_audio_11389_1752321255_lxf9ei1c.wav (size: 1884576 bytes)
+2025-07-12 11:54:15,901 - root - INFO - Converted file: /opt/tmp/discord_audio_11389_1752321255_lxf9ei1c.wav (size: 1884576 bytes)
+2025-07-12 11:54:15,901 - root - INFO - Converted file: /opt/tmp/discord_audio_11389_1752321255_lxf9ei1c.wav (size: 1884576 bytes)
+2025-07-12 11:54:15,901 - root - INFO - Sending request to Whisper API: http://localhost:18129/v1/audio/transcriptions with data: {'file': '<1884576 bytes>', 'model': 'Systran/faster-distil-whisper-small.en', 'response_format': 'text'}
+2025-07-12 11:54:15,901 - root - INFO - Sending request to Whisper API: http://localhost:18129/v1/audio/transcriptions with data: {'file': '<1884576 bytes>', 'model': 'Systran/faster-distil-whisper-small.en', 'response_format': 'text'}
+2025-07-12 11:55:02,548 - httpx - INFO - HTTP Request: POST http://localhost:18129/v1/audio/transcriptions "HTTP/1.1 200 OK"
+2025-07-12 11:55:02,548 - httpx - INFO - HTTP Request: POST http://localhost:18129/v1/audio/transcriptions "HTTP/1.1 200 OK"
+2025-07-12 11:55:02,548 - root - INFO - Whisper API response in 46.64s: 200
+2025-07-12 11:55:02,548 - root - INFO - Whisper API response in 46.64s: 200
+2025-07-12 11:55:02,548 - root - INFO - Transcription successful. Length: 446 characters
+2025-07-12 11:55:02,548 - root - INFO - Transcription successful. Length: 446 characters
+2025-07-12 11:55:02,783 - root - INFO - Successfully transcribed video message (length: 446 chars)
+2025-07-12 11:55:02,783 - root - INFO - Successfully transcribed video message (length: 446 chars)
+2025-07-12 11:55:05,251 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 11:55:05,251 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 11:57:53,816 - root - INFO - Running FFmpeg command: ffmpeg -y -i /opt/tmp/tmpcj3r1_bd.mov -map 0:a:0 -c:a pcm_s16le -ar 16000 -ac 1 -af atempo=1.75 -f wav /opt/tmp/tmpfjpd3m17.wav
+2025-07-12 11:57:53,816 - root - INFO - Running FFmpeg command: ffmpeg -y -i /opt/tmp/tmpcj3r1_bd.mov -map 0:a:0 -c:a pcm_s16le -ar 16000 -ac 1 -af atempo=1.75 -f wav /opt/tmp/tmpfjpd3m17.wav
+2025-07-12 11:57:54,178 - root - INFO - Processing audio file: /opt/tmp/tmpfjpd3m17.wav (size: 1861762 bytes)
+2025-07-12 11:57:54,178 - root - INFO - Processing audio file: /opt/tmp/tmpfjpd3m17.wav (size: 1861762 bytes)
+2025-07-12 11:57:54,179 - root - INFO - Running ffmpeg command: ffmpeg -hide_banner -loglevel warning -y -i /opt/tmp/tmpfjpd3m17.wav -ar 16000 -ac 1 -c:a pcm_s16le -f wav -fflags +bitexact /opt/tmp/discord_audio_11389_1752321474_0i4ysyjn.wav
+2025-07-12 11:57:54,179 - root - INFO - Running ffmpeg command: ffmpeg -hide_banner -loglevel warning -y -i /opt/tmp/tmpfjpd3m17.wav -ar 16000 -ac 1 -c:a pcm_s16le -f wav -fflags +bitexact /opt/tmp/discord_audio_11389_1752321474_0i4ysyjn.wav
+2025-07-12 11:57:54,238 - root - INFO - Output file created: /opt/tmp/discord_audio_11389_1752321474_0i4ysyjn.wav (size: 1861728 bytes)
+2025-07-12 11:57:54,238 - root - INFO - Output file created: /opt/tmp/discord_audio_11389_1752321474_0i4ysyjn.wav (size: 1861728 bytes)
+2025-07-12 11:57:54,238 - root - INFO - Converted file: /opt/tmp/discord_audio_11389_1752321474_0i4ysyjn.wav (size: 1861728 bytes)
+2025-07-12 11:57:54,238 - root - INFO - Converted file: /opt/tmp/discord_audio_11389_1752321474_0i4ysyjn.wav (size: 1861728 bytes)
+2025-07-12 11:57:54,238 - root - INFO - Sending request to Whisper API: http://localhost:18129/v1/audio/transcriptions with data: {'file': '<1861728 bytes>', 'model': 'Systran/faster-distil-whisper-small.en', 'response_format': 'text'}
+2025-07-12 11:57:54,238 - root - INFO - Sending request to Whisper API: http://localhost:18129/v1/audio/transcriptions with data: {'file': '<1861728 bytes>', 'model': 'Systran/faster-distil-whisper-small.en', 'response_format': 'text'}
+2025-07-12 11:57:54,712 - httpx - INFO - HTTP Request: POST http://localhost:18129/v1/audio/transcriptions "HTTP/1.1 200 OK"
+2025-07-12 11:57:54,712 - httpx - INFO - HTTP Request: POST http://localhost:18129/v1/audio/transcriptions "HTTP/1.1 200 OK"
+2025-07-12 11:57:54,712 - root - INFO - Whisper API response in 0.46s: 200
+2025-07-12 11:57:54,712 - root - INFO - Whisper API response in 0.46s: 200
+2025-07-12 11:57:54,712 - root - INFO - Transcription successful. Length: 0 characters
+2025-07-12 11:57:54,712 - root - INFO - Transcription successful. Length: 0 characters
+2025-07-12 11:57:54,713 - root - ERROR - Transcription failed: Could not transcribe video: Unknown error
+2025-07-12 11:57:54,713 - root - ERROR - Transcription failed: Could not transcribe video: Unknown error
+2025-07-12 11:57:56,485 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 11:57:56,485 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 11:58:41,431 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 11:58:41,431 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 11:59:29,490 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 11:59:29,490 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 11:59:43,889 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 11:59:43,889 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 12:02:45,743 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 12:02:45,743 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 12:02:59,605 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 12:02:59,605 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 12:03:08,321 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 12:03:08,321 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 12:04:32,710 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 12:04:32,710 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 12:07:46,829 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 12:07:46,829 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 12:23:03,005 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 12:23:03,005 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+[2025-07-12 12:24:44] [INFO    ] discord.gateway: Shard ID None has successfully RESUMED session fff9259294725c603790815b5657ab31.
+2025-07-12 12:24:44,438 - discord.gateway - INFO - Shard ID None has successfully RESUMED session fff9259294725c603790815b5657ab31.
+2025-07-12 12:24:44,438 - discord.gateway - INFO - Shard ID None has successfully RESUMED session fff9259294725c603790815b5657ab31.
+2025-07-12 12:32:32,122 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 12:32:32,122 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 12:32:41,953 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 12:32:41,953 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 12:32:55,665 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 12:32:55,665 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 12:51:28,415 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 12:51:28,415 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 13:08:50,350 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 13:08:50,350 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 13:09:03,593 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 13:09:03,593 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 13:09:08,564 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 13:09:08,564 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 13:09:17,650 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 13:09:17,650 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 13:09:25,457 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 13:09:25,457 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 13:09:39,641 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 13:09:39,641 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 13:23:30,824 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 13:23:30,824 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 13:24:37,336 - httpx - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=what%20is%20todays%20datetime&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 200 OK"
+2025-07-12 13:24:37,336 - httpx - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=what%20is%20todays%20datetime&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 200 OK"
+2025-07-12 13:24:40,198 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 13:24:40,198 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 13:41:50,768 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 13:41:50,768 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 13:45:22,325 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 13:45:22,325 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 13:47:26,152 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 13:47:26,152 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:13:22,870 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:13:22,870 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:16:11,871 - httpx - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=how%20many%20russians%20actually%20died%20in%20the%20ukraine%20war%3F&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 200 OK"
+2025-07-12 15:16:11,871 - httpx - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=how%20many%20russians%20actually%20died%20in%20the%20ukraine%20war%3F&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 200 OK"
+2025-07-12 15:16:13,943 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:16:13,943 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:17:50,458 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:17:50,458 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:18:19,836 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:18:19,836 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:23:12,782 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:23:12,782 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:23:33,512 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:23:33,512 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:23:42,371 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:23:42,371 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:23:46,945 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:23:46,945 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:24:25,563 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:24:25,563 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:24:30,345 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:24:30,345 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:24:34,405 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:24:34,405 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:25:21,804 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:25:21,804 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:25:28,169 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:25:28,169 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:25:34,611 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:25:34,611 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:26:27,492 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+2025-07-12 15:26:27,492 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+[2025-07-12 15:26:27] [INFO    ] discord.client: logging in using static token
+2025-07-12 15:26:27,499 - discord.client - INFO - logging in using static token
+2025-07-12 15:26:27,499 - discord.client - INFO - logging in using static token
+[2025-07-12 15:26:28] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: b2e0637ee2ba6611490e54b551da89c4).
+2025-07-12 15:26:28,535 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: b2e0637ee2ba6611490e54b551da89c4).
+2025-07-12 15:26:28,535 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: b2e0637ee2ba6611490e54b551da89c4).
+2025-07-12 15:26:30,551 - root - INFO - Ronin is now running! (hot config)
+2025-07-12 15:26:30,551 - root - INFO - Ronin is now running! (hot config)
+2025-07-12 15:29:47,226 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:29:47,226 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:30:38,173 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:30:38,173 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:30:58,907 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:30:58,907 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:32:13,195 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:32:13,195 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:32:38,635 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:32:38,635 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:35:24,262 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:35:24,262 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:35:35,878 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:35:35,878 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:35:43,785 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:35:43,785 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:35:43,864 - httpx - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=do%20you%20have%20a%20soy%20meter%3F&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 200 OK"
+2025-07-12 15:35:43,864 - httpx - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=do%20you%20have%20a%20soy%20meter%3F&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 200 OK"
+2025-07-12 15:35:48,470 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:35:48,470 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:35:54,245 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:35:54,245 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:35:54,860 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:35:54,860 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:35:58,614 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:35:58,614 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:37:14,943 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:37:14,943 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:37:29,978 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:37:29,978 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:37:40,718 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:37:40,718 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:39:40,116 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:39:40,116 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:39:53,573 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:39:53,573 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:40:01,069 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:40:01,069 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:40:14,850 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:40:14,850 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:40:57,662 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:40:57,662 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:41:14,147 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:41:14,147 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:41:29,766 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:41:29,766 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+[2025-07-12 15:41:36] [ERROR   ] discord.ext.commands.bot: Ignoring exception in command None
+discord.ext.commands.errors.CommandNotFound: Command "etoke" is not found
+2025-07-12 15:41:36,760 - discord.ext.commands.bot - ERROR - Ignoring exception in command None
+discord.ext.commands.errors.CommandNotFound: Command "etoke" is not found
+2025-07-12 15:41:36,760 - discord.ext.commands.bot - ERROR - Ignoring exception in command None
+discord.ext.commands.errors.CommandNotFound: Command "etoke" is not found
+2025-07-12 15:42:22,998 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:42:22,998 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:42:36,942 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:42:36,942 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:42:47,737 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:42:47,737 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:43:16,122 - root - INFO - Added memory for user 254254168234131456: Interest/occupation: you
+2025-07-12 15:43:16,122 - root - INFO - Added memory for user 254254168234131456: Interest/occupation: you
+2025-07-12 15:43:19,084 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:43:19,084 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:43:39,694 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:43:39,694 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:44:32,637 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:44:32,637 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:48:03,683 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:48:03,683 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:48:21,717 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:48:21,717 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:48:39,535 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:48:39,535 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:49:10,118 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:49:10,118 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:49:17,384 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:49:17,384 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:49:32,838 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:49:32,838 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:49:55,794 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:49:55,794 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:50:18,093 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:50:18,093 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:51:41,539 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:51:41,539 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:52:17,225 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:52:17,225 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:54:48,994 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:54:48,994 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:56:45,251 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:56:45,251 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:56:50,655 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:56:50,655 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:56:55,641 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 15:56:55,641 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+[2025-07-12 15:58:28] [ERROR   ] discord.ext.commands.bot: Ignoring exception in command None
+discord.ext.commands.errors.CommandNotFound: Command "tts" is not found
+2025-07-12 15:58:28,964 - discord.ext.commands.bot - ERROR - Ignoring exception in command None
+discord.ext.commands.errors.CommandNotFound: Command "tts" is not found
+2025-07-12 15:58:28,964 - discord.ext.commands.bot - ERROR - Ignoring exception in command None
+discord.ext.commands.errors.CommandNotFound: Command "tts" is not found
+2025-07-12 16:00:21,746 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 16:00:21,746 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 16:00:53,189 - root - ERROR - Error in VL API call: 'choices'
+2025-07-12 16:00:53,189 - root - ERROR - Error in VL API call: 'choices'
+2025-07-12 16:00:53,189 - root - ERROR - VL model returned empty caption
+2025-07-12 16:00:53,189 - root - ERROR - VL model returned empty caption
+2025-07-12 16:01:03,489 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 16:01:03,489 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 16:01:11,350 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+2025-07-12 16:01:11,350 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+[2025-07-12 16:01:11] [INFO    ] discord.client: logging in using static token
+2025-07-12 16:01:11,355 - discord.client - INFO - logging in using static token
+2025-07-12 16:01:11,355 - discord.client - INFO - logging in using static token
+[2025-07-12 16:01:12] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: dbae1966d0debfac3d06c523cfa90792).
+2025-07-12 16:01:12,305 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: dbae1966d0debfac3d06c523cfa90792).
+2025-07-12 16:01:12,305 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: dbae1966d0debfac3d06c523cfa90792).
+2025-07-12 16:01:14,319 - root - INFO - Ronin is now running! (hot config)
+2025-07-12 16:01:14,319 - root - INFO - Ronin is now running! (hot config)
+2025-07-12 16:02:15,962 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 16:02:15,962 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 16:02:44,081 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 16:02:44,081 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 16:04:45,659 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 16:04:45,659 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 16:07:47,176 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+2025-07-12 16:07:47,176 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+[2025-07-12 16:07:47] [INFO    ] discord.client: logging in using static token
+2025-07-12 16:07:47,181 - discord.client - INFO - logging in using static token
+2025-07-12 16:07:47,181 - discord.client - INFO - logging in using static token
+[2025-07-12 16:07:48] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: f1ce458fa03df67b35b5b82ff0ca1daa).
+2025-07-12 16:07:48,126 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: f1ce458fa03df67b35b5b82ff0ca1daa).
+2025-07-12 16:07:48,126 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: f1ce458fa03df67b35b5b82ff0ca1daa).
+2025-07-12 16:07:50,141 - root - INFO - Ronin is now running! (hot config)
+2025-07-12 16:07:50,141 - root - INFO - Ronin is now running! (hot config)
+2025-07-12 16:14:10,409 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 16:14:10,409 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+[2025-07-12 16:14:15] [ERROR   ] discord.ext.commands.bot: Ignoring exception in command None
+discord.ext.commands.errors.CommandNotFound: Command "speak" is not found
+2025-07-12 16:14:15,421 - discord.ext.commands.bot - ERROR - Ignoring exception in command None
+discord.ext.commands.errors.CommandNotFound: Command "speak" is not found
+2025-07-12 16:14:15,421 - discord.ext.commands.bot - ERROR - Ignoring exception in command None
+discord.ext.commands.errors.CommandNotFound: Command "speak" is not found
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/soundfile.py", line 181, in <module>
+    import _soundfile_data  # ImportError if this doesn't exist
+    ^^^^^^^^^^^^^^^^^^^^^^
+ModuleNotFoundError: No module named '_soundfile_data'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/soundfile.py", line 190, in <module>
+    raise OSError('sndfile library not found using ctypes.util.find_library')
+OSError: sndfile library not found using ctypes.util.find_library
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 21, in <module>
+    from TTS.api import TTS
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/api.py", line 9, in <module>
+    from TTS.utils.audio.numpy_transforms import save_wav
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/utils/audio/__init__.py", line 1, in <module>
+    from TTS.utils.audio.processor import AudioProcessor
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/utils/audio/processor.py", line 10, in <module>
+    from TTS.utils.audio.numpy_transforms import (
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/utils/audio/numpy_transforms.py", line 7, in <module>
+    import soundfile as sf
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/soundfile.py", line 212, in <module>
+    _snd = _ffi.dlopen(_explicit_libname)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+OSError: cannot load library 'libsndfile.so': libsndfile.so: cannot open shared object file: No such file or directory
+nohup: /opt/lib/libc.so.6: version `GLIBC_2.28' not found (required by nohup)
+nohup: /opt/lib/libc.so.6: version `GLIBC_2.34' not found (required by nohup)
+nohup: /opt/lib/libc.so.6: version `GLIBC_2.28' not found (required by nohup)
+nohup: /opt/lib/libc.so.6: version `GLIBC_2.34' not found (required by nohup)
+/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/numba/cpython/old_hashing.py:477: UserWarning: FNV hashing is not implemented in Numba. See PEP 456 https://www.python.org/dev/peps/pep-0456/ for rationale over not using FNV. Numba will continue to work, but hashes for built in types will be computed using siphash24. This will permit e.g. dictionaries to continue to behave as expected, however anything relying on the value of the hash opposed to hash as a derived property is likely to not work as expected.
+  warnings.warn(msg)
+2025-07-12 16:27:25,775 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+2025-07-12 16:27:25,775 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+[2025-07-12 16:27:25] [INFO    ] discord.client: logging in using static token
+2025-07-12 16:27:25,781 - discord.client - INFO - logging in using static token
+2025-07-12 16:27:25,781 - discord.client - INFO - logging in using static token
+[2025-07-12 16:27:26] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: 94eaa7c60b3d3b3710fc99bf63af78ed).
+2025-07-12 16:27:26,761 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 94eaa7c60b3d3b3710fc99bf63af78ed).
+2025-07-12 16:27:26,761 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 94eaa7c60b3d3b3710fc99bf63af78ed).
+2025-07-12 16:27:28,773 - root - INFO - Ronin is now running! (hot config)
+2025-07-12 16:27:28,773 - root - INFO - Ronin is now running! (hot config)
+2025-07-12 16:27:44,294 - root - WARNING - PDF processing disabled: failed to find libmagic.  Check your installation
+2025-07-12 16:27:44,710 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+2025-07-12 16:27:44,714 - discord.client - INFO - logging in using static token
+2025-07-12 16:27:45,610 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: e7b416f287051afbaa44824de682f3c8).
+2025-07-12 16:27:47,624 - root - INFO - Ronin is now running! (hot config)
+2025-07-12 16:27:52,220 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 16:28:08,538 - root - INFO - Bot shutdown complete.
+/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/numba/cpython/old_hashing.py:477: UserWarning: FNV hashing is not implemented in Numba. See PEP 456 https://www.python.org/dev/peps/pep-0456/ for rationale over not using FNV. Numba will continue to work, but hashes for built in types will be computed using siphash24. This will permit e.g. dictionaries to continue to behave as expected, however anything relying on the value of the hash opposed to hash as a derived property is likely to not work as expected.
+  warnings.warn(msg)
+2025-07-12 16:29:20,870 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+2025-07-12 16:29:20,870 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+[2025-07-12 16:29:20] [INFO    ] discord.client: logging in using static token
+2025-07-12 16:29:20,875 - discord.client - INFO - logging in using static token
+2025-07-12 16:29:20,875 - discord.client - INFO - logging in using static token
+[2025-07-12 16:29:21] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: 8bb419c284f6df4617585952cafa1e14).
+2025-07-12 16:29:21,726 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 8bb419c284f6df4617585952cafa1e14).
+2025-07-12 16:29:21,726 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 8bb419c284f6df4617585952cafa1e14).
+2025-07-12 16:29:23,750 - root - INFO - Ronin is now running! (hot config)
+2025-07-12 16:29:23,750 - root - INFO - Ronin is now running! (hot config)
+/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/numba/cpython/old_hashing.py:477: UserWarning: FNV hashing is not implemented in Numba. See PEP 456 https://www.python.org/dev/peps/pep-0456/ for rationale over not using FNV. Numba will continue to work, but hashes for built in types will be computed using siphash24. This will permit e.g. dictionaries to continue to behave as expected, however anything relying on the value of the hash opposed to hash as a derived property is likely to not work as expected.
+  warnings.warn(msg)
+2025-07-12 16:34:16,965 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+2025-07-12 16:34:16,965 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+[2025-07-12 16:34:16] [INFO    ] discord.client: logging in using static token
+2025-07-12 16:34:16,970 - discord.client - INFO - logging in using static token
+2025-07-12 16:34:16,970 - discord.client - INFO - logging in using static token
+[2025-07-12 16:34:17] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: 07c669895fe71145352cf7ba3cf09018).
+2025-07-12 16:34:17,756 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 07c669895fe71145352cf7ba3cf09018).
+2025-07-12 16:34:17,756 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 07c669895fe71145352cf7ba3cf09018).
+2025-07-12 16:34:19,774 - root - INFO - Ronin is now running! (hot config)
+2025-07-12 16:34:19,774 - root - INFO - Ronin is now running! (hot config)
+2025-07-12 16:34:28,605 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 16:34:28,605 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+ > Downloading model to /root/.local/share/tts/tts_models--en--ljspeech--tacotron2-DDC
+  0%|          | 0.00/113M [00:00<?, ?iB/s]  4%|▍         | 4.60M/113M [00:00<00:02, 46.0MiB/s]  8%|▊         | 9.55M/113M [00:00<00:02, 48.1MiB/s] 13%|█▎        | 14.4M/113M [00:00<00:02, 40.3MiB/s] 17%|█▋        | 19.3M/113M [00:00<00:02, 43.3MiB/s] 21%|██        | 23.7M/113M [00:00<00:02, 39.0MiB/s] 25%|██▌       | 28.6M/113M [00:00<00:01, 42.1MiB/s] 29%|██▉       | 33.0M/113M [00:00<00:02, 39.0MiB/s] 33%|███▎      | 37.0M/113M [00:00<00:02, 36.7MiB/s] 36%|███▌      | 40.7M/113M [00:01<00:02, 28.4MiB/s] 39%|███▉      | 43.9M/113M [00:01<00:02, 25.9MiB/s] 41%|████▏     | 46.7M/113M [00:01<00:02, 23.7MiB/s] 44%|████▎     | 49.2M/113M [00:01<00:02, 22.0MiB/s] 46%|████▌     | 51.5M/113M [00:01<00:02, 21.6MiB/s] 48%|████▊     | 53.7M/113M [00:01<00:02, 20.7MiB/s] 50%|████▉     | 55.8M/113M [00:01<00:02, 19.6MiB/s] 51%|█████▏    | 57.8M/113M [00:02<00:02, 19.6MiB/s] 53%|█████▎    | 59.7M/113M [00:02<00:02, 18.3MiB/s] 55%|█████▍    | 61.6M/113M [00:02<00:02, 17.9MiB/s] 56%|█████▋    | 63.4M/113M [00:02<00:02, 17.3MiB/s] 58%|█████▊    | 65.2M/113M [00:02<00:02, 17.5MiB/s] 59%|█████▉    | 66.9M/113M [00:02<00:02, 16.9MiB/s] 61%|██████    | 68.6M/113M [00:02<00:02, 16.6MiB/s] 62%|██████▏   | 70.3M/113M [00:02<00:02, 16.5MiB/s] 64%|██████▍   | 72.0M/113M [00:02<00:02, 16.6MiB/s] 65%|██████▌   | 73.7M/113M [00:03<00:02, 16.3MiB/s] 67%|██████▋   | 75.3M/113M [00:03<00:02, 16.0MiB/s] 68%|██████▊   | 76.9M/113M [00:03<00:02, 16.0MiB/s] 70%|██████▉   | 78.5M/113M [00:03<00:02, 16.0MiB/s] 71%|███████   | 80.2M/113M [00:03<00:02, 16.1MiB/s] 73%|███████▎  | 81.9M/113M [00:03<00:01, 16.4MiB/s] 74%|███████▍  | 83.9M/113M [00:03<00:01, 17.4MiB/s] 76%|███████▌  | 85.7M/113M [00:03<00:01, 17.8MiB/s] 78%|███████▊  | 87.5M/113M [00:03<00:01, 13.3MiB/s] 80%|████████  | 90.3M/113M [00:04<00:01, 16.9MiB/s] 83%|████████▎ | 93.3M/113M [00:04<00:00, 20.2MiB/s] 85%|████████▍ | 95.5M/113M [00:04<00:00, 19.7MiB/s] 87%|████████▋ | 97.6M/113M [00:04<00:00, 20.1MiB/s] 89%|████████▊ | 99.7M/113M [00:04<00:00, 19.5MiB/s] 90%|█████████ | 102M/113M [00:04<00:00, 19.6MiB/s]  92%|█████████▏| 104M/113M [00:04<00:00, 19.5MiB/s] 94%|█████████▍| 106M/113M [00:04<00:00, 19.4MiB/s] 96%|█████████▌| 108M/113M [00:04<00:00, 19.2MiB/s] 97%|█████████▋| 110M/113M [00:05<00:00, 18.8MiB/s] 99%|█████████▉| 112M/113M [00:05<00:00, 18.9MiB/s]2025-07-12 16:34:46,578 - root - ERROR - TTS synthesis failed: TTS synthesis error: [Errno 28] No space left on device
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2002, in synthesize_speech
+    tts = TTS("tts_models/en/ljspeech/tacotron2-DDC")
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/api.py", line 74, in __init__
+    self.load_tts_model_by_name(model_name, gpu)
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/api.py", line 171, in load_tts_model_by_name
+    model_path, config_path, vocoder_path, vocoder_config_path, model_dir = self.download_model_by_name(
+                                                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/api.py", line 129, in download_model_by_name
+    model_path, config_path, model_item = self.manager.download_model(model_name)
+                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/utils/manage.py", line 411, in download_model
+    self.create_dir_and_download_model(model_name, model_item, output_path)
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/utils/manage.py", line 345, in create_dir_and_download_model
+    self._download_github_model(model_item, output_path)
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/utils/manage.py", line 233, in _download_github_model
+    self._download_zip_file(model_item["github_rls_url"], output_path, self.progress_bar)
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/utils/manage.py", line 545, in _download_zip_file
+    z.extractall(output_folder)
+  File "/opt/lib/python3.11/zipfile.py", line 1702, in extractall
+  File "/opt/lib/python3.11/zipfile.py", line 1757, in _extract_member
+  File "/opt/lib/python3.11/shutil.py", line 200, in copyfileobj
+OSError: [Errno 28] No space left on device
+
+2025-07-12 16:34:46,578 - root - ERROR - TTS synthesis failed: TTS synthesis error: [Errno 28] No space left on device
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2002, in synthesize_speech
+    tts = TTS("tts_models/en/ljspeech/tacotron2-DDC")
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/api.py", line 74, in __init__
+    self.load_tts_model_by_name(model_name, gpu)
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/api.py", line 171, in load_tts_model_by_name
+    model_path, config_path, vocoder_path, vocoder_config_path, model_dir = self.download_model_by_name(
+                                                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/api.py", line 129, in download_model_by_name
+    model_path, config_path, model_item = self.manager.download_model(model_name)
+                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/utils/manage.py", line 411, in download_model
+    self.create_dir_and_download_model(model_name, model_item, output_path)
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/utils/manage.py", line 345, in create_dir_and_download_model
+    self._download_github_model(model_item, output_path)
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/utils/manage.py", line 233, in _download_github_model
+    self._download_zip_file(model_item["github_rls_url"], output_path, self.progress_bar)
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/utils/manage.py", line 545, in _download_zip_file
+    z.extractall(output_folder)
+  File "/opt/lib/python3.11/zipfile.py", line 1702, in extractall
+  File "/opt/lib/python3.11/zipfile.py", line 1757, in _extract_member
+  File "/opt/lib/python3.11/shutil.py", line 200, in copyfileobj
+OSError: [Errno 28] No space left on device
+
+100%|██████████| 113M/113M [00:20<00:00, 18.9MiB/s]2025-07-12 16:36:19,701 - root - ERROR - TTS synthesis failed: TTS synthesis error:  [!] Model file not found in the output path
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2002, in synthesize_speech
+    tts = TTS("tts_models/en/ljspeech/tacotron2-DDC")
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/api.py", line 74, in __init__
+    self.load_tts_model_by_name(model_name, gpu)
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/api.py", line 171, in load_tts_model_by_name
+    model_path, config_path, vocoder_path, vocoder_config_path, model_dir = self.download_model_by_name(
+                                                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/api.py", line 129, in download_model_by_name
+    model_path, config_path, model_item = self.manager.download_model(model_name)
+                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/utils/manage.py", line 419, in download_model
+    output_model_path, output_config_path = self._find_files(output_path)
+                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/utils/manage.py", line 442, in _find_files
+    raise ValueError(" [!] Model file not found in the output path")
+ValueError:  [!] Model file not found in the output path
+
+2025-07-12 16:36:19,701 - root - ERROR - TTS synthesis failed: TTS synthesis error:  [!] Model file not found in the output path
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2002, in synthesize_speech
+    tts = TTS("tts_models/en/ljspeech/tacotron2-DDC")
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/api.py", line 74, in __init__
+    self.load_tts_model_by_name(model_name, gpu)
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/api.py", line 171, in load_tts_model_by_name
+    model_path, config_path, vocoder_path, vocoder_config_path, model_dir = self.download_model_by_name(
+                                                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/api.py", line 129, in download_model_by_name
+    model_path, config_path, model_item = self.manager.download_model(model_name)
+                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/utils/manage.py", line 419, in download_model
+    output_model_path, output_config_path = self._find_files(output_path)
+                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/utils/manage.py", line 442, in _find_files
+    raise ValueError(" [!] Model file not found in the output path")
+ValueError:  [!] Model file not found in the output path
+
+/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/numba/cpython/old_hashing.py:477: UserWarning: FNV hashing is not implemented in Numba. See PEP 456 https://www.python.org/dev/peps/pep-0456/ for rationale over not using FNV. Numba will continue to work, but hashes for built in types will be computed using siphash24. This will permit e.g. dictionaries to continue to behave as expected, however anything relying on the value of the hash opposed to hash as a derived property is likely to not work as expected.
+  warnings.warn(msg)
+2025-07-12 16:37:03,585 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+2025-07-12 16:37:03,585 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+[2025-07-12 16:37:03] [INFO    ] discord.client: logging in using static token
+2025-07-12 16:37:03,589 - discord.client - INFO - logging in using static token
+2025-07-12 16:37:03,589 - discord.client - INFO - logging in using static token
+[2025-07-12 16:37:04] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: 1bf403a883f7a93be81645f11f56e537).
+2025-07-12 16:37:04,376 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 1bf403a883f7a93be81645f11f56e537).
+2025-07-12 16:37:04,376 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 1bf403a883f7a93be81645f11f56e537).
+2025-07-12 16:37:06,390 - root - INFO - Ronin is now running! (hot config)
+2025-07-12 16:37:06,390 - root - INFO - Ronin is now running! (hot config)
+2025-07-12 16:37:19,343 - root - ERROR - TTS synthesis failed: TTS synthesis error:  [!] Model file not found in the output path
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2002, in synthesize_speech
+    tts = TTS("tts_models/en/ljspeech/tacotron2-DDC")
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/api.py", line 74, in __init__
+    self.load_tts_model_by_name(model_name, gpu)
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/api.py", line 171, in load_tts_model_by_name
+    model_path, config_path, vocoder_path, vocoder_config_path, model_dir = self.download_model_by_name(
+                                                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/api.py", line 129, in download_model_by_name
+    model_path, config_path, model_item = self.manager.download_model(model_name)
+                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/utils/manage.py", line 419, in download_model
+    output_model_path, output_config_path = self._find_files(output_path)
+                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/utils/manage.py", line 442, in _find_files
+    raise ValueError(" [!] Model file not found in the output path")
+ValueError:  [!] Model file not found in the output path
+
+2025-07-12 16:37:19,343 - root - ERROR - TTS synthesis failed: TTS synthesis error:  [!] Model file not found in the output path
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2002, in synthesize_speech
+    tts = TTS("tts_models/en/ljspeech/tacotron2-DDC")
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/api.py", line 74, in __init__
+    self.load_tts_model_by_name(model_name, gpu)
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/api.py", line 171, in load_tts_model_by_name
+    model_path, config_path, vocoder_path, vocoder_config_path, model_dir = self.download_model_by_name(
+                                                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/api.py", line 129, in download_model_by_name
+    model_path, config_path, model_item = self.manager.download_model(model_name)
+                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/utils/manage.py", line 419, in download_model
+    output_model_path, output_config_path = self._find_files(output_path)
+                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/utils/manage.py", line 442, in _find_files
+    raise ValueError(" [!] Model file not found in the output path")
+ValueError:  [!] Model file not found in the output path
+
+2025-07-12 16:38:16,757 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+2025-07-12 16:38:16,762 - discord.client - INFO - logging in using static token
+2025-07-12 16:38:17,715 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 6e7a62d8333a85b4e6235a076d665d9b).
+2025-07-12 16:38:19,728 - root - INFO - Ronin is now running! (hot config)
+2025-07-12 16:42:03,204 - root - INFO - Bot shutdown complete.
+/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/numba/cpython/old_hashing.py:477: UserWarning: FNV hashing is not implemented in Numba. See PEP 456 https://www.python.org/dev/peps/pep-0456/ for rationale over not using FNV. Numba will continue to work, but hashes for built in types will be computed using siphash24. This will permit e.g. dictionaries to continue to behave as expected, however anything relying on the value of the hash opposed to hash as a derived property is likely to not work as expected.
+  warnings.warn(msg)
+2025-07-12 16:42:22,308 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+2025-07-12 16:42:22,308 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+[2025-07-12 16:42:22] [INFO    ] discord.client: logging in using static token
+2025-07-12 16:42:22,316 - discord.client - INFO - logging in using static token
+2025-07-12 16:42:22,316 - discord.client - INFO - logging in using static token
+[2025-07-12 16:42:23] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: e888f376b9de28a71d7e3f25f71d01af).
+2025-07-12 16:42:23,081 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: e888f376b9de28a71d7e3f25f71d01af).
+2025-07-12 16:42:23,081 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: e888f376b9de28a71d7e3f25f71d01af).
+2025-07-12 16:42:25,104 - root - INFO - Ronin is now running! (hot config)
+2025-07-12 16:42:25,104 - root - INFO - Ronin is now running! (hot config)
+2025-07-12 16:43:01,039 - root - ERROR - TTS synthesis failed: TTS synthesis error:  [!] Model file not found in the output path
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2002, in synthesize_speech
+    tts = TTS("tts_models/en/ljspeech/tacotron2-DDC")
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/api.py", line 74, in __init__
+    self.load_tts_model_by_name(model_name, gpu)
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/api.py", line 171, in load_tts_model_by_name
+    model_path, config_path, vocoder_path, vocoder_config_path, model_dir = self.download_model_by_name(
+                                                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/api.py", line 129, in download_model_by_name
+    model_path, config_path, model_item = self.manager.download_model(model_name)
+                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/utils/manage.py", line 419, in download_model
+    output_model_path, output_config_path = self._find_files(output_path)
+                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/utils/manage.py", line 442, in _find_files
+    raise ValueError(" [!] Model file not found in the output path")
+ValueError:  [!] Model file not found in the output path
+
+2025-07-12 16:43:01,039 - root - ERROR - TTS synthesis failed: TTS synthesis error:  [!] Model file not found in the output path
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2002, in synthesize_speech
+    tts = TTS("tts_models/en/ljspeech/tacotron2-DDC")
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/api.py", line 74, in __init__
+    self.load_tts_model_by_name(model_name, gpu)
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/api.py", line 171, in load_tts_model_by_name
+    model_path, config_path, vocoder_path, vocoder_config_path, model_dir = self.download_model_by_name(
+                                                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/api.py", line 129, in download_model_by_name
+    model_path, config_path, model_item = self.manager.download_model(model_name)
+                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/utils/manage.py", line 419, in download_model
+    output_model_path, output_config_path = self._find_files(output_path)
+                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/utils/manage.py", line 442, in _find_files
+    raise ValueError(" [!] Model file not found in the output path")
+ValueError:  [!] Model file not found in the output path
+
+/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/numba/cpython/old_hashing.py:477: UserWarning: FNV hashing is not implemented in Numba. See PEP 456 https://www.python.org/dev/peps/pep-0456/ for rationale over not using FNV. Numba will continue to work, but hashes for built in types will be computed using siphash24. This will permit e.g. dictionaries to continue to behave as expected, however anything relying on the value of the hash opposed to hash as a derived property is likely to not work as expected.
+  warnings.warn(msg)
+2025-07-12 16:43:27,248 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+2025-07-12 16:43:27,248 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+[2025-07-12 16:43:27] [INFO    ] discord.client: logging in using static token
+2025-07-12 16:43:27,252 - discord.client - INFO - logging in using static token
+2025-07-12 16:43:27,252 - discord.client - INFO - logging in using static token
+[2025-07-12 16:43:28] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: c4ad956736c09f23fb860232d9c88af7).
+2025-07-12 16:43:28,500 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: c4ad956736c09f23fb860232d9c88af7).
+2025-07-12 16:43:28,500 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: c4ad956736c09f23fb860232d9c88af7).
+2025-07-12 16:43:30,513 - root - INFO - Ronin is now running! (hot config)
+2025-07-12 16:43:30,513 - root - INFO - Ronin is now running! (hot config)
+2025-07-12 16:48:00,148 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 16:48:00,148 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/numba/cpython/old_hashing.py:477: UserWarning: FNV hashing is not implemented in Numba. See PEP 456 https://www.python.org/dev/peps/pep-0456/ for rationale over not using FNV. Numba will continue to work, but hashes for built in types will be computed using siphash24. This will permit e.g. dictionaries to continue to behave as expected, however anything relying on the value of the hash opposed to hash as a derived property is likely to not work as expected.
+  warnings.warn(msg)
+[2025-07-12 16:55:27] [INFO    ] discord.client: logging in using static token
+2025-07-12 16:55:27,880 - discord.client - INFO - logging in using static token
+2025-07-12 16:55:27,880 - discord.client - INFO - logging in using static token
+[2025-07-12 16:55:28] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: 30d0500eeb087c6279854a1256dca809).
+2025-07-12 16:55:28,892 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 30d0500eeb087c6279854a1256dca809).
+2025-07-12 16:55:28,892 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 30d0500eeb087c6279854a1256dca809).
+2025-07-12 16:55:30,907 - root - INFO - Ronin is now running! (hot config)
+2025-07-12 16:55:30,907 - root - INFO - Ronin is now running! (hot config)
+2025-07-12 16:55:38,001 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 16:55:38,001 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 16:55:42,096 - root - ERROR - TTS synthesis failed: TTS synthesis error:  [!] Model file not found in the output path
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2002, in synthesize_speech
+    tts = TTS("tts_models/en/ljspeech/tacotron2-DDC")
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/api.py", line 74, in __init__
+    self.load_tts_model_by_name(model_name, gpu)
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/api.py", line 171, in load_tts_model_by_name
+    model_path, config_path, vocoder_path, vocoder_config_path, model_dir = self.download_model_by_name(
+                                                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/api.py", line 129, in download_model_by_name
+    model_path, config_path, model_item = self.manager.download_model(model_name)
+                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/utils/manage.py", line 419, in download_model
+    output_model_path, output_config_path = self._find_files(output_path)
+                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/utils/manage.py", line 442, in _find_files
+    raise ValueError(" [!] Model file not found in the output path")
+ValueError:  [!] Model file not found in the output path
+
+2025-07-12 16:55:42,096 - root - ERROR - TTS synthesis failed: TTS synthesis error:  [!] Model file not found in the output path
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2002, in synthesize_speech
+    tts = TTS("tts_models/en/ljspeech/tacotron2-DDC")
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/api.py", line 74, in __init__
+    self.load_tts_model_by_name(model_name, gpu)
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/api.py", line 171, in load_tts_model_by_name
+    model_path, config_path, vocoder_path, vocoder_config_path, model_dir = self.download_model_by_name(
+                                                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/api.py", line 129, in download_model_by_name
+    model_path, config_path, model_item = self.manager.download_model(model_name)
+                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/utils/manage.py", line 419, in download_model
+    output_model_path, output_config_path = self._find_files(output_path)
+                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/utils/manage.py", line 442, in _find_files
+    raise ValueError(" [!] Model file not found in the output path")
+ValueError:  [!] Model file not found in the output path
+
+2025-07-12 16:55:49,993 - root - ERROR - TTS synthesis failed: TTS synthesis error:  [!] Model file not found in the output path
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2002, in synthesize_speech
+    tts = TTS("tts_models/en/ljspeech/tacotron2-DDC")
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/api.py", line 74, in __init__
+    self.load_tts_model_by_name(model_name, gpu)
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/api.py", line 171, in load_tts_model_by_name
+    model_path, config_path, vocoder_path, vocoder_config_path, model_dir = self.download_model_by_name(
+                                                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/api.py", line 129, in download_model_by_name
+    model_path, config_path, model_item = self.manager.download_model(model_name)
+                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/utils/manage.py", line 419, in download_model
+    output_model_path, output_config_path = self._find_files(output_path)
+                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/utils/manage.py", line 442, in _find_files
+    raise ValueError(" [!] Model file not found in the output path")
+ValueError:  [!] Model file not found in the output path
+
+2025-07-12 16:55:49,993 - root - ERROR - TTS synthesis failed: TTS synthesis error:  [!] Model file not found in the output path
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2002, in synthesize_speech
+    tts = TTS("tts_models/en/ljspeech/tacotron2-DDC")
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/api.py", line 74, in __init__
+    self.load_tts_model_by_name(model_name, gpu)
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/api.py", line 171, in load_tts_model_by_name
+    model_path, config_path, vocoder_path, vocoder_config_path, model_dir = self.download_model_by_name(
+                                                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/api.py", line 129, in download_model_by_name
+    model_path, config_path, model_item = self.manager.download_model(model_name)
+                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/utils/manage.py", line 419, in download_model
+    output_model_path, output_config_path = self._find_files(output_path)
+                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/TTS/utils/manage.py", line 442, in _find_files
+    raise ValueError(" [!] Model file not found in the output path")
+ValueError:  [!] Model file not found in the output path
+
+/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/numba/cpython/old_hashing.py:477: UserWarning: FNV hashing is not implemented in Numba. See PEP 456 https://www.python.org/dev/peps/pep-0456/ for rationale over not using FNV. Numba will continue to work, but hashes for built in types will be computed using siphash24. This will permit e.g. dictionaries to continue to behave as expected, however anything relying on the value of the hash opposed to hash as a derived property is likely to not work as expected.
+  warnings.warn(msg)
+[2025-07-12 16:57:27] [INFO    ] discord.client: logging in using static token
+2025-07-12 16:57:27,595 - discord.client - INFO - logging in using static token
+2025-07-12 16:57:27,595 - discord.client - INFO - logging in using static token
+[2025-07-12 16:57:28] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: e8f44a0dbad4ebfe11d5b76f991d6f4d).
+2025-07-12 16:57:28,417 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: e8f44a0dbad4ebfe11d5b76f991d6f4d).
+2025-07-12 16:57:28,417 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: e8f44a0dbad4ebfe11d5b76f991d6f4d).
+2025-07-12 16:57:30,430 - root - INFO - Ronin is now running! (hot config)
+2025-07-12 16:57:30,430 - root - INFO - Ronin is now running! (hot config)
+2025-07-12 16:57:31,403 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 16:57:31,403 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+ > Downloading model to /root/.local/share/tts/tts_models--en--ljspeech--tacotron2-DDC
+  0%|          | 0.00/113M [00:00<?, ?iB/s]  4%|▍         | 4.30M/113M [00:00<00:02, 42.9MiB/s]  8%|▊         | 8.85M/113M [00:00<00:02, 44.5MiB/s] 12%|█▏        | 13.4M/113M [00:00<00:02, 45.1MiB/s] 16%|█▌        | 18.0M/113M [00:00<00:02, 45.5MiB/s] 20%|██        | 22.6M/113M [00:00<00:01, 45.3MiB/s] 24%|██▍       | 27.2M/113M [00:00<00:01, 45.6MiB/s] 28%|██▊       | 31.8M/113M [00:00<00:01, 45.7MiB/s] 32%|███▏      | 36.4M/113M [00:00<00:02, 33.8MiB/s] 36%|███▌      | 40.2M/113M [00:01<00:02, 27.1MiB/s] 38%|███▊      | 43.3M/113M [00:01<00:02, 24.9MiB/s] 41%|████      | 46.2M/113M [00:01<00:02, 23.2MiB/s] 43%|████▎     | 48.7M/113M [00:01<00:02, 21.9MiB/s] 45%|████▌     | 51.0M/113M [00:01<00:02, 21.0MiB/s] 47%|████▋     | 53.2M/113M [00:01<00:02, 20.3MiB/s] 49%|████▉     | 55.3M/113M [00:01<00:02, 20.2MiB/s] 51%|█████     | 57.3M/113M [00:02<00:02, 19.7MiB/s] 53%|█████▎    | 59.3M/113M [00:02<00:04, 11.3MiB/s] 57%|█████▋    | 64.2M/113M [00:02<00:02, 17.9MiB/s] 59%|█████▉    | 66.8M/113M [00:02<00:02, 19.5MiB/s] 62%|██████▏   | 69.3M/113M [00:02<00:02, 19.6MiB/s] 64%|██████▎   | 71.7M/113M [00:02<00:02, 19.4MiB/s] 66%|██████▌   | 73.9M/113M [00:02<00:02, 19.0MiB/s] 67%|██████▋   | 76.0M/113M [00:03<00:01, 19.0MiB/s] 69%|██████▉   | 78.1M/113M [00:03<00:01, 18.7MiB/s] 71%|███████   | 80.1M/113M [00:03<00:01, 19.0MiB/s] 73%|███████▎  | 82.0M/113M [00:03<00:01, 18.8MiB/s] 75%|███████▍  | 84.0M/113M [00:03<00:01, 18.9MiB/s] 76%|███████▌  | 85.9M/113M [00:03<00:01, 18.6MiB/s] 78%|███████▊  | 87.8M/113M [00:03<00:01, 18.8MiB/s] 80%|███████▉  | 89.8M/113M [00:03<00:01, 19.0MiB/s] 81%|████████▏ | 91.7M/113M [00:03<00:01, 18.5MiB/s] 83%|████████▎ | 93.6M/113M [00:04<00:01, 18.5MiB/s] 85%|████████▍ | 95.6M/113M [00:04<00:00, 19.0MiB/s] 86%|████████▋ | 97.5M/113M [00:04<00:00, 18.7MiB/s] 88%|████████▊ | 99.4M/113M [00:04<00:00, 19.0MiB/s] 90%|████████▉ | 101M/113M [00:04<00:00, 18.9MiB/s]  92%|█████████▏| 103M/113M [00:04<00:00, 18.5MiB/s] 93%|█████████▎| 105M/113M [00:04<00:00, 19.0MiB/s] 95%|█████████▌| 107M/113M [00:04<00:00, 18.8MiB/s] 97%|█████████▋| 109M/113M [00:04<00:00, 18.6MiB/s] 99%|█████████▊| 111M/113M [00:04<00:00, 19.0MiB/s] > Model's license - apache 2.0
+ > Check https://choosealicense.com/licenses/apache-2.0/ for more info.
+ > Downloading model to /root/.local/share/tts/vocoder_models--en--ljspeech--hifigan_v2
+
+  0%|          | 0.00/3.80M [00:00<?, ?iB/s][A100%|██████████| 113M/113M [00:05<00:00, 19.3MiB/s]
+
+ 80%|███████▉  | 3.03M/3.80M [00:00<00:00, 30.3MiB/s][A
+100%|██████████| 3.80M/3.80M [00:14<00:00, 30.3MiB/s][A
