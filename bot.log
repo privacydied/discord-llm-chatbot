@@ -4664,3 +4664,283 @@ aiohttp.client_exceptions.ClientConnectionResetError: Cannot write to closing tr
 2025-07-12 19:03:49,118 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
 2025-07-12 19:05:00,933 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
 2025-07-12 19:05:00,933 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:06:02,237 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:06:02,237 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:06:10,040 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:06:10,040 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:06:17,639 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:06:17,639 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:06:34,812 - root - ERROR - Error processing URL https://x.com/kevorkalmassian/status/1944012640201605437?s=46: Blocked by robots.txt: Blocked by https://x.com/robots.txt
+2025-07-12 19:06:34,812 - root - ERROR - Error processing URL https://x.com/kevorkalmassian/status/1944012640201605437?s=46: Blocked by robots.txt: Blocked by https://x.com/robots.txt
+2025-07-12 19:06:38,986 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:06:38,986 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:07:18,678 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:07:18,678 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:07:18,885 - root - ERROR - Error in VL API call: 'choices'
+2025-07-12 19:07:18,885 - root - ERROR - Error in VL API call: 'choices'
+2025-07-12 19:07:18,885 - root - ERROR - VL model returned empty caption
+2025-07-12 19:07:18,885 - root - ERROR - VL model returned empty caption
+2025-07-12 19:07:22,369 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:07:22,369 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:07:30,347 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:07:30,347 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/numba/cpython/old_hashing.py:477: UserWarning: FNV hashing is not implemented in Numba. See PEP 456 https://www.python.org/dev/peps/pep-0456/ for rationale over not using FNV. Numba will continue to work, but hashes for built in types will be computed using siphash24. This will permit e.g. dictionaries to continue to behave as expected, however anything relying on the value of the hash opposed to hash as a derived property is likely to not work as expected.
+  warnings.warn(msg)
+[2025-07-12 19:09:00] [INFO    ] discord.client: logging in using static token
+2025-07-12 19:09:00,771 - discord.client - INFO - logging in using static token
+2025-07-12 19:09:00,771 - discord.client - INFO - logging in using static token
+[2025-07-12 19:09:01] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: b4c291d6c0f1ac13d3fd1f906dcbd85a).
+2025-07-12 19:09:01,475 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: b4c291d6c0f1ac13d3fd1f906dcbd85a).
+2025-07-12 19:09:01,475 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: b4c291d6c0f1ac13d3fd1f906dcbd85a).
+2025-07-12 19:09:03,492 - root - INFO - Ronin is now running! (hot config)
+2025-07-12 19:09:03,492 - root - INFO - Ronin is now running! (hot config)
+2025-07-12 19:09:03,570 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:09:03,570 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:09:43,620 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:09:43,620 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/numba/cpython/old_hashing.py:477: UserWarning: FNV hashing is not implemented in Numba. See PEP 456 https://www.python.org/dev/peps/pep-0456/ for rationale over not using FNV. Numba will continue to work, but hashes for built in types will be computed using siphash24. This will permit e.g. dictionaries to continue to behave as expected, however anything relying on the value of the hash opposed to hash as a derived property is likely to not work as expected.
+  warnings.warn(msg)
+[2025-07-12 19:12:13] [INFO    ] discord.client: logging in using static token
+2025-07-12 19:12:13,425 - discord.client - INFO - logging in using static token
+2025-07-12 19:12:13,425 - discord.client - INFO - logging in using static token
+[2025-07-12 19:12:14] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: e172aaa127544b6614a7ff86a9e509e2).
+2025-07-12 19:12:14,258 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: e172aaa127544b6614a7ff86a9e509e2).
+2025-07-12 19:12:14,258 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: e172aaa127544b6614a7ff86a9e509e2).
+2025-07-12 19:12:16,269 - root - INFO - Ronin is now running! (hot config)
+2025-07-12 19:12:16,269 - root - INFO - Ronin is now running! (hot config)
+2025-07-12 19:12:50,667 - httpx - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=how%20do%20i%20seduce%20diddy&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 200 OK"
+2025-07-12 19:12:50,667 - httpx - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=how%20do%20i%20seduce%20diddy&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 200 OK"
+2025-07-12 19:12:53,713 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:12:53,713 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:13:06,791 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:13:06,791 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:17:04,656 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:17:04,656 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:17:15,190 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:17:15,190 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:17:23,915 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:17:23,915 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/numba/cpython/old_hashing.py:477: UserWarning: FNV hashing is not implemented in Numba. See PEP 456 https://www.python.org/dev/peps/pep-0456/ for rationale over not using FNV. Numba will continue to work, but hashes for built in types will be computed using siphash24. This will permit e.g. dictionaries to continue to behave as expected, however anything relying on the value of the hash opposed to hash as a derived property is likely to not work as expected.
+  warnings.warn(msg)
+[2025-07-12 19:18:44] [INFO    ] discord.client: logging in using static token
+2025-07-12 19:18:44,295 - discord.client - INFO - logging in using static token
+2025-07-12 19:18:44,295 - discord.client - INFO - logging in using static token
+[2025-07-12 19:18:45] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: 7d011ac0f7c5fe0f686023f63e589206).
+2025-07-12 19:18:45,168 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 7d011ac0f7c5fe0f686023f63e589206).
+2025-07-12 19:18:45,168 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 7d011ac0f7c5fe0f686023f63e589206).
+2025-07-12 19:18:47,179 - root - INFO - Ronin is now running! (hot config)
+2025-07-12 19:18:47,179 - root - INFO - Ronin is now running! (hot config)
+2025-07-12 19:18:50,119 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:18:50,119 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:19:00,219 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:19:00,219 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:19:05,796 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:19:05,796 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:20:00,602 - root - ERROR - Error processing URL https://x.com/bronzeagemantis/status/1944057986085007637?s=46: Blocked by robots.txt: Blocked by https://x.com/robots.txt
+2025-07-12 19:20:00,602 - root - ERROR - Error processing URL https://x.com/bronzeagemantis/status/1944057986085007637?s=46: Blocked by robots.txt: Blocked by https://x.com/robots.txt
+2025-07-12 19:20:03,287 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:20:03,287 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:20:59,277 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:20:59,277 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:20:59,304 - root - ERROR - Error in VL API call: 'choices'
+2025-07-12 19:20:59,304 - root - ERROR - Error in VL API call: 'choices'
+2025-07-12 19:20:59,304 - root - ERROR - VL model returned empty caption
+2025-07-12 19:20:59,304 - root - ERROR - VL model returned empty caption
+2025-07-12 19:21:03,397 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:21:03,397 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:21:10,822 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:21:10,822 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:25:18,440 - httpx - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=when%20did%20taleb%20become%20so%20effing%20based%20https%3A%2F%2Fx.com%2Fnntaleb%2Fstatus%2F1944002492762571250%3F&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 200 OK"
+2025-07-12 19:25:18,440 - httpx - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=when%20did%20taleb%20become%20so%20effing%20based%20https%3A%2F%2Fx.com%2Fnntaleb%2Fstatus%2F1944002492762571250%3F&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 200 OK"
+2025-07-12 19:25:19,091 - root - ERROR - Error processing URL https://x.com/nntaleb/status/1944002492762571250?s=46: Blocked by robots.txt: Blocked by https://x.com/robots.txt
+2025-07-12 19:25:19,091 - root - ERROR - Error processing URL https://x.com/nntaleb/status/1944002492762571250?s=46: Blocked by robots.txt: Blocked by https://x.com/robots.txt
+2025-07-12 19:25:20,400 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:25:20,400 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/numba/cpython/old_hashing.py:477: UserWarning: FNV hashing is not implemented in Numba. See PEP 456 https://www.python.org/dev/peps/pep-0456/ for rationale over not using FNV. Numba will continue to work, but hashes for built in types will be computed using siphash24. This will permit e.g. dictionaries to continue to behave as expected, however anything relying on the value of the hash opposed to hash as a derived property is likely to not work as expected.
+  warnings.warn(msg)
+[2025-07-12 19:26:14] [INFO    ] discord.client: logging in using static token
+2025-07-12 19:26:14,342 - discord.client - INFO - logging in using static token
+2025-07-12 19:26:14,342 - discord.client - INFO - logging in using static token
+[2025-07-12 19:26:15] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: e70c9919139f2fc97364083e4d58843d).
+2025-07-12 19:26:15,146 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: e70c9919139f2fc97364083e4d58843d).
+2025-07-12 19:26:15,146 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: e70c9919139f2fc97364083e4d58843d).
+2025-07-12 19:26:17,161 - root - INFO - Ronin is now running! (hot config)
+2025-07-12 19:26:17,161 - root - INFO - Ronin is now running! (hot config)
+2025-07-12 19:26:30,316 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:26:30,316 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:26:39,018 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:26:39,018 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:26:43,767 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:26:43,767 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:26:58,455 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:26:58,455 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:28:55,960 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:28:55,960 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:29:04,207 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:29:04,207 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:29:08,565 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:29:08,565 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:30:58,160 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:30:58,160 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:30:58,184 - root - ERROR - Error in VL API call: 'choices'
+2025-07-12 19:30:58,184 - root - ERROR - Error in VL API call: 'choices'
+2025-07-12 19:30:58,184 - root - ERROR - VL model returned empty caption
+2025-07-12 19:30:58,184 - root - ERROR - VL model returned empty caption
+2025-07-12 19:31:01,493 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:31:01,493 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:31:01,505 - root - ERROR - Error in VL API call: 'choices'
+2025-07-12 19:31:01,505 - root - ERROR - Error in VL API call: 'choices'
+2025-07-12 19:31:01,505 - root - ERROR - VL model returned empty caption
+2025-07-12 19:31:01,505 - root - ERROR - VL model returned empty caption
+2025-07-12 19:31:06,331 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:31:06,331 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:31:51,803 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:31:51,803 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:31:51,850 - root - ERROR - Error in VL API call: 'choices'
+2025-07-12 19:31:51,850 - root - ERROR - Error in VL API call: 'choices'
+2025-07-12 19:31:51,850 - root - ERROR - VL model returned empty caption
+2025-07-12 19:31:51,850 - root - ERROR - VL model returned empty caption
+2025-07-12 19:31:55,153 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:31:55,153 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:31:55,226 - root - ERROR - Error in VL API call: 'choices'
+2025-07-12 19:31:55,226 - root - ERROR - Error in VL API call: 'choices'
+2025-07-12 19:31:55,226 - root - ERROR - VL model returned empty caption
+2025-07-12 19:31:55,226 - root - ERROR - VL model returned empty caption
+2025-07-12 19:31:57,546 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:31:57,546 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/numba/cpython/old_hashing.py:477: UserWarning: FNV hashing is not implemented in Numba. See PEP 456 https://www.python.org/dev/peps/pep-0456/ for rationale over not using FNV. Numba will continue to work, but hashes for built in types will be computed using siphash24. This will permit e.g. dictionaries to continue to behave as expected, however anything relying on the value of the hash opposed to hash as a derived property is likely to not work as expected.
+  warnings.warn(msg)
+[2025-07-12 19:32:21] [INFO    ] discord.client: logging in using static token
+2025-07-12 19:32:21,416 - discord.client - INFO - logging in using static token
+2025-07-12 19:32:21,416 - discord.client - INFO - logging in using static token
+[2025-07-12 19:32:22] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: 59292bc11e8f0578a964c6181d26be47).
+2025-07-12 19:32:22,226 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 59292bc11e8f0578a964c6181d26be47).
+2025-07-12 19:32:22,226 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 59292bc11e8f0578a964c6181d26be47).
+2025-07-12 19:32:24,240 - root - INFO - Ronin is now running! (hot config)
+2025-07-12 19:32:24,240 - root - INFO - Ronin is now running! (hot config)
+2025-07-12 19:32:26,046 - root - ERROR - Error updating server profile for guild 1156692144740892796: name 'server_profiles_last_saved' is not defined
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1821, in process_message
+    if not save_server_profile(guild_id):
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1168, in save_server_profile
+    if not force and guild_id in server_profiles_last_saved:
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+NameError: name 'server_profiles_last_saved' is not defined
+2025-07-12 19:32:26,046 - root - ERROR - Error updating server profile for guild 1156692144740892796: name 'server_profiles_last_saved' is not defined
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1821, in process_message
+    if not save_server_profile(guild_id):
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1168, in save_server_profile
+    if not force and guild_id in server_profiles_last_saved:
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+NameError: name 'server_profiles_last_saved' is not defined
+2025-07-12 19:32:28,471 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:32:28,471 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:32:50,595 - root - ERROR - Error updating server profile for guild 1156692144740892796: name 'server_profiles_last_saved' is not defined
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1821, in process_message
+    if not save_server_profile(guild_id):
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1168, in save_server_profile
+    if not force and guild_id in server_profiles_last_saved:
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+NameError: name 'server_profiles_last_saved' is not defined
+2025-07-12 19:32:50,595 - root - ERROR - Error updating server profile for guild 1156692144740892796: name 'server_profiles_last_saved' is not defined
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1821, in process_message
+    if not save_server_profile(guild_id):
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1168, in save_server_profile
+    if not force and guild_id in server_profiles_last_saved:
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+NameError: name 'server_profiles_last_saved' is not defined
+2025-07-12 19:32:54,782 - asyncio - ERROR - Task exception was never retrieved
+future: <Task finished name='Task-10' coro=<periodic_save() done, defined at /volume1/py/discord-llm-chatbot/main.py:2690> exception=NameError("name 'server_profiles_last_saved' is not defined")>
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2694, in periodic_save
+    save_all_profiles()
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1314, in save_all_profiles
+    save_server_profile(guild_id)
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1168, in save_server_profile
+    if not force and guild_id in server_profiles_last_saved:
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+NameError: name 'server_profiles_last_saved' is not defined
+2025-07-12 19:32:54,782 - asyncio - ERROR - Task exception was never retrieved
+future: <Task finished name='Task-10' coro=<periodic_save() done, defined at /volume1/py/discord-llm-chatbot/main.py:2690> exception=NameError("name 'server_profiles_last_saved' is not defined")>
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2694, in periodic_save
+    save_all_profiles()
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1314, in save_all_profiles
+    save_server_profile(guild_id)
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1168, in save_server_profile
+    if not force and guild_id in server_profiles_last_saved:
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+NameError: name 'server_profiles_last_saved' is not defined
+2025-07-12 19:32:58,491 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 500 Internal Server Error"
+2025-07-12 19:32:58,491 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 500 Internal Server Error"
+2025-07-12 19:34:15,023 - root - ERROR - Error updating server profile for guild 1156692144740892796: name 'server_profiles_last_saved' is not defined
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1821, in process_message
+    if not save_server_profile(guild_id):
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1168, in save_server_profile
+    if not force and guild_id in server_profiles_last_saved:
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+NameError: name 'server_profiles_last_saved' is not defined
+2025-07-12 19:34:15,023 - root - ERROR - Error updating server profile for guild 1156692144740892796: name 'server_profiles_last_saved' is not defined
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1821, in process_message
+    if not save_server_profile(guild_id):
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1168, in save_server_profile
+    if not force and guild_id in server_profiles_last_saved:
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+NameError: name 'server_profiles_last_saved' is not defined
+2025-07-12 19:34:24,086 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:34:24,086 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:34:24,832 - root - ERROR - Discord event error in on_message: name 'server_profiles_last_saved' is not defined
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2712, in on_message
+    await process_message(message, is_dm)
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2334, in process_message
+    save_all_profiles()
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1314, in save_all_profiles
+    save_server_profile(guild_id)
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1168, in save_server_profile
+    if not force and guild_id in server_profiles_last_saved:
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+NameError: name 'server_profiles_last_saved' is not defined
+2025-07-12 19:34:24,832 - root - ERROR - Discord event error in on_message: name 'server_profiles_last_saved' is not defined
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2712, in on_message
+    await process_message(message, is_dm)
+  File "/volume1/py/discord-llm-chatbot/main.py", line 2334, in process_message
+    save_all_profiles()
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1314, in save_all_profiles
+    save_server_profile(guild_id)
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1168, in save_server_profile
+    if not force and guild_id in server_profiles_last_saved:
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+NameError: name 'server_profiles_last_saved' is not defined
+2025-07-12 19:34:41,867 - root - ERROR - Error updating server profile for guild 1156692144740892796: name 'server_profiles_last_saved' is not defined
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1821, in process_message
+    if not save_server_profile(guild_id):
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1168, in save_server_profile
+    if not force and guild_id in server_profiles_last_saved:
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+NameError: name 'server_profiles_last_saved' is not defined
+2025-07-12 19:34:41,867 - root - ERROR - Error updating server profile for guild 1156692144740892796: name 'server_profiles_last_saved' is not defined
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1821, in process_message
+    if not save_server_profile(guild_id):
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/volume1/py/discord-llm-chatbot/main.py", line 1168, in save_server_profile
+    if not force and guild_id in server_profiles_last_saved:
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+NameError: name 'server_profiles_last_saved' is not defined
+2025-07-12 19:34:49,198 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 19:34:49,198 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
