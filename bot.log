@@ -4494,3 +4494,37 @@ aiohttp.client_exceptions.ClientConnectionResetError: Cannot write to closing tr
 2025-07-12 18:21:16,059 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
 /volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/numba/cpython/old_hashing.py:477: UserWarning: FNV hashing is not implemented in Numba. See PEP 456 https://www.python.org/dev/peps/pep-0456/ for rationale over not using FNV. Numba will continue to work, but hashes for built in types will be computed using siphash24. This will permit e.g. dictionaries to continue to behave as expected, however anything relying on the value of the hash opposed to hash as a derived property is likely to not work as expected.
   warnings.warn(msg)
+[2025-07-12 18:25:00] [INFO    ] discord.client: logging in using static token
+2025-07-12 18:25:00,033 - discord.client - INFO - logging in using static token
+2025-07-12 18:25:00,033 - discord.client - INFO - logging in using static token
+[2025-07-12 18:25:02] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: a8394a8a9c3ddcc0daf8c58e9b108d11).
+2025-07-12 18:25:02,552 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: a8394a8a9c3ddcc0daf8c58e9b108d11).
+2025-07-12 18:25:02,552 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: a8394a8a9c3ddcc0daf8c58e9b108d11).
+2025-07-12 18:25:04,568 - root - INFO - Ronin is now running! (hot config)
+2025-07-12 18:25:04,568 - root - INFO - Ronin is now running! (hot config)
+2025-07-12 18:26:09,157 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:26:09,157 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:27:40,617 - root - ERROR - Error in VL API call: 'choices'
+2025-07-12 18:27:40,617 - root - ERROR - Error in VL API call: 'choices'
+2025-07-12 18:27:40,618 - root - ERROR - VL model returned empty caption
+2025-07-12 18:27:40,618 - root - ERROR - VL model returned empty caption
+2025-07-12 18:27:51,177 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:27:51,177 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:29:22,452 - root - ERROR - Error in VL API call: 'choices'
+2025-07-12 18:29:22,452 - root - ERROR - Error in VL API call: 'choices'
+2025-07-12 18:29:22,452 - root - ERROR - VL model returned empty caption
+2025-07-12 18:29:22,452 - root - ERROR - VL model returned empty caption
+2025-07-12 18:29:25,899 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:29:25,899 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:30:41,755 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:30:41,755 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:31:03,311 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:31:03,311 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:31:12,577 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:31:12,577 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:31:23,088 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:31:23,088 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:36:56,991 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:36:56,991 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:38:22,249 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-12 18:38:22,249 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
