@@ -8,6 +8,28 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
+class ConfigurationError(Exception):
+    """Raised when configuration is invalid or missing."""
+    pass
+
+
+def validate_required_env() -> None:
+    """Validate that all required environment variables are present."""
+    required_vars = [
+        "DISCORD_TOKEN",
+    ]
+    
+    missing_vars = []
+    for var in required_vars:
+        if not os.getenv(var):
+            missing_vars.append(var)
+    
+    if missing_vars:
+        raise ConfigurationError(
+            f"Missing required environment variables: {', '.join(missing_vars)}"
+        )
+
+
 def load_config():
     """Load configuration from environment variables."""
     return {

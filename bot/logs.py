@@ -16,6 +16,10 @@ config = load_config()
 # Configure root logger
 def setup_logging():
     """Configure the root logger with file and console handlers."""
+    return configure_logging()
+
+def configure_logging():
+    """Configure the root logger with file and console handlers."""
     # Ensure logs directory exists
     config["USER_LOGS_DIR"].mkdir(parents=True, exist_ok=True)
     
@@ -156,5 +160,5 @@ def log_command(ctx, command_name: str, args: dict, success: bool = True, error:
     except Exception as e:
         logging.error(f"Error logging command: {e}", exc_info=True)
 
-# Initialize logging when module is imported
-setup_logging()
+# NOTE: Logging is no longer initialized at import time to avoid side effects.
+# Call configure_logging() or setup_logging() explicitly during bootstrap.

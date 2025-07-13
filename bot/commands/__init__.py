@@ -58,6 +58,11 @@ async def setup_commands(bot):
         await tts_cmds.setup(bot)
         logging.info("TTS commands registered")
         
+        # Import and set up event handlers
+        from ..events import setup as setup_events
+        await setup_events(bot)
+        logging.info("Event handlers registered")
+        
         logging.info("All command modules registered successfully")
         
     except Exception as e:
