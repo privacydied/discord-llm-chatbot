@@ -1,20 +1,24 @@
 """
 Centralized router for handling multimodal message processing.
 """
-import re
 import logging
 import os
+import re
 import tempfile
+from enum import Enum, auto
 from pathlib import Path
 from typing import Optional, Dict, Any, List, Tuple, Union
-from enum import Enum, auto
+
 import discord
 
+# Set up logger at module level
+logger = logging.getLogger(__name__)
+
 from .brain import brain_infer
-from .speak import speak_infer
-from .see import see_infer
-from .hear import hear_infer
 from .exceptions import InferenceError
+from .hear import hear_infer
+from .see import see_infer
+from .speak import speak_infer
 
 # Import PDF processor if available
 try:
@@ -28,11 +32,9 @@ except ImportError:
 try:
     import docx
     DOCX_SUPPORT = True
-except ImportError:
+except ImportError as e:
     DOCX_SUPPORT = False
-    logger.warning("DOCX processing not available (python-docx not installed)")
-
-logger = logging.getLogger(__name__)
+    logger.warning("DOCX processing not available (python-docx not installed): %s", str(e))
 
 class ProcessingMode(Enum):
     """Supported processing modes for the router."""
@@ -139,15 +141,46 @@ class Router:
                 if not processor.supported:
                     raise InferenceError("PDF processing is not available (missing dependencies)")
                 
-                result = processor.extract_all(file_path)
-                if result.get('error'):
-                    raise InferenceError(f"Failed to extract text from PDF: {result['error']}")
+                # Read the file content into memory
+                with open(file_path, 'rb') as f:
+                    file_content = f.read()
                 
-                content = result.get('text', '').strip()
-                if not content:
-                    raise InferenceError("The PDF appears to be empty or could not be read")
+                # Create a temporary file for OCR processing
+                import tempfile
+                import os
                 
-                return content
+                with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as temp_file:
+                    temp_file.write(file_content)
+                    temp_path = temp_file.name
+                
+                try:
+                    # Check if it's a scanned PDF using the in-memory content
+                    from io import BytesIO
+                    file_obj = BytesIO(file_content)
+                    
+                    if processor.is_scanned_pdf(file_obj):
+                        logger.info("Detected scanned PDF, attempting OCR...")
+                        # Use the temporary file path for OCR
+                        result = processor.extract_all(temp_path)
+                    else:
+                        # For regular PDFs, use the in-memory content
+                        result = processor.extract_all(file_obj)
+                    
+                    if result.get('error'):
+                        raise InferenceError(f"Failed to extract text from PDF: {result['error']}")
+                    
+                    content = result.get('text', '').strip()
+                    if not content:
+                        raise InferenceError("The PDF appears to be empty or could not be read")
+                    
+                    return content
+                    
+                finally:
+                    # Clean up the temporary file
+                    try:
+                        os.unlink(temp_path)
+                    except Exception as e:
+                        logger.warning(f"Error deleting temporary file {temp_path}: {e}")
             
             # Handle text files
             elif file_ext in ['.txt', '.md']:
@@ -216,19 +249,27 @@ class Router:
             
             # Speech-to-text processing
             elif mode == ProcessingMode.STT:
-                if not any(attachment.filename.lower().endswith(ext) for ext in ['.wav', '.mp3', '.ogg']):
-                    await message.channel.send("❌ Please provide an audio file (.wav, .mp3, .ogg)")
+                supported_audio_formats = ['.wav', '.mp3', '.ogg', '.opus']
+                if not any(attachment.filename.lower().endswith(ext) for ext in supported_audio_formats):
+                    await message.channel.send(f"❌ Please provide an audio file ({', '.join(supported_audio_formats)})")
                     return
                     
-                audio_path = await self._download_attachment(attachment)
+                audio_path_str = await self._download_attachment(attachment)
+                audio_path = Path(audio_path_str)  # Ensure we have a Path object
                 try:
-                    transcribed = await hear_infer(audio_path)
+                    logger.debug(f"🎙️ Processing audio file: {audio_path}")
+                    transcribed = await hear_infer(audio_path)  # Pass Path object
+                    logger.debug(f"🎙️ Transcribed text: {transcribed[:200]}...")
                     await self._process_text(message, transcribed)
+                except Exception as e:
+                    logger.error(f"Error in STT processing: {str(e)}", exc_info=True)
+                    await message.channel.send(f"❌ Error processing audio: {str(e)}")
                 finally:
                     try:
                         Path(audio_path).unlink()
-                    except:
-                        pass
+                        logger.debug(f"🗑️ Deleted temporary audio file: {audio_path}")
+                    except Exception as e:
+                        logger.warning(f"Error deleting temporary file {audio_path}: {str(e)}")
                 
             # Vision-language processing
             elif mode == ProcessingMode.VISION:

@@ -256,12 +256,28 @@ class BotEventHandler(commands.Cog):
 # Background task for cache maintenance
 async def cache_maintenance_task():
     """Background task to clean up old cache files."""
+    logger.info("🚀 Starting TTS cache maintenance task")
     while True:
         try:
-            await tts_manager.purge_old_cache()
+            logger.debug("🔄 Running TTS cache maintenance...")
+            # Get stats before cleanup
+            stats_before = tts_manager.get_cache_stats()
+            logger.debug(f"📊 Cache stats before cleanup: {stats_before}")
+            
+            # Run the cleanup
+            tts_manager.purge_old_cache()  # This is a synchronous method
+            
+            # Get stats after cleanup
+            stats_after = tts_manager.get_cache_stats()
+            logger.info(f"✅ TTS cache maintenance completed. Stats before: {stats_before}, after: {stats_after}")
+            
+            # Wait for 24 hours before next run
+            logger.debug("⏳ Next TTS cache maintenance in 24 hours...")
             await asyncio.sleep(86400)  # Run daily
+            
         except Exception as e:
-            logging.error(f"Cache maintenance failed: {e}")
+            logger.error(f"❌ TTS cache maintenance failed: {str(e)}", exc_info=True)
+            logger.info("⏳ Retrying TTS cache maintenance in 1 hour...")
             await asyncio.sleep(3600)  # Retry in 1 hour
 
 async def setup(bot) -> None:

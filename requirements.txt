@@ -23,11 +23,14 @@ fake-useragent==1.4.0
 pydantic>=1.10.0        # For configuration validation
 typing-extensions>=4.0.0  # Python 3.11 compatibility
 
-# PDF Processing
-PyMuPDF==1.23.8
-pytesseract==0.3.10
-Pillow==10.2.0
-python-magic==0.4.27
+# Document Processing
+PyPDF2>=3.0.0
+pdfminer.six>=20221105
+python-docx>=1.0.1
+python-magic>=0.4.27
+PyMuPDF>=1.23.8
+pytesseract>=0.3.10
+Pillow>=10.2.0
 
 # Audio Processing (for TTS)
 soundfile>=0.12.1
@@ -42,6 +45,8 @@ numpy>=1.21.0
 # Speech-to-text dependencies
 ctranslate2>=4.0.0
 faster-whisper>=1.0.0
+torch>=2.0.0            # PyTorch for faster-whisper
+torchaudio>=2.0.0      # Required for audio processing
 ffmpeg-python>=0.2.0
 aiofiles>=23.0.0        # async file I/O
 pydub>=0.25.1           # audio conversion
