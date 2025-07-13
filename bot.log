@@ -5354,3 +5354,13 @@ KeyError: 'tone'
 2025-07-13 01:53:56,073 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
 2025-07-13 01:54:16,545 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
 2025-07-13 01:54:16,545 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-13 01:57:52,656 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-13 01:57:52,656 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-13 01:58:05,070 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-13 01:58:05,070 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-13 01:58:05,152 - root - ERROR - Error in VL API call: 'choices'
+2025-07-13 01:58:05,152 - root - ERROR - Error in VL API call: 'choices'
+2025-07-13 01:58:05,152 - root - ERROR - VL model returned empty caption
+2025-07-13 01:58:05,152 - root - ERROR - VL model returned empty caption
+2025-07-13 01:58:14,839 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-13 01:58:14,839 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
