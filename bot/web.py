@@ -3,10 +3,11 @@ Web content extraction and processing for the Discord bot.
 """
 import logging
 import re
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 from urllib.parse import urlparse, urljoin, unquote
 import aiohttp
 from bs4 import BeautifulSoup
+import discord
 import trafilatura
 from trafilatura.settings import use_config
 

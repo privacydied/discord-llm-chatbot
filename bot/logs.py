@@ -7,6 +7,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+# CRITICAL FIX: Add missing discord import to prevent NameError
+import discord
+
 # Import config
 from .config import load_config
 
@@ -137,22 +140,17 @@ def log_message(message) -> None:
     except Exception as e:
         logging.error(f"Error logging message: {e}", exc_info=True)
 
-def log_command(ctx, command_name: str, args: dict, success: bool = True, error: Optional[str] = None):
+def log_command(user_id: str, guild_id: Optional[str], command: str, success: bool = True, message: Optional[str] = None):
     """Log a command execution."""
     try:
-        user_id = str(ctx.author.id)
-        username = str(ctx.author)
-        
         log_entry = {
             'timestamp': datetime.now().isoformat(),
             'user_id': user_id,
-            'username': username,
-            'command': command_name,
-            'args': args,
+            'guild_id': guild_id,
+            'command': command,
             'success': success,
-            'error': error,
-            'channel': str(ctx.channel) if hasattr(ctx, 'channel') else 'DM',
-            'guild': str(ctx.guild) if hasattr(ctx, 'guild') and ctx.guild else 'DM'
+            'message': message,
+            'channel': 'DM' if not guild_id else f'Guild:{guild_id}'
         }
         
         logging.info(f"Command executed: {log_entry}")

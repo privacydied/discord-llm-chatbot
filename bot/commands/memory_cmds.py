@@ -16,13 +16,13 @@ from ..config import load_config
 config = load_config()
 
 # Command group for memory-related commands
-group = commands.Group(
-    name="memory",
-    description="Manage your memories and server memories",
-    invoke_without_command=True
-)
+@commands.group(name="memory", description="Manage your memories and server memories", invoke_without_command=True)
+async def memory_group(ctx):
+    """Memory management commands."""
+    if ctx.invoked_subcommand is None:
+        await ctx.send("Use `!memory add <content>` to add a memory, `!memory list` to view memories, or `!memory clear` to clear all memories.")
 
-@group.command(name="add")
+@memory_group.command(name="add")
 async def add_memory_cmd(ctx, *, content: str):
     """Add a memory to your profile."""
     try:
@@ -58,7 +58,7 @@ async def add_memory_cmd(ctx, *, content: str):
         await ctx.send("❌ An error occurred while adding your memory.")
         log_command(ctx, "memory_add_error", {"error": str(e)}, success=False)
 
-@group.command(name="list")
+@memory_group.command(name="list")
 async def list_memories_cmd(ctx, limit: int = 5):
     """List your recent memories."""
     try:
@@ -92,7 +92,7 @@ async def list_memories_cmd(ctx, limit: int = 5):
         await ctx.send("❌ An error occurred while listing your memories.")
         log_command(ctx, "memory_list_error", {"error": str(e)}, success=False)
 
-@group.command(name="clear")
+@memory_group.command(name="clear")
 async def clear_memories_cmd(ctx):
     """Clear all your memories."""
     try:
@@ -139,7 +139,7 @@ async def clear_memories_cmd(ctx):
         await ctx.send("❌ An error occurred while clearing your memories.")
         log_command(ctx, "memory_clear_error", {"error": str(e)}, success=False)
 
-@group.command(name="server")
+@memory_group.command(name="server")
 @commands.has_permissions(manage_guild=True)
 async def server_memory_cmd(ctx, action: str, *, content: Optional[str] = None):
     """Manage server memories (Admin only)."""
@@ -257,5 +257,5 @@ async def server_memory_cmd(ctx, action: str, *, content: Optional[str] = None):
                    {"error": str(e), "action": action}, success=False)
 
 # Register the command group
-def setup(bot):
-    bot.add_command(group)
+async def setup(bot):
+    bot.add_command(memory_group)

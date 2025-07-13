@@ -364,13 +364,30 @@ async def generate_response(
             server_profile = get_server_profile(str(guild_id))
             server_context = server_profile.get('context_notes', '')
         
-        # Build the full prompt with context
-        full_prompt = f"""{context}
+        # CHANGE: Use PROMPT_FILE from environment instead of hardcoded prompt
+        config = load_config()
+        prompt_file_path = config.get("PROMPT_FILE")
+        if not prompt_file_path:
+            raise OllamaAPIError("PROMPT_FILE not configured in environment variables")
         
-        {server_context}
+        try:
+            with open(prompt_file_path, "r", encoding="utf-8") as pf:
+                base_system_prompt = pf.read().strip()
+                logging.debug(f"Loaded text prompt from {prompt_file_path}")
+        except FileNotFoundError:
+            raise OllamaAPIError(f"Prompt file not found: {prompt_file_path}")
+        except Exception as e:
+            raise OllamaAPIError(f"Error reading prompt file {prompt_file_path}: {e}")
         
-        User: {prompt}
-        Assistant:"""
+        # Build the full prompt with context and server context
+        full_prompt = f"""{base_system_prompt}
+
+Context: {context}
+
+Server Context: {server_context}
+
+User: {prompt}
+Assistant:"""
         
         # Generate the response
         if stream:

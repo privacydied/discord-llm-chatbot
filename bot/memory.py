@@ -434,5 +434,96 @@ def save_all_server_profiles() -> bool:
     
     return success
 
+def add_memory(user_id: str, memory_text: str, guild_id: Optional[str] = None, username: Optional[str] = None) -> bool:
+    """
+    Add a memory for a user and optionally to a server.
+    
+    Args:
+        user_id: Discord user ID
+        memory_text: The memory text to add
+        guild_id: Optional server ID to also add the memory to
+        username: Optional username for server memory context
+        
+    Returns:
+        bool: True if the memory was added successfully, False otherwise
+    """
+    if not user_id or not memory_text or not isinstance(memory_text, str) or not memory_text.strip():
+        logging.warning(f"Invalid memory data - user_id: {user_id}, memory_text: {type(memory_text)}")
+        return False
+    
+    memory_text = memory_text.strip()
+    memory_lower = memory_text.lower()
+    success = True
+    
+    # Add to user memories
+    try:
+        profile = get_profile(user_id)
+        if not profile:
+            logging.error(f"Failed to load profile for user {user_id}")
+            return False
+        
+        # Initialize memories list if it doesn't exist
+        if "memories" not in profile:
+            profile["memories"] = []
+        
+        # Check for duplicates (case-insensitive)
+        if not any(mem.lower() == memory_lower for mem in profile["memories"]):
+            profile["memories"].append(memory_text)
+            
+            # Enforce memory limit
+            from .config import load_config
+            config = load_config()
+            max_memories = config.get('MAX_MEMORIES', 100)
+            if len(profile["memories"]) > max_memories:
+                profile["memories"] = profile["memories"][-max_memories:]
+                
+            profile["last_updated"] = datetime.now().isoformat()
+            
+            # Save the updated profile
+            if not save_profile(profile):
+                logging.error(f"Failed to save profile after adding memory for user {user_id}")
+                success = False
+    
+    except Exception as e:
+        logging.error(f"Error adding user memory: {e}", exc_info=True)
+        success = False
+    
+    # Optionally add to server memories if guild_id is provided
+    if guild_id and username and isinstance(guild_id, str) and isinstance(username, str):
+        try:
+            server_profile = get_server_profile(guild_id)
+            if not server_profile:
+                logging.error(f"Failed to load server profile for guild {guild_id}")
+                return success and False
+            
+            # Format the memory with timestamp and username
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+            server_memory = f"[{timestamp}] {username}: {memory_text}"
+            
+            # Check for duplicates in server memories
+            if not any(server_memory.lower() in mem.lower() for mem in server_profile["memories"]):
+                server_profile["memories"].append(server_memory)
+                
+                # Enforce server memory limit
+                from .config import load_config
+                config = load_config()
+                max_memories = config.get('MAX_SERVER_MEMORY', 100)
+                if len(server_profile["memories"]) > max_memories:
+                    server_profile["memories"] = server_profile["memories"][-max_memories:]
+                
+                server_profile["last_updated"] = datetime.now().isoformat()
+                
+                # Save the updated server profile
+                if not save_server_profile(guild_id):
+                    logging.error(f"Failed to save server profile for guild {guild_id}")
+                    success = False
+        
+        except Exception as e:
+            logging.error(f"Error adding server memory: {e}", exc_info=True)
+            success = False
+    
+    return success
+
+
 # Initialize required directories when module is imported
 ensure_dirs()

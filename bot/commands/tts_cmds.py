@@ -16,13 +16,13 @@ from ..logs import log_command
 from ..memory import get_profile, save_profile, get_server_profile, save_server_profile
 
 # Command group for TTS commands
-group = commands.Group(
-    name="tts",
-    description="Control text-to-speech settings",
-    invoke_without_command=True
-)
+@commands.group(name="tts", description="Control text-to-speech settings", invoke_without_command=True)
+async def tts_group(ctx):
+    """Text-to-speech commands."""
+    if ctx.invoked_subcommand is None:
+        await ctx.send("Use `!tts on` to enable TTS, `!tts off` to disable, or `!tts status` to check current status.")
 
-@group.command(name="on")
+@tts_group.command(name="on")
 async def tts_on(ctx):
     """Enable TTS for your messages."""
     try:
@@ -50,7 +50,7 @@ async def tts_on(ctx):
         await ctx.send("❌ An error occurred while updating your TTS preferences.")
         log_command(ctx, "tts_on_error", {"error": str(e)}, success=False)
 
-@group.command(name="off")
+@tts_group.command(name="off")
 async def tts_off(ctx):
     """Disable TTS for your messages."""
     try:
@@ -73,7 +73,7 @@ async def tts_off(ctx):
         await ctx.send("❌ An error occurred while updating your TTS preferences.")
         log_command(ctx, "tts_off_error", {"error": str(e)}, success=False)
 
-@group.command(name="status")
+@tts_group.command(name="status")
 async def tts_status(ctx):
     """Check your current TTS settings."""
     try:
@@ -102,7 +102,7 @@ async def tts_status(ctx):
         await ctx.send("❌ An error occurred while checking your TTS status.")
         log_command(ctx, "tts_status_error", {"error": str(e)}, success=False)
 
-@group.command(name="say")
+@tts_group.command(name="say")
 async def tts_say(ctx, *, text: str):
     """Make the bot say something with TTS."""
     if not DIA_AVAILABLE:
@@ -129,7 +129,7 @@ async def tts_say(ctx, *, text: str):
         await ctx.send("❌ An error occurred while generating TTS.")
         log_command(ctx, "tts_say_error", {"error": str(e)}, success=False)
 
-@group.command(name="voices")
+@tts_group.command(name="voices")
 async def list_voices(ctx):
     """List available TTS voices."""
     if not DIA_AVAILABLE:
@@ -161,7 +161,7 @@ async def list_voices(ctx):
         await ctx.send("❌ An error occurred while listing TTS voices.")
         log_command(ctx, "tts_voices_error", {"error": str(e)}, success=False)
 
-@group.command(name="set_voice")
+@tts_group.command(name="set_voice")
 async def set_voice_cmd(ctx, voice_id: str):
     """Set your preferred TTS voice."""
     if not DIA_AVAILABLE:
@@ -198,7 +198,7 @@ async def set_voice_cmd(ctx, voice_id: str):
         await ctx.send("❌ An error occurred while updating your voice preference.")
         log_command(ctx, "tts_set_voice_error", {"error": str(e)}, success=False)
 
-@group.command(name="speed")
+@tts_group.command(name="speed")
 async def set_speed(ctx, speed: float):
     """Set the TTS speaking rate (0.5 to 2.0)."""
     try:
@@ -234,7 +234,7 @@ async def set_speed(ctx, speed: float):
         await ctx.send("❌ An error occurred while updating your speed preference.")
         log_command(ctx, "tts_set_speed_error", {"error": str(e)}, success=False)
 
-@group.command(name="all")
+@tts_group.command(name="all")
 @commands.has_permissions(manage_guild=True)
 async def tts_all(ctx, status: str):
     """Enable or disable TTS for all users in this server (Admin only)."""
@@ -273,5 +273,5 @@ async def tts_all(ctx, status: str):
         log_command(ctx, "tts_all_error", {"error": str(e)}, success=False)
 
 # Register the command group
-def setup(bot):
-    bot.add_command(group)
+async def setup(bot):
+    bot.add_command(tts_group)

@@ -1,0 +1,41 @@
+# Include the README and other documentation
+include README.md
+include LICENSE
+include CHANGELOG.md
+include pyproject.toml
+include requirements.txt
+
+# Include all Python files in the bot package
+recursive-include bot *.py
+recursive-include bot *.txt
+recursive-include bot *.md
+recursive-include bot *.yml
+recursive-include bot *.yaml
+
+# Include configuration files
+include .env-sample
+include *.sh
+
+# Include test files
+recursive-include tests *.py
+
+# Include documentation
+recursive-include docs *.md
+recursive-include docs *.rst
+recursive-include docs *.txt
+
+# Exclude cache and build files
+global-exclude *.pyc
+global-exclude __pycache__
+global-exclude *.pyo
+global-exclude *.pyd
+global-exclude .DS_Store
+global-exclude *.so
+global-exclude .git*
+global-exclude .venv*
+global-exclude venv*
+global-exclude .mypy_cache*
+global-exclude .pytest_cache*
+global-exclude *.egg-info*
+global-exclude build*
+global-exclude dist*

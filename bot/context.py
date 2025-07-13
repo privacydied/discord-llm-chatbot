@@ -97,6 +97,32 @@ def get_conversation_history(message: Message, max_messages: int = 10) -> List[D
     key = context_key(message)
     return conversation_store.get(key, [])[-max_messages:]
 
+def get_conversation_context(user_id: str, guild_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Get conversation context by user_id and guild_id."""
+    # Generate context key based on user_id and guild_id
+    if guild_id:
+        # For guild channels, we need to determine the specific channel
+        # For now, use a general guild-user key pattern
+        key = f"guild_{guild_id}_user_{user_id}"
+    else:
+        # For DM channels
+        key = f"dm_{user_id}"
+    
+    # Get the conversation history
+    context = conversation_store.get(key, [])
+    
+    # Clean up old messages based on TTL
+    current_time = time.time()
+    context = [
+        msg for msg in context
+        if current_time - msg.get('timestamp', 0) <= CONTEXT_TTL
+    ]
+    
+    # Update the store with cleaned context
+    conversation_store[key] = context
+    
+    return context.copy()
+
 def get_last_user_message(key: str) -> Optional[Dict[str, Any]]:
     """Get the last user message in a conversation."""
     messages = conversation_store.get(key, [])

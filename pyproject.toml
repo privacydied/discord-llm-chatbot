@@ -1,0 +1,231 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "discord-llm-chatbot"
+version = "0.1.0"
+description = "Production-ready Discord bot with AI capabilities"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Discord Bot Developer", email = "developer@example.com"}
+]
+maintainers = [
+    {name = "Discord Bot Developer", email = "developer@example.com"}
+]
+keywords = ["discord", "bot", "ai", "llm", "chatbot", "openai", "ollama"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Communications :: Chat",
+    "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+requires-python = ">=3.9,<3.12"
+
+# Core dependencies
+dependencies = [
+    # Core Dependencies
+    "python-dotenv>=1.0.0",
+    "discord.py>=2.3.0",
+    
+    # AI/ML Dependencies
+    "ollama>=0.2.0",
+    "openai>=1.94.0",
+    "TTS>=0.22.0",
+    
+    # Web & Networking
+    "httpx>=0.27.0",
+    "requests>=2.31.0",
+    "beautifulsoup4>=4.12.0",
+    "urllib3>=2.2.0",
+    "playwright>=1.42.0",
+    "trafilatura>=1.6.0",
+    
+    # Caching & Utilities
+    "cachetools>=5.3.0",
+    "fake-useragent>=1.4.0",
+    
+    # PDF Processing
+    "PyMuPDF>=1.23.0",
+    "pytesseract>=0.3.0",
+    "Pillow>=10.0.0",
+    "python-magic>=0.4.0",
+    
+    # Audio Processing (for TTS)
+    "soundfile>=0.12.0",
+    "librosa>=0.10.0",
+    "numpy>=1.19.0",
+]
+
+[project.optional-dependencies]
+# Development dependencies
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "flake8>=6.0.0",
+    "mypy>=1.0.0",
+    "pre-commit>=3.0.0",
+]
+
+# Testing dependencies
+test = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
+    "pytest-mock>=3.10.0",
+    "responses>=0.23.0",
+]
+
+# Documentation dependencies
+docs = [
+    "mkdocs>=1.4.0",
+    "mkdocs-material>=9.0.0",
+    "mkdocstrings[python]>=0.20.0",
+]
+
+# Production extras
+production = [
+    "gunicorn>=21.0.0",
+    "uvicorn[standard]>=0.23.0",
+]
+
+# All development dependencies
+all = [
+    "discord-llm-chatbot[dev,test,docs]"
+]
+
+[project.urls]
+Homepage = "https://github.com/user/discord-llm-chatbot"
+Documentation = "https://github.com/user/discord-llm-chatbot#readme"
+Repository = "https://github.com/user/discord-llm-chatbot"
+Issues = "https://github.com/user/discord-llm-chatbot/issues"
+Changelog = "https://github.com/user/discord-llm-chatbot/blob/main/CHANGELOG.md"
+
+[project.scripts]
+discord-llm-bot = "bot.main:run_bot"
+
+[tool.setuptools.packages.find]
+include = ["bot*"]
+exclude = ["tests*", "docs*"]
+
+[tool.setuptools.package-data]
+bot = ["*.txt", "*.md", "*.yml", "*.yaml"]
+
+# Black configuration
+[tool.black]
+line-length = 100
+target-version = ['py39', 'py310', 'py311']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+  | migrations
+)/
+'''
+
+# isort configuration
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 100
+known_first_party = ["bot"]
+known_third_party = ["discord", "asyncio", "aiohttp", "requests"]
+
+# MyPy configuration
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+[[tool.mypy.overrides]]
+module = [
+    "discord.*",
+    "aiohttp.*",
+    "trafilatura.*",
+    "pytesseract.*",
+    "PIL.*",
+    "soundfile.*",
+    "librosa.*",
+    "TTS.*",
+    "ollama.*",
+]
+ignore_missing_imports = true
+
+# Pytest configuration
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "--cov=bot",
+    "--cov-report=term-missing:skip-covered",
+    "--cov-report=html",
+    "--cov-report=xml",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+]
+
+# Coverage configuration
+[tool.coverage.run]
+source = ["bot"]
+branch = true
+omit = [
+    "*/tests/*",
+    "*/test_*",
+    "*/__pycache__/*",
+    "*/migrations/*",
+    "*/venv/*",
+    "*/.venv/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]
+
+[tool.coverage.html]
+directory = "htmlcov"

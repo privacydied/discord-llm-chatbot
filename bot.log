@@ -5378,3 +5378,43 @@ KeyError: 'tone'
 2025-07-13 03:59:01,386 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
 2025-07-13 03:59:07,520 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
 2025-07-13 03:59:12,745 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-13 04:00:23,970 - root - INFO - SIGINT received, saving all modified profiles...
+2025-07-13 04:00:23,971 - root - INFO - Flushing all modified profiles to disk...
+2025-07-13 04:00:23,989 - root - INFO - Successfully flushed all profiles to disk
+2025-07-13 04:00:23,989 - root - INFO - Successfully saved all profiles. Shutting down...
+/volume1/py/discord-llm-chatbot-git/venv/lib/python3.11/site-packages/numba/cpython/old_hashing.py:477: UserWarning: FNV hashing is not implemented in Numba. See PEP 456 https://www.python.org/dev/peps/pep-0456/ for rationale over not using FNV. Numba will continue to work, but hashes for built in types will be computed using siphash24. This will permit e.g. dictionaries to continue to behave as expected, however anything relying on the value of the hash opposed to hash as a derived property is likely to not work as expected.
+  warnings.warn(msg)
+[2025-07-13 04:01:09] [INFO    ] discord.client: logging in using static token
+2025-07-13 04:01:09,625 - discord.client - INFO - logging in using static token
+2025-07-13 04:01:09,625 - discord.client - INFO - logging in using static token
+[2025-07-13 04:01:10] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: 0e55bef3f4807e617f27935100c900ec).
+2025-07-13 04:01:10,507 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 0e55bef3f4807e617f27935100c900ec).
+2025-07-13 04:01:10,507 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 0e55bef3f4807e617f27935100c900ec).
+2025-07-13 04:01:12,524 - root - INFO - Yoroi is now running! (hot config)
+2025-07-13 04:01:12,524 - root - INFO - Yoroi is now running! (hot config)
+2025-07-13 04:02:25,072 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-13 04:02:25,072 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-13 04:30:16,020 - root - INFO - SIGTERM received, saving all modified profiles...
+2025-07-13 04:30:16,020 - root - INFO - SIGTERM received, saving all modified profiles...
+2025-07-13 04:30:16,020 - root - INFO - Flushing all modified profiles to disk...
+2025-07-13 04:30:16,020 - root - INFO - Flushing all modified profiles to disk...
+2025-07-13 04:30:16,050 - root - INFO - Successfully flushed all profiles to disk
+2025-07-13 04:30:16,050 - root - INFO - Successfully flushed all profiles to disk
+2025-07-13 04:30:16,050 - root - INFO - Successfully saved all profiles. Shutting down...
+2025-07-13 04:30:16,050 - root - INFO - Successfully saved all profiles. Shutting down...
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot-git/bot/main.py", line 14, in <module>
+    from .config import load_config, validate_required_env, ConfigurationError
+ImportError: attempted relative import with no known parent package
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot-git/bot/main.py", line 14, in <module>
+    from .config import load_config, validate_required_env, ConfigurationError
+ImportError: attempted relative import with no known parent package
+2025-07-13 12:35:02,256 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+2025-07-13 12:35:02,260 - discord.client - INFO - logging in using static token
+2025-07-13 12:35:03,082 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 621fc1f8ff944e1575deeb6dbaf05a32).
+2025-07-13 12:35:05,096 - root - INFO - Yoroi is now running! (hot config)
+2025-07-13 12:35:13,978 - root - INFO - SIGINT received, saving all modified profiles...
+2025-07-13 12:35:13,978 - root - INFO - Flushing all modified profiles to disk...
+2025-07-13 12:35:13,978 - root - INFO - Successfully flushed all profiles to disk
+2025-07-13 12:35:13,978 - root - INFO - Successfully saved all profiles. Shutting down...

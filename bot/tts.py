@@ -4,6 +4,7 @@ Text-to-speech functionality using DIA TTS.
 import os
 import tempfile
 import logging
+import asyncio
 from pathlib import Path
 from typing import Optional, Tuple, Dict, Any
 
@@ -210,3 +211,38 @@ def set_speaking_rate(rate: float) -> bool:
         return True
     except (ValueError, TypeError):
         return False
+
+async def setup_tts() -> None:
+    """Initialize TTS system."""
+    try:
+        # Ensure temp directory exists
+        temp_dir = Path(config["TEMP_DIR"])
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        
+        if DIA_AVAILABLE:
+            logging.info("TTS system initialized successfully")
+        else:
+            logging.warning("TTS system initialized without DIA TTS support")
+            
+    except Exception as e:
+        logging.error(f"Error during TTS setup: {e}")
+
+def cleanup_tts() -> None:
+    """Clean up TTS resources and temporary files."""
+    try:
+        # Clean up temporary TTS files
+        temp_dir = Path(config["TEMP_DIR"])
+        if temp_dir.exists():
+            for file_path in temp_dir.glob("*.wav"):
+                try:
+                    file_path.unlink()
+                except OSError as e:
+                    logging.error(f"Error deleting TTS temp file {file_path}: {e}")
+        
+        # Reset TTS settings
+        tts_settings['user_settings'].clear()
+        
+        logging.info("TTS cleanup completed")
+        
+    except Exception as e:
+        logging.error(f"Error during TTS cleanup: {e}")
