@@ -155,7 +155,7 @@ def save_profile(profile: dict, force: bool = False) -> bool:
                 try:
                     shutil.copy2(profile_path, backup_path)
                 except IOError as e:
-                    logging.error(f"Failed to create backup for {profile_path}: {e}"
+                    logging.error(f"Failed to create backup for {profile_path}: {e}")
                     
             # Save the profile
             try:
@@ -323,6 +323,109 @@ def flush_all_profiles() -> bool:
     for guild_id in server_ids:
         try:
             if not save_server_profile(guild_id):
+                success = False
+                logging.error(f"Failed to save server profile for guild {guild_id}")
+        except Exception as e:
+            success = False
+            logging.error(f"Error saving server profile for guild {guild_id}: {e}")
+    
+    return success
+
+# Global profile stores that main.py expects to import
+user_profiles = user_cache
+server_profiles = server_cache
+
+def load_all_profiles() -> None:
+    """Load all user profiles from disk into memory cache."""
+    from .config import load_config
+    config = load_config()
+    
+    profile_dir = config["USER_PROFILE_DIR"]
+    if not profile_dir.exists():
+        logging.info("User profile directory does not exist, creating it")
+        profile_dir.mkdir(parents=True, exist_ok=True)
+        return
+    
+    loaded_count = 0
+    for profile_file in profile_dir.glob("*.json"):
+        try:
+            user_id = profile_file.stem
+            with open(profile_file, 'r', encoding='utf-8') as f:
+                profile = json.load(f)
+            
+            # Ensure profile has all required fields
+            profile = ensure_profile_schema(profile, user_id)
+            
+            with user_cache_lock:
+                user_cache[user_id] = profile
+            
+            loaded_count += 1
+            
+        except Exception as e:
+            logging.error(f"Error loading user profile {profile_file}: {e}")
+    
+    logging.info(f"Loaded {loaded_count} user profiles from disk")
+
+def save_all_profiles() -> bool:
+    """Save all user profiles from memory cache to disk."""
+    success = True
+    
+    with user_cache_lock:
+        user_ids = list(user_cache.keys())
+    
+    for user_id in user_ids:
+        try:
+            profile = user_cache.get(user_id)
+            if profile and not save_profile(profile, force=True):
+                success = False
+                logging.error(f"Failed to save profile for user {user_id}")
+        except Exception as e:
+            success = False
+            logging.error(f"Error saving profile for user {user_id}: {e}")
+    
+    return success
+
+def load_all_server_profiles() -> None:
+    """Load all server profiles from disk into memory cache."""
+    from .config import load_config
+    config = load_config()
+    
+    profile_dir = config["SERVER_PROFILE_DIR"]
+    if not profile_dir.exists():
+        logging.info("Server profile directory does not exist, creating it")
+        profile_dir.mkdir(parents=True, exist_ok=True)
+        return
+    
+    loaded_count = 0
+    for profile_file in profile_dir.glob("*.json"):
+        try:
+            guild_id = profile_file.stem
+            with open(profile_file, 'r', encoding='utf-8') as f:
+                profile = json.load(f)
+            
+            # Ensure profile has all required fields
+            profile = ensure_server_profile_schema(profile, guild_id)
+            
+            with server_lock:
+                server_cache[guild_id] = profile
+            
+            loaded_count += 1
+            
+        except Exception as e:
+            logging.error(f"Error loading server profile {profile_file}: {e}")
+    
+    logging.info(f"Loaded {loaded_count} server profiles from disk")
+
+def save_all_server_profiles() -> bool:
+    """Save all server profiles from memory cache to disk."""
+    success = True
+    
+    with server_lock:
+        guild_ids = list(server_cache.keys())
+    
+    for guild_id in guild_ids:
+        try:
+            if not save_server_profile(guild_id, force=True):
                 success = False
                 logging.error(f"Failed to save server profile for guild {guild_id}")
         except Exception as e:

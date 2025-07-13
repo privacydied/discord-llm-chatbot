@@ -5226,3 +5226,131 @@ KeyError: 'tone'
 2025-07-12 20:35:57,877 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
 2025-07-12 20:37:09,781 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
 2025-07-12 20:37:09,781 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+/volume1/py/discord-llm-chatbot/venv/lib/python3.11/site-packages/numba/cpython/old_hashing.py:477: UserWarning: FNV hashing is not implemented in Numba. See PEP 456 https://www.python.org/dev/peps/pep-0456/ for rationale over not using FNV. Numba will continue to work, but hashes for built in types will be computed using siphash24. This will permit e.g. dictionaries to continue to behave as expected, however anything relying on the value of the hash opposed to hash as a derived property is likely to not work as expected.
+  warnings.warn(msg)
+[2025-07-13 00:08:12] [INFO    ] discord.client: logging in using static token
+2025-07-13 00:08:12,099 - discord.client - INFO - logging in using static token
+2025-07-13 00:08:12,099 - discord.client - INFO - logging in using static token
+[2025-07-13 00:08:13] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: 51b87856689df0f901755e8d376d92a8).
+2025-07-13 00:08:13,014 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 51b87856689df0f901755e8d376d92a8).
+2025-07-13 00:08:13,014 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 51b87856689df0f901755e8d376d92a8).
+2025-07-13 00:08:15,027 - root - INFO - Ronin is now running! (hot config)
+2025-07-13 00:08:15,027 - root - INFO - Ronin is now running! (hot config)
+2025-07-13 00:08:29,670 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-13 00:08:29,670 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-13 00:08:40,512 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-13 00:08:40,512 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-13 00:08:40,567 - root - ERROR - Error in VL API call: 'choices'
+2025-07-13 00:08:40,567 - root - ERROR - Error in VL API call: 'choices'
+2025-07-13 00:08:40,568 - root - ERROR - VL model returned empty caption
+2025-07-13 00:08:40,568 - root - ERROR - VL model returned empty caption
+2025-07-13 00:08:47,785 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-13 00:08:47,785 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-13 00:10:01,724 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-13 00:10:01,724 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-13 00:10:13,854 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-13 00:10:13,854 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-13 00:10:21,120 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-13 00:10:21,120 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-13 00:14:11,620 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-13 00:14:11,620 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+/volume1/py/discord-llm-chatbot-git/venv/lib/python3.11/site-packages/numba/cpython/old_hashing.py:477: UserWarning: FNV hashing is not implemented in Numba. See PEP 456 https://www.python.org/dev/peps/pep-0456/ for rationale over not using FNV. Numba will continue to work, but hashes for built in types will be computed using siphash24. This will permit e.g. dictionaries to continue to behave as expected, however anything relying on the value of the hash opposed to hash as a derived property is likely to not work as expected.
+  warnings.warn(msg)
+[2025-07-13 00:39:48] [INFO    ] discord.client: logging in using static token
+2025-07-13 00:39:48,736 - discord.client - INFO - logging in using static token
+2025-07-13 00:39:48,736 - discord.client - INFO - logging in using static token
+[2025-07-13 00:39:49] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: 570ce143e6dff7e7ddb8554c63ee2df5).
+2025-07-13 00:39:49,494 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 570ce143e6dff7e7ddb8554c63ee2df5).
+2025-07-13 00:39:49,494 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 570ce143e6dff7e7ddb8554c63ee2df5).
+2025-07-13 00:39:51,645 - root - INFO - Yoroi is now running! (hot config)
+2025-07-13 00:39:51,645 - root - INFO - Yoroi is now running! (hot config)
+2025-07-13 00:39:52,057 - root - INFO - SIGTERM received, saving all modified profiles...
+2025-07-13 00:39:52,057 - root - INFO - SIGTERM received, saving all modified profiles...
+2025-07-13 00:39:52,057 - root - INFO - Flushing all modified profiles to disk...
+2025-07-13 00:39:52,057 - root - INFO - Flushing all modified profiles to disk...
+2025-07-13 00:39:52,057 - root - INFO - Successfully flushed all profiles to disk
+2025-07-13 00:39:52,057 - root - INFO - Successfully flushed all profiles to disk
+2025-07-13 00:39:52,058 - root - INFO - Successfully saved all profiles. Shutting down...
+2025-07-13 00:39:52,058 - root - INFO - Successfully saved all profiles. Shutting down...
+/volume1/py/discord-llm-chatbot-git/venv/lib/python3.11/site-packages/numba/cpython/old_hashing.py:477: UserWarning: FNV hashing is not implemented in Numba. See PEP 456 https://www.python.org/dev/peps/pep-0456/ for rationale over not using FNV. Numba will continue to work, but hashes for built in types will be computed using siphash24. This will permit e.g. dictionaries to continue to behave as expected, however anything relying on the value of the hash opposed to hash as a derived property is likely to not work as expected.
+  warnings.warn(msg)
+[2025-07-13 00:40:02] [INFO    ] discord.client: logging in using static token
+2025-07-13 00:40:02,876 - discord.client - INFO - logging in using static token
+2025-07-13 00:40:02,876 - discord.client - INFO - logging in using static token
+[2025-07-13 00:40:04] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: c0e2c897aa903f1ec06cdc24d52d35ea).
+2025-07-13 00:40:04,321 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: c0e2c897aa903f1ec06cdc24d52d35ea).
+2025-07-13 00:40:04,321 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: c0e2c897aa903f1ec06cdc24d52d35ea).
+2025-07-13 00:40:06,349 - root - INFO - Yoroi is now running! (hot config)
+2025-07-13 00:40:06,349 - root - INFO - Yoroi is now running! (hot config)
+2025-07-13 00:43:45,367 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-13 00:43:45,367 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-13 00:44:45,401 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-13 00:44:45,401 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-13 00:45:59,004 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-13 00:45:59,004 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-13 00:46:40,195 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-13 00:46:40,195 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-13 00:52:20,607 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-13 00:52:20,607 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-13 01:02:16,125 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-13 01:02:16,125 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-13 01:10:20,290 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-13 01:10:20,290 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-13 01:10:56,622 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-13 01:10:56,622 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-13 01:11:29,813 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-13 01:11:29,813 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-13 01:12:07,959 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-13 01:12:07,959 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-13 01:15:24,936 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-13 01:15:24,936 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-13 01:16:04,724 - httpx - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=%3C%401393747399221973077%3E%20ayo%20i%20hate%20hakeem%20jeffries%20he%20uh%20goofy%20ass%20nigga%20who%20is%20like%20%27look%20at%20my%20beautiful%20blue%20eyes%27%20like%20shut%20up%20nigga%20damn&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 200 OK"
+2025-07-13 01:16:04,724 - httpx - INFO - HTTP Request: GET https://api.duckduckgo.com/?q=%3C%401393747399221973077%3E%20ayo%20i%20hate%20hakeem%20jeffries%20he%20uh%20goofy%20ass%20nigga%20who%20is%20like%20%27look%20at%20my%20beautiful%20blue%20eyes%27%20like%20shut%20up%20nigga%20damn&format=json&no_html=1&skip_disambig=1 "HTTP/1.1 200 OK"
+2025-07-13 01:16:06,528 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-13 01:16:06,528 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-13 01:16:51,934 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-13 01:16:51,934 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-13 01:40:44,848 - root - INFO - SIGTERM received, saving all modified profiles...
+2025-07-13 01:40:44,848 - root - INFO - SIGTERM received, saving all modified profiles...
+2025-07-13 01:40:44,849 - root - INFO - Flushing all modified profiles to disk...
+2025-07-13 01:40:44,849 - root - INFO - Flushing all modified profiles to disk...
+2025-07-13 01:40:44,881 - root - INFO - Successfully flushed all profiles to disk
+2025-07-13 01:40:44,881 - root - INFO - Successfully flushed all profiles to disk
+2025-07-13 01:40:44,881 - root - INFO - Successfully saved all profiles. Shutting down...
+2025-07-13 01:40:44,881 - root - INFO - Successfully saved all profiles. Shutting down...
+/volume1/py/discord-llm-chatbot-git/venv/lib/python3.11/site-packages/numba/cpython/old_hashing.py:477: UserWarning: FNV hashing is not implemented in Numba. See PEP 456 https://www.python.org/dev/peps/pep-0456/ for rationale over not using FNV. Numba will continue to work, but hashes for built in types will be computed using siphash24. This will permit e.g. dictionaries to continue to behave as expected, however anything relying on the value of the hash opposed to hash as a derived property is likely to not work as expected.
+  warnings.warn(msg)
+[2025-07-13 01:40:56] [INFO    ] discord.client: logging in using static token
+2025-07-13 01:40:56,452 - discord.client - INFO - logging in using static token
+2025-07-13 01:40:56,452 - discord.client - INFO - logging in using static token
+[2025-07-13 01:40:57] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: 25b97868ac04c57e63ab9a9c7b793814).
+2025-07-13 01:40:57,297 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 25b97868ac04c57e63ab9a9c7b793814).
+2025-07-13 01:40:57,297 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 25b97868ac04c57e63ab9a9c7b793814).
+2025-07-13 01:40:59,309 - root - INFO - Yoroi is now running! (hot config)
+2025-07-13 01:40:59,309 - root - INFO - Yoroi is now running! (hot config)
+2025-07-13 01:41:04,918 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-13 01:41:04,918 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-13 01:52:25,047 - root - INFO - SIGTERM received, saving all modified profiles...
+2025-07-13 01:52:25,047 - root - INFO - SIGTERM received, saving all modified profiles...
+2025-07-13 01:52:25,047 - root - INFO - Flushing all modified profiles to disk...
+2025-07-13 01:52:25,047 - root - INFO - Flushing all modified profiles to disk...
+2025-07-13 01:52:25,070 - root - INFO - Successfully flushed all profiles to disk
+2025-07-13 01:52:25,070 - root - INFO - Successfully flushed all profiles to disk
+2025-07-13 01:52:25,071 - root - INFO - Successfully saved all profiles. Shutting down...
+2025-07-13 01:52:25,071 - root - INFO - Successfully saved all profiles. Shutting down...
+/volume1/py/discord-llm-chatbot-git/venv/lib/python3.11/site-packages/numba/cpython/old_hashing.py:477: UserWarning: FNV hashing is not implemented in Numba. See PEP 456 https://www.python.org/dev/peps/pep-0456/ for rationale over not using FNV. Numba will continue to work, but hashes for built in types will be computed using siphash24. This will permit e.g. dictionaries to continue to behave as expected, however anything relying on the value of the hash opposed to hash as a derived property is likely to not work as expected.
+  warnings.warn(msg)
+[2025-07-13 01:52:35] [INFO    ] discord.client: logging in using static token
+2025-07-13 01:52:35,581 - discord.client - INFO - logging in using static token
+2025-07-13 01:52:35,581 - discord.client - INFO - logging in using static token
+[2025-07-13 01:52:36] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: 734cf992488fab656de331716a17fe25).
+2025-07-13 01:52:36,317 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 734cf992488fab656de331716a17fe25).
+2025-07-13 01:52:36,317 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 734cf992488fab656de331716a17fe25).
+2025-07-13 01:52:38,329 - root - INFO - Yoroi is now running! (hot config)
+2025-07-13 01:52:38,329 - root - INFO - Yoroi is now running! (hot config)
+2025-07-13 01:52:41,814 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-13 01:52:41,814 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-13 01:53:56,073 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-13 01:53:56,073 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-13 01:54:16,545 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2025-07-13 01:54:16,545 - httpx - INFO - HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"

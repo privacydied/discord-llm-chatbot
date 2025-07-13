@@ -32,4 +32,6 @@ def load_config():
         "FREQUENCY_PENALTY": float(os.getenv("FREQUENCY_PENALTY", "0.0")),
         "PRESENCE_PENALTY": float(os.getenv("PRESENCE_PENALTY", "0.0")),
         "LOG_LEVEL": os.getenv("LOG_LEVEL", "INFO"),
+        "COMMAND_PREFIX": os.getenv("COMMAND_PREFIX", "!"),
+        "OWNER_IDS": [int(id.strip()) for id in os.getenv("OWNER_IDS", "").split(",") if id.strip()],
     }

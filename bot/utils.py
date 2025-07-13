@@ -154,6 +154,9 @@ async def send_in_chunks(channel, text: str, reference=None, chunk_size: int = 2
     
     return sent_messages
 
+# Alias for backward compatibility with main.py import
+send_chunks = send_in_chunks
+
 def extract_mentions(text: str) -> List[Tuple[str, str]]:
     """
     Extract user and role mentions from text.

@@ -12,7 +12,7 @@ import discord
 from discord.ext import commands
 
 # Import bot modules
-from .config import load_config, setup_logging
+from .config import load_config
 from .memory import (
     load_all_profiles, save_all_profiles,
     load_all_server_profiles, save_all_server_profiles,
@@ -28,7 +28,7 @@ from .web import process_url, get_url_preview
 from .pdf_utils import pdf_processor, PDFProcessor
 from .ollama import ollama_client, OllamaAPIError, generate_response
 from .commands import setup_commands
-from .logs import setup_logging as setup_logging_utils, log_command, log_message
+from .logs import setup_logging, log_command, log_message
 from .utils import send_chunks, download_file, is_text_file
 
 # Load configuration
@@ -45,7 +45,6 @@ INTENTS.guilds = True
 
 # Set up logging
 logger = setup_logging()
-setup_logging_utils()
 
 class LLMBot(commands.Bot):
     """Custom bot class with additional functionality."""

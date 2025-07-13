@@ -40,6 +40,30 @@ def get_all_commands() -> dict:
     # Return only the primary commands (no aliases)
     return {name: cmd for name, cmd in commands.items() if name == cmd['name']}
 
+async def setup_commands(bot):
+    """
+    Set up all command modules with the bot instance.
+    This function is called during bot startup to register all commands.
+    """
+    import logging
+    
+    try:
+        # Import and set up memory commands
+        from . import memory_cmds
+        await memory_cmds.setup(bot)
+        logging.info("Memory commands registered")
+        
+        # Import and set up TTS commands  
+        from . import tts_cmds
+        await tts_cmds.setup(bot)
+        logging.info("TTS commands registered")
+        
+        logging.info("All command modules registered successfully")
+        
+    except Exception as e:
+        logging.error(f"Error setting up commands: {e}", exc_info=True)
+        raise
+
 # Import all command modules to register them
 # This must be done after the command registry is set up
 # and after all command decorators are defined

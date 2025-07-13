@@ -118,6 +118,21 @@ def log_dm_message(message) -> str:
         logging.error(f"Error logging DM: {e}", exc_info=True)
         return ""
 
+def log_message(message) -> None:
+    """
+    Log a message from Discord, handling both DM and server messages.
+    This function determines the appropriate logging method based on message type.
+    """
+    try:
+        if isinstance(message.channel, discord.DMChannel):
+            # Log as DM message
+            log_dm_message(message)
+        else:
+            # Log as user message in server
+            log_user_message(message)
+    except Exception as e:
+        logging.error(f"Error logging message: {e}", exc_info=True)
+
 def log_command(ctx, command_name: str, args: dict, success: bool = True, error: Optional[str] = None):
     """Log a command execution."""
     try:
