@@ -12,39 +12,96 @@ import discord
 from discord.ext import commands
 
 # Import all required helpers
-from .config import load_config, validate_required_env, ConfigurationError, audit_env_file, validate_prompt_files, check_venv_activation
-from .logs import configure_logging
-from .commands import setup_commands
-from .tasks import spawn_background_tasks
-from .shutdown import setup_signal_handlers
-from .memory import load_all_profiles, load_all_server_profiles, user_profiles, server_profiles
-from .tts import setup_tts
+from bot.config import load_config, validate_required_env, ConfigurationError, audit_env_file, validate_prompt_files, check_venv_activation
+from bot.logs import configure_logging
+from bot.router import setup_router, get_router
+from bot.tasks import spawn_background_tasks
+from bot.shutdown import setup_signal_handlers
+from bot.memory import load_all_profiles, load_all_server_profiles, user_profiles, server_profiles
+from bot.tts_manager import tts_manager
+from bot.tts_state import tts_state
+from bot.events import cache_maintenance_task
+
+# Add the bot directory to the Python path
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.absolute()))
 
 
 def create_bot_intents() -> discord.Intents:
-    """Create Discord intents based on environment configuration."""
-    intents = discord.Intents.default()
-    intents.message_content = os.getenv("ENABLE_MSG_INTENT", "true").lower() == "true"
-    intents.members = True
-    intents.guilds = True
+    """Create Discord intents with all required permissions."""
+    intents = discord.Intents.all()  # Start with all intents enabled
+    
+    # Log the intents being used
+    print("\n🔍 Bot Intents:")
+    print(f"  - message_content: {intents.message_content}")
+    print(f"  - members: {intents.members}")
+    print(f"  - guilds: {intents.guilds}")
+    print(f"  - messages: {intents.messages}")
+    print(f"  - guild_messages: {intents.guild_messages}")
+    print(f"  - dm_messages: {intents.dm_messages}")
+    
     return intents
 
 
 class LLMBot(commands.Bot):
     """Minimal bot class with bootstrap functionality only."""
     
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, command_prefix, intents, *args, **kwargs):
+        super().__init__(command_prefix, intents=intents, *args, **kwargs)
         self.startup_time = None
         self.config = load_config()
     
     async def setup_hook(self) -> None:
         """Bootstrap setup - load cogs and start services."""
+        print("🔧 Starting bot setup...")
         self.startup_time = discord.utils.utcnow()
-        await self._load_profiles()
-        await setup_tts()
-        await setup_commands(self)
-        await spawn_background_tasks(self)
+        
+        try:
+            # Initialize router first
+            print("🔄 Initializing router...")
+            self.router = setup_router(self)
+            print("✅ Router initialized")
+            
+            # Load all user and server profiles
+            print("🔄 Loading profiles...")
+            await self._load_profiles()
+            print("✅ Profiles loaded")
+            
+            # Load all command cogs
+            print("\n🔄 Loading command cogs...")
+            for ext in ['bot.commands.memory_cmds', 'bot.commands.tts_cmds']:
+                try:
+                    print(f"  ⏳ Loading {ext}...")
+                    await self.load_extension(ext)
+                    print(f"  ✅ Loaded extension: {ext}")
+                except Exception as e:
+                    print(f"  ❌ Failed to load extension {ext}: {str(e)}")
+                    import traceback
+                    traceback.print_exc()
+            
+            # Load events last
+            print("\n🔄 Loading events extension...")
+            try:
+                await self.load_extension('bot.events')
+                print("✅ Events extension loaded")
+            except Exception as e:
+                print(f"❌ Failed to load events extension: {str(e)}")
+                import traceback
+                traceback.print_exc()
+            
+            # Set up background tasks
+            print("\n🔄 Setting up background tasks...")
+            await spawn_background_tasks(self)
+            asyncio.create_task(cache_maintenance_task())
+            
+            print("\n🎉 Bot setup complete!")
+            
+        except Exception as e:
+            print(f"❌ Critical error during setup: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            raise
     
     async def _load_profiles(self) -> None:
         """Load all user and server profiles."""
@@ -54,6 +111,8 @@ class LLMBot(commands.Bot):
     
     async def on_ready(self) -> None:
         """Bootstrap completion notification."""
+        import logging
+        
         if not hasattr(self, 'startup_time'):
             self.startup_time = discord.utils.utcnow()
         
@@ -65,6 +124,36 @@ class LLMBot(commands.Bot):
         await self.change_presence(activity=activity)
         
         print(f"✅ {self.user} is ready! Connected to {len(self.guilds)} guilds")
+        
+        # Start TTS initialization in background
+        async def load_tts_model():
+            try:
+                # Direct async call with timeout
+                await asyncio.wait_for(tts_manager.load_model(), timeout=30.0)
+                logging.info("🔊 Kokoro-ONNX TTS initialized successfully")
+                tts_manager.set_available(True)
+                
+                # Log cache stats after successful init
+                cache_stats = tts_manager.get_cache_stats()
+                logging.info(f"🔊 TTS cache: {cache_stats['files']} files ({cache_stats['size_mb']:.1f}MB)")
+            except asyncio.TimeoutError:
+                logging.error("❌ TTS initialization timed out after 30 seconds")
+                tts_manager.set_available(False)
+            except Exception as e:
+                logging.error(f"❌ TTS initialization failed: {str(e)}")
+                tts_manager.set_available(False)
+        
+        # Start TTS initialization task
+        self.tts_init_task = asyncio.create_task(load_tts_model())
+        
+        # Startup watchdog to ensure bot remains responsive
+        async def startup_watchdog():
+            await asyncio.sleep(60)  # Wait 60 seconds
+            if not tts_manager.is_available():
+                logging.error("❌ TTS initialization watchdog: TTS still unavailable after 60 seconds")
+                tts_manager.set_available(False)  # Force availability to false
+        
+        asyncio.create_task(startup_watchdog())
 
 
 def parse_arguments() -> argparse.Namespace:

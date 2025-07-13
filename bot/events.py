@@ -1,381 +1,238 @@
 """
-Event handlers for Discord bot - extracted from main.py business logic.
+Event handlers for the Discord bot.
 """
-import os
-import re
+import asyncio
 import logging
+import sys
 from typing import Optional
 
 import discord
 from discord.ext import commands
 
-from .context import get_conversation_context
-from .logs import log_message, log_command
-from .memory import get_profile, get_server_profile
-# CRITICAL FIX: Use unified backend router instead of direct ollama import
-from .ai_backend import generate_response, generate_vl_response
-from .utils import send_chunks
-from .web import get_url_preview
-from . import stt  # CHANGE: Import STT module
-
+# Set up logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
+)
 logger = logging.getLogger(__name__)
 
+from bot.router import setup_router, get_router
+from bot.tts_manager import tts_manager
+from bot.tts_state import tts_state
+from bot.config import load_config
 
-def has_image_attachments(message: discord.Message) -> bool:
-    """
-    Utility function to detect image uploads in Discord messages.
-    CHANGE: Enhanced image detection with comprehensive debugging for hybrid multimodal logic.
-    """
-    logger.debug(f"🔍 has_image_attachments: checking {len(message.attachments)} attachments")
-    
-    if not message.attachments:
-        logger.debug("🔍 No attachments found")
-        return False
-    
-    image_extensions = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp'}
-    image_mimes = {'image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp', 'image/bmp'}
-    
-    for i, attachment in enumerate(message.attachments):
-        logger.debug(f"🔍 Checking attachment {i}: filename='{attachment.filename}'")
-        
-        # Check by file extension
-        filename_lower = attachment.filename.lower()
-        for ext in image_extensions:
-            if filename_lower.endswith(ext):
-                logger.info(f"✅ Image detected by extension: {attachment.filename} (extension: {ext})")
-                return True
-        
-        # Check by content type if available
-        if hasattr(attachment, 'content_type') and attachment.content_type:
-            logger.debug(f"🔍 Content type: {attachment.content_type}")
-            if attachment.content_type in image_mimes:
-                logger.info(f"✅ Image detected by MIME type: {attachment.filename} (MIME: {attachment.content_type})")
-                return True
-        else:
-            logger.debug(f"⚠️  No content_type available for {attachment.filename}")
-    
-    logger.debug("🔍 No images detected in attachments")
-    return False
-
-
-def get_image_urls(message: discord.Message) -> list:
-    """
-    Extract image URLs from Discord message attachments.
-    CHANGE: Added image URL extraction for VL model processing.
-    """
-    image_urls = []
-    if not message.attachments:
-        return image_urls
-    
-    image_extensions = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp'}
-    image_mimes = {'image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp', 'image/bmp'}
-    
-    for attachment in message.attachments:
-        is_image = False
-        
-        # Check by file extension
-        if any(attachment.filename.lower().endswith(ext) for ext in image_extensions):
-            is_image = True
-        
-        # Check by content type if available
-        if hasattr(attachment, 'content_type') and attachment.content_type in image_mimes:
-            is_image = True
-            
-        if is_image:
-            image_urls.append(attachment.url)
-    
-    return image_urls
-
-
-class EventHandlers(commands.Cog):
-    """Event handlers for message processing and AI responses."""
-    
-    def __init__(self, bot: commands.Bot):
+class BotEventHandler(commands.Cog):
+    def __init__(self, bot):
         self.bot = bot
+        self.config = load_config()
+        self.router = setup_router(bot)
+        self.prefix = self.config.get('COMMAND_PREFIX', '!')
+    
+    def _strip_prefix(self, content: str) -> str:
+        """Strip command prefix from message content."""
+        if content.startswith(self.prefix):
+            return content[len(self.prefix):].strip()
+        return content.strip()
+    
+    def _strip_mention(self, content: str) -> str:
+        """Strip bot mention from message content."""
+        # Remove <@!USER_ID> or <@USER_ID> mentions
+        mention = f'<@!{self.bot.user.id}>'
+        alt_mention = f'<@{self.bot.user.id}>'
+        
+        if content.startswith(mention):
+            return content[len(mention):].strip()
+        elif content.startswith(alt_mention):
+            return content[len(alt_mention):].strip()
+        return content
+    
+    async def dispatch_message(self, message: discord.Message) -> None:
+        """
+        Process a message through the appropriate pipeline.
+        Handles image attachments automatically, otherwise uses the router.
+        """
+        # Skip bot messages
+        if message.author.bot:
+            return
+        
+        # Check if message should be processed
+        is_dm = isinstance(message.channel, discord.DMChannel)
+        is_mentioned = self.bot.user.mentioned_in(message)
+        has_prefix = message.content.startswith(self.prefix)
+        has_image = any(att.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')) 
+                      for att in message.attachments)
+        
+        # Skip if no trigger and no image
+        if not (has_prefix or is_mentioned or is_dm or has_image):
+            return
+        
+        # Get clean input (strip prefix/mention)
+        content = message.content
+        if has_prefix:
+            content = self._strip_prefix(content)
+        elif is_mentioned:
+            content = self._strip_mention(content)
+        
+        # If there's an image, process it through VL and text models
+        if has_image and not (has_prefix or is_mentioned):
+            try:
+                # Process the first image attachment
+                image_attachment = next(
+                    att for att in message.attachments 
+                    if att.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif'))
+                )
+                
+                # Download the image
+                from pathlib import Path
+                import tempfile
+                import os
+                
+                with tempfile.NamedTemporaryFile(delete=False, suffix=Path(image_attachment.filename).suffix) as tmp:
+                    await image_attachment.save(tmp.name)
+                    image_path = Path(tmp.name)
+                
+                try:
+                    # Process image with VL model
+                    from bot.see import see_infer
+                    from bot.brain import brain_infer
+                    
+                    logger.info(f"👁️ Processing image: {image_attachment.filename}")
+                    
+                    # Get VL model description
+                    vl_result = await see_infer(image_path, content or "What's in this image?")
+                    logger.debug(f"VL model output: {vl_result[:200]}...")
+                    
+                    # Create enhanced prompt for text model
+                    enhanced_prompt = f"""Based on this image description:
+                    
+                    {vl_result}
+                    
+                    {content if content else 'What can you tell me about this image?'}
+                    """
+                    
+                    # Get text model response
+                    logger.info("🤖 Getting text model response...")
+                    response = await brain_infer(enhanced_prompt)
+                    
+                    # Send the final response
+                    await message.channel.send(response)
+                    
+                finally:
+                    # Clean up the temporary file
+                    try:
+                        os.unlink(image_path)
+                    except Exception as e:
+                        logger.warning(f"Failed to delete temp file {image_path}: {e}")
+                
+                # Return early since we've handled the image
+                return
+                
+            except Exception as e:
+                logger.error(f"Error processing image: {str(e)}", exc_info=True)
+                await message.channel.send("⚠️ An error occurred while processing the image")
+                return
+        
+        # For non-image messages or explicit commands, use the router
+        try:
+            await self.router.handle(message, content)
+        except Exception as e:
+            logger.error(f"Error in router.handle: {str(e)}", exc_info=True)
+            await message.channel.send("⚠️ An error occurred while processing your message")
     
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message) -> None:
-        """Process incoming messages."""
-        # CHANGE: Added ultra-verbose debug logging for all message processing
-        logger.debug(f"📨 on_message triggered: author={message.author.name}#{message.author.discriminator}, content_length={len(message.content)}")
-        logger.debug(f"📎 Attachments count: {len(message.attachments)}")
+        """Main message handler that dispatches to the router."""
+        print(f"\n📨 Message received from {message.author} in {message.channel}:"
+              f"\n  Content: {message.content}"
+              f"\n  Attachments: {len(message.attachments)}")
         
-        # CHANGE: Log every attachment for debugging
-        for i, attachment in enumerate(message.attachments):
-            logger.debug(f"📎 Attachment {i}: filename='{attachment.filename}', content_type='{getattr(attachment, 'content_type', 'UNKNOWN')}', url='{attachment.url}'")
-        
-        # CHANGE: Fixed AttributeError by using self.bot.user instead of self.user
-        # Ignore messages from the bot itself
-        if message.author == self.bot.user:
-            logger.debug("🤖 Ignoring message from bot itself")
-            return
-        
-        # Ignore messages from other bots
-        if message.author.bot:
-            logger.debug("🤖 Ignoring message from other bot")
-            return
-        
-        # Process commands first
-        await self.bot.process_commands(message)
-        
-        # Log the message
-        log_message(message)
-        
-        # Process URLs in the message
-        await self.process_urls(message)
-        
-        # CHANGE: Enhanced trigger condition logging
-        is_mentioned = self.bot.user.mentioned_in(message)
+        # Log message type and context
         is_dm = isinstance(message.channel, discord.DMChannel)
-        logger.debug(f"🎯 Trigger conditions: mentioned={is_mentioned}, is_dm={is_dm}")
+        is_mentioned = self.bot.user.mentioned_in(message)
+        has_prefix = message.content.startswith(self.prefix)
         
-        # Process AI responses if the bot is mentioned or in a DM
-        if is_mentioned or is_dm:
-            logger.info(f"🚀 Triggering AI response for message from {message.author.name}")
-            await self.generate_ai_response(message)
-        else:
-            logger.debug("🚫 AI response not triggered - bot not mentioned and not in DM")
-    
-    async def process_urls(self, message: discord.Message) -> None:
-        """Process URLs in a message."""
+        print(f"  Context - DM: {is_dm}, Mentioned: {is_mentioned}, Has Prefix: {has_prefix}")
+        
         try:
-            # Simple URL regex pattern
-            url_pattern = r'https?://[^\s]+'
-            urls = re.findall(url_pattern, message.content)
-            
-            for url in urls:
-                try:
-                    # Get URL preview
-                    preview = await get_url_preview(url)
-                    if preview:
-                        # Send the preview as an embed
-                        embed = discord.Embed(
-                            title=preview.get('title', 'Link Preview'),
-                            description=preview.get('description', '')[:500],
-                            url=url,
-                            color=discord.Color.blue()
-                        )
-                        
-                        if preview.get('image'):
-                            embed.set_image(url=preview['image'])
-                        
-                        await message.channel.send(embed=embed)
-                
-                except Exception as e:
-                    logger.error(f"Error processing URL {url}: {e}")
-        
+            await self.dispatch_message(message)
+            print("✅ Message processed successfully")
         except Exception as e:
-            logger.error(f"Error in process_urls: {e}", exc_info=True)
+            print(f"❌ Error processing message: {str(e)}")
+            import traceback
+            traceback.print_exc()
     
-    async def generate_ai_response(self, message: discord.Message) -> None:
-        """Generate an AI response to a message."""
-        try:
-            # Get user and guild IDs
-            user_id = str(message.author.id)
-            guild_id = str(message.guild.id) if message.guild else None
-            
-            # Get conversation context
-            conversation = get_conversation_context(user_id, guild_id)
-            
-            # Get user profile for TTS preference
-            user_profile = get_profile(user_id)
-            use_tts = user_profile.get('tts_enabled', False) if user_profile else False
-            
-            # Get server profile for TTS preference
-            if guild_id:
-                server_profile = get_server_profile(guild_id)
-                if server_profile and server_profile.get('tts_enabled', False):
-                    use_tts = True
-            
-            # Clean up the message content
-            content = message.content
-            if content.startswith(f'<@!{self.bot.user.id}>'):
-                content = content[len(f'<@!{self.bot.user.id}>'):].strip()
-            elif f'<@{self.bot.user.id}>' in content:
-                content = content.replace(f'<@{self.bot.user.id}>', '').strip()
-            
-            # Check if message has audio attachments
-            has_audio = any(
-                attachment.content_type and attachment.content_type.startswith("audio")
-                for attachment in message.attachments
-            )
-            
-            # Process audio attachments first
-            if has_audio:
-                logger.info("🎵 Audio attachment detected")
+    async def _is_admin(self, user: discord.Member, guild: discord.Guild) -> bool:
+        """Check if user has admin permissions."""
+        if guild is None:
+            return False
+        
+        # Check cached admin status
+        if tts_state.is_admin(user.id):
+            return True
+        
+        # Check Discord permissions
+        if user.guild_permissions.administrator:
+            tts_state.add_admin(user.id)
+            return True
+        
+        return False
+    
+    async def handle_hybrid_reply(self, ctx, text_response: str, mode: str = "both"):
+        """Hybrid inference pipeline for text and TTS responses."""
+        # For TTS modes, synthesize and send audio
+        if mode in ("tts", "both"):
+            if not tts_manager.is_available():
+                await ctx.send("🔄 TTS initializing—please retry in a moment.")
+            else:
                 try:
-                    # Use the first audio attachment
-                    audio_attachment = next(
-                        att for att in message.attachments
-                        if att.content_type and att.content_type.startswith("audio")
-                    )
+                    # Create temporary audio file
+                    import tempfile
+                    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmpfile:
+                        audio_path = Path(tmpfile.name)
                     
-                    # Normalize to WAV
-                    wav_path = await stt.normalise_to_wav(audio_attachment)
-                    # Transcribe
-                    transcript = await stt.transcribe_wav(wav_path)
-                    logger.info(f"🎵 STT transcript: {transcript}")
-                    # Use transcript as new content
-                    content = f"[Audio transcript:] {transcript}"
-                    # Clean up the WAV file
-                    try:
-                        wav_path.unlink()
-                    except Exception as e:
-                        logger.warning(f"Failed to delete WAV file: {e}")
-                except Exception as e:
-                    logger.error(f"Audio processing failed: {e}", exc_info=True)
-                    content = f"[Audio processing failed: {e}]"
-            
-            # Check if this is a search query
-            is_search = any(word in content.lower() for word in ['search', 'look up', 'find', 'what is'])
-            
-            try:
-                # Show typing indicator
-                async with message.channel.typing():
-                    # CHANGE: Enhanced hybrid multimodal logic with comprehensive debugging
-                    logger.debug("🤖 Starting AI response generation")
-                    logger.debug(f"🤖 User prompt: '{content[:100]}{'...' if len(content) > 100 else ''}'")
+                    # Synthesize audio asynchronously
+                    audio_path = await tts_manager.synthesize_async(text_response, audio_path)
                     
-                    # Check if message contains images
-                    has_images = has_image_attachments(message)
-                    logger.info(f"🖼️  Image detection result: {has_images}")
-                    
-                    if has_images:
-                        logger.info("🎨 ENTERING VL INFERENCE BRANCH")
-                        logger.debug(f"📁 VL_PROMPT_FILE = {os.getenv('VL_PROMPT_FILE')}")
-                        logger.debug(f"🤖 VL_MODEL = {os.getenv('VL_MODEL')}")
-                        
-                        # Get all image URLs from the message
-                        image_urls = get_image_urls(message)
-                        logger.debug(f"🖼️  Extracted {len(image_urls)} image URLs: {image_urls}")
-                        
-                        # Process the first image with VL model
-                        if image_urls:
-                            try:
-                                logger.info(f"🎨 Processing image with VL model: {image_urls[0][:100]}...")
-                                
-                                # Step 1: Use VL model with VL_PROMPT_FILE
-                                vl_response = await generate_vl_response(
-                                    image_url=image_urls[0],  # Process first image
-                                    user_prompt=content,  # Include user's text as additional context
-                                    user_id=user_id,
-                                    guild_id=guild_id,
-                                    temperature=0.7
-                                )
-                                
-                                vl_output = vl_response.get('text', '').strip()
-                                logger.info(f"✅ VL model returned {len(vl_output)} characters")
-                                logger.debug(f"🎨 VL model output preview: {vl_output[:200]}{'...' if len(vl_output) > 200 else ''}")
-                                
-                                if not vl_output:
-                                    logger.warning("⚠️  VL model returned empty output!")
-                                
-                                # Step 2: Feed VL output into text model with original context
-                                enhanced_context = f"{conversation}\n\nVision analysis:\n{vl_output}"
-                                logger.info("🔗 Chaining VL output into text model")
-                                logger.debug(f"🔗 Enhanced context length: {len(enhanced_context)} chars")
-                                
-                                # Generate final response using text model
-                                response = await generate_response(
-                                    prompt=content,
-                                    context=enhanced_context,
-                                    user_id=user_id,
-                                    guild_id=guild_id,
-                                    max_tokens=1000,
-                                    temperature=0.7
-                                )
-                                
-                                logger.info("🎉 Hybrid multimodal processing completed successfully")
-                                
-                            except Exception as vl_error:
-                                logger.error(f"❌ VL processing failed: {vl_error}", exc_info=True)
-                                # Fallback to text-only processing
-                                logger.warning("🔄 Falling back to text-only processing")
-                                response = await generate_response(
-                                    prompt=f"[Note: Image uploaded but vision processing failed] {content}",
-                                    context=conversation,
-                                    user_id=user_id,
-                                    guild_id=guild_id,
-                                    max_tokens=1000,
-                                    temperature=0.7
-                                )
-                        else:
-                            # No valid images found, fallback to text
-                            logger.warning("⚠️  No valid image URLs extracted despite has_image_attachments=True")
-                            logger.info("🔄 Falling back to text-only processing")
-                            response = await generate_response(
-                                prompt=content,
-                                context=conversation,
-                                user_id=user_id,
-                                guild_id=guild_id,
-                                max_tokens=1000,
-                                temperature=0.7
-                            )
+                    if audio_path and audio_path.exists():
+                        # Fix: Add missing closing parenthesis
+                        await ctx.send(file=discord.File(str(audio_path), filename="tts.ogg"))
                     else:
-                        # No images - standard text processing with PROMPT_FILE
-                        logger.info("📝 ENTERING STANDARD TEXT PROCESSING BRANCH")
-                        logger.debug(f"📁 PROMPT_FILE = {os.getenv('PROMPT_FILE')}")
-                        response = await generate_response(
-                            prompt=content,
-                            context=conversation,
-                            user_id=user_id,
-                            guild_id=guild_id,
-                            max_tokens=1000,
-                            temperature=0.7
-                        )
-                    
-                    # Send the response
-                    response_text = response.get('text', '').strip()
-                    if not response_text:
-                        return
-                    
-                    # Split long messages into chunks
-                    await send_chunks(message.channel, response_text)
-                    
-                    # Send TTS if enabled
-                    if use_tts:
-                        from .tts import generate_tts
-                        tts_file = await generate_tts(response_text, user_id=user_id)
-                        if tts_file and tts_file.exists():
-                            await message.channel.send(
-                                file=discord.File(tts_file, filename="tts_response.wav"),
-                                reference=message
-                            )
-                            # Clean up the temporary file
-                            try:
-                                tts_file.unlink()
-                            except Exception as e:
-                                logger.warning(f"Failed to delete TTS file: {e}")
-                
-                # Log the command
-                log_command(
-                    user_id=user_id,
-                    guild_id=guild_id,
-                    command="ai_response",
-                    success=True,
-                    message=content[:100]  # Log first 100 chars
-                )
-                
-            except Exception as e:
-                logger.error(f"Error generating AI response: {e}", exc_info=True)
-                
-                # Send an error message
-                error_msg = f"Sorry, I encountered an error: {str(e)}"
-                await message.channel.send(error_msg)
-                
-                # Log the error
-                log_command(
-                    user_id=user_id,
-                    guild_id=guild_id,
-                    command="ai_response",
-                    success=False,
-                    message=f"Error: {str(e)}"
-                )
+                        logging.error(f"TTS synthesis failed for: {text_response}")
+                except Exception as e:
+                    logging.error(f"TTS synthesis error: {e}")
+                    await ctx.send("⚠️ TTS synthesis failed")
         
+        # For text modes, send text response
+        if mode in ("text", "both"):
+            await ctx.send(text_response)
+    
+    async def _generate_bot_reply(self, message: discord.Message) -> str:
+        """Generate bot reply using AI backend."""
+        from .brain import brain_infer
+        from .exceptions import InferenceError
+        
+        try:
+            return await brain_infer(message.content)
+        except InferenceError as e:
+            logging.error(f"Brain inference failed: {str(e)}")
+            return "⚠️ An error occurred while generating the response"
+
+# Background task for cache maintenance
+async def cache_maintenance_task():
+    """Background task to clean up old cache files."""
+    while True:
+        try:
+            await tts_manager.purge_old_cache()
+            await asyncio.sleep(86400)  # Run daily
         except Exception as e:
-            logger.error(f"Error in generate_ai_response: {e}", exc_info=True)
+            logging.error(f"Cache maintenance failed: {e}")
+            await asyncio.sleep(3600)  # Retry in 1 hour
 
-
-async def setup(bot: commands.Bot) -> None:
-    """Setup function to add the event handlers cog."""
-    await bot.add_cog(EventHandlers(bot))
+async def setup(bot) -> None:
+    """Set up event handlers."""
+    await bot.add_cog(BotEventHandler(bot))
+    logger.info("✅ Event handlers loaded")
+    logger.info("Event handlers registered")

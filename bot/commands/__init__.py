@@ -7,6 +7,7 @@ import logging
 # Import all command modules here to register them
 from . import memory_cmds
 from . import tts_cmds
+from . import test_cmds  # Add test commands for debugging
 
 # This will be populated with all registered commands
 commands: Dict[str, Any] = {}
@@ -48,22 +49,27 @@ async def setup_commands(bot):
     import logging
     
     try:
+        # Import and set up test commands first
+        from . import test_cmds
+        await test_cmds.setup(bot)
+        logging.info("✅ Test commands registered")
+        
         # Import and set up memory commands
         from . import memory_cmds
         await memory_cmds.setup(bot)
-        logging.info("Memory commands registered")
+        logging.info("✅ Memory commands registered")
         
         # Import and set up TTS commands  
         from . import tts_cmds
         await tts_cmds.setup(bot)
-        logging.info("TTS commands registered")
+        logging.info("✅ TTS commands registered")
         
         # Import and set up event handlers
         from ..events import setup as setup_events
         await setup_events(bot)
-        logging.info("Event handlers registered")
+        logging.info("✅ Event handlers registered")
         
-        logging.info("All command modules registered successfully")
+        logging.info("🎉 All command modules registered successfully")
         
     except Exception as e:
         logging.error(f"Error setting up commands: {e}", exc_info=True)

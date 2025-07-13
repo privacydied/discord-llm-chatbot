@@ -1,8 +1,11 @@
 """
 Memory-related commands for the Discord bot.
+
+This module provides commands to manage user and server memories.
 """
 import logging
-from typing import Optional
+from typing import Optional, List, Dict, Any
+
 import discord
 from discord.ext import commands
 
@@ -11,251 +14,295 @@ from ..memory import add_memory, get_profile, save_profile, get_server_profile, 
 from ..context import get_conversation_history, reset_context
 from ..logs import log_command
 from ..config import load_config
+from ..router import get_router
 
 # Load configuration
 config = load_config()
 
-# Command group for memory-related commands
-@commands.group(name="memory", description="Manage your memories and server memories", invoke_without_command=True)
-async def memory_group(ctx):
-    """Memory management commands."""
-    if ctx.invoked_subcommand is None:
-        await ctx.send("Use `!memory add <content>` to add a memory, `!memory list` to view memories, or `!memory clear` to clear all memories.")
-
-@memory_group.command(name="add")
-async def add_memory_cmd(ctx, *, content: str):
-    """Add a memory to your profile."""
-    try:
-        # Get user's profile
-        profile = get_profile(str(ctx.author.id), str(ctx.author))
-        
-        # Add the memory
-        memory = {
-            'content': content,
-            'timestamp': discord.utils.utcnow().isoformat(),
-            'context': f"Added via command in {ctx.channel.name if hasattr(ctx.channel, 'name') else 'DM'}"
-        }
-        
-        if 'memories' not in profile:
-            profile['memories'] = []
-        
-        profile['memories'].append(memory)
-        
-        # Enforce memory limit
-        if len(profile['memories']) > config["MAX_MEMORIES"]:
-            profile['memories'] = profile['memories'][-config["MAX_MEMORIES"]:]
-        
-        # Save the profile
-        if save_profile(profile):
-            await ctx.send(f"✅ Memory added! You now have {len(profile['memories'])} memories.")
-            log_command(ctx, "memory_add", {"memory_length": len(content), "total_memories": len(profile['memories'])})
-        else:
-            await ctx.send("❌ Failed to save memory. Please try again later.")
-            log_command(ctx, "memory_add_error", {"error": "Failed to save profile"}, success=False)
+class MemoryCommands(commands.Cog):
+    """Commands for managing user and server memories."""
     
-    except Exception as e:
-        logging.error(f"Error in add_memory_cmd: {e}", exc_info=True)
-        await ctx.send("❌ An error occurred while adding your memory.")
+    def __init__(self, bot):
+        self.bot = bot
+        self.config = load_config()
+        self.router = get_router()
+        self.prefix = self.config.get('COMMAND_PREFIX', '!')
+    
+    @commands.group(name="memory", invoke_without_command=True)
+    async def memory_group(self, ctx):
+        """Memory management commands.
+        
+        Usage:
+        !memory add <content> - Add a new memory
+        !memory list [limit] - List your recent memories (default: 5)
+        !memory clear - Clear all your memories
+        """
+        if ctx.invoked_subcommand is None:
+            await ctx.send_help(ctx.command)
+
+    @memory_group.command(name="add")
+    async def add_memory_cmd(self, ctx, *, content: str):
+        """Add a memory to your profile.
+        
+        Example:
+        !memory add I prefer to be called by my nickname, not my full name
+        """
+        try:
+            # Get user's profile
+            profile = get_profile(str(ctx.author.id), str(ctx.author))
+            
+            # Add the memory
+            memory = {
+                'content': content,
+                'timestamp': discord.utils.utcnow().isoformat(),
+                'context': f"Added via command in {ctx.channel.name if hasattr(ctx.channel, 'name') else 'DM'}"
+            }
+            
+            if 'memories' not in profile:
+                profile['memories'] = []
+            
+            profile['memories'].append(memory)
+            
+            # Enforce memory limit
+            if len(profile['memories']) > self.config["MAX_MEMORIES"]:
+                profile['memories'] = profile['memories'][-self.config["MAX_MEMORIES"]:]
+            
+            # Save the profile
+            if save_profile(profile):
+                await ctx.send(f"✅ Memory added! You now have {len(profile['memories'])} memories.")
+                log_command(ctx, f"Added memory: {content[:50]}...")
+            else:
+                await ctx.send("❌ Failed to save memory. Please try again.")
+                logging.error(f"Failed to save memory for user {ctx.author.id}")
+                
+        except Exception as e:
+            logging.error(f"Error in add_memory_cmd: {str(e)}", exc_info=True)
+            await ctx.send("❌ An error occurred while adding the memory.")
         log_command(ctx, "memory_add_error", {"error": str(e)}, success=False)
 
-@memory_group.command(name="list")
-async def list_memories_cmd(ctx, limit: int = 5):
-    """List your recent memories."""
-    try:
-        # Get user's profile
-        profile = get_profile(str(ctx.author.id), str(ctx.author))
+    @memory_group.command(name="list")
+    async def list_memories_cmd(self, ctx, limit: int = 5):
+        """List your recent memories.
         
-        if not profile.get('memories'):
-            await ctx.send("You don't have any memories yet!")
-            return
-        
-        # Limit the number of memories to show
-        memories = profile['memories'][-min(limit, len(profile['memories'])):]
-        
-        # Format the response
-        response = [f"**Your recent memories (showing {len(memories)} of {len(profile['memories'])}):**\n"]
-        
-        for i, memory in enumerate(reversed(memories), 1):
-            content = memory.get('content', 'No content')
-            timestamp = memory.get('timestamp', 'Unknown time')
-            context = memory.get('context', 'No context')
+        Args:
+            limit: Number of memories to show (default: 5, max: 20)
             
-            response.append(f"**{i}.** {content[:100]}{'...' if len(content) > 100 else ''}")
-            response.append(f"   *{timestamp} - {context}*\n")
-        
-        # Send the response in chunks to avoid Discord's message length limit
-        await ctx.send(''.join(response)[:1900])
-        log_command(ctx, "memory_list", {"limit": limit})
-    
-    except Exception as e:
-        logging.error(f"Error in list_memories_cmd: {e}", exc_info=True)
-        await ctx.send("❌ An error occurred while listing your memories.")
+        Example:
+        !memory list 3 - Show your 3 most recent memories
+        """
+        try:
+            # Enforce a reasonable limit
+            limit = min(max(1, limit), 20)
+            
+            profile = get_profile(str(ctx.author.id))
+            
+            if not profile or 'memories' not in profile or not profile['memories']:
+                await ctx.send("You don't have any memories yet. Use `!memory add <content>` to add one!")
+                return
+                
+            # Limit the number of memories to show
+            memories = profile['memories'][-limit:]
+            
+            if not memories:
+                await ctx.send("No memories found.")
+                return
+                
+            # Create an embed to display memories
+            embed = discord.Embed(
+                title=f"Your Recent Memories (Last {len(memories)} of {len(profile['memories'])})",
+                color=discord.Color.blue()
+            )
+            
+            for i, memory in enumerate(reversed(memories), 1):
+                timestamp = memory.get('timestamp', 'Unknown')
+                context = memory.get('context', 'No context')
+                embed.add_field(
+                    name=f"Memory #{len(profile['memories']) - len(memories) + i}",
+                    value=f"{memory['content']}\n*{context} - {timestamp}*",
+                    inline=False
+                )
+                
+            await ctx.send(embed=embed)
+            log_command(ctx, "Listed memories")
+            
+        except Exception as e:
+            logging.error(f"Error in list_memories_cmd: {str(e)}", exc_info=True)
+            await ctx.send("❌ An error occurred while retrieving memories.")
         log_command(ctx, "memory_list_error", {"error": str(e)}, success=False)
 
-@memory_group.command(name="clear")
-async def clear_memories_cmd(ctx):
-    """Clear all your memories."""
-    try:
-        # Get user's profile
-        profile = get_profile(str(ctx.author.id), str(ctx.author))
-        
-        if not profile.get('memories'):
-            await ctx.send("You don't have any memories to clear!")
-            return
-        
-        # Confirm before clearing
-        confirm_msg = await ctx.send(
-            "⚠️ **Are you sure you want to clear all your memories?** This cannot be undone. "
-            "Type `confirm` to proceed or `cancel` to cancel."
-        )
-        
-        def check(m):
-            return m.author == ctx.author and m.channel == ctx.channel and m.content.lower() in ['confirm', 'cancel']
-        
+    @memory_group.command(name="clear")
+    @commands.cooldown(1, 30, commands.BucketType.user)
+    async def clear_memories_cmd(self, ctx):
+        """Clear all your memories after confirmation."""
         try:
-            msg = await ctx.bot.wait_for('message', check=check, timeout=30.0)
+            # Ask for confirmation
+            confirm_msg = await ctx.send("⚠️ Are you sure you want to delete ALL your memories? This cannot be undone. Type `yes` to confirm.")
             
-            if msg.content.lower() == 'confirm':
-                # Clear memories
-                memory_count = len(profile.get('memories', []))
+            def check(m):
+                return m.author == ctx.author and m.channel == ctx.channel and m.content.lower() == 'yes'
+            
+            try:
+                await ctx.bot.wait_for('message', check=check, timeout=30.0)
+            except asyncio.TimeoutError:
+                await confirm_msg.edit(content="Memory clear cancelled due to timeout.")
+                return
+                
+            # Get and clear memories
+            profile = get_profile(str(ctx.author.id))
+            if not profile:
+                await ctx.send("No profile found to clear.")
+                return
+                
+            if 'memories' in profile and profile['memories']:
+                memory_count = len(profile['memories'])
                 profile['memories'] = []
                 
                 if save_profile(profile):
-                    await ctx.send(f"✅ Cleared {memory_count} memories!")
-                    log_command(ctx, "memory_clear", {"cleared_count": memory_count})
+                    await ctx.send(f"✅ Successfully cleared {memory_count} memories.")
+                    log_command(ctx, f"Cleared {memory_count} memories")
                 else:
-                    await ctx.send("❌ Failed to clear memories. Please try again later.")
-                    log_command(ctx, "memory_clear_error", {"error": "Failed to save profile"}, success=False)
+                    await ctx.send("❌ Failed to clear memories. Please try again.")
             else:
-                await ctx.send("✅ Memory clear cancelled.")
-                log_command(ctx, "memory_clear_cancelled", {})
-        
-        except asyncio.TimeoutError:
-            await ctx.send("⏱️ Memory clear timed out. Please try again if you want to clear your memories.")
-            log_command(ctx, "memory_clear_timeout", {}, success=False)
-    
-    except Exception as e:
-        logging.error(f"Error in clear_memories_cmd: {e}", exc_info=True)
-        await ctx.send("❌ An error occurred while clearing your memories.")
-        log_command(ctx, "memory_clear_error", {"error": str(e)}, success=False)
+                await ctx.send("No memories found to clear.")
+                
+        except Exception as e:
+            logging.error(f"Error in clear_memories_cmd: {str(e)}", exc_info=True)
+            await ctx.send("❌ An error occurred while clearing memories.")
+        finally:
+            # Reset cooldown if command failed
+            self.clear_memories_cmd.reset_cooldown(ctx)
 
-@memory_group.command(name="server")
-@commands.has_permissions(manage_guild=True)
-async def server_memory_cmd(ctx, action: str, *, content: Optional[str] = None):
-    """Manage server memories (Admin only)."""
-    if not ctx.guild:
-        await ctx.send("This command can only be used in a server.")
-        return
-    
-    try:
-        action = action.lower()
+    @commands.group(name="server-memory", description="Manage server memories (Admin only)", invoke_without_command=True)
+    @commands.guild_only()
+    @commands.has_permissions(administrator=True)
+    async def server_memory_group(self, ctx):
+        """Manage server memories (Admin only).
         
-        if action == 'add' and content:
-            # Add a server memory
-            server_profile = get_server_profile(str(ctx.guild.id))
+        Subcommands:
+        add <content> - Add a server memory
+        list - List all server memories
+        clear - Clear all server memories
+        """
+        if ctx.invoked_subcommand is None:
+            await ctx.send_help(ctx.command)
+    
+    @server_memory_group.command(name="add")
+    @commands.has_permissions(administrator=True)
+    async def server_memory_add(self, ctx, *, content: str):
+        """Add a memory to the server's profile."""
+        try:
+            # Get server profile
+            server_id = str(ctx.guild.id)
+            profile = get_server_profile(server_id, ctx.guild.name)
             
+            # Add the memory
             memory = {
                 'content': content,
-                'added_by': str(ctx.author),
                 'timestamp': discord.utils.utcnow().isoformat(),
-                'context': f"Added in #{ctx.channel.name} by {ctx.author}"
+                'added_by': str(ctx.author),
+                'context': f"Added in #{ctx.channel.name if hasattr(ctx.channel, 'name') else 'unknown'}"
             }
             
-            if 'memories' not in server_profile:
-                server_profile['memories'] = []
-            
-            server_profile['memories'].append(memory)
-            
-            # Enforce server memory limit
-            if len(server_profile['memories']) > config["MAX_SERVER_MEMORY"]:
-                server_profile['memories'] = server_profile['memories'][-config["MAX_SERVER_MEMORY"]:]
-            
-            # Save the server profile
-            if save_server_profile(str(ctx.guild.id)):
-                await ctx.send(f"✅ Server memory added! The server now has {len(server_profile['memories'])} memories.")
-                log_command(ctx, "server_memory_add", 
-                          {"memory_length": len(content), 
-                           "total_memories": len(server_profile['memories'])})
-            else:
-                await ctx.send("❌ Failed to save server memory. Please try again later.")
-                log_command(ctx, "server_memory_add_error", 
-                          {"error": "Failed to save server profile"}, success=False)
-        
-        elif action == 'list':
-            # List server memories
-            server_profile = get_server_profile(str(ctx.guild.id))
-            
-            if not server_profile.get('memories'):
-                await ctx.send("This server doesn't have any memories yet!")
-                return
-            
-            # Format the response
-            response = [f"**Server memories (showing all {len(server_profile['memories'])}):**\n"]
-            
-            for i, memory in enumerate(reversed(server_profile['memories']), 1):
-                content = memory.get('content', 'No content')
-                added_by = memory.get('added_by', 'Unknown user')
-                timestamp = memory.get('timestamp', 'Unknown time')
+            if 'memories' not in profile:
+                profile['memories'] = []
                 
-                response.append(f"**{i}.** {content[:100]}{'...' if len(content) > 100 else ''}")
-                response.append(f"   *Added by {added_by} on {timestamp}*\n")
+            profile['memories'].append(memory)
             
-            # Send the response in chunks to avoid Discord's message length limit
-            await ctx.send(''.join(response)[:1900])
-            log_command(ctx, "server_memory_list", {})
-        
-        elif action == 'clear':
-            # Clear server memories (with confirmation)
-            server_profile = get_server_profile(str(ctx.guild.id))
+            # Enforce memory limit
+            if len(profile['memories']) > self.config["MAX_SERVER_MEMORIES"]:
+                profile['memories'] = profile['memories'][-self.config["MAX_SERVER_MEMORIES"]:]
             
-            if not server_profile.get('memories'):
-                await ctx.send("This server doesn't have any memories to clear!")
+            # Save the profile
+            if save_server_profile(server_id, profile):
+                await ctx.send(f"✅ Server memory added! There are now {len(profile['memories'])} server memories.")
+                log_command(ctx, f"Added server memory: {content[:50]}...")
+            else:
+                await ctx.send("❌ Failed to save server memory. Please try again.")
+                
+        except Exception as e:
+            logging.error(f"Error adding server memory: {str(e)}", exc_info=True)
+            await ctx.send("❌ An error occurred while adding the server memory.")
+    
+    @server_memory_group.command(name="list")
+    @commands.has_permissions(administrator=True)
+    async def server_memory_list(self, ctx):
+        """List all server memories."""
+        try:
+            profile = get_server_profile(str(ctx.guild.id))
+            
+            if not profile or 'memories' not in profile or not profile['memories']:
+                await ctx.send("No server memories found. Use `!server-memory add <content>` to add one!")
                 return
-            
-            # Confirm before clearing
-            confirm_msg = await ctx.send(
-                "⚠️ **Are you sure you want to clear all server memories?** This cannot be undone. "
-                "Type `confirm` to proceed or `cancel` to cancel."
+                
+            # Create an embed to display memories
+            embed = discord.Embed(
+                title=f"Server Memories ({len(profile['memories'])} total)",
+                color=discord.Color.green()
             )
             
+            for i, memory in enumerate(reversed(profile['memories']), 1):
+                added_by = memory.get('added_by', 'Unknown')
+                timestamp = memory.get('timestamp', 'Unknown')
+                context = memory.get('context', 'No context')
+                
+                embed.add_field(
+                    name=f"Memory #{i}",
+                    value=f"{memory['content']}\n*Added by {added_by} - {context} - {timestamp}*",
+                    inline=False
+                )
+                
+                # Discord has a limit of 25 fields per embed
+                if i >= 25:
+                    embed.set_footer(text=f"Showing 25 most recent of {len(profile['memories'])} memories.")
+                    break
+                    
+            await ctx.send(embed=embed)
+            log_command(ctx, "Listed server memories")
+            
+        except Exception as e:
+            logging.error(f"Error listing server memories: {str(e)}", exc_info=True)
+            await ctx.send("❌ An error occurred while retrieving server memories.")
+    
+    @server_memory_group.command(name="clear")
+    @commands.has_permissions(administrator=True)
+    @commands.cooldown(1, 60, commands.BucketType.guild)
+    async def server_memory_clear(self, ctx):
+        """Clear all server memories after confirmation."""
+        try:
+            # Ask for confirmation
+            confirm_msg = await ctx.send("⚠️ Are you sure you want to delete ALL server memories? This cannot be undone. Type `yes` to confirm.")
+            
             def check(m):
-                return m.author == ctx.author and m.channel == ctx.channel and m.content.lower() in ['confirm', 'cancel']
+                return m.author == ctx.author and m.channel == ctx.channel and m.content.lower() == 'yes'
             
             try:
-                msg = await ctx.bot.wait_for('message', check=check, timeout=30.0)
-                
-                if msg.content.lower() == 'confirm':
-                    # Clear server memories
-                    memory_count = len(server_profile.get('memories', []))
-                    server_profile['memories'] = []
-                    
-                    if save_server_profile(str(ctx.guild.id)):
-                        await ctx.send(f"✅ Cleared {memory_count} server memories!")
-                        log_command(ctx, "server_memory_clear", 
-                                  {"cleared_count": memory_count})
-                    else:
-                        await ctx.send("❌ Failed to clear server memories. Please try again later.")
-                        log_command(ctx, "server_memory_clear_error", 
-                                  {"error": "Failed to save server profile"}, success=False)
-                else:
-                    await ctx.send("✅ Server memory clear cancelled.")
-                    log_command(ctx, "server_memory_clear_cancelled", {})
-            
+                await ctx.bot.wait_for('message', check=check, timeout=30.0)
             except asyncio.TimeoutError:
-                await ctx.send("⏱️ Server memory clear timed out. Please try again if you want to clear server memories.")
-                log_command(ctx, "server_memory_clear_timeout", {}, success=False)
-        
-        else:
-            await ctx.send("❌ Invalid action. Use `add`, `list`, or `clear`.")
-            log_command(ctx, "server_memory_invalid_action", 
-                       {"action": action}, success=False)
-    
-    except Exception as e:
-        logging.error(f"Error in server_memory_cmd: {e}", exc_info=True)
-        await ctx.send("❌ An error occurred while processing your request.")
-        log_command(ctx, "server_memory_error", 
-                   {"error": str(e), "action": action}, success=False)
+                await confirm_msg.edit(content="Server memory clear cancelled due to timeout.")
+                return
+                
+            # Clear server memories
+            profile = get_server_profile(str(ctx.guild.id))
+            if not profile or 'memories' not in profile or not profile['memories']:
+                await ctx.send("No server memories found to clear.")
+                return
+                
+            memory_count = len(profile['memories'])
+            profile['memories'] = []
+            
+            if save_server_profile(str(ctx.guild.id), profile):
+                await ctx.send(f"✅ Successfully cleared {memory_count} server memories.")
+                log_command(ctx, f"Cleared {memory_count} server memories")
+            else:
+                await ctx.send("❌ Failed to clear server memories. Please try again.")
+                
+        except Exception as e:
+            logging.error(f"Error clearing server memories: {str(e)}", exc_info=True)
+            await ctx.send("❌ An error occurred while clearing server memories.")
+        finally:
+            # Reset cooldown if command failed
+            self.server_memory_clear.reset_cooldown(ctx)
 
-# Register the command group
 async def setup(bot):
-    bot.add_command(memory_group)
+    """Add memory commands to the bot."""
+    await bot.add_cog(MemoryCommands(bot))

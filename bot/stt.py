@@ -9,6 +9,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 from functools import lru_cache
+from typing import Optional, Dict, Any
 
 import torch
 from faster_whisper import WhisperModel
@@ -17,6 +18,71 @@ from faster_whisper import WhisperModel
 _ENGINE = os.getenv("STT_ENGINE", "faster-whisper")
 _FALLBACK = os.getenv("STT_FALLBACK", "whispercpp")
 _SIZE = os.getenv("WHISPER_MODEL_SIZE", "base-int8")
+
+class STTManager:
+    """Manages STT operations with support for multiple backends."""
+    
+    def __init__(self):
+        self.available = False
+        self.engine = _ENGINE
+        self.model = None
+        self._init_model()
+    
+    def _init_model(self):
+        """Initialize the STT model."""
+        try:
+            if self.engine == "faster-whisper":
+                self.model = _load_fw()
+                self.available = True
+                logging.info("✅ Initialized faster-whisper STT model")
+            else:
+                logging.warning(f"Unsupported STT engine: {self.engine}")
+                self.available = False
+        except Exception as e:
+            logging.error(f"Failed to initialize STT: {str(e)}")
+            self.available = False
+    
+    def is_available(self) -> bool:
+        """Check if STT is available."""
+        return self.available
+    
+    async def transcribe_async(self, audio_path: Path) -> str:
+        """Transcribe audio file asynchronously."""
+        if not self.available:
+            raise RuntimeError("STT engine not available")
+        
+        try:
+            loop = asyncio.get_event_loop()
+            return await loop.run_in_executor(
+                None,  # Use default executor
+                self._transcribe_sync,
+                audio_path
+            )
+        except Exception as e:
+            logging.error(f"STT transcription failed: {str(e)}")
+            raise
+    
+    def _transcribe_sync(self, audio_path: Path) -> str:
+        """Synchronous transcription wrapper."""
+        if not audio_path.exists():
+            raise FileNotFoundError(f"Audio file not found: {audio_path}")
+        
+        try:
+            if self.engine == "faster-whisper" and self.model:
+                segments, _ = self.model.transcribe(
+                    str(audio_path),
+                    beam_size=5,
+                    language="en"
+                )
+                return " ".join(segment.text for segment in segments)
+            else:
+                raise RuntimeError(f"Unsupported STT engine: {self.engine}")
+        except Exception as e:
+            logging.error(f"STT transcription error: {str(e)}")
+            raise
+
+# Create a single instance of STTManager
+stt_manager = STTManager()
 
 logger = logging.getLogger(__name__)
 

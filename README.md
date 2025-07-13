@@ -4,16 +4,39 @@ An advanced Discord chatbot with memory, web search, file processing, vision cap
 
 ## ✨ Features
 
-- **AI-Powered Chat**: Natural conversations powered by Ollama or OpenAI/OpenRouter
-- **Vision Capabilities**: Image understanding using VL models
-- **Persistent Memory**: Remembers context and user preferences across conversations
-- **Text-to-Speech**: Optional TTS functionality with DIA TTS
-- **Web Search**: Integrated web search for up-to-date information (automatic for fact queries)
+- **Multimodal AI**: Hybrid text/speech/vision processing pipeline
+- **Brain/Speak/See/Hear**: Centralized inference modules
+- **Persistent Memory**: Remembers context and user preferences
+- **Web Search**: Integrated web search for up-to-date information
 - **File Processing**: Read and process text files and PDFs
-- **Modular Architecture**: Clean, organized codebase for easy extension
+- **Modular Architecture**: Clean, organized codebase
 - **User Profiles**: Per-user settings and memory storage
-- **Comprehensive Logging**: Detailed logs for debugging and moderation
-- **Automatic Memory Extraction**: Bot learns from conversations
+- **Comprehensive Logging**: Detailed debugging logs
+- **Automatic Memory Extraction**: Learns from conversations
+
+## 🎛️ Command Usage
+
+### Text and Voice
+- `!ask <prompt> [--mode=text|tts|both]` - AI response (text/audio/both)
+- `!speak <text>` - Convert text to speech
+- `!hear` - Transcribe audio attachment
+
+### Vision
+- `!see <prompt>` - Analyze attached image
+
+### Hybrid Processing
+```mermaid
+graph LR
+    User[User Input] --> Parser[Command Parser]
+    Parser -->|text/tts| Brain[Text Inference]
+    Parser -->|stt| Hear[Speech-to-Text]
+    Parser -->|vl| See[Vision-Language]
+    Hear --> Brain
+    Brain -->|text| Response[Text Reply]
+    Brain -->|tts| Speak[Text-to-Speech]
+    See --> Response
+    Speak --> Response[Audio Reply]
+```
 
 ## 🚀 Quick Start
 

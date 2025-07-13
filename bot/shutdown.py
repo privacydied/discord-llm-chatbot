@@ -10,7 +10,7 @@ from typing import Callable, Optional, Any
 from discord.ext import commands
 
 from .memory import save_all_profiles, save_all_server_profiles
-from .tts import cleanup_tts
+from .tts_manager import tts_manager
 from .ollama import ollama_client
 from .tasks import stop_background_tasks
 
@@ -131,7 +131,13 @@ class GracefulShutdown:
         """Clean up TTS resources."""
         try:
             logger.info("Cleaning up TTS resources...")
-            await cleanup_tts()
+            # Cleanup TTS resources if available
+            if hasattr(tts_manager, '_tts') and tts_manager._tts:
+                # If the TTS engine has a cleanup method, call it
+                if hasattr(tts_manager._tts, 'cleanup'):
+                    tts_manager._tts.cleanup()
+                # Alternatively, just set to None to release resources
+                tts_manager._tts = None
             logger.info("TTS cleanup completed")
             
         except Exception as e:

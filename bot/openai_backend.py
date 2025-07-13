@@ -250,15 +250,20 @@ async def generate_vl_response(
             full_prompt += f"\n\nAdditional context: {user_prompt}"
             logger.debug(f"🎨 Enhanced prompt with user context: +{len(user_prompt)} chars")
         
-        # CHANGE: Download and base64-encode image to handle URL fetching issues
-        try:
-            image_content = await get_base64_image(image_url)
-            logger.info("✅ Image converted to base64 data URI")
-            logger.debug(f"🎨 Base64 data length: {len(image_content)} chars")
-            logger.debug(f"🎨 Base64 preview: {image_content[:100]}...")
-        except Exception as img_error:
-            logger.error(f"❌ Failed to convert image to base64: {img_error}")
-            raise Exception(f"Image processing failed: {str(img_error)}")
+        # Handle data URLs directly, otherwise try to download and encode
+        if isinstance(image_url, str) and image_url.startswith('data:'):
+            logger.info("✅ Using provided data URL for image")
+            image_content = image_url
+        else:
+            try:
+                image_content = await get_base64_image(image_url)
+                logger.info("✅ Image downloaded and converted to base64 data URI")
+            except Exception as img_error:
+                logger.error(f"❌ Failed to process image: {img_error}")
+                raise Exception(f"Image processing failed: {str(img_error)}")
+        
+        logger.debug(f"🎨 Base64 data length: {len(image_content)} chars")
+        logger.debug(f"🎨 Base64 preview: {image_content[:100]}...")
         
         # Prepare the messages for vision model
         messages = [
