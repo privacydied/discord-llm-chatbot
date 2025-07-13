@@ -16,6 +16,7 @@ from .memory import get_profile, get_server_profile
 from .ai_backend import generate_response, generate_vl_response
 from .utils import send_chunks
 from .web import get_url_preview
+from . import stt  # CHANGE: Import STT module
 
 logger = logging.getLogger(__name__)
 
@@ -192,6 +193,38 @@ class EventHandlers(commands.Cog):
                 content = content[len(f'<@!{self.bot.user.id}>'):].strip()
             elif f'<@{self.bot.user.id}>' in content:
                 content = content.replace(f'<@{self.bot.user.id}>', '').strip()
+            
+            # Check if message has audio attachments
+            has_audio = any(
+                attachment.content_type and attachment.content_type.startswith("audio")
+                for attachment in message.attachments
+            )
+            
+            # Process audio attachments first
+            if has_audio:
+                logger.info("🎵 Audio attachment detected")
+                try:
+                    # Use the first audio attachment
+                    audio_attachment = next(
+                        att for att in message.attachments
+                        if att.content_type and att.content_type.startswith("audio")
+                    )
+                    
+                    # Normalize to WAV
+                    wav_path = await stt.normalise_to_wav(audio_attachment)
+                    # Transcribe
+                    transcript = await stt.transcribe_wav(wav_path)
+                    logger.info(f"🎵 STT transcript: {transcript}")
+                    # Use transcript as new content
+                    content = f"[Audio transcript:] {transcript}"
+                    # Clean up the WAV file
+                    try:
+                        wav_path.unlink()
+                    except Exception as e:
+                        logger.warning(f"Failed to delete WAV file: {e}")
+                except Exception as e:
+                    logger.error(f"Audio processing failed: {e}", exc_info=True)
+                    content = f"[Audio processing failed: {e}]"
             
             # Check if this is a search query
             is_search = any(word in content.lower() for word in ['search', 'look up', 'find', 'what is'])

@@ -35,3 +35,8 @@ numpy>=1.19.0  # Required by librosa
 #   Ubuntu/Debian: sudo apt-get install libsndfile1
 #   RHEL/CentOS: sudo yum install libsndfile
 #   Alpine: apk add alsa-lib
+
+# Speech-to-text dependencies
+ctranslate2>=4.0.0
+faster-whisper>=1.0.0
+ffmpeg-python>=0.2.0

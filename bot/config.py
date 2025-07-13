@@ -180,6 +180,12 @@ def load_config():
         "PROMPT_FILE": _clean_env_value(os.getenv("PROMPT_FILE")),  # CHANGE: Added PROMPT_FILE for text model prompts
         "VL_PROMPT_FILE": _clean_env_value(os.getenv("VL_PROMPT_FILE")),  # CHANGE: Added VL_PROMPT_FILE for vision prompts
         
+        # STT SETTINGS
+        "STT_ENGINE": os.getenv("STT_ENGINE", "faster-whisper"),
+        "STT_FALLBACK": os.getenv("STT_FALLBACK", "whispercpp"),
+        "WHISPER_MODEL_SIZE": os.getenv("WHISPER_MODEL_SIZE", "medium-int8"),
+        "WHISPER_CPP_MODEL": os.getenv("WHISPER_CPP_MODEL", "ggml-medium.bin"),
+        
         # WHISPER SETTINGS
         "WHISPER_API_KEY": os.getenv("WHISPER_API_KEY"),
         "WHISPER_API_BASE": os.getenv("WHISPER_API_BASE"),
