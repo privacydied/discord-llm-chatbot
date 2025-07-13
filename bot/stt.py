@@ -19,6 +19,17 @@ _ENGINE = os.getenv("STT_ENGINE", "faster-whisper")
 _FALLBACK = os.getenv("STT_FALLBACK", "whispercpp")
 _SIZE = os.getenv("WHISPER_MODEL_SIZE", "base-int8")
 
+@lru_cache
+def _load_fw():
+    """Load faster-whisper model with caching"""
+    logger = logging.getLogger(__name__)
+    logger.info(f"Loading faster-whisper {_SIZE}")
+    return WhisperModel(
+        _SIZE,
+        device="cuda" if torch.cuda.is_available() else "cpu",
+        compute_type="int8"
+    )
+
 class STTManager:
     """Manages STT operations with support for multiple backends."""
     
@@ -85,16 +96,6 @@ class STTManager:
 stt_manager = STTManager()
 
 logger = logging.getLogger(__name__)
-
-@lru_cache
-def _load_fw():
-    """Load faster-whisper model with caching"""
-    logger.info(f"Loading faster-whisper {_SIZE}")
-    return WhisperModel(
-        _SIZE,
-        device="cuda" if torch.cuda.is_available() else "cpu",
-        compute_type="int8"
-    )
 
 async def transcribe_wav(path: Path) -> str:
     """Transcribe WAV file using configured STT engine"""

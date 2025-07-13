@@ -3,6 +3,9 @@ Centralized router for handling multimodal message processing.
 """
 import re
 import logging
+import os
+import tempfile
+from pathlib import Path
 from typing import Optional, Dict, Any, List, Tuple, Union
 from enum import Enum, auto
 import discord
@@ -12,6 +15,22 @@ from .speak import speak_infer
 from .see import see_infer
 from .hear import hear_infer
 from .exceptions import InferenceError
+
+# Import PDF processor if available
+try:
+    from .pdf_utils import PDFProcessor
+    PDF_SUPPORT = True
+except ImportError:
+    PDF_SUPPORT = False
+    logger.warning("PDF processing not available (missing dependencies)")
+
+# Import docx if available
+try:
+    import docx
+    DOCX_SUPPORT = True
+except ImportError:
+    DOCX_SUPPORT = False
+    logger.warning("DOCX processing not available (python-docx not installed)")
 
 logger = logging.getLogger(__name__)
 
@@ -73,8 +92,13 @@ class Router:
             mode, cleaned_input = self._extract_mode(raw_input)
             
             # Handle different processing modes
-            if mode in (ProcessingMode.TEXT, ProcessingMode.BOTH) and cleaned_input:
-                await self._process_text(message, cleaned_input, include_tts=(mode == ProcessingMode.BOTH))
+            if mode in (ProcessingMode.TEXT, ProcessingMode.BOTH) and (cleaned_input or message.attachments):
+                # If there are attachments and we're in TEXT mode, process them
+                if mode == ProcessingMode.TEXT and message.attachments:
+                    await self._process_attachments(message, mode, cleaned_input)
+                # Otherwise, process as regular text
+                elif cleaned_input:
+                    await self._process_text(message, cleaned_input, include_tts=(mode == ProcessingMode.BOTH))
             elif mode == ProcessingMode.TTS and cleaned_input:
                 await self._process_tts(message, cleaned_input)
             elif mode in (ProcessingMode.STT, ProcessingMode.VISION):
@@ -103,6 +127,56 @@ class Router:
         """Process text as TTS only."""
         await self._generate_tts(message, text)
     
+    async def _process_document(self, file_path: str, file_ext: str) -> str:
+        """Process a document file and return its text content."""
+        try:
+            # Handle PDF files
+            if file_ext == '.pdf':
+                if not PDF_SUPPORT:
+                    raise InferenceError("PDF processing is not available (missing dependencies)")
+                
+                processor = PDFProcessor()
+                if not processor.supported:
+                    raise InferenceError("PDF processing is not available (missing dependencies)")
+                
+                result = processor.extract_all(file_path)
+                if result.get('error'):
+                    raise InferenceError(f"Failed to extract text from PDF: {result['error']}")
+                
+                content = result.get('text', '').strip()
+                if not content:
+                    raise InferenceError("The PDF appears to be empty or could not be read")
+                
+                return content
+            
+            # Handle text files
+            elif file_ext in ['.txt', '.md']:
+                with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
+                    content = f.read().strip()
+                if not content:
+                    raise InferenceError("The text file is empty")
+                return content
+            
+            # Handle DOCX files
+            elif file_ext == '.docx':
+                if not DOCX_SUPPORT:
+                    raise InferenceError("DOCX processing requires python-docx package")
+                
+                doc = docx.Document(file_path)
+                content = '\n'.join([para.text for para in doc.paragraphs if para.text.strip()])
+                if not content:
+                    raise InferenceError("The document appears to be empty")
+                return content
+            
+            else:
+                raise InferenceError(f"Unsupported file type: {file_ext}")
+                
+        except UnicodeDecodeError:
+            raise InferenceError(f"Could not decode the file. It may be corrupted or in an unsupported encoding.")
+        except Exception as e:
+            logger.error(f"Error in _process_document: {str(e)}", exc_info=True)
+            raise InferenceError(f"Error processing document: {str(e)}")
+    
     async def _process_attachments(self, message: discord.Message, mode: ProcessingMode, prompt: str = '') -> None:
         """Process message attachments based on mode."""
         if not message.attachments:
@@ -110,46 +184,86 @@ class Router:
             return
             
         attachment = message.attachments[0]
+        file_ext = Path(attachment.filename).suffix.lower()
         
         try:
-            if mode == ProcessingMode.STT:
-                # Handle speech-to-text
+            # Document processing
+            if mode == ProcessingMode.TEXT and file_ext in ['.pdf', '.txt', '.md', '.docx']:
+                file_path = await self._download_attachment(attachment)
+                logger.debug(f"📄 Processing document: {file_path}")
+                
+                try:
+                    # Process the document
+                    content = await self._process_document(file_path, file_ext)
+                    logger.debug(f"📝 Extracted {len(content)} characters from document")
+                    
+                    # Process with LLM
+                    enhanced_prompt = f"Document content:\n{content}\n\nUser prompt: {prompt if prompt else 'Please analyze this document'}"
+                    response = await brain_infer(enhanced_prompt)
+                    await message.channel.send(response)
+                    
+                except InferenceError as e:
+                    await message.channel.send(f"❌ {str(e)}")
+                except Exception as e:
+                    logger.error(f"Error processing document: {str(e)}", exc_info=True)
+                    await message.channel.send("❌ An error occurred while processing the document")
+                finally:
+                    # Clean up the downloaded file
+                    try:
+                        Path(file_path).unlink()
+                    except Exception as e:
+                        logger.warning(f"Error deleting temporary file {file_path}: {str(e)}")
+            
+            # Speech-to-text processing
+            elif mode == ProcessingMode.STT:
                 if not any(attachment.filename.lower().endswith(ext) for ext in ['.wav', '.mp3', '.ogg']):
                     await message.channel.send("❌ Please provide an audio file (.wav, .mp3, .ogg)")
                     return
                     
                 audio_path = await self._download_attachment(attachment)
-                transcribed = await hear_infer(audio_path)
+                try:
+                    transcribed = await hear_infer(audio_path)
+                    await self._process_text(message, transcribed)
+                finally:
+                    try:
+                        Path(audio_path).unlink()
+                    except:
+                        pass
                 
-                # Process the transcribed text
-                await self._process_text(message, transcribed)
-                
+            # Vision-language processing
             elif mode == ProcessingMode.VISION:
-                # Handle vision-language processing
                 if not any(attachment.filename.lower().endswith(ext) for ext in ['.jpg', '.jpeg', '.png', '.gif']):
                     await message.channel.send("❌ Please provide an image file (.jpg, .png, .gif)")
                     return
                     
                 image_path = await self._download_attachment(attachment)
-                logger.debug(f"👁️ Processing image with VL model: {image_path}")
-                
-                # Get VL model description
-                vl_result = await see_infer(image_path, prompt)
-                logger.debug(f"👁️ VL model output: {vl_result[:200]}...")
-                
-                # Create enhanced prompt for text model
-                enhanced_prompt = f"Based on this image description: {vl_result}\n\nUser prompt: {prompt if prompt else 'Tell me about this image'}"
-                logger.debug(f"📝 Sending to text model: {enhanced_prompt[:200]}...")
-                
-                # Get text model response
-                text_response = await brain_infer(enhanced_prompt)
-                logger.debug("✅ Text model response generated")
-                
-                # Send the final response
-                await message.channel.send(text_response)
+                try:
+                    logger.debug(f"👁️ Processing image with VL model: {image_path}")
+                    
+                    # Get VL model description
+                    vl_result = await see_infer(image_path, prompt)
+                    logger.debug(f"👁️ VL model output: {vl_result[:200]}...")
+                    
+                    # Create enhanced prompt for text model
+                    enhanced_prompt = f"Based on this image description: {vl_result}\n\nUser prompt: {prompt if prompt else 'Tell me about this image'}"
+                    logger.debug(f"📝 Sending to text model: {enhanced_prompt[:200]}...")
+                    
+                    # Get text model response
+                    text_response = await brain_infer(enhanced_prompt)
+                    logger.debug("✅ Text model response generated")
+                    
+                    # Send the final response
+                    await message.channel.send(text_response)
+                finally:
+                    try:
+                        Path(image_path).unlink()
+                    except:
+                        pass
+            else:
+                await message.channel.send(f"❌ Unsupported file type or mode for processing: {file_ext}")
                 
         except InferenceError as e:
-            await message.channel.send(f"❌ Error processing attachment: {str(e)}")
+            await message.channel.send(f"❌ {str(e)}")
         except Exception as e:
             logger.error(f"Error processing attachment: {str(e)}", exc_info=True)
             await message.channel.send("⚠️ An error occurred while processing the attachment")

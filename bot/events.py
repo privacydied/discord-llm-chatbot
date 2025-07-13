@@ -64,9 +64,13 @@ class BotEventHandler(commands.Cog):
         has_prefix = message.content.startswith(self.prefix)
         has_image = any(att.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')) 
                       for att in message.attachments)
+        has_document = any(att.filename.lower().endswith(('.pdf', '.txt', '.md', '.docx'))
+                         for att in message.attachments)
+        has_audio = any(att.filename.lower().endswith(('.wav', '.mp3', '.ogg'))
+                       for att in message.attachments)
         
-        # Skip if no trigger and no image
-        if not (has_prefix or is_mentioned or is_dm or has_image):
+        # Skip if no trigger and no attachments that can be auto-processed
+        if not (has_prefix or is_mentioned or is_dm or has_image or has_document or has_audio):
             return
         
         # Get clean input (strip prefix/mention)
@@ -75,6 +79,35 @@ class BotEventHandler(commands.Cog):
             content = self._strip_prefix(content)
         elif is_mentioned:
             content = self._strip_mention(content)
+        
+        # Handle document uploads
+        if has_document and not (has_prefix or is_mentioned):
+            try:
+                doc_attachment = next(
+                    att for att in message.attachments 
+                    if att.filename.lower().endswith(('.pdf', '.txt', '.md', '.docx'))
+                )
+                
+                # Process with document mode
+                await self.router.handle(message, f"--mode=text {content}" if content else "--mode=text")
+                return
+                
+            except Exception as e:
+                logger.error(f"Error processing document: {str(e)}", exc_info=True)
+                await message.channel.send("⚠️ An error occurred while processing the document")
+                return
+        
+        # Handle audio uploads
+        if has_audio and not (has_prefix or is_mentioned):
+            try:
+                # Process with STT mode
+                await self.router.handle(message, "--mode=stt")
+                return
+                
+            except Exception as e:
+                logger.error(f"Error processing audio: {str(e)}", exc_info=True)
+                await message.channel.send("⚠️ An error occurred while processing the audio")
+                return
         
         # If there's an image, process it through VL and text models
         if has_image and not (has_prefix or is_mentioned):
