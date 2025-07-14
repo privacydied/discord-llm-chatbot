@@ -150,8 +150,9 @@ class BotEventHandler(commands.Cog):
                     logger.info("🤖 Getting text model response...")
                     response = await brain_infer(enhanced_prompt)
                     
-                    # Send the final response
-                    await message.channel.send(response)
+                    # Send the response through the router to respect TTS settings
+                    logger.info("🔊 Routing text model response through router...")
+                    await self.router.handle(message, response, voice_only=tts_state.is_user_tts_enabled(message.author.id))
                     
                 finally:
                     # Clean up the temporary file
@@ -219,6 +220,9 @@ class BotEventHandler(commands.Cog):
         if mode in ("tts", "both"):
             if not tts_manager.is_available():
                 await ctx.send("🔄 TTS initializing—please retry in a moment.")
+                # Fall back to text if TTS is not available
+                if mode == "both":
+                    await ctx.send(text_response)
             else:
                 try:
                     # Create temporary audio file
@@ -230,16 +234,20 @@ class BotEventHandler(commands.Cog):
                     audio_path = await tts_manager.synthesize_async(text_response, audio_path)
                     
                     if audio_path and audio_path.exists():
-                        # Fix: Add missing closing parenthesis
+                        # Send only voice response when TTS is active
                         await ctx.send(file=discord.File(str(audio_path), filename="tts.ogg"))
                     else:
                         logging.error(f"TTS synthesis failed for: {text_response}")
+                        # Fall back to text on TTS failure
+                        await ctx.send(text_response)
                 except Exception as e:
                     logging.error(f"TTS synthesis error: {e}")
                     await ctx.send("⚠️ TTS synthesis failed")
+                    # Fall back to text on error
+                    await ctx.send(text_response)
         
-        # For text modes, send text response
-        if mode in ("text", "both"):
+        # For text-only mode, send text response
+        elif mode == "text":
             await ctx.send(text_response)
     
     async def _generate_bot_reply(self, message: discord.Message) -> str:

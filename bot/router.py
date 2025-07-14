@@ -189,8 +189,9 @@ class Router:
                 logging.debug(f"🔊 Using TTS for user {message.author.id} (user preference or global setting)")
         
         if use_tts and self.tts_manager.is_available():
-            # Synthesize and send as voice
+            # Synthesize and send as voice ONLY
             try:
+                logger.debug(f"🔊 Generating TTS for response (length: {len(response)}): '{response[:50]}...'")
                 audio_path = await self.tts_manager.generate_tts(response, self.tts_manager.voice)
                 await message.channel.send(file=discord.File(audio_path))
                 logging.debug(f"🔊 TTS response sent successfully")
@@ -203,6 +204,7 @@ class Router:
                 else:
                     await message.channel.send(f"⚠️ Failed to generate speech: {str(e)}")
         elif not voice_only:  # Only send text if not voice_only
+            # Text-only response (TTS not enabled or not available)
             await message.channel.send(response)
     
     async def _process_tts(self, message: discord.Message, text: str) -> None:
@@ -371,7 +373,8 @@ class Router:
     async def _process_tts_with_attachments(self, message: discord.Message, cleaned_input: str) -> None:
         """
         Handle TTS commands (!speak, !say) with attachments.
-        Processes attachments through appropriate pipeline and returns TTS response.
+        Processes attachments through appropriate pipeline and returns ONLY a voice response.
+        No text response is sent - voice only.
         
         Args:
             message: The Discord message object
