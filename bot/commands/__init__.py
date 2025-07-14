@@ -6,7 +6,6 @@ import logging
 
 # Import all command modules here to register them
 from . import memory_cmds
-from . import tts_cmds
 from . import test_cmds  # Add test commands for debugging
 
 # This will be populated with all registered commands

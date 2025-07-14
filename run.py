@@ -3,7 +3,13 @@
 Main entry point for the Discord LLM Chatbot
 """
 
-from bot.main import main
+"""
+Main entry point for the Discord LLM Chatbot
+"""
+
+from bot.main import run_bot
 
 if __name__ == "__main__":
-    main()
+    run_bot()
+
+

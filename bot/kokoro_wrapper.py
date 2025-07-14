@@ -75,12 +75,20 @@ class KokoroWrapper:
             with open(temp_voices_path, 'w') as f:
                 json.dump(serializable_voices, f)
             
-            # Initialize Kokoro with the temporary voices file
-            self.kokoro = Kokoro(self.model_path, str(temp_voices_path))
-            logging.info("Successfully initialized Kokoro-ONNX engine")
-            
+            # Monkey-patch numpy.load to allow pickled files, as the library doesn't support it directly.
+            original_load = np.load
+            try:
+                # Temporarily set allow_pickle to True for the Kokoro model loading
+                np.load = lambda *a, **k: original_load(*a, **k, allow_pickle=True)
+                
+                # Initialize Kokoro with the temporary voices file
+                self.kokoro = Kokoro(self.model_path, str(temp_voices_path))
+                logging.info("Successfully initialized Kokoro-ONNX engine")
+            finally:
+                # Restore the original numpy.load to maintain security
+                np.load = original_load
             # Add voices attribute to match Kokoro interface
-            if not hasattr(self.kokoro, 'voices'):
+            if self.kokoro and not hasattr(self.kokoro, 'voices'):
                 setattr(self.kokoro, 'voices', self.voices)
                 
         except ImportError as e:

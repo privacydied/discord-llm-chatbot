@@ -11,11 +11,12 @@ from datetime import datetime, timedelta
 
 # Import bot modules
 from .config import load_config
-from .logs import log_command
+from .logger import get_logger
 from .memory import get_profile, save_profile, get_server_profile, save_server_profile
 
 # Load configuration
 config = load_config()
+logger = get_logger(__name__)
 
 # Ollama API settings
 OLLAMA_BASE_URL = config["OLLAMA_BASE_URL"]
@@ -33,9 +34,8 @@ RATE_LIMIT_MAX_REQUESTS = 30  # Max requests per window
 # Track rate limits
 user_rate_limits = {}
 
-class OllamaAPIError(Exception):
-    """Custom exception for Ollama API errors."""
-    pass
+from .exceptions import APIError as OllamaAPIError
+
 
 class OllamaClient:
     """Client for interacting with the Ollama API."""
@@ -310,7 +310,7 @@ class OllamaClient:
                     return model
             return None
         except Exception as e:
-            logging.error(f"Error getting model info: {e}", exc_info=True)
+            logger.error(f"Error getting model info: {e}", exc_info=True, extra={'subsys': 'ollama', 'event': 'get_model_info_fail'})
             return None
 
 # Create a global instance for convenience
@@ -373,7 +373,7 @@ async def generate_response(
         try:
             with open(prompt_file_path, "r", encoding="utf-8") as pf:
                 base_system_prompt = pf.read().strip()
-                logging.debug(f"Loaded text prompt from {prompt_file_path}")
+                logger.debug(f"Loaded text prompt from {prompt_file_path}", extra={'subsys': 'ollama', 'event': 'prompt_load'})
         except FileNotFoundError:
             raise OllamaAPIError(f"Prompt file not found: {prompt_file_path}")
         except Exception as e:
@@ -410,7 +410,7 @@ Assistant:"""
             )
     
     except Exception as e:
-        logging.error(f"Error in generate_response: {e}", exc_info=True)
+        logger.error(f"Error in generate_response: {e}", exc_info=True, extra={'subsys': 'ollama', 'event': 'generate_response_fail'})
         raise OllamaAPIError(f"Failed to generate response: {str(e)}")
 
 # Cleanup function to close the client

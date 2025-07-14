@@ -47,9 +47,11 @@ except ImportError:
 
 class PDFProcessor:
     """Class to handle PDF processing operations."""
-    
+
     def __init__(self):
         self.supported = PYPDF2_AVAILABLE or PDFMINER_AVAILABLE
+        # We need the bot's event loop to run sync functions in an executor
+        self.loop = None
     
     def is_pdf(self, file_path: Union[str, Path, BinaryIO]) -> bool:
         """Check if a file is a PDF by its magic number."""
@@ -333,5 +335,16 @@ class PDFProcessor:
             result['error'] = str(e)
             return result
 
-# Create a global instance for convenience
-pdf_processor = PDFProcessor()
+    async def process(self, file_path: Union[str, Path, BinaryIO], 
+                      extract_images: bool = False) -> Dict[str, any]:
+        """
+        Asynchronously process a PDF file by running the synchronous extract_all
+        method in an executor to avoid blocking the event loop.
+        """
+        loop = self.loop or asyncio.get_running_loop()
+        return await loop.run_in_executor(
+            None,  # Use the default executor
+            self.extract_all,
+            file_path,
+            extract_images
+        )

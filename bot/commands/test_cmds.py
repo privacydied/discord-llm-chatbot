@@ -22,10 +22,9 @@ class TestCommands(commands.Cog):
         print(f"🏓 Ping command received from {ctx.author}")
         await ctx.send("Pong! 🏓")
 
-def setup(bot):
+async def setup(bot):
     """Add the test commands to the bot."""
-    print("🔄 Setting up test commands...")
+    logger.info("Setting up test commands...")
     cog = TestCommands(bot)
-    bot.add_cog(cog)
-    print("✅ Test commands set up")
-    return cog
+    await bot.add_cog(cog)
+    logger.info("Test commands set up")

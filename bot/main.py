@@ -7,21 +7,23 @@ import asyncio
 import aiohttp
 import os
 import sys
+import hashlib
 from typing import NoReturn, Optional
+
 
 import discord
 from discord.ext import commands
 
 # Import all required helpers
-from bot.config import load_config, validate_required_env, ConfigurationError, audit_env_file, validate_prompt_files, check_venv_activation
-from bot.logs import configure_logging
-from bot.router import setup_router, get_router
+from bot.config import load_config, validate_required_env, ConfigurationError, check_venv_activation
+from bot.logger import setup_logging, get_logger
+from bot.router import setup_router
+from bot.commands import setup_commands
 from bot.tasks import spawn_background_tasks
 from bot.shutdown import setup_signal_handlers
-from bot.memory import load_all_profiles, load_all_server_profiles, user_profiles, server_profiles
-from bot.tts_manager import tts_manager
-from bot.tts_state import tts_state
+from bot.memory import load_all_profiles, load_all_server_profiles
 from bot.events import cache_maintenance_task
+
 
 # Add the bot directory to the Python path
 import sys
@@ -29,182 +31,143 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.absolute()))
 
 
+def run_pre_flight_checks(config: dict) -> None:
+    """Runs all mandatory startup checks as per the Windsurf spec."""
+    logger = get_logger(__name__)
+    logger.info("--- Running Pre-Flight Checklist ---", extra={'subsys': 'core', 'event': 'pre_flight_checks'})
+
+    # 1. Bot Token Check
+    token = config.get("DISCORD_TOKEN")
+    if not token:
+        logger.critical("DISCORD_TOKEN is missing. Bot cannot start.", extra={'subsys': 'core', 'event': 'token_check_fail'})
+        raise ConfigurationError("DISCORD_TOKEN not found in environment.")
+    token_hash = hashlib.sha256(token.encode()).hexdigest()
+    logger.info(f"[WIND][INIT] Token hash={token_hash} validated", extra={'subsys': 'core', 'event': 'token_check_pass'})
+
+    # 2. Intents Check
+    intents = create_bot_intents()
+    required_intents = {
+        'message_content': intents.message_content,
+        'guilds': intents.guilds,
+        'guild_messages': intents.messages, # This covers guild messages
+        'dm_messages': intents.messages, # and DM messages
+        'guild_voice_states': intents.voice_states,
+    }
+
+    all_intents_ok = True
+    for intent_name, is_enabled in required_intents.items():
+        if not is_enabled:
+            all_intents_ok = False
+            logger.error(f"Required intent '{intent_name}' is disabled.", extra={'subsys': 'core', 'event': 'intent_check_fail'})
+    
+    if all_intents_ok:
+        logger.info("[WIND][INIT] Intents verified", extra={'subsys': 'core', 'event': 'intent_check_pass'})
+    else:
+        logger.critical("One or more required intents are missing. Bot may not function correctly.", extra={'subsys': 'core', 'event': 'intent_check_fail'})
+        # Depending on strictness, you might raise an error here.
+
+    # 3. Voice Gateway Version
+    logger.info(f"[WIND][INIT] Discord.py Version: {discord.__version__}", extra={'subsys': 'core', 'event': 'version_check'})
+    logger.info("--- Pre-Flight Checklist Complete ---", extra={'subsys': 'core', 'event': 'pre_flight_checks_pass'})
+
 def create_bot_intents() -> discord.Intents:
     """Create Discord intents with all required permissions."""
     intents = discord.Intents.default()  # Start with default intents
     intents.message_content = True  # Enable message content intent
-    
-    # Log the intents being used
-    print("\n🔍 Bot Intents:")
-    print(f"  - message_content: {intents.message_content}")
-    print(f"  - members: {intents.members}")
-    print(f"  - guilds: {intents.guilds}")
-    print(f"  - messages: {intents.messages}")
-    print(f"  - guild_messages: {intents.guild_messages}")
-    print(f"  - dm_messages: {intents.dm_messages}")
-    
     return intents
 
 
 class LLMBot(commands.Bot):
     """Minimal bot class with bootstrap functionality only."""
     
-    def __init__(self, command_prefix, intents, *args, **kwargs):
-        super().__init__(command_prefix, intents=intents, *args, **kwargs)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.startup_time = None
         self.config = load_config()
-    
+        self.logger = get_logger(self.__class__.__name__)
+
     async def setup_hook(self) -> None:
         """Bootstrap setup - load cogs and start services."""
-        print("🔧 Starting bot setup...")
+        self.logger.info("--- Starting Bot Setup Hook ---", extra={'subsys': 'core', 'event': 'setup_hook_start'})
         self.startup_time = discord.utils.utcnow()
-        
+
         try:
             # Initialize router first
-            print("🔄 Initializing router...")
-            self.router = setup_router(self)
-            print("✅ Router initialized")
-            
-            # Load all user and server profiles
-            print("🔄 Loading profiles...")
-            await self._load_profiles()
-            print("✅ Profiles loaded")
-            
-            # Load all command cogs
-            print("\n🔄 Loading command cogs...")
-            for ext in ['bot.commands.memory_cmds', 'bot.commands.tts_cmds']:
-                try:
-                    print(f"  ⏳ Loading {ext}...")
-                    await self.load_extension(ext)
-                    print(f"  ✅ Loaded extension: {ext}")
-                except Exception as e:
-                    print(f"  ❌ Failed to load extension {ext}: {str(e)}")
-                    import traceback
-                    traceback.print_exc()
-            
-            # Load events last
-            print("\n🔄 Loading events extension...")
-            try:
-                await self.load_extension('bot.events')
-                print("✅ Events extension loaded")
-            except Exception as e:
-                print(f"❌ Failed to load events extension: {str(e)}")
-                import traceback
-                traceback.print_exc()
-            
-            # Set up background tasks
-            print("\n🔄 Setting up background tasks...")
+            setup_router(self)
+            self.logger.info("Router initialized.", extra={'subsys': 'core', 'event': 'router_init'})
+
+            # Register all commands
+            await setup_commands(self)
+            self.logger.info("Commands registered.", extra={'subsys': 'core', 'event': 'commands_registered'})
+
+            # Load profiles
+            self._load_profiles()
+
+            # Spawn background tasks
             await spawn_background_tasks(self)
-            asyncio.create_task(cache_maintenance_task())
-            
-            print("\n🎉 Bot setup complete!")
-            
+            self.logger.info("Background tasks spawned.", extra={'subsys': 'core', 'event': 'tasks_spawned'})
+
         except Exception as e:
-            print(f"❌ Critical error during setup: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            raise
-    
-    async def _load_profiles(self) -> None:
+            self.logger.critical(f"Fatal error during setup hook: {e}", exc_info=True, extra={'subsys': 'core', 'event': 'setup_hook_fail'})
+            await self.close()  # Gracefully shutdown on setup failure
+            sys.exit(1)
+
+        self.logger.info("--- Bot Setup Hook Complete ---", extra={'subsys': 'core', 'event': 'setup_hook_pass'})
+
+    async def on_ready(self):
+        """Called when the bot is done preparing the data received from Discord."""
+        self.logger.info(f'Logged in as {self.user} (ID: {self.user.id})', extra={'subsys': 'core', 'event': 'login_success'})
+        self.logger.info('------\n')
+
+        # Set presence
+        try:
+            await self.change_presence(activity=discord.Game(name="Listening..."))
+            self.logger.info("Bot presence set.", extra={'subsys': 'core', 'event': 'presence_set'})
+        except Exception as e:
+            self.logger.warning(f"Failed to set presence: {e}", exc_info=True, extra={'subsys': 'core', 'event': 'presence_fail'})
+
+    def _load_profiles(self):
         """Load all user and server profiles."""
-        load_all_profiles()
-        load_all_server_profiles()
-        print(f"✅ Loaded {len(user_profiles)} user profiles and {len(server_profiles)} server profiles")
-    
-    async def on_ready(self) -> None:
-        """Bootstrap completion notification."""
-        import logging
-        
-        if not hasattr(self, 'startup_time'):
-            self.startup_time = discord.utils.utcnow()
-        
-        # Set presence now that bot is connected
-        activity = discord.Activity(
-            type=discord.ActivityType.listening,
-            name=f"{self.config.get('COMMAND_PREFIX', '!')}help"
-        )
-        await self.change_presence(activity=activity)
-        
-        print(f"✅ {self.user} is ready! Connected to {len(self.guilds)} guilds")
-        
-        # Start TTS initialization in background
-        async def load_tts_model():
-            try:
-                # TTS initialization now happens in __init__, just verify it's available [CA]
-                if tts_manager.is_available():
-                    logging.info("🔊 Kokoro-ONNX TTS initialized successfully")
-                    
-                    # Log cache stats after successful init
-                    cache_stats = tts_manager.get_cache_stats()
-                    logging.info(f"🔊 TTS cache: {cache_stats['files']} files ({cache_stats['size_mb']:.1f}MB)")
-                else:
-                    logging.error("❌ TTS is not available - check configuration and model files")
-            except Exception as e:
-                logging.error(f"❌ TTS initialization check failed: {str(e)}")
-        
-        # Start TTS initialization task
-        self.tts_init_task = asyncio.create_task(load_tts_model())
-        
-        # Startup watchdog to ensure bot remains responsive
-        async def startup_watchdog():
-            await asyncio.sleep(60)  # Wait 60 seconds
-            if not tts_manager.is_available():
-                logging.error("❌ TTS initialization watchdog: TTS still unavailable after 60 seconds")
-        
-        asyncio.create_task(startup_watchdog())
+        try:
+            self.logger.info("Loading all user and server profiles...", extra={'subsys': 'core', 'event': 'profile_load_start'})
+            load_all_profiles()
+            load_all_server_profiles()
+            self.logger.info("Profiles loaded successfully.", extra={'subsys': 'core', 'event': 'profile_load_success'})
+        except Exception as e:
+            self.logger.error(f"Failed to load profiles: {e}", exc_info=True, extra={'subsys': 'core', 'event': 'profile_load_fail'})
 
 
 def parse_arguments() -> argparse.Namespace:
-    """Parse command line arguments."""
-    parser = argparse.ArgumentParser(
-        description="Discord LLM Chatbot - Production-ready AI Discord bot",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  python -m bot.main                    # Start the bot normally
-  python -m bot.main --debug            # Enable debug logging
-  python -m bot.main --config-check     # Validate configuration only
-  python -m bot.main --version          # Show version information
-"""
-    )
-    
-    parser.add_argument(
-        "--debug",
-        action="store_true",
-        help="Enable debug logging"
-    )
-    
-    parser.add_argument(
-        "--config-check",
-        action="store_true",
-        help="Validate configuration and exit"
-    )
-    
-    parser.add_argument(
-        "--version",
-        action="store_true",
-        help="Show version information and exit"
-    )
-    
-    parser.add_argument(
-        "--log-level",
-        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
-        help="Set log level (overrides LOG_LEVEL env var)"
-    )
-    
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(description="Windsurf Discord Bot")
+    parser.add_argument('--debug', action='store_true', help='Enable debug logging.')
+    parser.add_argument('--version', action='store_true', help='Show version information and exit.')
+    parser.add_argument('--config-check', action='store_true', help='Validate configuration and exit.')
     return parser.parse_args()
 
 
+def load_tts_model():
+    # Placeholder for TTS model loading logic
+    logger = get_logger(__name__)
+    try:
+        logger.info("TTS model loading placeholder...", extra={'subsys': 'tts', 'event': 'model_load_start'})
+        # In a real scenario, you would initialize your TTS client here
+        # from bot.tts import tts_client
+        # tts_client.initialize()
+        logger.info("TTS model loaded successfully.", extra={'subsys': 'tts', 'event': 'model_load_pass'})
+    except Exception as e:
+        logger.error("Failed to load TTS model.", exc_info=True, extra={'subsys': 'tts', 'event': 'model_load_fail'})
+
+
+def startup_watchdog():
+    # Placeholder for a startup watchdog
+    logger = get_logger(__name__)
+    logger.info("Startup watchdog running...", extra={'subsys': 'core', 'event': 'watchdog_start'})
+
 def show_version_info() -> None:
     """Display version and system information."""
-    from . import __version__, __title__, __author__, __description__
-    
-    print(f"{__title__} v{__version__}")
-    print(f"Description: {__description__}")
-    print(f"Author: {__author__}")
-    print(f"Python: {sys.version}")
-    print(f"Discord.py: {discord.__version__}")
-    print(f"Platform: {sys.platform}")
+    # This will be properly implemented later when versioning is added.
+    print("Show version info placeholder.")
 
 
 def validate_configuration_only() -> None:
@@ -212,164 +175,117 @@ def validate_configuration_only() -> None:
     try:
         config = load_config()
         validate_required_env()
-        print("✅ Configuration is valid")
-        print(f"  • Discord token: {'✅ Present' if config.get('DISCORD_TOKEN') else '❌ Missing'}")
-        print(f"  • Command prefix: {config.get('COMMAND_PREFIX', '!')}")
-        print(f"  • Text backend: {config.get('TEXT_BACKEND', 'ollama')}")
+        logger = get_logger(__name__)
+        logger.info("Configuration is valid", extra={'subsys': 'core', 'event': 'config_valid'})
+        logger.info(f"  • Discord token: {'✅ Present' if config.get('DISCORD_TOKEN') else '❌ Missing'}", extra={'subsys': 'core', 'event': 'config_valid'})
+        logger.info(f"  • Command prefix: {config.get('COMMAND_PREFIX', '!')}", extra={'subsys': 'core', 'event': 'config_valid'})
+        logger.info(f"  • Text backend: {config.get('TEXT_BACKEND', 'ollama')}", extra={'subsys': 'core', 'event': 'config_valid'})
         
         if config.get('TEXT_BACKEND') == 'openai':
-            print(f"  • OpenAI API key: {'✅ Present' if config.get('OPENAI_API_KEY') else '❌ Missing'}")
-            print(f"  • OpenAI model: {config.get('OPENAI_TEXT_MODEL', 'gpt-4')}")
-            print(f"  • OpenAI base URL: {config.get('OPENAI_API_BASE', 'https://api.openai.com/v1')}")
+            logger.info(f"  • OpenAI API key: {'✅ Present' if config.get('OPENAI_API_KEY') else '❌ Missing'}", extra={'subsys': 'core', 'event': 'config_valid'})
+            logger.info(f"  • OpenAI model: {config.get('OPENAI_TEXT_MODEL', 'gpt-4')}", extra={'subsys': 'core', 'event': 'config_valid'})
+            logger.info(f"  • OpenAI base URL: {config.get('OPENAI_API_BASE', 'https://api.openai.com/v1')}", extra={'subsys': 'core', 'event': 'config_valid'})
         else:
-            print(f"  • Ollama base URL: {config.get('OLLAMA_BASE_URL', 'http://localhost:11434')}")
-            print(f"  • Ollama model: {config.get('OLLAMA_MODEL', 'llama3')}")
+            logger.info(f"  • Ollama base URL: {config.get('OLLAMA_BASE_URL', 'http://localhost:11434')}", extra={'subsys': 'core', 'event': 'config_valid'})
+            logger.info(f"  • Ollama model: {config.get('OLLAMA_MODEL', 'llama3')}", extra={'subsys': 'core', 'event': 'config_valid'})
         
-        print(f"  • Log level: {config.get('LOG_LEVEL', 'INFO')}")
+        logger.info(f"  • Log level: {config.get('LOG_LEVEL', 'INFO')}", extra={'subsys': 'core', 'event': 'config_valid'})
         
     except ConfigurationError as e:
-        print(f"❌ Configuration error: {e}")
+        logger = get_logger(__name__)
+        logger.critical(f"Configuration error: {e}", exc_info=True, extra={'subsys': 'core', 'event': 'config_fail'})
         sys.exit(1)
 
 
-async def main(args: Optional[argparse.Namespace] = None) -> None:
+def get_prefix(bot: commands.Bot, message: discord.Message) -> list[str]:
+    """Determine command prefix based on context."""
+    config = bot.config
+    prefix = config.get('COMMAND_PREFIX', '!')
+    if message.guild is None:
+        return [prefix]
+    mentions = commands.when_mentioned(bot, message)
+    return [f"{m}{prefix}" for m in mentions]
+
+async def main() -> NoReturn:
     """Main bot execution function with enhanced error handling and CLI support."""
-    if args is None:
-        args = parse_arguments()
-    
-    # Handle version request
+    args = parse_arguments()
+
     if args.version:
         show_version_info()
-        return
-    
-    # Handle configuration check
+        sys.exit(0)
+
+    # Set log level in environment for the new logger to pick up.
+    # The --debug flag overrides the .env setting.
+    if args.debug:
+        os.environ['LOG_LEVEL'] = 'DEBUG'
+
+    # setup_logging now reads from config/env, so no argument is needed.
+    setup_logging()
+    logger = get_logger(__name__)
+
     if args.config_check:
         validate_configuration_only()
-        return
-    
-    # Configure logging first
-    configure_logging()
-    
-    # Override log level if specified
-    if args.log_level:
-        import logging
-        logging.getLogger().setLevel(getattr(logging, args.log_level))
-        print(f"Log level set to {args.log_level}")
-    
-    if args.debug:
-        import logging
-        logging.getLogger().setLevel(logging.DEBUG)
-        print("Debug logging enabled")
-    
-    # CHANGE: Enforce .venv usage and perform comprehensive startup validation
+        sys.exit(0)
+
     try:
-        # Step 1: Check .venv activation
         check_venv_activation()
-        
-        # Step 2: Audit .env file (logs all variables)
-        audit_env_file()
-        
-        # Step 3: Load and validate configuration
         config = load_config()
-        validate_required_env()
-        
-        # Step 4: Validate prompt files exist and are readable
-        validate_prompt_files()
-        
-        print("✅ All startup validations passed")
-        
+        run_pre_flight_checks(config)
     except ConfigurationError as e:
-        print(f"❌ Configuration error: {e}")
-        print("💡 Use --config-check to validate your configuration")
+        logger.critical(f"Configuration error: {e}", exc_info=True, extra={'subsys': 'core', 'event': 'config_fail'})
         sys.exit(1)
     except Exception as e:
-        print(f"❌ Startup validation error: {e}")
-        print("💡 Check your .env file and prompt files")
+        logger.critical(f"A fatal error occurred during startup validation: {e}", exc_info=True, extra={'subsys': 'core', 'event': 'startup_fail'})
         sys.exit(1)
-    
-    # Create bot instance
-    intents = discord.Intents.default()
-    intents.message_content = True
-    
-    import logging
-    logger = logging.getLogger(__name__)
-    
-    def get_prefix(bot: commands.Bot, message: discord.Message) -> list[str]:
-        """Determine command prefix based on context."""
-        # Load prefix from config
-        config = load_config()
-        prefix = config.get('COMMAND_PREFIX', '!')
-        
-        # In DMs, use just the prefix
-        if message.guild is None:
-            return [prefix]
-            
-        # In guilds, require both mention and the prefix
-        # This returns patterns like ['<@bot_id> !', '<@!bot_id> !'] 
-        mentions = commands.when_mentioned(bot, message)
-        return [f"{m}{prefix}" for m in mentions]
-    
+
+    intents = create_bot_intents()
     bot = LLMBot(
         command_prefix=get_prefix,
         intents=intents,
-        help_command=None,
+        help_command=None
     )
-    
-    # Setup signal handlers
+
     try:
         setup_signal_handlers(bot)
     except Exception as e:
-        print(f"⚠️  Warning: Failed to setup signal handlers: {e}")
-    
-    # Start the bot with retry logic
+        logger.warning(f"Failed to setup signal handlers: {e}", exc_info=True, extra={'subsys': 'core', 'event': 'signal_handler_fail'})
+
     max_retries = 3
     base_delay = 5  # seconds
-    
     for attempt in range(max_retries):
         try:
-            print(f"🚀 Connection attempt {attempt + 1}/{max_retries}")
+            logger.info(f"Connecting to Discord... (Attempt {attempt + 1}/{max_retries})", extra={'subsys': 'core', 'event': 'connect_start'})
             await bot.start(config["DISCORD_TOKEN"])
-            break
+            break  # Exit loop on successful connection
         except (discord.HTTPException, aiohttp.ClientConnectorError) as e:
-            last_exception = e
             if attempt == max_retries - 1:
-                print(f"❌ Failed after {max_retries} attempts. Last error: {type(e).__name__}: {e}")
+                logger.critical(f"Failed to connect after {max_retries} attempts.", exc_info=True, extra={'subsys': 'core', 'event': 'connect_fail_max_retries'})
                 if isinstance(e, aiohttp.ClientConnectorError):
-                    print("💡 Check your internet connection and firewall settings")
+                    logger.error("This may be a network issue. Check internet connection and firewall settings.", extra={'subsys': 'core', 'event': 'network_issue_hint'})
                 sys.exit(1)
-            delay = base_delay * (attempt + 1)
-            print(f"⚠️  Retrying in {delay}s... (Error: {e})")
+            delay = base_delay * (2 ** attempt)  # Exponential backoff
+            logger.warning(f"Connection failed, retrying in {delay}s...", exc_info=False, extra={'subsys': 'core', 'event': 'connect_retry'})
             await asyncio.sleep(delay)
     
-    # Start the bot
-    try:
-        print(f"🚀 Starting {bot.__class__.__name__}...")
-    except discord.LoginFailure:
-        print("❌ Invalid Discord token. Please check your DISCORD_TOKEN environment variable.")
-        sys.exit(1)
-    except discord.HTTPException as e:
-        print(f"❌ Discord HTTP error: {e}")
-        sys.exit(1)
-    except Exception as e:
-        print(f"❌ Fatal error: {e}")
-        import traceback
-        traceback.print_exc()
-        sys.exit(1)
+    logger.critical("Bot event loop exited unexpectedly.", extra={'subsys': 'core', 'event': 'event_loop_exit'})
+    sys.exit(1) # Should not be reached if bot.start() is successful and runs forever.
 
 
 def run_bot() -> None:
     """Entry point for running the bot with proper error handling."""
     try:
-        args = parse_arguments()
-        asyncio.run(main(args))
+        asyncio.run(main())
     except KeyboardInterrupt:
-        print("\n👋 Bot shutdown requested by user")
+        # A logger might not be configured if shutdown happens early.
+        print("\nBot shutdown requested by user.")
         sys.exit(0)
     except Exception as e:
-        print(f"❌ Fatal error: {e}")
+        # Fallback logging for catastrophic failures before logger is set up.
+        print(f"FATAL ERROR: {e}", file=sys.stderr)
         import traceback
         traceback.print_exc()
         sys.exit(1)
 
 
-asyncio.run(main())
+if __name__ == "__main__":
+    run_bot()

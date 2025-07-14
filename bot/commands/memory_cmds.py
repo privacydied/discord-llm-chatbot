@@ -12,7 +12,7 @@ from discord.ext import commands
 # Import bot modules
 from ..memory import add_memory, get_profile, save_profile, get_server_profile, save_server_profile
 from ..context import get_conversation_history, reset_context
-from ..logs import log_command
+from ..logger import log_command
 from ..config import load_config
 from ..router import get_router
 

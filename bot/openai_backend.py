@@ -9,6 +9,7 @@ import base64
 
 from .config import load_config
 from .memory import get_profile, get_server_profile
+from .exceptions import APIError
 
 logger = logging.getLogger(__name__)
 
@@ -72,16 +73,16 @@ async def generate_openai_response(
         # CHANGE: Use PROMPT_FILE from environment instead of hardcoded prompt
         prompt_file_path = config.get("PROMPT_FILE")
         if not prompt_file_path:
-            raise Exception("PROMPT_FILE not configured in environment variables")
+            raise APIError("PROMPT_FILE not configured in environment variables")
         
         try:
             with open(prompt_file_path, "r", encoding="utf-8") as pf:
                 base_system_prompt = pf.read().strip()
                 logger.debug(f"Loaded text prompt from {prompt_file_path}")
         except FileNotFoundError:
-            raise Exception(f"Prompt file not found: {prompt_file_path}")
+            raise APIError(f"Prompt file not found: {prompt_file_path}")
         except Exception as e:
-            raise Exception(f"Error reading prompt file {prompt_file_path}: {e}")
+            raise APIError(f"Error reading prompt file {prompt_file_path}: {e}")
         
         # Build the full prompt with context and server context
         system_prompt = f"""{base_system_prompt}
@@ -141,7 +142,7 @@ Server Context: {server_context}"""
     
     except Exception as e:
         logger.error(f"Error in generate_openai_response: {e}", exc_info=True)
-        raise Exception(f"Failed to generate OpenAI response: {str(e)}")
+        raise APIError(f"Failed to generate OpenAI response: {str(e)}")
 
 
 async def get_base64_image(image_url: str) -> str:
@@ -161,7 +162,7 @@ async def get_base64_image(image_url: str) -> str:
             else:
                 error_msg = f"Failed to download image: status={response.status}"
                 logger.error(error_msg)
-                raise Exception(error_msg)
+                raise APIError(error_msg)
 
 
 async def generate_vl_response(
@@ -208,7 +209,7 @@ async def generate_vl_response(
         vl_model = config.get('VL_MODEL')
         if not vl_model:
             logger.error("❌ VL_MODEL not configured in environment variables")
-            raise Exception("VL_MODEL not configured in environment variables")
+            raise APIError("VL_MODEL not configured in environment variables")
         
         logger.info(f"🎨 Using VL model: {vl_model}")
         
@@ -216,7 +217,7 @@ async def generate_vl_response(
         vl_prompt_file_path = config.get("VL_PROMPT_FILE")
         if not vl_prompt_file_path:
             logger.error("❌ VL_PROMPT_FILE not configured in environment variables")
-            raise Exception("VL_PROMPT_FILE not configured in environment variables")
+            raise APIError("VL_PROMPT_FILE not configured in environment variables")
         
         logger.debug(f"🎨 Loading VL prompt from: {vl_prompt_file_path}")
         try:
@@ -226,10 +227,10 @@ async def generate_vl_response(
                 logger.debug(f"🎨 VL prompt preview: {vl_system_prompt[:100]}{'...' if len(vl_system_prompt) > 100 else ''}")
         except FileNotFoundError:
             logger.error(f"❌ VL prompt file not found: {vl_prompt_file_path}")
-            raise Exception(f"VL prompt file not found: {vl_prompt_file_path}")
+            raise APIError(f"VL prompt file not found: {vl_prompt_file_path}")
         except Exception as e:
             logger.error(f"❌ Error reading VL prompt file {vl_prompt_file_path}: {e}")
-            raise Exception(f"Error reading VL prompt file {vl_prompt_file_path}: {e}")
+            raise APIError(f"Error reading VL prompt file {vl_prompt_file_path}: {e}")
         
         # Get user preferences if user_id is provided
         if user_id:
@@ -260,7 +261,7 @@ async def generate_vl_response(
                 logger.info("✅ Image downloaded and converted to base64 data URI")
             except Exception as img_error:
                 logger.error(f"❌ Failed to process image: {img_error}")
-                raise Exception(f"Image processing failed: {str(img_error)}")
+                raise APIError(f"Image processing failed: {str(img_error)}")
         
         logger.debug(f"🎨 Base64 data length: {len(image_content)} chars")
         logger.debug(f"🎨 Base64 preview: {image_content[:100]}...")
@@ -304,7 +305,7 @@ async def generate_vl_response(
         # CHANGE: Enhanced error handling with detailed response logging
         if response is None:
             logger.error("❌ VL API returned None response")
-            raise Exception("VL API returned None response")
+            raise APIError("VL API returned None response")
         
         # Log complete response for debugging
         logger.debug(f"🎨 Full API response: {response}")
@@ -321,27 +322,27 @@ async def generate_vl_response(
         # Validate response structure
         if not hasattr(response, 'choices'):
             logger.error("❌ VL API response has no 'choices' attribute")
-            raise Exception("VL API response has no 'choices' attribute")
+            raise APIError("VL API response has no 'choices' attribute")
         
         if response.choices is None:
             logger.error("❌ VL API response.choices is None")
-            raise Exception("VL API response.choices is None")
+            raise APIError("VL API response.choices is None")
         
         if not response.choices:
             logger.error("❌ VL API response choices list is empty")
             logger.debug(f"❌ Choices: {response.choices}")
-            raise Exception("VL API response choices list is empty")
+            raise APIError("VL API response choices list is empty")
         
         # Validate first choice
         choice = response.choices[0]
         if not hasattr(choice, 'message'):
             logger.error("❌ VL API response choice has no 'message' attribute")
             logger.debug(f"❌ Choice attributes: {dir(choice)}")
-            raise Exception("VL API response choice has no 'message' attribute")
+            raise APIError("VL API response choice has no 'message' attribute")
         
         if choice.message is None:
             logger.error("❌ VL API response choice message is None")
-            raise Exception("VL API response choice message is None")
+            raise APIError("VL API response choice message is None")
         
         logger.info("✅ VL API call completed successfully")
         
@@ -372,4 +373,4 @@ async def generate_vl_response(
     
     except Exception as e:
         logger.error(f"❌ Error in generate_vl_response: {e}", exc_info=True)
-        raise Exception(f"Failed to generate VL response: {str(e)}")
+        raise APIError(f"Failed to generate VL response: {str(e)}")

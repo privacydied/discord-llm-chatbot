@@ -108,7 +108,7 @@ class KokoroDirect:
                 available_voices = ", ".join(self.available_voices)
                 raise FileNotFoundError(f"Voice file not found: {voice_path}. Available voices: {available_voices}")
             
-            # Load voice embedding
+            # Load voice embedding from raw binary file
             voice_embedding = np.fromfile(str(voice_path), dtype=np.float32).reshape(-1, 1, 256)
             logger.debug(f"Loaded voice embedding for {voice_id}: shape={voice_embedding.shape}")
             

@@ -44,24 +44,19 @@ class TTSManager:
         # Initialize backend [CA]
         if self.backend == "kokoro-onnx":
             try:
-                # Check if kokoro_onnx is available [IV]
-                try:
-                    import kokoro_onnx
-                    logger.debug("✅ kokoro_onnx package imported successfully")
-                except ImportError as e:
-                    raise RuntimeError(f"❌ Kokoro-ONNX not installed. Please install it with 'uv pip install kokoro-onnx soundfile misaki[en]': {e}")
+                from .kokoro_direct import KokoroDirect # Use direct implementation
                 
-                # Verify model files exist [IV]
-                model_path = Path(config.get("TTS_MODEL_FILE", "tts/kokoro-v1.0.onnx"))
-                voices_path = Path(config.get("TTS_VOICE_FILE", "tts/voices.json"))
-                
-                if not model_path.exists():
-                    raise FileNotFoundError(f"Model file not found: {model_path}")
-                if not voices_path.exists():
-                    raise FileNotFoundError(f"Voices file not found: {voices_path}")
-                
-                logger.debug(f"✅ Model files verified: {model_path}, {voices_path}")
-                
+                # Verify model and voice directories exist [IV]
+                onnx_dir = Path(config.get("TTS_ONNX_DIR", "tts/onnx"))
+                voices_dir = Path(config.get("TTS_VOICES_DIR", "tts/voices"))
+
+                if not onnx_dir.exists() or not onnx_dir.is_dir():
+                    raise FileNotFoundError(f"ONNX model directory not found: {onnx_dir}")
+                if not voices_dir.exists() or not voices_dir.is_dir():
+                    raise FileNotFoundError(f"Voices directory not found: {voices_dir}")
+
+                logger.debug(f"✅ Model and voice directories verified: {onnx_dir}, {voices_dir}")
+
                 # Initialize G2P with fallback [REH]
                 try:
                     from misaki import en, espeak
@@ -71,16 +66,15 @@ class TTSManager:
                 except Exception as g2p_error:
                     logger.error(f"Failed to initialize G2P: {g2p_error}")
                     raise
-                
-                # Initialize Kokoro engine [CA]
+
+                # Initialize Kokoro engine using KokoroDirect [CA]
                 try:
-                    from kokoro_onnx import Kokoro
-                    self.engine = Kokoro(str(model_path), str(voices_path))
-                    logger.debug(f"✅ Kokoro engine initialized with correct API")
+                    self.engine = KokoroDirect(onnx_dir=str(onnx_dir), voices_dir=str(voices_dir))
+                    logger.debug(f"✅ KokoroDirect engine initialized")
                     
                     # Verify voices are available [IV]
-                    if hasattr(self.engine, 'voices') and self.engine.voices:
-                        available_voices = list(self.engine.voices)
+                    if hasattr(self.engine, 'available_voices') and self.engine.available_voices:
+                        available_voices = self.engine.available_voices
                         logger.info(f"Available voices ({len(available_voices)}): {available_voices[:5]}{'...' if len(available_voices) > 5 else ''}")
                         
                         # Validate requested voice [IV]
@@ -169,34 +163,11 @@ class TTSManager:
                     # First flatten the array completely
                     voice = voice.flatten()
                     
-                    # Check if we need to resize to 256 elements
-                    if len(voice) != 256:
-                        logger.warning(f"Voice vector dimension mismatch: {len(voice)} != 256")
-                        if len(voice) > 256:
-                            # Truncate to first 256 elements
-                            logger.debug(f"Truncating voice vector from {len(voice)} to 256 dimensions")
-                            voice = voice[:256]
-                        else:
-                            # Pad with zeros to get 256 elements
-                            logger.debug(f"Padding voice vector from {len(voice)} to 256 dimensions")
-                            padding = np.zeros(256 - len(voice), dtype=voice.dtype)
-                            voice = np.concatenate([voice, padding])
-                    
-                    # Finally reshape to (1, 256) for model input
-                    voice = voice.reshape(1, 256)
-                    logger.debug(f"Final voice shape: {voice.shape}, ndim: {voice.ndim}")
-
-                # Log voice vector shape for debugging [REH]
-                logger.debug(f"Voice vector shape before create: {voice.shape if hasattr(voice, 'shape') else 'unknown'}")
-                
-                # Extra verification right before calling self.engine.create [REH]
-                logger.debug(f"FINAL CHECK - Voice vector type: {type(voice)}, shape: {voice.shape if hasattr(voice, 'shape') else 'unknown'}, ndim: {voice.ndim if hasattr(voice, 'ndim') else 'unknown'}")
-                
+                # With KokoroDirect, we pass the voice_id (string) directly
                 samples_tensor, sample_rate = self.engine.create(
-                    text, 
-                    voice=voice, 
-                    speed=1.0, 
-                    lang="en-us"
+                    text,
+                    voice_id=self.voice,
+                    speed=1.0
                 )
                 
                 # Handle both PyTorch tensors and NumPy arrays

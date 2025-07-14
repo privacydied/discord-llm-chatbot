@@ -16,9 +16,8 @@ load_dotenv(dotenv_path=Path.cwd() / '.env', verbose=True)
 # Also try loading from the project root in case we're running from a subdirectory
 load_dotenv(dotenv_path=Path(__file__).parent.parent / '.env', verbose=False)
 
-class ConfigurationError(Exception):
-    """Raised when configuration is invalid or missing."""
-    pass
+from .exceptions import ConfigurationError
+
 
 
 def audit_env_file() -> None:
@@ -175,6 +174,7 @@ def load_config():
         "MAX_CONVERSATION_LENGTH": _safe_int(os.getenv("MAX_CONVERSATION_LENGTH"), "1000", "MAX_CONVERSATION_LENGTH"),
         "MAX_TEXT_ATTACHMENT_SIZE": _safe_int(os.getenv("MAX_TEXT_ATTACHMENT_SIZE"), "20000", "MAX_TEXT_ATTACHMENT_SIZE"),
         "MAX_FILE_SIZE": _safe_int(os.getenv("MAX_FILE_SIZE"), "2097152", "MAX_FILE_SIZE"),  # 2 MB
+        "MAX_ATTACHMENT_SIZE_MB": _safe_int(os.getenv("MAX_ATTACHMENT_SIZE_MB"), "25", "MAX_ATTACHMENT_SIZE_MB"),
         
         # PROMPT FILES - CRITICAL FOR MULTIMODAL FUNCTIONALITY
         "PROMPT_FILE": _clean_env_value(os.getenv("PROMPT_FILE")),  # CHANGE: Added PROMPT_FILE for text model prompts
@@ -202,6 +202,7 @@ def load_config():
         "USER_LOGS_DIR": Path(os.getenv("USER_LOGS_DIR", "user_logs")),
         "DM_LOGS_DIR": Path(os.getenv("DM_LOGS_DIR", "dm_logs")),
         "TEMP_DIR": Path(os.getenv("TEMP_DIR", "temp")),
+        "LOGS_DIR": Path(os.getenv("LOGS_DIR", "logs")),
         
         # TTS SETTINGS
         "TTS_BACKEND": os.getenv("TTS_BACKEND", "kokoro-onnx"),
@@ -224,4 +225,5 @@ def load_config():
         "LOG_LEVEL": os.getenv("LOG_LEVEL", "INFO"),
         "COMMAND_PREFIX": os.getenv("COMMAND_PREFIX", "!"),
         "OWNER_IDS": [int(id.strip()) for id in os.getenv("OWNER_IDS", "").split(",") if id.strip()],
+        "LOG_FILE": os.getenv("LOG_FILE", "logs/bot.jsonl"),
     }

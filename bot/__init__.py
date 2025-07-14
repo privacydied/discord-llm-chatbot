@@ -20,7 +20,7 @@ __license__ = "MIT"
 
 # Core package components - exposed for external use
 from .config import load_config, validate_required_env, ConfigurationError
-from .logs import configure_logging, log_message, log_command
+from .logger import setup_logging, get_logger
 from .memory import (
     get_profile, save_profile, 
     get_server_profile, save_server_profile,
@@ -40,9 +40,8 @@ __all__ = [
     'validate_required_env',
     
     # Logging
-    'configure_logging',
-    'log_message',
-    'log_command',
+    'setup_logging',
+    'get_logger',
     
     # Memory management
     'get_profile',
