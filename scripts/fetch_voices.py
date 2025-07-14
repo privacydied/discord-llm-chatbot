@@ -8,6 +8,7 @@ https://huggingface.co/hexgrad/Kokoro-82M/blob/main/VOICES.md
 
 import io
 import os
+import json
 from pathlib import Path
 
 import numpy as np
@@ -15,16 +16,18 @@ import requests
 import torch
 from tqdm import tqdm
 
+VOICES_URL = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files/voices.json"
+
 config = {
     "Kokoro-82M-v1.1-zh": {
         "voice_url": "https://huggingface.co/hexgrad/Kokoro-82M-v1.1-zh/resolve/main/voices/{name}.pt",
         "api_url": "https://huggingface.co/api/models/hexgrad/Kokoro-82M-v1.1-zh/tree/main/voices",
-        "npz_path": "voices-v1.1-zh.bin",
+        "npz_path": "voices-v1.1-zh.json",
     },
     "Kokoro-82M": {
         "voice_url": "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/voices/{name}.pt",
         "api_url": "https://huggingface.co/api/models/hexgrad/Kokoro-82M/tree/main/voices",
-        "npz_path": "voices-v1.0.bin",
+        "npz_path": "voices-v1.0.json",
     },
 }
 # Extract voice names
@@ -68,11 +71,12 @@ def download_voices(voice_url: str, names: list[str], npz_path: str):
     # Save all voices to a single .npz file
     npz_path = Path("tts") / npz_path
     os.makedirs(os.path.dirname(npz_path), exist_ok=True)
-    with open(npz_path, "wb") as f:
-        np.savez(f, **voices)
+    response = requests.get(VOICES_URL)
+    with open(npz_path, 'w') as f:
+        f.write(response.text)
 
-        mb_size = os.path.getsize(npz_path) // 1000 // 1000
-        print(f"Created {npz_path} ({mb_size}MB)")
+    mb_size = os.path.getsize(npz_path) // 1000 // 1000
+    print(f"Created {npz_path} ({mb_size}MB)")
 
 
 def main():

@@ -18,17 +18,17 @@ def convert_bin_to_json(bin_path, json_path):
     try:
         # Load the binary voices file which is a .npz archive
         print(f"Loading binary voices file from {bin_path}")
-        voices_data = np.load(bin_path)
+        voices_data = np.load(bin_path, allow_pickle=True)
         
         # Extract voice names and their corresponding embeddings
-        voice_names = list(voices_data.files)
+        voice_names = list(voices_data.item().keys())
         print(f"Found {len(voice_names)} voices")
         
         # Create a dictionary mapping voice names to their embeddings
         voices_dict = {}
         for voice_name in voice_names:
             # Convert the numpy array to a regular Python list for JSON serialization
-            voice_array = voices_data[voice_name].tolist()
+            voice_array = voices_data.item()[voice_name].tolist()
             voices_dict[voice_name] = voice_array
         
         # Write the JSON file
@@ -47,7 +47,7 @@ def convert_bin_to_json(bin_path, json_path):
 def main():
     # Define paths
     tts_dir = Path("tts")
-    bin_path = tts_dir / "voices-v1.0.bin"
+    bin_path = tts_dir / "voices.bin"
     json_path = tts_dir / "voices.json"
     
     # Ensure the TTS directory exists

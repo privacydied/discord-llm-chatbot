@@ -129,13 +129,22 @@ class Router:
             mode, cleaned_input = self._extract_mode(raw_input)
             logger.debug(f"🔍 Parsed mode: {mode}, Cleaned input: '{cleaned_input}'")
             
-            # Auto-detect mode based on attachments if no explicit mode was set
-            if message.attachments and not self.mode_pattern.search(raw_input):
+            # Check if this is a TTS command (!speak, !say) - preserve TTS intent
+            is_tts_command = any(raw_input.strip().startswith(cmd) for cmd in ['!speak', '!say'])
+            
+            # Auto-detect mode based on attachments ONLY if no explicit mode AND not a TTS command
+            if message.attachments and not self.mode_pattern.search(raw_input) and not is_tts_command:
                 original_mode = mode
                 mode = self._auto_detect_mode(message, mode)
                 logger.debug(f"🔍 Auto-detected mode: {mode.name} (was {original_mode.name}) for message with attachments")
             
-            logger.debug(f"🔍 Final processing mode: {mode.name}")
+            logger.debug(f"🔍 Final processing mode: {mode.name}, TTS command: {is_tts_command}")
+            
+            # Handle TTS commands with attachments specially - single response flow
+            if is_tts_command and message.attachments:
+                logger.debug(f"🔊📎 Processing TTS command with attachments - single response flow")
+                await self._process_tts_with_attachments(message, cleaned_input)
+                return
             
             # Handle different processing modes
             if mode in (ProcessingMode.TEXT, ProcessingMode.BOTH) and (cleaned_input or message.attachments):
@@ -356,30 +365,96 @@ class Router:
                     await self._process_text(message, f"{cleaned_input}\n{document_text}".strip())
                 
         except Exception as e:
-            logger.error(f"Error processing attachments: {str(e)}", exc_info=True)
-            await message.channel.send(f"⚠️ Error processing attachments: {str(e)}")
+            logger.error(f"Error in _process_attachments: {str(e)}", exc_info=True)
+            await message.channel.send(f"⚠️ An error occurred while processing your request: {str(e)}")
     
-    # This method is deprecated and replaced by direct calls to tts_manager.generate_tts
-    # Keeping it for backward compatibility
-    async def _generate_tts(self, message: discord.Message, text: str, reply_to: discord.Message = None) -> None:
-        """Generate and send TTS audio (deprecated)."""
+    async def _process_tts_with_attachments(self, message: discord.Message, cleaned_input: str) -> None:
+        """
+        Handle TTS commands (!speak, !say) with attachments.
+        Processes attachments through appropriate pipeline and returns TTS response.
+        
+        Args:
+            message: The Discord message object
+            cleaned_input: The cleaned input text
+        """
         try:
-            if not self.tts_manager.is_available():
-                if not reply_to:  # Only send this if we're not in a combined text+tts flow
-                    await message.channel.send("❌ TTS is not available. Please check your configuration.")
-                return
+            # Create temporary directory for downloads
+            with tempfile.TemporaryDirectory() as tmp_dir:
+                tmp_dir_path = Path(tmp_dir)
+                files = []
                 
-            audio_path = await self.tts_manager.generate_tts(text, self.tts_manager.voice)
-            
-            # Send the audio file
-            with open(audio_path, 'rb') as f:
-                audio_file = discord.File(f, filename='tts_output.wav')
-                await (reply_to or message.channel).send(file=audio_file)
+                # Download all attachments
+                for attachment in message.attachments:
+                    file_path = tmp_dir_path / attachment.filename
+                    await attachment.save(file_path)
+                    files.append(file_path)
+                    logger.debug(f"⬇️ Downloaded attachment for TTS: {attachment.filename}")
+                
+                # Auto-detect file types and process accordingly
+                final_text = cleaned_input or ""
+                
+                # Process images through VL pipeline
+                image_files = [f for f in files if f.suffix.lower() in {'.png', '.jpg', '.jpeg', '.gif', '.webp'}]
+                if image_files:
+                    prompt = cleaned_input or "What's in this image?"
+                    logger.info(f"👁️ Processing image for TTS with prompt: '{prompt}'")
+                    vision_results = await see_infer(image_files, prompt)
+                    
+                    if cleaned_input:
+                        # Full pipeline: image > VL > text model > TTS
+                        combined_prompt = f"Image description: {vision_results}\n\nUser request: {cleaned_input}"
+                        final_text = await brain_infer(combined_prompt)
+                    else:
+                        # Just describe the image through text model
+                        final_text = await brain_infer(f"Describe this image in a conversational way: {vision_results}")
+                
+                # Process documents
+                document_files = [f for f in files if f.suffix.lower() in {'.pdf', '.txt', '.md', '.docx'}]
+                if document_files:
+                    document_text = await self._process_document(document_files)
+                    if cleaned_input:
+                        combined_prompt = f"Document content: {document_text}\n\nUser request: {cleaned_input}"
+                        final_text = await brain_infer(combined_prompt)
+                    else:
+                        # Summarize the document
+                        final_text = await brain_infer(f"Summarize this document: {document_text}")
+                
+                # Process audio files through STT
+                audio_files = [f for f in files if f.suffix.lower() in {'.wav', '.mp3', '.ogg', '.opus', '.m4a', '.flac'}]
+                if audio_files:
+                    for audio_file in audio_files:
+                        transcript = await hear_infer(audio_file)
+                        if transcript:
+                            if cleaned_input:
+                                combined_prompt = f"Audio transcript: {transcript}\n\nUser request: {cleaned_input}"
+                                final_text = await brain_infer(combined_prompt)
+                            else:
+                                # Respond to the transcribed audio
+                                final_text = await brain_infer(f"Respond to this: {transcript}")
+                            break  # Process only the first audio file
+                
+                # If no attachments processed but we have text, use text model
+                if not final_text and cleaned_input:
+                    final_text = await brain_infer(cleaned_input)
+                
+                # If still no text, provide default response
+                if not final_text:
+                    final_text = "I received your message but couldn't process the content. Could you try again?"
+                
+                # Generate and send TTS response (single response only)
+                logger.debug(f"🔊 Generating TTS for: '{final_text[:50]}...'")
+                audio_path = await self.tts_manager.generate_tts(final_text, self.tts_manager.voice)
+                
+                # Send only the TTS audio file (single response)
+                with open(audio_path, 'rb') as f:
+                    audio_file = discord.File(f, filename='tts_output.wav')
+                    await message.channel.send(file=audio_file)
+                
+                logger.debug(f"✅ TTS with attachments completed successfully")
                 
         except Exception as e:
-            logger.error(f"Error in TTS generation: {str(e)}", exc_info=True)
-            if not reply_to:  # Only send this if we're not in a combined text+tts flow
-                await message.channel.send(f"⚠️ An error occurred while generating speech: {str(e)}")
+            logger.error(f"Error in _process_tts_with_attachments: {str(e)}", exc_info=True)
+            await message.channel.send(f"⚠️ An error occurred while processing TTS with attachments: {str(e)}")
     
     async def _download_attachment(self, attachment: discord.Attachment) -> str:
         """Download an attachment to a temporary file and return the path."""

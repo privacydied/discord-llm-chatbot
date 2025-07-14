@@ -1,8 +1,10 @@
 from .tts import TTSManager
 import logging
+import numpy as np  # Import numpy for array operations
 from .config import load_config  # Import config loader
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)   # TODO: Remove in production or set back to original level
 
 # Load configuration
 config = load_config()
