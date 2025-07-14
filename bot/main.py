@@ -130,20 +130,17 @@ class LLMBot(commands.Bot):
         # Start TTS initialization in background
         async def load_tts_model():
             try:
-                # Direct async call with timeout
-                await asyncio.wait_for(tts_manager.load_model(), timeout=30.0)
-                logging.info("🔊 Kokoro-ONNX TTS initialized successfully")
-                tts_manager.set_available(True)
-                
-                # Log cache stats after successful init
-                cache_stats = tts_manager.get_cache_stats()
-                logging.info(f"🔊 TTS cache: {cache_stats['files']} files ({cache_stats['size_mb']:.1f}MB)")
-            except asyncio.TimeoutError:
-                logging.error("❌ TTS initialization timed out after 30 seconds")
-                tts_manager.set_available(False)
+                # TTS initialization now happens in __init__, just verify it's available [CA]
+                if tts_manager.is_available():
+                    logging.info("🔊 Kokoro-ONNX TTS initialized successfully")
+                    
+                    # Log cache stats after successful init
+                    cache_stats = tts_manager.get_cache_stats()
+                    logging.info(f"🔊 TTS cache: {cache_stats['files']} files ({cache_stats['size_mb']:.1f}MB)")
+                else:
+                    logging.error("❌ TTS is not available - check configuration and model files")
             except Exception as e:
-                logging.error(f"❌ TTS initialization failed: {str(e)}")
-                tts_manager.set_available(False)
+                logging.error(f"❌ TTS initialization check failed: {str(e)}")
         
         # Start TTS initialization task
         self.tts_init_task = asyncio.create_task(load_tts_model())
@@ -153,7 +150,6 @@ class LLMBot(commands.Bot):
             await asyncio.sleep(60)  # Wait 60 seconds
             if not tts_manager.is_available():
                 logging.error("❌ TTS initialization watchdog: TTS still unavailable after 60 seconds")
-                tts_manager.set_available(False)  # Force availability to false
         
         asyncio.create_task(startup_watchdog())
 

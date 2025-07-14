@@ -11,10 +11,13 @@ config = load_config()
 tts_manager = TTSManager(config)
 
 async def initialize_tts():
-    """Initialize TTS manager asynchronously"""
+    """Initialize TTS manager asynchronously [CA]"""
     try:
-        logger.info("🔊 Initializing TTS model...")
-        await tts_manager.load_model()
-        logger.info("✅ TTS initialization completed")
+        logger.info("🔊 Checking TTS availability...")
+        # TTS initialization now happens in __init__, just verify it's available [CA]
+        if tts_manager.is_available():
+            logger.info("✅ TTS initialization completed successfully")
+        else:
+            logger.error("❌ TTS is not available - check configuration and model files")
     except Exception as e:
-        logger.error(f"❌ TTS initialization failed: {str(e)}")
+        logger.error(f"❌ TTS initialization check failed: {str(e)}")

@@ -6,12 +6,15 @@ pip==25.1.1
 # AI/ML
 ollama==0.2.0
 openai==1.94.0
-kokoro-onnx>=0.4.9      # Kokoro ONNX TTS library
-onnxruntime>=1.15.0
-onnxruntime-gpu>=1.15.0  # Optional GPU support
-spacy>=3.0.0            # Required for kokoro-onnx
+
+# TTS Dependencies (kokoro-onnx ecosystem) - COMPATIBLE VERSIONS [REH][CA]
+kokoro-onnx==0.4.9      # Kokoro ONNX TTS library
+numpy>=2.0.2            # Required by kokoro-onnx 0.4.9
+onnxruntime>=1.20.1     # Required by kokoro-onnx 0.4.9
+onnxruntime-gpu>=1.20.1 # Optional GPU support - matching onnxruntime version
+spacy>=3.4.0            # Required for kokoro-onnx
 num2words>=0.5.10       # Required for kokoro-onnx
-soundfile>=0.10.0       # Required for kokoro-onnx
+soundfile>=0.12.1       # Required for kokoro-onnx - audio I/O
 misaki[en]>=0.1.0       # Required for kokoro-onnx G2P
 
 # Web & Networking
@@ -39,8 +42,7 @@ pytesseract>=0.3.10
 Pillow>=10.2.0
 
 # Audio Processing (for TTS)
-soundfile>=0.12.1
-numpy>=2.0.2
+# numpy and soundfile versions specified in TTS section above
 
 # System Dependencies (may need manual installation)
 # - libsndfile1 (required by soundfile)

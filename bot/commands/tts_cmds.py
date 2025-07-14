@@ -64,16 +64,22 @@ class TTSCommands(commands.Cog):
         tts_state.set_one_time_tts(ctx.author.id)
         
         if text:
-            # If text is provided, process it immediately
-            await self.router.handle(ctx.message, text)
+            # If text is provided, process it immediately with voice_only=True to prevent duplicate responses
+            await self.router.handle(ctx.message, text, voice_only=True)
         else:
             # Otherwise, just set the flag for the next response
             await ctx.send("🗣️ The next response will be spoken.")
     
     @commands.command(name='say')
     async def say(self, ctx: commands.Context, *, text: str):
-        """Make the bot say exactly what you type."""
-        # Use TTS manager to synthesize and send the text
+        """Make the bot say exactly what you type without generating AI response."""
+        # Check for image attachments first
+        if ctx.message.attachments:
+            # Has image attachments, process through VL flow, then TTS
+            await self.router.handle(ctx.message, text, voice_only=True)
+            return
+        
+        # No images, direct TTS with provided text
         if not tts_manager.is_available():
             await ctx.send("❌ TTS is not available at the moment.")
             return

@@ -8,10 +8,27 @@ from .exceptions import InferenceError
 
 logger = logging.getLogger(__name__)
 
-async def see_infer(image_path: Path, prompt: str) -> str:
-    """Generate response from image and prompt"""
+async def see_infer(image_paths: list[Path], prompt: str = "What's in this image?") -> str:
+    """Generate response from image(s) and prompt
+    
+    Args:
+        image_paths: List of paths to image files
+        prompt: Text prompt to guide VL model's interpretation
+        
+    Returns:
+        Text description of the image(s)
+    """
     try:
-        logger.info(f"👁️ Vision-language inference started for {image_path}")
+        # Convert to list if a single Path was provided
+        if not isinstance(image_paths, list):
+            image_paths = [image_paths]
+        
+        logger.info(f"👁️ Vision-language inference started for {len(image_paths)} image(s)")
+        
+        # Process the first image only for now (VL model may not support multiple images)
+        image_path = image_paths[0]
+        if len(image_paths) > 1:
+            logger.warning(f"Multiple images provided ({len(image_paths)}), but only using the first one")
         
         # Read the image file directly and convert to base64 data URI
         with open(image_path, 'rb') as f:
@@ -28,6 +45,7 @@ async def see_infer(image_path: Path, prompt: str) -> str:
         data_url = f"data:{mime_type};base64,{base64.b64encode(image_data).decode()}"
         
         # Call the VL backend
+        logger.debug(f"Calling VL backend with prompt: '{prompt}'")
         response = await generate_vl_response(
             image_url=data_url,
             user_prompt=prompt
@@ -35,7 +53,9 @@ async def see_infer(image_path: Path, prompt: str) -> str:
         
         # Handle the response format from generate_vl_response
         if 'text' in response:
-            return response['text']
+            vl_result = response['text']
+            logger.debug(f"VL model returned: '{vl_result[:50]}...'")
+            return vl_result
         else:
             logger.error(f"Unexpected VL response format: {response}")
             raise InferenceError("Unexpected response format from vision model")

@@ -114,13 +114,14 @@ class Router:
             
         return current_mode
 
-    async def handle(self, message: discord.Message, raw_input: str) -> None:
+    async def handle(self, message: discord.Message, raw_input: str, voice_only: bool = False) -> None:
         """
         Process a message through the appropriate pipeline based on content and mode.
         
         Args:
             message: The Discord message object
             raw_input: The raw input string (with prefix/mention already stripped)
+            voice_only: If True, only send TTS response (no text response)
         """
         try:
             logger.debug(f"🔍 Raw input: '{raw_input}'")
@@ -145,7 +146,7 @@ class Router:
                 # Otherwise, process as regular text
                 elif cleaned_input:
                     logger.debug(f"📝 Processing TEXT mode with input: '{cleaned_input[:50]}...'")
-                    await self._process_text(message, cleaned_input, include_tts=(mode == ProcessingMode.BOTH))
+                    await self._process_text(message, cleaned_input, include_tts=(mode == ProcessingMode.BOTH), voice_only=voice_only)
             elif mode == ProcessingMode.TTS and cleaned_input:
                 logger.debug(f"🔊 Processing TTS mode with input: '{cleaned_input[:50]}...'")
                 await self._process_tts(message, cleaned_input)
@@ -163,18 +164,20 @@ class Router:
             logger.error(f"Error in router.handle: {str(e)}", exc_info=True)
             await message.channel.send("⚠️ An error occurred while processing your request")
     
-    async def _process_text(self, message: discord.Message, text: str, include_tts: bool = False) -> None:
+    async def _process_text(self, message: discord.Message, text: str, include_tts: bool = False, voice_only: bool = False) -> None:
         """Process text input through the LLM pipeline."""
         response = await brain_infer(text)
         
         # Check if we should use TTS
-        use_tts = False
-        if self.tts_state.get_and_clear_one_time_tts(message.author.id):
-            use_tts = True
-            logging.debug(f"🔊 Using one-time TTS for user {message.author.id}")
-        elif self.tts_state.is_user_tts_enabled(message.author.id):
-            use_tts = True
-            logging.debug(f"🔊 Using TTS for user {message.author.id} (user preference or global setting)")
+        use_tts = voice_only  # Always use TTS if voice_only is True
+        
+        if not use_tts:  # Only check other conditions if voice_only is False
+            if self.tts_state.get_and_clear_one_time_tts(message.author.id):
+                use_tts = True
+                logging.debug(f"🔊 Using one-time TTS for user {message.author.id}")
+            elif self.tts_state.is_user_tts_enabled(message.author.id):
+                use_tts = True
+                logging.debug(f"🔊 Using TTS for user {message.author.id} (user preference or global setting)")
         
         if use_tts and self.tts_manager.is_available():
             # Synthesize and send as voice
@@ -184,9 +187,13 @@ class Router:
                 logging.debug(f"🔊 TTS response sent successfully")
             except Exception as e:
                 logger.error(f"Error in TTS synthesis: {e}", exc_info=True)
-                await message.channel.send(response)  # Fallback to text
-                logging.warning(f"⚠️ TTS failed, falling back to text response")
-        else:
+                # Only fall back to text if not voice_only
+                if not voice_only:
+                    await message.channel.send(response)  # Fallback to text
+                    logging.warning(f"⚠️ TTS failed, falling back to text response")
+                else:
+                    await message.channel.send(f"⚠️ Failed to generate speech: {str(e)}")
+        elif not voice_only:  # Only send text if not voice_only
             await message.channel.send(response)
     
     async def _process_tts(self, message: discord.Message, text: str) -> None:
@@ -320,9 +327,28 @@ class Router:
                             await self._process_text(message, f"{cleaned_input}\n{transcript}".strip(), include_tts=False)
                 
                 elif mode == ProcessingMode.VISION:
-                    # Process vision pipeline
-                    vision_results = await see_infer(files)
-                    await self._process_text(message, vision_results, include_tts=False)
+                    # Check if this is coming from a speak or say command (voice_only)
+                    voice_only = self.tts_state.get_and_clear_one_time_tts(message.author.id) or self.tts_state.is_user_tts_enabled(message.author.id)
+                    
+                    # Get image files
+                    image_files = [f for f in files if f.suffix.lower() in {'.png', '.jpg', '.jpeg', '.gif', '.webp'}]
+                    if not image_files:
+                        raise ValueError("No valid image files found for vision processing")
+                    
+                    # 1. Process image through VL pipeline
+                    prompt = cleaned_input or "What's in this image?"
+                    logger.info(f"👁️ Processing image with prompt: '{prompt}'")
+                    vision_results = await see_infer(image_files, prompt)
+                    
+                    # 2. Pass VL results to text model for further processing if there's a prompt
+                    if cleaned_input:
+                        # For TTS commands, we want the full pipeline: image > VL > text > TTS
+                        combined_prompt = f"Image description: {vision_results}\n\nUser request: {cleaned_input}"
+                        logger.debug(f"👁️➡️💬 Sending VL results to text model: '{combined_prompt[:50]}...'")
+                        await self._process_text(message, combined_prompt, include_tts=False, voice_only=voice_only)
+                    else:
+                        # Just the VL description
+                        await self._process_text(message, vision_results, include_tts=False, voice_only=voice_only)
                 
                 elif mode == ProcessingMode.TEXT:
                     # Process document pipeline
