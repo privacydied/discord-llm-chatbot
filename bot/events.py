@@ -3,7 +3,9 @@ Event handlers for the Discord bot.
 """
 import asyncio
 import logging
+import re
 import sys
+from pathlib import Path
 from typing import Optional
 
 import discord
@@ -38,16 +40,12 @@ class BotEventHandler(commands.Cog):
         return content.strip()
     
     def _strip_mention(self, content: str) -> str:
-        """Strip bot mention from message content."""
-        # Remove <@!USER_ID> or <@USER_ID> mentions
-        mention = f'<@!{self.bot.user.id}>'
-        alt_mention = f'<@{self.bot.user.id}>'
-        
-        if content.startswith(mention):
-            return content[len(mention):].strip()
-        elif content.startswith(alt_mention):
-            return content[len(alt_mention):].strip()
-        return content
+        """Remove bot mention from message content."""
+        # Remove user-style mention
+        content = re.sub(rf'<@{self.bot.user.id}>', '', content)
+        # Remove nickname-style mention
+        content = re.sub(rf'<@!{self.bot.user.id}>', '', content)
+        return content.strip()
     
     async def dispatch_message(self, message: discord.Message) -> None:
         """
@@ -81,13 +79,24 @@ class BotEventHandler(commands.Cog):
             content = self._strip_mention(content)
         
         # Check if this is a Discord command that will be processed by command handlers
-        # If so, skip router processing to avoid duplicates
-        is_discord_command = has_prefix and any(content.strip().startswith(cmd) for cmd in [
-            'speak', 'say', 'tts', 'help'
-        ])
+        raw_content = message.content.strip()
+        is_discord_command = False
+        
+        # In DMs: check for !command
+        if is_dm and raw_content.startswith('!'):
+            command_part = raw_content[1:].split()[0] if raw_content[1:] else ''
+            is_discord_command = command_part in ['speak', 'say', 'tts', 'help']
+        
+        # In guilds: check for <@bot> !command pattern
+        elif not is_dm and is_mentioned:
+            # Remove mention and check for !command
+            clean_content = self._strip_mention(raw_content)
+            if clean_content.startswith('!'):
+                command_part = clean_content[1:].split()[0] if clean_content[1:] else ''
+                is_discord_command = command_part in ['speak', 'say', 'tts', 'help']
         
         if is_discord_command:
-            logger.debug(f"🎯 Skipping router for Discord command: {content.split()[0] if content else 'unknown'}")
+            logger.debug(f"🎯 Skipping router for Discord command: {command_part}")
             return  # Let Discord's command system handle this
         
         # Handle document uploads
@@ -119,9 +128,10 @@ class BotEventHandler(commands.Cog):
                 await message.channel.send("⚠️ An error occurred while processing the audio")
                 return
         
-        # If there's an image without explicit commands, let the router handle it
-        if has_image and not (has_prefix or is_mentioned):
-            logger.info(f"📷 Auto-processing image attachment through router")
+        # If there's an image without explicit commands, only auto-process in DMs
+        # In guilds, require mention or prefix for image processing
+        if has_image and not (has_prefix or is_mentioned) and is_dm:
+            logger.info(f"📷 Auto-processing image attachment in DM through router")
             try:
                 # Let the router handle image processing with proper TTS integration
                 await self.router.handle(message, content or "What's in this image?")
