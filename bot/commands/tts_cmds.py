@@ -21,76 +21,74 @@ class TTSCommands(commands.Cog):
         self.router = get_router()
         self.prefix = '!'
     
-    @commands.group(name="tts", invoke_without_command=True)
-    async def tts_group(self, ctx, *, content: Optional[str] = None):
-        """Text-to-speech commands.
-        
-        Usage:
-        !tts on/off - Enable/disable TTS for yourself
-        !tts status - Check your TTS status
-        !tts <text> --mode=tts - Speak the given text
-        """
-        if ctx.invoked_subcommand is not None or not content:
-            if not ctx.invoked_subcommand:
-                await ctx.send_help(ctx.command)
-            return
-            
-        # If we get here, user did something like !tts hello
-        await self.router.handle(ctx.message, content)
+    @commands.group(name='tts', invoke_without_command=True)
+    async def tts_group(self, ctx: commands.Context, *, text: Optional[str] = None):
+        """Base command for TTS functionality."""
+        if text:
+            # If there's text after !tts, treat it as a one-off TTS request
+            await self.speak(ctx, text)
+        else:
+            # Otherwise, show help
+            await ctx.send("Please specify 'on', 'off', or text to speak.")
     
-    @tts_group.command(name="on")
-    async def tts_on(self, ctx):
+    @tts_group.command(name='on')
+    async def tts_on(self, ctx: commands.Context):
         """Enable TTS for your messages."""
-        if not tts_manager.is_available():
-            await ctx.send("❌ TTS is not available. The Kokoro-ONNX TTS package is not installed or failed to initialize.")
-            return
-            
         tts_state.set_user_tts(ctx.author.id, True)
-        await ctx.send("🔊 TTS enabled for you.")
+        await ctx.send("✅ TTS responses enabled for you.")
     
-    @tts_group.command(name="off")
-    async def tts_off(self, ctx):
+    @tts_group.command(name='off')
+    async def tts_off(self, ctx: commands.Context):
         """Disable TTS for your messages."""
         tts_state.set_user_tts(ctx.author.id, False)
-        await ctx.send("🔊 TTS disabled for you.")
+        await ctx.send("✅ TTS responses disabled for you.")
     
-    @tts_group.command(name="status")
-    async def tts_status(self, ctx):
-        """Check your current TTS status."""
-        status = "enabled" if tts_state.is_user_tts_enabled(ctx.author.id) else "disabled"
-        global_status = "enabled" if tts_state.global_enabled else "disabled"
-        await ctx.send(f"Your TTS is **{status}** (Global TTS is **{global_status}**).")
-    
-    @commands.command(name="tts-all", description="[Admin] Enable/disable TTS for all users")
+    @tts_group.command(name='all')
+    @commands.guild_only()  # Block usage in DMs
     @commands.has_permissions(administrator=True)
-    async def tts_all(self, ctx, state: Optional[str] = None):
-        """Admin command to toggle TTS for everyone."""
+    async def tts_all(self, ctx: commands.Context, setting: str):
+        """Admin-only: Enable/disable TTS globally. Only works in servers, not DMs."""
+        setting = setting.lower()
+        if setting == 'on':
+            tts_state.set_global_tts(True)
+            await ctx.send("✅ TTS responses enabled globally.")
+        elif setting == 'off':
+            tts_state.set_global_tts(False)
+            await ctx.send("✅ TTS responses disabled globally.")
+        else:
+            await ctx.send("❌ Invalid setting. Use 'on' or 'off'.")
+    
+    @commands.command(name='speak')
+    async def speak(self, ctx: commands.Context, *, text: Optional[str] = None):
+        """Make the next response TTS or speak the given text."""
+        tts_state.set_one_time_tts(ctx.author.id)
+        
+        if text:
+            # If text is provided, process it immediately
+            await self.router.handle(ctx.message, text)
+        else:
+            # Otherwise, just set the flag for the next response
+            await ctx.send("🗣️ The next response will be spoken.")
+    
+    @commands.command(name='say')
+    async def say(self, ctx: commands.Context, *, text: str):
+        """Make the bot say exactly what you type."""
+        # Use TTS manager to synthesize and send the text
+        if not tts_manager.is_available():
+            await ctx.send("❌ TTS is not available at the moment.")
+            return
+        
         try:
-            # Validate input
-            if not state:
-                await ctx.send("❌ Missing argument. Usage: `!tts-all [on|off]`")
-                return
-                
-            state = state.lower()
-            if state not in ['on', 'off']:
-                await ctx.send("❌ Invalid argument. Use 'on' or 'off'.")
-                return
-                
-            # Check TTS availability
-            if not tts_manager.is_available():
-                await ctx.send("⚠️ TTS is not available. The Kokoro-ONNX TTS package is not installed or failed to initialize. You can still enable it, but audio will not work until fixed.")
-
-            # Update global TTS state
-            enabled = (state == 'on')
-            tts_state.global_enabled = enabled
-            
-            # Notify channel
-            status = "enabled" if enabled else "disabled"
-            await ctx.send(f"🔊 TTS has been **{status}** for all users.")
-            
+            # Use the correct method name generate_tts instead of synthesize
+            audio_path = await tts_manager.generate_tts(text, tts_manager.voice)
+            await ctx.send(file=discord.File(audio_path))
+            logging.debug(f"🔊 Direct TTS response sent for '{text[:30]}...'")
         except Exception as e:
-            logging.error(f"Error in tts_all: {str(e)}", exc_info=True)
-            await ctx.send("⚠️ An error occurred while processing your request. Please try again.")
+            logging.error(f"Error in say command: {e}", exc_info=True)
+            await ctx.send(f"❌ An error occurred while generating TTS: {str(e)}")
+    
+    # Note: The standalone tts-all command is removed to avoid duplication
+    # The functionality is now handled by the @tts_group.command(name='all') subcommand
 
 async def setup(bot):
     """Add TTS commands to the bot."""

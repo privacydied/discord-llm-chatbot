@@ -25,6 +25,16 @@ def parse_command(content: str) -> Tuple[str, str]:
     elif content.startswith("!see"):
         mode = "vl"
         content = content.replace("!see", "", 1).strip()
+    elif content.startswith("!tts"):
+        # Extract subcommand and text
+        parts = content.split(maxsplit=1)
+        if len(parts) > 1 and not parts[1].startswith('-'):
+            # If there's text after !tts (not a flag), treat as TTS input
+            mode = "tts"
+            content = parts[1].strip()
+        else:
+            # Otherwise keep mode as text for subcommands like !tts on/off
+            mode = "text"
     
     # Validate mode
     valid_modes = {"text", "tts", "stt", "vl", "both"}

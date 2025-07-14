@@ -13,6 +13,9 @@ class TTSState:
         # Per-user TTS preferences {user_id: enabled}
         self.user_preferences: Dict[int, bool] = {}
         
+        # Per-user one-time TTS flags
+        self.one_time_tts: Set[int] = set()
+        
         # Admin user IDs (cached for performance)
         self.admin_users: Set[int] = set()
         
@@ -45,6 +48,17 @@ class TTSState:
     def remove_admin(self, user_id: int) -> None:
         """Remove user from admin cache."""
         self.admin_users.discard(user_id)
+    
+    def set_one_time_tts(self, user_id: int) -> None:
+        """Set a one-time TTS flag for the user."""
+        self.one_time_tts.add(user_id)
+        
+    def get_and_clear_one_time_tts(self, user_id: int) -> bool:
+        """Check and clear the one-time TTS flag for the user."""
+        if user_id in self.one_time_tts:
+            self.one_time_tts.remove(user_id)
+            return True
+        return False
     
     def get_stats(self) -> dict:
         """Get TTS usage statistics."""

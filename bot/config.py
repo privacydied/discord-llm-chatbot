@@ -203,6 +203,10 @@ def load_config():
         "DM_LOGS_DIR": Path(os.getenv("DM_LOGS_DIR", "dm_logs")),
         "TEMP_DIR": Path(os.getenv("TEMP_DIR", "temp")),
         
+        # TTS SETTINGS
+        "TTS_BACKEND": os.getenv("TTS_BACKEND", "kokoro-onnx"),
+        "TTS_VOICE": os.getenv("TTS_VOICE", "af"),
+        
         # OPTIONAL SETTINGS
         "TTS_PREFS_FILE": os.getenv("TTS_PREFS_FILE"),
         "DEBUG": os.getenv("DEBUG", "False").lower() == "true",

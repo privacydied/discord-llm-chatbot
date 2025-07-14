@@ -45,6 +45,11 @@ dm_logs/*
 user_logs/*
 user_profiles/*
 server_profiles/*
+server_profiles/*.json
+user_profiles/*.json
+dm_logs/*.json  
+tts_cache/*.wav
+tts_cache/*
 
 # Temporary files
 *.swp

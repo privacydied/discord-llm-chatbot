@@ -4,6 +4,7 @@ This module should contain NO business logic, only orchestration.
 """
 import argparse
 import asyncio
+import aiohttp
 import os
 import sys
 from typing import NoReturn, Optional
@@ -30,7 +31,8 @@ sys.path.insert(0, str(Path(__file__).parent.absolute()))
 
 def create_bot_intents() -> discord.Intents:
     """Create Discord intents with all required permissions."""
-    intents = discord.Intents.all()  # Start with all intents enabled
+    intents = discord.Intents.default()  # Start with default intents
+    intents.message_content = True  # Enable message content intent
     
     # Log the intents being used
     print("\n🔍 Bot Intents:")
@@ -290,15 +292,32 @@ async def main(args: Optional[argparse.Namespace] = None) -> None:
         sys.exit(1)
     
     # Create bot instance
-    try:
-        bot = LLMBot(
-            command_prefix=commands.when_mentioned_or(config.get("COMMAND_PREFIX", "!")),
-            intents=create_bot_intents(),
-            case_insensitive=True
-        )
-    except Exception as e:
-        print(f"❌ Failed to create bot instance: {e}")
-        sys.exit(1)
+    intents = discord.Intents.default()
+    intents.message_content = True
+    
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    def get_prefix(bot: commands.Bot, message: discord.Message) -> list[str]:
+        """Determine command prefix based on context."""
+        # Load prefix from config
+        config = load_config()
+        prefix = config.get('COMMAND_PREFIX', '!')
+        
+        # In DMs, use just the prefix
+        if message.guild is None:
+            return [prefix]
+            
+        # In guilds, require both mention and the prefix
+        # This returns patterns like ['<@bot_id> !', '<@!bot_id> !'] 
+        mentions = commands.when_mentioned(bot, message)
+        return [f"{m}{prefix}" for m in mentions]
+    
+    bot = LLMBot(
+        command_prefix=get_prefix,
+        intents=intents,
+        help_command=None,
+    )
     
     # Setup signal handlers
     try:
@@ -306,10 +325,29 @@ async def main(args: Optional[argparse.Namespace] = None) -> None:
     except Exception as e:
         print(f"⚠️  Warning: Failed to setup signal handlers: {e}")
     
+    # Start the bot with retry logic
+    max_retries = 3
+    base_delay = 5  # seconds
+    
+    for attempt in range(max_retries):
+        try:
+            print(f"🚀 Connection attempt {attempt + 1}/{max_retries}")
+            await bot.start(config["DISCORD_TOKEN"])
+            break
+        except (discord.HTTPException, aiohttp.ClientConnectorError) as e:
+            last_exception = e
+            if attempt == max_retries - 1:
+                print(f"❌ Failed after {max_retries} attempts. Last error: {type(e).__name__}: {e}")
+                if isinstance(e, aiohttp.ClientConnectorError):
+                    print("💡 Check your internet connection and firewall settings")
+                sys.exit(1)
+            delay = base_delay * (attempt + 1)
+            print(f"⚠️  Retrying in {delay}s... (Error: {e})")
+            await asyncio.sleep(delay)
+    
     # Start the bot
     try:
         print(f"🚀 Starting {bot.__class__.__name__}...")
-        await bot.start(config["DISCORD_TOKEN"])
     except discord.LoginFailure:
         print("❌ Invalid Discord token. Please check your DISCORD_TOKEN environment variable.")
         sys.exit(1)
@@ -338,5 +376,4 @@ def run_bot() -> None:
         sys.exit(1)
 
 
-if __name__ == "__main__":
-    run_bot()
+asyncio.run(main())

@@ -1,9 +1,14 @@
 from .tts import TTSManager
 import logging
+from .config import load_config  # Import config loader
 
 logger = logging.getLogger(__name__)
 
-tts_manager = TTSManager()
+# Load configuration
+config = load_config()
+
+# Initialize TTSManager with config
+tts_manager = TTSManager(config)
 
 async def initialize_tts():
     """Initialize TTS manager asynchronously"""
