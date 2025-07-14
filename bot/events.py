@@ -80,6 +80,16 @@ class BotEventHandler(commands.Cog):
         elif is_mentioned:
             content = self._strip_mention(content)
         
+        # Check if this is a Discord command that will be processed by command handlers
+        # If so, skip router processing to avoid duplicates
+        is_discord_command = has_prefix and any(content.strip().startswith(cmd) for cmd in [
+            'speak', 'say', 'tts', 'help'
+        ])
+        
+        if is_discord_command:
+            logger.debug(f"🎯 Skipping router for Discord command: {content.split()[0] if content else 'unknown'}")
+            return  # Let Discord's command system handle this
+        
         # Handle document uploads
         if has_document and not (has_prefix or is_mentioned):
             try:
@@ -109,61 +119,13 @@ class BotEventHandler(commands.Cog):
                 await message.channel.send("⚠️ An error occurred while processing the audio")
                 return
         
-        # If there's an image, process it through VL and text models
+        # If there's an image without explicit commands, let the router handle it
         if has_image and not (has_prefix or is_mentioned):
+            logger.info(f"📷 Auto-processing image attachment through router")
             try:
-                # Process the first image attachment
-                image_attachment = next(
-                    att for att in message.attachments 
-                    if att.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif'))
-                )
-                
-                # Download the image
-                from pathlib import Path
-                import tempfile
-                import os
-                
-                with tempfile.NamedTemporaryFile(delete=False, suffix=Path(image_attachment.filename).suffix) as tmp:
-                    await image_attachment.save(tmp.name)
-                    image_path = Path(tmp.name)
-                
-                try:
-                    # Process image with VL model
-                    from bot.see import see_infer
-                    from bot.brain import brain_infer
-                    
-                    logger.info(f"👁️ Processing image: {image_attachment.filename}")
-                    
-                    # Get VL model description
-                    vl_result = await see_infer(image_path, content or "What's in this image?")
-                    logger.debug(f"VL model output: {vl_result[:200]}...")
-                    
-                    # Create enhanced prompt for text model
-                    enhanced_prompt = f"""Based on this image description:
-                    
-                    {vl_result}
-                    
-                    {content if content else 'What can you tell me about this image?'}
-                    """
-                    
-                    # Get text model response
-                    logger.info("🤖 Getting text model response...")
-                    response = await brain_infer(enhanced_prompt)
-                    
-                    # Send the response through the router to respect TTS settings
-                    logger.info("🔊 Routing text model response through router...")
-                    await self.router.handle(message, response, voice_only=tts_state.is_user_tts_enabled(message.author.id))
-                    
-                finally:
-                    # Clean up the temporary file
-                    try:
-                        os.unlink(image_path)
-                    except Exception as e:
-                        logger.warning(f"Failed to delete temp file {image_path}: {e}")
-                
-                # Return early since we've handled the image
+                # Let the router handle image processing with proper TTS integration
+                await self.router.handle(message, content or "What's in this image?")
                 return
-                
             except Exception as e:
                 logger.error(f"Error processing image: {str(e)}", exc_info=True)
                 await message.channel.send("⚠️ An error occurred while processing the image")
