@@ -1,7 +1,7 @@
 #!/bin/sh
 # Startup script for Discord LLM Chatbot
 
-BOT_DIR="/volume1/py/discord-llm-chatbot"
+BOT_DIR=$(dirname "$(readlink -f "$0")")
 LOGFILE="$BOT_DIR/bot.log"
 
 case "$1" in
@@ -9,7 +9,7 @@ case "$1" in
     export TESSDATA_PREFIX=/opt/share/
 	cd "$BOT_DIR"
     . venv/bin/activate
-    nohup venv/bin/python main.py >> "$LOGFILE" 2>&1 &
+        nohup venv/bin/python run.py >> "$LOGFILE" 2>&1 &
     echo $! > "$BOT_DIR/bot.pid"
     ;;
   stop)

@@ -6,7 +6,7 @@ import discord
 from discord.ext import commands
 
 # Import the cog class directly for testing
-from tests.core.cogs.test_cog import TestCommands
+from tests.core.cogs.test_cog import PingCog
 
 
 @pytest.mark.asyncio
@@ -28,7 +28,7 @@ async def test_command_registration_direct_add():
     bot._connection.http = MagicMock()
 
     # Add the cog directly to the bot
-    await bot.add_cog(TestCommands(bot))
+    await bot.add_cog(PingCog(bot))
 
     # After the hook, check the bot's own command registry
     registered_commands = bot.commands

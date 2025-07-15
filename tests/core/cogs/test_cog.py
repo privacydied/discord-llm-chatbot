@@ -1,6 +1,6 @@
 from discord.ext import commands
 
-class TestCommands(commands.Cog):
+class PingCog(commands.Cog):
     """A simple cog for testing command registration."""
     def __init__(self, bot):
         self.bot = bot
@@ -11,5 +11,5 @@ class TestCommands(commands.Cog):
         await ctx.send('pong')
 
 async def setup(bot):
-    """The setup function for the TestCommands cog."""
-    await bot.add_cog(TestCommands(bot))
+    """The setup function for the PingCog cog."""
+    await bot.add_cog(PingCog(bot))

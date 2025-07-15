@@ -71,20 +71,13 @@ All tests should pass before running the bot.
 
 ## 3. Running the Bot
 
-Once setup and testing are complete, you can start the bot using the provided shell script.
+Once setup and testing are complete, you can start the bot directly with `uv`.
 
 ```bash
-# Make sure your virtual environment is activated
-source .venv/bin/activate
-
-# Start the bot
-./discord-llm-chatbot.sh start
+# Start the bot from the project's root directory
+uv run python run.py
 ```
+
+This command executes the `run.py` script within the project's managed virtual environment.
 
 The bot should now be online and responding to commands in your Discord server.
-
-To stop the bot, you can run:
-
-```bash
-./discord-llm-chatbot.sh stop
-```

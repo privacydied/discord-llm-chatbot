@@ -18,18 +18,24 @@ if TYPE_CHECKING:
 from .brain import brain_infer
 from .command_parser import Command, parse_command
 from .hear import hear_infer
-from .pdf_utils import PDFProcessor, PDF_SUPPORT
+from .pdf_utils import PDFProcessor
 from .see import see_infer
 from .web import process_url
 
 logger = logging.getLogger(__name__)
 
-# Try to import python-docx for .docx support
+# Dependency availability flags
 try:
     import docx  # noqa: F401
     DOCX_SUPPORT = True
 except ImportError:
     DOCX_SUPPORT = False
+
+try:
+    import fitz  # PyMuPDF
+    PDF_SUPPORT = True
+except ImportError:
+    PDF_SUPPORT = False
 
 class InputModality(Enum):
     """Defines the type of input received from the user."""
