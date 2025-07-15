@@ -87,11 +87,13 @@ class Router:
 
             # 2. Handle ignored messages or no-ops early
             if parsed_command is None:
-                self.logger.debug("Ignoring message (no command parsed).", extra={'subsys': 'router'})
+                self.logger.debug("Ignoring message (no command parsed).", extra={'subsys': 'router', 'msg_id': message.id})
                 return None
             if parsed_command.command is Command.IGNORE:
-                self.logger.debug("Ignoring message (IGNORE command).", extra={'subsys': 'router'})
+                self.logger.debug("Ignoring message (IGNORE command).", extra={'subsys': 'router', 'msg_id': message.id})
                 return None
+
+            self.logger.debug(f"Parsed command: {parsed_command}", extra={'subsys': 'router', 'msg_id': message.id})
         except Exception:
             # This case is for when parsing fails entirely, e.g., a message in a guild
             # without a mention. We should silently ignore these.
@@ -109,45 +111,69 @@ class Router:
             output_modality = self._get_output_modality(parsed_command, message)
             self.logger.debug(f"Determined modalities: Input={input_modality}, Output={output_modality}", extra={'subsys': 'router'})
 
-            # 5. Process based on input modality
-            processed_text = None
-            if input_modality == InputModality.TEXT_ONLY:
-                processed_text = await self._flows['process_text'](parsed_command.cleaned_content, str(message.author.id))
+            # 5. Route to the appropriate processing flow
+            text_response = None
+
+            # A. Process based on input modality to get a text response
+            if parsed_command.command == Command.SAY:
+                # For direct !say commands, the content is the text to be spoken
+                text_response = parsed_command.cleaned_content
+            elif input_modality is InputModality.TEXT_ONLY:
+                self.logger.debug("Routing to text processing flow.", extra={'subsys': 'router', 'msg_id': message.id, 'flow': 'text'})
+                text_response = await self._flows['process_text'](parsed_command.cleaned_content, str(message.author.id))
             elif input_modality in [InputModality.IMAGE, InputModality.DOCUMENT]:
-                processed_text = await self._flows['process_attachments'](message, parsed_command.cleaned_content)
-            else:
-                # This case handles unhandled attachment types like AUDIO
-                self.logger.warning(f"Unhandled input modality: {input_modality}", extra={'subsys': 'router'})
-                return ResponseMessage(text="I'm sorry, I can't process that type of attachment.")
+                self.logger.debug("Routing to attachment processing flow.", extra={'subsys': 'router', 'msg_id': message.id, 'flow': 'attachment'})
+                text_response = await self._flows['process_attachments'](message, parsed_command.cleaned_content)
 
-            # 6. Handle cases where processing yields no text
-            if not processed_text:
-                self.logger.warning("Processing resulted in no text.", extra={'subsys': 'router'})
-                return ResponseMessage(text="I'm sorry, I couldn't process that. Please try again.")
+            # If no text could be generated, we can't proceed.
+            if not text_response:
+                self.logger.warning("No text response generated from input processing; cannot proceed.", extra={'subsys': 'router', 'msg_id': message.id})
+                return None
 
-            # 7. Generate response based on output modality
-            if output_modality == OutputModality.TTS:
-                audio_path = await self._flows['generate_tts'](processed_text)
-                # For !say command, only return audio
-                text_response = None if parsed_command.command == Command.SAY else processed_text
-                return ResponseMessage(text=text_response, audio_path=audio_path)
+            # B. Process based on output modality
+            if output_modality is OutputModality.TTS:
+                self.logger.debug("Routing to TTS generation flow.", extra={'subsys': 'router', 'msg_id': message.id, 'flow': 'tts'})
+                audio_path = await self._flows['generate_tts'](text_response)
+                return ResponseMessage(audio_path=audio_path)
             else:
-                return ResponseMessage(text=processed_text)
+                # C. Default to text response
+                return ResponseMessage(text=text_response)
 
         except Exception as e:
-            self.logger.error(f"An unexpected error occurred in dispatch_message: {e}", exc_info=True)
+            self.logger.error(f"An unexpected error occurred in dispatch_message for msg {message.id}: {e}", exc_info=True, extra={'subsys': 'router'})
             return ResponseMessage(text="I'm sorry, an unexpected error occurred.")
 
     def _get_input_modality(self, message: Message) -> InputModality:
-        """Determines the primary input modality of the message."""
-        if message.attachments:
-            attachment = message.attachments[0]
-            content_type = attachment.content_type
-            if content_type and content_type.startswith('image/'):
+        """Determines the primary input modality of the message by checking attachments."""
+        if not message.attachments:
+            return InputModality.TEXT_ONLY
+
+        # Define supported extensions
+        image_exts = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp']
+        doc_exts = ['.pdf', '.txt', '.md', '.docx']
+        audio_exts = ['.wav', '.mp3', '.ogg', '.opus', '.flac']
+
+        # Check for each modality type in order of priority
+        for attachment in message.attachments:
+            file_ext = Path(attachment.filename).suffix.lower()
+            if file_ext in image_exts:
+                self.logger.debug(f"Detected IMAGE modality from attachment: {attachment.filename}")
                 return InputModality.IMAGE
-            # Add more specific document checks if needed
-            if any(attachment.filename.lower().endswith(ext) for ext in ['.pdf', '.txt', '.md', '.docx']):
+
+        for attachment in message.attachments:
+            file_ext = Path(attachment.filename).suffix.lower()
+            if file_ext in doc_exts:
+                self.logger.debug(f"Detected DOCUMENT modality from attachment: {attachment.filename}")
                 return InputModality.DOCUMENT
+
+        for attachment in message.attachments:
+            file_ext = Path(attachment.filename).suffix.lower()
+            if file_ext in audio_exts:
+                self.logger.debug(f"Detected AUDIO modality from attachment: {attachment.filename}")
+                return InputModality.AUDIO
+
+        # If no supported attachments are found, treat as text only
+        self.logger.debug("Attachments present, but no supported modality detected.")
         return InputModality.TEXT_ONLY
 
     def _get_output_modality(self, parsed_command: Command, message: Message) -> OutputModality:
@@ -158,7 +184,8 @@ class Router:
 
     async def _flow_process_text(self, text: str, author_id: str) -> str:
         """Process text using the AI brain."""
-        return await brain_infer(text, author_id)
+        # author_id is currently unused but kept for future context management.
+        return await brain_infer(text)
 
     async def _flow_process_attachments(self, message: Message, text: str) -> str:
         """Process attachments using the AI vision module."""
@@ -226,11 +253,13 @@ class Router:
                 if not DOCX_SUPPORT:
                     logger.error("[WIND] DOCX support not available.", extra={'subsys': 'router', 'event': 'process_document.docx.no_support'})
                     raise Exception("DOCX processing is not available (python-docx not installed).")
+                doc = docx.Document(file_path)
+                full_text = [para.text for para in doc.paragraphs]
+                return "\n".join(full_text)
+
             else:
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    content = f.read()
-                    logger.info("[WIND] Plain text file processed successfully.", extra={'subsys': 'router', 'event': 'process_document.text.success'})
-                    return content
+                logger.warning(f"Unhandled document extension: {file_ext}", extra={'subsys': 'router', 'event': 'process_document.unhandled_ext'})
+                return f"Unsupported document type: {file_ext}"
         except Exception as e:
             logger.error(f"[WIND] Error processing document {file_path}: {e}", extra={'subsys': 'router', 'event': 'process_document.error.unexpected'}, exc_info=True)
             return "⚠️ An unexpected error occurred while processing the document."
@@ -239,16 +268,14 @@ class Router:
 # Global router instance
 router: Router = None
 
-def setup_router(bot: "LLMBot") -> None:
-    """Set up the router and store it on the bot instance."""
-    global router
-    if not router:
-        router = Router(bot=bot)
-        bot.router = router
-        logger.info("[WIND] Router initialized.", extra={'subsys': 'router', 'event': 'init'})
+def setup_router(bot: "commands.Bot") -> "Router":
+    _router_instance = Router(bot=bot)
+    bot.router = _router_instance
+    logger.info("[WIND] Router initialized.", extra={'subsys': 'router', 'event': 'init'})
+    return _router_instance
 
-def get_router() -> Router:
-    """Get the global router instance."""
+def get_router() -> "Router":
+    """Returns the global router instance. Note: This is only safe to call after the bot's setup_hook has completed."""
     if router is None:
         raise RuntimeError("Router not initialized. Call setup_router() first.")
     return router
