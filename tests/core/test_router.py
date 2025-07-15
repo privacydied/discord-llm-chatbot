@@ -51,7 +51,7 @@ async def test_dispatch_text_only_message(router, mock_bot, mock_flows):
         response = await router.dispatch_message(message)
 
     # Assert the correct flow was called and response is correct
-    mock_flows['process_text'].assert_called_once_with("Hello bot", "987")
+    mock_flows['process_text'].assert_called_once_with("Hello bot")
     assert isinstance(response, ResponseMessage)
     assert response.text == "AI response text"
     assert response.audio_path is None
@@ -83,10 +83,8 @@ async def test_dispatch_tts_command(router, mock_bot, mock_flows):
         m.setattr("bot.router.parse_command", MagicMock(return_value=ParsedCommand(command=Command.SAY, cleaned_content="speak this")))
         response = await router.dispatch_message(message)
 
-    mock_flows['generate_tts'].assert_called_once_with("speak this")
-    assert isinstance(response, ResponseMessage)
-    assert response.text is None
-    assert response.audio_path == "/path/to/audio.wav"
+    assert response is None, "Router should ignore SAY command and return None"
+    mock_flows['generate_tts'].assert_not_called()
 
 
 @pytest.mark.asyncio

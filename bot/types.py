@@ -12,6 +12,8 @@ class Command(Enum):
     PING = auto()       # A simple command for testing
     HELP = auto()       # Show help message
     TTS = auto()        # Toggle TTS on/off for the user
+    TTS_ALL = auto()    # Admin-only global TTS toggle
+    SPEAK = auto()      # Single TTS response then revert to text
     SAY = auto()        # Say a message in TTS
     MEMORY_ADD = auto() # Add a memory
     MEMORY_DEL = auto() # Delete a memory

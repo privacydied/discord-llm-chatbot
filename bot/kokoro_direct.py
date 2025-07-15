@@ -209,8 +209,8 @@ class KokoroDirect:
             # Prepare tokens
             tokens = self._prepare_phonemes(phonemes)
             
-            # Select style vector based on number of tokens (excluding pad tokens)
-            ref_s = voice_embedding[len(phonemes)]
+            # The entire voice embedding is the style reference.
+            ref_s = voice_embedding
             
             # Set speed
             speed_np = np.ones(1, dtype=np.float32) * speed

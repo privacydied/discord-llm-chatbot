@@ -15,8 +15,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from pathlib import Path
 
 from bot.core.bot import LLMBot
-from bot.router import Router
-from bot.command_parser import Command
+from bot.router import Router, OutputModality
+from bot.command_parser import Command, ParsedCommand
 
 
 @pytest.fixture
@@ -64,77 +64,100 @@ async def test_flow_text_to_text(mock_brain_infer, mock_bot, mock_message):
     assert response is not None, "Router should have returned a response"
     assert response.text == "General Kenobi!", "Response text is incorrect"
     assert response.audio_path is None, "Response should not have an audio path"
-    mock_brain_infer.assert_called_once_with("Hello there", '12345')
+    mock_brain_infer.assert_called_once_with("Hello there")
 
 
 @pytest.mark.asyncio
 @patch('bot.router.brain_infer', new_callable=AsyncMock)
 async def test_flow_text_to_tts(mock_brain_infer, mock_bot, mock_message):
-    """2. TEXT -> TTS: Test a !say command returns a TTS audio response."""
+    """2. TEXT -> TTS: Test a text input returns a voice message."""
     # Arrange
-    mock_message.content = "!say Hello there"
+    mock_message.content = "!chat Hello there"
     mock_brain_infer.return_value = "General Kenobi!"
-    mock_bot.tts_manager.generate_tts.return_value = "/path/to/test.wav"
 
-    # Act
-    response = await mock_bot.router.dispatch_message(mock_message)
+    router = Router(bot=mock_bot)
+    router._flows['generate_tts'] = AsyncMock(return_value='/tmp/fake_tts.mp3')
+
+    with patch.object(router, '_get_output_modality', return_value=OutputModality.TTS):
+        # Act
+        response = await router.dispatch_message(mock_message)
 
     # Assert
     assert response is not None, "Router should have returned a response"
-    assert response.text is None, "!say command should not have a text response"
-    assert response.audio_path == "/path/to/test.wav", "Response audio path is incorrect"
-    mock_brain_infer.assert_called_once_with("Hello there", '12345')
-    mock_bot.tts_manager.generate_tts.assert_called_once_with("General Kenobi!", 'default_voice')
+    assert response.audio_path == '/tmp/fake_tts.mp3', "Response should have an audio path"
+    assert response.text == "General Kenobi!", "Response text is incorrect"
+    router._flows['generate_tts'].assert_called_once_with("General Kenobi!")
 
 
 @pytest.mark.asyncio
+@patch('bot.router.brain_infer', new_callable=AsyncMock)
 @patch('bot.router.see_infer', new_callable=AsyncMock)
-async def test_flow_image_to_text(mock_see_infer, mock_bot, mock_message):
+async def test_flow_image_to_text(mock_see_infer, mock_brain_infer, mock_bot, mock_message):
     """3. IMAGE -> TEXT: Test an image upload returns a text description."""
     # Arrange
     mock_attachment = MagicMock(spec=discord.Attachment)
     mock_attachment.filename = 'test_image.png'
-    mock_attachment.url = 'http://example.com/test_image.png'
+    mock_attachment.content_type = 'image/png'
+    mock_attachment.read = AsyncMock(return_value=b'fake_image_bytes')
     mock_message.attachments = [mock_attachment]
     mock_message.content = "What is this?"
-    mock_see_infer.return_value = "This is a test image."
+
+    mock_see_infer.return_value = "a cat sitting on a table"
+    mock_brain_infer.return_value = "The image shows a cat sitting on a table."
+
+    router = Router(bot=mock_bot)
 
     # Act
-    response = await mock_bot.router.dispatch_message(mock_message)
+    response = await router.dispatch_message(mock_message)
 
     # Assert
     assert response is not None, "Router should have returned a response"
-    assert response.text == "This is a test image.", "Response text is incorrect"
+    mock_see_infer.assert_called_once_with(
+        image_data=b'fake_image_bytes',
+        prompt="User uploaded an image with the prompt: 'What is this?'",
+        mime_type='image/png'
+    )
+    mock_brain_infer.assert_called_once_with(
+        "User uploaded an image with the prompt: 'What is this?'. The image contains: a cat sitting on a table"
+    )
+    assert response.text == "The image shows a cat sitting on a table.", "Response text is incorrect"
+    # Ensure the attachment save method was not called for images
+    mock_attachment.save.assert_not_called()
     assert response.audio_path is None, "Response should not have an audio path"
-    mock_see_infer.assert_called_once()
 
 
 @pytest.mark.asyncio
+@patch('bot.router.os.remove')
+@patch('bot.router.brain_infer', new_callable=AsyncMock)
 @patch('bot.router.Router._process_document', new_callable=AsyncMock)
-async def test_flow_document_to_text(mock_process_document, mock_bot, mock_message):
+async def test_flow_document_to_text(mock_process_document, mock_brain_infer, mock_os_remove, mock_bot, mock_message):
     """4. DOCUMENT -> TEXT: Test a document upload returns a text summary."""
     # Arrange
     mock_attachment = MagicMock(spec=discord.Attachment)
-    mock_attachment.filename = 'test_doc.txt'
-    mock_attachment.url = 'http://example.com/test_doc.txt'
+    mock_attachment.filename = 'test_doc.pdf'
+    mock_attachment.content_type = 'application/pdf'
     mock_attachment.save = AsyncMock()
     mock_message.attachments = [mock_attachment]
     mock_message.content = "Summarize this document."
     mock_process_document.return_value = "This is the document content."
+    mock_brain_infer.return_value = "This is a summary of the document."
+
+    router = Router(bot=mock_bot)
 
     with patch('bot.router.tempfile.NamedTemporaryFile') as mock_temp_file:
-        # Mock the context manager for NamedTemporaryFile
         mock_file_handle = MagicMock()
-        mock_file_handle.name = '/tmp/fake_doc.txt'
+        mock_file_handle.name = '/tmp/fake_doc.pdf'
         mock_temp_file.return_value.__enter__.return_value = mock_file_handle
 
         # Act
-        response = await mock_bot.router.dispatch_message(mock_message)
+        response = await router.dispatch_message(mock_message)
 
     # Assert
     assert response is not None, "Router should have returned a response"
-    # The final response is generated by brain_infer after the document is read
-    # For this test, we check that the document processing was called correctly.
-    # A full integration test would also patch brain_infer.
-    mock_attachment.save.assert_called_once_with(Path('/tmp/fake_doc.txt'))
-    mock_process_document.assert_called_once_with('/tmp/fake_doc.txt', '.txt')
+    mock_attachment.save.assert_called_once_with(Path('/tmp/fake_doc.pdf'))
+    mock_process_document.assert_called_once_with('/tmp/fake_doc.pdf', '.pdf')
+    mock_brain_infer.assert_called_once_with(
+        f"DOCUMENT CONTENT:\n---\nThis is the document content.\n---\n\nUSER'S PROMPT: Summarize this document."
+    )
+    assert response.text == "This is a summary of the document."
+    mock_os_remove.assert_called_once_with('/tmp/fake_doc.pdf')

@@ -122,6 +122,8 @@ espeakng-loader==0.2.4
     # via kokoro-onnx
 fake-useragent==1.4.0
     # via discord-llm-chatbot (pyproject.toml)
+faster-whisper==1.1.1
+    # via discord-llm-chatbot (pyproject.toml)
 filelock==3.18.0
     # via
     #   huggingface-hub
@@ -446,6 +448,8 @@ python-dateutil==2.9.0.post0
     #   pandas
 python-dotenv==1.0.1
     # via discord-llm-chatbot (pyproject.toml)
+python-json-logger==3.3.0
+    # via discord-llm-chatbot (pyproject.toml)
 python-magic==0.4.27
     # via discord-llm-chatbot (pyproject.toml)
 pytz==2025.2
@@ -648,3 +652,4 @@ wrapt==1.17.2
     # via smart-open
 yarl==1.20.1
     # via aiohttp
+pytest

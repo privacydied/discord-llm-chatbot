@@ -4,9 +4,8 @@ Defines the core LLMBot class.
 import discord
 
 from .client import Bot
-from bot.commands import setup_commands
 from bot.config import load_config
-from bot.memory import load_all_profiles
+from bot.memory import load_all_profiles, load_all_server_profiles
 from bot.logger import get_logger
 from bot.router import setup_router
 from bot.events import setup as setup_events
@@ -38,6 +37,7 @@ class LLMBot(Bot):
             self.logger.info("Router initialized.", extra={'subsys': 'core', 'event': 'router_init'})
 
             # Register all commands
+            from bot.commands import setup_commands
             await setup_commands(self)
             self.logger.info("Commands registered.", extra={'subsys': 'core', 'event': 'commands_registered'})
 

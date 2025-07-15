@@ -35,6 +35,7 @@ dependencies = [
     # Core Dependencies
     "python-dotenv>=1.0.0",
     "discord.py>=2.3.0",
+    "python-json-logger>=2.0.7",
     # AI/ML Dependencies
     "ollama>=0.2.0",
     "openai>=1.94.0",
@@ -54,11 +55,12 @@ dependencies = [
     "pytesseract>=0.3.0",
     "Pillow>=10.0.0",
     "python-magic>=0.4.0",
-    # Audio Processing (for TTS)
+    # Audio Processing (for TTS & STT)
     "soundfile>=0.12.0",
     "librosa>=0.10.0",
     "numpy>=1.19.0",
     "kokoro-onnx>=0.2.2",
+    "faster-whisper>=1.1.0",
 ]
 
 [project.optional-dependencies]
@@ -178,23 +180,13 @@ ignore_missing_imports = true
 
 # Pytest configuration
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+markers = ["asyncio"]
+addopts = "--cov=bot --cov-report=term-missing:skip-covered --cov-report=html --cov-report=xml"
+pythonpath = "."
+testpaths = "tests"
 python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-addopts = [
-    "--strict-markers",
-    "--strict-config",
-    "--cov=bot",
-    "--cov-report=term-missing:skip-covered",
-    "--cov-report=html",
-    "--cov-report=xml",
-]
-markers = [
-    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
-    "integration: marks tests as integration tests",
-    "unit: marks tests as unit tests",
-]
 
 # Coverage configuration
 [tool.coverage.run]

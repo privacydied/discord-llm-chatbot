@@ -1,9 +1,9 @@
 """
-Unit tests for the Router class.
+Unit tests for the refactored Router class.
 
-Verifies that the router correctly dispatches messages to the appropriate processing
-flow based on context (DM vs. Guild), command, and attachments. Ensures that the
-'1 IN > 1 OUT' principle is maintained and that channel rules are enforced.
+Ensures all modality flows (text, audio, URL, image, doc) are correctly routed,
+and that the '1 IN > 1 OUT' principle is strictly enforced. Verifies command
+handling for static, cog-based, and standard chat commands.
 """
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -11,42 +11,28 @@ import discord
 from dataclasses import dataclass
 import logging
 
-from bot.router import Router, ResponseMessage
+from bot.router import InputModality, Router, ResponseMessage
+from bot.command_parser import ParsedCommand
 from bot.types import Command
 
-@dataclass
-class MockParsedCommand:
-    command: Command
-    cleaned_content: str
 
 @pytest.fixture
 def mock_bot():
-    """Fixture for a mocked bot instance with all necessary attributes."""
+    """Fixture for a mocked bot instance with necessary attributes."""
     bot = MagicMock(spec=discord.Client)
     bot.user = MagicMock()
     bot.user.id = 12345
     bot.user.mentioned_in.return_value = True
-    mock_config = MagicMock()
-    mock_config.get.return_value = "Test prompt"
-    bot.config = mock_config
-    mock_tts_manager = AsyncMock()
-    mock_tts_manager.voice = "test_voice"
-    bot.tts_manager = mock_tts_manager
+    bot.config = {'TTS_ENABLED_USERS': set(), 'TTS_ENABLED_SERVERS': set()}
+    bot.tts_manager = AsyncMock()
+    bot.brain = AsyncMock()
     bot.loop = AsyncMock()
     return bot
 
 @pytest.fixture
-@patch('bot.router.parse_command')
-def router_setup(mock_parse_command, mock_bot, mock_logger):
-    """Fixture to provide a router factory and the parse_command mock."""
-    def _create_router(flow_overrides=None):
-        return Router(mock_bot, flow_overrides=flow_overrides, logger=mock_logger)
-    return _create_router, mock_parse_command, mock_logger
-
-@pytest.fixture
-def mock_logger():
-    """Fixture for a mocked logger instance."""
-    return MagicMock(spec=logging.Logger)
+def router(mock_bot):
+    """Provides a Router instance with a mocked bot."""
+    return Router(bot=mock_bot, logger=MagicMock(spec=logging.Logger))
 
 @pytest.fixture
 def mock_message():
@@ -58,73 +44,115 @@ def mock_message():
     message.author = MagicMock(spec=discord.User)
     message.author.id = 98765
     message.attachments = []
+    message.content = "Hello"
     return message
 
 # --- Test Cases ---
 
 @pytest.mark.asyncio
-async def test_ping_command(router_setup, mock_message):
-    """Test that the PING command returns 'Pong!'"""
-    router_factory, mock_parse_command, _ = router_setup
-    router = router_factory()
-    mock_parse_command.return_value = MockParsedCommand(command=Command.PING, cleaned_content="")
-    response = await router.dispatch_message(mock_message)
-    assert response is not None
-    assert response.text == "Pong!"
+@pytest.mark.parametrize(
+    "command_type, expected_text, should_be_none",
+    [
+        (Command.PING, "Pong!", False),
+        (Command.HELP, "See `/help` for a list of commands.", False),
+        (Command.CHAT, "Processed text", False),
+        (Command.TTS, None, True),      # Cog-handled
+        (Command.SAY, None, True),      # Cog-handled
+        (Command.TTS_ALL, None, True), # Cog-handled
+        (Command.SPEAK, None, True),   # Cog-handled
+        (Command.IGNORE, None, True),   # Ignored
+    ],
+)
+@patch("bot.router.parse_command")
+async def test_command_handling(
+    mock_parse_command, router, mock_message, command_type, expected_text, should_be_none
+):
+    """Test router's handling of static, cog, and ignored commands."""
+    mock_parse_command.return_value = ParsedCommand(
+        command=command_type, cleaned_content="Hello"
+    )
+
+    if command_type == Command.CHAT:
+        # For a standard chat, we need to mock the full flow
+        router._flows['process_text'] = AsyncMock(return_value=expected_text)
+        with patch.object(router, "_get_input_modality", return_value=InputModality.TEXT_ONLY):
+            response = await router.dispatch_message(mock_message)
+    else:
+        response = await router.dispatch_message(mock_message)
+
+    if should_be_none:
+        assert response is None, f"Expected None for command {command_type.name}, but got a response."
+    else:
+        assert response is not None, f"Expected a response for command {command_type.name}, but got None."
+        assert response.text == expected_text
+
 
 @pytest.mark.asyncio
-async def test_unhandled_attachment_type(router_setup, mock_message):
-    """Test that an unhandled attachment type returns an error message."""
-    router_factory, mock_parse_command, _ = router_setup
-    router = router_factory()
-    attachment = MagicMock()
-    attachment.filename = 'test.zip'
-    mock_message.attachments = [attachment]
-    mock_parse_command.return_value = MockParsedCommand(command=Command.CHAT, cleaned_content="Check out this file")
-    response = await router.dispatch_message(mock_message)
+@pytest.mark.parametrize(
+    "modality, flow_key, expected_output",
+    [
+        (InputModality.TEXT_ONLY, "process_text", "Processed text"),
+        (InputModality.URL, "process_url", "Processed URL"),
+        (InputModality.AUDIO, "process_audio", "Processed audio"),
+        (InputModality.IMAGE, "process_attachments", "Processed attachments"),
+        (InputModality.DOCUMENT, "process_attachments", "Processed attachments"),
+    ],
+)
+@patch("bot.router.parse_command")
+async def test_modality_flows(
+    mock_parse_command,
+    router,
+    mock_message,
+    modality,
+    flow_key,
+    expected_output,
+):
+    """Verify that each input modality is routed to the correct processing flow."""
+    mock_parse_command.return_value = ParsedCommand(
+        command=Command.CHAT, cleaned_content="Test content"
+    )
+
+    if modality == InputModality.URL:
+        mock_message.content = "https://example.com"
+
+    # Mock the specific flow method in the _flows dictionary
+    mock_flow_method = AsyncMock(return_value=expected_output)
+    router._flows[flow_key] = mock_flow_method
+
+    with patch.object(router, "_get_input_modality", return_value=modality) as mock_get_modality:
+        response = await router.dispatch_message(mock_message)
+
+    mock_get_modality.assert_called_once_with(mock_message)
+    mock_flow_method.assert_called_once()
     assert response is not None
-    assert "I'm sorry, I can't process that type of attachment" in response.text
+    assert response.text == expected_output
+
 
 @pytest.mark.asyncio
-async def test_no_processed_text_returns_error_message(router_setup, mock_message):
-    """Test that if no text is produced, an error message is returned."""
-    router_factory, mock_parse_command, _ = router_setup
-    mock_flow_text = AsyncMock(return_value=None)
-    router = router_factory(flow_overrides={'process_text': mock_flow_text})
-    mock_parse_command.return_value = MockParsedCommand(command=Command.CHAT, cleaned_content="a valid message")
-    response = await router.dispatch_message(mock_message)
+@patch('bot.router.parse_command')
+async def test_no_processed_text_returns_error(mock_parse_command, router, mock_message):
+    """Test that if a flow returns no text, a user-friendly error is returned."""
+    mock_parse_command.return_value = ParsedCommand(command=Command.CHAT, cleaned_content="Test")
+
+    router._flows['process_text'] = AsyncMock(return_value=None) # Simulate a flow failure
+
+    with patch.object(router, '_get_input_modality', return_value=InputModality.TEXT_ONLY):
+        response = await router.dispatch_message(mock_message)
+
     assert response is not None
-    assert "I'm sorry, I wasn't able to process that" in response.text
+    assert response.text == "I'm sorry, I wasn't able to process that."
+
 
 @pytest.mark.asyncio
-async def test_say_command_returns_only_audio(router_setup, mock_message):
-    """Test that !say command returns only audio path and no text."""
-    router_factory, mock_parse_command, _ = router_setup
-    mock_flow_tts = AsyncMock(return_value="/path/to/tts.wav")
-    router = router_factory(flow_overrides={'generate_tts': mock_flow_tts})
-    mock_parse_command.return_value = MockParsedCommand(command=Command.SAY, cleaned_content="speak this")
-    response = await router.dispatch_message(mock_message)
-    assert response is not None
-    assert response.audio_path == "/path/to/tts.wav"
-    assert response.text is None
+@patch('bot.router.parse_command')
+async def test_exception_in_flow_returns_error(mock_parse_command, router, mock_message):
+    """Test that an exception during processing returns a generic error message."""
+    mock_parse_command.return_value = ParsedCommand(command=Command.CHAT, cleaned_content="Test")
 
-@pytest.mark.asyncio
-async def test_error_in_dispatch_returns_error_message(router_setup, mock_message):
-    """Test that a generic exception in dispatch returns a user-friendly error."""
-    router_factory, mock_parse_command, _ = router_setup
-    mock_flow_text = AsyncMock(side_effect=Exception("KABOOM"))
-    router = router_factory(flow_overrides={'process_text': mock_flow_text})
-    mock_parse_command.return_value = MockParsedCommand(command=Command.CHAT, cleaned_content="this will break")
-    response = await router.dispatch_message(mock_message)
-    assert response is not None
-    assert "I'm sorry, an unexpected error occurred" in response.text
+    router._flows['process_text'] = AsyncMock(side_effect=Exception("Critical failure!"))
 
-@pytest.mark.asyncio
-async def test_guild_message_without_mention_is_ignored(router_setup, mock_message):
-    """Test that messages in guilds without a mention are ignored."""
-    router_factory, mock_parse_command, _ = router_setup
-    router = router_factory()
-    mock_message.guild = MagicMock()
-    mock_parse_command.return_value = None  # This is the key for this test
-    response = await router.dispatch_message(mock_message)
-    assert response is None
+    with patch.object(router, '_get_input_modality', return_value=InputModality.TEXT_ONLY):
+        response = await router.dispatch_message(mock_message)
+
+    assert response is not None
+    assert response.text == "An unexpected error occurred. Please try again later."

@@ -10,6 +10,7 @@ from discord.ext import commands
 from bot.logger import get_logger
 from bot.router import get_router
 from bot.config import load_config
+from .hear import hear_infer
 
 logger = get_logger(__name__)
 
@@ -70,9 +71,29 @@ class BotEventHandler(commands.Cog):
         try:
             # The router now handles all message types, including attachments,
             # mention stripping, and command parsing.
-            await self.router.dispatch_message(message)
+            response = await self.router.dispatch_message(message)
 
-            logger.info("[WIND][EVENT] Message dispatched to router successfully.", extra={**extra, 'event': 'router_dispatch_success'})
+            if response:
+                # Send text response if available
+                if response.text:
+                    logger.debug(f"Sending text response to channel {message.channel.id}", extra=extra)
+                    await message.channel.send(response.text)
+                
+                # Send audio response if available
+                if response.audio_path:
+                    logger.debug(f"Sending audio response to channel {message.channel.id}", extra=extra)
+                    audio_file = discord.File(response.audio_path)
+                    await message.channel.send(file=audio_file)
+                    # Clean up the temporary audio file
+                    try:
+                        Path(response.audio_path).unlink()
+                    except OSError as e:
+                        logger.error(f"Error removing temporary audio file {response.audio_path}: {e}", extra=extra)
+
+                logger.info("[WIND][EVENT] Response sent successfully.", extra={**extra, 'event': 'response_sent'})
+            else:
+                logger.info("[WIND][EVENT] Router returned no response; taking no action.", extra={**extra, 'event': 'no_response'})
+
 
         except Exception as e:
             logger.error(
