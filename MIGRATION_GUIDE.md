@@ -87,16 +87,16 @@ python main.py
 #### New execution:
 ```bash
 # Standard execution
-uv run python -m bot.main
+python run.py
 
 # With debug logging
-uv run python -m bot.main --debug
+python run.py --debug
 
 # Configuration validation
-uv run python -m bot.main --config-check
+python run.py --config-check
 
 # Version information
-uv run python -m bot.main --version
+python run.py --version
 ```
 
 ### 4. Import Changes
@@ -137,16 +137,16 @@ uv pip install -e ".[all]"     # All optional dependencies
 ### 1. Enhanced CLI Interface
 ```bash
 # Show help
-uv run python -m bot.main --help
+python run.py --help
 
 # Debug mode
-uv run python -m bot.main --debug
+python run.py --debug
 
 # Set log level
-uv run python -m bot.main --log-level DEBUG
+python run.py --log-level DEBUG
 
 # Validate configuration
-uv run python -m bot.main --config-check
+python run.py --config-check
 ```
 
 ### 2. Comprehensive Error Handling
@@ -222,9 +222,9 @@ uv venv --python 3.11
 
 After migration, verify everything works:
 
-- [ ] **Configuration**: `uv run python -m bot.main --config-check`
-- [ ] **Version**: `uv run python -m bot.main --version`
-- [ ] **Help**: `uv run python -m bot.main --help`
+- [ ] **Configuration**: `python run.py --config-check`
+- [ ] **Version**: `python run.py --version`
+- [ ] **Help**: `python run.py --help`
 - [ ] **Package import**: `uv run python -c "import bot; print(bot.__version__)"`
 - [ ] **Dependencies**: All packages install without errors
 - [ ] **Bot startup**: Bot starts without crashing (may not connect without token)

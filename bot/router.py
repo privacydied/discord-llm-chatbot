@@ -73,75 +73,54 @@ class Router:
         if flow_overrides:
             self._flows.update(flow_overrides)
 
-    async def dispatch_message(self, message: Message) -> Optional[ResponseMessage]:
-        """
-        Central dispatcher for all incoming messages. It parses, routes, processes, and
-        handles errors to guarantee the '1 IN > 1 OUT' principle.
-        """
+    async def dispatch_message(self, message: Message) -> ResponseMessage:
         self.logger.debug(f"--- Dispatching message {message.id} ---", extra={'subsys': 'router'})
 
         try:
-            # 1. Parse the command from the message
-            self.logger.debug(f"Parsing command for message: {message.id}", extra={'msg_id': message.id})
             parsed_command = parse_command(message, self.bot)
-
-            # 2. Handle ignored messages or no-ops early
-            if parsed_command is None:
-                self.logger.debug("Ignoring message (no command parsed).", extra={'subsys': 'router', 'msg_id': message.id})
-                return None
-            if parsed_command.command is Command.IGNORE:
-                self.logger.debug("Ignoring message (IGNORE command).", extra={'subsys': 'router', 'msg_id': message.id})
-                return None
+            if parsed_command is None or parsed_command.command is Command.IGNORE:
+                self.logger.debug("Ignoring message.", extra={'subsys': 'router', 'msg_id': message.id})
+                return ResponseMessage(text="")
 
             self.logger.debug(f"Parsed command: {parsed_command}", extra={'subsys': 'router', 'msg_id': message.id})
-        except Exception:
-            # This case is for when parsing fails entirely, e.g., a message in a guild
-            # without a mention. We should silently ignore these.
-            self.logger.debug("Command parsing failed, ignoring message.", extra={'msg_id': message.id})
-            return None
 
-        # 3. Handle special simple commands
-        if parsed_command.command == Command.PING:
-            self.logger.info("Ping command received.", extra={'subsys': 'router'})
-            return ResponseMessage(text="Pong!")
+            # Handle simple, static commands first
+            if parsed_command.command == Command.PING:
+                return ResponseMessage(text="Pong!")
+            if parsed_command.command == Command.HELP:
+                return ResponseMessage(text="*yo what's good...*")
 
-        try:
-            # 4. Determine input and output modalities
+            # Determine modalities
             input_modality = self._get_input_modality(message)
             output_modality = self._get_output_modality(parsed_command, message)
-            self.logger.debug(f"Determined modalities: Input={input_modality}, Output={output_modality}", extra={'subsys': 'router'})
+            self.logger.debug(f"Modalities: IN={input_modality.name} -> OUT={output_modality.name}", extra={'subsys': 'router'})
 
-            # 5. Route to the appropriate processing flow
-            text_response = None
-
-            # A. Process based on input modality to get a text response
+            # Process input to get text
+            response_text = None
             if parsed_command.command == Command.SAY:
-                # For direct !say commands, the content is the text to be spoken
-                text_response = parsed_command.cleaned_content
-            elif input_modality is InputModality.TEXT_ONLY:
-                self.logger.debug("Routing to text processing flow.", extra={'subsys': 'router', 'msg_id': message.id, 'flow': 'text'})
-                text_response = await self._flows['process_text'](parsed_command.cleaned_content, str(message.author.id))
+                response_text = parsed_command.cleaned_content
+            elif input_modality == InputModality.TEXT_ONLY:
+                response_text = await self._flows['process_text'](parsed_command.cleaned_content, str(message.author.id))
             elif input_modality in [InputModality.IMAGE, InputModality.DOCUMENT]:
-                self.logger.debug("Routing to attachment processing flow.", extra={'subsys': 'router', 'msg_id': message.id, 'flow': 'attachment'})
-                text_response = await self._flows['process_attachments'](message, parsed_command.cleaned_content)
+                response_text = await self._flows['process_attachments'](message, parsed_command.cleaned_content)
+            
+            if not response_text:
+                self.logger.warning("No text generated from input processing.", extra={'subsys': 'router', 'msg_id': message.id})
+                return ResponseMessage(text="I'm sorry, I wasn't able to process that. Please try again.")
 
-            # If no text could be generated, we can't proceed.
-            if not text_response:
-                self.logger.warning("No text response generated from input processing; cannot proceed.", extra={'subsys': 'router', 'msg_id': message.id})
-                return None
-
-            # B. Process based on output modality
-            if output_modality is OutputModality.TTS:
-                self.logger.debug("Routing to TTS generation flow.", extra={'subsys': 'router', 'msg_id': message.id, 'flow': 'tts'})
-                audio_path = await self._flows['generate_tts'](text_response)
-                return ResponseMessage(audio_path=audio_path)
+            # Generate final response based on output modality
+            if output_modality == OutputModality.TTS:
+                audio_path = await self._flows['generate_tts'](response_text)
+                # !say command is audio-only
+                if parsed_command.command == Command.SAY:
+                    return ResponseMessage(audio_path=audio_path)
+                return ResponseMessage(text=response_text, audio_path=audio_path)
             else:
-                # C. Default to text response
-                return ResponseMessage(text=text_response)
+                return ResponseMessage(text=response_text)
 
         except Exception as e:
-            self.logger.error(f"An unexpected error occurred in dispatch_message for msg {message.id}: {e}", exc_info=True, extra={'subsys': 'router'})
-            return ResponseMessage(text="I'm sorry, an unexpected error occurred.")
+            self.logger.error(f"Unexpected error in dispatch_message for msg {message.id}: {e}", exc_info=True, extra={'subsys': 'router'})
+            return ResponseMessage(text="I'm sorry, an unexpected error occurred. Please check the logs.")
 
     def _get_input_modality(self, message: Message) -> InputModality:
         """Determines the primary input modality of the message by checking attachments."""
@@ -203,13 +182,13 @@ class Router:
                 vision_response = await see_infer(image_bytes, prompt)
                 # Combine the vision response with the original text prompt for the brain
                 final_prompt = f"User uploaded an image with the prompt: '{text}'. The image contains: {vision_response}"
-                return await brain_infer(final_prompt, str(message.author.id))
+                return await brain_infer(final_prompt)
 
             elif input_modality == InputModality.DOCUMENT:
                 logger.debug(f"Processing document attachment: {attachment.filename}", extra={'subsys': 'router'})
-                doc_text = await self._process_document(tmp_file.name, file_ext)
-                prompt = f"User uploaded a document with the prompt: '{text}'. The document contains: {doc_text}"
-                return await brain_infer(prompt, str(message.author.id))
+                document_text = await self._process_document(tmp_file.name, file_ext)
+                prompt = f"DOCUMENT CONTENT:\n---\n{document_text}\n---\n\nUSER'S PROMPT: {text}"
+                return await brain_infer(prompt)
 
         # Fallback for unhandled attachment types
         return "I'm sorry, I can't process that type of attachment."
@@ -269,10 +248,11 @@ class Router:
 router: Router = None
 
 def setup_router(bot: "commands.Bot") -> "Router":
-    _router_instance = Router(bot=bot)
-    bot.router = _router_instance
+    global router
+    router = Router(bot=bot)
+    bot.router = router
     logger.info("[WIND] Router initialized.", extra={'subsys': 'router', 'event': 'init'})
-    return _router_instance
+    return router
 
 def get_router() -> "Router":
     """Returns the global router instance. Note: This is only safe to call after the bot's setup_hook has completed."""

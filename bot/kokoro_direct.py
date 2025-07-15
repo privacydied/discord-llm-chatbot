@@ -7,6 +7,9 @@ import numpy as np
 import logging
 from pathlib import Path
 from typing import List, Tuple, Optional
+
+from misaki import en
+import numpy as np
 from onnxruntime import InferenceSession
 
 # Configure logging
@@ -45,6 +48,14 @@ class KokoroDirect:
         self.session = None
         self._voices_cache = {}
         self.available_voices = []
+
+        # Initialize the G2P converter
+        try:
+            self.g2p = en.G2P()
+            logger.info("Misaki G2P engine initialized for English.")
+        except Exception as e:
+            logger.error("Failed to initialize Misaki G2P engine.", exc_info=True)
+            raise RuntimeError("Could not initialize G2P engine") from e
         
         # Initialize session and load voices
         self._init_session()
@@ -123,10 +134,13 @@ class KokoroDirect:
 
             voice_embedding = self._voices_cache[voice_id]
 
-            # Ensure the embedding has the shape the backend expects: (N, 1, 256)
-            if voice_embedding.ndim == 2 and voice_embedding.shape[1] == 256:
+            # Handle both 2D (N, 256) and 3D (N, 1, 256) shapes.
+            if voice_embedding.ndim == 3 and voice_embedding.shape[1:] == (1, 256):
+                logger.debug(f"Loaded pre-shaped 3D voice '{voice_id}': shape={voice_embedding.shape}")
+                return voice_embedding
+            elif voice_embedding.ndim == 2 and voice_embedding.shape[1] == 256:
                 reshaped_embedding = voice_embedding.reshape(-1, 1, 256)
-                logger.debug(f"Loaded voice '{voice_id}': shape={reshaped_embedding.shape}")
+                logger.debug(f"Reshaped and loaded 2D voice '{voice_id}': shape={reshaped_embedding.shape}")
                 return reshaped_embedding
             else:
                 raise ValueError(f"Unexpected voice embedding shape for '{voice_id}': {voice_embedding.shape}")
@@ -175,12 +189,19 @@ class KokoroDirect:
             else:
                 pass
                 
-            # If no phonemes provided, we need phonemization
-            # This is a placeholder - in practice, you should use Misaki G2P
+            # If no phonemes provided, perform basic character-to-phoneme mapping.
+            # This is a temporary fix. A proper G2P model should be used for production.
             if phonemes is None:
-                logger.warning("No phonemes provided. Using placeholder tokens.")
-                # These are just example tokens - they won't produce meaningful speech
-                phonemes = [50, 157, 43, 135, 16, 53, 135]
+                logger.debug(f"No phonemes provided. Using Misaki G2P for: '{text}'")
+                try:
+                    # Use the initialized G2P object to convert text to phoneme IDs.
+                    phonemes = self.g2p(text)
+                    # Ensure we don't exceed the model's limit (512 tokens, with 2 for start/end).
+                    phonemes = phonemes[:510]
+                    logger.debug(f"Generated phoneme IDs: {phonemes}")
+                except Exception as e:
+                    logger.error(f"Misaki G2P failed for text: '{text}'. Error: {e}", exc_info=True)
+                    raise ValueError(f"Failed to phonemize text: {text}") from e
                 
             # Load voice embedding
             voice_embedding = self._load_voice(voice_id)
@@ -212,6 +233,10 @@ class KokoroDirect:
             logger.error(f"Error creating audio: {e}", exc_info=True)
             raise
     
+    def is_available(self) -> bool:
+        """Check if the TTS engine is initialized and ready."""
+        return self.session is not None and len(self.available_voices) > 0
+
     @property
     def voices(self) -> List[str]:
         """Get list of available voices."""

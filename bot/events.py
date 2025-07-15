@@ -8,14 +8,16 @@ import discord
 from discord.ext import commands
 
 from bot.logger import get_logger
-from bot.router import Router
+from bot.router import get_router
+from bot.config import load_config
 
 logger = get_logger(__name__)
 
 class BotEventHandler(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self.router: Router = self.bot.router
+        self.router = get_router()
+        self.config = load_config()
 
     def _is_relevant(self, message: discord.Message) -> bool:
         """Determines if a message is relevant for the bot to process."""
@@ -66,16 +68,9 @@ class BotEventHandler(commands.Cog):
 
         # If not a command, dispatch to the router
         try:
-            # The router now handles all message types, including attachments.
-            # We just need to strip the mention and pass the raw content.
-            if self.bot.user.mentioned_in(message):
-                # Strip the mention from the content to get the raw input
-                raw_input = message.content.replace(f'<@!{self.bot.user.id}>', '', 1).replace(f'<@{self.bot.user.id}>', '', 1).strip()
-            else:
-                # For DMs, the content is the raw input
-                raw_input = message.content
-
-            await self.router.handle(message, raw_input)
+            # The router now handles all message types, including attachments,
+            # mention stripping, and command parsing.
+            await self.router.dispatch_message(message)
 
             logger.info("[WIND][EVENT] Message dispatched to router successfully.", extra={**extra, 'event': 'router_dispatch_success'})
 
@@ -145,21 +140,21 @@ class BotEventHandler(commands.Cog):
             return "⚠️ An error occurred while generating the response"
 
 # Background task for cache maintenance
-async def cache_maintenance_task():
+async def cache_maintenance_task(bot: commands.Bot):
     """Background task to clean up old cache files."""
     logger.info("Starting TTS cache maintenance task", extra={'subsys': 'tts_cache', 'event': 'task_start'})
     while True:
         try:
             logger.debug("Running TTS cache maintenance...", extra={'subsys': 'tts_cache', 'event': 'task_run'})
             # Get stats before cleanup
-            stats_before = self.bot.tts_manager.get_cache_stats()
+            stats_before = bot.tts_manager.get_cache_stats()
             logger.debug(f"Cache stats before cleanup: {stats_before}", extra={'subsys': 'tts_cache', 'event': 'stats_before'})
             
             # Run the cleanup
-            self.bot.tts_manager.purge_old_cache()  # This is a synchronous method
+            bot.tts_manager.purge_old_cache()  # This is a synchronous method
             
             # Get stats after cleanup
-            stats_after = self.bot.tts_manager.get_cache_stats()
+            stats_after = bot.tts_manager.get_cache_stats()
             logger.info(f"TTS cache maintenance completed. Stats before: {stats_before}, after: {stats_after}", extra={'subsys': 'tts_cache', 'event': 'task_success'})
             
             # Wait for 24 hours before next run

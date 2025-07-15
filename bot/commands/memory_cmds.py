@@ -24,7 +24,7 @@ class MemoryCommands(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.config = load_config()
-        self.router = get_router()
+        self.router = bot.router
         self.prefix = self.config.get('COMMAND_PREFIX', '!')
     
     @commands.group(name="memory", invoke_without_command=True)

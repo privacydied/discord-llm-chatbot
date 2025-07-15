@@ -63,3 +63,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Docker containerization support
 - CI/CD pipeline configuration
 - Advanced logging with structured JSON output
+
+## [0.2.0] - 2025-07-15
+
+### Fixed
+- **Startup Stability**: Resolved all catastrophic startup failures related to `TTSManager` initialization, `KokoroDirect` constructor, asynchronous profile loading, and background task management. The bot is now stable and starts cleanly.
+- **TTS Initialization**: Fixed `AttributeError` in `TTSManager` by implementing the `is_available` method in the `KokoroDirect` class.
+- **Profile Loading**: Fixed `TypeError` during profile loading by removing incorrect `await` calls on synchronous functions.
+- **Background Tasks**: Fixed `AttributeError` in `on_ready` event by removing a redundant and incorrect background task start call.
+- **Module Imports**: Fixed `ModuleNotFoundError` for `tts_manager` by removing stale imports and refactoring all TTS commands to use the central `bot.tts_manager` instance.
+- **Constructor Arguments**: Fixed `TypeError` on `KokoroDirect` instantiation by removing an invalid `logger` argument.
+
+### Changed
+- **TTS Engine**: Replaced the previous TTS implementation with `Kokoro-ONNX` for improved performance and voice quality.
+- **TTS Architecture**: Refactored the entire TTS system to be managed by a `TTSManager` class attached to the bot instance, eliminating global state and improving testability.
+- **Entry Point**: Changed the recommended run command from `python -m bot.main` to `python run.py` to resolve `RuntimeWarning` and establish a cleaner entry point.
+
+### Added
+- **TTS Debugging**: Added comprehensive debug logging for the TTS and router systems to aid in future diagnostics.
+- **Error Handling**: Implemented more robust error handling and recovery mechanisms for TTS initialization.

@@ -8,11 +8,16 @@ if TYPE_CHECKING:
 
 class Command(Enum):
     """Enumeration of all supported bot commands."""
-    CHAT = auto()      # General chat, default command
-    PING = auto()      # A simple command for testing
-    TTS = auto()
-    SAY = auto()
-    IGNORE = auto()  # A command to signify that the message should be ignored
+    CHAT = auto()       # General chat, default command
+    PING = auto()       # A simple command for testing
+    HELP = auto()       # Show help message
+    TTS = auto()        # Toggle TTS on/off for the user
+    SAY = auto()        # Say a message in TTS
+    MEMORY_ADD = auto() # Add a memory
+    MEMORY_DEL = auto() # Delete a memory
+    MEMORY_SHOW = auto()# Show memories
+    MEMORY_WIPE = auto()# Wipe memories
+    IGNORE = auto()     # A command to signify that the message should be ignored
 
 @dataclass
 class ParsedCommand:

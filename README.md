@@ -70,7 +70,7 @@ graph LR
    uv venv --python 3.11
    source .venv/bin/activate  # On Windows: .venv\Scripts\activate
    uv pip install -r requirements.txt
-   python -m bot.main
+   python run.py
    ```
 
 ## 🛠️ Configuration
@@ -187,4 +187,4 @@ MIT License - see [LICENSE](LICENSE) for details
 - [Ollama](https://ollama.com/) for local LLM framework
 - [Discord.py](https://github.com/Rapptz/discord.py) for Discord API
 - [OpenRouter](https://openrouter.ai/) for model access
-- [DIA TTS](https://github.com/diart-team/dia-tts) for TTS functionality
+- [Kokoro-ONNX TTS](https://github.com/Oleg-Yarosh/kokoro-onnx) for TTS functionality

@@ -16,8 +16,14 @@ logger = logging.getLogger(__name__)
 # Maps the raw command string to the Command enum
 COMMAND_MAP = {
     "!ping": Command.PING,
+    "!help": Command.HELP,
+    "!chat": Command.CHAT,
     "!tts": Command.TTS,
     "!say": Command.SAY,
+    "!memory-add": Command.MEMORY_ADD,
+    "!memory-del": Command.MEMORY_DEL,
+    "!memory-show": Command.MEMORY_SHOW,
+    "!memory-wipe": Command.MEMORY_WIPE,
 }
 
 def parse_command(message: discord.Message, bot: commands.Bot) -> Optional[ParsedCommand]:
@@ -34,29 +40,36 @@ def parse_command(message: discord.Message, bot: commands.Bot) -> Optional[Parse
     content = message.content.strip()
     is_dm = isinstance(message.channel, discord.DMChannel)
 
-    # In guilds, the bot must be mentioned. If not, ignore the message.
-    if not is_dm and not bot.user.mentioned_in(message):
-        return None
-
-    # Remove the mention from guild messages to get the actual content
-    if not is_dm:
-        # This regex handles both <@USER_ID> and <@!USER_ID> mentions
+    # In DMs, we process the message directly.
+    # In guilds, the bot must be mentioned.
+    if is_dm:
+        pass  # Proceed with parsing
+    elif bot.user.mentioned_in(message):
+        # Remove the mention from guild messages to get the actual content
         mention_pattern = fr'^<@!?{bot.user.id}>\s*'
         content = re.sub(mention_pattern, '', content)
+    else:
+        # Not a DM and no mention, so ignore.
+        return None
 
     # If there's no content left, it's not a command
     if not content:
         return None
 
-    # Check if the message starts with a known command prefix
+    # If the message starts with a command prefix, try to parse it as a command.
     if content.startswith('!'):
         parts = content.split(maxsplit=1)
         command_str = parts[0]
         remaining_content = parts[1] if len(parts) > 1 else ""
-        
-        command = COMMAND_MAP.get(command_str)
-        if command:
-            return ParsedCommand(command=command, cleaned_content=remaining_content.strip())
 
-    # If no specific command was matched, treat it as a general chat command.
+        command = COMMAND_MAP.get(command_str)
+
+        if command:
+            # It's a known command.
+            return ParsedCommand(command=command, cleaned_content=remaining_content.strip())
+        else:
+            # It's an unknown command starting with '!', so we ignore it.
+            return None
+
+    # If it doesn't start with '!', it's a general chat message.
     return ParsedCommand(command=Command.CHAT, cleaned_content=content)

@@ -10,16 +10,15 @@ import discord
 from discord.ext import commands
 
 from bot.tts_state import tts_state
+
 from bot.router import get_router
-from bot.logger import get_logger
-from bot.utils import send_and_log, get_user_id_from_mentioner
 
 class TTSCommands(commands.Cog):
     """Commands for controlling TTS functionality."""
     
     def __init__(self, bot):
         self.bot = bot
-        self.router = get_router()
+        self.router = bot.router
         self.prefix = '!'
     
     @commands.group(name='tts', invoke_without_command=True)
@@ -66,10 +65,9 @@ class TTSCommands(commands.Cog):
         # This prevents duplicate responses by avoiding double TTS triggering
         
         if text:
-            # If text is provided, process it immediately with voice_only=True 
-            # This forces a voice-only response without setting flags
-            logging.debug(f"🔊 Processing !speak with text: '{text[:30]}...'")
-            await self.router.handle(ctx.message, text, voice_only=True)
+            # If text is provided, delegate to the 'say' command's logic for direct synthesis.
+            logging.debug(f"🔊 Delegating !speak with text to !say handler: '{text[:30]}...'" )
+            await self.say(ctx, text=text)
         else:
             # Only set the flag when no text is provided (for next response)
             tts_state.set_one_time_tts(ctx.author.id)
@@ -81,9 +79,11 @@ class TTSCommands(commands.Cog):
         # Check for image attachments first
         if ctx.message.attachments:
             # Has attachments, process through VL/document flow with voice_only=True
-            # The voice_only flag ensures only voice response, no text
-            logging.debug("📷 !say command with attachments, forcing voice_only=True")
-            await self.router.handle(ctx.message, text, voice_only=True)
+            # The router will process the attachment, and we'll set a one-time TTS flag
+            # to ensure the response is spoken, fulfilling the command's intent.
+            logging.debug("📷 !say command with attachments, setting one-time TTS and dispatching to router.")
+            tts_state.set_one_time_tts(ctx.author.id)
+            await self.router.dispatch_message(ctx.message)
             return
         
         # No attachments, direct TTS with provided text
