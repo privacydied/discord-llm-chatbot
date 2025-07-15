@@ -4,9 +4,8 @@ Utility functions for the Discord bot.
 import re
 import os
 import mimetypes
-from typing import Optional, List, Tuple, Any, Dict, Union
+from typing import Optional, List, Tuple, Any, Union
 from pathlib import Path
-import asyncio
 import aiohttp
 import logging
 

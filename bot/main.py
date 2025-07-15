@@ -66,7 +66,7 @@ async def main() -> NoReturn:
             logger.info(f"Connecting to Discord... (Attempt {attempt + 1}/{max_retries})", extra={'subsys': 'core', 'event': 'connect_start'})
             await bot.start(config["DISCORD_TOKEN"])
             break
-        except (discord.HTTPException, aiohttp.ClientConnectorError) as e:
+        except (discord.HTTPException, aiohttp.ClientConnectorError):
             if attempt == max_retries - 1:
                 logger.critical(f"Failed to connect after {max_retries} attempts.", exc_info=True, extra={'subsys': 'core', 'event': 'connect_fail_max_retries'})
                 sys.exit(1)

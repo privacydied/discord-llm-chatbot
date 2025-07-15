@@ -2,18 +2,19 @@
 Defines the core LLMBot class.
 """
 import discord
-from discord.ext import commands
 
 from bot.config import load_config
 from bot.logger import get_logger
 from bot.router import setup_router
+from bot.tts import TTSManager
 from bot.commands import setup_commands
 from bot.tasks import spawn_background_tasks
 from bot.memory import load_all_profiles, load_all_server_profiles
 from bot.events import cache_maintenance_task
+from .client import Bot
 
 
-class LLMBot(commands.Bot):
+class LLMBot(Bot):
     """Minimal bot class with bootstrap functionality only."""
 
     def __init__(self, *args, **kwargs):
@@ -28,7 +29,11 @@ class LLMBot(commands.Bot):
         self.startup_time = discord.utils.utcnow()
 
         try:
-            # Initialize router first
+            # Initialize TTS Manager
+            self.tts_manager = TTSManager(self)
+            self.logger.info("TTS Manager initialized.", extra={'subsys': 'core', 'event': 'tts_manager_init'})
+
+            # Initialize router
             setup_router(self)
             self.logger.info("Router initialized.", extra={'subsys': 'core', 'event': 'router_init'})
 

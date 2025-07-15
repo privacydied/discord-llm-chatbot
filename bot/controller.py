@@ -2,6 +2,7 @@
 Hybrid multimodal pipeline controller
 """
 import logging
+import discord
 from pathlib import Path
 from .exceptions import InferenceError
 from .brain import brain_infer

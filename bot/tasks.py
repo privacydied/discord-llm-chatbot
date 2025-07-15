@@ -3,8 +3,7 @@ Background task management for the Discord bot.
 """
 import asyncio
 import logging
-from typing import Dict, List, Optional, Callable, Any
-from datetime import datetime, timedelta
+from typing import Dict, List, Optional, Any
 
 from discord.ext import commands, tasks
 

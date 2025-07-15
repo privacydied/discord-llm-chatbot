@@ -1,36 +1,22 @@
 """
-Parses raw Discord messages to identify commands and extract clean content, 
+Parses raw Discord messages to identify commands and extract clean content,
 enforcing strict context rules for guilds vs. DMs.
 """
 import logging
-from dataclasses import dataclass
-from enum import Enum, auto
+import re
 from typing import Optional
 
 import discord
 from discord.ext import commands
 
+from .types import Command, ParsedCommand
+
 logger = logging.getLogger(__name__)
-
-class Command(Enum):
-    """Enumeration of all supported bot commands."""
-    TTS = auto()
-    TTS_ALL = auto()
-    SPEAK = auto()
-    SAY = auto()
-    GENERAL = auto()  # Default for any non-command message
-
-@dataclass
-class ParsedCommand:
-    """Represents a parsed command with its type and cleaned content."""
-    command: Command
-    cleaned_content: str
 
 # Maps the raw command string to the Command enum
 COMMAND_MAP = {
+    "!ping": Command.PING,
     "!tts": Command.TTS,
-    "!tts-all": Command.TTS_ALL,
-    "!speak": Command.SPEAK,
     "!say": Command.SAY,
 }
 
@@ -45,43 +31,32 @@ def parse_command(message: discord.Message, bot: commands.Bot) -> Optional[Parse
     Returns:
         A ParsedCommand object if the message is a valid command, otherwise None.
     """
-    content = message.content
+    content = message.content.strip()
     is_dm = isinstance(message.channel, discord.DMChannel)
 
-    if is_dm:
-        # In DMs, commands must start with '!', no mention needed.
-        if not content.startswith('!'):
-            return ParsedCommand(Command.GENERAL, content.strip())
-        
+    # In guilds, the bot must be mentioned. If not, ignore the message.
+    if not is_dm and not bot.user.mentioned_in(message):
+        return None
+
+    # Remove the mention from guild messages to get the actual content
+    if not is_dm:
+        # This regex handles both <@USER_ID> and <@!USER_ID> mentions
+        mention_pattern = fr'^<@!?{bot.user.id}>\s*'
+        content = re.sub(mention_pattern, '', content)
+
+    # If there's no content left, it's not a command
+    if not content:
+        return None
+
+    # Check if the message starts with a known command prefix
+    if content.startswith('!'):
         parts = content.split(maxsplit=1)
         command_str = parts[0]
-        cleaned_content = parts[1] if len(parts) > 1 else ""
-        command = COMMAND_MAP.get(command_str, Command.GENERAL)
-        # If it started with ! but wasn't a known command, treat as general.
-        if command == Command.GENERAL:
-            return ParsedCommand(Command.GENERAL, content.strip())
-        return ParsedCommand(command, cleaned_content.strip())
-
-    else: # Guild message
-        # In guilds, the bot must be mentioned.
-        if not bot.user.mentioned_in(message):
-            return None # Ignore unmentioned messages in guilds
-
-        # Remove the mention to get the actual content
-        mention_pattern = fr'<@!?{bot.user.id}>\s*'
-        cleaned_content = discord.utils.remove_markdown(content)
-        cleaned_content = discord.utils.remove_mentions(cleaned_content).strip()
-
-        if not cleaned_content.startswith('!'):
-            return ParsedCommand(Command.GENERAL, cleaned_content)
-
-        parts = cleaned_content.split(maxsplit=1)
-        command_str = parts[0]
-        cleaned_content = parts[1] if len(parts) > 1 else ""
-        command = COMMAND_MAP.get(command_str, Command.GENERAL)
+        remaining_content = parts[1] if len(parts) > 1 else ""
         
-        # If it started with ! but wasn't a known command, treat as general.
-        if command == Command.GENERAL:
-             return ParsedCommand(Command.GENERAL, cleaned_content.strip())
+        command = COMMAND_MAP.get(command_str)
+        if command:
+            return ParsedCommand(command=command, cleaned_content=remaining_content.strip())
 
-        return ParsedCommand(command, cleaned_content.strip())
+    # If no specific command was matched, treat it as a general chat command.
+    return ParsedCommand(command=Command.CHAT, cleaned_content=content)

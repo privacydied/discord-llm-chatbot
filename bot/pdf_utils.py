@@ -1,12 +1,12 @@
 """
 PDF processing utilities for the Discord bot.
 """
-import os
 import io
 import logging
+import asyncio
 import re
 from pathlib import Path
-from typing import Optional, Dict, List, Tuple, Union, BinaryIO
+from typing import Dict, Union, BinaryIO
 
 # Import config
 from .config import load_config
@@ -25,12 +25,7 @@ except ImportError:
 # Try to import pdfminer.six for better text extraction
 try:
     from pdfminer.high_level import extract_text as pdfminer_extract_text
-    from pdfminer.pdfdocument import PDFDocument, PDFTextExtractionNotAllowed
-    from pdfminer.pdfparser import PDFParser
-    from pdfminer.pdfinterp import PDFResourceManager, PDFPageInterpreter
-    from pdfminer.converter import TextConverter
-    from pdfminer.layout import LAParams
-    from pdfminer.pdfpage import PDFPage
+    from pdfminer.pdfdocument import PDFTextExtractionNotAllowed
     PDFMINER_AVAILABLE = True
 except ImportError:
     PDFMINER_AVAILABLE = False
@@ -42,7 +37,10 @@ PDF_SUPPORT = PYPDF2_AVAILABLE or PDFMINER_AVAILABLE
 # Try to import OCR libraries
 try:
     import pytesseract
-    from PIL import Image
+    # PIL.Image is needed by pytesseract, but not directly used here.
+    # We keep the import to ensure it's installed, but the linter flags it.
+    # For now, we assume it's implicitly required.
+    from PIL import Image  # noqa: F401
     TESSERACT_AVAILABLE = True
 except ImportError:
     TESSERACT_AVAILABLE = False

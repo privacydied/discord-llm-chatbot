@@ -2,9 +2,8 @@
 Web content extraction and processing for the Discord bot.
 """
 import logging
-import re
-from typing import Any, Dict, List, Optional, Tuple, Union
-from urllib.parse import urlparse, urljoin, unquote
+from typing import Any, Dict, Optional, Tuple
+from urllib.parse import urlparse, urljoin
 import aiohttp
 from bs4 import BeautifulSoup
 import discord
@@ -13,7 +12,6 @@ from trafilatura.settings import use_config
 
 # Import bot modules
 from .config import load_config
-from .utils import download_file, is_text_file
 
 # Load configuration
 config = load_config()

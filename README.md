@@ -16,10 +16,14 @@ An advanced Discord chatbot with memory, web search, file processing, vision cap
 
 ## 🎛️ Command Usage
 
-### Text and Voice
-- `!ask <prompt> [--mode=text|tts|both]` - AI response (text/audio/both)
-- `!speak <text>` - Convert text to speech
-- `!hear` - Transcribe audio attachment
+In Direct Messages (DMs), commands start with `!`. In servers (Guilds), commands must start by mentioning the bot, e.g., `@BotName !command`.
+
+### Core Commands
+- `!chat <prompt>`: Get a standard text-based response from the AI.
+- `!say <text>`: The bot will speak the provided text in a voice note.
+- `!speak`: Toggles your responses to be voice notes until you use the command again.
+- `!tts [on|off]`: Enables or disables TTS responses for your user account.
+- `!ping`: Checks if the bot is online and responsive.
 
 ### Vision
 - `!see <prompt>` - Analyze attached image
@@ -64,7 +68,7 @@ graph LR
 3. Create a virtual environment and activate it:
    ```bash
    uv venv --python 3.11
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
    uv pip install -r requirements.txt
    python -m bot.main
    ```
@@ -128,6 +132,7 @@ graph LR
 │   ├── ollama.py      # Ollama backend
 │   ├── openai_backend.py # OpenAI backend
 │   ├── pdf_utils.py   # PDF processing
+│   ├── router.py      # Message routing and dispatch
 │   ├── search.py      # Web search
 │   ├── stt.py         # Speech-to-text
 │   ├── tasks.py       # Background tasks

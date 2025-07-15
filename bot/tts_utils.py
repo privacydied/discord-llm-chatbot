@@ -2,11 +2,8 @@
 Utility functions for TTS initialization and voice model management.
 Handles automatic downloading of voice models when required.
 """
-import io
 import json
 import logging
-import os
-import sys
 from pathlib import Path
 
 import numpy as np
@@ -153,14 +150,14 @@ def ensure_tts_files():
     if VOICES_PATH.exists():
         try:
             VOICES_PATH.unlink()
-            logger.info(f"🗑️ Removed obsolete voices.json file")
+            logger.info("🗑️ Removed obsolete voices.json file")
         except OSError as e:
             logger.error(f"Error removing obsolete voices.json: {e}")
 
     if CONFIG_PATH.exists():
         try:
             CONFIG_PATH.unlink()
-            logger.info(f"🗑️ Removed obsolete config.json file")
+            logger.info("🗑️ Removed obsolete config.json file")
         except OSError as e:
             logger.error(f"Error removing obsolete config.json: {e}")
 
@@ -169,7 +166,7 @@ def ensure_tts_files():
     if old_model_path.exists():
         try:
             old_model_path.unlink()
-            logger.info(f"🗑️ Removed obsolete kokoro-v1.0.onnx model file")
+            logger.info("🗑️ Removed obsolete kokoro-v1.0.onnx model file")
         except OSError as e:
             logger.error(f"Error removing obsolete model file: {e}")
     

@@ -1,7 +1,6 @@
 """
 Ollama API integration for the Discord bot.
 """
-import os
 import json
 import logging
 import aiohttp
@@ -12,7 +11,8 @@ from datetime import datetime, timedelta
 # Import bot modules
 from .config import load_config
 from .logger import get_logger
-from .memory import get_profile, save_profile, get_server_profile, save_server_profile
+from .memory import get_profile, get_server_profile
+from .exceptions import APIError as OllamaAPIError
 
 # Load configuration
 config = load_config()
@@ -33,8 +33,6 @@ RATE_LIMIT_MAX_REQUESTS = 30  # Max requests per window
 
 # Track rate limits
 user_rate_limits = {}
-
-from .exceptions import APIError as OllamaAPIError
 
 
 class OllamaClient:

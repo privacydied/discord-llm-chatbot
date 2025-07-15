@@ -1,13 +1,11 @@
 """
 User and server profile management with persistence.
 """
-import os
 import json
 import logging
 import shutil
-from pathlib import Path
 from datetime import datetime
-from typing import Dict, Optional, Any
+from typing import Dict, Optional
 import threading
 
 # Initialize locks for thread safety

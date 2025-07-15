@@ -5,14 +5,12 @@ Implements the specification for both human-readable, "pretty" console logs
 and structured, machine-readable JSONL file logs.
 """
 import logging
-import sys
 from pathlib import Path
 
 import discord
 from discord.ext import commands
 from pythonjsonlogger import jsonlogger
 from rich.console import Console
-from rich.logging import RichHandler
 from rich.theme import Theme
 
 from bot.config import load_config

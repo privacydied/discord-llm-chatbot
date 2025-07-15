@@ -10,8 +10,9 @@ import discord
 from discord.ext import commands
 
 from bot.tts_state import tts_state
-from bot.tts_manager import tts_manager
 from bot.router import get_router
+from bot.logger import get_logger
+from bot.utils import send_and_log, get_user_id_from_mentioner
 
 class TTSCommands(commands.Cog):
     """Commands for controlling TTS functionality."""
@@ -81,21 +82,21 @@ class TTSCommands(commands.Cog):
         if ctx.message.attachments:
             # Has attachments, process through VL/document flow with voice_only=True
             # The voice_only flag ensures only voice response, no text
-            logging.debug(f"📷 !say command with attachments, forcing voice_only=True")
+            logging.debug("📷 !say command with attachments, forcing voice_only=True")
             await self.router.handle(ctx.message, text, voice_only=True)
             return
         
         # No attachments, direct TTS with provided text
-        if not tts_manager.is_available():
+        if not self.bot.tts_manager.is_available():
             await ctx.send("❌ TTS is not available at the moment.")
             return
         
         try:
             # Direct TTS synthesis (bypassing router for simple text)
             logging.debug(f"🔊 Direct TTS synthesis for !say command: '{text[:30]}...'")
-            audio_path = await tts_manager.generate_tts(text, tts_manager.voice)
+            audio_path = await self.bot.tts_manager.generate_tts(text, self.bot.tts_manager.voice)
             await ctx.send(file=discord.File(audio_path))
-            logging.debug(f"✅ Direct TTS response sent successfully")
+            logging.debug("✅ Direct TTS response sent successfully")
         except Exception as e:
             logging.error(f"Error in say command: {e}", exc_info=True)
             await ctx.send(f"❌ An error occurred while generating TTS: {str(e)}")

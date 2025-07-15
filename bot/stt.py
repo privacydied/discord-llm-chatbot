@@ -9,7 +9,6 @@ import subprocess
 import tempfile
 from pathlib import Path
 from functools import lru_cache
-from typing import Optional, Dict, Any
 
 import torch
 from faster_whisper import WhisperModel

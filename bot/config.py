@@ -6,6 +6,7 @@ import sys
 import logging
 from pathlib import Path
 from dotenv import load_dotenv
+from .exceptions import ConfigurationError
 
 # CHANGE: Enhanced .env loading with comprehensive audit and logging
 logger = logging.getLogger(__name__)
@@ -15,8 +16,6 @@ load_dotenv(dotenv_path=Path.cwd() / '.env', verbose=True)
 
 # Also try loading from the project root in case we're running from a subdirectory
 load_dotenv(dotenv_path=Path(__file__).parent.parent / '.env', verbose=False)
-
-from .exceptions import ConfigurationError
 
 
 
@@ -119,7 +118,7 @@ def _safe_int(value: str, default: str, var_name: str) -> int:
         # Clean value by removing comments and whitespace
         clean_value = value.split('#')[0].strip() if value else default
         return int(clean_value)
-    except (ValueError, AttributeError) as e:
+    except (ValueError, AttributeError):
         print(f"Warning: Invalid {var_name} value '{value}', using default {default}")
         return int(default)
 
@@ -130,7 +129,7 @@ def _safe_float(value: str, default: str, var_name: str) -> float:
         # Clean value by removing comments and whitespace
         clean_value = value.split('#')[0].strip() if value else default
         return float(clean_value)
-    except (ValueError, AttributeError) as e:
+    except (ValueError, AttributeError):
         print(f"Warning: Invalid {var_name} value '{value}', using default {default}")
         return float(default)
 

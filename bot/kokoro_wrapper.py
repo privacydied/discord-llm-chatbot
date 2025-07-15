@@ -6,7 +6,7 @@ import logging
 import numpy as np
 import json
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional, Union, Any
+from typing import Tuple, Optional
 
 class KokoroWrapper:
     """Wrapper for Kokoro-ONNX to handle numpy.float32 compatibility issues."""
@@ -115,7 +115,7 @@ class KokoroWrapper:
         if voice_id not in self._voices_data:
             available_voices = list(self._voices_data.keys())
             if len(available_voices) == 0:
-                raise ValueError(f"No voices available")
+                raise ValueError("No voices available")
             
             # Fall back to the first available voice
             voice_id = available_voices[0]

@@ -3,7 +3,6 @@ Handles command-line interface parsing and actions.
 """
 import argparse
 import sys
-import os
 
 from bot.config import load_config, validate_required_env, ConfigurationError
 from bot.logger import get_logger
@@ -19,7 +18,7 @@ def parse_arguments():
 def show_version_info():
     """Display version and system information."""
     # This can be expanded with more detailed version info
-    print(f"Discord LLM Bot - Version 1.0.0")
+    print("Discord LLM Bot - Version 1.0.0")
     print(f"Python Version: {sys.version}")
 
 def validate_configuration_only():

@@ -6,148 +6,195 @@ flow based on context (DM vs. Guild), command, and attachments. Ensures that the
 '1 IN > 1 OUT' principle is maintained and that channel rules are enforced.
 """
 import pytest
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 import discord
+from dataclasses import dataclass
+import logging
 
-import os
-import sys
-# Add the project root to the path to allow importing the bot module
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from bot.router import Router, ResponseMessage
+from bot.types import Command
 
-from bot.router import Router, ResponseMessage, InputModality, OutputModality
-from bot.command_parser import Command, ParsedCommand
+@dataclass
+class MockParsedCommand:
+    command: Command
+    cleaned_content: str
 
-# Mock discord objects for testing
 @pytest.fixture
-def router(mocker):
-    """Fixture to create a Router instance with mocked dependencies."""
-    mock_bot = MagicMock(spec=discord.Client)
-    mock_bot.user.id = 12345
-    mock_bot.loop = asyncio.get_event_loop()
+def mock_bot():
+    """Fixture for a mocked bot instance with all necessary attributes."""
+    bot = MagicMock(spec=discord.Client)
+    bot.user = MagicMock()
+    bot.user.id = 12345
+    bot.user.mentioned_in.return_value = True
 
-    mock_config = {
-        "DISCORD_TOKEN": "test_token",
-        "SYSTEM_PROMPT": "You are a helpful assistant.",
-        "KOKORO_MODEL_PATH": "tts/onnx",
-        "KOKORO_VOICE_PACK_PATH": "tts/voices",
-    }
+    # Mock for the config object
+    mock_config = MagicMock()
+    mock_config.get.return_value = "Test prompt"
+    bot.config = mock_config
 
-    # Mock the TTSManager and PDFProcessor
-    mock_tts_manager = mocker.AsyncMock()
-    mock_pdf_processor = mocker.AsyncMock()
+    # Mock for the tts_manager object
+    mock_tts_manager = AsyncMock()
+    mock_tts_manager.voice = "test_voice"
+    bot.tts_manager = mock_tts_manager
 
-    # Create the Router instance with all dependencies
-    router_instance = Router(bot=mock_bot, config=mock_config, tts_manager=mock_tts_manager)
-    
-    # Attach mocks directly to the instance
-    router_instance.brain_infer = mocker.AsyncMock(return_value="Mocked brain response.")
-    router_instance.see_infer = mocker.AsyncMock(return_value="Mocked vision response.")
+    # Mock for the event loop
+    bot.loop = AsyncMock()
 
-    return router_instance
+    return bot
+
+@pytest.fixture
+@patch('bot.command_parser.parse_command')
+def router_setup(mock_parse_command, mock_bot, mock_logger):
+    """Fixture to provide a router factory and the parse_command mock."""
+    def _create_router(flow_overrides=None):
+        return Router(mock_bot, flow_overrides=flow_overrides, logger=mock_logger)
+    return _create_router, mock_parse_command, mock_logger
+
+@pytest.fixture
+def mock_logger():
+    """Fixture for a mocked logger instance."""
+    return MagicMock(spec=logging.Logger)
 
 @pytest.fixture
 def mock_message():
     """Fixture for a mocked discord.Message instance."""
-    message = MagicMock()
-    message.guild = None # Default to DM
-    message.channel = MagicMock()
-    message.channel.__class__.__name__ = 'DMChannel'
-    message.author.id = 987654321
+    message = MagicMock(spec=discord.Message)
+    message.id = 11223344
+    message.guild = None
+    message.channel = MagicMock(spec=discord.DMChannel)
+    message.author = MagicMock(spec=discord.User)
+    message.author.id = 98765
     message.attachments = []
     return message
 
 # --- Test Cases ---
 
 @pytest.mark.asyncio
-@patch('bot.router.parse_command')
-async def test_dm_text_to_text_flow(mock_parse_command, router, mock_message):
+async def test_dm_text_to_text_flow(router_setup, mock_message):
     """Test standard text-to-text flow in a DM."""
-    # Arrange
+    router_factory, mock_parse_command, mock_logger = router_setup
+    mock_flow_text = AsyncMock(return_value="Test response")
+    router = router_factory(flow_overrides={'process_text': mock_flow_text})
     mock_message.content = "Hello, bot!"
-    mock_parse_command.return_value = ParsedCommand(Command.GENERAL, "Hello, bot!")
-    # The router fixture already patches brain_infer
-    brain_infer_mock = router.brain_infer
-    brain_infer_mock.return_value = "Hello, user!"
+    mock_parse_command.return_value = MockParsedCommand(command=Command.CHAT, cleaned_content="Hello, bot!")
 
-    # Act
     response = await router.dispatch_message(mock_message)
 
-    # Assert
-    brain_infer_mock.assert_called_once_with("Hello, bot!", str(mock_message.author.id))
-    assert isinstance(response, ResponseMessage)
-    assert response.text == "Hello, user!"
+    mock_flow_text.assert_called_once_with("Hello, bot!", str(mock_message.author.id))
+    assert response.text == "Test response"
     assert response.audio_path is None
 
 @pytest.mark.asyncio
-@patch('bot.router.parse_command')
-async def test_guild_text_to_tts_flow(mock_parse_command, router, mock_message):
-    """Test text-to-TTS flow in a guild with a mention."""
-    # Arrange
-    mock_message.guild = MagicMock() # It's a guild message
-    mock_message.channel.__class__.__name__ = 'TextChannel'
-    router.bot.user.mentioned_in.return_value = True
-    mock_message.content = f"<@{router.bot.user.id}> !speak How are you?"
-    
-    mock_parse_command.return_value = ParsedCommand(Command.SPEAK, "How are you?")
-    
-    brain_infer_mock = router.brain_infer
-    brain_infer_mock.return_value = "I am well, thank you!"
-    
-    router.tts_manager.generate_tts.return_value = "/path/to/audio.wav"
-    
-    # Act
+async def test_guild_text_to_tts_flow(router_setup, mock_message):
+    """Test text-to-TTS flow in a guild with a !say command."""
+    router_factory, mock_parse_command, mock_logger = router_setup
+    mock_flow_text = AsyncMock(return_value="TTS response")
+    mock_flow_tts = AsyncMock(return_value="/path/to/audio.wav")
+    router = router_factory(flow_overrides={'process_text': mock_flow_text, 'generate_tts': mock_flow_tts})
+    mock_message.guild = MagicMock()
+    mock_parse_command.return_value = MockParsedCommand(command=Command.SAY, cleaned_content="How are you?")
+
     response = await router.dispatch_message(mock_message)
 
-    # Assert
-    brain_infer_mock.assert_called_once_with("How are you?", str(mock_message.author.id))
-    router.tts_manager.generate_tts.assert_called_once_with("I am well, thank you!")
-    assert isinstance(response, ResponseMessage)
-    assert response.text == "I am well, thank you!"
+    mock_flow_text.assert_called_once_with("How are you?", str(mock_message.author.id))
+    mock_flow_tts.assert_called_once_with("TTS response")
+    assert response.text is None
     assert response.audio_path == "/path/to/audio.wav"
 
 @pytest.mark.asyncio
-@patch('bot.router.parse_command')
-async def test_dm_image_to_text_flow(mock_parse_command, router, mock_message):
+async def test_dm_image_to_text_flow(router_setup, mock_message):
     """Test image-to-text flow in a DM."""
-    # Arrange
-    mock_attachment = MagicMock()
-    mock_attachment.filename = 'test.png'
-    mock_attachment.url = 'http://example.com/test.png'
+    router_factory, mock_parse_command, mock_logger = router_setup
+    mock_flow_attachments = AsyncMock(return_value="Image processed")
+    router = router_factory(flow_overrides={'process_attachments': mock_flow_attachments})
+    mock_attachment = MagicMock(spec=discord.Attachment)
     mock_attachment.content_type = 'image/png'
     mock_message.attachments = [mock_attachment]
     mock_message.content = "What is this?"
+    mock_parse_command.return_value = MockParsedCommand(command=Command.CHAT, cleaned_content="What is this?")
 
-    mock_parse_command.return_value = ParsedCommand(Command.GENERAL, "What is this?")
-    see_infer_mock = router.see_infer
-    see_infer_mock.return_value = "It is a cat."
-    brain_infer_mock = router.brain_infer
-    brain_infer_mock.return_value = "The image shows a cat sitting on a mat."
+    response = await router.dispatch_message(mock_message)
 
-    # Act
-    with patch('tempfile.NamedTemporaryFile') as mock_tmp_file:
-        mock_tmp_file.return_value.__enter__.return_value.name = "/tmp/test.png"
-        response = await router.dispatch_message(mock_message)
-
-    # Assert
-    see_infer_mock.assert_called_once()
-    brain_infer_mock.assert_called_once()
-    assert isinstance(response, ResponseMessage)
-    assert "The image shows a cat" in response.text
+    mock_flow_attachments.assert_called_once_with(mock_message, "What is this?")
+    assert response.text == "Image processed"
     assert response.audio_path is None
 
 @pytest.mark.asyncio
-@patch('bot.router.parse_command')
-async def test_guild_message_without_mention_is_ignored(mock_parse_command, router, mock_message):
-    """Test that a message in a guild without a mention is ignored."""
-    # Arrange
+async def test_guild_message_without_mention_is_ignored(router_setup, mock_message):
+    """Test that messages in guilds without a mention are ignored."""
+    router_factory, mock_parse_command, mock_logger = router_setup
+    mock_flow_text = AsyncMock()
+    mock_flow_attachments = AsyncMock()
+    router = router_factory(flow_overrides={'process_text': mock_flow_text, 'process_attachments': mock_flow_attachments})
     mock_message.guild = MagicMock()
-    mock_message.channel.__class__.__name__ = 'TextChannel'
-    router.bot.user.mentioned_in.return_value = False # The key for this test
-    mock_message.content = "Hello? Anyone there?"
+    mock_parse_command.return_value = None  # This is the key for this test
 
-    # Act
     response = await router.dispatch_message(mock_message)
 
-    # Assert
     assert response is None
+    mock_flow_text.assert_not_called()
+    mock_flow_attachments.assert_not_called()
+
+@pytest.mark.asyncio
+async def test_ping_command(router_setup, mock_message):
+    """Test that the PING command returns 'Pong!'"""
+    router_factory, mock_parse_command, mock_logger = router_setup
+    router = router_factory()
+    mock_parse_command.return_value = MockParsedCommand(command=Command.PING, cleaned_content="")
+
+    response = await router.dispatch_message(mock_message)
+
+    assert response.text == "Pong!"
+    assert response.audio_path is None
+
+@pytest.mark.asyncio
+async def test_unhandled_attachment_type(router_setup, mock_message):
+    """Test that an unhandled attachment type returns an error message."""
+    router_factory, mock_parse_command, mock_logger = router_setup
+    router = router_factory()
+    mock_attachment = MagicMock(spec=discord.Attachment)
+    mock_attachment.content_type = 'application/zip'
+    mock_message.attachments = [mock_attachment]
+    mock_parse_command.return_value = MockParsedCommand(command=Command.CHAT, cleaned_content="Check this out")
+
+    response = await router.dispatch_message(mock_message)
+
+    assert "I'm sorry, I can't process that type of attachment." in response.text
+
+@pytest.mark.asyncio
+async def test_no_processed_text_returns_error_message(router_setup, mock_message):
+    """Test that if no text is produced, an error message is returned."""
+    router_factory, mock_parse_command, mock_logger = router_setup
+    mock_flow_text = AsyncMock(return_value=None) # Simulate flow returning nothing
+    router = router_factory(flow_overrides={'process_text': mock_flow_text})
+    mock_parse_command.return_value = MockParsedCommand(command=Command.CHAT, cleaned_content="Hello")
+
+    response = await router.dispatch_message(mock_message)
+
+    assert response.text == "I'm sorry, I couldn't process that. Please try again."
+
+@pytest.mark.asyncio
+async def test_say_command_returns_only_audio(router_setup, mock_message):
+    """Test that !say command returns only audio path and no text."""
+    router_factory, mock_parse_command, mock_logger = router_setup
+    mock_flow_text = AsyncMock(return_value="TTS response")
+    mock_flow_tts = AsyncMock(return_value="/path/to/audio.wav")
+    router = router_factory(flow_overrides={'process_text': mock_flow_text, 'generate_tts': mock_flow_tts})
+    mock_parse_command.return_value = MockParsedCommand(command=Command.SAY, cleaned_content="Say this")
+
+    response = await router.dispatch_message(mock_message)
+
+    assert response.text is None
+    assert response.audio_path == "/path/to/audio.wav"
+
+@pytest.mark.asyncio
+async def test_error_in_dispatch_returns_error_message(router_setup, mock_message):
+    """Test that a generic exception in dispatch returns a user-friendly error."""
+    router_factory, mock_parse_command, mock_logger = router_setup
+    mock_flow_text = AsyncMock(side_effect=Exception("A wild error appears!"))
+    router = router_factory(flow_overrides={'process_text': mock_flow_text})
+    mock_parse_command.return_value = MockParsedCommand(command=Command.CHAT, cleaned_content="Hello")
+
+    response = await router.dispatch_message(mock_message)
+
+    assert response.text == "I'm sorry, an unexpected error occurred."

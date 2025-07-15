@@ -2,14 +2,14 @@
 Search functionality for the Discord bot.
 """
 import logging
-import re
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict
 import asyncio
 from datetime import datetime, timedelta
 
 import discord
 import aiohttp
 from bs4 import BeautifulSoup
+from pathlib import Path
 
 # Import bot modules
 from .config import load_config

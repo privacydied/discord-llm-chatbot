@@ -1,15 +1,11 @@
 """
 TTS client for Kokoro-ONNX TTS microservice.
 """
-import asyncio
 import hashlib
-import json
 import logging
-import os
-import tempfile
 import time
 from pathlib import Path
-from typing import Union, Optional
+from typing import Union
 import numpy as np
 
 # Import TTS utilities for automatic model downloads
@@ -24,17 +20,21 @@ logger.setLevel(logging.DEBUG)
 class TTSManager:
     """Text-to-Speech manager using kokoro-onnx package. [PA][CA][IV]"""
     
-    def __init__(self, config: dict):
+    def __init__(self, bot: "LLMBot"):
         """Initialize TTS manager with lightweight kokoro-onnx implementation. [PA][CA]"""
-        self.config = config
-        self.backend = config.get("TTS_BACKEND", "kokoro-onnx")
-        self.voice = config.get("TTS_VOICE", "am_michael")
-        self.cache_dir = Path(config.get("TTS_CACHE_DIR", "tts_cache"))
+        self.bot = bot
+        self.logger = bot.logger
+        self.config = bot.config
+        self.backend = self.config.get("TTS_BACKEND", "kokoro-onnx")
+        self.voice = self.config.get("TTS_VOICE", "am_michael")
+        self.cache_dir = Path(self.config.get("TTS_CACHE_DIR", "tts_cache"))
         self.cache_dir.mkdir(exist_ok=True)
-        
+
         # Auto-download model files if missing
-        logger.info("🔍 Checking for TTS model files...")
-        ensure_tts_files()
+        self._ensure_models_exist()
+
+        self.tts_instance = None
+        self.load_tts_instance()
         
         # TTS engine state
         self.engine = None
@@ -47,8 +47,8 @@ class TTSManager:
                 from .kokoro_direct import KokoroDirect # Use direct implementation
                 
                 # Verify model and voice directories exist [IV]
-                onnx_dir = Path(config.get("TTS_ONNX_DIR", "tts/onnx"))
-                voices_dir = Path(config.get("TTS_VOICES_DIR", "tts/voices"))
+                onnx_dir = Path(self.config.get("TTS_ONNX_DIR", "tts/onnx"))
+                voices_dir = Path(self.config.get("TTS_VOICES_DIR", "tts/voices"))
 
                 if not onnx_dir.exists() or not onnx_dir.is_dir():
                     raise FileNotFoundError(f"ONNX model directory not found: {onnx_dir}")
@@ -70,7 +70,7 @@ class TTSManager:
                 # Initialize Kokoro engine using KokoroDirect [CA]
                 try:
                     self.engine = KokoroDirect(onnx_dir=str(onnx_dir), voices_dir=str(voices_dir))
-                    logger.debug(f"✅ KokoroDirect engine initialized")
+                    logger.debug("✅ KokoroDirect engine initialized")
                     
                     # Verify voices are available [IV]
                     if hasattr(self.engine, 'available_voices') and self.engine.available_voices:
@@ -136,7 +136,7 @@ class TTSManager:
                     except Exception as e:
                         logger.error(f"Error getting voice style: {e}")
                         # Create a default 256-dimension vector as fallback
-                        logger.warning(f"Using default 256-dim voice vector as fallback")
+                        logger.warning("Using default 256-dim voice vector as fallback")
                         voice = np.zeros((1, 256), dtype=np.float32)
                 
                 # Debug voice value and type
@@ -145,7 +145,7 @@ class TTSManager:
                 
                 # Ensure voice is a numpy array
                 if not isinstance(voice, np.ndarray):
-                    logger.warning(f"Converting non-numpy voice to numpy array")
+                    logger.warning("Converting non-numpy voice to numpy array")
                     try:
                         voice = np.array(voice, dtype=np.float32)
                     except Exception as e:

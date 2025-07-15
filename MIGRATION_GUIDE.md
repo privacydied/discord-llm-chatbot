@@ -265,3 +265,60 @@ After successful migration:
 3. **Test all features** to ensure compatibility
 4. **Update documentation** for your specific use case
 5. **Consider CI/CD** setup using the new package structure
+
+## Router and Testing Refactor
+
+The `Router` class and the corresponding test suite have been significantly refactored to improve reliability, testability, and maintainability.
+
+### Key Changes
+
+1.  **Dependency Injection in Router**: The `Router` now accepts an optional `flow_overrides` dictionary in its constructor. This allows for the injection of mock flow methods during testing, completely isolating the router's logic from the actual implementation of the flows.
+
+2.  **Robust Test Fixtures**: The test suite (`tests/test_router.py`) now uses a set of powerful fixtures to streamline test creation:
+    *   `mock_bot`: Provides a fully-mocked `LLMBot` instance with all necessary attributes (`config`, `tts_manager`, `loop`, etc.) to prevent `AttributeError` during tests.
+    *   `mock_logger`: Injects a mock logger to prevent side effects and allow for logging assertions.
+    *   `router_factory`: A factory fixture that simplifies `Router` instantiation with custom `flow_overrides`.
+
+3.  **`MockParsedCommand` Dataclass**: A `MockParsedCommand` dataclass has replaced the use of `MagicMock` for `ParsedCommand` objects, providing better type safety and clarity in tests.
+
+4.  **Graceful Error Handling**: The `dispatch_message` method now wraps the initial `parse_command` call in a `try...except` block. This ensures that messages that are not valid commands (e.g., regular chat in a guild without a bot mention) are silently ignored, preventing test failures and extraneous error logging.
+
+### Writing a New Router Test (Runbook)
+
+Here is a complete example of how to write a test for the refactored router. This serves as a runbook for future test development.
+
+```python
+import pytest
+from unittest.mock import AsyncMock, MagicMock
+from bot.router import ResponseMessage
+from bot.types import Command
+
+# Assuming fixtures like mock_bot, mock_logger, and mock_message are defined as in test_router.py
+
+@pytest.mark.asyncio
+async def test_example_flow(router_setup, mock_message):
+    """Example test for a custom flow."""
+    # 1. Setup: Get the router factory and mocks from the router_setup fixture
+    router_factory, mock_parse_command, mock_logger = router_setup
+
+    # 2. Mock the specific flow method you want to test
+    mock_custom_flow = AsyncMock(return_value="Custom flow response")
+
+    # 3. Instantiate the router using the factory, providing the mock flow
+    router = router_factory(flow_overrides={'process_text': mock_custom_flow})
+
+    # 4. Set up the mock message and the return value for the command parser
+    mock_message.content = "!custom_command"
+    mock_parse_command.return_value = MockParsedCommand(
+        command=Command.CHAT,  # Or any other relevant command
+        cleaned_content="custom_command"
+    )
+
+    # 5. Dispatch the message
+    response = await router.dispatch_message(mock_message)
+
+    # 6. Assert the results
+    mock_custom_flow.assert_called_once_with("custom_command", str(mock_message.author.id))
+    assert response.text == "Custom flow response"
+    assert response.audio_path is None
+```

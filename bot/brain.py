@@ -3,7 +3,6 @@ Centralized text inference module (brain)
 """
 import logging
 from .ai_backend import generate_response
-from .config import load_config
 from .exceptions import InferenceError
 
 logger = logging.getLogger(__name__)

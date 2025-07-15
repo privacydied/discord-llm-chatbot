@@ -3,12 +3,10 @@ Direct implementation of Kokoro-ONNX TTS using the official Hugging Face approac
 This module handles TTS using the ONNX models and .bin voice files directly.
 """
 
-import os
 import numpy as np
 import logging
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional, Any
-import soundfile as sf
+from typing import List, Tuple, Optional
 from onnxruntime import InferenceSession
 
 # Configure logging
@@ -34,12 +32,18 @@ class KokoroDirect:
         """
         from bot.config import load_config
         self.config = config if config is not None else load_config()
+        logger.debug(f"KokoroDirect received config: {config}")
+        logger.debug(f"KokoroDirect loaded config: {self.config}")
+        
         onnx_dir = self.config.get("KOKORO_MODEL_PATH", onnx_dir)
         voices_dir = self.config.get("KOKORO_VOICE_PACK_PATH", voices_dir)
+        
+        logger.debug(f"Using ONNX dir: {onnx_dir}")
+        logger.debug(f"Using voices dir: {voices_dir}")
         self.onnx_dir = Path(onnx_dir)
         self.voices_dir = Path(voices_dir)
         self.session = None
-        self.voices = {}
+        self._voices_cache = {}
         self.available_voices = []
         
         # Initialize session and load voices
@@ -83,16 +87,19 @@ class KokoroDirect:
     
     def _load_available_voices(self):
         """Load available voices from the voices directory."""
+        logger.debug(f"Attempting to load voices from {self.voices_dir}")
         try:
             voice_pack_path = self.voices_dir / "voices-v1.0.bin"
             if not voice_pack_path.exists():
-                logger.warning(f"Voice pack not found at {voice_pack_path}. No voices loaded.")
+                logger.error(f"CRITICAL: Voice pack not found at {voice_pack_path}. No voices loaded.")
                 self.available_voices = []
                 return
 
+            logger.debug(f"Found voice pack at {voice_pack_path}, loading...")
             with np.load(voice_pack_path, allow_pickle=True) as data:
-                self.voices = {name: data[name] for name in data.files}
-                self.available_voices = list(self.voices.keys())
+                self._voices_cache = {name: data[name] for name in data.files}
+                self.available_voices = list(self._voices_cache.keys())
+                logger.debug(f"Loaded {len(self.available_voices)} voices into cache.")
             
             logger.info(f"Found {len(self.available_voices)} voices: {self.available_voices}")
 
@@ -111,10 +118,10 @@ class KokoroDirect:
             Voice embedding as a numpy array of shape (N, 1, 256).
         """
         try:
-            if voice_id not in self.voices:
+            if voice_id not in self._voices_cache:
                 raise ValueError(f"Voice '{voice_id}' not found or no voices loaded.")
 
-            voice_embedding = self.voices[voice_id]
+            voice_embedding = self._voices_cache[voice_id]
 
             # Ensure the embedding has the shape the backend expects: (N, 1, 256)
             if voice_embedding.ndim == 2 and voice_embedding.shape[1] == 256:
@@ -164,10 +171,9 @@ class KokoroDirect:
             # But this is just a fallback - ideally phonemes should be provided as token IDs
             if isinstance(phonemes, str):
                 logger.warning("Phonemes provided as string, not token IDs. Treating as raw text.")
-                raw_text = phonemes
                 phonemes = None
             else:
-                raw_text = text
+                pass
                 
             # If no phonemes provided, we need phonemization
             # This is a placeholder - in practice, you should use Misaki G2P

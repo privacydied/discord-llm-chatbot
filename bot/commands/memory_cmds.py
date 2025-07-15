@@ -4,14 +4,13 @@ Memory-related commands for the Discord bot.
 This module provides commands to manage user and server memories.
 """
 import logging
-from typing import Optional, List, Dict, Any
 
 import discord
+import asyncio
 from discord.ext import commands
 
 # Import bot modules
-from ..memory import add_memory, get_profile, save_profile, get_server_profile, save_server_profile
-from ..context import get_conversation_history, reset_context
+from ..memory import get_profile, save_profile, get_server_profile, save_server_profile
 from ..logger import log_command
 from ..config import load_config
 from ..router import get_router
@@ -78,7 +77,7 @@ class MemoryCommands(commands.Cog):
         except Exception as e:
             logging.error(f"Error in add_memory_cmd: {str(e)}", exc_info=True)
             await ctx.send("❌ An error occurred while adding the memory.")
-        log_command(ctx, "memory_add_error", {"error": str(e)}, success=False)
+            log_command(ctx, "memory_add_error", {"error": str(e)}, success=False)
 
     @memory_group.command(name="list")
     async def list_memories_cmd(self, ctx, limit: int = 5):
@@ -128,7 +127,7 @@ class MemoryCommands(commands.Cog):
         except Exception as e:
             logging.error(f"Error in list_memories_cmd: {str(e)}", exc_info=True)
             await ctx.send("❌ An error occurred while retrieving memories.")
-        log_command(ctx, "memory_list_error", {"error": str(e)}, success=False)
+            log_command(ctx, "memory_list_error", {"error": str(e)}, success=False)
 
     @memory_group.command(name="clear")
     @commands.cooldown(1, 30, commands.BucketType.user)

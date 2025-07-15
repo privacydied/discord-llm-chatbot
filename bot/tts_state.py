@@ -1,7 +1,6 @@
 """
 TTS state management for per-user and global preferences.
 """
-import asyncio
 import logging
 from typing import Dict, Set
 

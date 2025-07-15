@@ -4,10 +4,9 @@ Centralized speech-to-text inference module (hear)
 import asyncio
 import logging
 import tempfile
-import shutil
 import os
 from pathlib import Path
-from .stt import stt_manager, normalise_to_wav
+from .stt import stt_manager
 from .exceptions import InferenceError
 
 logger = logging.getLogger(__name__)

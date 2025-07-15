@@ -2,27 +2,20 @@
 Event handlers for the Discord bot.
 """
 import asyncio
-import asyncio
-import re
-import sys
 from pathlib import Path
-from typing import Optional
 
 import discord
 from discord.ext import commands
 
 from bot.logger import get_logger
-from bot.router import get_router
-from bot.tts_manager import tts_manager
-from bot.config import load_config
+from bot.router import Router
 
 logger = get_logger(__name__)
 
 class BotEventHandler(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self.router = get_router()
-        self.config = load_config()
+        self.router: Router = self.bot.router
 
     def _is_relevant(self, message: discord.Message) -> bool:
         """Determines if a message is relevant for the bot to process."""
@@ -108,7 +101,7 @@ class BotEventHandler(commands.Cog):
         """Hybrid inference pipeline for text and TTS responses."""
         # For TTS modes, synthesize and send audio
         if mode in ("tts", "both"):
-            if not tts_manager.is_available():
+            if not self.bot.tts_manager.is_available():
                 await ctx.send("🔄 TTS initializing—please retry in a moment.")
                 # Fall back to text if TTS is not available
                 if mode == "both":
@@ -121,17 +114,17 @@ class BotEventHandler(commands.Cog):
                         audio_path = Path(tmpfile.name)
                     
                     # Synthesize audio asynchronously
-                    audio_path = await tts_manager.synthesize_async(text_response, audio_path)
+                    audio_path = await self.bot.tts_manager.synthesize_async(text_response, audio_path)
                     
                     if audio_path and audio_path.exists():
                         # Send only voice response when TTS is active
                         await ctx.send(file=discord.File(str(audio_path), filename="tts.ogg"))
                     else:
-                        logging.error(f"TTS synthesis failed for: {text_response}")
+                        logger.error(f"TTS synthesis failed for: {text_response}")
                         # Fall back to text on TTS failure
                         await ctx.send(text_response)
                 except Exception as e:
-                    logging.error(f"TTS synthesis error: {e}")
+                    logger.error(f"TTS synthesis error: {e}")
                     await ctx.send("⚠️ TTS synthesis failed")
                     # Fall back to text on error
                     await ctx.send(text_response)
@@ -148,7 +141,7 @@ class BotEventHandler(commands.Cog):
         try:
             return await brain_infer(message.content)
         except InferenceError as e:
-            logging.error(f"Brain inference failed: {str(e)}")
+            logger.error(f"Brain inference failed: {str(e)}")
             return "⚠️ An error occurred while generating the response"
 
 # Background task for cache maintenance
@@ -159,14 +152,14 @@ async def cache_maintenance_task():
         try:
             logger.debug("Running TTS cache maintenance...", extra={'subsys': 'tts_cache', 'event': 'task_run'})
             # Get stats before cleanup
-            stats_before = tts_manager.get_cache_stats()
+            stats_before = self.bot.tts_manager.get_cache_stats()
             logger.debug(f"Cache stats before cleanup: {stats_before}", extra={'subsys': 'tts_cache', 'event': 'stats_before'})
             
             # Run the cleanup
-            tts_manager.purge_old_cache()  # This is a synchronous method
+            self.bot.tts_manager.purge_old_cache()  # This is a synchronous method
             
             # Get stats after cleanup
-            stats_after = tts_manager.get_cache_stats()
+            stats_after = self.bot.tts_manager.get_cache_stats()
             logger.info(f"TTS cache maintenance completed. Stats before: {stats_before}, after: {stats_after}", extra={'subsys': 'tts_cache', 'event': 'task_success'})
             
             # Wait for 24 hours before next run
