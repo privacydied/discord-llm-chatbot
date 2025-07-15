@@ -88,54 +88,208 @@ class Router:
             self._flows.update(flow_overrides)
 
     async def dispatch_message(self, message: Message) -> Optional[ResponseMessage]:
-        self.logger.debug(f"--- Dispatching message {message.id} ---", extra={'subsys': 'router'})
+        """Process a message and ensure exactly one response is generated (1 IN > 1 OUT rule).
+        
+        This method enforces the strict 1 IN > 1 OUT principle, ensuring that each processed message
+        will either be explicitly ignored (return None) or will generate exactly one response.
+        
+        Args:
+            message: The Discord message to process
+            
+        Returns:
+            ResponseMessage: A single response with text and/or audio, or None if message is ignored
+        """
+        msg_id = message.id
+        user_id = str(message.author.id) if message.author else 'unknown'
+        guild_id = str(message.guild.id) if message.guild else 'dm'
+        
+        self.logger.info(f"🔄 === ROUTER DISPATCH STARTED: MSG {msg_id} ====", 
+                       extra={'subsys': 'router', 'event': 'dispatch.start', 
+                              'msg_id': msg_id, 'user_id': user_id, 'guild_id': guild_id})
+        
+        # Track if this message should be processed by the router
+        should_process = True
+        
         try:
-            # 1. Gatekeeping: Parse the command and ignore irrelevant messages.
+            # 1. Gatekeeping: Parse the command and identify messages to be ignored
+            self.logger.debug(f"🔍 Parsing command from message {msg_id}", 
+                            extra={'subsys': 'router', 'event': 'command.parse', 'msg_id': msg_id})
             parsed_command = parse_command(message, self.bot)
-            if parsed_command is None or parsed_command.command in [Command.IGNORE, Command.TTS, Command.SAY, Command.TTS_ALL, Command.SPEAK]:
-                self.logger.debug("Ignoring message as it's not a valid or relevant command or is handled by a cog.", extra={'subsys': 'router'})
+            
+            # Check if message should be ignored (handled by cogs or invalid)
+            if parsed_command is None:
+                self.logger.debug(f"⏭️ Ignoring message {msg_id}: No valid command parsed", 
+                                extra={'subsys': 'router', 'event': 'command.ignore', 'msg_id': msg_id})
+                should_process = False
+                return None
+                
+            if parsed_command.command in [Command.IGNORE, Command.TTS, Command.SAY, Command.TTS_ALL, Command.SPEAK]:
+                self.logger.debug(f"⏭️ Ignoring message {msg_id}: Command {parsed_command.command} handled by cog", 
+                                extra={'subsys': 'router', 'event': 'command.cog_handled', 
+                                       'msg_id': msg_id, 'command': str(parsed_command.command)})
+                should_process = False
                 return None
 
             # 2. Handle simple, static commands directly.
+            self.logger.debug(f"🔍 Processing command: {parsed_command.command}", 
+                            extra={'subsys': 'router', 'event': 'command.process', 
+                                   'msg_id': msg_id, 'command': str(parsed_command.command)})
+            
+            # Simple commands with direct responses
             if parsed_command.command == Command.PING:
+                self.logger.info(f"✅ Handling PING command", 
+                               extra={'subsys': 'router', 'event': 'command.ping', 'msg_id': msg_id})
+                self.logger.info(f"🏁 === ROUTER DISPATCH COMPLETED: PING COMMAND ====", 
+                               extra={'subsys': 'router', 'event': 'dispatch.complete.ping', 'msg_id': msg_id})
                 return ResponseMessage(text="Pong!")
+                
             if parsed_command.command == Command.HELP:
+                self.logger.info(f"✅ Handling HELP command", 
+                               extra={'subsys': 'router', 'event': 'command.help', 'msg_id': msg_id})
+                self.logger.info(f"🏁 === ROUTER DISPATCH COMPLETED: HELP COMMAND ====", 
+                               extra={'subsys': 'router', 'event': 'dispatch.complete.help', 'msg_id': msg_id})
                 return ResponseMessage(text="See `/help` for a list of commands.")
 
             # 3. Determine modalities and process content
             input_modality = self._get_input_modality(message)
             output_modality = self._get_output_modality(parsed_command, message)
-            self.logger.debug(f"MODALITIES: IN={input_modality.name} -> OUT={output_modality.name}", extra={'subsys': 'router'})
+            self.logger.info(f"🔀 MODALITIES: IN={input_modality.name} -> OUT={output_modality.name}", 
+                           extra={'subsys': 'router', 'event': 'modality.select', 'msg_id': msg_id, 
+                                  'input_modality': input_modality.name, 'output_modality': output_modality.name})
+            
+            # Enforce 1 IN > 1 OUT rule: Track that we're now committed to generating a response
+            should_process = True
 
+            # Initialize response tracking variables
             processed_text = None
             content = parsed_command.cleaned_content
+            self.logger.debug(f"🔍 Processing content with length: {len(content)}", 
+                            extra={'subsys': 'router', 'event': 'content.process', 'msg_id': msg_id})
 
-            if input_modality == InputModality.TEXT_ONLY:
-                processed_text = await self._flows['process_text'](content)
-            elif input_modality == InputModality.URL:
-                url_match = re.search(r'https?://[\S]+', message.content)
-                if url_match:
-                    processed_text = await self._flows['process_url'](url_match.group(0))
-            elif input_modality == InputModality.AUDIO:
-                processed_text = await self._flows['process_audio'](message)
-            elif input_modality in [InputModality.IMAGE, InputModality.DOCUMENT]:
-                processed_text = await self._flows['process_attachments'](message, content)
+            # Process based on input modality - each branch must produce text or raise an exception
+            try:
+                if input_modality == InputModality.TEXT_ONLY:
+                    self.logger.info(f"💬 Processing TEXT_ONLY input", 
+                                   extra={'subsys': 'router', 'event': 'flow.text', 'msg_id': msg_id})
+                    processed_text = await self._flows['process_text'](content)
+                    if not processed_text:
+                        self.logger.warning(f"⚠️ TEXT flow returned empty response", 
+                                         extra={'subsys': 'router', 'event': 'flow.text.empty', 'msg_id': msg_id})
+                        processed_text = "I'm sorry, I wasn't able to process your text message."
+                    
+                elif input_modality == InputModality.URL:
+                    url_match = re.search(r'https?://[\S]+', message.content)
+                    if url_match:
+                        url = url_match.group(0)
+                        self.logger.info(f"🔗 Processing URL input: {url[:50]}{'...' if len(url) > 50 else ''}", 
+                                       extra={'subsys': 'router', 'event': 'flow.url', 'msg_id': msg_id})
+                        processed_text = await self._flows['process_url'](url)
+                        if not processed_text:
+                            self.logger.warning(f"⚠️ URL flow returned empty response", 
+                                             extra={'subsys': 'router', 'event': 'flow.url.empty', 'msg_id': msg_id})
+                            processed_text = "I'm sorry, I wasn't able to process that URL."
+                    else:
+                        self.logger.warning(f"⚠️ URL modality detected but no URL found in content", 
+                                         extra={'subsys': 'router', 'event': 'flow.url.not_found', 'msg_id': msg_id})
+                        processed_text = "I couldn't find a valid URL in your message."
+                        
+                elif input_modality == InputModality.AUDIO:
+                    self.logger.info(f"🔊 Processing AUDIO input: {message.attachments[0].filename if message.attachments else 'unknown'}", 
+                                   extra={'subsys': 'router', 'event': 'flow.audio', 'msg_id': msg_id})
+                    processed_text = await self._flows['process_audio'](message)
+                    if not processed_text:
+                        self.logger.warning(f"⚠️ AUDIO flow returned empty response", 
+                                         extra={'subsys': 'router', 'event': 'flow.audio.empty', 'msg_id': msg_id})
+                        processed_text = "I'm sorry, I wasn't able to process that audio message."
+                    
+                elif input_modality in [InputModality.IMAGE, InputModality.DOCUMENT]:
+                    attachment_name = message.attachments[0].filename if message.attachments else 'unknown'
+                    attachment_type = 'IMAGE' if input_modality == InputModality.IMAGE else 'DOCUMENT'
+                    self.logger.info(f"📎 Processing {attachment_type} attachment: {attachment_name}", 
+                                   extra={'subsys': 'router', 'event': f'flow.{attachment_type.lower()}', 'msg_id': msg_id})
+                    processed_text = await self._flows['process_attachments'](message, content)
+                    if not processed_text:
+                        self.logger.warning(f"⚠️ {attachment_type} flow returned empty response", 
+                                         extra={'subsys': 'router', 'event': f'flow.{attachment_type.lower()}.empty', 'msg_id': msg_id})
+                        processed_text = f"I'm sorry, I wasn't able to process that {attachment_type.lower()}."
+                else:
+                    # Fallback for any unhandled modality
+                    self.logger.error(f"❌ Unhandled input modality: {input_modality}", 
+                                    extra={'subsys': 'router', 'event': 'modality.unhandled', 'msg_id': msg_id})
+                    processed_text = "I'm sorry, I don't know how to process that type of input."
+            except Exception as flow_error:
+                # Catch exceptions in flow processing to ensure 1 IN > 1 OUT
+                self.logger.error(f"❌ Error in flow processing: {flow_error}", 
+                                exc_info=True, 
+                                extra={'subsys': 'router', 'event': 'flow.error', 
+                                       'msg_id': msg_id, 'error': str(flow_error)})
+                processed_text = "I encountered an error while processing your message."
 
-            # 4. Handle cases where processing fails or yields no text.
+            # 4. Verify we have a valid response (1 IN > 1 OUT rule enforcement)
+            # This is a safety check - the flow processing should have already ensured a non-empty response
             if not processed_text:
-                self.logger.warning("Message processing resulted in no text.", extra={'subsys': 'router'})
-                return ResponseMessage(text="I'm sorry, I wasn't able to process that.")
+                self.logger.error("❌ CRITICAL: Message processing resulted in no text despite safeguards", 
+                                extra={'subsys': 'router', 'event': 'process.no_result', 'msg_id': msg_id})
+                processed_text = "I'm sorry, I wasn't able to process that message. (Error: Empty response)"
+                
+            self.logger.info(f"✅ Content processed successfully: {len(processed_text)} chars", 
+                           extra={'subsys': 'router', 'event': 'process.success', 'msg_id': msg_id})
 
-            # 5. Generate final response based on output modality.
-            if output_modality == OutputModality.TTS:
-                audio_path = await self._flows['generate_tts'](processed_text)
-                return ResponseMessage(text=processed_text, audio_path=audio_path)
+            # 5. Generate final response based on output modality (1 IN > 1 OUT rule enforcement)
+            response = None
             
-            return ResponseMessage(text=processed_text)
+            try:
+                if output_modality == OutputModality.TTS:
+                    self.logger.info(f"🔊 Generating TTS output for text of length: {len(processed_text)}", 
+                                   extra={'subsys': 'router', 'event': 'output.tts', 'msg_id': msg_id})
+                    audio_path = await self._flows['generate_tts'](processed_text)
+                    
+                    if audio_path:
+                        self.logger.info(f"✅ TTS generation successful: {audio_path}", 
+                                       extra={'subsys': 'router', 'event': 'output.tts.success', 'msg_id': msg_id})
+                        response = ResponseMessage(text=processed_text, audio_path=audio_path)
+                    else:
+                        self.logger.warning("⚠️ TTS generation failed, falling back to text", 
+                                         extra={'subsys': 'router', 'event': 'output.tts.fail', 'msg_id': msg_id})
+                        response = ResponseMessage(text=processed_text)
+                else:
+                    # Default to text output
+                    self.logger.info(f"✅ TEXT output generated: {len(processed_text)} chars", 
+                                   extra={'subsys': 'router', 'event': 'output.text', 'msg_id': msg_id})
+                    response = ResponseMessage(text=processed_text)
+            except Exception as output_error:
+                # Catch any exceptions in output generation to ensure 1 IN > 1 OUT
+                self.logger.error(f"❌ Error in output generation: {output_error}", 
+                                exc_info=True, 
+                                extra={'subsys': 'router', 'event': 'output.error', 
+                                       'msg_id': msg_id, 'error': str(output_error)})
+                response = ResponseMessage(text="I encountered an error while generating the response.")
+            
+            # Final verification of 1 IN > 1 OUT rule
+            if not response:
+                self.logger.error("❌ CRITICAL: No response generated despite safeguards", 
+                                extra={'subsys': 'router', 'event': 'output.missing', 'msg_id': msg_id})
+                response = ResponseMessage(text="I'm sorry, an unexpected error occurred. (Error: No response generated)")
+                
+            self.logger.info(f"🏁 === ROUTER DISPATCH COMPLETED: MSG {msg_id} ====", 
+                           extra={'subsys': 'router', 'event': 'dispatch.complete', 'msg_id': msg_id})
+            return response
 
         except Exception as e:
-            self.logger.error(f"Error dispatching message {message.id}: {e}", exc_info=True, extra={'subsys': 'router'})
-            return ResponseMessage(text="An unexpected error occurred. Please try again later.")
+            self.logger.error(f"❌ Error dispatching message {msg_id}: {e}", 
+                            exc_info=True, 
+                            extra={'subsys': 'router', 'event': 'dispatch.error', 'msg_id': msg_id, 'error': str(e)})
+            
+            # 1 IN > 1 OUT rule enforcement: If we should process this message, always return a response
+            if should_process:
+                self.logger.info(f"🏁 === ROUTER DISPATCH FAILED BUT RESPONDING: MSG {msg_id} ====", 
+                               extra={'subsys': 'router', 'event': 'dispatch.fail_with_response', 'msg_id': msg_id})
+                return ResponseMessage(text="An unexpected error occurred. Please try again later.")
+            else:
+                # This was a message we were ignoring anyway
+                self.logger.info(f"🏁 === ROUTER DISPATCH FAILED: IGNORED MSG {msg_id} ====", 
+                               extra={'subsys': 'router', 'event': 'dispatch.fail_ignored', 'msg_id': msg_id})
+                return None
 
     def _get_input_modality(self, message: Message) -> InputModality:
         """Determines the primary input modality of the message."""
@@ -223,39 +377,264 @@ class Router:
         """Process attachments using the AI vision module."""
         attachment = message.attachments[0]
         input_modality = self._get_input_modality(message)
+        
+        # Get message metadata for logging
+        msg_id = message.id
+        user_id = str(message.author.id) if message.author else 'unknown'
+        guild_id = str(message.guild.id) if message.guild else 'dm'
+        
+        # Log attachment details
+        self.logger.info(f"📎 === ATTACHMENT PROCESSING STARTED ====", 
+                       extra={'subsys': 'router', 'event': 'attachment.start', 
+                              'msg_id': msg_id, 'user_id': user_id, 'guild_id': guild_id})
+        self.logger.debug(f"📎 Attachment details: name={attachment.filename}, size={attachment.size}, type={attachment.content_type}", 
+                        extra={'subsys': 'router', 'event': 'attachment.details', 'msg_id': msg_id})
 
+        # Process image attachments
         if attachment.content_type and attachment.content_type.startswith("image/"):
-            self.logger.debug(f"Processing image attachment: {attachment.filename}")
-            image_bytes = await attachment.read()
-            prompt = f"User uploaded an image with the prompt: '{text}'"
-            vision_response = await see_infer(image_data=image_bytes, prompt=prompt, mime_type=attachment.content_type)
-            if not vision_response:
-                return "I'm sorry, I couldn't understand the image."
-            final_prompt = f"User uploaded an image with the prompt: '{text}'. The image contains: {vision_response}"
-            return await brain_infer(final_prompt)
+            self.logger.info(f"🖼 Processing image attachment: {attachment.filename}", 
+                           extra={'subsys': 'router', 'event': 'image.process', 'msg_id': msg_id})
+            try:
+                # Get the correct file extension from the attachment
+                file_ext = Path(attachment.filename).suffix.lower()
+                if not file_ext:
+                    file_ext = ".png"  # Default to PNG if no extension
+                    self.logger.debug(f"🖼 No file extension detected, using default: {file_ext}", 
+                                    extra={'subsys': 'router', 'event': 'image.extension', 'msg_id': msg_id})
+                
+                with tempfile.NamedTemporaryFile(delete=False, suffix=file_ext) as tmp_img:
+                    tmp_path = tmp_img.name
+                    self.logger.debug(f"💾 Saving image to temporary file: {tmp_path}", 
+                                    extra={'subsys': 'router', 'event': 'image.save', 'msg_id': msg_id})
+                    
+                    # Save attachment to temp file
+                    await attachment.save(tmp_path)
+                    
+                    # Verify file exists and has content
+                    if not os.path.exists(tmp_path):
+                        self.logger.error(f"❌ Image file not created: {tmp_path}", 
+                                        extra={'subsys': 'router', 'event': 'image.save.fail', 'msg_id': msg_id})
+                        return "Error: Failed to save image"
+                        
+                    file_size = os.path.getsize(tmp_path)
+                    self.logger.debug(f"✅ Image saved successfully: {file_size} bytes", 
+                                    extra={'subsys': 'router', 'event': 'image.save.success', 
+                                           'msg_id': msg_id, 'file_size': file_size})
+                    
+                    # Process with vision model
+                    self.logger.info(f"👁️ Calling vision model with prompt length: {len(text) if text else 0} chars", 
+                                   extra={'subsys': 'router', 'event': 'image.vision.call', 'msg_id': msg_id})
+                    
+                    vision_start_time = asyncio.get_event_loop().time()
+                    vision_response = await see_infer(image_path=tmp_path, prompt=text)
+                    vision_duration = asyncio.get_event_loop().time() - vision_start_time
+                    
+                    # Check vision response
+                    if not vision_response:
+                        self.logger.warning("⚠️ Vision model returned empty response", 
+                                         extra={'subsys': 'router', 'event': 'image.vision.empty', 
+                                                'msg_id': msg_id, 'duration': vision_duration})
+                        return "I couldn't understand the image"
+                    
+                    self.logger.info(f"✅ Vision model returned {len(vision_response)} chars in {vision_duration:.2f}s", 
+                                   extra={'subsys': 'router', 'event': 'image.vision.success', 
+                                          'msg_id': msg_id, 'duration': vision_duration})
+                    
+                    # Process with text model
+                    final_prompt = f"User uploaded an image with the prompt: '{text}'. The image contains: {vision_response}"
+                    self.logger.debug(f"💬 Sending to text model: prompt length={len(final_prompt)} chars", 
+                                    extra={'subsys': 'router', 'event': 'image.text.call', 'msg_id': msg_id})
+                    
+                    text_start_time = asyncio.get_event_loop().time()
+                    text_response = await brain_infer(final_prompt)
+                    text_duration = asyncio.get_event_loop().time() - text_start_time
+                    
+                    self.logger.info(f"✅ Text model returned {len(text_response) if text_response else 0} chars in {text_duration:.2f}s", 
+                                   extra={'subsys': 'router', 'event': 'image.text.success', 
+                                          'msg_id': msg_id, 'duration': text_duration})
+                    
+                    # Clean up temp file
+                    try:
+                        os.unlink(tmp_path)
+                        self.logger.debug(f"🚮 Temporary image file deleted: {tmp_path}", 
+                                        extra={'subsys': 'router', 'event': 'image.cleanup', 'msg_id': msg_id})
+                    except Exception as cleanup_err:
+                        self.logger.warning(f"⚠️ Failed to delete temporary image: {cleanup_err}", 
+                                         extra={'subsys': 'router', 'event': 'image.cleanup.fail', 'msg_id': msg_id})
+                    
+                    self.logger.info(f"🏁 === IMAGE PROCESSING COMPLETED ====", 
+                                   extra={'subsys': 'router', 'event': 'image.complete', 'msg_id': msg_id})
+                    return text_response
+                    
+            except Exception as e:
+                self.logger.error(f"❌ Image processing failed: {e}", 
+                                exc_info=True, 
+                                extra={'subsys': 'router', 'event': 'image.fail', 'msg_id': msg_id, 'error': str(e)})
+                self.logger.info(f"🏁 === IMAGE PROCESSING FAILED ====", 
+                               extra={'subsys': 'router', 'event': 'image.fail', 'msg_id': msg_id})
+                return "⚠️ An error occurred while processing this image."
 
         elif input_modality == InputModality.DOCUMENT:
-            logger.debug(f"Processing document attachment: {attachment.filename}", extra={'subsys': 'router'})
-            file_ext = Path(attachment.filename).suffix
-            with tempfile.NamedTemporaryFile(delete=False, suffix=file_ext) as tmp_file:
-                await attachment.save(Path(tmp_file.name))
-                document_text = await self._process_document(tmp_file.name, file_ext)
+            self.logger.info(f"📝 Processing document attachment: {attachment.filename}", 
+                           extra={'subsys': 'router', 'event': 'document.process', 'msg_id': msg_id})
             
+            file_ext = Path(attachment.filename).suffix
+            self.logger.debug(f"📝 Document file extension: {file_ext}", 
+                            extra={'subsys': 'router', 'event': 'document.extension', 'msg_id': msg_id})
+            
+            with tempfile.NamedTemporaryFile(delete=False, suffix=file_ext) as tmp_file:
+                tmp_path = tmp_file.name
+                self.logger.debug(f"💾 Saving document to temporary file: {tmp_path}", 
+                                extra={'subsys': 'router', 'event': 'document.save', 'msg_id': msg_id})
+                
+                # Save using string path, not Path object
+                await attachment.save(tmp_path)
+                
+                # Verify file exists and has content
+                if not os.path.exists(tmp_path):
+                    self.logger.error(f"❌ Document file not created: {tmp_path}", 
+                                    extra={'subsys': 'router', 'event': 'document.save.fail', 'msg_id': msg_id})
+                    return "Error: Failed to save document"
+                    
+                file_size = os.path.getsize(tmp_path)
+                self.logger.debug(f"✅ Document saved successfully: {file_size} bytes", 
+                                extra={'subsys': 'router', 'event': 'document.save.success', 
+                                       'msg_id': msg_id, 'file_size': file_size})
+                
+                # Process document content
+                self.logger.info(f"📝 Processing document content: {attachment.filename}", 
+                               extra={'subsys': 'router', 'event': 'document.extract', 'msg_id': msg_id})
+                
+                doc_start_time = asyncio.get_event_loop().time()
+                try:
+                    document_text = await self._process_document(tmp_path, file_ext)
+                    doc_duration = asyncio.get_event_loop().time() - doc_start_time
+                    
+                    if document_text:
+                        self.logger.info(f"✅ Document text extracted: {len(document_text)} chars in {doc_duration:.2f}s", 
+                                       extra={'subsys': 'router', 'event': 'document.extract.success', 
+                                              'msg_id': msg_id, 'duration': doc_duration})
+                    else:
+                        self.logger.warning("⚠️ Document processing returned empty text", 
+                                         extra={'subsys': 'router', 'event': 'document.extract.empty', 
+                                                'msg_id': msg_id, 'duration': doc_duration})
+                        document_text = "No readable text found in document."
+                        
+                except Exception as e:
+                    self.logger.error(f"❌ Error processing document: {e}", 
+                                    exc_info=True, 
+                                    extra={'subsys': 'router', 'event': 'document.extract.fail', 
+                                           'msg_id': msg_id, 'error': str(e)})
+                    document_text = "⚠️ An error occurred while processing this document."
+            
+            # Clean up temp file
             try:
-                os.remove(tmp_file.name)
+                os.remove(tmp_path)
+                self.logger.debug(f"🚮 Temporary document file deleted: {tmp_path}", 
+                                extra={'subsys': 'router', 'event': 'document.cleanup', 'msg_id': msg_id})
             except OSError as e:
-                logger.error(f"Error removing temporary file {tmp_file.name}: {e}", extra={'subsys': 'router'})
+                self.logger.warning(f"⚠️ Error removing temporary file {tmp_path}: {e}", 
+                                 extra={'subsys': 'router', 'event': 'document.cleanup.fail', 
+                                        'msg_id': msg_id, 'error': str(e)})
 
+            # Process with text model
             prompt = f"DOCUMENT CONTENT:\n---\n{document_text}\n---\n\nUSER'S PROMPT: {text}"
-            return await brain_infer(prompt)
+            self.logger.debug(f"💬 Sending to text model: prompt length={len(prompt)} chars", 
+                            extra={'subsys': 'router', 'event': 'document.text.call', 'msg_id': msg_id})
+            
+            text_start_time = asyncio.get_event_loop().time()
+            text_response = await brain_infer(prompt)
+            text_duration = asyncio.get_event_loop().time() - text_start_time
+            
+            self.logger.info(f"✅ Text model returned {len(text_response) if text_response else 0} chars in {text_duration:.2f}s", 
+                           extra={'subsys': 'router', 'event': 'document.text.success', 
+                                  'msg_id': msg_id, 'duration': text_duration})
+            
+            self.logger.info(f"🏁 === DOCUMENT PROCESSING COMPLETED ====", 
+                           extra={'subsys': 'router', 'event': 'document.complete', 'msg_id': msg_id})
+            return text_response
 
         # Fallback for unhandled attachment types
-        logger.warning(f"Unhandled attachment type for file: {attachment.filename}", extra={'subsys': 'router'})
+        self.logger.warning(f"⚠️ Unhandled attachment type for file: {attachment.filename}", 
+                         extra={'subsys': 'router', 'event': 'attachment.unsupported', 
+                                'msg_id': msg_id, 'content_type': attachment.content_type})
+        self.logger.info(f"🏁 === ATTACHMENT PROCESSING FAILED: UNSUPPORTED TYPE ====", 
+                       extra={'subsys': 'router', 'event': 'attachment.fail', 'msg_id': msg_id})
         return "I'm sorry, I can't process that type of attachment."
 
     async def _flow_generate_tts(self, text: str) -> str:
         """Generate TTS audio from text."""
-        return await self.tts_manager.generate_tts(text, self.tts_manager.voice)
+        self.logger.info(f"🔊 === TTS GENERATION STARTED ====", 
+                       extra={'subsys': 'router', 'event': 'tts.start'})
+        self.logger.debug(f"🔊 Input text length: {len(text)} chars", 
+                        extra={'subsys': 'router', 'event': 'tts.input'})
+        
+        try:
+            # Check TTS manager availability
+            if not self.bot.tts_manager:
+                self.logger.error("❌ TTS Manager not initialized", 
+                                extra={'subsys': 'router', 'event': 'tts.manager.missing'})
+                self.logger.info(f"🏁 === TTS GENERATION FAILED: NO MANAGER ====", 
+                               extra={'subsys': 'router', 'event': 'tts.fail'})
+                return None
+            
+            # Check if text is suitable for TTS
+            if not text or len(text.strip()) == 0:
+                self.logger.warning("⚠️ Empty text provided for TTS generation", 
+                                 extra={'subsys': 'router', 'event': 'tts.empty_input'})
+                self.logger.info(f"🏁 === TTS GENERATION FAILED: EMPTY INPUT ====", 
+                               extra={'subsys': 'router', 'event': 'tts.fail'})
+                return None
+                
+            # Generate TTS
+            self.logger.info("🔊 Calling TTS manager to generate audio", 
+                           extra={'subsys': 'router', 'event': 'tts.generate.call'})
+            
+            tts_start_time = asyncio.get_event_loop().time()
+            audio_path = await self.bot.tts_manager.generate_tts(text)
+            tts_duration = asyncio.get_event_loop().time() - tts_start_time
+            
+            # Verify TTS output
+            if not audio_path:
+                self.logger.error("❌ TTS generation returned no audio path", 
+                                extra={'subsys': 'router', 'event': 'tts.generate.no_path', 
+                                       'duration': tts_duration})
+                self.logger.info(f"🏁 === TTS GENERATION FAILED: NO PATH ====", 
+                               extra={'subsys': 'router', 'event': 'tts.fail'})
+                return None
+                
+            if not os.path.exists(audio_path):
+                self.logger.error(f"❌ TTS audio file not found: {audio_path}", 
+                                extra={'subsys': 'router', 'event': 'tts.file.missing', 
+                                       'path': audio_path, 'duration': tts_duration})
+                self.logger.info(f"🏁 === TTS GENERATION FAILED: FILE NOT FOUND ====", 
+                               extra={'subsys': 'router', 'event': 'tts.fail'})
+                return None
+            
+            # Check file size and validity
+            file_size = os.path.getsize(audio_path)
+            if file_size == 0:
+                self.logger.error(f"❌ TTS generated empty audio file: {audio_path}", 
+                                extra={'subsys': 'router', 'event': 'tts.file.empty', 
+                                       'path': audio_path, 'duration': tts_duration})
+                self.logger.info(f"🏁 === TTS GENERATION FAILED: EMPTY FILE ====", 
+                               extra={'subsys': 'router', 'event': 'tts.fail'})
+                return None
+                
+            self.logger.info(f"✅ TTS generated successfully: {audio_path} ({file_size} bytes) in {tts_duration:.2f}s", 
+                           extra={'subsys': 'router', 'event': 'tts.generate.success', 
+                                  'path': audio_path, 'size': file_size, 'duration': tts_duration})
+            self.logger.info(f"🏁 === TTS GENERATION COMPLETED ====", 
+                           extra={'subsys': 'router', 'event': 'tts.complete'})
+            return audio_path
+            
+        except Exception as e:
+            self.logger.error(f"❌ Error generating TTS: {e}", 
+                            exc_info=True, 
+                            extra={'subsys': 'router', 'event': 'tts.error', 'error': str(e)})
+            self.logger.info(f"🏁 === TTS GENERATION FAILED: EXCEPTION ====", 
+                           extra={'subsys': 'router', 'event': 'tts.fail'})
+            return None
 
     async def _process_document(self, file_path: str, file_ext: str) -> str:
         """Process a document file and return its text content."""

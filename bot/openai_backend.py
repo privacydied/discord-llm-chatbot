@@ -6,6 +6,7 @@ from typing import Dict, Any, Union, AsyncGenerator
 import openai
 import aiohttp
 import base64
+import os
 
 from .config import load_config
 from .memory import get_profile, get_server_profile
@@ -147,22 +148,74 @@ Server Context: {server_context}"""
 
 async def get_base64_image(image_url: str) -> str:
     """
-    Download image from URL and convert to base64 data URI.
-    CHANGE: Added to handle models that require base64 images instead of URLs.
+    Process image from URL or file path and convert to base64 data URI.
+    CHANGE: Enhanced to handle both URLs and file paths.
     """
-    logger.debug(f"📥 Downloading image from: {image_url}")
-    async with aiohttp.ClientSession() as session:
-        async with session.get(image_url) as response:
-            if response.status == 200:
-                data = await response.read()
-                base64_data = base64.b64encode(data).decode('utf-8')
-                content_type = response.headers.get('Content-Type', 'image/png')
-                logger.debug(f"✅ Image downloaded: size={len(data)} bytes, type={content_type}")
-                return f"data:{content_type};base64,{base64_data}"
-            else:
-                error_msg = f"Failed to download image: status={response.status}"
+    logger.debug(f"📥 Processing image from: {image_url}")
+    
+    # Handle file paths (file:// protocol or direct file path)
+    if image_url.startswith('file://') or os.path.exists(image_url):
+        try:
+            # Extract actual path from file:// URL if needed
+            file_path = image_url[7:] if image_url.startswith('file://') else image_url
+            
+            # Verify file exists
+            if not os.path.exists(file_path):
+                error_msg = f"File not found: {file_path}"
                 logger.error(error_msg)
                 raise APIError(error_msg)
+                
+            # Read file and encode to base64
+            with open(file_path, 'rb') as f:
+                data = f.read()
+                
+            # Determine content type from file extension
+            ext = os.path.splitext(file_path)[1].lower()
+            content_type = "image/jpeg" if ext in ('.jpg', '.jpeg') else \
+                          "image/png" if ext == '.png' else \
+                          "image/webp" if ext == '.webp' else \
+                          "image/gif" if ext == '.gif' else \
+                          "image/png"  # Default to PNG
+                          
+            base64_data = base64.b64encode(data).decode('utf-8')
+            logger.debug(f"✅ Image loaded from file: size={len(data)} bytes, type={content_type}")
+            return f"data:{content_type};base64,{base64_data}"
+            
+        except Exception as e:
+            error_msg = f"Failed to process image file: {e}"
+            logger.error(error_msg, exc_info=True)
+            raise APIError(error_msg)
+    
+    # Handle HTTP/HTTPS URLs
+    elif image_url.startswith(('http://', 'https://')):
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(image_url) as response:
+                    if response.status == 200:
+                        data = await response.read()
+                        base64_data = base64.b64encode(data).decode('utf-8')
+                        content_type = response.headers.get('Content-Type', 'image/png')
+                        logger.debug(f"✅ Image downloaded: size={len(data)} bytes, type={content_type}")
+                        return f"data:{content_type};base64,{base64_data}"
+                    else:
+                        error_msg = f"Failed to download image: status={response.status}"
+                        logger.error(error_msg)
+                        raise APIError(error_msg)
+        except Exception as e:
+            error_msg = f"Failed to download image from URL: {e}"
+            logger.error(error_msg, exc_info=True)
+            raise APIError(error_msg)
+    
+    # Already a data URL
+    elif image_url.startswith('data:'):
+        logger.debug("✅ Image already in data URL format")
+        return image_url
+    
+    # Unsupported format
+    else:
+        error_msg = f"Unsupported image source format: {image_url[:30]}..."
+        logger.error(error_msg)
+        raise APIError(error_msg)
 
 
 async def generate_vl_response(

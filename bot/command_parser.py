@@ -52,8 +52,14 @@ def parse_command(message: discord.Message, bot: commands.Bot) -> Optional[Parse
         # Not a DM and no mention, so ignore.
         return None
 
-    # If there's no content left, it's not a command
+    # If there's no content left but has attachments, treat as CHAT command
     if not content:
+        if message.attachments:
+            # Empty content with attachments is valid for processing
+            attachment_info = f"{len(message.attachments)} attachment(s): {message.attachments[0].filename}"
+            logging.debug(f"📎 Processing empty content message with {attachment_info}", 
+                        extra={'subsys': 'parser', 'event': 'empty_with_attachment'})
+            return ParsedCommand(command=Command.CHAT, cleaned_content="")
         return None
 
     # If the message starts with a command prefix, try to parse it as a command.

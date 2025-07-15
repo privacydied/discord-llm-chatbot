@@ -136,15 +136,42 @@ class TTSManager:
     async def generate_tts(self, text: str, voice_id: str = "default") -> Path:
         """Generate TTS audio, cache it, and return the file path. [PA][CA][REH]"""
         if not self.is_available():
+            self.logger.error("TTS service is not available", 
+                            extra={'subsys': 'tts', 'event': 'tts.unavailable'})
             raise RuntimeError("TTS service is not available")
 
+        # Create a unique filename based on voice and text content
         filename = f"{voice_id}_{hashlib.md5(text.encode()).hexdigest()}.wav"
         file_path = self.cache_dir / filename
+        
+        # Log details about the TTS request
+        self.logger.debug(f"TTS request: voice={voice_id}, text_length={len(text)}, target={file_path}",
+                         extra={'subsys': 'tts', 'event': 'tts.request', 
+                                'voice_id': voice_id, 'text_length': len(text)})
 
+        # Check if we already have this audio cached
         if file_path.exists():
-            self.logger.debug(f"Using cached TTS: {file_path}")
+            file_size = file_path.stat().st_size
+            self.logger.debug(f"Using cached TTS: {file_path} ({file_size} bytes)",
+                             extra={'subsys': 'tts', 'event': 'tts.cache_hit', 
+                                    'voice_id': voice_id, 'file_size': file_size})
             return file_path
 
+        # Create parent directories if they don't exist
+        if not file_path.parent.exists():
+            self.logger.debug(f"Creating TTS cache directory: {file_path.parent}",
+                             extra={'subsys': 'tts', 'event': 'tts.create_dir'})
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+            
+        # Generate the audio file
+        self.logger.debug(f"Generating new TTS audio: {file_path}",
+                         extra={'subsys': 'tts', 'event': 'tts.generate', 
+                                'voice_id': voice_id})
         await self.synthesize_async(text, file_path)
-        self.logger.debug(f"TTS generated: {file_path} ({file_path.stat().st_size} bytes)")
+        
+        # Log successful generation with file details
+        file_size = file_path.stat().st_size
+        self.logger.debug(f"TTS generated: {file_path} ({file_size} bytes)",
+                         extra={'subsys': 'tts', 'event': 'tts.generated', 
+                                'voice_id': voice_id, 'file_size': file_size})
         return file_path
