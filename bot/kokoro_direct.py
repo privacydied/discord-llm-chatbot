@@ -23,17 +23,23 @@ class KokoroDirect:
     Direct implementation of Kokoro-ONNX TTS using ONNX models and .bin voice files.
     """
     
-    def __init__(self, onnx_dir: str = "tts/onnx", voices_dir: str = "tts/voices"):
+    def __init__(self, config: dict = None, onnx_dir: str = "tts/onnx", voices_dir: str = "tts/voices"):
         """
         Initialize KokoroDirect with paths to ONNX models and voice files.
         
         Args:
-            onnx_dir: Directory containing ONNX model files
-            voices_dir: Directory containing .bin voice files
+            config: Optional configuration dictionary.
+            onnx_dir: Directory containing ONNX model files (fallback).
+            voices_dir: Directory containing .bin voice files (fallback).
         """
+        from bot.config import load_config
+        self.config = config if config is not None else load_config()
+        onnx_dir = self.config.get("KOKORO_MODEL_PATH", onnx_dir)
+        voices_dir = self.config.get("KOKORO_VOICE_PACK_PATH", voices_dir)
         self.onnx_dir = Path(onnx_dir)
         self.voices_dir = Path(voices_dir)
         self.session = None
+        self.voices = {}
         self.available_voices = []
         
         # Initialize session and load voices
@@ -78,44 +84,48 @@ class KokoroDirect:
     def _load_available_voices(self):
         """Load available voices from the voices directory."""
         try:
-            # Check if voices directory exists
-            if not self.voices_dir.exists():
-                logger.error(f"Voices directory not found: {self.voices_dir}")
+            voice_pack_path = self.voices_dir / "voices-v1.0.bin"
+            if not voice_pack_path.exists():
+                logger.warning(f"Voice pack not found at {voice_pack_path}. No voices loaded.")
+                self.available_voices = []
                 return
-            
-            # Find all .bin files in the voices directory
-            voice_files = list(self.voices_dir.glob("*.bin"))
-            self.available_voices = [voice_file.stem for voice_file in voice_files]
+
+            with np.load(voice_pack_path, allow_pickle=True) as data:
+                self.voices = {name: data[name] for name in data.files}
+                self.available_voices = list(self.voices.keys())
             
             logger.info(f"Found {len(self.available_voices)} voices: {self.available_voices}")
-            
+
         except Exception as e:
-            logger.error(f"Error loading available voices: {e}")
+            logger.error(f"Error loading available voices: {e}", exc_info=True)
+            self.available_voices = []
     
     def _load_voice(self, voice_id: str) -> np.ndarray:
         """
-        Load a voice embedding from a .bin file.
-        
+        Load a voice embedding from the voices-v1.0.bin NPZ archive.
+
         Args:
-            voice_id: Voice ID (without .bin extension)
-            
+            voice_id: The ID of the desired voice.
+
         Returns:
-            Voice embedding as numpy array
+            Voice embedding as a numpy array of shape (N, 1, 256).
         """
         try:
-            voice_path = self.voices_dir / f"{voice_id}.bin"
-            if not voice_path.exists():
-                available_voices = ", ".join(self.available_voices)
-                raise FileNotFoundError(f"Voice file not found: {voice_path}. Available voices: {available_voices}")
-            
-            # Load voice embedding from raw binary file
-            voice_embedding = np.fromfile(str(voice_path), dtype=np.float32).reshape(-1, 1, 256)
-            logger.debug(f"Loaded voice embedding for {voice_id}: shape={voice_embedding.shape}")
-            
-            return voice_embedding
-            
+            if voice_id not in self.voices:
+                raise ValueError(f"Voice '{voice_id}' not found or no voices loaded.")
+
+            voice_embedding = self.voices[voice_id]
+
+            # Ensure the embedding has the shape the backend expects: (N, 1, 256)
+            if voice_embedding.ndim == 2 and voice_embedding.shape[1] == 256:
+                reshaped_embedding = voice_embedding.reshape(-1, 1, 256)
+                logger.debug(f"Loaded voice '{voice_id}': shape={reshaped_embedding.shape}")
+                return reshaped_embedding
+            else:
+                raise ValueError(f"Unexpected voice embedding shape for '{voice_id}': {voice_embedding.shape}")
+
         except Exception as e:
-            logger.error(f"Error loading voice {voice_id}: {e}")
+            logger.error(f"Error loading voice '{voice_id}': {e}", exc_info=True)
             raise
     
     def _prepare_phonemes(self, phonemes: List[int]) -> Tuple[List[List[int]], np.ndarray]:

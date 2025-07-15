@@ -36,6 +36,9 @@ except ImportError:
     PDFMINER_AVAILABLE = False
     logging.warning("pdfminer.six is not installed. PDF text extraction will be limited.")
 
+PDF_SUPPORT = PYPDF2_AVAILABLE or PDFMINER_AVAILABLE
+
+
 # Try to import OCR libraries
 try:
     import pytesseract
