@@ -236,18 +236,75 @@ class KokoroDirect:
                     extra={'subsys': 'tts', 'event': 'create_audio.tokens_conversion'}
                 )
             
-            # Prepare inputs for the model
-            # Note: Kokoro-ONNX 0.4.9+ expects 'style' parameter as float32 with shape (1,256)
+            # Prepare inputs for the model based on what it expects
+            # Get available input names from the model
+            input_names = [input.name for input in self.sess.get_inputs()]
+            logger.debug(
+                f"Available ONNX input names: {input_names}", 
+                extra={'subsys': 'tts', 'event': 'create_audio.input_names'}
+            )
+            
+            # Start with common inputs that all models should have
+            # Ensure input_ids has rank 2 (batch dimension)
+            if len(tokens.shape) == 1:
+                # Reshape to add batch dimension if needed
+                tokens = tokens.reshape(1, -1)
+                logger.debug(
+                    f"Reshaped input_ids from 1D to 2D: {tokens.shape}", 
+                    extra={'subsys': 'tts', 'event': 'create_audio.reshape'}
+                )
+                
             inputs = {
                 'input_ids': tokens,
-                'speaker_embedding': voice,
-                'speed': np.array([speed], dtype=np.float32),
-                'style': np.zeros((1, 256), dtype=np.float32)  # Default neutral style as zeros with shape (1,256)
+                'speed': np.array([speed], dtype=np.float32)
             }
             
+            # Add voice embedding with the correct name
+            if 'speaker_embedding' in input_names:
+                # Older models use 'speaker_embedding'
+                inputs['speaker_embedding'] = voice
+            elif 'speaker' in input_names:
+                # Some models might use 'speaker'
+                inputs['speaker'] = voice
+            elif 'spk_emb' in input_names:
+                # Some models might use 'spk_emb'
+                inputs['spk_emb'] = voice
+            else:
+                # If no voice embedding input is found, log a warning but don't add it to inputs
+                logger.warning(
+                    f"Could not find voice embedding input name in model inputs: {input_names}", 
+                    extra={'subsys': 'tts', 'event': 'create_audio.warning'}
+                )
+            
+            # Add style parameter if the model expects it (kokoro-onnx 0.4.9+)
+            if 'style' in input_names:
+                # Get the expected shape for 'style'
+                style_shape = None
+                for input in self.sess.get_inputs():
+                    if input.name == 'style':
+                        style_shape = input.shape
+                        break
+                
+                if style_shape and len(style_shape) == 2 and style_shape[1] == 256:
+                    # kokoro-onnx 0.4.9+ expects (1, 256)
+                    inputs['style'] = np.zeros((1, 256), dtype=np.float32)
+                    logger.debug(
+                        f"Using style shape (1, 256) for kokoro-onnx 0.4.9+", 
+                        extra={'subsys': 'tts', 'event': 'create_audio.style_shape'}
+                    )
+                else:
+                    # Fallback to (1, 1) for older versions
+                    inputs['style'] = np.array([[0.0]], dtype=np.float32)
+                    logger.debug(
+                        f"Using style shape (1, 1) for backward compatibility", 
+                        extra={'subsys': 'tts', 'event': 'create_audio.style_shape'}
+                    )
+            
+            
             # Log the input shapes for debugging
+            input_shapes = {name: value.shape if hasattr(value, 'shape') else value for name, value in inputs.items()}
             logger.debug(
-                f"ONNX inputs: input_ids={tokens.shape}, speaker_embedding={voice.shape}, speed={speed}, style=(1,256) zeros (neutral float32)", 
+                f"ONNX inputs: {input_shapes}", 
                 extra={'subsys': 'tts', 'event': 'create_audio.inputs'}
             )
             
