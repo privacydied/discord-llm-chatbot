@@ -237,17 +237,17 @@ class KokoroDirect:
                 )
             
             # Prepare inputs for the model
-            # Note: Kokoro-ONNX 0.4.9+ expects 'style' parameter
+            # Note: Kokoro-ONNX 0.4.9+ expects 'style' parameter as float32
             inputs = {
                 'input_ids': tokens,
                 'speaker_embedding': voice,
                 'speed': np.array([speed], dtype=np.float32),
-                'style': np.array([0], dtype=np.int64)  # Default neutral style (0)
+                'style': np.array([0.0], dtype=np.float32)  # Default neutral style (0) as float32
             }
             
             # Log the input shapes for debugging
             logger.debug(
-                f"ONNX inputs: input_ids={tokens.shape}, speaker_embedding={voice.shape}, speed={speed}, style=0 (neutral)", 
+                f"ONNX inputs: input_ids={tokens.shape}, speaker_embedding={voice.shape}, speed={speed}, style=0.0 (neutral float32)", 
                 extra={'subsys': 'tts', 'event': 'create_audio.inputs'}
             )
             
