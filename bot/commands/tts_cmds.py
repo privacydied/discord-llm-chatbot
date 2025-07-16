@@ -59,7 +59,7 @@ class TTSCommands(commands.Cog):
             await ctx.send("❌ Invalid setting. Use 'on' or 'off'.")
     
     @commands.command(name='speak')
-    async def speak(self, ctx: commands.Context, *, text: Optional[str] = None):
+    async def speak(self, ctx: commands.Context, *, text: Optional[str] = None, pcm16: bool = False):
         """Make the next response TTS or speak the given text."""
         # Don't set one_time_tts when providing text directly - use voice_only instead
         # This prevents duplicate responses by avoiding double TTS triggering

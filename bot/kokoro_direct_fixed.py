@@ -228,83 +228,17 @@ class KokoroDirect:
             # Tokenize phonemes
             tokens = self.tokenizer.tokenize(phonemes)
             
-            # Convert tokens list to numpy array if it's a list
-            if isinstance(tokens, list):
-                tokens = np.array(tokens, dtype=np.int64)
-                logger.debug(
-                    f"Converted tokens list to numpy array with shape {tokens.shape}",
-                    extra={'subsys': 'tts', 'event': 'create_audio.tokens_conversion'}
-                )
-            
-            # Prepare inputs for the model based on what it expects
-            # Get available input names from the model
-            input_names = [input.name for input in self.sess.get_inputs()]
-            logger.debug(
-                f"Available ONNX input names: {input_names}", 
-                extra={'subsys': 'tts', 'event': 'create_audio.input_names'}
-            )
-            
-            # Start with common inputs that all models should have
-            # Ensure input_ids has rank 2 (batch dimension)
-            if len(tokens.shape) == 1:
-                # Reshape to add batch dimension if needed
-                tokens = tokens.reshape(1, -1)
-                logger.debug(
-                    f"Reshaped input_ids from 1D to 2D: {tokens.shape}", 
-                    extra={'subsys': 'tts', 'event': 'create_audio.reshape'}
-                )
-                
+            # Prepare inputs for the model
+            # Note: Kokoro-ONNX expects 'input_ids' not 'tokens'
             inputs = {
                 'input_ids': tokens,
+                'speaker_embedding': voice,
                 'speed': np.array([speed], dtype=np.float32)
             }
             
-            # Add voice embedding with the correct name
-            if 'speaker_embedding' in input_names:
-                # Older models use 'speaker_embedding'
-                inputs['speaker_embedding'] = voice
-            elif 'speaker' in input_names:
-                # Some models might use 'speaker'
-                inputs['speaker'] = voice
-            elif 'spk_emb' in input_names:
-                # Some models might use 'spk_emb'
-                inputs['spk_emb'] = voice
-            else:
-                # If no voice embedding input is found, log a warning but don't add it to inputs
-                logger.warning(
-                    f"Could not find voice embedding input name in model inputs: {input_names}", 
-                    extra={'subsys': 'tts', 'event': 'create_audio.warning'}
-                )
-            
-            # Add style parameter if the model expects it (kokoro-onnx 0.4.9+)
-            if 'style' in input_names:
-                # Get the expected shape for 'style'
-                style_shape = None
-                for input in self.sess.get_inputs():
-                    if input.name == 'style':
-                        style_shape = input.shape
-                        break
-                
-                if style_shape and len(style_shape) == 2 and style_shape[1] == 256:
-                    # kokoro-onnx 0.4.9+ expects (1, 256)
-                    inputs['style'] = np.zeros((1, 256), dtype=np.float32)
-                    logger.debug(
-                        f"Using style shape (1, 256) for kokoro-onnx 0.4.9+", 
-                        extra={'subsys': 'tts', 'event': 'create_audio.style_shape'}
-                    )
-                else:
-                    # Fallback to (1, 1) for older versions
-                    inputs['style'] = np.array([[0.0]], dtype=np.float32)
-                    logger.debug(
-                        f"Using style shape (1, 1) for backward compatibility", 
-                        extra={'subsys': 'tts', 'event': 'create_audio.style_shape'}
-                    )
-            
-            
             # Log the input shapes for debugging
-            input_shapes = {name: value.shape if hasattr(value, 'shape') else value for name, value in inputs.items()}
             logger.debug(
-                f"ONNX inputs: {input_shapes}", 
+                f"ONNX inputs: input_ids={tokens.shape}, speaker_embedding={voice.shape}, speed={speed}", 
                 extra={'subsys': 'tts', 'event': 'create_audio.inputs'}
             )
             
@@ -337,7 +271,6 @@ class KokoroDirect:
                 extra={'subsys': 'tts', 'event': 'create_audio.complete'}
             )
             
-            # Return the audio data and sample rate for processing in the create method
             return audio, SAMPLE_RATE
             
         except Exception as e:
@@ -403,7 +336,6 @@ class KokoroDirect:
         
         # Create audio
         try:
-            # Get audio data and sample rate from _create_audio
             audio, sample_rate = self._create_audio(phonemes, voice_embedding, speed)
             
             # Normalize audio to be within float32 range for WAV files (-1.0 to 1.0)
@@ -500,12 +432,7 @@ class KokoroDirect:
                     extra={'subsys': 'tts', 'event': 'create.error.file_creation'}
                 )
                 raise TTSWriteError(f"Audio file is empty or does not exist: {out_path}")
-            
-            # Debug log to verify what we're returning
-            logger.debug(f"Returning Path object: {out_path}, type: {type(out_path)}", 
-                      extra={'subsys': 'tts', 'event': 'create.return_path'})
                 
-            # Make sure we're returning a Path object
             return out_path
             
         except TTSWriteError:

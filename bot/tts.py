@@ -262,80 +262,85 @@ class TTSManager:
             logger.warning(f"Voice '{old_voice_id}' not found, falling back to '{voice_id}'", 
                          extra={'subsys': 'tts', 'event': 'generate.fallback_voice', 'requested': old_voice_id, 'using': voice_id})
         
+        # Generate audio using KokoroDirect via KokoroWrapper
+        # KokoroDirect now handles both voice IDs and embeddings directly
+        logger.debug(f"Synthesizing text with voice '{voice_id}': '{text[:50]}{'...' if len(text) > 50 else ''}''", 
+                   extra={'subsys': 'tts', 'event': 'generate.start', 'voice_id': voice_id, 'text_length': len(text)})
+        
+        # Create a temporary file with a unique name in the temp directory
+        os.makedirs(self.temp_dir, exist_ok=True)
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False, dir=self.temp_dir) as temp_file:
+            temp_path = Path(temp_file.name)
+        
+        # Pass voice_id directly to KokoroDirect.create which should return a Path
+        start_time = asyncio.get_event_loop().time()
         try:
-            # Generate audio using KokoroDirect via KokoroWrapper
-            # KokoroDirect now handles both voice IDs and embeddings directly
-            logger.debug(f"Synthesizing text with voice '{voice_id}': '{text[:50]}{'...' if len(text) > 50 else ''}''", 
-                       extra={'subsys': 'tts', 'event': 'generate.start', 'voice_id': voice_id, 'text_length': len(text)})
-            
-            # Pass voice_id directly - KokoroDirect will handle the lookup
-            start_time = asyncio.get_event_loop().time()
-            audio, sample_rate = await asyncio.to_thread(self.kokoro.create, text, voice_id)
+            result = await asyncio.to_thread(self.kokoro.create, text, voice_id, out_path=temp_path)
             generation_time = asyncio.get_event_loop().time() - start_time
             
+            # Handle potential tuple return value (audio, sample_rate) instead of Path
+            if isinstance(result, tuple) and len(result) == 2:
+                logger.warning("kokoro.create returned a tuple instead of a Path. Using the provided temp_path.",
+                             extra={'subsys': 'tts', 'event': 'generate.tuple_return'})
+                # Use the temp_path we created earlier, since the audio was written there
+                wav_path = temp_path
+            else:
+                wav_path = result
+            
+            # Verify the file was created and has content
+            if not wav_path or not isinstance(wav_path, Path) or not wav_path.exists() or wav_path.stat().st_size == 0:
+                logger.error(f"TTS generated empty or missing file: {wav_path}", 
+                           extra={'subsys': 'tts', 'event': 'generate.error.empty_file'})
+                return None
+                
+            # Try to get audio duration for logging
+            try:
+                import soundfile as sf
+                info = sf.info(wav_path)
+                audio_duration = info.duration
+                sample_rate = info.samplerate
+                logger.debug(f"Audio info: {audio_duration:.2f}s, {sample_rate}Hz, {info.channels} channels",
+                           extra={'subsys': 'tts', 'event': 'generate.audio_info'})
+            except ImportError:
+                # Fallback to scipy if soundfile is not available
+                try:
+                    from scipy.io import wavfile
+                    sample_rate, audio = wavfile.read(wav_path)
+                    audio_duration = len(audio) / sample_rate
+                    logger.debug(f"Audio info (scipy): {audio_duration:.2f}s, {sample_rate}Hz, shape: {audio.shape}",
+                               extra={'subsys': 'tts', 'event': 'generate.audio_info_scipy'})
+                except Exception as e:
+                    # If we can't get audio info, just log file size
+                    audio_duration = 0
+                    logger.debug(f"Could not get audio info: {e}, file size: {wav_path.stat().st_size} bytes",
+                               extra={'subsys': 'tts', 'event': 'generate.audio_info_fallback'})
+            
             # Log performance metrics
-            audio_duration = len(audio) / sample_rate if audio is not None else 0
-            logger.debug(f"Generated {audio_duration:.2f}s audio in {generation_time:.2f}s ({audio_duration/generation_time:.2f}x real-time)", 
+            logger.debug(f"Generated {audio_duration:.2f}s audio in {generation_time:.2f}s ({audio_duration/generation_time:.2f}x real-time if positive)", 
                        extra={'subsys': 'tts', 'event': 'generate.complete', 
                               'audio_duration': audio_duration, 
                               'generation_time': generation_time, 
-                              'speedup': audio_duration/generation_time if generation_time > 0 else 0})
+                              'speedup': audio_duration/generation_time if generation_time > 0 and audio_duration > 0 else 0})
             
-            if audio is None or len(audio) == 0:
-                logger.error("Generated empty audio", 
-                           extra={'subsys': 'tts', 'event': 'generate.error.empty_audio'})
-                return None
+            # Return the path as a string for compatibility
+            return str(wav_path)
             
-            # Create a temporary file with a unique name in the temp directory
-            os.makedirs(self.temp_dir, exist_ok=True)
-            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False, dir=self.temp_dir) as temp_file:
-                temp_path = temp_file.name
-                
-            # Ensure audio is not empty and has valid data
-            if audio is None or audio.size == 0:
-                logger.error("Cannot save empty audio", 
-                           extra={'subsys': 'tts', 'event': 'generate.error.empty_audio'})
-                return None
-                
-            # Log audio info for debugging
-            logger.debug(f"Audio shape: {audio.shape}, dtype: {audio.dtype}, min: {np.min(audio)}, max: {np.max(audio)}",
-                       extra={'subsys': 'tts', 'event': 'generate.audio_info'})
-                   
-            # Ensure audio is a 1D array (WAV files expect 1D arrays)
-            if len(audio.shape) > 1:
-                # Reshape to 1D if it's a 2D array with shape like (1, N)
-                audio = audio.reshape(-1)
-                logger.debug(f"Reshaped audio to 1D: {audio.shape}",
-                           extra={'subsys': 'tts', 'event': 'generate.reshape'})
+        except Exception as e:
+            generation_time = asyncio.get_event_loop().time() - start_time
+            logger.error(f"TTS generation failed after {generation_time:.2f}s: {e}", 
+                       extra={'subsys': 'tts', 'event': 'generate.error'}, exc_info=True)
             
-            # Save as WAV using soundfile (more reliable for float32 audio)
-            try:
-                import soundfile as sf
-                # Ensure audio is float32 and in range [-1, 1]
-                if not np.issubdtype(audio.dtype, np.floating):
-                    audio = audio.astype(np.float32)
-                    if np.max(np.abs(audio)) > 1.0:
-                        audio = audio / 32767.0  # Convert from int16 scale if needed
-                        
-                # Write as WAV file with subtype 'FLOAT' for float32 data
-                sf.write(temp_path, audio, sample_rate, subtype='FLOAT')
-                logger.debug(f"Saved audio to {temp_path} using soundfile (FLOAT subtype)", 
-                           extra={'subsys': 'tts', 'event': 'generate.save', 'path': temp_path, 'library': 'soundfile'})
-            except Exception as e:
-                logger.warning(f"Failed to save with soundfile: {e}, trying scipy", 
-                             extra={'subsys': 'tts', 'event': 'generate.fallback_scipy'})
-                # Fallback to scipy if soundfile fails
+            # Clean up the temp file if it exists
+            if temp_path.exists():
                 try:
-                    from scipy.io import wavfile
-                    # Convert to int16 for scipy wavfile
-                    audio_int16 = (np.clip(audio, -1.0, 1.0) * 32767).astype(np.int16)
-                    wavfile.write(temp_path, sample_rate, audio_int16)
-                    logger.debug(f"Saved audio to {temp_path} using scipy (int16)", 
-                               extra={'subsys': 'tts', 'event': 'generate.save', 'path': temp_path, 'library': 'scipy'})
-                except Exception as e:
-                    logger.error(f"Failed to save audio with both libraries: {e}", 
-                               extra={'subsys': 'tts', 'event': 'generate.error.save_failed'}, exc_info=True)
-                    return None
+                    temp_path.unlink()
+                    logger.debug(f"Cleaned up temp file {temp_path} after error",
+                               extra={'subsys': 'tts', 'event': 'generate.cleanup'})
+                except Exception as cleanup_error:
+                    logger.warning(f"Failed to clean up temp file: {cleanup_error}",
+                                 extra={'subsys': 'tts', 'event': 'generate.cleanup_error'})
+            
+            return None
                     
             # Verify the file was created and has content
             if not os.path.exists(temp_path) or os.path.getsize(temp_path) == 0:

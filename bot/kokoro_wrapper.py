@@ -29,6 +29,7 @@ class KokoroWrapper:
         self.voices_path = voices_path
         self.kokoro = None
         self._voices_data = {}
+        self._voices_list = []
         self._load_voices()
         self._init_kokoro()
     
@@ -139,8 +140,8 @@ class KokoroWrapper:
             
             # Set the voices data and list of available voices
             self._voices_data = voices_data
-            self.voices = list(voices_data.keys())
-            logging.info(f"Loaded {len(self.voices)} voices from {voices_path}", 
+            self._voices_list = list(voices_data.keys())
+            logging.info(f"Loaded {len(self._voices_list)} voices from {voices_path}", 
                         extra={'subsys': 'tts', 'event': 'load_voices.success'})
         except Exception as e:
             logging.error(f"Error loading voices: {e}", 
@@ -151,7 +152,7 @@ class KokoroWrapper:
         """Get list of available voice names."""
         if self.kokoro and hasattr(self.kokoro, 'get_voice_names'):
             return self.kokoro.get_voice_names()
-        return list(self._voices_data.keys())
+        return self._voices_list
 
     def _init_kokoro(self) -> None:
         """Initialize the KokoroDirect engine for direct NPZ handling."""
@@ -177,7 +178,7 @@ class KokoroWrapper:
             logging.error(f"Failed to initialize KokoroDirect: {e}", 
                          extra={'subsys': 'tts', 'event': 'init_kokoro.error'}, exc_info=True)
     
-    def create(self, text: str, voice_id_or_embedding, phonemes: Optional[str] = None, speed: float = 1.0) -> Tuple[np.ndarray, int]:
+    def create(self, text: str, voice_id_or_embedding, phonemes: Optional[str] = None, speed: float = 1.0, *, out_path: Optional[Path] = None) -> Tuple[np.ndarray, int]:
         """
         Create audio from text and voice ID or embedding.
         
@@ -186,6 +187,7 @@ class KokoroWrapper:
             voice_id_or_embedding: ID of voice to use or a voice embedding numpy array
             phonemes: Optional phonemes to use (if None, text will be used)
             speed: Speed factor (1.0 is normal speed)
+            out_path: Optional output path for the WAV file
             
         Returns:
             Tuple of (audio_samples, sample_rate)
@@ -200,16 +202,35 @@ class KokoroWrapper:
         # Our KokoroDirect implementation already handles both voice IDs and embeddings
         # It also already uses 'input_ids' instead of 'tokens' for ONNX input
         try:
-            # Directly pass to KokoroDirect's create method
-            audio, sample_rate = self.kokoro.create(text, voice_id_or_embedding, phonemes=phonemes, speed=speed)
+            # Directly pass to KokoroDirect's create method which now returns a Path
+            wav_path = self.kokoro.create(text, voice_id_or_embedding, phonemes=phonemes, speed=speed, out_path=out_path)
             
             # Log success
-            logging.debug(f"Successfully created TTS audio: {len(audio)/sample_rate:.2f}s", 
+            logging.debug(f"Successfully created TTS audio file: {wav_path}", 
                          extra={'subsys': 'tts', 'event': 'create.success'})
+            
+            # Read the WAV file to get audio samples and sample rate
+            try:
+                import soundfile as sf
+                audio, sample_rate = sf.read(wav_path)
+                logging.debug(f"Read audio from {wav_path}: {len(audio)/sample_rate:.2f}s", 
+                             extra={'subsys': 'tts', 'event': 'create.read_wav'})
+            except ImportError:
+                # Fall back to scipy if soundfile is not available
+                from scipy.io import wavfile
+                sample_rate, audio = wavfile.read(wav_path)
+                # Convert int16 to float32 if needed
+                if audio.dtype == np.int16:
+                    audio = audio.astype(np.float32) / 32767.0
+                logging.debug(f"Read audio from {wav_path} using scipy: {len(audio)/sample_rate:.2f}s", 
+                             extra={'subsys': 'tts', 'event': 'create.read_wav_scipy'})
             
             return audio, sample_rate
             
         except Exception as e:
             logging.error(f"Error in KokoroDirect create: {e}", 
                          extra={'subsys': 'tts', 'event': 'create.error'}, exc_info=True)
+            from .tts_errors import TTSWriteError
+            if isinstance(e, TTSWriteError):
+                raise
             raise RuntimeError(f"Failed to generate speech: {e}")
