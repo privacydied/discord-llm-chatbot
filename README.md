@@ -65,23 +65,23 @@ graph LR
    ```
    Edit the `.env` file with your configuration
 
-3. Create a virtual environment, install dependencies, and run the bot:
+3. Set up the environment and install dependencies:
    ```bash
-   # Create a Python 3.11 virtual environment using uv
-   uv venv --python 3.11
+   # Option 1: Quick setup with fix_deps.sh (recommended)
+   chmod +x scripts/fix_deps.sh
+   ./scripts/fix_deps.sh
    
-   # Activate the virtual environment
+   # Option 2: Manual setup
+   # Create a Python 3.11 virtual environment using uv
+   python -m venv .venv
    source .venv/bin/activate  # On Windows: .venv\Scripts\activate
    
-   # Install dependencies with prerelease support for kokoro-onnx
-   uv pip install "kokoro-onnx>=0.3.3" --prerelease=allow
-   uv pip sync requirements.txt
-   
-   # Install test dependencies if needed
-   uv pip install pytest pytest-asyncio pytest-cov
+   # Install locked dependencies
+   uv pip install -r requirements.lock
+   uv pip install --no-deps -e .
    
    # Run the bot
-   python run.py
+   uv run python -m bot.main
    ```
    
    For development and testing:

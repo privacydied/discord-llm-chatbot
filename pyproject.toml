@@ -41,9 +41,10 @@ dependencies = [
     "openai>=1.94.0",
     "TTS>=0.22.0",
     # TTS - Kokoro and dependencies
-    "kokoro-onnx>=0.3.3",  # Allow prerelease versions for compatibility
+    "kokoro-onnx==0.4.9",  # Pin specific version for compatibility
     "soundfile>=0.12.1",
     "misaki>=0.1.0",  # Phonemizer for English
+    "numba>=0.60",  # numpy-2-compatible
     # TTS - G2P, Phonemizers, etc.
     "gdown>=4.7.1", # Workaround for g2pkk runtime install
     "g2pkk @ file:///${PROJECT_ROOT}/libs/g2pkk",
@@ -66,8 +67,8 @@ dependencies = [
     # Audio Processing (for TTS & STT)
     "PyNaCl>=1.5.0",
     "soundfile>=0.12.0",
-    "librosa>=0.10.0",
-    "numpy>=1.19.0",
+    "librosa>=0.11.0",  # Supports numpy-2
+    "numpy>=2.0.2,<2.3",  # Modern numpy stack
     "faster-whisper>=1.1.0",
 ]
 
