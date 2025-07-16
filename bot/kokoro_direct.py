@@ -259,24 +259,7 @@ class KokoroDirect:
                 'speed': np.array([speed], dtype=np.float32)
             }
             
-            # Add voice embedding with the correct name
-            if 'speaker_embedding' in input_names:
-                # Older models use 'speaker_embedding'
-                inputs['speaker_embedding'] = voice
-            elif 'speaker' in input_names:
-                # Some models might use 'speaker'
-                inputs['speaker'] = voice
-            elif 'spk_emb' in input_names:
-                # Some models might use 'spk_emb'
-                inputs['spk_emb'] = voice
-            else:
-                # If no voice embedding input is found, log a warning but don't add it to inputs
-                logger.warning(
-                    f"Could not find voice embedding input name in model inputs: {input_names}", 
-                    extra={'subsys': 'tts', 'event': 'create_audio.warning'}
-                )
-            
-            # Add style parameter if the model expects it (kokoro-onnx 0.4.9+)
+            # Add voice embedding with the correct name based on model version
             if 'style' in input_names:
                 # Get the expected shape for 'style'
                 style_shape = None
@@ -287,16 +270,55 @@ class KokoroDirect:
                 
                 if style_shape and len(style_shape) == 2 and style_shape[1] == 256:
                     # kokoro-onnx 0.4.9+ expects (1, 256)
-                    inputs['style'] = np.zeros((1, 256), dtype=np.float32)
+                    # Use the voice embedding as the style input with correct shape
+                    if voice.shape != (1, 256):
+                        # Handle specific case of (512, 1, 256) shape from voice loader
+                        if len(voice.shape) == 3 and voice.shape[1] == 1 and voice.shape[2] == 256:
+                            # Take the first voice embedding from the batch
+                            # This handles the (512, 1, 256) shape from the voice loader
+                            voice_for_style = voice[0].reshape(1, 256)
+                            logger.debug(
+                                f"Reshaped voice from {voice.shape} to {voice_for_style.shape} for style input",
+                                extra={'subsys': 'tts', 'event': 'create_audio.reshape_voice_3d'}
+                            )
+                        # Handle 1D array of 256 elements
+                        elif len(voice.shape) == 1 and voice.shape[0] == 256:
+                            # If it's a flat array of 256 elements, reshape to (1, 256)
+                            voice_for_style = voice.reshape(1, 256)
+                            logger.debug(
+                                f"Reshaped voice from {voice.shape} to {voice_for_style.shape} for style input",
+                                extra={'subsys': 'tts', 'event': 'create_audio.reshape_voice_1d'}
+                            )
+                        else:
+                            # Create a zero array and copy as much of voice as possible
+                            logger.warning(
+                                f"Voice shape {voice.shape} doesn't match required style shape (1, 256), adapting",
+                                extra={'subsys': 'tts', 'event': 'create_audio.reshape_voice'}
+                            )
+                            voice_for_style = np.zeros((1, 256), dtype=np.float32)
+                            if len(voice.shape) == 1:
+                                copy_len = min(voice.shape[0], 256)
+                                voice_for_style[0, :copy_len] = voice[:copy_len]
+                            elif len(voice.shape) == 2:
+                                copy_len = min(voice.shape[1], 256)
+                                voice_for_style[0, :copy_len] = voice[0, :copy_len]
+                    else:
+                        voice_for_style = voice
+                        
+                    # Ensure dtype is float32
+                    if voice_for_style.dtype != np.float32:
+                        voice_for_style = voice_for_style.astype(np.float32)
+                        
+                    inputs['style'] = voice_for_style
                     logger.debug(
-                        f"Using style shape (1, 256) for kokoro-onnx 0.4.9+", 
+                        f"Using voice embedding as style with shape {voice_for_style.shape}", 
                         extra={'subsys': 'tts', 'event': 'create_audio.style_shape'}
                     )
                 else:
                     # Fallback to (1, 1) for older versions
                     inputs['style'] = np.array([[0.0]], dtype=np.float32)
                     logger.debug(
-                        f"Using style shape (1, 1) for backward compatibility", 
+                        f"Using default style shape (1, 1) for backward compatibility", 
                         extra={'subsys': 'tts', 'event': 'create_audio.style_shape'}
                     )
             
@@ -502,11 +524,12 @@ class KokoroDirect:
                 raise TTSWriteError(f"Audio file is empty or does not exist: {out_path}")
             
             # Debug log to verify what we're returning
-            logger.debug(f"Returning Path object: {out_path}, type: {type(out_path)}", 
-                      extra={'subsys': 'tts', 'event': 'create.return_path'})
+            logger.debug(f"Returning Path object: {out_path}, type: {type(out_path)}, audio length: {len(audio)}", 
+                      extra={'subsys': 'tts', 'event': 'create.return_path', 'audio_length': len(audio), 'sample_rate': sample_rate})
                 
-            # Make sure we're returning a Path object
-            return out_path
+            # Make sure we're returning ONLY a Path object (not a tuple)
+            # This ensures backward compatibility with code expecting just a Path
+            return out_path  # Return only the path, not (path, sample_rate)
             
         except TTSWriteError:
             # Re-raise TTSWriteError without wrapping

@@ -280,12 +280,16 @@ class TTSManager:
             
             # Handle potential tuple return value (audio, sample_rate) instead of Path
             if isinstance(result, tuple) and len(result) == 2:
-                logger.warning("kokoro.create returned a tuple instead of a Path. Using the provided temp_path.",
-                             extra={'subsys': 'tts', 'event': 'generate.tuple_return'})
-                # Use the temp_path we created earlier, since the audio was written there
-                wav_path = temp_path
+                logger.debug("kokoro.create returned a tuple (Path, sample_rate). Using the Path component.",
+                              extra={'subsys': 'tts', 'event': 'generate.tuple_return'})
+                # Extract the Path from the tuple
+                wav_path, _ = result
             else:
                 wav_path = result
+                
+            # Debug log the result type and path
+            logger.debug(f"TTS result: type={type(wav_path)}, path={wav_path}",
+                        extra={'subsys': 'tts', 'event': 'generate.result_path'})
             
             # Verify the file was created and has content
             if not wav_path or not isinstance(wav_path, Path) or not wav_path.exists() or wav_path.stat().st_size == 0:
