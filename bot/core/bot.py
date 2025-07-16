@@ -79,6 +79,40 @@ class LLMBot(Bot):
         except Exception as e:
             self.logger.error(f"Failed to set up TTS manager: {e}", exc_info=True,
                              extra={"subsys": "tts", "event": "setup_error"})
+            
+            # Create a fallback TTS manager implementation
+            try:
+                # Import the class again to ensure we have it
+                from bot.tts import TTSManager
+                
+                # Create a dummy class that implements the TTSManager interface
+                class FallbackTTSManager:
+                    def __init__(self):
+                        self.logger = get_logger("FallbackTTSManager")
+                        self.logger.warning("Using fallback TTS manager with limited functionality",
+                                         extra={"subsys": "tts", "event": "fallback_init"})
+                        self.voice = "default"
+                    
+                    def is_available(self) -> bool:
+                        return False
+                    
+                    async def generate_tts(self, text, voice_id=None, **kwargs):
+                        self.logger.warning("Attempted to use generate_tts on fallback TTS manager",
+                                         extra={"subsys": "tts", "event": "fallback_generate_attempt"})
+                        raise RuntimeError("TTS is not available. The TTS manager failed to initialize properly.")
+                    
+                    async def close(self):
+                        pass
+                
+                # Assign the fallback manager
+                self.tts_manager = FallbackTTSManager()
+                self.logger.warning("Using fallback TTS manager", 
+                                 extra={"subsys": "tts", "event": "fallback_setup_complete"})
+            except Exception as fallback_error:
+                self.logger.error(f"Failed to create fallback TTS manager: {fallback_error}", exc_info=True,
+                                extra={"subsys": "tts", "event": "fallback_setup_error"})
+                # As a last resort, set to None but this will cause issues if code doesn't check for None
+                self.tts_manager = None
 
     async def setup_router(self) -> None:
         """Set up message router."""

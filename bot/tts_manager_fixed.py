@@ -33,12 +33,62 @@ class TTSManager:
         self.kokoro = None
         self.cache_dir = Path(os.environ.get('XDG_CACHE_HOME', 'tts/cache'))
         
+        # Handle both old and new environment variable formats for model and voice paths
+        # New format: TTS_MODEL_PATH, TTS_VOICES_PATH
+        # Old format: TTS_MODEL_FILE, TTS_VOICE_FILE
+        self.model_path = self._get_env_path_with_fallback(
+            primary='TTS_MODEL_PATH',
+            fallback='TTS_MODEL_FILE',
+            default='tts/onnx/kokoro-v1.0.onnx'
+        )
+        
+        self.voices_path = self._get_env_path_with_fallback(
+            primary='TTS_VOICES_PATH',
+            fallback='TTS_VOICE_FILE',
+            default='tts/voices/voices-v1.0.bin'
+        )
+        
         # Create cache directory if it doesn't exist
         os.makedirs(self.cache_dir, exist_ok=True)
         
         # Check if TTS is available
         self._check_availability()
         
+    def _get_env_path_with_fallback(self, primary: str, fallback: str, default: str) -> Path:
+        """
+        Get path from environment variables with fallback support.
+        Prefers the primary (new) env var, falls back to the old one if not set.
+        Logs a deprecation warning if only the old format is used.
+        
+        Args:
+            primary: Primary (new) environment variable name
+            fallback: Fallback (old) environment variable name
+            default: Default path if neither env var is set
+            
+        Returns:
+            Path object for the requested resource
+        """
+        primary_value = os.environ.get(primary)
+        fallback_value = os.environ.get(fallback)
+        
+        if primary_value:
+            # New format is used (preferred)
+            return Path(primary_value)
+        elif fallback_value:
+            # Only old format is used, log deprecation warning
+            logger.warning(
+                f"Using deprecated environment variable {fallback}. Please use {primary} instead.",
+                extra={'subsys': 'tts', 'event': 'env.deprecated'}
+            )
+            return Path(fallback_value)
+        else:
+            # No env var set, use default
+            logger.debug(
+                f"No environment variable set for {primary} or {fallback}, using default: {default}",
+                extra={'subsys': 'tts', 'event': 'env.default'}
+            )
+            return Path(default)
+    
     def _check_availability(self) -> None:
         """Check if the TTS backend is available."""
         if self.backend == 'kokoro-onnx':
@@ -67,19 +117,21 @@ class TTSManager:
             return
             
         try:
-            # Use our fixed KokoroDirect implementation
+            # Import here to avoid dependency issues
             from .kokoro_direct_fixed import KokoroDirect
             
-            # Get model and voices paths from config or environment
-            model_path = os.environ.get('TTS_MODEL_PATH', self.config.get('tts', {}).get('model_path', 'models/kokoro.onnx'))
-            voices_path = os.environ.get('TTS_VOICES_PATH', self.config.get('tts', {}).get('voices_path', 'models/voices.npz'))
+            # Initialize KokoroDirect with our model and voice paths
+            # These already handle both old and new environment variable formats
+            self.kokoro = KokoroDirect(
+                model_path=str(self.model_path),
+                voices_path=str(self.voices_path),
+                voice_name=self.voice
+            )
             
-            # Log model and voices paths
-            logger.debug(f"Loading TTS model from {model_path} and voices from {voices_path}", 
-                        extra={'subsys': 'tts', 'event': 'load.paths'})
-            
-            # Initialize KokoroDirect
-            self.kokoro = KokoroDirect(model_path, voices_path)
+            logger.info(
+                f"Initialized kokoro-onnx with model={self.model_path}, voices={self.voices_path}, voice={self.voice}", 
+                extra={'subsys': 'tts', 'event': 'kokoro.init'}
+            )
             
             # Log available voices
             voices = self.kokoro.get_voice_names()

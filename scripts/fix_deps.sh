@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Dependency conflict resolution script for discord-llm-chatbot
 # Handles the TTS/NumPy conflict by using vendored patched gruut wheel
+# Also installs and checks for OCR and phonemizer dependencies
 set -e
 
 # Get the project root directory
@@ -23,7 +24,7 @@ fi
 
 echo "📦 Installing dependencies..."
 # First install numpy 2.x and other core dependencies
-uv pip install --upgrade "numpy>=2.0.2,<2.3" "librosa>=0.11.0" "numba>=0.60" "kokoro-onnx==0.4.9" "soundfile>=0.12.1" "pytest>=7.0.0"
+uv pip install --upgrade "numpy>=2.0.2,<2.3" "librosa>=0.11.0" "numba>=0.60" "kokoro-onnx==0.4.9" "soundfile>=0.12.1" "pytest>=7.0.0" "phonemizer>=3.2.0" "PyMuPDF>=1.23.0"
 
 echo "🔄 Installing TTS with patched gruut..."
 # Try different TTS versions in order of preference
@@ -63,10 +64,46 @@ python -c "import kokoro_onnx; print('kokoro_onnx is available')" || echo "Faile
 echo "🔍 Verifying gruut is importable:"
 python -c "import gruut; print(f'gruut version: {gruut.__version__}')" || echo "Failed to import gruut"
 
+# Check for system dependencies
+echo "🔍 Checking for system dependencies:"
+
+# Check for tesseract-ocr
+if command -v tesseract >/dev/null 2>&1; then
+    echo "✅ tesseract-ocr is installed ($(tesseract --version | head -n 1))"
+else
+    echo "⚠️ tesseract-ocr is not installed. OCR functionality for image-based PDFs will be disabled."
+    echo "   To install on Arch Linux: sudo pacman -S tesseract tesseract-data-eng"
+fi
+
+# Check for espeak-ng
+if command -v espeak-ng >/dev/null 2>&1; then
+    echo "✅ espeak-ng is installed ($(espeak-ng --version | head -n 1))"
+else
+    echo "⚠️ espeak-ng is not installed. Some TTS tokenization methods will be unavailable."
+    echo "   To install on Arch Linux: sudo pacman -S espeak-ng"
+fi
+
+# Check for phonemizer
+python -c "import phonemizer; print(f'phonemizer version: {phonemizer.__version__}')" 2>/dev/null && echo "✅ phonemizer is installed" || echo "⚠️ phonemizer is not installed. Some TTS tokenization methods will be unavailable."
+
 # Run TTS smoke test if it exists
 if [[ -f "${PROJECT_ROOT}/tests/test_tts_smoke.py" ]]; then
     echo "🔊 Running TTS smoke test..."
     cd "${PROJECT_ROOT}"
     # Run pytest with -k to select only the test_tts_smoke.py file and override addopts
     PYTHONPATH="${PROJECT_ROOT}" python -m pytest tests/test_tts_smoke.py -xvs -o addopts=
+fi
+
+# Run TTS environment variable compatibility test
+if [[ -f "${PROJECT_ROOT}/tests/test_tts_env_compat.py" ]]; then
+    echo "🔊 Running TTS environment variable compatibility test..."
+    cd "${PROJECT_ROOT}"
+    PYTHONPATH="${PROJECT_ROOT}" python -m pytest tests/test_tts_env_compat.py -xvs -o addopts=
+fi
+
+# Run TTS error handling test
+if [[ -f "${PROJECT_ROOT}/tests/test_tts_error_handling.py" ]]; then
+    echo "🔊 Running TTS error handling test..."
+    cd "${PROJECT_ROOT}"
+    PYTHONPATH="${PROJECT_ROOT}" python -m pytest tests/test_tts_error_handling.py -xvs -o addopts=
 fi

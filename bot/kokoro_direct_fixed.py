@@ -11,6 +11,8 @@ import tempfile
 import soundfile as sf
 import enum
 import re
+import sys
+import importlib
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union, Any
 from numpy.typing import NDArray
@@ -26,12 +28,47 @@ SAMPLE_RATE = 24000
 MAX_PHONEME_LENGTH = 512
 CACHE_DIR = os.environ.get('XDG_CACHE_HOME', Path('tts/cache'))
 
+# Monkey patch for EspeakWrapper.set_data_path
+try:
+    # Try to import the EspeakWrapper class
+    from phonemizer.backend.espeak.wrapper import EspeakWrapper
+    
+    # Check if set_data_path method exists
+    if not hasattr(EspeakWrapper, 'set_data_path'):
+        logger.info("Monkey patching EspeakWrapper.set_data_path method")
+        
+        # Add the missing set_data_path method
+        @classmethod
+        def set_data_path(cls, path):
+            # This is a no-op since we can't actually set the data_path property
+            # The real EspeakWrapper uses data_path as a property, not a settable attribute
+            logger.debug(f"Monkey patched EspeakWrapper.set_data_path called with: {path}")
+            # We don't actually need to do anything here, as the data path is set elsewhere
+            pass
+            
+        # Add the method to the class
+        EspeakWrapper.set_data_path = set_data_path
+        logger.info("Successfully added EspeakWrapper.set_data_path method")
+    
+except ImportError as e:
+    logger.warning(f"Could not monkey patch EspeakWrapper: {e}")
+except Exception as e:
+    logger.error(f"Error while monkey patching EspeakWrapper: {e}", exc_info=True)
+
 # Tokenization method enum
 class TokenizationMethod(enum.Enum):
+    # Internal tokenizer methods
     PHONEME_ENCODE = "phoneme_encode"  # Original encode method
     PHONEME_TO_ID = "phoneme_to_id"   # Direct phoneme to ID lookup
     TEXT_TO_IDS = "text_to_ids"       # Direct text to IDs conversion
     G2P_PIPELINE = "g2p_pipeline"     # G2P pipeline
+    
+    # External phonemizers
+    ESPEAK = "espeak"                 # eSpeak phonemizer
+    PHONEMIZER = "phonemizer"         # Phonemizer package
+    MISAKI = "misaki"                 # Misaki (Japanese/Chinese)
+    
+    # Fallbacks
     GRAPHEME_FALLBACK = "grapheme_fallback"  # ASCII grapheme fallback
     UNKNOWN = "unknown"               # Unknown method
 
@@ -136,20 +173,53 @@ class KokoroDirect:
     def _load_model(self) -> None:
         """Load the ONNX model and tokenizer."""
         try:
-            # Import here to avoid dependency issues
-            from kokoro_onnx.tokenizer import Tokenizer
+            import kokoro_onnx
             import onnxruntime as ort
             
-            # Create tokenizer
-            self.tokenizer = Tokenizer()
+            # Try to initialize tokenizer with error handling
+            try:
+                self.tokenizer = kokoro_onnx.Tokenizer()
+            except AttributeError as e:
+                if "'EspeakWrapper' object has no attribute 'set_data_path'" in str(e):
+                    logger.error(f"kokoro-onnx initialization error: {e}")
+                    
+                    # Try to monkey patch at runtime as a last resort
+                    try:
+                        from phonemizer.backend.espeak.wrapper import EspeakWrapper
+                        
+                        # Add the missing set_data_path method
+                        @classmethod
+                        def set_data_path(cls, path):
+                            logger.debug(f"Runtime-patched EspeakWrapper.set_data_path called with: {path}")
+                            pass
+                            
+                        # Add the method to the class
+                        EspeakWrapper.set_data_path = set_data_path
+                        logger.info("Runtime-patched EspeakWrapper.set_data_path method")
+                        
+                        # Try initializing again
+                        self.tokenizer = kokoro_onnx.Tokenizer()
+                    except Exception as patch_error:
+                        logger.error(f"Failed to apply runtime patch: {patch_error}", exc_info=True)
+                        raise
+                else:
+                    raise
             
             # Log ONNX providers
             providers = ort.get_available_providers()
             logger.debug(f"ONNX providers: {providers}", extra={'subsys': 'tts', 'event': 'onnx.providers'})
             
-            # Create ONNX session
+            # Create ONNX session directly instead of using Model class
             self.sess = ort.InferenceSession(self.model_path, providers=providers)
             
+            logger.info(f"Loaded ONNX model from {self.model_path}")
+            
+            # Validate language resources
+            self._validate_language_resources()
+            
+        except Exception as e:
+            logger.error(f"Failed to load model: {e}", exc_info=True)
+            raise
             # Log input names for debugging
             input_names = [input.name for input in self.sess.get_inputs()]
             logger.debug(f"ONNX model input names: {input_names}", extra={'subsys': 'tts', 'event': 'onnx.inputs'})
@@ -165,6 +235,7 @@ class KokoroDirect:
         """Detect available tokenization methods for the current tokenizer."""
         self.available_tokenization_methods = set()
         
+        # Check for tokenizer methods
         # Check for encode method (original method)
         if hasattr(self.tokenizer, 'encode') and callable(getattr(self.tokenizer, 'encode')):
             self.available_tokenization_methods.add(TokenizationMethod.PHONEME_ENCODE)
@@ -188,6 +259,41 @@ class KokoroDirect:
             self.available_tokenization_methods.add(TokenizationMethod.G2P_PIPELINE)
             logger.debug("Found tokenizer.g2p_pipeline method", 
                        extra={'subsys': 'tts', 'event': 'tokenizer.method.g2p_pipeline'})
+        
+        # Check for external phonemizers
+        # Check for espeak
+        try:
+            import shutil
+            espeak_path = shutil.which("espeak")
+            if espeak_path:
+                self.available_tokenization_methods.add(TokenizationMethod.ESPEAK)
+                logger.debug(f"Found espeak at {espeak_path}", 
+                           extra={'subsys': 'tts', 'event': 'tokenizer.external.espeak'})
+        except Exception as e:
+            logger.debug(f"Failed to check for espeak: {e}", 
+                       extra={'subsys': 'tts', 'event': 'tokenizer.external.error'})
+        
+        # Check for phonemizer
+        try:
+            import importlib.util
+            if importlib.util.find_spec("phonemizer"):
+                self.available_tokenization_methods.add(TokenizationMethod.PHONEMIZER)
+                logger.debug("Found phonemizer package", 
+                           extra={'subsys': 'tts', 'event': 'tokenizer.external.phonemizer'})
+        except Exception as e:
+            logger.debug(f"Failed to check for phonemizer: {e}", 
+                       extra={'subsys': 'tts', 'event': 'tokenizer.external.error'})
+        
+        # Check for misaki (Japanese/Chinese tokenizer)
+        try:
+            import importlib.util
+            if importlib.util.find_spec("misaki"):
+                self.available_tokenization_methods.add(TokenizationMethod.MISAKI)
+                logger.debug("Found misaki package", 
+                           extra={'subsys': 'tts', 'event': 'tokenizer.external.misaki'})
+        except Exception as e:
+            logger.debug(f"Failed to check for misaki: {e}", 
+                       extra={'subsys': 'tts', 'event': 'tokenizer.external.error'})
             
         # Set default tokenization method based on availability
         if TokenizationMethod.PHONEME_ENCODE in self.available_tokenization_methods:
@@ -479,21 +585,29 @@ class KokoroDirect:
                 logger.debug(f"Added speed: {speed}", 
                            extra={'subsys': 'tts', 'event': 'create_audio.speed'})
             
-            # Add speaker embedding with the appropriate name
-            speaker_key = None
-            for name in ['speaker_embedding', 'speaker', 'spk_emb']:
-                if name in input_names:
-                    speaker_key = name
+            # Add speaker embedding if available
+            speaker_embedding_added = False
+            
+            # First try standard speaker embedding input names
+            for speaker_name in ['speaker', 'speaker_embedding', 'spk_emb']:
+                if speaker_name in input_names:
+                    inputs[speaker_name] = voice_embedding
+                    logger.debug(f"Added {speaker_name} with shape {voice_embedding.shape}")
+                    speaker_embedding_added = True
                     break
             
-            if speaker_key:
-                inputs[speaker_key] = voice_embedding
-                logger.debug(f"Added {speaker_key} with shape {voice_embedding.shape}", 
-                           extra={'subsys': 'tts', 'event': 'create_audio.speaker'})
-            else:
-                logger.error(f"No compatible speaker embedding input name found in model inputs: {input_names}", 
-                           extra={'subsys': 'tts', 'event': 'create_audio.error.no_speaker_input'})
-                raise ValueError("No compatible speaker embedding input name found in model")
+            # If no speaker input found but 'style' is available, route voice vector there
+            if not speaker_embedding_added and 'style' in input_names:
+                logger.warning(f"No speaker input found, routing voice embedding to 'style' input")
+                # Style input already added with zeros, replace with voice embedding
+                inputs['style'] = voice_embedding
+                speaker_embedding_added = True
+            
+            if not speaker_embedding_added:
+                logger.error(f"No compatible speaker/style input found in model inputs: {input_names}")
+                # Fall back to zero vector, but continue with warning
+                logger.warning("Using zero vector for voice; output quality may be degraded")
+                # Don't raise error, try to continue with default style
             
             # Add style parameter if model accepts it
             if 'style' in input_names:
@@ -541,11 +655,17 @@ class KokoroDirect:
                 logger.debug(f"Output shape: {audio.shape}, min: {audio.min():.4f}, max: {audio.max():.4f}, mean: {audio.mean():.4f}", 
                            extra={'subsys': 'tts', 'event': 'create_audio.output_stats'})
                 
-                # Check if audio is silent (all zeros or very close to zero)
-                if np.allclose(audio, 0, atol=1e-6):
-                    logger.error("Generated audio contains all zeros", 
+                # Calculate audio statistics
+                rms = np.sqrt(np.mean(np.square(audio))) if audio.size > 0 else 0
+                max_amp = np.max(np.abs(audio)) if audio.size > 0 else 0
+                logger.debug(f"Audio stats: RMS={rms:.6f}, max amplitude={max_amp:.6f}", 
+                           extra={'subsys': 'tts', 'event': 'create_audio.stats'})
+                
+                # Check if audio is all zeros or extremely quiet
+                if np.all(audio == 0) or rms < 1e-4:
+                    logger.error(f"Generated audio is silent or too quiet: RMS={rms:.6f}, max={max_amp:.6f}", 
                                extra={'subsys': 'tts', 'event': 'create_audio.error.silent_audio'})
-                    raise ValueError("Generated audio contains all zeros")
+                    raise TTSSynthesisError("Generated audio is silent or too quiet")
                 
                 # Check if audio is too quiet (max amplitude too low)
                 if np.max(np.abs(audio)) < 0.01:

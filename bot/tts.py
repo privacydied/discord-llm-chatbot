@@ -14,7 +14,6 @@ import numpy as np
 from discord.ext import commands
 
 from .config import load_config
-from .kokoro_wrapper import KokoroWrapper
 from .kokoro_direct_fixed import KokoroDirect
 
 logger = logging.getLogger(__name__)
@@ -44,9 +43,29 @@ class TTSManager:
     def _init_kokoro(self) -> None:
         """Initialize the Kokoro TTS engine with direct NPZ support."""
         try:
-            # Get model and voice paths from environment variables or config
-            model_path = os.environ.get("TTS_MODEL_FILE") or self.config.get("TTS_MODEL_FILE", "tts/onnx/kokoro-v1.0.onnx")
-            voices_path = os.environ.get("TTS_VOICE_FILE") or self.config.get("TTS_VOICE_FILE", "tts/voices/voices-v1.0.bin")
+            # Check for new environment variables first (preferred)
+            model_path = os.environ.get("TTS_MODEL_PATH")
+            voices_path = os.environ.get("TTS_VOICES_PATH")
+            
+            # Fall back to old environment variables if new ones aren't set
+            if not model_path:
+                model_path = os.environ.get("TTS_MODEL_FILE")
+                if model_path:
+                    logger.warning("Using deprecated TTS_MODEL_FILE environment variable. Please use TTS_MODEL_PATH instead.",
+                                 extra={'subsys': 'tts', 'event': 'init.deprecated_env_var', 'var': 'TTS_MODEL_FILE'})
+            
+            if not voices_path:
+                voices_path = os.environ.get("TTS_VOICE_FILE")
+                if voices_path:
+                    logger.warning("Using deprecated TTS_VOICE_FILE environment variable. Please use TTS_VOICES_PATH instead.",
+                                 extra={'subsys': 'tts', 'event': 'init.deprecated_env_var', 'var': 'TTS_VOICE_FILE'})
+            
+            # Fall back to config values if environment variables aren't set
+            if not model_path:
+                model_path = self.config.get("tts", {}).get("model_path") or self.config.get("TTS_MODEL_FILE", "tts/onnx/kokoro-v1.0.onnx")
+            
+            if not voices_path:
+                voices_path = self.config.get("tts", {}).get("voices_path") or self.config.get("TTS_VOICE_FILE", "tts/voices/voices-v1.0.bin")
             
             # Log paths with detailed info for debugging
             logger.debug(f"Using TTS model path: {model_path}", 
@@ -58,13 +77,49 @@ class TTSManager:
             model_path_obj = Path(model_path)
             voices_path_obj = Path(voices_path)
             
+            # Try alternative paths if files don't exist
             if not model_path_obj.exists():
-                logger.error(f"Kokoro model not found at {model_path}", 
+                # Try common alternative locations
+                alt_paths = [
+                    Path("models/kokoro.onnx"),
+                    Path("tts/onnx/model.onnx"),
+                    Path("tts/onnx/kokoro-v1.0.onnx"),
+                    Path("tts/model.onnx")
+                ]
+                
+                for alt_path in alt_paths:
+                    if alt_path.exists():
+                        logger.warning(f"Model not found at {model_path}, using alternative path: {alt_path}",
+                                     extra={'subsys': 'tts', 'event': 'init.alt_path', 'path_type': 'model'})
+                        model_path = str(alt_path)
+                        model_path_obj = alt_path
+                        break
+            
+            if not model_path_obj.exists():
+                logger.error(f"Kokoro model not found at {model_path} or any alternative paths", 
                            extra={'subsys': 'tts', 'event': 'init.error.model_missing'})
                 return
-                
+            
+            # Try alternative paths for voices file
             if not voices_path_obj.exists():
-                logger.error(f"Voices file not found at {voices_path}", 
+                # Try common alternative locations
+                alt_paths = [
+                    Path("models/voices.npz"),
+                    Path("tts/voices/voices.npz"),
+                    Path("tts/voices/voices-v1.0.bin"),
+                    Path("tts/voices.npz")
+                ]
+                
+                for alt_path in alt_paths:
+                    if alt_path.exists():
+                        logger.warning(f"Voices not found at {voices_path}, using alternative path: {alt_path}",
+                                     extra={'subsys': 'tts', 'event': 'init.alt_path', 'path_type': 'voices'})
+                        voices_path = str(alt_path)
+                        voices_path_obj = alt_path
+                        break
+            
+            if not voices_path_obj.exists():
+                logger.error(f"Voices file not found at {voices_path} or any alternative paths", 
                            extra={'subsys': 'tts', 'event': 'init.error.voices_missing'})
                 return
             
@@ -84,26 +139,35 @@ class TTSManager:
                 logger.warning(f"Could not calculate voice file hash: {e}", 
                              extra={'subsys': 'tts', 'event': 'init.hash_error'})
             
-            # Initialize with KokoroWrapper which now uses KokoroDirect internally
-            self.kokoro = KokoroWrapper(model_path, voices_path)
-            
-            # Get available voices
-            self.voices = self.kokoro.voices if hasattr(self.kokoro, 'voices') else []
-            
-            # Log success with detailed info
-            if self.voices:
-                logger.info(f"TTS initialized with {len(self.voices)} voices: {', '.join(self.voices[:5])}{'...' if len(self.voices) > 5 else ''}", 
-                           extra={'subsys': 'tts', 'event': 'init.success', 'voice_count': len(self.voices)})
-            else:
-                logger.warning("TTS initialized but no voices available", 
-                             extra={'subsys': 'tts', 'event': 'init.no_voices'})
+            # Initialize with KokoroDirect directly
+            try:
+                logger.info("Initializing KokoroDirect TTS engine",
+                          extra={'subsys': 'tts', 'event': 'init.kokoro_direct'})
+                self.kokoro = KokoroDirect(model_path, voices_path)
+                
+                # Get available voices
+                self.voices = self.kokoro.get_voice_names() if hasattr(self.kokoro, 'get_voice_names') else []
+                
+                # Log success with detailed info
+                if self.voices:
+                    logger.info(f"TTS initialized with {len(self.voices)} voices: {', '.join(self.voices[:5])}{'...' if len(self.voices) > 5 else ''}", 
+                               extra={'subsys': 'tts', 'event': 'init.success', 'voice_count': len(self.voices)})
+                else:
+                    logger.warning("TTS initialized but no voices available", 
+                                 extra={'subsys': 'tts', 'event': 'init.no_voices'})
+            except Exception as e:
+                logger.error(f"Failed to initialize KokoroDirect: {e}",
+                           extra={'subsys': 'tts', 'event': 'init.kokoro_error'}, exc_info=True)
+                raise
                 
         except ImportError as e:
             logger.error(f"Failed to import required modules for TTS: {e}", 
                        extra={'subsys': 'tts', 'event': 'init.import_error'}, exc_info=True)
+            raise
         except Exception as e:
             logger.error(f"Failed to initialize Kokoro TTS: {e}", 
                        extra={'subsys': 'tts', 'event': 'init.error'}, exc_info=True)
+            raise
             
     def is_available(self) -> bool:
         """Check if TTS is available for use.

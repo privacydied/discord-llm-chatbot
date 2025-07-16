@@ -4,8 +4,9 @@ PDF processing utilities for the Discord bot, using PyMuPDF (fitz).
 import io
 import logging
 import asyncio
+import shutil
 from pathlib import Path
-from typing import Dict, Union, BinaryIO
+from typing import Dict, Union, BinaryIO, Optional
 
 # PyMuPDF
 try:
@@ -20,12 +21,20 @@ except ImportError:
 try:
     import pytesseract
     from PIL import Image
-    TESSERACT_AVAILABLE = True
+    # Check if tesseract executable is available in PATH
+    TESSERACT_EXECUTABLE = shutil.which("tesseract")
+    TESSERACT_AVAILABLE = TESSERACT_EXECUTABLE is not None
+    
+    if not TESSERACT_AVAILABLE:
+        logging.warning("Tesseract OCR executable not found in PATH. Image-based PDFs will not be processed.")
+    else:
+        logging.debug(f"Found Tesseract OCR at: {TESSERACT_EXECUTABLE}")
+        
 except ImportError:
     pytesseract = None
     Image = None
     TESSERACT_AVAILABLE = False
-    logging.warning("Tesseract OCR is not installed. Image-based PDFs will not be processed.")
+    logging.warning("Tesseract OCR Python libraries not installed. Image-based PDFs will not be processed.")
 
 
 class PDFProcessor:
