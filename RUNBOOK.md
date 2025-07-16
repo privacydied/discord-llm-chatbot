@@ -25,19 +25,26 @@ These steps will guide you through setting up the project environment from scrat
     This project uses a `.venv` virtual environment managed by `uv`.
 
     ```bash
-    # Create the virtual environment
-    python3.11 -m venv .venv
+    # Create the virtual environment with uv
+    uv venv --python 3.11
 
     # Activate the virtual environment
-    source .venv/bin/activate
+    source .venv/bin/activate  # On Windows: .venv\Scripts\activate
     ```
 
 3.  **Install Dependencies**
 
-    Install all required packages from `requirements.txt` using `uv`.
+    Install all required packages using `uv` with prerelease support for kokoro-onnx.
 
     ```bash
-    uv pip install -r requirements.txt
+    # Install kokoro-onnx with prerelease support first
+    uv pip install "kokoro-onnx>=0.3.3" --prerelease=allow
+    
+    # Sync all other dependencies from requirements.txt
+    uv pip sync requirements.txt
+    
+    # Install test dependencies
+    uv pip install pytest pytest-asyncio pytest-cov
     ```
 
 4.  **Configure Environment Variables**
@@ -57,27 +64,59 @@ These steps will guide you through setting up the project environment from scrat
 
 ## 2. Running the Tests
 
-To ensure all components are working correctly, run the full test suite using `pytest`.
+To ensure all components are working correctly, run the test suite using `pytest`. Note that we need to override the default pytest options defined in pyproject.toml.
 
 ```bash
 # Make sure your virtual environment is activated
 source .venv/bin/activate
 
-# Run all tests
-uv run pytest
+# Run all tests (overriding default options)
+python -m pytest tests/ -o addopts=
+
+# Run a specific test
+python -m pytest tests/test_tts_assets.py::TestTTSAssets::test_validate_voice_bin -v -o addopts=
+
+# Run tests with coverage report
+python -m pytest tests/ --cov=bot --cov-report=term-missing
 ```
 
-All tests should pass before running the bot.
+Note: Some tests may require specific environment variables or mock data to be set up correctly. Check the test files for specific requirements.
 
 ## 3. Running the Bot
 
-Once setup and testing are complete, you can start the bot directly with `uv`.
+Once setup and testing are complete, you can start the bot:
 
 ```bash
+# Make sure your virtual environment is activated
+source .venv/bin/activate
+
 # Start the bot from the project's root directory
-uv run python run.py
+python run.py
 ```
 
-This command executes the `run.py` script within the project's managed virtual environment.
+## 4. Troubleshooting
+
+### Dependency Issues
+
+If you encounter dependency conflicts, especially with kokoro-onnx and numpy versions:
+
+```bash
+# Reinstall kokoro-onnx with prerelease support
+uv pip install "kokoro-onnx>=0.3.3" --prerelease=allow
+
+# Sync dependencies
+uv pip sync requirements.txt
+```
+
+### TTS Voice Validation Issues
+
+If TTS voice validation fails:
+
+1. Check that the voice bin file exists at the path specified in your .env file
+2. Ensure the voice bin file is in the correct format (npz archive)
+3. Run the specific test to validate:
+   ```bash
+   python -m pytest tests/test_tts_assets.py::TestTTSAssets::test_validate_voice_bin -v -o addopts=
+   ```
 
 The bot should now be online and responding to commands in your Discord server.

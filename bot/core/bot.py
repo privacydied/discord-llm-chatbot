@@ -1,91 +1,122 @@
-"""
-Defines the core LLMBot class.
-"""
-import discord
+"""Core bot implementation for Discord LLM Chatbot."""
 
-from .client import Bot
-from bot.config import load_config
-from bot.memory import load_all_profiles, load_all_server_profiles
+import asyncio
+import os
+from pathlib import Path
+from typing import Dict, List, Optional, Union, Any, Callable
+
+import discord
+from discord.ext import commands, tasks
+
+from bot.core.client import Bot
 from bot.logger import get_logger
-from bot.router import setup_router
-from bot.events import setup as setup_events
-from bot.tasks import spawn_background_tasks
-from bot.tts import TTSManager
+from bot.memory import load_all_profiles
 
 
 class LLMBot(Bot):
-    """Minimal bot class with bootstrap functionality only."""
+    """Main bot class that extends the base Bot class with LLM capabilities."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.startup_time = None
-        self.config = load_config()
-        self.logger = get_logger(self.__class__.__name__)
+        self.logger = get_logger(__name__)
+        self.config = {}
+        self.user_profiles = {}
+        self.server_profiles = {}
+        self.memory_save_task = None
+        self.tts_manager = None
+        self.background_tasks = []
 
     async def setup_hook(self) -> None:
-        """Bootstrap setup - load cogs and start services."""
-        self.logger.info("--- Starting Bot Setup Hook ---", extra={'subsys': 'core', 'event': 'setup_hook_start'})
-        self.startup_time = discord.utils.utcnow()
+        """Called when the bot is starting up."""
+        self.logger.info("Setting up bot...", extra={"subsys": "core", "event": "setup_start"})
+        
+        # Load memory profiles
+        await self.load_profiles()
+        
+        # Set up background tasks
+        self.setup_background_tasks()
+        
+        # Set up TTS manager if configured
+        await self.setup_tts()
+        
+        # Set up router
+        await self.setup_router()
+        
+        # Load extensions
+        await self.load_extensions()
+        
+        self.logger.info("Bot setup complete", extra={"subsys": "core", "event": "setup_complete"})
 
+    async def load_profiles(self) -> None:
+        """Load user and server memory profiles."""
         try:
-            # Initialize TTS Manager
+            self.logger.info("Loading memory profiles...", extra={"subsys": "memory", "event": "load_start"})
+            self.user_profiles, self.server_profiles = await asyncio.to_thread(load_all_profiles)
+            self.logger.info(
+                f"Loaded {len(self.user_profiles)} user profiles and {len(self.server_profiles)} server profiles",
+                extra={"subsys": "memory", "event": "load_complete"}
+            )
+        except Exception as e:
+            self.logger.error(f"Failed to load profiles: {e}", exc_info=True, 
+                             extra={"subsys": "memory", "event": "load_error"})
+
+    def setup_background_tasks(self) -> None:
+        """Set up background tasks for the bot."""
+        try:
+            from bot.tasks import setup_memory_save_task
+            self.memory_save_task = setup_memory_save_task(self)
+            self.memory_save_task.start()
+        except Exception as e:
+            self.logger.error(f"Failed to set up background tasks: {e}", exc_info=True,
+                             extra={"subsys": "tasks", "event": "setup_error"})
+
+    async def setup_tts(self) -> None:
+        """Set up TTS manager if configured."""
+        try:
+            from bot.tts import TTSManager
             self.tts_manager = TTSManager(self)
-            self.logger.info("TTS Manager initialized.", extra={'subsys': 'core', 'event': 'tts_manager_init'})
+            self.logger.info("TTS manager initialized", extra={"subsys": "tts", "event": "setup_complete"})
+        except Exception as e:
+            self.logger.error(f"Failed to set up TTS manager: {e}", exc_info=True,
+                             extra={"subsys": "tts", "event": "setup_error"})
 
-            # Set up the router
+    async def setup_router(self) -> None:
+        """Set up message router."""
+        try:
+            from bot.router import setup_router
+            # setup_router returns a Router instance directly, no need to await
             self.router = setup_router(self)
-            self.logger.info("Router initialized.", extra={'subsys': 'core', 'event': 'router_init'})
+            self.logger.info("Router initialized", extra={"subsys": "router", "event": "setup_complete"})
+        except Exception as e:
+            self.logger.error(f"Failed to set up router: {e}", exc_info=True,
+                             extra={"subsys": "router", "event": "setup_error"})
 
-            # Register all commands
+    async def load_extensions(self) -> None:
+        """Load command extensions."""
+        try:
             from bot.commands import setup_commands
             await setup_commands(self)
-            self.logger.info("Commands registered.", extra={'subsys': 'core', 'event': 'commands_registered'})
-
-            # Spawn background tasks
-            await spawn_background_tasks(self)
-            self.logger.info("Background tasks spawned.", extra={'subsys': 'core', 'event': 'tasks_spawned'})
-
-            # Register event handlers
-            await setup_events(self)
-            self.logger.info("Event handlers registered.", extra={'subsys': 'core', 'event': 'events_registered'})
-
+            self.logger.info("Commands loaded", extra={"subsys": "commands", "event": "setup_complete"})
         except Exception as e:
-            self.logger.critical(f"Error during setup hook: {e}", exc_info=True, extra={'subsys': 'core', 'event': 'setup_hook_fail'})
-            await self.close()
+            self.logger.error(f"Failed to load extensions: {e}", exc_info=True,
+                             extra={"subsys": "commands", "event": "setup_error"})
 
-        self.logger.info("--- Bot Setup Hook Complete ---", extra={'subsys': 'core', 'event': 'setup_hook_pass'})
-
-    async def on_message(self, message: discord.Message) -> None:
-        """Primary gateway for all incoming messages."""
-        if message.author.bot:
-            return  # Ignore messages from other bots
-
-        # Log every message received that is not from a bot
-        self.logger.debug(
-            f"Message received: {message.id}",
-            extra={'subsys': 'events', 'event': 'on_message', 'msg_id': message.id}
-        )
-
-        # Pass the message to the router for processing
-        await self.router.dispatch_message(message)
-
-    async def on_ready(self):
-        """Called when the bot is done preparing the data received from Discord."""
-        self.logger.info(f'Logged in as {self.user} (ID: {self.user.id})', extra={'subsys': 'core', 'event': 'login_success', 'user_id': self.user.id})
-        self.logger.info('------', extra={'subsys': 'core', 'event': 'separator'})
-
-        # Load profiles after bot is ready
-        await self._load_profiles()
-
-
-
-    async def _load_profiles(self):
-        """Load all user and server profiles."""
-        self.logger.info("Loading user and server profiles...", extra={'subsys': 'core', 'event': 'profile_load_start'})
-        try:
-            load_all_profiles()
-            load_all_server_profiles()
-            self.logger.info("Profiles loaded successfully.", extra={'subsys': 'core', 'event': 'profile_load_pass'})
-        except Exception as e:
-            self.logger.error(f"Error loading profiles: {e}", exc_info=True, extra={'subsys': 'core', 'event': 'profile_load_fail'})
-
+    async def close(self) -> None:
+        """Clean up resources when the bot is shutting down."""
+        self.logger.info("Bot is shutting down...", extra={"subsys": "core", "event": "shutdown_start"})
+        
+        # Cancel background tasks
+        if self.memory_save_task and self.memory_save_task.is_running():
+            self.memory_save_task.cancel()
+        
+        # Cancel any other background tasks
+        for task in self.background_tasks:
+            if not task.done():
+                task.cancel()
+        
+        # Close TTS manager if it exists
+        if self.tts_manager:
+            await self.tts_manager.close()
+        
+        await super().close()
+        self.logger.info("Bot shutdown complete", extra={"subsys": "core", "event": "shutdown_complete"})

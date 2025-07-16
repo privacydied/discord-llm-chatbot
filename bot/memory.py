@@ -333,36 +333,46 @@ def flush_all_profiles() -> bool:
 user_profiles = user_cache
 server_profiles = server_cache
 
-def load_all_profiles() -> None:
-    """Load all user profiles from disk into memory cache."""
+def load_all_profiles():
+    """Load all user profiles from disk into memory cache.
+    
+    Returns:
+        tuple: A tuple containing (user_profiles, server_profiles)
+    """
     from .config import load_config
     config = load_config()
     
+    # Load user profiles
     profile_dir = config["USER_PROFILE_DIR"]
     if not profile_dir.exists():
         logging.info("User profile directory does not exist, creating it")
         profile_dir.mkdir(parents=True, exist_ok=True)
-        return
+    else:
+        loaded_count = 0
+        for profile_file in profile_dir.glob("*.json"):
+            try:
+                user_id = profile_file.stem
+                with open(profile_file, 'r', encoding='utf-8') as f:
+                    profile = json.load(f)
+                
+                # Ensure profile has all required fields
+                profile = ensure_profile_schema(profile, user_id)
+                
+                with user_cache_lock:
+                    user_cache[user_id] = profile
+                
+                loaded_count += 1
+                
+            except Exception as e:
+                logging.error(f"Error loading user profile {profile_file}: {e}")
+        
+        logging.info(f"Loaded {loaded_count} user profiles from disk")
     
-    loaded_count = 0
-    for profile_file in profile_dir.glob("*.json"):
-        try:
-            user_id = profile_file.stem
-            with open(profile_file, 'r', encoding='utf-8') as f:
-                profile = json.load(f)
-            
-            # Ensure profile has all required fields
-            profile = ensure_profile_schema(profile, user_id)
-            
-            with user_cache_lock:
-                user_cache[user_id] = profile
-            
-            loaded_count += 1
-            
-        except Exception as e:
-            logging.error(f"Error loading user profile {profile_file}: {e}")
+    # Load server profiles
+    load_all_server_profiles()
     
-    logging.info(f"Loaded {loaded_count} user profiles from disk")
+    # Return both caches
+    return user_cache, server_cache
 
 def save_all_profiles() -> bool:
     """Save all user profiles from memory cache to disk."""

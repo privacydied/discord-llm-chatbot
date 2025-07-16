@@ -1,243 +1,330 @@
 """
-Direct implementation of Kokoro-ONNX TTS using the official Hugging Face approach.
-This module handles TTS using the ONNX models and .bin voice files directly.
+Direct NPZ integration for Kokoro-ONNX TTS engine.
+Handles NPZ voice data directly without JSON conversion and fixes ONNX input signature mismatches.
 """
 
-import numpy as np
+import os
 import logging
-from pathlib import Path
-from typing import List, Tuple, Optional
-
-from misaki import en
 import numpy as np
-from onnxruntime import InferenceSession
+import time
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple, Union, Any
+from numpy.typing import NDArray
+import warnings
 
-# Configure logging
-logging.basicConfig(level=logging.DEBUG)
+# Setup logging
 logger = logging.getLogger(__name__)
 
 # Constants
-SAMPLE_RATE = 24000  # Kokoro sample rate
+SAMPLE_RATE = 24000
+MAX_PHONEME_LENGTH = 512
+CACHE_DIR = os.environ.get('XDG_CACHE_HOME', Path('tts/cache'))
 
 class KokoroDirect:
     """
-    Direct implementation of Kokoro-ONNX TTS using ONNX models and .bin voice files.
+    Direct NPZ integration for Kokoro-ONNX TTS engine.
+    Handles NPZ voice data directly without JSON conversion.
+    Fixes ONNX input signature mismatches ('tokens' -> 'input_ids').
     """
     
-    def __init__(self, config: dict = None, onnx_dir: str = "tts/onnx", voices_dir: str = "tts/voices"):
+    def __init__(self, model_path: str, voices_path: str):
         """
-        Initialize KokoroDirect with paths to ONNX models and voice files.
+        Initialize KokoroDirect with model and voices paths.
         
         Args:
-            config: Optional configuration dictionary.
-            onnx_dir: Directory containing ONNX model files (fallback).
-            voices_dir: Directory containing .bin voice files (fallback).
+            model_path: Path to the ONNX model file
+            voices_path: Path to the NPZ voices file
         """
-        from bot.config import load_config
-        self.config = config if config is not None else load_config()
-        logger.debug(f"KokoroDirect received config: {config}")
-        logger.debug(f"KokoroDirect loaded config: {self.config}")
+        self.model_path = model_path
+        self.voices_path = voices_path
+        self.voices_data = {}
+        self.voices = []
+        self.tokenizer = None
+        self.sess = None
         
-        onnx_dir = self.config.get("KOKORO_MODEL_PATH", onnx_dir)
-        voices_dir = self.config.get("KOKORO_VOICE_PACK_PATH", voices_dir)
+        # Load the model and voices
+        self._load_model()
+        self._load_voices()
         
-        logger.debug(f"Using ONNX dir: {onnx_dir}")
-        logger.debug(f"Using voices dir: {voices_dir}")
-        self.onnx_dir = Path(onnx_dir)
-        self.voices_dir = Path(voices_dir)
-        self.session = None
-        self._voices_cache = {}
-        self.available_voices = []
-
-        # Initialize the G2P converter
+        logger.info(f"Initialized KokoroDirect with {len(self.voices)} voices")
+        
+    def _load_model(self) -> None:
+        """Load the ONNX model and tokenizer."""
         try:
-            self.g2p = en.G2P()
-            logger.info("Misaki G2P engine initialized for English.")
+            # Import here to avoid dependency issues
+            from kokoro_onnx.tokenizer import Tokenizer
+            import onnxruntime as ort
+            
+            # Create tokenizer
+            self.tokenizer = Tokenizer()
+            
+            # Log ONNX providers
+            providers = ort.get_available_providers()
+            logger.debug(f"ONNX providers: {providers}", extra={'subsys': 'tts', 'event': 'onnx.providers'})
+            
+            # Create ONNX session
+            self.sess = ort.InferenceSession(self.model_path, providers=providers)
+            
+            # Log input names for debugging
+            input_names = [input.name for input in self.sess.get_inputs()]
+            logger.debug(f"ONNX model input names: {input_names}", extra={'subsys': 'tts', 'event': 'onnx.inputs'})
+            
+        except ImportError as e:
+            logger.error(f"Failed to import required modules: {e}", extra={'subsys': 'tts', 'event': 'load_model.error'})
+            raise
         except Exception as e:
-            logger.error("Failed to initialize Misaki G2P engine.", exc_info=True)
-            raise RuntimeError("Could not initialize G2P engine") from e
-        
-        # Initialize session and load voices
-        self._init_session()
-        self._load_available_voices()
-    
-    def _init_session(self):
-        """Initialize the ONNX inference session."""
-        try:
-            # Find available ONNX model variants - prioritized order
-            model_variants = [
-                'model.onnx',            # Base model
-                'model_fp16.onnx',       # Mixed-precision
-                'model_q8f16.onnx',      # Quantized with fp16
-                'model_quantized.onnx',  # Quantized
-                'model_uint8f16.onnx',   # uint8 with fp16
-                'model_uint8.onnx',      # uint8
-                'model_q4f16.onnx',      # q4 with fp16
-                'model_q4.onnx',         # q4 quantized
-            ]
-            
-            model_path = None
-            for variant in model_variants:
-                candidate_path = self.onnx_dir / variant
-                if candidate_path.exists():
-                    model_path = candidate_path
-                    logger.info(f"Found ONNX model: {model_path}")
-                    break
-            
-            if model_path is None:
-                raise FileNotFoundError(f"No ONNX model found in {self.onnx_dir}")
-            
-            # Initialize session
-            logger.info(f"Initializing ONNX session with model {model_path}")
-            self.session = InferenceSession(str(model_path))
-            logger.info("ONNX session initialized successfully")
-            
-        except Exception as e:
-            logger.error(f"Failed to initialize ONNX session: {e}")
+            logger.error(f"Failed to load model: {e}", extra={'subsys': 'tts', 'event': 'load_model.error'}, exc_info=True)
             raise
     
-    def _load_available_voices(self):
-        """Load available voices from the voices directory."""
-        logger.debug(f"Attempting to load voices from {self.voices_dir}")
+    def _load_voices(self) -> None:
+        """Load voice embeddings directly from NPZ file."""
         try:
-            voice_pack_path = self.voices_dir / "voices-v1.0.bin"
-            if not voice_pack_path.exists():
-                logger.error(f"CRITICAL: Voice pack not found at {voice_pack_path}. No voices loaded.")
-                self.available_voices = []
+            voices_path = Path(self.voices_path)
+            if not voices_path.exists():
+                logger.error(f"Voices file not found: {voices_path}", extra={'subsys': 'tts', 'event': 'load_voices.error'})
                 return
-
-            logger.debug(f"Found voice pack at {voice_pack_path}, loading...")
-            with np.load(voice_pack_path, allow_pickle=True) as data:
-                self._voices_cache = {name: data[name] for name in data.files}
-                self.available_voices = list(self._voices_cache.keys())
-                logger.debug(f"Loaded {len(self.available_voices)} voices into cache.")
             
-            logger.info(f"Found {len(self.available_voices)} voices: {self.available_voices}")
-
-        except Exception as e:
-            logger.error(f"Error loading available voices: {e}", exc_info=True)
-            self.available_voices = []
-    
-    def _load_voice(self, voice_id: str) -> np.ndarray:
-        """
-        Load a voice embedding from the voices-v1.0.bin NPZ archive.
-
-        Args:
-            voice_id: The ID of the desired voice.
-
-        Returns:
-            Voice embedding as a numpy array of shape (N, 1, 256).
-        """
-        try:
-            if voice_id not in self._voices_cache:
-                raise ValueError(f"Voice '{voice_id}' not found or no voices loaded.")
-
-            voice_embedding = self._voices_cache[voice_id]
-
-            # Handle both 2D (N, 256) and 3D (N, 1, 256) shapes.
-            if voice_embedding.ndim == 3 and voice_embedding.shape[1:] == (1, 256):
-                logger.debug(f"Loaded pre-shaped 3D voice '{voice_id}': shape={voice_embedding.shape}")
-                return voice_embedding
-            elif voice_embedding.ndim == 2 and voice_embedding.shape[1] == 256:
-                reshaped_embedding = voice_embedding.reshape(-1, 1, 256)
-                logger.debug(f"Reshaped and loaded 2D voice '{voice_id}': shape={reshaped_embedding.shape}")
-                return reshaped_embedding
+            # Load NPZ file
+            logger.debug(f"Loading NPZ voices from: {voices_path}", extra={'subsys': 'tts', 'event': 'load_voices.npz'})
+            npz_data = np.load(voices_path, allow_pickle=True)
+            
+            if hasattr(npz_data, 'files'):
+                logger.debug(f"NPZ file contains {len(npz_data.files)} voices", extra={'subsys': 'tts', 'event': 'load_voices.npz.count'})
+                
+                # Extract each voice embedding
+                for voice_id in npz_data.files:
+                    voice_data = npz_data[voice_id]
+                    if isinstance(voice_data, np.ndarray):
+                        # Handle different voice embedding shapes
+                        if voice_data.shape[0] == MAX_PHONEME_LENGTH and (len(voice_data.shape) == 2 and voice_data.shape[1] == 256):
+                            # Perfect shape (512, 256)
+                            self.voices_data[voice_id] = voice_data
+                            self.voices.append(voice_id)
+                            logger.debug(f"Loaded voice {voice_id} with shape {voice_data.shape}", 
+                                       extra={'subsys': 'tts', 'event': 'load_voices.npz.voice'})
+                        elif voice_data.shape[0] == MAX_PHONEME_LENGTH and (len(voice_data.shape) == 3 and voice_data.shape[1] == 1 and voice_data.shape[2] == 256):
+                            # Shape (512, 1, 256) - already good
+                            self.voices_data[voice_id] = voice_data
+                            self.voices.append(voice_id)
+                            logger.debug(f"Loaded voice {voice_id} with shape {voice_data.shape}", 
+                                       extra={'subsys': 'tts', 'event': 'load_voices.npz.voice'})
+                        elif len(voice_data.shape) == 3 and voice_data.shape[1] == 1 and voice_data.shape[2] == 256:
+                            # Handle non-standard shape like (510, 1, 256) by padding to (512, 1, 256)
+                            current_rows = voice_data.shape[0]
+                            if current_rows < MAX_PHONEME_LENGTH:
+                                # Pad with zeros to reach MAX_PHONEME_LENGTH
+                                padding_rows = MAX_PHONEME_LENGTH - current_rows
+                                padded_data = np.pad(voice_data, ((0, padding_rows), (0, 0), (0, 0)), 'constant')
+                                logger.debug(f"Padded voice {voice_id} from shape {voice_data.shape} to {padded_data.shape}", 
+                                           extra={'subsys': 'tts', 'event': 'load_voices.npz.padded'})
+                                self.voices_data[voice_id] = padded_data
+                                self.voices.append(voice_id)
+                            elif current_rows > MAX_PHONEME_LENGTH:
+                                # Truncate to MAX_PHONEME_LENGTH
+                                truncated_data = voice_data[:MAX_PHONEME_LENGTH, :, :]
+                                logger.debug(f"Truncated voice {voice_id} from shape {voice_data.shape} to {truncated_data.shape}", 
+                                           extra={'subsys': 'tts', 'event': 'load_voices.npz.truncated'})
+                                self.voices_data[voice_id] = truncated_data
+                                self.voices.append(voice_id)
+                        elif len(voice_data.shape) == 2 and voice_data.shape[1] == 256:
+                            # Handle non-standard shape like (510, 256) by padding to (512, 256)
+                            current_rows = voice_data.shape[0]
+                            if current_rows < MAX_PHONEME_LENGTH:
+                                # Pad with zeros to reach MAX_PHONEME_LENGTH
+                                padding_rows = MAX_PHONEME_LENGTH - current_rows
+                                padded_data = np.pad(voice_data, ((0, padding_rows), (0, 0)), 'constant')
+                                logger.debug(f"Padded voice {voice_id} from shape {voice_data.shape} to {padded_data.shape}", 
+                                           extra={'subsys': 'tts', 'event': 'load_voices.npz.padded'})
+                                self.voices_data[voice_id] = padded_data
+                                self.voices.append(voice_id)
+                            elif current_rows > MAX_PHONEME_LENGTH:
+                                # Truncate to MAX_PHONEME_LENGTH
+                                truncated_data = voice_data[:MAX_PHONEME_LENGTH, :]
+                                logger.debug(f"Truncated voice {voice_id} from shape {voice_data.shape} to {truncated_data.shape}", 
+                                           extra={'subsys': 'tts', 'event': 'load_voices.npz.truncated'})
+                                self.voices_data[voice_id] = truncated_data
+                                self.voices.append(voice_id)
+                        else:
+                            logger.warning(f"Voice {voice_id} has invalid shape {voice_data.shape}, expected ({MAX_PHONEME_LENGTH}, 256) or ({MAX_PHONEME_LENGTH}, 1, 256)",
+                                         extra={'subsys': 'tts', 'event': 'load_voices.npz.invalid_shape'})
+                    else:
+                        logger.warning(f"Voice {voice_id} is not a numpy array: {type(voice_data)}", 
+                                     extra={'subsys': 'tts', 'event': 'load_voices.invalid_type'})
+                
+                logger.info(f"Successfully loaded {len(self.voices)} voices from NPZ file", 
+                          extra={'subsys': 'tts', 'event': 'load_voices.success'})
             else:
-                raise ValueError(f"Unexpected voice embedding shape for '{voice_id}': {voice_embedding.shape}")
-
+                logger.error("Invalid NPZ file format (no 'files' attribute)", 
+                           extra={'subsys': 'tts', 'event': 'load_voices.invalid_format'})
+                
         except Exception as e:
-            logger.error(f"Error loading voice '{voice_id}': {e}", exc_info=True)
-            raise
+            logger.error(f"Error loading voices: {e}", 
+                       extra={'subsys': 'tts', 'event': 'load_voices.error'}, exc_info=True)
     
-    def _prepare_phonemes(self, phonemes: List[int]) -> Tuple[List[List[int]], np.ndarray]:
+    def get_voice_names(self) -> List[str]:
+        """Get list of available voice names."""
+        return self.voices
+    
+    def _create_audio(self, phonemes: str, voice: NDArray[np.float32], speed: float) -> Tuple[NDArray[np.float32], int]:
         """
-        Prepare phoneme tokens and pad them as needed.
+        Create audio from phonemes and voice embedding.
+        Fixes input signature mismatch by using 'input_ids' instead of 'tokens'.
         
         Args:
-            phonemes: List of phoneme token IDs
-            
-        Returns:
-            Tuple of padded tokens and voice embedding index
-        """
-        # Ensure phoneme length is within limits (512 - 2 for pad tokens)
-        assert len(phonemes) <= 510, f"Phoneme length {len(phonemes)} exceeds maximum (510)"
-        
-        # Add pad tokens at start and end
-        padded_tokens = [[0, *phonemes, 0]]
-        
-        return padded_tokens
-    
-    def create(self, text: str, voice_id: str, phonemes: Optional[List[int]] = None, speed: float = 1.0) -> Tuple[np.ndarray, int]:
-        """
-        Create audio from text/phonemes and voice ID.
-        
-        Args:
-            text: Text to synthesize (used only if phonemes is None)
-            voice_id: ID of voice to use
-            phonemes: Optional list of phoneme token IDs
-            speed: Speed factor (1.0 is normal speed)
+            phonemes: Phoneme string
+            voice: Voice embedding array
+            speed: Speed factor (1.0 is normal)
             
         Returns:
             Tuple of (audio_samples, sample_rate)
         """
+        if not self.sess:
+            raise RuntimeError("ONNX model not loaded")
+            
+        logger.debug(f"Creating audio for phonemes: {phonemes[:50]}...", 
+                   extra={'subsys': 'tts', 'event': 'create_audio.start'})
+        
+        # Truncate if needed
+        if len(phonemes) > MAX_PHONEME_LENGTH:
+            logger.warning(f"Phonemes too long ({len(phonemes)}), truncating to {MAX_PHONEME_LENGTH}", 
+                         extra={'subsys': 'tts', 'event': 'create_audio.truncate'})
+            phonemes = phonemes[:MAX_PHONEME_LENGTH]
+        
+        # Tokenize
+        start_t = time.time()
+        tokens = self.tokenizer.tokenize(phonemes)
+        
+        # Validate token length
+        if len(tokens) > MAX_PHONEME_LENGTH:
+            logger.warning(f"Tokens too long ({len(tokens)}), truncating", 
+                         extra={'subsys': 'tts', 'event': 'create_audio.tokens_truncate'})
+            tokens = tokens[:MAX_PHONEME_LENGTH]
+        
+        # Select appropriate voice embedding slice
+        voice_slice = voice[len(tokens)]
+        
+        # Prepare input with correct signature: 'input_ids' instead of 'tokens'
+        input_tokens = [[0, *tokens, 0]]
+        
+        # Debug input shape
+        logger.debug(f"Input shape: tokens={np.array(input_tokens).shape}, voice={voice_slice.shape}", 
+                   extra={'subsys': 'tts', 'event': 'create_audio.shapes'})
+        
+        # Run inference with correct input name
         try:
-            # If phonemes is a string, not a list of token IDs, we need to tokenize it
-            # But this is just a fallback - ideally phonemes should be provided as token IDs
-            if isinstance(phonemes, str):
-                logger.warning("Phonemes provided as string, not token IDs. Treating as raw text.")
-                phonemes = None
-            else:
-                pass
-                
-            # If no phonemes provided, perform basic character-to-phoneme mapping.
-            # This is a temporary fix. A proper G2P model should be used for production.
-            if phonemes is None:
-                logger.debug(f"No phonemes provided. Using Misaki G2P for: '{text}'")
-                try:
-                    # Use the initialized G2P object to convert text to phoneme IDs.
-                    phonemes = self.g2p(text)
-                    # Ensure we don't exceed the model's limit (512 tokens, with 2 for start/end).
-                    phonemes = phonemes[:510]
-                    logger.debug(f"Generated phoneme IDs: {phonemes}")
-                except Exception as e:
-                    logger.error(f"Misaki G2P failed for text: '{text}'. Error: {e}", exc_info=True)
-                    raise ValueError(f"Failed to phonemize text: {text}") from e
-                
-            # Load voice embedding
-            voice_embedding = self._load_voice(voice_id)
-            
-            # Prepare tokens
-            tokens = self._prepare_phonemes(phonemes)
-            
-            # The entire voice embedding is the style reference.
-            ref_s = voice_embedding
-            
-            # Set speed
-            speed_np = np.ones(1, dtype=np.float32) * speed
-            
-            # Run inference
-            logger.debug(f"Running inference with tokens shape={np.array(tokens).shape}, style shape={ref_s.shape}")
-            audio = self.session.run(
+            audio = self.sess.run(
                 None,
                 {
-                    'input_ids': tokens,
-                    'style': ref_s, 
-                    'speed': speed_np
+                    # Use 'input_ids' instead of 'tokens' to match ONNX model expectation
+                    'input_ids': input_tokens, 
+                    'style': voice_slice, 
+                    'speed': np.ones(1, dtype=np.float32) * speed
                 }
             )[0]
             
-            # Return audio and sample rate
-            return audio[0], SAMPLE_RATE
+            # Normalize audio to be within float32 range for WAV files (-1.0 to 1.0)
+            # Most audio libraries prefer float32 in [-1, 1] range for WAV files
+            if audio.size > 0:
+                # Check if we have any audio data
+                if np.max(np.abs(audio)) > 0:
+                    # Normalize to range [-1, 1]
+                    audio = audio / np.max(np.abs(audio))
+                    # Keep as float32 for better compatibility with audio libraries
+                    audio = audio.astype(np.float32)
+                else:
+                    # If audio is all zeros, just create zeros with float32 dtype
+                    audio = np.zeros(len(audio), dtype=np.float32)
+            else:
+                # Empty audio, create a small silent segment
+                logger.warning("Generated empty audio, creating short silence", 
+                             extra={'subsys': 'tts', 'event': 'create_audio.empty'})
+                audio = np.zeros(SAMPLE_RATE // 2, dtype=np.float32)  # 0.5 second of silence
+        
+            # Log performance metrics
+            audio_duration = len(audio) / SAMPLE_RATE
+            create_duration = time.time() - start_t
+            speedup_factor = audio_duration / create_duration
+            
+            logger.debug(
+                f"Created {audio_duration:.2f}s audio for {len(phonemes)} phonemes in {create_duration:.2f}s ({speedup_factor:.2f}x real-time)",
+                extra={'subsys': 'tts', 'event': 'create_audio.complete'}
+            )
+            
+            return audio, SAMPLE_RATE
             
         except Exception as e:
-            logger.error(f"Error creating audio: {e}", exc_info=True)
+            logger.error(f"Error in ONNX inference: {e}", 
+                       extra={'subsys': 'tts', 'event': 'create_audio.error'}, exc_info=True)
             raise
     
-    def is_available(self) -> bool:
-        """Check if the TTS engine is initialized and ready."""
-        return self.session is not None and len(self.available_voices) > 0
-
-    @property
-    def voices(self) -> List[str]:
-        """Get list of available voices."""
-        return self.available_voices
+    def create(self, text: str, voice_id_or_embedding: Union[str, NDArray[np.float32]], 
+              phonemes: Optional[str] = None, speed: float = 1.0) -> Tuple[NDArray[np.float32], int]:
+        """
+        Create audio from text or phonemes using specified voice.
+        
+        Args:
+            text: Text to synthesize (used if phonemes not provided)
+            voice_id_or_embedding: Voice ID string or embedding array
+            phonemes: Optional phoneme string (if None, text is used)
+            speed: Speed factor (1.0 is normal)
+            
+        Returns:
+            Tuple of (audio_samples, sample_rate)
+        """
+        # Handle voice ID or direct embedding
+        voice_embedding = None
+        
+        if isinstance(voice_id_or_embedding, str):
+            voice_id = voice_id_or_embedding
+            if voice_id not in self.voices_data:
+                available_voices = self.voices
+                if not available_voices:
+                    raise ValueError("No voices available")
+                
+                # Fall back to first available voice
+                voice_id = available_voices[0]
+                logger.warning(f"Voice '{voice_id_or_embedding}' not found, falling back to '{voice_id}'", 
+                             extra={'subsys': 'tts', 'event': 'create.fallback_voice'})
+            
+            voice_embedding = self.voices_data[voice_id]
+            logger.debug(f"Using voice: {voice_id}", extra={'subsys': 'tts', 'event': 'create.voice_id'})
+        else:
+            # Assume it's already a voice embedding
+            voice_embedding = voice_id_or_embedding
+            logger.debug(f"Using direct voice embedding with shape {voice_embedding.shape}", 
+                       extra={'subsys': 'tts', 'event': 'create.direct_embedding'})
+        
+        # Use text directly if no phonemes provided
+        if phonemes is None:
+            # In a real implementation, we would convert text to phonemes here
+            # For now, just use the text directly
+            phonemes = text
+            logger.debug(f"No phonemes provided, using text directly: {text[:50]}...", 
+                       extra={'subsys': 'tts', 'event': 'create.text_as_phonemes'})
+        
+        # Create audio
+        try:
+            audio, sample_rate = self._create_audio(phonemes, voice_embedding, speed)
+            
+            # Normalize audio to be within float32 range for WAV files (-1.0 to 1.0)
+            # Most audio libraries prefer float32 in [-1, 1] range for WAV files
+            if audio.size > 0:
+                # Check if we have any audio data
+                if np.max(np.abs(audio)) > 0:
+                    # Normalize to range [-1, 1]
+                    audio = audio / np.max(np.abs(audio))
+                    # Keep as float32 for better compatibility with audio libraries
+                    audio = audio.astype(np.float32)
+                else:
+                    # If audio is all zeros, just create zeros with float32 dtype
+                    audio = np.zeros(len(audio), dtype=np.float32)
+            else:
+                # Empty audio, create a small silent segment
+                logger.warning("Generated empty audio, creating short silence")
+                audio = np.zeros(sample_rate // 2, dtype=np.float32)  # 0.5 second of silence
+            
+            return audio, sample_rate
+        except Exception as e:
+            logger.error(f"Failed to generate speech: {e}", 
+                       extra={'subsys': 'tts', 'event': 'create.error'}, exc_info=True)
+            raise RuntimeError(f"Failed to generate speech: {e}")

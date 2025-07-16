@@ -65,12 +65,32 @@ graph LR
    ```
    Edit the `.env` file with your configuration
 
-3. Create a virtual environment and activate it:
+3. Create a virtual environment, install dependencies, and run the bot:
    ```bash
+   # Create a Python 3.11 virtual environment using uv
    uv venv --python 3.11
+   
+   # Activate the virtual environment
    source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-   uv pip install -r requirements.txt
+   
+   # Install dependencies with prerelease support for kokoro-onnx
+   uv pip install "kokoro-onnx>=0.3.3" --prerelease=allow
+   uv pip sync requirements.txt
+   
+   # Install test dependencies if needed
+   uv pip install pytest pytest-asyncio pytest-cov
+   
+   # Run the bot
    python run.py
+   ```
+   
+   For development and testing:
+   ```bash
+   # Run tests with pytest
+   python -m pytest tests/ -o addopts=  # Override default pytest options
+   
+   # Run specific test
+   python -m pytest tests/test_tts_assets.py::TestTTSAssets::test_validate_voice_bin -v -o addopts=
    ```
 
 ## 🛠️ Configuration

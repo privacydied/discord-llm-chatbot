@@ -40,6 +40,10 @@ dependencies = [
     "ollama>=0.2.0",
     "openai>=1.94.0",
     "TTS>=0.22.0",
+    # TTS - Kokoro and dependencies
+    "kokoro-onnx>=0.3.3",  # Allow prerelease versions for compatibility
+    "soundfile>=0.12.1",
+    "misaki>=0.1.0",  # Phonemizer for English
     # TTS - G2P, Phonemizers, etc.
     "gdown>=4.7.1", # Workaround for g2pkk runtime install
     "g2pkk @ file:///${PROJECT_ROOT}/libs/g2pkk",
@@ -64,9 +68,7 @@ dependencies = [
     "soundfile>=0.12.0",
     "librosa>=0.10.0",
     "numpy>=1.19.0",
-    "kokoro-onnx>=0.2.2",
     "faster-whisper>=1.1.0",
-
 ]
 
 [project.optional-dependencies]
