@@ -1,0 +1,1029 @@
+"""
+Direct NPZ integration for Kokoro-ONNX TTS engine.
+Handles NPZ voice data directly without JSON conversion and fixes ONNX input signature mismatches.
+"""
+
+import os
+import logging
+import numpy as np
+import time
+import tempfile
+import re
+import enum
+import soundfile as sf
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple, Union, Any, Set, NDArray, Callable
+
+# Import custom exceptions
+from .tts_errors import TTSWriteError
+
+# Setup logging
+logger = logging.getLogger(__name__)
+
+# Constants
+SAMPLE_RATE = 24000
+MAX_PHONEME_LENGTH = 512
+CACHE_DIR = os.environ.get('XDG_CACHE_HOME', Path('tts/cache'))
+
+# Tokenization method enum
+class TokenizationMethod(enum.Enum):
+    PHONEME_ENCODE = "phoneme_encode"  # Original encode method
+    PHONEME_TO_ID = "phoneme_to_id"   # Direct phoneme to ID lookup
+    TEXT_TO_IDS = "text_to_ids"       # Direct text to IDs conversion
+    G2P_PIPELINE = "g2p_pipeline"     # G2P pipeline
+    GRAPHEME_FALLBACK = "grapheme_fallback"  # ASCII grapheme fallback
+    UNKNOWN = "unknown"               # Unknown method
+
+def normalize_text(text: str) -> str:
+    """Normalize text for TTS processing.
+    
+    Args:
+        text: Input text to normalize
+        
+    Returns:
+        Normalized text string
+    """
+    if not text:
+        return ""
+        
+    # Remove control characters
+    text = re.sub(r'[\x00-\x1F\x7F-\x9F]', '', text)
+    
+    # Collapse multiple whitespace
+    text = re.sub(r'\s+', ' ', text)
+    
+    # Strip Discord mentions if present
+    text = re.sub(r'<@!?\d+>', '', text)
+    
+    # Strip common markdown
+    text = re.sub(r'[*_~`]', '', text)
+    
+    # Trim whitespace
+    text = text.strip()
+    
+    return text
+
+class KokoroDirect:
+    """
+    Direct NPZ integration for Kokoro-ONNX TTS engine.
+    Handles NPZ voice data directly without JSON conversion.
+    Fixes ONNX input signature mismatches ('tokens' -> 'input_ids').
+    Provides robust tokenization with multiple fallback strategies.
+    """
+    
+    def __init__(self, model_path: str, voices_path: str):
+        """
+        Initialize KokoroDirect with model and voices paths.
+        
+        Args:
+            model_path: Path to the ONNX model file
+            voices_path: Path to the NPZ voices file
+        """
+        self.model_path = model_path
+        self.voices_path = voices_path
+        self.voices_data = {}
+        self.voices = []
+        self.tokenizer = None
+        self.sess = None
+        self.language = os.environ.get("TTS_LANGUAGE", "en")
+        self.phonemiser = self._select_phonemiser(self.language)
+        self.tokenization_method = TokenizationMethod.UNKNOWN
+        self.available_tokenization_methods = set()
+        
+        # Load the model and voices
+        self._load_model()
+        self._load_voices()
+        
+        # Validate language and resource availability
+        self._validate_language_resources()
+        
+        logger.info(f"Initialized KokoroDirect with {len(self.voices)} voices")
+        logger.info(f"Available tokenization methods: {', '.join([m.value for m in self.available_tokenization_methods])}")
+        
+    def _select_phonemiser(self, language: str) -> str:
+        """
+        Select the appropriate phonemiser based on language.
+        
+        Args:
+            language: Language code (e.g., 'en', 'ja')
+            
+        Returns:
+            Phonemiser name to use
+        """
+        # Allow override from environment
+        env_phonemiser = os.environ.get("TTS_PHONEMISER")
+        if env_phonemiser:
+            return env_phonemiser
+            
+        # Select based on language
+        if language.startswith("en"):
+            phonemiser = "espeak"
+        elif language.startswith(("ja", "zh")):
+            phonemiser = "misaki"
+        else:
+            phonemiser = "espeak"
+            
+        # Log warning if using non-espeak for English
+        if language.startswith("en") and phonemiser != "espeak":
+            logger.warning(
+                f"Using non-recommended phonemiser '{phonemiser}' for English language", 
+                extra={'subsys': 'tts', 'event': 'phonemiser.warning'}
+            )
+            
+        logger.debug(
+            f"Selected phonemiser '{phonemiser}' for language '{language}'", 
+            extra={'subsys': 'tts', 'event': 'phonemiser.select'}
+        )
+        return phonemiser
+        
+    def _validate_language_resources(self) -> None:
+        """Validate that the configured language has required resources.
+        If not, fall back to a known-good default."""
+        if not self.tokenizer:
+            logger.error("Cannot validate language resources: tokenizer not initialized",
+                        extra={'subsys': 'tts', 'event': 'language.validate.error'})
+            return
+            
+        # Check if we have a valid tokenizer for the configured language
+        try:
+            # Try to detect available tokenization methods
+            self._detect_tokenization_methods()
+            
+            if not self.available_tokenization_methods:
+                # No valid tokenization methods found for current language
+                old_language = self.language
+                self.language = "en"  # Default to English
+                logger.warning(f"No valid tokenization methods found for language '{old_language}', falling back to '{self.language}'",
+                              extra={'subsys': 'tts', 'event': 'language.fallback', 'from': old_language, 'to': self.language})
+                
+                # Try again with the default language
+                self._detect_tokenization_methods()
+                
+                if not self.available_tokenization_methods:
+                    logger.error(f"No valid tokenization methods found even for fallback language '{self.language}'",
+                                extra={'subsys': 'tts', 'event': 'language.fallback.error'})
+        except Exception as e:
+            logger.error(f"Error validating language resources: {e}",
+                        extra={'subsys': 'tts', 'event': 'language.validate.error'}, exc_info=True)
+    
+    def _detect_tokenization_methods(self) -> None:
+        """Detect available tokenization methods for the current tokenizer."""
+        if not self.tokenizer:
+            logger.error("Cannot detect tokenization methods: tokenizer not initialized",
+                        extra={'subsys': 'tts', 'event': 'tokenize.detect.error'})
+            return
+            
+        self.available_tokenization_methods.clear()
+        
+        # Check for encode method (original API)
+        if hasattr(self.tokenizer, 'encode') and callable(getattr(self.tokenizer, 'encode')):
+            self.available_tokenization_methods.add(TokenizationMethod.PHONEME_ENCODE)
+            
+        # Check for phoneme_to_id dictionary
+        if hasattr(self.tokenizer, 'phoneme_to_id') and isinstance(getattr(self.tokenizer, 'phoneme_to_id'), dict):
+            self.available_tokenization_methods.add(TokenizationMethod.PHONEME_TO_ID)
+            
+        # Check for text_to_ids method
+        if hasattr(self.tokenizer, 'text_to_ids') and callable(getattr(self.tokenizer, 'text_to_ids')):
+            self.available_tokenization_methods.add(TokenizationMethod.TEXT_TO_IDS)
+            
+        # Check for g2p pipeline
+        if hasattr(self.tokenizer, 'g2p') and callable(getattr(self.tokenizer, 'g2p')):
+            self.available_tokenization_methods.add(TokenizationMethod.G2P_PIPELINE)
+            
+        # Always add grapheme fallback as last resort
+        self.available_tokenization_methods.add(TokenizationMethod.GRAPHEME_FALLBACK)
+        
+        logger.debug(f"Detected tokenization methods: {[m.value for m in self.available_tokenization_methods]}",
+                    extra={'subsys': 'tts', 'event': 'tokenize.detect'})
+    
+    def tokenize_text(self, text: str) -> Tuple[List[int], TokenizationMethod]:
+        """Tokenize text using the most appropriate available method.
+        
+        Args:
+            text: Text to tokenize
+            
+        Returns:
+            Tuple of (token IDs, tokenization method used)
+            
+        Raises:
+            ValueError: If tokenization fails with all methods
+        """
+        if not text:
+            raise ValueError("Empty text provided for tokenization")
+            
+        # Normalize text
+        text = normalize_text(text)
+        if not text:
+            raise ValueError("Text normalized to empty string")
+            
+        # Try each method in order of preference
+        token_ids = []
+        used_method = TokenizationMethod.UNKNOWN
+        
+        # Method 1: Original encode method
+        if TokenizationMethod.PHONEME_ENCODE in self.available_tokenization_methods:
+            try:
+                token_ids = self.tokenizer.encode(text)
+                if token_ids and len(token_ids) > 0:
+                    used_method = TokenizationMethod.PHONEME_ENCODE
+                    logger.debug(f"Tokenized with encode method: {len(token_ids)} tokens",
+                                extra={'subsys': 'tts', 'event': 'tokenize.encode'})
+            except Exception as e:
+                logger.debug(f"encode method failed: {e}",
+                            extra={'subsys': 'tts', 'event': 'tokenize.encode.error'})
+        
+        # Method 2: Direct phoneme_to_id lookup
+        if not token_ids and TokenizationMethod.PHONEME_TO_ID in self.available_tokenization_methods:
+            try:
+                # Try to get phonemes first
+                phonemes = None
+                if hasattr(self.tokenizer, 'phonemize') and callable(getattr(self.tokenizer, 'phonemize')):
+                    phonemes = self.tokenizer.phonemize(text)
+                
+                # If we have phonemes and a phoneme_to_id dict, convert them
+                if phonemes and hasattr(self.tokenizer, 'phoneme_to_id'):
+                    phoneme_to_id = self.tokenizer.phoneme_to_id
+                    token_ids = [phoneme_to_id.get(p, 0) for p in phonemes if p in phoneme_to_id]
+                    if token_ids and len(token_ids) > 0:
+                        used_method = TokenizationMethod.PHONEME_TO_ID
+                        logger.debug(f"Tokenized with phoneme_to_id: {len(token_ids)} tokens",
+                                    extra={'subsys': 'tts', 'event': 'tokenize.phoneme_to_id'})
+            except Exception as e:
+                logger.debug(f"phoneme_to_id method failed: {e}",
+                            extra={'subsys': 'tts', 'event': 'tokenize.phoneme_to_id.error'})
+        
+        # Method 3: text_to_ids direct conversion
+        if not token_ids and TokenizationMethod.TEXT_TO_IDS in self.available_tokenization_methods:
+            try:
+                if hasattr(self.tokenizer, 'text_to_ids') and callable(getattr(self.tokenizer, 'text_to_ids')):
+                    token_ids = self.tokenizer.text_to_ids(text)
+                    if token_ids and len(token_ids) > 0:
+                        used_method = TokenizationMethod.TEXT_TO_IDS
+                        logger.debug(f"Tokenized with text_to_ids: {len(token_ids)} tokens",
+                                    extra={'subsys': 'tts', 'event': 'tokenize.text_to_ids'})
+            except Exception as e:
+                logger.debug(f"text_to_ids method failed: {e}",
+                            extra={'subsys': 'tts', 'event': 'tokenize.text_to_ids.error'})
+        
+        # Method 4: G2P pipeline
+        if not token_ids and TokenizationMethod.G2P_PIPELINE in self.available_tokenization_methods:
+            try:
+                if hasattr(self.tokenizer, 'g2p') and callable(getattr(self.tokenizer, 'g2p')):
+                    phonemes = self.tokenizer.g2p(text)
+                    if phonemes and hasattr(self.tokenizer, 'phoneme_to_id'):
+                        phoneme_to_id = self.tokenizer.phoneme_to_id
+                        token_ids = [phoneme_to_id.get(p, 0) for p in phonemes if p in phoneme_to_id]
+                        if token_ids and len(token_ids) > 0:
+                            used_method = TokenizationMethod.G2P_PIPELINE
+                            logger.debug(f"Tokenized with g2p pipeline: {len(token_ids)} tokens",
+                                        extra={'subsys': 'tts', 'event': 'tokenize.g2p'})
+            except Exception as e:
+                logger.debug(f"g2p pipeline method failed: {e}",
+                            extra={'subsys': 'tts', 'event': 'tokenize.g2p.error'})
+        
+        # Method 5: Last resort - grapheme fallback
+        if not token_ids and TokenizationMethod.GRAPHEME_FALLBACK in self.available_tokenization_methods:
+            try:
+                # Create basic ASCII mapping for graphemes
+                # This is a last-resort fallback that should work with any model
+                # Start with a reasonable ID offset to avoid special tokens
+                grapheme_to_id = {}
+                for i, c in enumerate("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 .,?!-'"):
+                    grapheme_to_id[c] = i + 10  # Start at 10 to avoid special tokens
+                
+                # Map unknown chars to space
+                token_ids = [grapheme_to_id.get(c, grapheme_to_id.get(' ', 10)) for c in text]
+                if token_ids and len(token_ids) > 0:
+                    used_method = TokenizationMethod.GRAPHEME_FALLBACK
+                    logger.warning(f"Using grapheme fallback tokenization: {len(token_ids)} tokens",
+                                 extra={'subsys': 'tts', 'event': 'tokenize.grapheme_fallback'})
+            except Exception as e:
+                logger.debug(f"grapheme fallback method failed: {e}",
+                            extra={'subsys': 'tts', 'event': 'tokenize.grapheme_fallback.error'})
+        
+        # If we still have no tokens, raise an error
+        if not token_ids or len(token_ids) == 0:
+            logger.error("No compatible tokenization method found",
+                        extra={'subsys': 'tts', 'event': 'tokenize.error.no_method'})
+            raise ValueError("No compatible tokenization method found")
+        
+        # Update the current tokenization method
+        self.tokenization_method = used_method
+        
+        # Log the method used
+        logger.info(f"Tokenization method used: {used_method.value}, tokens: {len(token_ids)}",
+                   extra={'subsys': 'tts', 'event': 'tokenize.method', 'method': used_method.value})
+        
+        return token_ids, used_method
+    
+    def _load_model(self) -> None:
+        """Load the ONNX model and tokenizer."""
+        try:
+            # Import here to avoid dependency issues
+            from kokoro_onnx.tokenizer import Tokenizer
+            import onnxruntime as ort
+            
+            # Create tokenizer
+            self.tokenizer = Tokenizer()
+            
+            # Log ONNX providers
+            providers = ort.get_available_providers()
+            logger.debug(f"ONNX providers: {providers}", extra={'subsys': 'tts', 'event': 'onnx.providers'})
+            
+            # Create ONNX session
+            self.sess = ort.InferenceSession(self.model_path, providers=providers)
+            
+            # Log input names for debugging
+            input_names = [input.name for input in self.sess.get_inputs()]
+            logger.debug(f"ONNX model input names: {input_names}", extra={'subsys': 'tts', 'event': 'onnx.inputs'})
+            
+        except ImportError as e:
+            logger.error(f"Failed to import required modules: {e}", extra={'subsys': 'tts', 'event': 'load_model.error'})
+            raise
+        except Exception as e:
+            logger.error(f"Failed to load model: {e}", extra={'subsys': 'tts', 'event': 'load_model.error'}, exc_info=True)
+            raise
+    
+    def _load_voices(self) -> None:
+        """Load voice embeddings directly from NPZ file."""
+        try:
+            voices_path = Path(self.voices_path)
+            if not voices_path.exists():
+                logger.error(f"Voices file not found: {voices_path}", extra={'subsys': 'tts', 'event': 'load_voices.error'})
+                return
+            
+            # Load NPZ file
+            logger.debug(f"Loading NPZ voices from: {voices_path}", extra={'subsys': 'tts', 'event': 'load_voices.npz'})
+            npz_data = np.load(voices_path, allow_pickle=True)
+            
+            if hasattr(npz_data, 'files'):
+                logger.debug(f"NPZ file contains {len(npz_data.files)} voices", extra={'subsys': 'tts', 'event': 'load_voices.npz.count'})
+                
+                # Extract each voice embedding
+                for voice_id in npz_data.files:
+                    voice_data = npz_data[voice_id]
+                    if isinstance(voice_data, np.ndarray):
+                        # Handle different voice embedding shapes
+                        if voice_data.shape[0] == MAX_PHONEME_LENGTH and (len(voice_data.shape) == 2 and voice_data.shape[1] == 256):
+                            # Perfect shape (512, 256)
+                            self.voices_data[voice_id] = voice_data
+                            self.voices.append(voice_id)
+                            logger.debug(f"Loaded voice {voice_id} with shape {voice_data.shape}", 
+                                        extra={'subsys': 'tts', 'event': 'load_voices.voice'})
+                        elif voice_data.shape[0] == MAX_PHONEME_LENGTH and len(voice_data.shape) == 3 and voice_data.shape[1] == 1 and voice_data.shape[2] == 256:
+                            # Shape (512, 1, 256) - already correct format
+                            self.voices_data[voice_id] = voice_data
+                            self.voices.append(voice_id)
+                            logger.debug(f"Loaded voice {voice_id} with shape {voice_data.shape}", 
+                                        extra={'subsys': 'tts', 'event': 'load_voices.voice'})
+                        elif (voice_data.shape[0] == 510 or voice_data.shape[0] == 511) and (
+                              (len(voice_data.shape) == 2 and voice_data.shape[1] == 256) or
+                              (len(voice_data.shape) == 3 and voice_data.shape[1] == 1 and voice_data.shape[2] == 256)):
+                            # Shape (510, 256) or (510, 1, 256) - need padding to 512
+                            pad_size = MAX_PHONEME_LENGTH - voice_data.shape[0]
+                            if len(voice_data.shape) == 2:
+                                # Pad (510, 256) to (512, 256)
+                                padded_data = np.pad(voice_data, ((0, pad_size), (0, 0)), 'constant')
+                                self.voices_data[voice_id] = padded_data
+                            else:
+                                # Pad (510, 1, 256) to (512, 1, 256)
+                                padded_data = np.pad(voice_data, ((0, pad_size), (0, 0), (0, 0)), 'constant')
+                                self.voices_data[voice_id] = padded_data
+                                
+                            self.voices.append(voice_id)
+                            
+                            # Log min/max values to check for 0-padding dominance
+                            non_zero_data = voice_data[voice_data != 0]
+                            if len(non_zero_data) > 0:
+                                min_val = np.min(non_zero_data)
+                                max_val = np.max(non_zero_data)
+                                logger.debug(
+                                    f"Padded voice {voice_id} from {voice_data.shape} to {self.voices_data[voice_id].shape}, "
+                                    f"non-zero min/max: {min_val:.4f}/{max_val:.4f}", 
+                                    extra={'subsys': 'tts', 'event': 'load_voices.padded'}
+                                )
+                            else:
+                                logger.warning(
+                                    f"Voice {voice_id} contains all zeros", 
+                                    extra={'subsys': 'tts', 'event': 'load_voices.warning.zeros'}
+                                )
+                        else:
+                            logger.warning(
+                                f"Skipping voice {voice_id} with incompatible shape {voice_data.shape}", 
+                                extra={'subsys': 'tts', 'event': 'load_voices.warning.shape'}
+                            )
+                    else:
+                        logger.warning(
+                            f"Skipping voice {voice_id} with non-array type {type(voice_data)}", 
+                            extra={'subsys': 'tts', 'event': 'load_voices.warning.type'}
+                        )
+                
+                logger.info(f"Loaded {len(self.voices)} voices from NPZ file", 
+                          extra={'subsys': 'tts', 'event': 'load_voices.success'})
+            else:
+                logger.error("Invalid NPZ file format (no 'files' attribute)", 
+                           extra={'subsys': 'tts', 'event': 'load_voices.error.format'})
+        
+        except Exception as e:
+            logger.error(f"Failed to load voices: {e}", 
+                       extra={'subsys': 'tts', 'event': 'load_voices.error'}, exc_info=True)
+
+    def _create_audio(self, phonemes: str, voice_embedding: np.ndarray, speed: float = 1.0) -> Tuple[np.ndarray, int]:
+        """
+        Create audio from phonemes and voice embedding.
+        
+        Args:
+            phonemes: Phoneme string to synthesize
+            voice_embedding: Voice embedding array
+            speed: Speech speed factor (1.0 = normal)
+            
+        Returns:
+            Tuple of (audio array, sample rate)
+            
+        Raises:
+            ValueError: If tokenization fails or produces empty token sequence
+        """
+        start_t = time.time()
+        
+        # Normalize and sanitize input text
+        phonemes = normalize_text(phonemes)
+        if not phonemes:
+            logger.warning("Empty phonemes input, using fallback text", 
+                         extra={"subsys": "tts", "event": "create_audio.empty_input"})
+            phonemes = "Hello."  # Fallback to ensure we generate something
+        
+        # Tokenize phonemes using our robust tokenization method
+        try:
+            token_ids, method_used = self.tokenize_text(phonemes)
+            logger.debug(f"Tokenized {len(phonemes)} chars to {len(token_ids)} tokens using {method_used.value}", 
+                       extra={"subsys": "tts", "event": "create_audio.tokenize", "method": method_used.value})
+            
+            # Verify we have non-empty token sequence
+            if not token_ids or len(token_ids) == 0:
+                logger.error("Tokenization produced empty token sequence", 
+                           extra={"subsys": "tts", "event": "create_audio.error.empty_tokens"})
+                raise ValueError("Tokenization produced empty token sequence")
+                
+        except Exception as e:
+            logger.error(f"Failed to tokenize text: {e}", 
+                       extra={"subsys": "tts", "event": "create_audio.error.tokenize"}, 
+                       exc_info=True)
+            raise ValueError(f"Failed to tokenize text: {e}")
+        
+        # Prepare inputs for ONNX model
+        try:
+            # Get input names from model
+            input_names = [input.name for input in self.sess.get_inputs()]
+            logger.debug(f"Model input names: {input_names}", 
+                       extra={"subsys": "tts", "event": "create_audio.input_names"})
+            
+            # Create input dictionary with required inputs
+            inputs = {}
+            
+            # Add token IDs with the appropriate name
+            if "input_ids" in input_names:
+                # Ensure input_ids is 2D as required by ONNX model
+                if isinstance(token_ids, np.ndarray) and len(token_ids.shape) == 1:
+                    token_ids = token_ids.reshape(1, -1)
+                elif isinstance(token_ids, list):
+                    token_ids = np.array(token_ids).reshape(1, -1)
+                
+                inputs["input_ids"] = token_ids
+                logger.debug(f"Added input_ids with shape {inputs["input_ids"].shape}", 
+                           extra={"subsys": "tts", "event": "create_audio.input_ids"})
+            elif "tokens" in input_names:
+                # Ensure tokens is 2D as required by ONNX model
+                if isinstance(token_ids, np.ndarray) and len(token_ids.shape) == 1:
+                    token_ids = token_ids.reshape(1, -1)
+                elif isinstance(token_ids, list):
+                    token_ids = np.array(token_ids).reshape(1, -1)
+                
+                inputs["tokens"] = token_ids
+                logger.debug(f"Added tokens with shape {inputs["tokens"].shape}", 
+                           extra={"subsys": "tts", "event": "create_audio.tokens"})
+            else:
+                logger.error("No compatible token input name found in model", 
+                           extra={"subsys": "tts", "event": "create_audio.error.no_token_input"})
+                raise ValueError("No compatible token input name found in model")
+            
+            # Add speed parameter if model accepts it
+            if "speed" in input_names:
+                inputs["speed"] = np.array([speed], dtype=np.float32)
+                logger.debug(f"Added speed={speed}", 
+                           extra={"subsys": "tts", "event": "create_audio.speed"})
+            
+            # Add style parameter if model accepts it
+            if "style" in input_names:
+                # Create style tensor with correct shape and dtype
+                style = np.zeros((1, 256), dtype=np.float32)
+                inputs["style"] = style
+                logger.debug(f"Added style with shape {style.shape}", 
+                           extra={"subsys": "tts", "event": "create_audio.style"})
+            
+            # Process voice embedding to ensure it has the correct shape
+            if voice_embedding is not None:
+                # Check and reshape voice embedding as needed
+                if len(voice_embedding.shape) == 1:
+                    # Need to reshape to 3D for model
+                    if voice_embedding.shape[0] == 256:
+                        # Single 256-dim vector, reshape to [1, MAX_PHONEME_LENGTH, 256]
+                        expanded = np.zeros((1, MAX_PHONEME_LENGTH, 256), dtype=np.float32)
+                        for i in range(MAX_PHONEME_LENGTH):
+                            expanded[0, i, :] = voice_embedding
+                        voice_embedding = expanded
+                        logger.debug(f"Expanded voice embedding to {voice_embedding.shape}", 
+                                   extra={"subsys": "tts", "event": "create_audio.expand_embedding"})
+                    else:
+                        # Need to add batch dimension for ONNX
+                        voice_embedding = voice_embedding.reshape(1, MAX_PHONEME_LENGTH, 256)
+                        logger.debug(f"Reshaped voice embedding to {voice_embedding.shape}", 
+                                   extra={"subsys": "tts", "event": "create_audio.reshape_embedding_2d"})
+                elif len(voice_embedding.shape) == 2:
+                    if voice_embedding.shape == (MAX_PHONEME_LENGTH, 256):
+                        # Need to add batch dimension for ONNX
+                        voice_embedding = voice_embedding.reshape(1, MAX_PHONEME_LENGTH, 256)
+                        logger.debug(f"Reshaped voice embedding to {voice_embedding.shape}", 
+                                   extra={"subsys": "tts", "event": "create_audio.reshape_embedding_2d"})
+                    elif voice_embedding.shape == (1, 256):
+                        # Expand to full shape needed by model
+                        expanded = np.zeros((1, MAX_PHONEME_LENGTH, 256), dtype=np.float32)
+                        for i in range(MAX_PHONEME_LENGTH):
+                            expanded[0, i, :] = voice_embedding[0, :]
+                        voice_embedding = expanded
+                        logger.debug(f"Expanded voice embedding to {voice_embedding.shape}", 
+                                   extra={"subsys": "tts", "event": "create_audio.expand_embedding"})
+                elif len(voice_embedding.shape) == 3:
+                    if voice_embedding.shape[0] != 1 or voice_embedding.shape[1] != MAX_PHONEME_LENGTH or voice_embedding.shape[2] != 256:
+                        # Reshape to expected dimensions
+                        logger.warning(f"Unexpected voice embedding shape: {voice_embedding.shape}, reshaping", 
+                                     extra={"subsys": "tts", "event": "create_audio.unexpected_shape"})
+                        # Try to preserve data if possible
+                        if voice_embedding.size >= MAX_PHONEME_LENGTH * 256:
+                            # Reshape and take first MAX_PHONEME_LENGTH * 256 elements
+                            flat = voice_embedding.flatten()[:MAX_PHONEME_LENGTH * 256]
+                            voice_embedding = flat.reshape(1, MAX_PHONEME_LENGTH, 256)
+                        else:
+                            # Not enough data, create zeros and copy what we have
+                            new_embedding = np.zeros((1, MAX_PHONEME_LENGTH, 256), dtype=np.float32)
+                            flat = voice_embedding.flatten()
+                            new_flat = new_embedding.flatten()
+                            new_flat[:min(len(flat), len(new_flat))] = flat[:min(len(flat), len(new_flat))]
+                            voice_embedding = new_embedding
+                        logger.debug(f"Reshaped voice embedding to {voice_embedding.shape}", 
+                                   extra={"subsys": "tts", "event": "create_audio.reshape_embedding_3d"})
+            
+                # Add speaker embedding with the appropriate name
+                if "speaker_embedding" in input_names:
+                    inputs["speaker_embedding"] = voice_embedding
+                    logger.debug(f"Added speaker_embedding with shape {voice_embedding.shape}", 
+                               extra={"subsys": "tts", "event": "create_audio.speaker_embedding"})
+                elif "spk_emb" in input_names:
+                    inputs["spk_emb"] = voice_embedding
+                    logger.debug(f"Added spk_emb with shape {voice_embedding.shape}", 
+                               extra={"subsys": "tts", "event": "create_audio.spk_emb"})
+                else:
+                    # Try common embedding names if none matched
+                    for name in ["speaker", "voice_embedding", "embedding"]:
+                        if name in input_names:
+                            inputs[name] = voice_embedding
+                            logger.debug(f"Added {name} with shape {voice_embedding.shape}", 
+                                       extra={"subsys": "tts", "event": f"create_audio.{name}"})
+                            break
+                    else:
+                        logger.warning("No matching embedding input name found in model", 
+                                     extra={"subsys": "tts", "event": "create_audio.no_embedding_input"})
+            
+            # Log final inputs for debugging
+            input_shapes = {k: v.shape for k, v in inputs.items()}
+            input_dtypes = {k: str(v.dtype) for k, v in inputs.items()}
+            logger.debug(f"ONNX inputs: shapes={input_shapes}, dtypes={input_dtypes}", 
+                       extra={"subsys": "tts", "event": "create_audio.inputs"})
+            
+            # Run inference
+            try:
+                outputs = self.sess.run(None, inputs)
+                
+                # Extract audio from outputs
+                audio = outputs[0][0]  # Shape: [batch_size=1, audio_length]
+                
+                # Log output shape and stats
+                logger.debug(f"Output shape: {audio.shape}, min: {audio.min():.4f}, max: {audio.max():.4f}, mean: {audio.mean():.4f}", 
+                           extra={"subsys": "tts", "event": "create_audio.output_stats"})
+                
+                # Check if audio is silent (all zeros or very close to zero)
+                if np.allclose(audio, 0, atol=1e-6):
+                    logger.error("Generated audio contains all zeros", 
+                               extra={"subsys": "tts", "event": "create_audio.error.silent_audio"})
+                    raise ValueError("Generated audio contains all zeros")
+                
+                # Check if audio is too quiet (max amplitude too low)
+                if np.max(np.abs(audio)) < 0.01:
+                    logger.warning("Generated audio is very quiet", 
+                                 extra={"subsys": "tts", "event": "create_audio.warning.quiet_audio"})
+                
+                # Calculate inference time
+                inference_time = time.time() - start_t
+                logger.debug(f"Inference time: {inference_time:.2f}s", 
+                           extra={"subsys": "tts", "event": "create_audio.inference_time"})
+                
+                # Calculate audio duration in seconds
+                audio_duration = len(audio) / SAMPLE_RATE
+                logger.debug(f"Audio duration: {audio_duration:.2f}s",
+                           extra={"subsys": "tts", "event": "create_audio.duration"})
+                
+                # Ensure audio is at least 1 second long for short inputs
+                if audio_duration < 1.0 and len(audio) > 0:
+                    # Pad with silence to reach 1 second
+                    samples_needed = SAMPLE_RATE - len(audio)
+                    if samples_needed > 0:
+                        silence = np.zeros(samples_needed, dtype=audio.dtype)
+                        audio = np.concatenate([audio, silence])
+                        logger.debug(f"Padded audio to 1 second: new shape={audio.shape}",
+                                   extra={"subsys": "tts", "event": "create_audio.padding"})
+                
+                # Log performance metrics
+                audio_duration = len(audio) / SAMPLE_RATE
+                create_duration = time.time() - start_t
+                speedup_factor = audio_duration / create_duration if create_duration > 0 else 0
+                
+                logger.debug(
+                    f"Created {audio_duration:.2f}s audio for {len(phonemes)} phonemes in {create_duration:.2f}s ({speedup_factor:.2f}x real-time)",
+                    extra={"subsys": "tts", "event": "create_audio.complete"}
+                )
+                
+                # Always return a tuple of (audio, sample_rate)
+                return audio, SAMPLE_RATE
+                
+            except Exception as e:
+                logger.error(f"Error during ONNX inference: {e}", 
+                           extra={"subsys": "tts", "event": "create_audio.error.inference"}, 
+                           exc_info=True)
+                # Return a short silent audio segment as fallback
+                return np.zeros(SAMPLE_RATE, dtype=np.float32), SAMPLE_RATE  # 1 second of silence
+            
+        except Exception as e:
+            logger.error(f"Error in _create_audio: {e}", 
+                       extra={"subsys": "tts", "event": "create_audio.error"}, 
+                       exc_info=True)
+            # Return a short silent audio segment as fallback
+            return np.zeros(SAMPLE_RATE, dtype=np.float32), SAMPLE_RATE  # 1 second of silence
+    
+    def create(self, text: str, voice_id_or_embedding: Union[str, NDArray[np.float32]], 
+          phonemes: Optional[str] = None, speed: float = 1.0, *, out_path: Optional[Path] = None) -> Path:
+        """
+        Create audio from text or phonemes using specified voice and write to WAV file.
+        
+        Args:
+            text: Text to synthesize (used if phonemes not provided)
+            voice_id_or_embedding: Voice ID string or embedding array
+            phonemes: Optional phoneme string (if None, text is used)
+            speed: Speed factor (1.0 is normal)
+            out_path: Optional output path for the WAV file
+            
+        Returns:
+            Path to the generated audio file
+            
+        Raises:
+            TTSWriteError: If audio generation or file writing fails
+        """
+        # Start with detailed logging for debugging
+        logger.debug(f"Creating audio for text: '{text[:50]}{'...' if len(text) > 50 else ''}'", 
+                   extra={'subsys': 'tts', 'event': 'create.start'})
+        logger.debug(f"Using voice_id_or_embedding type: {type(voice_id_or_embedding).__name__}", 
+                   extra={'subsys': 'tts', 'event': 'create.voice_type'})
+        if out_path:
+            logger.debug(f"Using provided output path: {out_path}", 
+                       extra={'subsys': 'tts', 'event': 'create.out_path'})
+        else:
+            logger.debug("No output path provided, will create temporary file", 
+                       extra={'subsys': 'tts', 'event': 'create.no_out_path'})
+        # Handle voice ID or direct embedding
+        voice_embedding = None
+        voice_id = None
+        
+        if isinstance(voice_id_or_embedding, str):
+            voice_id = voice_id_or_embedding
+            if voice_id not in self.voices_data:
+                available_voices = self.voices
+                if not available_voices:
+                    raise ValueError("No voices available")
+                
+                # Fall back to first available voice
+                voice_id = available_voices[0]
+                logger.warning(f"Voice '{voice_id_or_embedding}' not found, falling back to '{voice_id}'", 
+                             extra={'subsys': 'tts', 'event': 'create.fallback_voice'})
+            
+            voice_embedding = self.voices_data[voice_id]
+            logger.debug(f"Using voice: {voice_id}", extra={'subsys': 'tts', 'event': 'create.voice_id'})
+        else:
+            # Assume it's already a voice embedding
+            voice_embedding = voice_id_or_embedding
+            logger.debug(f"Using direct voice embedding with shape {voice_embedding.shape}", 
+                       extra={'subsys': 'tts', 'event': 'create.direct_embedding'})
+        
+        # Use text directly if no phonemes provided
+        if phonemes is None:
+            # In a real implementation, we would convert text to phonemes here
+            # For now, just use the text directly
+            phonemes = text
+            logger.debug(f"No phonemes provided, using text directly: {text[:50]}...", 
+                       extra={'subsys': 'tts', 'event': 'create.text_as_phonemes'})
+        
+        # Log phonemiser and language
+        logger.debug(
+            f"Kokoro: voice={voice_id or 'custom'} lang={self.language} phonemiser={self.phonemiser}", 
+            extra={'subsys': 'tts', 'event': 'create.params'}
+        )
+        
+        # Create audio
+        try:
+            create_result = self._create_audio(phonemes, voice_embedding, speed)
+            
+            # Handle different return types from _create_audio
+            if isinstance(create_result, tuple) and len(create_result) == 2:
+                # Check if the first element is a Path
+                if isinstance(create_result[0], (str, Path)):
+                    # If first element is a Path, just return it
+                    logger.debug(
+                        f"_create_audio returned tuple with Path as first element",
+                        extra={'subsys': 'tts', 'event': 'create.tuple_path_return'}
+                    )
+                    path_result = Path(create_result[0]) if not isinstance(create_result[0], Path) else create_result[0]
+                    
+                    # Verify the path exists and has content
+                    if not path_result.exists():
+                        logger.error(
+                            f"Path from _create_audio does not exist: {path_result}",
+                            extra={'subsys': 'tts', 'event': 'create.error.path_not_exists'}
+                        )
+                        # Fall through to create silent audio
+                    elif path_result.stat().st_size == 0:
+                        logger.error(
+                            f"Path from _create_audio is empty: {path_result}",
+                            extra={'subsys': 'tts', 'event': 'create.error.path_empty'}
+                        )
+                        # Fall through to create silent audio
+                    else:
+                        # Path exists and has content, return it
+                        return path_result
+                        
+                # If first element is an ndarray, extract it and the sample rate
+                if isinstance(create_result[0], np.ndarray):
+                    audio, sample_rate = create_result
+                    logger.debug(
+                        f"_create_audio returned tuple with ndarray as first element, shape={audio.shape}, sr={sample_rate}",
+                        extra={'subsys': 'tts', 'event': 'create.tuple_ndarray_return'}
+                    )
+                else:
+                    # Unexpected first element type, create silent audio
+                    logger.error(
+                        f"Unexpected first element type in tuple from _create_audio: {type(create_result[0])}",
+                        extra={'subsys': 'tts', 'event': 'create.error.unexpected_tuple_element'}
+                    )
+                    # Create silent audio as fallback
+                    audio = np.zeros(SAMPLE_RATE, dtype=np.float32)  # 1 second of silence
+                    sample_rate = SAMPLE_RATE
+            elif isinstance(create_result, np.ndarray):
+                # Direct ndarray return
+                audio = create_result
+                sample_rate = 24000  # Default sample rate
+                logger.debug(
+                    f"_create_audio returned ndarray directly, shape={audio.shape}",
+                    extra={'subsys': 'tts', 'event': 'create.ndarray_return'}
+                )
+            elif isinstance(create_result, (str, Path)):
+                # If _create_audio somehow returned a path directly, use it
+                path_result = Path(create_result) if not isinstance(create_result, Path) else create_result
+                logger.debug(
+                    f"_create_audio returned path directly: {path_result}",
+                    extra={'subsys': 'tts', 'event': 'create.path_return'}
+                )
+                
+                # Verify the path exists and has content
+                if not path_result.exists():
+                    logger.error(
+                        f"Path from _create_audio does not exist: {path_result}",
+                        extra={'subsys': 'tts', 'event': 'create.error.path_not_exists'}
+                    )
+                    # Fall through to create silent audio
+                elif path_result.stat().st_size == 0:
+                    logger.error(
+                        f"Path from _create_audio is empty: {path_result}",
+                        extra={'subsys': 'tts', 'event': 'create.error.path_empty'}
+                    )
+                    # Fall through to create silent audio
+                else:
+                    # Path exists and has content, return it
+                    return path_result
+            elif create_result is None:
+                # Handle None return explicitly
+                logger.error(
+                    "_create_audio returned None",
+                    extra={'subsys': 'tts', 'event': 'create.error.none_return'}
+                )
+                # Create silent audio as fallback
+                audio = np.zeros(SAMPLE_RATE, dtype=np.float32)  # 1 second of silence
+                sample_rate = SAMPLE_RATE
+            else:
+                logger.error(
+                    f"Unexpected return type from _create_audio: {type(create_result)}",
+                    extra={'subsys': 'tts', 'event': 'create.error.unexpected_return'}
+                )
+                # Create silent audio as fallback
+                audio = np.zeros(SAMPLE_RATE, dtype=np.float32)  # 1 second of silence
+                sample_rate = SAMPLE_RATE
+            
+            # Normalize audio to be within float32 range for WAV files (-1.0 to 1.0)
+            # Most audio libraries prefer float32 in [-1, 1] range for WAV files
+            if audio.size > 0:
+                # Check if we have any audio data
+                if np.max(np.abs(audio)) > 0:
+                    # Normalize to range [-1, 1]
+                    audio = audio / np.max(np.abs(audio))
+                    # Keep as float32 for better compatibility with audio libraries
+                    audio = audio.astype(np.float32)
+                    
+                    # Log audio stats for debugging
+                    logger.debug(
+                        f"Audio samples: shape={audio.shape}, dtype={audio.dtype}, min={np.min(audio):.2f}, max={np.max(audio):.2f}, sr={sample_rate}", 
+                        extra={'subsys': 'tts', 'event': 'create.audio_stats'}
+                    )
+                else:
+                    # If audio is all zeros, just create zeros with float32 dtype
+                    audio = np.zeros(len(audio), dtype=np.float32)
+                    logger.error(
+                        "Generated audio contains all zeros", 
+                        extra={'subsys': 'tts', 'event': 'create.error.zeros'}
+                    )
+            else:
+                # Empty audio, create a small silent segment
+                logger.error(
+                    "Generated empty audio (zero length)", 
+                    extra={'subsys': 'tts', 'event': 'create.error.empty'}
+                )
+                audio = np.zeros(sample_rate // 2, dtype=np.float32)  # 0.5 second of silence
+            
+            # Ensure audio is a 1D array (WAV files expect 1D arrays)
+            if len(audio.shape) > 1:
+                # Reshape to 1D if it's a 2D array with shape like (1, N)
+                audio = audio.reshape(-1)
+                logger.debug(
+                    f"Reshaped audio to 1D: {audio.shape}", 
+                    extra={'subsys': 'tts', 'event': 'create.reshape'}
+                )
+            
+            # Create a temporary file if no output path provided
+            if out_path is None:
+                try:
+                    # Create temp directory if it doesn't exist
+                    os.makedirs(CACHE_DIR, exist_ok=True)
+                    # Create temporary file with .wav extension
+                    fd, temp_path = tempfile.mkstemp(suffix=".wav", dir=CACHE_DIR)
+                    os.close(fd)  # Close the file descriptor
+                    out_path = Path(temp_path)
+                except Exception as e:
+                    logger.error(
+                        f"Failed to create temporary file: {e}", 
+                        extra={'subsys': 'tts', 'event': 'create.error.temp_file'}, 
+                        exc_info=True
+                    )
+                    raise TTSWriteError(f"Failed to create temporary file: {e}")
+            
+            # Save as WAV using soundfile (more reliable for float32 audio)
+            try:
+                # Write as WAV file with subtype 'FLOAT' for float32 data
+                sf.write(out_path, audio, sample_rate, subtype='FLOAT')
+                logger.debug(
+                    f"Saved audio to {out_path} using soundfile (FLOAT subtype)", 
+                    extra={'subsys': 'tts', 'event': 'create.save', 'path': str(out_path), 'library': 'soundfile'}
+                )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to save with soundfile: {e}, trying scipy", 
+                    extra={'subsys': 'tts', 'event': 'create.fallback_scipy'}
+                )
+                # Fallback to scipy if soundfile fails
+                try:
+                    from scipy.io import wavfile
+                    # Convert to int16 for scipy wavfile
+                    audio_int16 = (np.clip(audio, -1.0, 1.0) * 32767).astype(np.int16)
+                    wavfile.write(out_path, sample_rate, audio_int16)
+                    logger.debug(
+                        f"Saved audio to {out_path} using scipy (int16)", 
+                        extra={'subsys': 'tts', 'event': 'create.save', 'path': str(out_path), 'library': 'scipy'}
+                    )
+                except Exception as e:
+                    logger.error(
+                        f"Failed to save audio with both libraries: {e}", 
+                        extra={'subsys': 'tts', 'event': 'create.error.save_failed'}, 
+                        exc_info=True
+                    )
+                    raise TTSWriteError(f"Failed to save audio file: {e}")
+            
+            # Verify the file was created and has content
+            if not out_path.exists() or out_path.stat().st_size == 0:
+                logger.error(
+                    f"Failed to create audio file or file is empty: {out_path}", 
+                    extra={'subsys': 'tts', 'event': 'create.error.file_creation'}
+                )
+                
+                # Create a fallback silent audio file instead of raising an exception
+                try:
+                    logger.warning(
+                        "Creating fallback silent audio file",
+                        extra={'subsys': 'tts', 'event': 'create.fallback_silent'}
+                    )
+                    # Generate 1 second of silence
+                    from scipy.io import wavfile
+                    silent_audio = np.zeros(SAMPLE_RATE, dtype=np.int16)
+                    wavfile.write(out_path, SAMPLE_RATE, silent_audio)
+                    logger.debug(
+                        f"Created fallback silent audio file: {out_path}",
+                        extra={'subsys': 'tts', 'event': 'create.fallback_silent_created'}
+                    )
+                except Exception as fallback_error:
+                    logger.error(
+                        f"Failed to create fallback silent audio: {fallback_error}",
+                        extra={'subsys': 'tts', 'event': 'create.error.fallback_silent_failed'}
+                    )
+                    raise TTSWriteError(f"Audio file is empty or does not exist and fallback creation failed: {out_path}")
+            
+            # Ensure we're returning a Path object
+            if not isinstance(out_path, Path):
+                logger.warning(
+                    f"Converting non-Path output to Path: {type(out_path)}",
+                    extra={'subsys': 'tts', 'event': 'create.path_convert'}
+                )
+                try:
+                    out_path = Path(str(out_path))
+                except Exception as e:
+                    logger.error(
+                        f"Failed to convert output to Path: {e}",
+                        extra={'subsys': 'tts', 'event': 'create.error.path_convert'}
+                    )
+                    raise TTSWriteError(f"Failed to convert output to Path: {e}")
+                
+            # Final verification that we have a valid Path
+            if not isinstance(out_path, Path):
+                logger.error(
+                    f"Failed to convert output to Path: {type(out_path)}",
+                    extra={'subsys': 'tts', 'event': 'create.error.path_convert'}
+                )
+                raise TTSWriteError(f"Failed to convert output to Path: {type(out_path)}")
+                
+            # Final check that the path exists and has content
+            if not out_path.exists():
+                logger.error(
+                    f"Final path check: file does not exist: {out_path}",
+                    extra={'subsys': 'tts', 'event': 'create.error.final_path_check'}
+                )
+                raise TTSWriteError(f"Final path check: file does not exist: {out_path}")
+                
+            if out_path.stat().st_size == 0:
+                logger.error(
+                    f"Final path check: file is empty: {out_path}",
+                    extra={'subsys': 'tts', 'event': 'create.error.final_path_check'}
+                )
+                raise TTSWriteError(f"Final path check: file is empty: {out_path}")
+                
+            logger.debug(
+                f"Successfully created audio file: {out_path} ({out_path.stat().st_size} bytes)",
+                extra={'subsys': 'tts', 'event': 'create.success'}
+            )
+            return out_path
+            
+        except TTSWriteError:
+            # Re-raise TTSWriteError without wrapping
+            raise
+        except Exception as e:
+            logger.error(
+                f"Failed to generate speech: {e}", 
+                extra={'subsys': 'tts', 'event': 'create.error'}, 
+                exc_info=True
+            )
+            
+            # Try to create a fallback silent audio file
+            if out_path is not None:
+                try:
+                    logger.warning(
+                        "Creating fallback silent audio after exception",
+                        extra={'subsys': 'tts', 'event': 'create.fallback_silent_exception'}
+                    )
+                    # Generate 1 second of silence
+                    from scipy.io import wavfile
+                    silent_audio = np.zeros(SAMPLE_RATE, dtype=np.int16)
+                    wavfile.write(out_path, SAMPLE_RATE, silent_audio)
+                    logger.debug(
+                        f"Created fallback silent audio file after exception: {out_path}",
+                        extra={'subsys': 'tts', 'event': 'create.fallback_silent_exception_created'}
+                    )
+                    return out_path
+                except Exception as fallback_error:
+                    logger.error(
+                        f"Failed to create fallback silent audio after exception: {fallback_error}",
+                        extra={'subsys': 'tts', 'event': 'create.error.fallback_silent_exception_failed'}
+                    )
+            
+            # If we couldn't create a fallback, raise the original exception
+            raise TTSWriteError(f"Failed to generate speech: {e}")

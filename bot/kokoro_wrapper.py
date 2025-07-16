@@ -12,7 +12,7 @@ from typing import Tuple, Optional, List, Dict, Union, Any
 from numpy.typing import NDArray
 
 # Import our direct NPZ handler
-from bot.kokoro_direct import KokoroDirect
+from bot.kokoro_direct_fixed import KokoroDirect
 
 class KokoroWrapper:
     """Wrapper for Kokoro-ONNX to handle numpy.float32 compatibility issues."""

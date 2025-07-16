@@ -2,6 +2,13 @@
 # -*- coding: utf-8 -*-
 """
 CLI script for testing TTS functionality.
+
+This script verifies that:
+1. The TTS pipeline always returns a valid Path object
+2. The audio file exists and is not empty
+3. The audio file is large enough to be playable (>10kB for 'ping')
+4. The audio file has a duration of at least 1 second
+
 Usage: python -m bot.tts_cli "hello world"
 """
 import argparse
@@ -42,54 +49,72 @@ def main():
     
     # Initialize KokoroDirect
     try:
-        logger.info(f"Initializing TTS with model: {model_path}")
+        logger.info(f"Initializing TTS with model: {model_path}, voices: {voice_path}")
         kokoro = KokoroDirect(
             model_path=model_path,
-            language="en",
-            phonemiser="espeak"
+            voices_path=voice_path
         )
         
-        # Load voice(s)
-        if os.path.isdir(voice_path):
-            # If voice_path is a directory, load all voices in it
-            voice_dir = Path(voice_path)
-            voice_files = list(voice_dir.glob("*.npz"))
-            if not voice_files:
-                logger.error(f"No voice files found in {voice_dir}")
-                sys.exit(1)
+        # Get available voices
+        voices = kokoro.get_voice_names()
+        if not voices:
+            logger.error("No voices available in the voice file")
+            sys.exit(1)
             
-            for voice_file in voice_files:
-                logger.info(f"Loading voice: {voice_file.stem}")
-                kokoro.load_voice(voice_file)
-        else:
-            # If voice_path is a file, load just that voice
-            voice_file = Path(voice_path)
-            if not voice_file.exists():
-                logger.error(f"Voice file not found: {voice_file}")
-                sys.exit(1)
-            
-            logger.info(f"Loading voice: {voice_file.stem}")
-            kokoro.load_voice(voice_file)
+        logger.info(f"Loaded {len(voices)} voices: {', '.join(voices[:5])}{'...' if len(voices) > 5 else ''}")
+        
+        # Check if requested voice is available
+        if args.voice not in voices:
+            logger.warning(f"Requested voice '{args.voice}' not found, using '{voices[0]}' instead")
+            args.voice = voices[0]
         
         # Generate audio
         logger.info(f"Generating audio for text: '{args.text}'")
+        start_time = os.times().user
         result = kokoro.create(args.text, args.voice, out_path=output_path)
+        generation_time = os.times().user - start_time
         
-        # Verify the result
-        if result and result.exists() and result.stat().st_size > 0:
-            logger.info(f"✅ Generated audio saved to: {result}")
-            logger.info(f"File size: {result.stat().st_size} bytes")
-            
-            # Try to get audio duration
-            try:
-                import soundfile as sf
-                info = sf.info(result)
-                logger.info(f"Audio duration: {info.duration:.2f}s, Sample rate: {info.samplerate}Hz")
-            except Exception as e:
-                logger.warning(f"Could not get audio info: {e}")
-        else:
-            logger.error(f"Failed to generate audio or file is empty: {result}")
+        # Verify the result is a Path object
+        if not isinstance(result, Path):
+            logger.error(f"❌ TTS pipeline returned {type(result)}, expected Path object")
             sys.exit(1)
+            
+        # Verify the file exists
+        if not result.exists():
+            logger.error(f"❌ Output file does not exist: {result}")
+            sys.exit(1)
+            
+        # Verify the file has content
+        file_size = result.stat().st_size
+        if file_size == 0:
+            logger.error(f"❌ Output file is empty: {result}")
+            sys.exit(1)
+            
+        # Verify minimum file size (10kB for short phrases)
+        min_size = 10000  # 10kB
+        if file_size < min_size:
+            logger.error(f"❌ File size too small: {file_size} bytes (minimum: {min_size} bytes)")
+            sys.exit(1)
+            
+        logger.info(f"✅ Generated audio saved to: {result}")
+        logger.info(f"File size: {file_size} bytes")
+        
+        # Try to get audio duration
+        try:
+            import soundfile as sf
+            info = sf.info(result)
+            duration = info.duration
+            
+            # Verify minimum duration (1 second)
+            min_duration = 1.0  # 1 second
+            if duration < min_duration:
+                logger.error(f"❌ Audio duration too short: {duration:.2f}s (minimum: {min_duration:.1f}s)")
+                sys.exit(1)
+                
+            logger.info(f"✅ Audio duration: {duration:.2f}s, Sample rate: {info.samplerate}Hz")
+            logger.info(f"Generation speed: {duration/generation_time:.2f}x real-time")
+        except Exception as e:
+            logger.warning(f"Could not get audio info: {e}")
             
     except TTSWriteError as e:
         logger.error(f"TTS error: {e}")

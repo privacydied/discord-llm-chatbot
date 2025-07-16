@@ -39,7 +39,8 @@ dependencies = [
     # AI/ML Dependencies
     "ollama>=0.2.0",
     "openai>=1.94.0",
-    "TTS>=0.22.0",
+    # TTS is pinned to 0.21.1 because newer versions require gruut which pins numpy<2.0.0
+    "TTS==0.21.1",  # Last version before gruut dependency
     # TTS - Kokoro and dependencies
     "kokoro-onnx==0.4.9",  # Pin specific version for compatibility
     "soundfile>=0.12.1",
@@ -68,7 +69,7 @@ dependencies = [
     "PyNaCl>=1.5.0",
     "soundfile>=0.12.0",
     "librosa>=0.11.0",  # Supports numpy-2
-    "numpy>=2.0.2,<2.3",  # Modern numpy stack
+    "numpy>=2.0.2,<2.3",  # Modern numpy stack, compatible with TTS 0.22.0+ and kokoro-onnx 0.4.9
     "faster-whisper>=1.1.0",
 ]
 
