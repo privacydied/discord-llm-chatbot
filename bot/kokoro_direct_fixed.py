@@ -20,6 +20,9 @@ from numpy.typing import NDArray
 # Import custom exceptions
 from .tts_errors import TTSWriteError
 
+# Import tokenizer registry
+from .tokenizer_registry import select_tokenizer_for_language
+
 # Setup logging
 logger = logging.getLogger(__name__)
 
@@ -144,31 +147,31 @@ class KokoroDirect:
         Returns:
             Phonemiser name to use
         """
-        # Allow override from environment
-        env_phonemiser = os.environ.get("TTS_PHONEMISER")
+        # Use environment variable override if present
+        env_phonemiser = os.environ.get("TTS_PHONEMISER", "").strip().lower()
         if env_phonemiser:
+            logger.info(f"Using phonemiser from environment: {env_phonemiser}", 
+                      extra={'subsys': 'tts', 'event': 'phonemiser.env_override'})
             return env_phonemiser
+        
+        try:
+            # Use the tokenizer registry to select the best tokenizer for this language
+            tokenizer = select_tokenizer_for_language(language)
+            logger.info(f"Selected tokenizer for {language} from registry: {tokenizer}", 
+                      extra={'subsys': 'tts', 'event': 'phonemiser.registry_select'})
+            return tokenizer
+        except Exception as e:
+            logger.warning(f"Failed to select tokenizer from registry: {e}, using fallbacks", 
+                         extra={'subsys': 'tts', 'event': 'phonemiser.registry_error'})
             
-        # Select based on language
-        if language.startswith("en"):
-            phonemiser = "espeak"
-        elif language.startswith(("ja", "zh")):
-            phonemiser = "misaki"
-        else:
-            phonemiser = "espeak"
-            
-        # Log warning if using non-espeak for English
-        if language.startswith("en") and phonemiser != "espeak":
-            logger.warning(
-                f"Using non-recommended phonemiser '{phonemiser}' for English language", 
-                extra={'subsys': 'tts', 'event': 'phonemiser.warning'}
-            )
-            
-        logger.debug(
-            f"Selected phonemiser '{phonemiser}' for language '{language}'", 
-            extra={'subsys': 'tts', 'event': 'phonemiser.select'}
-        )
-        return phonemiser
+            # Legacy fallback phonemiser selection logic
+            language = language.lower().strip()
+            if language == "en":
+                return "espeak"  # Best for English
+            elif language in ["ja", "zh"]:
+                return "misaki"  # Best for Japanese/Chinese
+            else:
+                return "phonemizer"  # Default for other languages
         
     def _load_model(self) -> None:
         """Load the ONNX model and tokenizer."""
@@ -212,17 +215,14 @@ class KokoroDirect:
             # Create ONNX session directly instead of using Model class
             self.sess = ort.InferenceSession(self.model_path, providers=providers)
             
+            # Log input names for debugging
+            input_names = [input.name for input in self.sess.get_inputs()]
+            logger.debug(f"ONNX model input names: {input_names}", extra={'subsys': 'tts', 'event': 'onnx.inputs'})
+            
             logger.info(f"Loaded ONNX model from {self.model_path}")
             
             # Validate language resources
             self._validate_language_resources()
-            
-        except Exception as e:
-            logger.error(f"Failed to load model: {e}", exc_info=True)
-            raise
-            # Log input names for debugging
-            input_names = [input.name for input in self.sess.get_inputs()]
-            logger.debug(f"ONNX model input names: {input_names}", extra={'subsys': 'tts', 'event': 'onnx.inputs'})
             
         except ImportError as e:
             logger.error(f"Failed to import required modules: {e}", extra={'subsys': 'tts', 'event': 'load_model.error'})
