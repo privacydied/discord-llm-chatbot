@@ -15,6 +15,8 @@ from discord.ext import commands
 
 from .config import load_config
 from .kokoro_direct_fixed import KokoroDirect
+from .tokenizer_registry import TokenizerRegistry, discover_tokenizers, is_tokenizer_warning_needed, get_tokenizer_warning_message
+from .tts_errors import MissingTokeniserError
 
 logger = logging.getLogger(__name__)
 
@@ -40,9 +42,39 @@ class TTSManager:
         # Initialize Kokoro TTS
         self._init_kokoro()
     
+    def _init_tokenizer_registry(self) -> None:
+        """Initialize the tokenizer registry to ensure tokenizers are available for TTS."""
+        try:
+            # Get the tokenizer registry instance
+            registry = TokenizerRegistry.get_instance()
+            
+            # Discover available tokenizers
+            available_tokenizers = registry.discover_tokenizers()
+            
+            if not available_tokenizers:
+                logger.warning("No tokenizers found during initialization. TTS may not work correctly.",
+                             extra={'subsys': 'tts', 'event': 'init.no_tokenizers'})
+            else:
+                logger.info(f"Found {len(available_tokenizers)} available tokenizers: {', '.join(sorted(available_tokenizers))}",
+                          extra={'subsys': 'tts', 'event': 'init.tokenizers_found'})
+                
+            # Check if we need to warn about missing tokenizers for English
+            language = os.environ.get("TTS_LANGUAGE", "en").lower()
+            if language == "en" and is_tokenizer_warning_needed(language):
+                warning_message = get_tokenizer_warning_message(language)
+                logger.warning(warning_message, extra={'subsys': 'tts', 'event': 'init.tokenizer_warning'})
+                
+        except Exception as e:
+            logger.error(f"Failed to initialize tokenizer registry: {e}",
+                       extra={'subsys': 'tts', 'event': 'init.tokenizer_registry_error'}, exc_info=True)
+            # Continue without failing - we'll use fallback tokenizers
+    
     def _init_kokoro(self) -> None:
         """Initialize the Kokoro TTS engine with direct NPZ support."""
         try:
+            # Initialize tokenizer registry first to ensure it's available for TTS
+            self._init_tokenizer_registry()
+            
             # Check for new environment variables first (preferred)
             model_path = os.environ.get("TTS_MODEL_PATH")
             voices_path = os.environ.get("TTS_VOICES_PATH")
@@ -139,25 +171,46 @@ class TTSManager:
                 logger.warning(f"Could not calculate voice file hash: {e}", 
                              extra={'subsys': 'tts', 'event': 'init.hash_error'})
             
-            # Initialize with KokoroDirect directly
+            # Initialize Kokoro with the model and voices paths
             try:
-                logger.info("Initializing KokoroDirect TTS engine",
-                          extra={'subsys': 'tts', 'event': 'init.kokoro_direct'})
+                logger.debug("Initializing KokoroDirect TTS engine", 
+                           extra={'subsys': 'tts', 'event': 'init.kokoro_start'})
                 self.kokoro = KokoroDirect(model_path, voices_path)
+                logger.info("KokoroDirect TTS engine initialized successfully", 
+                          extra={'subsys': 'tts', 'event': 'init.kokoro_success'})
+                
+                # Check if tokenizer warning is needed and log it
+                if is_tokenizer_warning_needed():
+                    language = os.environ.get('TTS_LANGUAGE', 'en')
+                    warning_msg = get_tokenizer_warning_message(language)
+                    logger.warning(f"Tokenizer warning: {warning_msg.splitlines()[0]}", 
+                                 extra={'subsys': 'tts', 'event': 'init.tokenizer_warning'})
+                    
+                    # Store warning message for potential display to user
+                    self.tokenizer_warning = warning_msg
+                else:
+                    self.tokenizer_warning = None
                 
                 # Get available voices
-                self.voices = self.kokoro.get_voice_names() if hasattr(self.kokoro, 'get_voice_names') else []
+                self.voices = self.kokoro.get_voice_names()
+                logger.info(f"Loaded {len(self.voices)} voices", 
+                          extra={'subsys': 'tts', 'event': 'init.voices_loaded', 'voice_count': len(self.voices)})
                 
-                # Log success with detailed info
-                if self.voices:
-                    logger.info(f"TTS initialized with {len(self.voices)} voices: {', '.join(self.voices[:5])}{'...' if len(self.voices) > 5 else ''}", 
-                               extra={'subsys': 'tts', 'event': 'init.success', 'voice_count': len(self.voices)})
-                else:
-                    logger.warning("TTS initialized but no voices available", 
-                                 extra={'subsys': 'tts', 'event': 'init.no_voices'})
+                # Set default voice
+                default_voice = os.environ.get("TTS_VOICE", "default")
+                if default_voice not in self.voices and default_voice != "default":
+                    logger.warning(f"Default voice '{default_voice}' not found, using first available voice",
+                                 extra={'subsys': 'tts', 'event': 'init.default_voice_not_found'})
+                    default_voice = self.voices[0] if self.voices else "default"
+                
+                self._default_voice = default_voice
+                logger.info(f"Using default voice: {self._default_voice}", 
+                          extra={'subsys': 'tts', 'event': 'init.default_voice_set'})
+                
             except Exception as e:
-                logger.error(f"Failed to initialize KokoroDirect: {e}",
+                logger.error(f"Failed to initialize KokoroDirect TTS engine: {e}", 
                            extra={'subsys': 'tts', 'event': 'init.kokoro_error'}, exc_info=True)
+                self.kokoro = None
                 raise
                 
         except ImportError as e:

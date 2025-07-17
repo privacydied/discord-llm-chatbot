@@ -55,6 +55,25 @@ source .venv/bin/activate
 uv pip install -r requirements.txt
 ```
 
+3. For better English TTS quality, install one of these phonetic tokenizers:
+
+```bash
+# Option 1: Install phonemizer (Python package)
+source .venv/bin/activate
+uv pip install phonemizer
+
+# Option 2: Install espeak-ng (system package)
+sudo pacman -Sy espeak-ng  # For Arch Linux
+# OR
+sudo apt install espeak-ng  # For Debian/Ubuntu
+
+# Option 3: Install g2p_en (Python package, English only)
+source .venv/bin/activate
+uv pip install g2p_en
+```
+
+Without a phonetic tokenizer, the TTS quality may be reduced as it will fall back to grapheme tokenization.
+
 ## Automatic Asset Management
 
 The bot includes an automatic asset management system that:
