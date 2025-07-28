@@ -140,81 +140,59 @@ class Router:
         should_process = False
 
         try:
-            # 1. Gatekeeping: First check channel type (DM vs Guild)
-            if isinstance(message.channel, DMChannel):
-                self.logger.info(f"📩 === DM MESSAGE PROCESSING STARTED ====",
-                               extra={'subsys': 'router', 'event': 'dm.start',
-                                      'msg_id': msg_id, 'user_id': user_id})
+            # 1. Attachment Check: Prioritize attachments over any other content.
+            if message.attachments:
+                self.logger.info(f"📎 Message has attachments, starting attachment processing flow",
+                               extra={'subsys': 'router', 'event': 'attachment.start', 'msg_id': msg_id, 'guild_id': guild_id})
+                self._metric_inc('messages_attachment_handled')
+                # We assume the first attachment is the one to process
+                text_response = await self._flow_process_attachments(message, message.attachments[0])
+                return BotAction(content=text_response)
 
-                # 1a. Attachment Check: Prioritize attachments over commands or text.
-                if message.attachments:
-                    self.logger.info(f"📎 DM has attachments, starting attachment processing flow",
-                                   extra={'subsys': 'router', 'event': 'dm.attachment', 'msg_id': msg_id})
-                    self._metric_inc('messages_dm_attachment_handled')
-                    # We assume the first attachment is the one to process
-                    text_response = await self._flow_process_attachments(message, message.attachments[0])
-                    return BotAction(content=text_response)
+            # 2. Command & Text Processing: Only if no attachments.
+            # In DMs, all messages are treated as commands. In guilds, check for prefix/mention.
+            is_dm = isinstance(message.channel, DMChannel)
+            if is_dm:
+                self.logger.info(f"📩 DM message, parsing for command/text",
+                               extra={'subsys': 'router', 'event': 'dm.parse', 'msg_id': msg_id})
+        
+            parsed_command = parse_command(message, self.bot)
 
-                # 1b. Command Check: If no attachments, check for commands.
-                parsed_command = parse_command(message, self.bot)
-                if parsed_command:
-                    self.logger.debug(f"🔍 DM command detected: {parsed_command.command.name}",
-                                    extra={'subsys': 'router', 'event': 'dm.command',
-                                           'msg_id': msg_id, 'command': parsed_command.command.name})
+            # If not in a DM and no command was parsed (no prefix/mention), ignore.
+            if not is_dm and not parsed_command:
+                self.logger.debug(f"⏭️ Ignoring guild message {msg_id}: No mention or prefix",
+                                extra={'subsys': 'router', 'event': 'guild.ignore.unmentioned'})
+                return None
 
-                    if parsed_command.command in [Command.PING, Command.HELP]:
-                        return await self._handle_simple_command(parsed_command, msg_id)
-                    elif parsed_command.command == Command.IGNORE:
-                        return None  # Explicitly ignore
-                    elif parsed_command.command == Command.CHAT:
-                        self.logger.info(f"📝 Processing DM as plain text message",
-                                       extra={'subsys': 'router', 'event': 'dm.text', 'msg_id': msg_id})
-                        self._metric_inc('messages_dm_text_handled')
-                        return await self._invoke_text_flow(parsed_command.cleaned_content)
-                    else:
-                        # Other commands fall through to be handled by cogs
-                        self.logger.info(f"⚙️ Passing DM command to cog: {parsed_command.command.name}",
-                                       extra={'subsys': 'router', 'event': 'dm.command.pass', 'msg_id': msg_id})
-                        should_process = True  # Let the default cog handler run
-                else:
-                    # 1c. Fallback: If no attachments and no command, it's an empty or invalid message.
-                    self.logger.debug("No command or attachment detected in DM, ignoring.", extra={'subsys': 'router', 'event': 'dm.ignore.empty', 'msg_id': msg_id})
-                    return None # Ignore empty/invalid messages
+            # If a command was parsed, handle it.
+            if parsed_command:
+                self.logger.debug(f"🔍 Command detected: {parsed_command.command.name}",
+                                extra={'subsys': 'router', 'event': 'command.detected',
+                                       'msg_id': msg_id, 'command': parsed_command.command.name})
 
-            else:  # It's a Guild Channel
-                self.logger.debug(f"🏢 === GUILD MESSAGE PROCESSING STARTED ==== ",
-                               extra={'subsys': 'router', 'event': 'guild.start',
-                                      'msg_id': msg_id, 'guild_id': guild_id})
-                parsed_command = parse_command(message, self.bot)
-
-                if not parsed_command:
-                    self.logger.debug(f"⏭️ Ignoring guild message {msg_id}: No mention or prefix",
-                                    extra={'subsys': 'router', 'event': 'guild.ignore.unmentioned'})
-                    return None # Not a command, and bot was not mentioned.
-
-                # At this point, it's a command or a mention.
-                # 2a. Attachment Check
-                if message.attachments:
-                    self.logger.info(f"📎 Guild message has attachments, starting attachment processing flow",
-                                   extra={'subsys': 'router', 'event': 'guild.attachment', 'msg_id': msg_id})
-                    self._metric_inc('messages_guild_attachment_handled')
-                    text_response = await self._flow_process_attachments(message, message.attachments[0])
-                    return BotAction(content=text_response)
-                
-                # 2b. Command/Text processing
                 if parsed_command.command in [Command.PING, Command.HELP]:
                     return await self._handle_simple_command(parsed_command, msg_id)
+            
                 elif parsed_command.command == Command.IGNORE:
-                    return None
+                    return None  # Explicitly ignore
+            
                 elif parsed_command.command == Command.CHAT:
-                    self.logger.info(f"📝 Processing guild message as text",
-                                   extra={'subsys': 'router', 'event': 'guild.text', 'msg_id': msg_id})
-                    self._metric_inc('messages_guild_text_handled')
+                    self.logger.info(f"📝 Processing as plain text message",
+                                   extra={'subsys': 'router', 'event': 'text.process', 'msg_id': msg_id})
+                    self._metric_inc('messages_text_handled')
                     return await self._invoke_text_flow(parsed_command.cleaned_content)
+            
                 else:
-                    self.logger.info(f"⚙️ Passing guild command to cog: {parsed_command.command.name}",
-                                   extra={'subsys': 'router', 'event': 'guild.command.pass', 'msg_id': msg_id})
-                    should_process = True # Let the default cog handler run
+                    # Other commands fall through to be handled by cogs
+                    self.logger.info(f"⚙️ Passing command to cog: {parsed_command.command.name}",
+                                   extra={'subsys': 'router', 'event': 'command.pass_to_cog', 'msg_id': msg_id})
+                    should_process = True  # Let the default cog handler run
+        
+            # If in a DM and no command was parsed, it's an invalid/empty message to be ignored.
+            elif is_dm:
+                self.logger.debug("No command detected in DM, ignoring.", 
+                                extra={'subsys': 'router', 'event': 'dm.ignore.empty', 'msg_id': msg_id})
+                return None
 
         except Exception as e:
             self.logger.error(f"❌ Error in router dispatch: {e}", exc_info=True,
