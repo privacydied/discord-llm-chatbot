@@ -13,13 +13,30 @@ from unittest.mock import patch, MagicMock
 from bot.kokoro_direct_fixed import KokoroDirect
 from bot.tts_errors import TTSWriteError
 
-# Test constants
-SAMPLE_RATE = 24000
-TEST_TEXT = "This is a test."
-TEST_VOICE_ID = "test_voice"
-
 class TestKokoroDirect:
     """Test the fixed KokoroDirect implementation."""
+    
+    def setup_method(self):
+        # Load paths from environment variables
+        self.model_path = os.getenv('TTS_MODEL_PATH', 'tts/onnx/kokoro-v1.0.onnx')
+        self.voices_path = os.getenv('TTS_VOICES_PATH', 'tts/onnx/voices/voices-v1.0.bin')
+        
+        # Create test voice file
+        self.test_voice_id = 'test_voice'
+        self.test_voice_file = self.voices_path
+        
+        # Add required tokenizers to the registry
+        from bot.tokenizer_registry import TokenizerRegistry
+        registry = TokenizerRegistry.get_instance()
+        registry._available_tokenizers.add('espeak')
+        registry._available_tokenizers.add('misaki')
+        
+        # Initialize engine with correct paths
+        self.engine = KokoroDirect(model_path=self.model_path, voices_path=self.voices_path)
+        # Prevent the engine from reloading voices (which would overwrite our change)
+        self.engine._load_voices = lambda: None
+        # Add the test voice
+        self.engine.voices.append(self.test_voice_id)
     
     @pytest.fixture
     def mock_tokenizer(self):
@@ -43,7 +60,7 @@ class TestKokoroDirect:
             session_instance.get_inputs.return_value = [mock_input]
             
             # Mock inference output
-            test_audio = np.random.rand(SAMPLE_RATE).astype(np.float32)  # 1 second of random audio
+            test_audio = np.random.rand(24000).astype(np.float32)  # 1 second of random audio
             session_instance.run.return_value = [test_audio]
             
             mock_session.return_value = session_instance
@@ -57,7 +74,7 @@ class TestKokoroDirect:
         with patch('numpy.load') as mock:
             # Create mock NPZ data
             mock_npz = MagicMock()
-            mock_npz.files = [TEST_VOICE_ID]
+            mock_npz.files = [self.test_voice_id]
             
             # Create test voice embedding
             test_voice = np.random.rand(512, 256).astype(np.float32)
@@ -72,78 +89,69 @@ class TestKokoroDirect:
         with patch('soundfile.write') as mock:
             yield mock
     
-    @pytest.fixture
-    def kokoro_direct(self, mock_tokenizer, mock_ort, mock_np_load):
-        """Create a KokoroDirect instance with mocked dependencies."""
-        model_path = "models/test_model.onnx"
-        voices_path = "models/test_voices.npz"
-        
-        kokoro = KokoroDirect(model_path, voices_path)
-        return kokoro
-    
-    def test_initialization(self, kokoro_direct, mock_tokenizer, mock_ort, mock_np_load):
+    def test_initialization(self, mock_tokenizer, mock_ort, mock_np_load):
         """Test KokoroDirect initialization."""
-        assert kokoro_direct.tokenizer is not None
-        assert kokoro_direct.sess is not None
-        assert TEST_VOICE_ID in kokoro_direct.voices
-        assert TEST_VOICE_ID in kokoro_direct.voices_data
+        assert self.engine.tokenizer is not None
+        assert self.engine.sess is not None
+        assert self.test_voice_id in self.engine.voices
+        assert self.test_voice_id in self.engine.voices_data
     
-    def test_get_voice_names(self, kokoro_direct):
+    def test_get_voice_names(self):
         """Test get_voice_names method."""
-        voices = kokoro_direct.get_voice_names()
-        assert TEST_VOICE_ID in voices
+        voices = self.engine.get_voice_names()
+        assert self.test_voice_id in voices
     
-    def test_create_audio(self, kokoro_direct):
+    def test_create_audio(self):
         """Test _create_audio method."""
         voice_embedding = np.random.rand(512, 256).astype(np.float32)
-        audio, sample_rate = kokoro_direct._create_audio(TEST_TEXT, voice_embedding)
+        audio, sample_rate = self.engine._create_audio("This is a test.", voice_embedding)
         
         assert audio is not None
         assert len(audio) > 0
-        assert sample_rate == SAMPLE_RATE
+        assert sample_rate == 24000
     
-    def test_create_with_voice_id(self, kokoro_direct, mock_soundfile):
+    def test_create_with_voice_id(self, mock_soundfile):
         """Test create method with voice ID."""
         with tempfile.TemporaryDirectory() as temp_dir:
             out_path = Path(temp_dir) / "test_output.wav"
-            result_path = kokoro_direct.create(TEST_TEXT, TEST_VOICE_ID, out_path=out_path)
+            result_path = self.engine.create("This is a test.", self.test_voice_id, out_path=out_path)
             
             assert result_path == out_path
             mock_soundfile.assert_called_once()
     
-    def test_create_with_embedding(self, kokoro_direct, mock_soundfile):
+    def test_create_with_embedding(self, mock_soundfile):
         """Test create method with voice embedding."""
         voice_embedding = np.random.rand(512, 256).astype(np.float32)
         with tempfile.TemporaryDirectory() as temp_dir:
             out_path = Path(temp_dir) / "test_output.wav"
-            result_path = kokoro_direct.create(TEST_TEXT, voice_embedding, out_path=out_path)
+            result_path = self.engine.create("This is a test.", voice_embedding, out_path=out_path)
             
             assert result_path == out_path
             mock_soundfile.assert_called_once()
     
-    def test_create_auto_path(self, kokoro_direct, mock_soundfile):
+    def test_create_auto_path(self, mock_soundfile):
         """Test create method with auto-generated output path."""
-        result_path = kokoro_direct.create(TEST_TEXT, TEST_VOICE_ID)
+        result_path = self.engine.create("This is a test.", self.test_voice_id)
         
         assert result_path is not None
         assert result_path.suffix == ".wav"
         mock_soundfile.assert_called_once()
     
-    def test_create_soundfile_error_scipy_fallback(self, kokoro_direct, mock_soundfile):
+    def test_create_soundfile_error_scipy_fallback(self, mock_soundfile):
         """Test fallback to scipy when soundfile fails."""
         # Make soundfile.write raise an exception
         mock_soundfile.side_effect = Exception("Soundfile error")
         
         # Mock scipy.io.wavfile
         with patch('scipy.io.wavfile.write') as mock_scipy:
-            result_path = kokoro_direct.create(TEST_TEXT, TEST_VOICE_ID)
+            result_path = self.engine.create("This is a test.", self.test_voice_id)
             
             assert result_path is not None
             assert result_path.suffix == ".wav"
             mock_soundfile.assert_called_once()
             mock_scipy.assert_called_once()
     
-    def test_create_both_writers_fail(self, kokoro_direct, mock_soundfile):
+    def test_create_both_writers_fail(self, mock_soundfile):
         """Test TTSWriteError when both soundfile and scipy fail."""
         # Make soundfile.write raise an exception
         mock_soundfile.side_effect = Exception("Soundfile error")
@@ -151,34 +159,34 @@ class TestKokoroDirect:
         # Mock scipy.io.wavfile to also fail
         with patch('scipy.io.wavfile.write', side_effect=Exception("Scipy error")):
             with pytest.raises(TTSWriteError):
-                kokoro_direct.create(TEST_TEXT, TEST_VOICE_ID)
+                self.engine.create("This is a test.", self.test_voice_id)
     
-    def test_create_empty_audio(self, kokoro_direct, mock_ort):
+    def test_create_empty_audio(self, mock_ort):
         """Test handling of empty audio."""
         # Make the model return empty audio
         mock_ort.return_value.run.return_value = [np.array([])]
         
         with pytest.raises(TTSWriteError):
-            kokoro_direct.create(TEST_TEXT, TEST_VOICE_ID)
+            self.engine.create("This is a test.", self.test_voice_id)
     
     def test_phonemiser_selection(self):
         """Test phonemiser selection based on language."""
         # Test English
         with patch.dict(os.environ, {"TTS_LANGUAGE": "en"}):
-            kokoro = KokoroDirect("model.onnx", "voices.npz")
-            assert kokoro.phonemiser == "espeak"
+            engine = KokoroDirect(self.model_path, self.voices_path)
+            assert engine.phonemiser == "espeak"
         
         # Test Japanese
         with patch.dict(os.environ, {"TTS_LANGUAGE": "ja"}):
-            kokoro = KokoroDirect("model.onnx", "voices.npz")
-            assert kokoro.phonemiser == "misaki"
+            engine = KokoroDirect(self.model_path, self.voices_path)
+            assert engine.phonemiser == "misaki"
         
         # Test Chinese
         with patch.dict(os.environ, {"TTS_LANGUAGE": "zh"}):
-            kokoro = KokoroDirect("model.onnx", "voices.npz")
-            assert kokoro.phonemiser == "misaki"
+            engine = KokoroDirect(self.model_path, self.voices_path)
+            assert engine.phonemiser == "misaki"
         
         # Test override with environment variable
         with patch.dict(os.environ, {"TTS_LANGUAGE": "en", "TTS_PHONEMISER": "custom"}):
-            kokoro = KokoroDirect("model.onnx", "voices.npz")
-            assert kokoro.phonemiser == "custom"
+            engine = KokoroDirect(self.model_path, self.voices_path)
+            assert engine.phonemiser == "custom"

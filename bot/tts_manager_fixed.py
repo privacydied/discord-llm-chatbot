@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Optional, Dict, Any, Union
 
 # Import custom exceptions and utilities
-from .tts_errors import TTSWriteError, MissingTokeniserError
+from .tts_errors import TTSWriteError, MissingTokeniserError, TokeniserInjectionError
 from .env_utils import resolve_env, resolve_path, get_config_singleton
 from .tokenizer_registry import TokenizerRegistry, discover_tokenizers, select_tokenizer_for_language, is_tokenizer_warning_needed
 
@@ -141,35 +141,54 @@ class TTSManager:
         """
         Load the TTS model asynchronously.
         """
-        if not self.available:
-            logger.warning("TTS is not available, skipping model loading", 
-                          extra={'subsys': 'tts', 'event': 'load.skipped'})
+        if self.backend != 'kokoro-onnx':
+            logger.warning(f"Unsupported TTS backend: {self.backend}", 
+                          extra={'subsys': 'tts', 'event': 'load.unsupported_backend'})
+            self.available = False
             return
             
         try:
-            # Import here to avoid dependency issues
-            from .kokoro_direct_fixed import KokoroDirect
+            # Import kokoro-onnx here to avoid import errors if not installed
+            # The bootstrap module should already have registered the EspeakWrapper tokenizer
+            logger.info("Loading kokoro-onnx TTS model", 
+                      extra={'subsys': 'tts', 'event': 'load.start'})
             
-            # Initialize KokoroDirect with our model and voice paths
-            # These already handle both old and new environment variable formats
+            # Create KokoroDirect instance
             self.kokoro = KokoroDirect(
                 model_path=str(self.model_path),
-                voices_path=str(self.voices_path),
-                voice_name=self.voice
+                voice_path=str(self.voices_path),
+                cache_dir=str(self.cache_dir),
             )
             
-            logger.info(
-                f"Initialized kokoro-onnx with model={self.model_path}, voices={self.voices_path}, voice={self.voice}", 
-                extra={'subsys': 'tts', 'event': 'kokoro.init'}
-            )
+            # Verify that the tokenizer is properly initialized
+            if self.kokoro.tokenizer is None:
+                # Attempt to inject EspeakWrapper directly
+                logger.warning("Tokenizer is None after initialization, attempting direct injection", 
+                              extra={'subsys': 'tts', 'event': 'tokenizer.injection.attempt'})
+                
+                try:
+                    from kokoro_onnx.tokenizer import EspeakWrapper
+                    self.kokoro.tokenizer = EspeakWrapper()
+                    logger.info("Successfully injected EspeakWrapper tokenizer directly", 
+                              extra={'subsys': 'tts', 'event': 'tokenizer.injection.success'})
+                except Exception as e:
+                    logger.error(f"Failed to inject EspeakWrapper tokenizer: {e}", 
+                                extra={'subsys': 'tts', 'event': 'tokenizer.injection.error'}, exc_info=True)
+                    raise TokeniserInjectionError(f"Failed to inject EspeakWrapper tokenizer: {e}")
             
-            # Log available voices
-            voices = self.kokoro.get_voice_names()
-            logger.info(f"TTS model loaded with {len(voices)} voices: {', '.join(voices[:5])}{'...' if len(voices) > 5 else ''}", 
-                       extra={'subsys': 'tts', 'event': 'load.success'})
+            # Verify that the tokenizer is now properly initialized
+            if self.kokoro.tokenizer is None:
+                logger.error("Tokenizer is still None after injection attempt", 
+                            extra={'subsys': 'tts', 'event': 'tokenizer.missing'})
+                raise TokeniserInjectionError("Tokenizer is still None after injection attempt")
             
-            # Verify voice exists
-            if self.voice not in voices and self.voice != 'default':
+            # Log the tokenizer class name for diagnostics
+            tokenizer_class = self.kokoro.tokenizer.__class__.__name__
+            logger.info(f"Using tokenizer: {tokenizer_class}", 
+                      extra={'subsys': 'tts', 'event': 'tokenizer.class', 'tokenizer': tokenizer_class})
+            
+            # Check if the voice exists
+            if self.voice not in self.kokoro.available_voices:
                 logger.warning(f"Requested voice '{self.voice}' not found, will use fallback", 
                               extra={'subsys': 'tts', 'event': 'load.voice_missing'})
             
@@ -180,6 +199,10 @@ class TTSManager:
             self.available = False
             logger.error(f"Failed to load TTS model: {e}", 
                         extra={'subsys': 'tts', 'event': 'load.error'}, exc_info=True)
+            
+            # Propagate TokeniserInjectionError to the caller
+            if isinstance(e, TokeniserInjectionError):
+                raise
     
     async def generate_speech(self, text: str, voice: Optional[str] = None, 
                              out_path: Optional[Path] = None, pcm16: bool = False) -> Optional[Path]:

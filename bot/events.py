@@ -45,16 +45,25 @@ class BotEventHandler(commands.Cog):
             'msg_id': message.id
         }
 
-    @commands.Cog.listener()
-    async def on_message(self, message: discord.Message) -> None:
-        """Main message handler that gates and dispatches messages."""
+        # This file is now obsolete - message handling is done in bot.py
+        # All message filtering and routing is now handled by the bot's on_message implementation
+        # This prevents CommandNotFound spam and ensures proper routing
+
         if not self._is_relevant(message):
             return
 
         extra = self._get_log_extra(message)
         logger.info(
-            f"[WIND][EVENT] Relevant message received. Type: {'DM' if isinstance(message.channel, discord.DMChannel) else 'Mention'}",
+            "[WIND][EVENT] Relevant message received. Type: %s",
+            'DM' if isinstance(message.channel, discord.DMChannel) else 'Mention',
             extra={**extra, 'event': 'message_received'}
+        )
+        logger.debug(
+            "[WIND][AUDIT] Router input audit: guild=%s, author=%s, content=%s",
+            message.guild.id if message.guild else 'dm',
+            message.author.id,
+            message.content,
+            extra={**extra, 'event': 'input_audit'}
         )
 
         # Let the commands extension handle actual commands first

@@ -76,3 +76,26 @@ class TTSGibberishError(TTSSynthesisError):
             "• Choose a different voice\n"
             "• Check that your TTS model and voice files are compatible"
         )
+
+class TokeniserInjectionError(Exception):
+    """Exception raised when tokenizer injection into KokoroDirect fails.
+    
+    This is a critical error that should prevent TTS initialization, as using
+    an incorrect tokeniser will result in gibberish output.
+    """
+    def __init__(self, message="Failed to inject tokenizer into KokoroDirect"):
+        self.message = message
+        super().__init__(message)
+    
+    @property
+    def user_message(self):
+        """Get a user-friendly error message with suggestions."""
+        return (
+            "⚠️ Failed to initialize the TTS system with the correct tokenizer. \n\n"
+            "Suggestions:\n"
+            "• Check that espeak-ng is installed on your system\n"
+            "• Verify that the kokoro-onnx package is correctly installed\n"
+            "• Set TTS_TOKENISER=espeak in your .env file\n"
+            "• Set KOKORO_SKIP_TOKENIZER_PROBE=1 in your .env file\n"
+            "• Restart the bot after making these changes"
+        )

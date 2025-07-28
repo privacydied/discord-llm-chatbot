@@ -14,7 +14,7 @@ from bot.config import load_config, check_venv_activation, ConfigurationError
 from bot.core.bot import LLMBot
 from bot.core.cli import parse_arguments, show_version_info, validate_configuration_only
 from bot.core.startup import run_pre_flight_checks, create_bot_intents, get_prefix
-from bot.logger import setup_logging, get_logger
+from bot.util.logging import init_logging, get_logger
 from bot.shutdown import setup_signal_handlers
 
 
@@ -29,7 +29,7 @@ async def main() -> NoReturn:
     if args.debug:
         os.environ['LOG_LEVEL'] = 'DEBUG'
 
-    setup_logging()
+    init_logging()
     logger = get_logger(__name__)
 
     if args.config_check:

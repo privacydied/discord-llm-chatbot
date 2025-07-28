@@ -16,7 +16,7 @@ from discord.ext import commands
 from .config import load_config
 from .kokoro_direct_fixed import KokoroDirect
 from .tokenizer_registry import TokenizerRegistry, discover_tokenizers, is_tokenizer_warning_needed, get_tokenizer_warning_message
-from .tts_errors import MissingTokeniserError
+from .tts_errors import MissingTokeniserError, TTSWriteError
 
 logger = logging.getLogger(__name__)
 
@@ -398,203 +398,27 @@ class TTSManager:
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False, dir=self.temp_dir) as temp_file:
             temp_path = Path(temp_file.name)
         
-        # Pass voice_id directly to KokoroDirect.create which should return a Path
+        # Pass voice_id directly to KokoroDirect.create which returns a Path
         start_time = asyncio.get_event_loop().time()
         try:
-            result = await asyncio.to_thread(self.kokoro.create, text, voice_id, out_path=temp_path)
+            wav_path = await asyncio.to_thread(self.kokoro.create, text, voice_id, out_path=temp_path)
             generation_time = asyncio.get_event_loop().time() - start_time
             
-            # Handle potential tuple return value (audio, sample_rate) instead of Path
-            if isinstance(result, tuple) and len(result) == 2:
-                # Extract the components from the tuple
-                first_elem, second_elem = result
-                
-                # Check if the first element is a Path or string
-                if isinstance(first_elem, (str, Path)):
-                    logger.debug("kokoro.create returned a tuple (Path, sample_rate). Using the Path component.",
-                                extra={'subsys': 'tts', 'event': 'generate.tuple_path_return'})
-                    wav_path = first_elem
-                # Check if the first element is a NumPy ndarray (audio data)
-                elif isinstance(first_elem, np.ndarray):
-                    logger.debug("kokoro.create returned a tuple (ndarray, sample_rate). Writing to file.",
-                                extra={'subsys': 'tts', 'event': 'generate.tuple_ndarray_return'})
-                    # Get the sample rate from the second element if it's a number
-                    sample_rate = second_elem if isinstance(second_elem, (int, float)) else 24000
-                    
-                    # Write the ndarray to the temp file
-                    try:
-                        from scipy.io import wavfile
-                        # Normalize and convert to int16 for scipy wavfile
-                        if np.max(np.abs(first_elem)) > 0:  # Avoid division by zero
-                            audio_normalized = first_elem / np.max(np.abs(first_elem))
-                        else:
-                            audio_normalized = first_elem
-                        audio_int16 = (np.clip(audio_normalized, -1.0, 1.0) * 32767).astype(np.int16)
-                        wavfile.write(temp_path, sample_rate, audio_int16)
-                        wav_path = temp_path
-                        logger.debug(f"Wrote audio ndarray to temp file: {temp_path}",
-                                    extra={'subsys': 'tts', 'event': 'generate.tuple_ndarray_written'})
-                    except Exception as e:
-                        logger.error(f"Failed to write audio ndarray to file: {e}",
-                                    extra={'subsys': 'tts', 'event': 'generate.error.write_tuple_ndarray'})
-                        raise ValueError(f"Failed to write audio ndarray to file: {e}")
-                else:
-                    # Unexpected first element type
-                    logger.error(f"First element of tuple is not a Path, string, or ndarray: {type(first_elem)}",
-                                extra={'subsys': 'tts', 'event': 'generate.error.tuple_unexpected_type'})
-                    raise ValueError(f"TTS generation failed: First element of tuple is not a Path, string, or ndarray: {type(first_elem)}")
-                    
-            elif isinstance(result, np.ndarray):
-                # Handle case where raw audio array is returned instead of Path
-                logger.warning("kokoro.create returned a NumPy array instead of a Path. Writing to temp file.",
-                              extra={'subsys': 'tts', 'event': 'generate.array_return'})
-                # Write the array to the temp file
-                try:
-                    from scipy.io import wavfile
-                    # Convert to int16 for scipy wavfile
-                    audio_int16 = (np.clip(result, -1.0, 1.0) * 32767).astype(np.int16)
-                    wavfile.write(temp_path, 24000, audio_int16)  # Assume 24kHz sample rate
-                    wav_path = temp_path
-                    logger.debug(f"Wrote audio array to temp file: {temp_path}",
-                                extra={'subsys': 'tts', 'event': 'generate.array_written'})
-                except Exception as e:
-                    logger.error(f"Failed to write audio array to file: {e}",
-                                extra={'subsys': 'tts', 'event': 'generate.error.write_array'})
-                    # Raise exception instead of returning None
-                    raise ValueError(f"Failed to write audio array to file: {e}")
-            else:
-                # Handle case where result might be None or other non-Path type
-                if result is None:
-                    logger.error("kokoro.create returned None instead of a Path",
-                                extra={'subsys': 'tts', 'event': 'generate.error.none_result'})
-                    raise ValueError("TTS generation failed: kokoro.create returned None instead of a Path")
-                elif not isinstance(result, (str, Path)):
-                    logger.error(f"kokoro.create returned unexpected type: {type(result)}",
-                                extra={'subsys': 'tts', 'event': 'generate.error.unexpected_type'})
-                    raise ValueError(f"TTS generation failed: kokoro.create returned unexpected type: {type(result)}")
-                wav_path = result
-                
-            # Debug log the result type and path
-            logger.debug(f"TTS result: type={type(wav_path)}, path={wav_path}",
-                        extra={'subsys': 'tts', 'event': 'generate.result_path'})
+            # Validate the return type is Path
+            if not isinstance(wav_path, Path):
+                logger.error("KokoroDirect.create returned unexpected type: {type(wav_path)}",
+                           extra={'subsys': 'tts', 'event': 'generate.error.invalid_return_type'})
+                raise TypeError(f"Expected Path, got {type(wav_path)}")
             
-            # Ensure wav_path is a Path object
-            if wav_path is not None and not isinstance(wav_path, Path):
-                try:
-                    wav_path = Path(wav_path)
-                    logger.debug(f"Converted wav_path to Path object: {wav_path}",
-                                extra={'subsys': 'tts', 'event': 'generate.path_convert'})
-                except Exception as e:
-                    logger.error(f"Failed to convert wav_path to Path object: {e}",
-                                extra={'subsys': 'tts', 'event': 'generate.error.path_convert'})
-                    # Raise exception instead of returning None
-                    raise ValueError(f"Failed to convert TTS output to Path object: {e}")
+            # Verify the file exists and is not empty
+            if not wav_path.exists() or wav_path.stat().st_size == 0:
+                logger.error("Generated audio file is missing or empty",
+                           extra={'subsys': 'tts', 'event': 'generate.error.empty_file', 'path': str(wav_path)})
+                raise TTSWriteError("Generated audio file is missing or empty")
             
-            # Verify the file was created and has content
-            # First ensure wav_path is not None and is a Path object
-            if wav_path is None:
-                logger.error("TTS generated None instead of a Path", 
-                           extra={'subsys': 'tts', 'event': 'generate.error.none_path'})
-                
-                # Create a fallback silent audio file instead of raising an exception
-                try:
-                    logger.warning("Creating fallback silent audio file",
-                                 extra={'subsys': 'tts', 'event': 'generate.fallback_silent'})
-                    # Generate 1 second of silence
-                    from scipy.io import wavfile
-                    sample_rate = 24000
-                    silent_audio = np.zeros(sample_rate, dtype=np.int16)
-                    wavfile.write(temp_path, sample_rate, silent_audio)
-                    wav_path = temp_path
-                    logger.debug(f"Created fallback silent audio file: {temp_path}",
-                                extra={'subsys': 'tts', 'event': 'generate.fallback_silent_created'})
-                except Exception as fallback_error:
-                    logger.error(f"Failed to create fallback silent audio: {fallback_error}",
-                                extra={'subsys': 'tts', 'event': 'generate.error.fallback_silent_failed'})
-                    raise ValueError("TTS generation failed: returned None instead of a Path and fallback creation failed")
-                
-            # Now check if the file exists and has content
-            try:
-                if not isinstance(wav_path, Path):
-                    logger.warning(f"wav_path is not a Path object, attempting conversion: {type(wav_path)}", 
-                                 extra={'subsys': 'tts', 'event': 'generate.warning.not_path'})
-                    wav_path = Path(str(wav_path))
-                
-                if not wav_path.exists():
-                    logger.error(f"TTS output file does not exist: {wav_path}", 
-                                extra={'subsys': 'tts', 'event': 'generate.error.missing_file'})
-                    
-                    # Create a fallback silent audio file
-                    logger.warning("Creating fallback silent audio file for missing output",
-                                 extra={'subsys': 'tts', 'event': 'generate.fallback_silent_missing'})
-                    from scipy.io import wavfile
-                    sample_rate = 24000
-                    silent_audio = np.zeros(sample_rate, dtype=np.int16)
-                    wavfile.write(temp_path, sample_rate, silent_audio)
-                    wav_path = temp_path
-                elif wav_path.stat().st_size == 0:
-                    logger.error(f"TTS generated empty file: {wav_path}", 
-                                extra={'subsys': 'tts', 'event': 'generate.error.empty_file'})
-                    
-                    # Create a fallback silent audio file
-                    logger.warning("Creating fallback silent audio file for empty output",
-                                 extra={'subsys': 'tts', 'event': 'generate.fallback_silent_empty'})
-                    from scipy.io import wavfile
-                    sample_rate = 24000
-                    silent_audio = np.zeros(sample_rate, dtype=np.int16)
-                    wavfile.write(temp_path, sample_rate, silent_audio)
-                    wav_path = temp_path
-            except Exception as e:
-                logger.error(f"Error checking file existence: {e}", 
-                            extra={'subsys': 'tts', 'event': 'generate.error.file_check'})
-                
-                # Create a fallback silent audio file
-                try:
-                    logger.warning("Creating fallback silent audio after file check error",
-                                 extra={'subsys': 'tts', 'event': 'generate.fallback_silent_error'})
-                    from scipy.io import wavfile
-                    sample_rate = 24000
-                    silent_audio = np.zeros(sample_rate, dtype=np.int16)
-                    wavfile.write(temp_path, sample_rate, silent_audio)
-                    wav_path = temp_path
-                except Exception as fallback_error:
-                    logger.error(f"Failed to create fallback silent audio: {fallback_error}",
-                                extra={'subsys': 'tts', 'event': 'generate.error.fallback_silent_failed'})
-                    raise ValueError(f"TTS generation failed: error checking file existence: {e}")
-                
-            
-            # Try to get audio duration for logging
-            try:
-                import soundfile as sf
-                info = sf.info(wav_path)
-                audio_duration = info.duration
-                sample_rate = info.samplerate
-                logger.debug(f"Audio info: {audio_duration:.2f}s, {sample_rate}Hz, {info.channels} channels",
-                           extra={'subsys': 'tts', 'event': 'generate.audio_info'})
-            except ImportError:
-                # Fallback to scipy if soundfile is not available
-                try:
-                    from scipy.io import wavfile
-                    sample_rate, audio = wavfile.read(wav_path)
-                    audio_duration = len(audio) / sample_rate
-                    logger.debug(f"Audio info (scipy): {audio_duration:.2f}s, {sample_rate}Hz, shape: {audio.shape}",
-                               extra={'subsys': 'tts', 'event': 'generate.audio_info_scipy'})
-                except Exception as e:
-                    # If we can't get audio info, just log file size
-                    audio_duration = 0
-                    logger.debug(f"Could not get audio info: {e}, file size: {wav_path.stat().st_size} bytes",
-                               extra={'subsys': 'tts', 'event': 'generate.audio_info_fallback'})
-            
-            # Log performance metrics
-            logger.debug(f"Generated {audio_duration:.2f}s audio in {generation_time:.2f}s ({audio_duration/generation_time:.2f}x real-time if positive)", 
-                       extra={'subsys': 'tts', 'event': 'generate.complete', 
-                              'audio_duration': audio_duration, 
-                              'generation_time': generation_time, 
-                              'speedup': audio_duration/generation_time if generation_time > 0 and audio_duration > 0 else 0})
-            
-            # Return the path as a Path object
+            logger.info(f"Generated TTS audio in {generation_time:.2f}s: {wav_path}",
+                      extra={'subsys': 'tts', 'event': 'generate.success', 'duration': generation_time, 'path': str(wav_path)})
             return wav_path
-            
         except Exception as e:
             generation_time = asyncio.get_event_loop().time() - start_time
             logger.error(f"TTS generation failed after {generation_time:.2f}s: {e}", 

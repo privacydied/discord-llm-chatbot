@@ -181,7 +181,8 @@ class KokoroDirect:
             
             # Try to initialize tokenizer with error handling
             try:
-                self.tokenizer = kokoro_onnx.Tokenizer()
+                from kokoro_onnx.tokenizer import Tokenizer
+                self.tokenizer = Tokenizer()
             except AttributeError as e:
                 if "'EspeakWrapper' object has no attribute 'set_data_path'" in str(e):
                     logger.error(f"kokoro-onnx initialization error: {e}")
@@ -201,7 +202,8 @@ class KokoroDirect:
                         logger.info("Runtime-patched EspeakWrapper.set_data_path method")
                         
                         # Try initializing again
-                        self.tokenizer = kokoro_onnx.Tokenizer()
+                        from kokoro_onnx.tokenizer import Tokenizer
+                        self.tokenizer = Tokenizer()
                     except Exception as patch_error:
                         logger.error(f"Failed to apply runtime patch: {patch_error}", exc_info=True)
                         raise

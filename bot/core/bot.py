@@ -1,30 +1,51 @@
 """Core bot implementation for Discord LLM Chatbot."""
 
+from __future__ import annotations
 import asyncio
 import os
-from pathlib import Path
-from typing import Dict, List, Optional, Union, Any, Callable
+import time
+from typing import TYPE_CHECKING, Optional, List
 
 import discord
-from discord.ext import commands, tasks
+from discord import Intents
+from discord.ext import commands
 
-from bot.core.client import Bot
-from bot.logger import get_logger
+from bot.util.logging import get_logger, init_logging
+from bot.metrics import NullMetrics
+from bot.tts import TTSManager
 from bot.memory import load_all_profiles
 
+if TYPE_CHECKING:
+    from bot.router import BotAction
 
-class LLMBot(Bot):
+
+class LLMBot(commands.Bot):
     """Main bot class that extends the base Bot class with LLM capabilities."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        init_logging()
         self.logger = get_logger(__name__)
-        self.config = {}
+        try:
+            from bot.metrics.prometheus import PrometheusMetrics
+            self.metrics = PrometheusMetrics()
+        except Exception:
+            self.metrics = NullMetrics()
+        
+        self.config = {
+            'tts': {
+                'voice_model_path': os.getenv('TTS_MODEL_PATH'),
+                'voice_style_path': os.getenv('TTS_VOICES_PATH'),
+                'tokenizer_alias': os.getenv('TTS_TOKENISER', 'default')
+            }
+        }
         self.user_profiles = {}
         self.server_profiles = {}
         self.memory_save_task = None
         self.tts_manager = None
         self.background_tasks = []
+
+
 
     async def setup_hook(self) -> None:
         """Called when the bot is starting up."""
@@ -45,13 +66,116 @@ class LLMBot(Bot):
         # Load extensions
         await self.load_extensions()
         
+        # Custom message handler is now implemented directly in on_message
+        # No need to register separate listener
+        
         self.logger.info("Bot setup complete", extra={"subsys": "core", "event": "setup_complete"})
+        
+    async def on_message(self, message: discord.Message):
+        # Skip messages from self
+        if message.author == self.user:
+            return
+
+        # Guard: Ensure message has content or attachments
+        if (not message.content or len(message.content.strip()) == 0) and not message.attachments:
+            self.logger.warning(
+                "GUARD-FAIL",
+                extra={
+                    "subsys": "core",
+                    "event": "empty_message",
+                    "message_id": message.id,
+                    "author_id": message.author.id
+                }
+            )
+            return
+
+        # Log incoming message
+        channel_type = 'DM' if isinstance(message.channel, discord.DMChannel) else str(message.guild.id)
+        self.logger.info(
+            "EVENT-RECV",
+            extra={
+                "subsys": "core",
+                "event": "message_received",
+                "message_id": message.id,
+                "guild_or_dm": channel_type,
+                "author_id": message.author.id,
+                "raw_length": len(message.content)
+            }
+        )
+
+        # Get normalized prefixes
+        prefixes = self.get_prefixes(message)
+
+        # --- BEGIN DIAGNOSTIC LOGGING ---
+        is_mentioned = self.user in message.mentions
+        has_prefix = any(message.content.startswith(p) for p in prefixes)
+        self.logger.info(
+            "[DIAGNOSTIC] Pre-dispatch check",
+            extra={
+                "subsys": "core",
+                "event": "pre_dispatch_check",
+                "message_id": message.id,
+                "is_mentioned": is_mentioned,
+                "has_prefix": has_prefix,
+                "prefixes": prefixes,
+            }
+        )
+        # --- END DIAGNOSTIC LOGGING ---
+
+        # In DMs, process the message directly. In guilds, check for mention/prefix.
+        if isinstance(message.channel, discord.DMChannel) or is_mentioned or has_prefix:
+            self.logger.info("[DIAGNOSTIC] Pre-dispatch check", extra={'subsys': 'bot', 'guild_id': message.guild.id if message.guild else 'DM', 'user_id': message.author.id, 'msg_id': message.id})
+            action = await self.process_message(message)
+            if action and action.has_payload:
+                self.logger.info(f"SENDING-MSG: {action.content[:50]}...", extra={'subsys': 'bot', 'guild_id': message.guild.id if message.guild else 'DM', 'user_id': message.author.id, 'msg_id': message.id})
+                await message.channel.send(content=action.content, embeds=action.embeds, files=action.files)
+        else:
+            self.logger.info(
+                "Message ignored: No trigger (mention/prefix) in guild channel",
+                extra={"subsys": "core", "event": "ignore_no_trigger", "message_id": message.id}
+            )
+
+    def get_prefixes(self, message: discord.Message) -> tuple[str, ...]:
+        """Normalize command prefixes to tuple of strings"""
+        # Guard: Ensure message is valid
+        if not message or not isinstance(message, discord.Message):
+            self.logger.error(
+                "GUARD-FAIL",
+                extra={
+                    "subsys": "core",
+                    "event": "invalid_message_object",
+                    "error": "None or invalid message object"
+                }
+            )
+            return ()
+
+        # Handle callable prefix
+        if callable(self.command_prefix):
+            result = self.command_prefix(self, message)
+        else:
+            result = self.command_prefix
+            
+        # Normalize to tuple of strings
+        if isinstance(result, str):
+            return (result,)
+        elif isinstance(result, (list, tuple)):
+            return tuple(str(p) for p in result)
+        else:
+            self.logger.warning(
+                "GUARD-FAIL",
+                extra={
+                    "subsys": "core",
+                    "event": "invalid_prefix_type",
+                    "type": type(result).__name__
+                }
+            )
+            return ()
 
     async def load_profiles(self) -> None:
         """Load user and server memory profiles."""
         try:
             self.logger.info("Loading memory profiles...", extra={"subsys": "memory", "event": "load_start"})
-            self.user_profiles, self.server_profiles = await asyncio.to_thread(load_all_profiles)
+            self.user_profiles, self.server_profiles = load_all_profiles()
             self.logger.info(
                 f"Loaded {len(self.user_profiles)} user profiles and {len(self.server_profiles)} server profiles",
                 extra={"subsys": "memory", "event": "load_complete"}
@@ -73,46 +197,13 @@ class LLMBot(Bot):
     async def setup_tts(self) -> None:
         """Set up TTS manager if configured."""
         try:
-            from bot.tts import TTSManager
+            from bot.tts.interface import TTSManager
             self.tts_manager = TTSManager(self)
             self.logger.info("TTS manager initialized", extra={"subsys": "tts", "event": "setup_complete"})
         except Exception as e:
             self.logger.error(f"Failed to set up TTS manager: {e}", exc_info=True,
                              extra={"subsys": "tts", "event": "setup_error"})
-            
-            # Create a fallback TTS manager implementation
-            try:
-                # Import the class again to ensure we have it
-                from bot.tts import TTSManager
-                
-                # Create a dummy class that implements the TTSManager interface
-                class FallbackTTSManager:
-                    def __init__(self):
-                        self.logger = get_logger("FallbackTTSManager")
-                        self.logger.warning("Using fallback TTS manager with limited functionality",
-                                         extra={"subsys": "tts", "event": "fallback_init"})
-                        self.voice = "default"
-                    
-                    def is_available(self) -> bool:
-                        return False
-                    
-                    async def generate_tts(self, text, voice_id=None, **kwargs):
-                        self.logger.warning("Attempted to use generate_tts on fallback TTS manager",
-                                         extra={"subsys": "tts", "event": "fallback_generate_attempt"})
-                        raise RuntimeError("TTS is not available. The TTS manager failed to initialize properly.")
-                    
-                    async def close(self):
-                        pass
-                
-                # Assign the fallback manager
-                self.tts_manager = FallbackTTSManager()
-                self.logger.warning("Using fallback TTS manager", 
-                                 extra={"subsys": "tts", "event": "fallback_setup_complete"})
-            except Exception as fallback_error:
-                self.logger.error(f"Failed to create fallback TTS manager: {fallback_error}", exc_info=True,
-                                extra={"subsys": "tts", "event": "fallback_setup_error"})
-                # As a last resort, set to None but this will cause issues if code doesn't check for None
-                self.tts_manager = None
+            self.tts_manager = None
 
     async def setup_router(self) -> None:
         """Set up message router."""
@@ -154,3 +245,28 @@ class LLMBot(Bot):
         
         await super().close()
         self.logger.info("Bot shutdown complete", extra={"subsys": "core", "event": "shutdown_complete"})
+
+    async def process_message(self, message: discord.Message) -> Optional[BotAction]:
+        """Calls the router to dispatch the message and returns the resulting action."""
+        self.logger.debug(f"Routing message {message.id}...", extra={"message_id": message.id})
+        try:
+            action = await self.router.dispatch_message(message)
+            if action and action.has_payload:
+                self.logger.info(f"Router returned action for message {message.id}", extra={"message_id": message.id})
+            else:
+                self.logger.info(f"Router ignored message {message.id}", extra={"message_id": message.id})
+            return action
+        except Exception as e:
+            self.logger.error(
+                f"Error dispatching message {message.id}: {e}",
+                exc_info=True,
+                extra={"message_id": message.id, "event": "dispatch_error"}
+            )
+            return None
+
+    @commands.command(name='testflow')
+    async def test_flow(self, ctx):
+        """Test command to verify message flow"""
+        self.logger.debug(" [TEST-FLOW] Command received")
+        await ctx.send(" Message flow working correctly!")
+        self.logger.debug("[TEST-FLOW] Response sent")

@@ -4,6 +4,7 @@ TTS (Text-to-Speech) commands for the Discord bot.
 This module provides commands to control TTS settings and behavior.
 """
 import logging
+import io
 from typing import Optional
 
 import discord
@@ -130,9 +131,20 @@ class TTSCommands(commands.Cog):
         try:
             # Direct TTS synthesis (bypassing router for simple text)
             logging.debug(f"🔊 Direct TTS synthesis for !say command: '{text[:30]}...'")
-            audio_path = await self.bot.tts_manager.generate_tts(text, self.bot.tts_manager.voice)
-            await ctx.send(file=discord.File(audio_path))
-            logging.debug("✅ Direct TTS response sent successfully")
+            try:
+                # Get audio bytes from synthesizer
+                audio_bytes = await self.bot.tts_manager.synthesize(text)
+                
+                # Create in-memory file object
+                audio_stream = io.BytesIO(audio_bytes)
+                audio_stream.seek(0)
+                
+                # Send audio file to Discord
+                await ctx.send(file=discord.File(audio_stream, filename="tts_audio.wav"))
+                logging.debug("✅ Direct TTS response sent successfully")
+            except Exception as e:
+                logging.error(f"Error in say command: {e}", exc_info=True)
+                await ctx.send(f"❌ An error occurred while generating TTS: {str(e)}")
         except Exception as e:
             logging.error(f"Error in say command: {e}", exc_info=True)
             await ctx.send(f"❌ An error occurred while generating TTS: {str(e)}")

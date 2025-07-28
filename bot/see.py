@@ -58,7 +58,7 @@ async def see_infer(image_path: str, prompt: str = None) -> str:
         # Call the VL backend with file path
         logger.debug(f"Calling VL backend with prompt length: {len(prompt)} chars and image: {image_path}")
         response = await generate_vl_response(
-            image_url=f"file://{image_path}",
+            image_url=image_path,  # Pass the raw file path directly
             user_prompt=prompt
         )
         

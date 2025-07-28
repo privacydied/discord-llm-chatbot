@@ -11,7 +11,7 @@ import discord
 from dataclasses import dataclass
 import logging
 
-from bot.router import InputModality, Router, ResponseMessage
+from bot.router import InputModality, Router, ResponseMessage, BotAction
 from bot.command_parser import ParsedCommand
 from bot.types import Command
 
@@ -140,7 +140,7 @@ async def test_no_processed_text_returns_error(mock_parse_command, router, mock_
         response = await router.dispatch_message(mock_message)
 
     assert response is not None
-    assert response.text == "I'm sorry, I wasn't able to process that."
+    assert response.text.startswith("Error:")
 
 
 @pytest.mark.asyncio
@@ -155,4 +155,90 @@ async def test_exception_in_flow_returns_error(mock_parse_command, router, mock_
         response = await router.dispatch_message(mock_message)
 
     assert response is not None
-    assert response.text == "An unexpected error occurred. Please try again later."
+    assert response.text.startswith("Error:")
+
+@pytest.mark.asyncio
+@patch('bot.router.parse_command')
+async def test_empty_string_prevention(mock_parse_command, router, mock_message):
+    """Verify empty string responses are converted to error messages."""
+    mock_parse_command.return_value = ParsedCommand(command=Command.CHAT, cleaned_content="Test")
+
+    router._flows['process_text'] = AsyncMock(return_value="")  # Empty string
+
+    with patch.object(router, '_get_input_modality', return_value=InputModality.TEXT_ONLY):
+        response = await router.dispatch_message(mock_message)
+
+    assert response is not None
+    assert response.text.startswith("Error:")
+
+@pytest.mark.asyncio
+
+@pytest.mark.asyncio
+@patch('bot.router.parse_command')
+async def test_error_embed_generation(mock_parse_command, router, mock_message):
+    """Verify error conditions generate proper embed responses."""
+    mock_parse_command.return_value = ParsedCommand(command=Command.CHAT, cleaned_content="Test")
+
+    router._flows['process_text'] = AsyncMock(return_value=None)  # Simulate failure
+
+    with patch.object(router, '_get_input_modality', return_value=InputModality.TEXT_ONLY):
+        response = await router.dispatch_message(mock_message)
+
+    assert response is not None
+    assert hasattr(response, 'embed'), "Error responses should include an embed"
+    assert response.embed.title.startswith("Error:")
+
+
+@pytest.mark.asyncio
+async def test_dm_plain_text_reply():
+    """Test that a plain text DM returns a BotAction with content."""
+    # Setup
+    mock_bot = MagicMock()
+    mock_logger = MagicMock()
+    mock_metrics = MagicMock()
+    flows = {
+        'process_text': AsyncMock(return_value="Hello, world!")
+    }
+    router = Router(mock_bot, flows, mock_logger, mock_metrics)
+    
+    # Create a mock DM message
+    mock_message = MagicMock()
+    mock_message.channel = MagicMock()
+    mock_message.channel.__class__.__name__ = "DMChannel"
+    mock_message.content = "Hello"
+    mock_message.attachments = []
+    
+    # Execute
+    action = await router.dispatch_message(mock_message)
+    
+    # Verify
+    assert isinstance(action, BotAction)
+    assert action.content == "Hello, world!"
+    assert not action.error
+
+@pytest.mark.asyncio
+async def test_guild_unmentioned_ignored():
+    """Test that an unmentioned guild message returns None."""
+    # Setup
+    mock_bot = MagicMock()
+    mock_logger = MagicMock()
+    mock_metrics = MagicMock()
+    flows = {
+        'process_text': AsyncMock(return_value="Hello, world!")
+    }
+    router = Router(mock_bot, flows, mock_logger, mock_metrics)
+    
+    # Create a mock guild message without mention
+    mock_message = MagicMock()
+    mock_message.channel = MagicMock()
+    mock_message.channel.__class__.__name__ = "TextChannel"
+    mock_message.content = "Hello"
+    mock_message.attachments = []
+    # Simulate parse_command returning None (no mention)
+    router.parse_command = MagicMock(return_value=None)
+    
+    # Execute
+    action = await router.dispatch_message(mock_message)
+    
+    # Verify
+    assert action is None

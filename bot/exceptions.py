@@ -25,3 +25,11 @@ class TTSAudioError(BotBaseException):
 class FileProcessingError(BotBaseException):
     """Raised for errors when processing user-uploaded files."""
     pass
+
+class DispatchEmptyError(BotBaseException):
+    """Raised when a dispatch returns no result (violates 1 IN > 1 OUT)."""
+    pass
+
+class DispatchTypeError(BotBaseException):
+    """Raised when a dispatch returns an invalid type."""
+    pass

@@ -3,6 +3,7 @@
 # Handles the TTS/NumPy conflict by using vendored patched gruut wheel
 # Also installs and checks for OCR and phonemizer dependencies
 set -e
+set -x
 
 # Get the project root directory
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -18,8 +19,9 @@ mkdir -p "${VENDOR_DIR}"
 
 # Build patched gruut wheel if it doesn't exist
 if [[ ! -f "${VENDOR_DIR}"/gruut-2.2.3.post1-*.whl ]]; then
-    echo "🔨 Building patched gruut wheel..."
-    "${PROJECT_ROOT}/scripts/build_gruut_patch.sh"
+    echo "⏳ Building patched gruut (this may take 5-10 minutes)..."
+    timeout 15m bash -c "cd gruut && make clean && make wheel"
+    cp gruut/dist/gruut-2.2.3.post1-*.whl "${VENDOR_DIR}/"
 fi
 
 echo "📦 Installing dependencies..."
@@ -45,6 +47,15 @@ uv pip install --no-deps -e .
 # Install additional runtime dependencies needed for tests
 echo "📚 Installing additional runtime dependencies..."
 uv pip install "python-dotenv>=1.0.0" "discord.py>=2.3.0" "python-json-logger>=2.0.7" "cachetools>=5.3.0" "faster-whisper>=0.10.0" "beautifulsoup4>=4.12.0" "PyMuPDF>=1.23.0" "trafilatura>=2.0.0" "lxml>=4.9.0" "aiohttp>=3.8.0"
+
+# Reinstall kokoro-onnx to fix missing modules
+echo "🔄 Reinstalling kokoro-onnx..."
+uv pip uninstall -y kokoro-onnx
+uv pip install kokoro-onnx==0.4.9
+
+# Force reinstall numpy and dependent packages to resolve binary incompatibility
+echo "🔄 Rebuilding numpy-dependent packages..."
+uv pip install --force-reinstall --no-cache-dir -r requirements.txt
 
 echo "✅ Dependencies installed successfully!"
 
