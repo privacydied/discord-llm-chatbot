@@ -81,6 +81,39 @@ class Router:
 
         self.logger.info("✔ Router initialized.")
 
+    def _is_reply_to_bot(self, message: Message) -> bool:
+        """Check if a message is a reply to the bot."""
+        if message.reference and message.reference.message_id:
+            # To check who the replied-to message is from, we might need to fetch the message
+            # This is a simplification. For a robust solution, you might need to fetch the message
+            # if it's not in the cache, which is an async operation.
+            # Here we assume a simple check is enough, or the logic is handled elsewhere.
+            ref_msg = message.reference.resolved
+            if ref_msg and ref_msg.author.id == self.bot.user.id:
+                return True
+        return False
+
+    def _should_process_message(self, message: Message) -> bool:
+        """Determine if the message should be processed based on context (DM, mention)."""
+        is_dm = isinstance(message.channel, DMChannel)
+        is_mentioned = self.bot.user in message.mentions
+        is_reply = self._is_reply_to_bot(message)
+
+        if is_dm:
+            self.logger.debug(f"Processing message {message.id}: It's a DM.")
+            return True
+
+        if is_mentioned:
+            self.logger.debug(f"Processing message {message.id}: Bot is mentioned.")
+            return True
+
+        if is_reply:
+            self.logger.debug(f"Processing message {message.id}: It's a reply to the bot.")
+            return True
+
+        self.logger.debug(f"Ignoring message {message.id}: Not a DM, mention, or reply to the bot.")
+        return False
+
     def _bind_flow_methods(self, flow_overrides: Optional[Dict[str, Callable]] = None):
         """Binds flow methods to the instance, allowing for overrides for testing."""
         self._flows = {
@@ -108,16 +141,12 @@ class Router:
                 return BotAction(meta={'delegated_to_cog': True})
 
             # 3. Determine if the bot should process this message (DM, mention, or reply).
-            is_dm = isinstance(message.channel, DMChannel)
-            is_mentioned = self.bot.user in message.mentions
-            is_reply = message.reference is not None
-            
-            if not (is_dm or is_mentioned or is_reply):
-                self.logger.info(f"Ignoring message: not a command, DM, mention, or reply. (msg_id: {message.id})")
+            if not self._should_process_message(message):
+                self.logger.debug(f"Ignoring message {message.id} in guild {message.guild.id if message.guild else 'N/A'}: Not a DM or direct mention.")
                 return None
 
             # --- Start of processing for DMs, Mentions, and Replies ---
-            self.logger.info(f"Processing message: DM={is_dm}, Mention={is_mentioned}, Reply={is_reply} (msg_id: {message.id})")
+            self.logger.info(f"Processing message: DM={isinstance(message.channel, DMChannel)}, Mention={self.bot.user in message.mentions} (msg_id: {message.id})")
 
             # 4. Gather conversation history for context
             history = []
@@ -131,38 +160,36 @@ class Router:
             input_modality = self._get_input_modality(message)
             self._metric_inc('router_input_modality', {'modality': input_modality.name.lower()})
             output_modality = self._get_output_modality(None, message)
-            self._metric_inc('router_output_modality', {'modality': output_modality.name.lower()})
-
             action = None
             text_content = message.content
-            if is_mentioned:
+            if self.bot.user in message.mentions:
                 text_content = re.sub(r'^(<@!?&?{}>)'.format(self.bot.user.id), '', text_content).strip()
 
-            # Pass both history and current message to the appropriate flow
             if input_modality == InputModality.TEXT_ONLY:
                 action = await self._invoke_text_flow(text_content, message, history)
             elif input_modality == InputModality.URL:
                 url_match = re.search(r'https?://[\S]+', text_content)
                 if url_match:
                     action = await self._flows['process_url'](url_match.group(0), message)
-            elif input_modality == InputModality.IMAGE:
+            elif message.attachments:
                 action = await self._flows['process_attachments'](message, message.attachments[0])
-            elif input_modality == InputModality.DOCUMENT:
-                action = await self._flows['process_attachments'](message, message.attachments[0])
-            
-            # 6. If we have a response, determine output modality and finalize the action.
-            if action:
-                action.meta['is_reply'] = is_reply
+
+            # 7. Finalize and return the action
+            if action and action.content:
+                # Prepend user mention if in a guild
+                if not isinstance(message.channel, DMChannel):
+                    action.content = f"{message.author.mention} {action.content}"
+
+                self.logger.info(f"✅ Preparing to reply with content: {action.content[:100]}... (msg_id: {message.id})")
 
                 # Generate TTS if needed
-                output_modality = self._get_output_modality(parsed_command, message)
-                if output_modality == OutputModality.TTS and action.content and not action.files:
+                if output_modality == OutputModality.TTS and not action.files:
                     action.audio_path = await self._generate_tts_safe(action.content)
-                
-                return action
 
-            self.logger.info(f"🏁 === ROUTER DISPATCH END: No Action Taken ====")
-            return None
+                return action
+            else:
+                self.logger.info(f"🤔 No action taken for message {message.id}. Inference result was empty.")
+                return None
 
         except Exception as e:
             self.logger.error(f"❌ Error in router dispatch: {e} (msg_id: {message.id})", exc_info=True)
