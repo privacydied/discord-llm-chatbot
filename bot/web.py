@@ -4,7 +4,8 @@ Web content extraction and processing for the Discord bot.
 import logging
 from typing import Any, Dict, Optional, Tuple
 from urllib.parse import urlparse, urljoin
-import aiohttp
+import httpx
+from playwright.async_api import async_playwright
 from bs4 import BeautifulSoup
 import discord
 import trafilatura
@@ -101,40 +102,41 @@ def get_domain_info(url: str) -> Dict[str, str]:
             'should_extract': False
         }
 
-async def fetch_url_content(url: str, timeout: int = 10) -> Optional[Tuple[bytes, str]]:
+async def fetch_url_content(url: str, timeout: int = 15) -> Optional[Tuple[bytes, str]]:
     """
-    Fetch the content of a URL.
-    
-    Args:
-        url: The URL to fetch
-        timeout: Request timeout in seconds
-        
-    Returns:
-        Tuple of (content, content_type) or None if the request failed
+    Fetch the content of a URL, with a fallback to Playwright for problematic sites.
     """
     headers = {
         'User-Agent': USER_AGENT,
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.5',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'Connection': 'keep-alive',
-        'Upgrade-Insecure-Requests': '1',
-        'Cache-Control': 'max-age=0',
     }
-    
+
+    # First, try with httpx for speed
     try:
-        async with aiohttp.ClientSession(headers=headers) as session:
-            async with session.get(url, timeout=timeout, allow_redirects=True) as response:
-                if response.status != 200:
-                    logging.warning(f"Failed to fetch {url}: HTTP {response.status}")
-                    return None
-                
-                content_type = response.headers.get('Content-Type', '').split(';')[0].strip()
-                content = await response.read()
-                
-                return content, content_type
+        async with httpx.AsyncClient(headers=headers, follow_redirects=True, timeout=timeout) as client:
+            response = await client.get(url)
+            response.raise_for_status() # Raise exception for 4xx/5xx responses
+            content = await response.aread()
+            content_type = response.headers.get('Content-Type', 'application/octet-stream')
+            logging.info(f"Successfully fetched {url} with httpx.")
+            return content, content_type
+    except (httpx.HTTPStatusError, httpx.RequestError, httpx.TooManyRedirects, httpx.InvalidHeader) as e:
+        logging.warning(f"httpx fetch failed for {url}: {e}. Falling back to Playwright.")
+        # Fall through to Playwright
+
+    # If httpx fails, use Playwright as a fallback
+    try:
+        async with async_playwright() as p:
+            browser = await p.chromium.launch()
+            page = await browser.new_page()
+            await page.goto(url, timeout=timeout * 1000) # Playwright timeout is in ms
+            content = await page.content()
+            await browser.close()
+            logging.info(f"Successfully fetched {url} with Playwright fallback.")
+            return content.encode('utf-8'), 'text/html'
     except Exception as e:
-        logging.error(f"Error fetching URL {url}: {e}")
+        logging.error(f"Playwright fallback also failed for {url}: {e}", exc_info=True)
         return None
 
 def extract_metadata(html: str, url: str) -> Dict[str, str]:

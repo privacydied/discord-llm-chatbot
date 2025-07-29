@@ -46,20 +46,24 @@ async def setup_commands(bot):
     import logging
     
     try:
-        # Import and set up test commands first
-        from . import test_cmds
-        await test_cmds.setup(bot)
-        logging.info("✅ Test commands registered")
-        
-        # Import and set up memory commands
-        from . import memory_cmds
-        await memory_cmds.setup(bot)
-        logging.info("✅ Memory commands registered")
-        
-        # Import and set up TTS commands  
-        from . import tts_cmds
-        await tts_cmds.setup(bot)
-        logging.info("✅ TTS commands registered")
+        from . import test_cmds, memory_cmds, tts_cmds
+
+        # A set to keep track of loaded cogs and avoid duplicates
+        loaded_cogs = set(bot.cogs.keys())
+
+        # Define cogs to load
+        cogs_to_load = {
+            'TestCommands': test_cmds,
+            'MemoryCommands': memory_cmds,
+            'TTSCommands': tts_cmds
+        }
+
+        for cog_name, module in cogs_to_load.items():
+            if cog_name not in loaded_cogs:
+                await module.setup(bot)
+                logging.info(f"✅ {cog_name} registered")
+            else:
+                logging.debug(f"Skipping already loaded cog: {cog_name}")
         
 
         logging.info("🎉 All command modules registered successfully")

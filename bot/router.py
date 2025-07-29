@@ -243,12 +243,13 @@ class Router:
             system_prompt = (
                 "A user linked the following webpage. Please provide a concise summary of its contents, "
                 "explain any interesting or notable points, and if applicable, add a short critical commentary. "
-                "Your goal is to be a helpful, intelligent assistant."
+                "Your goal is to be a helpful, intelligent assistant. "
+                "IMPORTANT: Your entire response must be under 1800 characters."
             )
 
             self.logger.info(f"Summarizing content via LLM... (msg_id: {message.id})")
 
-            summary_action = await brain_infer(text=truncated_text, system_prompt=system_prompt)
+            summary_action = await brain_infer(prompt=truncated_text, system_prompt=system_prompt)
 
             if summary_action.error:
                 self.logger.error(f"LLM summarization failed. (msg_id: {message.id})")
@@ -258,7 +259,7 @@ class Router:
 
             if len(extracted_text) > 4000 or is_truncated:
                 file_content = io.BytesIO(extracted_text.encode('utf-8'))
-                summary_action.files.append(discord.File(file_content, filename="original_content.txt"))
+                summary_action.files.append(File(file_content, filename="original_content.txt"))
                 self.logger.info(f"Attaching full content ({len(extracted_text)} chars) as file. (msg_id: {message.id})")
 
             self.logger.info(f"Replying with summary (and optional attachment). (msg_id: {message.id})")

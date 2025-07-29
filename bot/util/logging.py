@@ -13,9 +13,9 @@ def init_logging() -> None:
     # Configure root logger with RichHandler as per user request
     logging.basicConfig(
         level=log_level,
-        format="%(asctime)s | %(levelname)-8s | %(name)s:%(funcName)s:%(lineno)d - %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-        handlers=[RichHandler(rich_tracebacks=True, show_path=False)],
+        format="%(message)s",  # Let RichHandler do all the formatting
+        datefmt="[%X]", # This is ignored when format is just message, but good practice
+        handlers=[RichHandler(rich_tracebacks=True, show_path=False, show_time=True)],
         force=True,  # Overwrite any existing configuration
     )
 

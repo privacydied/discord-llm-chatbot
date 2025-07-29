@@ -1,9 +1,6 @@
-aiohttp==3.9.3
-aiosignal==1.4.0
 annotated-types==0.7.0
 anyio==4.9.0
 attrs==25.3.0
-audioop-lts==0.2.1
 av==15.0.0
 babel==2.17.0
 beautifulsoup4==4.13.4
@@ -24,7 +21,7 @@ espeakng-loader==0.2.4
 faster-whisper==1.1.1
 filelock==3.18.0
 flatbuffers==25.2.10
-frozenlist==1.7.0
+
 fsspec==2025.5.1
 h11==0.16.0
 hf-xet==1.1.5
@@ -42,6 +39,7 @@ jsonschema==4.25.0
 jsonschema-specifications==2025.4.1
 justext==3.0.2
 kokoro-onnx==0.4.9
+playwright==1.44.0
 language-tags==1.2.0
 lxml==5.4.0
 lxml-html-clean==0.4.2

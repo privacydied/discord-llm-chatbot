@@ -191,5 +191,8 @@ async def cache_maintenance_task(bot: commands.Bot):
 
 async def setup(bot) -> None:
     """Set up event handlers."""
-    await bot.add_cog(BotEventHandler(bot))
-    logger.info(f"Event handlers loaded. [subsys: core, event: cog_load_success, cog: {__name__}]")
+    if 'BotEventHandler' not in bot.cogs:
+        await bot.add_cog(BotEventHandler(bot))
+        logger.info(f"Event handlers loaded. [subsys: core, event: cog_load_success, cog: {__name__}]")
+    else:
+        logger.debug("BotEventHandler already loaded.")
