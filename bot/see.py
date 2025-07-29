@@ -31,9 +31,10 @@ async def see_infer(image_path: str, prompt: str = None) -> BotAction:
             raise InferenceError(f"Image file not found: {image_path}")
             
         # Get file extension to determine MIME type
-        mime_type = "image/jpeg" if image_path.lower().endswith(('.jpg', '.jpeg')) \
-                   else "image/png" if image_path.lower().endswith('.png') \
-                   else "image/webp" if image_path.lower().endswith('.webp') \
+        image_path_str = str(image_path)
+        mime_type = "image/jpeg" if image_path_str.lower().endswith(('.jpg', '.jpeg')) \
+                   else "image/png" if image_path_str.lower().endswith('.png') \
+                   else "image/webp" if image_path_str.lower().endswith('.webp') \
                    else "image/unknown"
         
         logger.debug(f"Detected MIME type: {mime_type}")
