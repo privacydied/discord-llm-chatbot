@@ -4,12 +4,18 @@ import os
 import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor
 
-from .engines.stub import StubEngine
 from .engines.base import BaseEngine
+from .engines.stub import StubEngine
+from .engines.kokoro import KokoroONNXEngine
 from .errors import SynthesisError
 from ..util.logging import get_logger
 
 logger = get_logger(__name__)
+
+ENGINES = {
+    "stub": StubEngine,
+    "kokoro-onnx": KokoroONNXEngine,
+}
 
 class TTSManager:
     """Manages loading and interacting with the configured TTS engine."""
@@ -22,35 +28,27 @@ class TTSManager:
 
     def load(self):
         """Loads the primary TTS engine, falling back to the StubEngine on any error."""
+        engine_name = os.getenv('TTS_ENGINE', 'stub')
+        logger.info(f"Attempting to load TTS engine: {engine_name}")
+
         try:
-            engine_name = os.getenv('TTS_BACKEND')
-            if not engine_name:
-                raise ValueError("TTS_BACKEND environment variable not set.")
-
-            logger.info(f"Attempting to load TTS engine: {engine_name}")
-            if engine_name == 'kokoro':
-                from .engines import kokoro as kokoro_engine
-                
-                # Read configuration from environment
-                model_path = os.getenv('TTS_MODEL_PATH')
-                voices_path = os.getenv('TTS_VOICES_PATH')
-                tokenizer = os.getenv('TTS_TOKENISER', 'espeak')
-                
-                if not model_path or not voices_path:
-                    raise ValueError("Missing required TTS environment variables (TTS_MODEL_PATH, TTS_VOICES_PATH).")
-
-                self.engine = kokoro_engine.KokoroEngine(
-                    model_path=model_path,
-                    voices_path=voices_path,
-                    tokenizer=tokenizer
-                )
-                logger.info("Successfully loaded Kokoro TTS engine.")
-            # Add other engines here with 'elif engine_name == ...'
-            else:
+            engine_class = ENGINES.get(engine_name)
+            if not engine_class:
                 raise ValueError(f"Unsupported TTS engine: {engine_name}")
 
+            if engine_name == "kokoro-onnx":
+                model_path = os.getenv('TTS_MODEL_PATH')
+                voices_path = os.getenv('TTS_VOICES_PATH')
+                if not model_path or not voices_path:
+                    raise ValueError("Missing TTS config: TTS_MODEL_PATH and TTS_VOICES_PATH must be set for kokoro-onnx.")
+                self.engine = engine_class(model_path=model_path, voices_path=voices_path)
+            else:
+                self.engine = engine_class()
+
+            logger.info(f"Successfully loaded TTS engine: {engine_name}")
+
         except Exception as e:
-            logger.warning(f"Failed to load primary TTS engine: {e}. Falling back to stub.", exc_info=True)
+            logger.error(f"Failed to load primary TTS engine '{engine_name}': {e}. Falling back to stub.", exc_info=True)
             self.engine = StubEngine()
 
     def is_available(self) -> bool:

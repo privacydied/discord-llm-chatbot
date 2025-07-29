@@ -11,7 +11,10 @@ from discord.ext import commands
 
 # Import bot modules
 from ..memory import get_profile, save_profile, get_server_profile, save_server_profile
-from ..logger import log_command
+import logging
+from bot.logger import log_command
+
+logger = logging.getLogger(__name__)
 from ..config import load_config
 from ..router import get_router
 
@@ -304,4 +307,7 @@ class MemoryCommands(commands.Cog):
 
 async def setup(bot):
     """Add memory commands to the bot."""
-    await bot.add_cog(MemoryCommands(bot))
+    if not bot.get_cog('MemoryCommands'):
+        await bot.add_cog(MemoryCommands(bot))
+    else:
+        logger.warning("'MemoryCommands' cog already loaded, skipping setup.")

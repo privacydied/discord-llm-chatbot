@@ -1,17 +1,18 @@
 """
 AI Backend Router - Routes requests to appropriate AI service based on configuration.
 """
-import logging
-from typing import Dict, Any, Union, AsyncGenerator
+from typing import Dict, Any, Union, AsyncGenerator, Optional
 
 from .config import load_config
+from .util.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def generate_response(
     prompt: str,
     context: str = "",
+    system_prompt: Optional[str] = None,
     user_id: str = None,
     guild_id: str = None,
     temperature: float = None,
@@ -43,6 +44,7 @@ async def generate_response(
             result = await generate_openai_response(
                 prompt=prompt,
                 context=context,
+                system_prompt=system_prompt,
                 user_id=user_id,
                 guild_id=guild_id,
                 temperature=temperature,
@@ -59,6 +61,7 @@ async def generate_response(
             result = await ollama_generate_response(
                 prompt=prompt,
                 context=context,
+                system_prompt=system_prompt,
                 user_id=user_id,
                 guild_id=guild_id,
                 temperature=temperature,

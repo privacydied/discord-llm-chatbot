@@ -2,14 +2,14 @@
 Centralized speech-to-text inference module (hear)
 """
 import asyncio
-import logging
 import tempfile
 import os
 from pathlib import Path
 from .stt import stt_manager
 from .exceptions import InferenceError
+from .util.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 def _get_file_extension(filename: str) -> str:
     """Get the lowercase file extension with leading dot."""

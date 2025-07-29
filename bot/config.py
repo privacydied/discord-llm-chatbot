@@ -3,13 +3,13 @@ Configuration loading and environment setup.
 """
 import os
 import sys
-import logging
 from pathlib import Path
 from dotenv import load_dotenv
 from .exceptions import ConfigurationError
+from .util.logging import get_logger
 
 # CHANGE: Enhanced .env loading with comprehensive audit and logging
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Load environment variables from .env file with explicit path
 load_dotenv(dotenv_path=Path.cwd() / '.env', verbose=True)

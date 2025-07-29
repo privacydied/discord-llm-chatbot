@@ -20,7 +20,7 @@ import dotenv
 
 from bot.kokoro_direct import KokoroDirect
 from bot.tts_errors import TTSWriteError
-from bot.logger import get_logger
+from bot.util.logging import get_logger
 
 logger = get_logger(__name__)
 

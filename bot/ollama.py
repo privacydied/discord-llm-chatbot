@@ -1,8 +1,10 @@
 """
 Ollama API integration for the Discord bot.
 """
+"""
+Ollama API integration for the Discord bot.
+"""
 import json
-import logging
 import aiohttp
 import asyncio
 from typing import Dict, List, Optional, Any, Union, AsyncGenerator
@@ -10,7 +12,7 @@ from datetime import datetime, timedelta
 
 # Import bot modules
 from .config import load_config
-from .logger import get_logger
+from .util.logging import get_logger
 from .memory import get_profile, get_server_profile
 from .exceptions import APIError as OllamaAPIError
 
@@ -176,7 +178,7 @@ class OllamaClient:
         except aiohttp.ClientError as e:
             raise OllamaAPIError(f"Network error: {str(e)}")
         except Exception as e:
-            logging.error(f"Error in Ollama generate: {e}", exc_info=True)
+            logger.error(f"Error in Ollama generate: {e}", exc_info=True)
             raise OllamaAPIError(f"An error occurred: {str(e)}")
     
     async def generate_stream(
@@ -264,11 +266,11 @@ class OllamaClient:
                                     'raw_response': data
                                 }
                             except json.JSONDecodeError:
-                                logging.warning(f"Failed to parse JSON: {line}")
+                                logger.warning(f"Failed to parse JSON: {line}")
                                 continue
                     
                     except Exception as e:
-                        logging.error(f"Error processing chunk: {e}", exc_info=True)
+                        logger.error(f"Error processing chunk: {e}", exc_info=True)
                         continue
         
         except asyncio.TimeoutError:
@@ -276,7 +278,7 @@ class OllamaClient:
         except aiohttp.ClientError as e:
             raise OllamaAPIError(f"Network error: {str(e)}")
         except Exception as e:
-            logging.error(f"Error in Ollama generate_stream: {e}", exc_info=True)
+            logger.error(f"Error in Ollama generate_stream: {e}", exc_info=True)
             raise OllamaAPIError(f"An error occurred: {str(e)}")
     
     async def list_models(self) -> List[Dict[str, Any]]:
@@ -296,7 +298,7 @@ class OllamaClient:
                 return response_data.get('models', [])
         
         except Exception as e:
-            logging.error(f"Error listing models: {e}", exc_info=True)
+            logger.error(f"Error listing models: {e}", exc_info=True)
             raise OllamaAPIError(f"Failed to list models: {str(e)}")
     
     async def get_model_info(self, model_name: str) -> Optional[Dict[str, Any]]:
@@ -308,7 +310,7 @@ class OllamaClient:
                     return model
             return None
         except Exception as e:
-            logger.error(f"Error getting model info: {e}", exc_info=True, extra={'subsys': 'ollama', 'event': 'get_model_info_fail'})
+            logger.error(f"Error getting model info: {e}", exc_info=True)
             return None
 
 # Create a global instance for convenience
@@ -318,6 +320,7 @@ ollama_client = OllamaClient()
 async def generate_response(
     prompt: str,
     context: str = "",
+    system_prompt: Optional[str] = None,
     user_id: str = None,
     guild_id: str = None,
     temperature: float = None,
@@ -362,35 +365,41 @@ async def generate_response(
             server_profile = get_server_profile(str(guild_id))
             server_context = server_profile.get('context_notes', '')
         
-        # CHANGE: Use PROMPT_FILE from environment instead of hardcoded prompt
-        config = load_config()
-        prompt_file_path = config.get("PROMPT_FILE")
-        if not prompt_file_path:
-            raise OllamaAPIError("PROMPT_FILE not configured in environment variables")
-        
-        try:
-            with open(prompt_file_path, "r", encoding="utf-8") as pf:
-                base_system_prompt = pf.read().strip()
-                logger.debug(f"Loaded text prompt from {prompt_file_path}", extra={'subsys': 'ollama', 'event': 'prompt_load'})
-        except FileNotFoundError:
-            raise OllamaAPIError(f"Prompt file not found: {prompt_file_path}")
-        except Exception as e:
-            raise OllamaAPIError(f"Error reading prompt file {prompt_file_path}: {e}")
-        
-        # Build the full prompt with context and server context
-        full_prompt = f"""{base_system_prompt}
+        # Determine the system prompt to use
+        final_system_prompt = ""
+        if system_prompt:
+            final_system_prompt = system_prompt
+            # If there's also context, add it separately for clarity
+            if context:
+                final_system_prompt += f"\n\nPREVIOUS_CONVERSATION_HISTORY:\n{context}"
+        else:
+            # Construct the default system prompt
+            config = load_config()
+            prompt_file_path = config.get("PROMPT_FILE")
+            if not prompt_file_path:
+                raise OllamaAPIError("PROMPT_FILE not configured in environment variables")
+            try:
+                with open(prompt_file_path, "r", encoding="utf-8") as pf:
+                    base_system_prompt = pf.read().strip()
+            except FileNotFoundError:
+                raise OllamaAPIError(f"Prompt file not found: {prompt_file_path}")
+            except Exception as e:
+                raise OllamaAPIError(f"Error reading prompt file {prompt_file_path}: {e}")
+            
+            final_system_prompt = f"""{base_system_prompt}\n\nContext: {context}\n\nServer Context: {server_context}"""
 
-Context: {context}
-
-Server Context: {server_context}
-
-User: {prompt}
-Assistant:"""
+        # The Ollama /api/generate endpoint takes the user prompt and system prompt separately.
+        # We pass the user's message as the main prompt and the constructed prompt as the system instruction.
+        user_prompt = prompt
         
+        # Add the system prompt to kwargs if it exists
+        if final_system_prompt:
+            kwargs['system'] = final_system_prompt
+
         # Generate the response
         if stream:
             return ollama_client.generate_stream(
-                prompt=full_prompt,
+                prompt=user_prompt,
                 model=model,
                 temperature=temperature,
                 max_tokens=max_tokens,
@@ -399,7 +408,7 @@ Assistant:"""
             )
         else:
             return await ollama_client.generate(
-                prompt=full_prompt,
+                prompt=user_prompt,
                 model=model,
                 temperature=temperature,
                 max_tokens=max_tokens,
@@ -408,7 +417,7 @@ Assistant:"""
             )
     
     except Exception as e:
-        logger.error(f"Error in generate_response: {e}", exc_info=True, extra={'subsys': 'ollama', 'event': 'generate_response_fail'})
+        logger.error(f"Error in generate_response: {e}", exc_info=True)
         raise OllamaAPIError(f"Failed to generate response: {str(e)}")
 
 # Cleanup function to close the client

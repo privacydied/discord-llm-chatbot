@@ -8,7 +8,10 @@ import io
 from typing import Optional
 
 import discord
+import logging
 from discord.ext import commands
+
+logger = logging.getLogger(__name__)
 
 from bot.tts_state import tts_state
 
@@ -154,5 +157,8 @@ class TTSCommands(commands.Cog):
     # The functionality is now handled by the @tts_group.command(name='all') subcommand
 
 async def setup(bot):
-    """Add TTS commands to the bot."""
-    await bot.add_cog(TTSCommands(bot))
+    """Add the TTS commands to the bot."""
+    if not bot.get_cog('TTSCommands'):
+        await bot.add_cog(TTSCommands(bot))
+    else:
+        logger.warning("'TTSCommands' cog already loaded, skipping setup.")

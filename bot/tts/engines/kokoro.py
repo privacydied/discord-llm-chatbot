@@ -5,7 +5,7 @@ from bot.tts.errors import TTSError
 
 logger = logging.getLogger(__name__)
 
-class KokoroEngine(BaseEngine):
+class KokoroONNXEngine(BaseEngine):
     def __init__(self, model_path: str, voices_path: str, tokenizer: str = "espeak"):
         self.model_path = model_path
         self.voices_path = voices_path

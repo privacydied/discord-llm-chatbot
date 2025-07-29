@@ -1,7 +1,6 @@
 """
 OpenAI/OpenRouter Backend - Handles OpenAI API calls including OpenRouter.
 """
-import logging
 from typing import Dict, Any, Union, AsyncGenerator
 import openai
 import aiohttp
@@ -11,13 +10,15 @@ import os
 from .config import load_config
 from .memory import get_profile, get_server_profile
 from .exceptions import APIError
+from .util.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def generate_openai_response(
     prompt: str,
     context: str = "",
+    system_prompt: str = None,
     user_id: str = None,
     guild_id: str = None,
     temperature: float = None,
@@ -71,32 +72,37 @@ async def generate_openai_response(
             if server_profile:
                 server_context = server_profile.get('context_notes', '')
         
-        # CHANGE: Use PROMPT_FILE from environment instead of hardcoded prompt
-        prompt_file_path = config.get("PROMPT_FILE")
-        if not prompt_file_path:
-            raise APIError("PROMPT_FILE not configured in environment variables")
-        
-        try:
-            with open(prompt_file_path, "r", encoding="utf-8") as pf:
-                base_system_prompt = pf.read().strip()
-                logger.debug(f"Loaded text prompt from {prompt_file_path}")
-        except FileNotFoundError:
-            raise APIError(f"Prompt file not found: {prompt_file_path}")
-        except Exception as e:
-            raise APIError(f"Error reading prompt file {prompt_file_path}: {e}")
-        
-        # Build the full prompt with context and server context
-        system_prompt = f"""{base_system_prompt}
+        # Prepare the messages payload
+        messages = []
 
-Context: {context}
+        # If a specific system_prompt is provided, use it.
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        # Otherwise, construct the default system prompt.
+        else:
+            prompt_file_path = config.get("PROMPT_FILE")
+            if not prompt_file_path:
+                raise APIError("PROMPT_FILE not configured in environment variables")
+            try:
+                with open(prompt_file_path, "r", encoding="utf-8") as pf:
+                    base_system_prompt = pf.read().strip()
+            except FileNotFoundError:
+                raise APIError(f"Prompt file not found: {prompt_file_path}")
+            except Exception as e:
+                raise APIError(f"Error reading prompt file {prompt_file_path}: {e}")
+            
+            # Combine base prompt, server context, and conversation history
+            full_system_prompt = f"""{base_system_prompt}
 
 Server Context: {server_context}"""
-        
-        # Prepare the messages
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": prompt}
-        ]
+            messages.append({"role": "system", "content": full_system_prompt})
+
+        # Add conversation history if it exists and a specific system prompt was used
+        if system_prompt and context:
+            messages.append({"role": "system", "content": f"PREVIOUS_CONVERSATION_HISTORY:\n{context}"})
+
+        # Finally, add the user's actual prompt
+        messages.append({"role": "user", "content": prompt})
         
         # Set default max_tokens if not provided
         if max_tokens is None:

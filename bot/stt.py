@@ -3,7 +3,6 @@ Speech-to-text module for Discord bot using faster-whisper and whisper.cpp
 """
 import os
 import json
-import logging
 import asyncio
 import subprocess
 import tempfile
@@ -13,6 +12,10 @@ from functools import lru_cache
 import torch
 from faster_whisper import WhisperModel
 
+from .util.logging import get_logger
+
+logger = get_logger(__name__)
+
 # Get environment variables
 _ENGINE = os.getenv("STT_ENGINE", "faster-whisper")
 _FALLBACK = os.getenv("STT_FALLBACK", "whispercpp")
@@ -21,13 +24,13 @@ _SIZE = os.getenv("WHISPER_MODEL_SIZE", "base-int8")
 @lru_cache
 def _load_fw():
     """Load faster-whisper model with caching"""
-    logger = logging.getLogger(__name__)
     logger.info(f"Loading faster-whisper {_SIZE}")
     return WhisperModel(
         _SIZE,
         device="cuda" if torch.cuda.is_available() else "cpu",
         compute_type="int8"
     )
+
 
 class STTManager:
     """Manages STT operations with support for multiple backends."""
@@ -44,12 +47,12 @@ class STTManager:
             if self.engine == "faster-whisper":
                 self.model = _load_fw()
                 self.available = True
-                logging.info("✅ Initialized faster-whisper STT model")
+                logger.info("✅ Initialized faster-whisper STT model")
             else:
-                logging.warning(f"Unsupported STT engine: {self.engine}")
+                logger.warning(f"Unsupported STT engine: {self.engine}")
                 self.available = False
         except Exception as e:
-            logging.error(f"Failed to initialize STT: {str(e)}")
+            logger.error(f"Failed to initialize STT: {str(e)}")
             self.available = False
     
     def is_available(self) -> bool:
@@ -69,7 +72,7 @@ class STTManager:
                 audio_path
             )
         except Exception as e:
-            logging.error(f"STT transcription failed: {str(e)}")
+            logger.error(f"STT transcription failed: {str(e)}")
             raise
     
     def _transcribe_sync(self, audio_path: Path) -> str:
@@ -88,13 +91,12 @@ class STTManager:
             else:
                 raise RuntimeError(f"Unsupported STT engine: {self.engine}")
         except Exception as e:
-            logging.error(f"STT transcription error: {str(e)}")
+            logger.error(f"STT transcription error: {str(e)}")
             raise
 
 # Create a single instance of STTManager
 stt_manager = STTManager()
 
-logger = logging.getLogger(__name__)
 
 async def transcribe_wav(path: Path) -> str:
     """Transcribe WAV file using configured STT engine"""

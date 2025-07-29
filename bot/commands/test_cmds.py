@@ -24,6 +24,9 @@ class TestCommands(commands.Cog):
 async def setup(bot):
     """Add the test commands to the bot."""
     logger.info("Setting up test commands...")
-    cog = TestCommands(bot)
-    await bot.add_cog(cog)
+    if not bot.get_cog('TestCommands'):
+        cog = TestCommands(bot)
+        await bot.add_cog(cog)
+    else:
+        logger.warning("'TestCommands' cog already loaded, skipping setup.")
     logger.info("Test commands set up")

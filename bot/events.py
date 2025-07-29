@@ -7,7 +7,7 @@ from pathlib import Path
 import discord
 from discord.ext import commands
 
-from bot.logger import get_logger
+from bot.util.logging import get_logger
 from bot.router import get_router
 from bot.config import load_config
 from .hear import hear_infer
@@ -36,14 +36,7 @@ class BotEventHandler(commands.Cog):
 
         return False
 
-    def _get_log_extra(self, message: discord.Message) -> dict:
-        """Helper to create the extra dictionary for structured logging."""
-        return {
-            'subsys': 'events',
-            'guild_id': message.guild.id if message.guild else None,
-            'user_id': message.author.id,
-            'msg_id': message.id
-        }
+
 
         # This file is now obsolete - message handling is done in bot.py
         # All message filtering and routing is now handled by the bot's on_message implementation
@@ -172,31 +165,31 @@ class BotEventHandler(commands.Cog):
 # Background task for cache maintenance
 async def cache_maintenance_task(bot: commands.Bot):
     """Background task to clean up old cache files."""
-    logger.info("Starting TTS cache maintenance task", extra={'subsys': 'tts_cache', 'event': 'task_start'})
+    logger.info("Starting TTS cache maintenance task [subsys: tts_cache, event: task_start]")
     while True:
         try:
-            logger.debug("Running TTS cache maintenance...", extra={'subsys': 'tts_cache', 'event': 'task_run'})
+            logger.debug("Running TTS cache maintenance... [subsys: tts_cache, event: task_run]")
             # Get stats before cleanup
             stats_before = bot.tts_manager.get_cache_stats()
-            logger.debug(f"Cache stats before cleanup: {stats_before}", extra={'subsys': 'tts_cache', 'event': 'stats_before'})
+            logger.debug(f"Cache stats before cleanup: {stats_before} [subsys: tts_cache, event: stats_before]")
             
             # Run the cleanup
             bot.tts_manager.purge_old_cache()  # This is a synchronous method
             
             # Get stats after cleanup
             stats_after = bot.tts_manager.get_cache_stats()
-            logger.info(f"TTS cache maintenance completed. Stats before: {stats_before}, after: {stats_after}", extra={'subsys': 'tts_cache', 'event': 'task_success'})
+            logger.info(f"TTS cache maintenance completed. Stats before: {stats_before}, after: {stats_after} [subsys: tts_cache, event: task_success]")
             
             # Wait for 24 hours before next run
-            logger.debug("Next TTS cache maintenance in 24 hours...", extra={'subsys': 'tts_cache', 'event': 'task_sleep'})
+            logger.debug("Next TTS cache maintenance in 24 hours... [subsys: tts_cache, event: task_sleep]")
             await asyncio.sleep(86400)  # Run daily
             
         except Exception as e:
-            logger.error(f"TTS cache maintenance failed: {str(e)}", exc_info=True, extra={'subsys': 'tts_cache', 'event': 'task_fail'})
-            logger.info("Retrying TTS cache maintenance in 1 hour...", extra={'subsys': 'tts_cache', 'event': 'task_retry'})
+            logger.error(f"TTS cache maintenance failed: {str(e)} [subsys: tts_cache, event: task_fail]", exc_info=True)
+            logger.info("Retrying TTS cache maintenance in 1 hour... [subsys: tts_cache, event: task_retry]")
             await asyncio.sleep(3600)  # Retry in 1 hour
 
 async def setup(bot) -> None:
     """Set up event handlers."""
     await bot.add_cog(BotEventHandler(bot))
-    logger.info("Event handlers loaded.", extra={'subsys': 'core', 'event': 'cog_load_success', 'cog': __name__})
+    logger.info(f"Event handlers loaded. [subsys: core, event: cog_load_success, cog: {__name__}]")

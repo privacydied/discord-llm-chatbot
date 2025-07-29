@@ -4,9 +4,7 @@ Command handlers for the Discord bot.
 from typing import Dict, Any
 import logging
 
-# Import all command modules here to register them
-from . import memory_cmds as memory_cmds
-from . import test_cmds as test_cmds  # Add test commands for debugging
+# Command modules are loaded via the setup_commands function below.
 
 # This will be populated with all registered commands
 commands: Dict[str, Any] = {}

@@ -28,54 +28,41 @@ COMMAND_MAP = {
 
 def parse_command(message: discord.Message, bot: commands.Bot) -> Optional[ParsedCommand]:
     """
-    Parses a message to determine the command and extracts clean content based on context.
+    Parses a message to determine if it's an explicit command.
+
+    This function ONLY identifies commands that start with '!'. It does not handle
+    routing logic for DMs or mentions; that is the responsibility of the Router.
 
     Args:
         message: The discord.Message object to parse.
-        bot: The bot instance, used to check for mentions.
+        bot: The bot instance (currently unused, kept for API consistency).
 
     Returns:
-        A ParsedCommand object if the message is a valid command, otherwise None.
+        A ParsedCommand object if a known '!' command is found, otherwise None.
     """
     content = message.content.strip()
-    is_dm = isinstance(message.channel, discord.DMChannel)
 
-    # In DMs, we process the message directly.
-    # In guilds, the bot must be mentioned.
-    if is_dm:
-        pass  # Proceed with parsing
-    elif bot.user.mentioned_in(message):
-        # Remove the mention from guild messages to get the actual content
-        mention_pattern = fr'^<@!?{bot.user.id}>\s*'
-        content = re.sub(mention_pattern, '', content)
-    else:
-        # Not a DM and no mention, so ignore.
+    # Remove bot mention from the beginning of the message to isolate the command
+    mention_pattern = fr'^<@!?{bot.user.id}>\s*'
+    content = re.sub(mention_pattern, '', content)
+
+    if not content.startswith('!'):
+        # Not an explicit command, so the router should handle it as a regular message.
         return None
 
-    # If there's no content left but has attachments, treat as CHAT command
-    if not content:
-        if message.attachments:
-            # Empty content with attachments is valid for processing
-            attachment_info = f"{len(message.attachments)} attachment(s): {message.attachments[0].filename}"
-            logging.debug(f"📎 Processing empty content message with {attachment_info}", 
-                        extra={'subsys': 'parser', 'event': 'empty_with_attachment'})
-            return ParsedCommand(command=Command.CHAT, cleaned_content="")
-        return None
+    parts = content.split(maxsplit=1)
+    command_str = parts[0]
+    remaining_content = parts[1] if len(parts) > 1 else ""
 
-    # If the message starts with a command prefix, try to parse it as a command.
-    if content.startswith('!'):
-        parts = content.split(maxsplit=1)
-        command_str = parts[0]
-        remaining_content = parts[1] if len(parts) > 1 else ""
+    command = COMMAND_MAP.get(command_str)
 
-        command = COMMAND_MAP.get(command_str)
-
-        if command:
-            # It's a known command.
-            return ParsedCommand(command=command, cleaned_content=remaining_content.strip())
-        else:
-            # It's an unknown command starting with '!', so we ignore it.
-            return None
-
-    # If it doesn't start with '!', it's a general chat message.
-    return ParsedCommand(command=Command.CHAT, cleaned_content=content)
+    if command:
+        # A known command was found.
+        logger.debug(f"Parsed command: {command.name} with content: '{remaining_content[:50]}...'",
+                     extra={'subsys': 'parser', 'event': 'command.found'})
+        return ParsedCommand(command=command, cleaned_content=remaining_content.strip())
+    
+    # An unknown '!' command was found, ignore it.
+    logger.debug(f"Ignoring unknown command: {command_str}", 
+                 extra={'subsys': 'parser', 'event': 'command.unknown'})
+    return None

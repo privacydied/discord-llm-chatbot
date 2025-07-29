@@ -4,13 +4,14 @@ Centralized vision-language inference module (see)
 import logging
 import os
 from pathlib import Path
+from .action import BotAction
 from .ai_backend import generate_vl_response
 from .exceptions import InferenceError
 from .config import load_config
 
 logger = logging.getLogger(__name__)
 
-async def see_infer(image_path: str, prompt: str = None) -> str:
+async def see_infer(image_path: str, prompt: str = None) -> BotAction:
     """Generate response from image path and prompt
     
     Args:
@@ -67,7 +68,7 @@ async def see_infer(image_path: str, prompt: str = None) -> str:
             vl_result = response['text']
             logger.info(f"VL model returned: {len(vl_result)} chars")
             logger.debug(f"VL result preview: '{vl_result[:100]}...'")
-            return vl_result
+            return BotAction(content=vl_result)
         else:
             logger.error(f"Unexpected VL response format: {response}")
             raise InferenceError("Unexpected response format from vision model")
