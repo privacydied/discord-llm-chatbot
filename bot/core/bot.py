@@ -6,8 +6,10 @@ import os
 from typing import TYPE_CHECKING, Optional
 
 import discord
+import io
 from discord.ext import commands
 
+from bot.config import load_system_prompts
 from bot.util.logging import get_logger
 from bot.metrics import NullMetrics
 from bot.memory import load_all_profiles
@@ -38,6 +40,7 @@ class LLMBot(commands.Bot):
         self.router: Optional[Router] = None
         self.background_tasks = []
         self._is_ready = asyncio.Event()
+        self.system_prompts = {}
 
     async def setup_hook(self) -> None:
         """Asynchronous setup phase for the bot."""
@@ -48,6 +51,7 @@ class LLMBot(commands.Bot):
         except Exception:
             self.logger.warning("Prometheus metrics not available, using NullMetrics.")
 
+        self.system_prompts = load_system_prompts()
         await self.load_profiles()
         self.setup_background_tasks()
         await self.setup_tts()
@@ -120,12 +124,40 @@ class LLMBot(commands.Bot):
             action.content = "I tried to send a voice message, but the audio file was missing."
 
         try:
-            if action.content or action.embeds or files:
-                # Use message.reply() if the action was triggered by a reply
+            content = action.content
+            # Per user request, add a mention to the user unless it's a reply in a thread.
+            if action.meta.get('is_reply'):
+                # Prepend mention only if content exists and is not just whitespace
+                if content and content.strip():
+                    content = f"{message.author.mention}\n\n{content}"
+
+            # Discord message character limit handling
+            if content and len(content) > 2000:
+                self.logger.warning(f"Message content for {message.id} exceeds 2000 characters. Attaching as file.")
+                file_content = io.BytesIO(content.encode('utf-8'))
+                text_file = discord.File(fp=file_content, filename="full_response.txt")
+                if files is None:
+                    files = []
+                files.append(text_file)
+
+                # The message becomes a notification about the attached file.
                 if action.meta.get('is_reply'):
-                    await message.reply(content=action.content, embeds=action.embeds, files=files)
+                    content = f"{message.author.mention}\n\nThe response was too long to post directly. The full content is attached as a file."
                 else:
-                    await message.channel.send(content=action.content, embeds=action.embeds, files=files)
+                    content = "The response was too long to post directly. The full content is attached as a file."
+
+            if content or action.embeds or files:
+                try:
+                    # Use message.reply() for contextual replies.
+                    await message.reply(content=content, embeds=action.embeds, files=files, mention_author=True)
+                except discord.errors.HTTPException as e:
+                    # If replying fails (e.g., original message deleted), send a normal message instead.
+                    if e.code == 50035: # Unknown Message
+                        self.logger.warning(f"Replying to message {message.id} failed (likely deleted). Falling back to channel send.")
+                        await message.channel.send(content=content, embeds=action.embeds, files=files)
+                    else:
+                        raise # Re-raise other HTTP exceptions
+
         except discord.errors.HTTPException as e:
             self.logger.error(f"Failed to send message: {e} (msg_id: {message.id})")
 

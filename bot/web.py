@@ -266,6 +266,21 @@ def should_extract_text(content_type: str) -> Dict[str, bool]:
     else:
         return {'should_extract': False}
 
+def strip_boilerplate(text: str) -> str:
+    """Removes common boilerplate text from web content."""
+    if not text:
+        return ""
+    BLOCKLIST = [
+        "cookie", "privacy", "gdpr", "javascript", "login", "log in",
+        "browser support", "enable js", "advertisement", "subscribe",
+        "sign up", "newsletter", "allow notifications"
+    ]
+    # A line is considered boilerplate if it's short and contains a keyword
+    return "\n".join(
+        line for line in text.splitlines()
+        if not (len(line.split()) < 15 and any(keyword in line.lower() for keyword in BLOCKLIST))
+    )
+
 async def process_url(url: str) -> Dict[str, Any]:
     """Process a URL, fetching content with a fallback to Playwright for JS-heavy sites."""
     text_content = None
@@ -280,7 +295,8 @@ async def process_url(url: str) -> Dict[str, Any]:
             if 'text/html' in content_type:
                 try:
                     html_string = content.decode('utf-8')
-                    text_content = trafilatura.extract(html_string, url=url, config=trafilatura_config)
+                    raw_text = trafilatura.extract(html_string, url=url, config=trafilatura_config)
+                    text_content = strip_boilerplate(raw_text)
                 except (UnicodeDecodeError, TypeError):
                     logging.warning(f"Could not decode or parse content from {url} via httpx.")
     except Exception as e:
@@ -296,7 +312,12 @@ async def process_url(url: str) -> Dict[str, Any]:
         playwright_result = await capture_with_playwright(url)
 
         if playwright_result and not playwright_result.get('error'):
-            text_content = playwright_result.get('text')
+            # Only use playwright's text if it's substantial, otherwise prioritize the screenshot.
+            playwright_text = playwright_result.get('text')
+            if playwright_text:
+                cleaned_text = strip_boilerplate(playwright_text)
+                if len(cleaned_text) > 150:
+                    text_content = cleaned_text
             screenshot_path = playwright_result.get('screenshot_path')
         elif playwright_result and playwright_result.get('error') == 'BROWSER_NOT_INSTALLED':
             error_message = "Sorry, this site requires JavaScript and the tool to process it isn't installed. Please ask the bot administrator to run `playwright install`."

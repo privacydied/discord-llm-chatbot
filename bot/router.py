@@ -218,51 +218,63 @@ class Router:
 
     async def _flow_process_url(self, url: str, message: discord.Message) -> BotAction:
         """
-        Processes a URL. Fetches text content and falls back to a screenshot-to-VL flow if text is unavailable.
+        Processes a URL, intelligently routing to a text or vision-language flow.
         """
         self.logger.info(f"Processing URL: {url} (msg_id: {message.id})")
-        processed_data = await web.process_url(url)
+        screenshot_path = None
 
-        if processed_data.get('error'):
-            self.logger.error(f"Failed to process URL {url}: {processed_data['error']} (msg_id: {message.id})")
-            return BotAction(content=f"Sorry, I couldn't process that URL. Reason: {processed_data['error']}", error=True)
+        try:
+            result = await web.process_url(url)
+            text_content = result.get('text')
+            screenshot_path = result.get('screenshot_path')
+            error_message = result.get('error')
 
-        text_content = processed_data.get('text')
-        screenshot_path = processed_data.get('screenshot_path')
+            if error_message:
+                self.logger.error(f"❌ URL processing failed for {url}: {error_message} (msg_id: {message.id})")
+                return BotAction(content=error_message, error=True)
 
-        # Flow 1: Screenshot-to-Vision pipeline if text is insufficient
-        if screenshot_path and (not text_content or len(text_content) < 150):
-            self.logger.info(f"📸 Activating screenshot-to-vision flow for {url}. (msg_id: {message.id})")
-            try:
-                prompt = f"This is a screenshot of the webpage at {url}. Please describe the content of this page."
-                vision_response = await see_infer(image_path=str(screenshot_path), prompt=prompt)
+            # --- Vision-Language Flow --- #
+            if screenshot_path:
+                self.logger.info(f"📸 Screenshot available. Routing to vision-language model for {url}. (msg_id: {message.id})")
+                try:
+                    vl_system_prompt = self.bot.system_prompts.get("vl_prompt", "Describe the content of this webpage screenshot.")
+                    vision_response = await see_infer(prompt=vl_system_prompt, image_path=screenshot_path)
 
-                if not vision_response or vision_response.error:
-                    self.logger.warning(f"Vision model failed for screenshot of {url}. (msg_id: {message.id})")
-                    return BotAction(content="I took a screenshot, but I couldn't understand it.", error=True)
+                    if not vision_response or vision_response.error:
+                        return BotAction(content="I couldn't understand the image from that URL.", error=True)
 
-                final_prompt = f"A user shared this URL: {url}. I couldn't read the text, but a vision model described the page as: '{vision_response.content}'. Please provide a summary or answer based on this description."
-                return await brain_infer(final_prompt)
+                    # Combine vision result with any text for a final, context-rich summary
+                    final_prompt = (
+                        f"A user shared this URL: {url}. "
+                        f"A vision model described the page's screenshot as: '{vision_response.content}'."
+                    )
+                    if text_content:
+                        final_prompt += f"\n\nSome text was also extracted: '{text_content[:1000]}'"
+                    final_prompt += "\n\nPlease provide a concise summary or answer based on this combined information."
 
-            except Exception as e:
-                self.logger.error(f"❌ Screenshot-to-vision flow failed: {e} (msg_id: {message.id})", exc_info=True)
-                return BotAction(content="⚠️ An error occurred while analyzing the screenshot.", error=True)
-            finally:
-                # Ensure temporary screenshot is deleted
-                if screenshot_path and os.path.exists(screenshot_path):
-                    os.unlink(screenshot_path)
-                    self.logger.info(f"🗑️ Cleaned up screenshot file: {screenshot_path}")
+                    text_system_prompt = self.bot.system_prompts.get("text_prompt", "You are a helpful assistant.")
+                    return await brain_infer(prompt=final_prompt, system_prompt=text_system_prompt)
 
-        # Flow 2: Standard text summarization
-        elif text_content:
-            self.logger.info(f"📚 Summarizing text content from {url}. (msg_id: {message.id})")
-            prompt = f"Please summarize the following content from the URL {url}:\n\n{text_content}"
-            return await brain_infer(prompt=prompt)
+                except Exception as e:
+                    self.logger.error(f"❌ Screenshot-to-vision flow failed: {e} (msg_id: {message.id})", exc_info=True)
+                    return BotAction(content="An error occurred while analyzing the webpage screenshot.", error=True)
 
-        # Fallback: No content could be processed
-        else:
-            self.logger.warning(f"No content could be extracted from {url}. (msg_id: {message.id})")
-            return BotAction(content="I couldn't get any text or visual content from that URL.", error=True)
+            # --- Text-Only Flow --- #
+            elif text_content:
+                self.logger.info(f"📚 No screenshot. Summarizing text content from {url}. (msg_id: {message.id})")
+                text_system_prompt = self.bot.system_prompts.get("text_prompt", "You are a helpful assistant.")
+                prompt = f"Please summarize the following content from the URL {url}:\n\n{text_content}"
+                return await brain_infer(prompt=prompt, system_prompt=text_system_prompt)
+
+            # --- Failure Flow --- #
+            else:
+                self.logger.warning(f"Could not extract any content from URL: {url} (msg_id: {message.id})")
+                return BotAction(content="I was unable to extract any content from that URL.", error=True)
+
+        finally:
+            if screenshot_path and os.path.exists(screenshot_path):
+                os.unlink(screenshot_path)
+                self.logger.debug(f"Cleaned up screenshot file: {screenshot_path}")
 
     async def _flow_process_audio(self, message: Message) -> BotAction:
         """Process audio attachment through STT model."""

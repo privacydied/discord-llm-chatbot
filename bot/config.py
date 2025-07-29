@@ -81,24 +81,39 @@ def validate_required_env() -> None:
 def validate_prompt_files() -> None:
     """
     Validate that prompt files exist and are readable.
-    CHANGE: Added prompt file validation for PROMPT_FILE and VL_PROMPT_FILE.
     """
-    config = load_config()
-    prompt_file = config.get("PROMPT_FILE")
-    vl_prompt_file = config.get("VL_PROMPT_FILE")
-    
+    prompt_file = os.getenv("PROMPT_FILE")
+    vl_prompt_file = os.getenv("VL_PROMPT_FILE")
+
     if prompt_file:
         prompt_path = Path(prompt_file)
         if not prompt_path.exists():
             raise ConfigurationError(f"PROMPT_FILE not found: {prompt_path}")
         logger.debug(f"✅ Text prompt file found: {prompt_path}")
-    
+
     if vl_prompt_file:
         vl_prompt_path = Path(vl_prompt_file)
         if not vl_prompt_path.exists():
             raise ConfigurationError(f"VL_PROMPT_FILE not found: {vl_prompt_path}")
         logger.debug(f"✅ VL prompt file found: {vl_prompt_path}")
 
+
+def load_system_prompts() -> dict[str, str]:
+    """Loads system prompts from files specified in .env and returns them as a dictionary."""
+    prompts = {}
+    try:
+        prompt_file = os.getenv("PROMPT_FILE", "prompts/prompt-yoroi-super-chill.txt")
+        vl_prompt_file = os.getenv("VL_PROMPT_FILE", "prompts/vl-prompt.txt")
+
+        prompts["text_prompt"] = Path(prompt_file).read_text()
+        prompts["vl_prompt"] = Path(vl_prompt_file).read_text()
+
+        logger.info(f"✅ Loaded system prompts: {list(prompts.keys())}")
+        return prompts
+    except FileNotFoundError as e:
+        logger.error(f"❌ Critical error: Prompt file not found at {e.filename}. Please check your .env and file paths.")
+        # This is a critical failure, so we exit.
+        sys.exit(1)
 
 def check_venv_activation() -> None:
     """
