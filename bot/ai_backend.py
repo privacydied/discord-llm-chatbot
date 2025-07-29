@@ -97,7 +97,8 @@ async def generate_vl_response(
     """
     try:
         logger.info("🎨 === VL BACKEND ROUTING STARTED ===")
-        logger.debug(f"🎨 Image URL: {image_url[:100]}{'...' if len(image_url) > 100 else ''}")
+        image_url_str = str(image_url)
+        logger.debug(f"🎨 Image URL: {image_url_str[:100]}{'...' if len(image_url_str) > 100 else ''}")
         logger.debug(f"🎨 User prompt: '{user_prompt[:100]}{'...' if len(user_prompt) > 100 else ''}'")
         logger.debug(f"🎨 User ID: {user_id}, Guild ID: {guild_id}")
         
