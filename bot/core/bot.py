@@ -85,7 +85,6 @@ class LLMBot(commands.Bot):
                     self.logger.info(f"Message {message.id} delegated to command processor.")
                     await self.process_commands(message)
                 elif action.has_payload:
-                    self.logger.info(f"Executing action for message {message.id}")
                     await self._execute_action(message, action)
                 # If no payload and not delegated, the router decided to do nothing.
             else:
@@ -124,7 +123,6 @@ class LLMBot(commands.Bot):
             if action.content or action.embeds or files:
                 # Use message.reply() if the action was triggered by a reply
                 if action.meta.get('is_reply'):
-                    self.logger.info(f"Replying to message {message.id} in thread.")
                     await message.reply(content=action.content, embeds=action.embeds, files=files)
                 else:
                     await message.channel.send(content=action.content, embeds=action.embeds, files=files)

@@ -17,6 +17,7 @@ from typing import Any, Callable, Coroutine, Dict, Optional, TYPE_CHECKING, List
 from .context import get_conversation_history
 from . import web
 from discord import Message, DMChannel, Embed, File
+from bot.brain import brain_infer
 
 if TYPE_CHECKING:
     from bot.core.bot import LLMBot as DiscordBot
@@ -217,58 +218,51 @@ class Router:
 
     async def _flow_process_url(self, url: str, message: discord.Message) -> BotAction:
         """
-        Processes a URL by fetching its content, summarizing it with an LLM,
-        and returning a BotAction with the summary and an optional file attachment.
+        Processes a URL. Fetches text content and falls back to a screenshot-to-VL flow if text is unavailable.
         """
         self.logger.info(f"Processing URL: {url} (msg_id: {message.id})")
+        processed_data = await web.process_url(url)
 
-        try:
-            content_data = await web.process_url(url)
-            if not content_data or content_data.get('error'):
-                error_msg = content_data.get('error', 'Unknown error')
-                self.logger.error(f"Failed to fetch or process URL: {error_msg} (msg_id: {message.id})")
-                return BotAction(content=f"I'm sorry, I was unable to process that page. ({error_msg})", error=True)
+        if processed_data.get('error'):
+            self.logger.error(f"Failed to process URL {url}: {processed_data['error']} (msg_id: {message.id})")
+            return BotAction(content=f"Sorry, I couldn't process that URL. Reason: {processed_data['error']}", error=True)
 
-            extracted_text = content_data.get('content', {}).get('text')
-            if not extracted_text:
-                self.logger.warning(f"No readable content found at URL. (msg_id: {message.id})")
-                return BotAction(content="I couldn't find any readable content on that page.", error=True)
+        text_content = processed_data.get('text')
+        screenshot_path = processed_data.get('screenshot_path')
 
-            self.logger.info(f"Extracted {len(extracted_text)} characters from URL. (msg_id: {message.id})")
+        # Flow 1: Screenshot-to-Vision pipeline if text is insufficient
+        if screenshot_path and (not text_content or len(text_content) < 150):
+            self.logger.info(f"📸 Activating screenshot-to-vision flow for {url}. (msg_id: {message.id})")
+            try:
+                prompt = f"This is a screenshot of the webpage at {url}. Please describe the content of this page."
+                vision_response = await see_infer(image_path=str(screenshot_path), prompt=prompt)
 
-            max_chars = 8000
-            is_truncated = len(extracted_text) > max_chars
-            truncated_text = extracted_text[:max_chars]
+                if not vision_response or vision_response.error:
+                    self.logger.warning(f"Vision model failed for screenshot of {url}. (msg_id: {message.id})")
+                    return BotAction(content="I took a screenshot, but I couldn't understand it.", error=True)
 
-            system_prompt = (
-                "A user linked the following webpage. Please provide a concise summary of its contents, "
-                "explain any interesting or notable points, and if applicable, add a short critical commentary. "
-                "Your goal is to be a helpful, intelligent assistant. "
-                "IMPORTANT: Your entire response must be under 1800 characters."
-            )
+                final_prompt = f"A user shared this URL: {url}. I couldn't read the text, but a vision model described the page as: '{vision_response.content}'. Please provide a summary or answer based on this description."
+                return await brain_infer(final_prompt)
 
-            self.logger.info(f"Summarizing content via LLM... (msg_id: {message.id})")
+            except Exception as e:
+                self.logger.error(f"❌ Screenshot-to-vision flow failed: {e} (msg_id: {message.id})", exc_info=True)
+                return BotAction(content="⚠️ An error occurred while analyzing the screenshot.", error=True)
+            finally:
+                # Ensure temporary screenshot is deleted
+                if screenshot_path and os.path.exists(screenshot_path):
+                    os.unlink(screenshot_path)
+                    self.logger.info(f"🗑️ Cleaned up screenshot file: {screenshot_path}")
 
-            summary_action = await brain_infer(prompt=truncated_text, system_prompt=system_prompt)
+        # Flow 2: Standard text summarization
+        elif text_content:
+            self.logger.info(f"📚 Summarizing text content from {url}. (msg_id: {message.id})")
+            prompt = f"Please summarize the following content from the URL {url}:\n\n{text_content}"
+            return await brain_infer(prompt=prompt)
 
-            if summary_action.error:
-                self.logger.error(f"LLM summarization failed. (msg_id: {message.id})")
-                return summary_action
-
-            self.logger.info(f"Summarization complete. (msg_id: {message.id})")
-
-            if len(extracted_text) > 4000 or is_truncated:
-                file_content = io.BytesIO(extracted_text.encode('utf-8'))
-                summary_action.files.append(File(file_content, filename="original_content.txt"))
-                self.logger.info(f"Attaching full content ({len(extracted_text)} chars) as file. (msg_id: {message.id})")
-
-            self.logger.info(f"Replying with summary (and optional attachment). (msg_id: {message.id})")
-
-            return summary_action
-
-        except Exception as e:
-            self.logger.error(f"An unexpected error occurred during URL processing: {e} (msg_id: {message.id})", exc_info=True)
-            return BotAction(content="A critical error occurred while I was handling that URL.", error=True)
+        # Fallback: No content could be processed
+        else:
+            self.logger.warning(f"No content could be extracted from {url}. (msg_id: {message.id})")
+            return BotAction(content="I couldn't get any text or visual content from that URL.", error=True)
 
     async def _flow_process_audio(self, message: Message) -> BotAction:
         """Process audio attachment through STT model."""

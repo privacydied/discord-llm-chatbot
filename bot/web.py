@@ -5,7 +5,7 @@ import logging
 from typing import Any, Dict, Optional, Tuple
 from urllib.parse import urlparse, urljoin
 import httpx
-from playwright.async_api import async_playwright
+from bot.utils.web_capture import capture_with_playwright
 from bs4 import BeautifulSoup
 import discord
 import trafilatura
@@ -104,7 +104,7 @@ def get_domain_info(url: str) -> Dict[str, str]:
 
 async def fetch_url_content(url: str, timeout: int = 15) -> Optional[Tuple[bytes, str]]:
     """
-    Fetch the content of a URL, with a fallback to Playwright for problematic sites.
+    Fetch the content of a URL using httpx.
     """
     headers = {
         'User-Agent': USER_AGENT,
@@ -112,32 +112,22 @@ async def fetch_url_content(url: str, timeout: int = 15) -> Optional[Tuple[bytes
         'Accept-Language': 'en-US,en;q=0.5',
     }
 
-    # First, try with httpx for speed
     try:
         async with httpx.AsyncClient(headers=headers, follow_redirects=True, timeout=timeout) as client:
             response = await client.get(url)
-            response.raise_for_status() # Raise exception for 4xx/5xx responses
+            response.raise_for_status()  # Raise exception for 4xx/5xx responses
             content = await response.aread()
             content_type = response.headers.get('Content-Type', 'application/octet-stream')
             logging.info(f"Successfully fetched {url} with httpx.")
             return content, content_type
     except (httpx.HTTPStatusError, httpx.RequestError, httpx.TooManyRedirects, httpx.InvalidHeader) as e:
-        logging.warning(f"httpx fetch failed for {url}: {e}. Falling back to Playwright.")
-        # Fall through to Playwright
-
-    # If httpx fails, use Playwright as a fallback
-    try:
-        async with async_playwright() as p:
-            browser = await p.chromium.launch()
-            page = await browser.new_page()
-            await page.goto(url, timeout=timeout * 1000) # Playwright timeout is in ms
-            content = await page.content()
-            await browser.close()
-            logging.info(f"Successfully fetched {url} with Playwright fallback.")
-            return content.encode('utf-8'), 'text/html'
-    except Exception as e:
-        logging.error(f"Playwright fallback also failed for {url}: {e}", exc_info=True)
+        logging.error(f"httpx fetch failed for {url}: {e}", exc_info=True)
         return None
+    except Exception as e:
+        logging.error(f"An unexpected error occurred while fetching {url}: {e}", exc_info=True)
+        return None
+
+
 
 def extract_metadata(html: str, url: str) -> Dict[str, str]:
     """
@@ -258,78 +248,71 @@ def extract_main_content(html: str, url: str) -> Dict[str, str]:
         return content
     
     except Exception as e:
-        logging.error(f"Error extracting main content from {url}: {e}")
-        return {'content': '', 'text': ''}
+        logging.error(f"Error extracting text from HTML: {e}")
+        return ""
 
-async def process_url(url: str, extract_content: bool = True) -> Dict[str, Any]:
+def should_extract_text(content_type: str) -> Dict[str, bool]:
     """
-    Process a URL and extract relevant information.
+    Determine if text extraction should be performed based on the content type.
     
     Args:
-        url: The URL to process
-        extract_content: Whether to extract the main content (can be slow)
+        content_type: The content type
         
     Returns:
-        Dictionary with extracted information
+        A dictionary with a single key 'should_extract' indicating whether text extraction should be performed
     """
+    if content_type.startswith('text/html'):
+        return {'should_extract': True}
+    else:
+        return {'should_extract': False}
+
+async def process_url(url: str) -> Dict[str, Any]:
+    """Process a URL, fetching content with a fallback to Playwright for JS-heavy sites."""
+    text_content = None
+    screenshot_path = None
+    error_message = None
+
+    # 1. Attempt to fetch with httpx first
     try:
-        # Get domain information
-        domain_info = get_domain_info(url)
-        
-        # Don't extract content for certain types
-        if not domain_info.get('should_extract', True):
-            extract_content = False
-        
-        # Fetch the URL content
-        result = await fetch_url_content(url)
-        if not result:
-            return {'error': 'Failed to fetch URL', 'url': url}
-        
-        content, content_type = result
-        
-        # Handle non-HTML content
-        if not content_type.startswith('text/html'):
-            return {
-                'url': url,
-                'type': 'file',
-                'content_type': content_type,
-                'domain_info': domain_info,
-                'metadata': {}
-            }
-        
-        # Decode HTML content
-        try:
-            html = content.decode('utf-8', errors='replace')
-        except UnicodeDecodeError:
-            try:
-                html = content.decode('latin-1', errors='replace')
-            except Exception as e:
-                logging.error(f"Failed to decode content from {url}: {e}")
-                return {'error': 'Failed to decode content', 'url': url}
-        
-        # Extract metadata
-        metadata = extract_metadata(html, url)
-        
-        # Extract main content if requested
-        main_content = {}
-        if extract_content:
-            main_content = extract_main_content(html, url)
-        
-        # Prepare result
-        result = {
-            'url': url,
-            'type': domain_info['type'],
-            'content_type': content_type,
-            'domain_info': domain_info,
-            'metadata': metadata,
-            'content': main_content
-        }
-        
-        return result
-    
+        httpx_content_data = await fetch_url_content(url)
+        if httpx_content_data:
+            content, content_type = httpx_content_data
+            if 'text/html' in content_type:
+                try:
+                    html_string = content.decode('utf-8')
+                    text_content = trafilatura.extract(html_string, url=url, config=trafilatura_config)
+                except (UnicodeDecodeError, TypeError):
+                    logging.warning(f"Could not decode or parse content from {url} via httpx.")
     except Exception as e:
-        logging.error(f"Error processing URL {url}: {e}", exc_info=True)
-        return {'error': str(e), 'url': url}
+        logging.warning(f"httpx fetch failed for {url}: {e}")
+        error_message = f"Failed to fetch content: {e}"
+
+    # 2. Check if fallback to Playwright is needed
+    js_required_keywords = ['enable javascript', 'javascript is required', 'requires javascript']
+    is_placeholder = text_content and any(keyword in text_content.lower() for keyword in js_required_keywords)
+
+    if not text_content or is_placeholder or len(text_content) < 150:
+        logging.info(f"httpx fetch for {url} yielded insufficient content. Falling back to Playwright.")
+        playwright_result = await capture_with_playwright(url)
+
+        if playwright_result and not playwright_result.get('error'):
+            text_content = playwright_result.get('text')
+            screenshot_path = playwright_result.get('screenshot_path')
+        elif playwright_result and playwright_result.get('error') == 'BROWSER_NOT_INSTALLED':
+            error_message = "Sorry, this site requires JavaScript and the tool to process it isn't installed. Please ask the bot administrator to run `playwright install`."
+        else:
+            error_message = f"Playwright fallback failed: {playwright_result.get('error', 'Unknown error')}"
+            logging.error(f"Playwright fallback also failed for {url}. Reason: {error_message}")
+
+    if not text_content and not screenshot_path:
+        return {'error': error_message or 'Failed to fetch or render any content from URL.'}
+
+    return {
+        'url': url,
+        'text': text_content,
+        'screenshot_path': screenshot_path,
+        'error': None
+    }
 
 async def get_url_preview(url: str) -> discord.Embed:
     """
@@ -342,49 +325,17 @@ async def get_url_preview(url: str) -> discord.Embed:
         A Discord Embed object
     """
     try:
-        # Process the URL
-        result = await process_url(url, extract_content=False)
-        
-        if 'error' in result:
-            embed = discord.Embed(
-                title="Error",
-                description=f"Failed to process URL: {result['error']}",
-                color=discord.Color.red()
-            )
-            return embed
-        
-        metadata = result.get('metadata', {})
-        domain_info = result.get('domain_info', {})
-        
-        # Create embed
-        title = metadata.get('title', domain_info.get('domain', 'Untitled'))
-        if len(title) > 256:
-            title = title[:253] + '...'
-        
-        description = metadata.get('description', '')
-        if len(description) > 1000:
-            description = description[:997] + '...'
+        domain_info = get_domain_info(url)
+        title = domain_info.get('domain', 'Link Preview')
         
         embed = discord.Embed(
             title=title,
-            description=description,
             url=url,
+            description=f"[Click to open]({url})",
             color=discord.Color.blue()
         )
         
-        # Add image if available
-        if metadata.get('image'):
-            try:
-                # Validate image URL
-                parsed = urlparse(metadata['image'])
-                if parsed.scheme in ('http', 'https') and parsed.netloc:
-                    embed.set_image(url=metadata['image'])
-            except Exception as e:
-                logging.warning(f"Invalid image URL: {metadata['image']}: {e}")
-        
-        # Add footer with domain
-        site_name = metadata.get('site_name', domain_info.get('domain', 'Link'))
-        embed.set_footer(text=site_name, icon_url=metadata.get('favicon', ''))
+        embed.set_footer(text=domain_info.get('domain', ''))
         
         return embed
     
