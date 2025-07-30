@@ -41,8 +41,6 @@ class LLMBot(commands.Bot):
         self.background_tasks = []
         self._is_ready = asyncio.Event()
         self.system_prompts = {}
-        self._processed_messages = set()
-        self._dispatch_lock = asyncio.Lock()
 
     async def setup_hook(self) -> None:
         """Asynchronous setup phase for the bot."""
@@ -71,16 +69,6 @@ class LLMBot(commands.Bot):
             self.logger.info("Bot is ready to receive commands.")
 
     async def on_message(self, message: discord.Message):
-        # DD-TODO: Use a more sophisticated cache like LRU to prevent memory growth.
-        async with self._dispatch_lock:
-            if message.id in self._processed_messages:
-                self.logger.warning(f"Duplicate dispatch prevented for msg_id: {message.id}")
-                return
-            # Limit the size of the set to avoid unbounded memory growth
-            if len(self._processed_messages) > 1000:
-                self._processed_messages.pop()
-            self._processed_messages.add(message.id)
-
         await self._is_ready.wait() # Wait until the bot is ready
         if message.author == self.user:
             return
@@ -135,42 +123,43 @@ class LLMBot(commands.Bot):
             self.logger.error(f"Audio file not generated after TTS processing. (msg_id: {message.id})")
             action.content = "I tried to send a voice message, but the audio file was missing."
 
-        content = action.content
-        # Per user request, add a mention to the user unless it's a reply in a thread.
-        if action.meta.get('is_reply'):
-            # Prepend mention only if content exists and is not just whitespace
-            if content and content.strip():
-                content = f"{message.author.mention}\n\n{content}"
-
-        # Discord has a 2000 character limit.
-        if content and len(content) > 2000:
-            self.logger.warning(f"Message content for {message.id} exceeds 2000 characters. Attaching as file.")
-            file_content = io.BytesIO(content.encode('utf-8'))
-            text_file = discord.File(fp=file_content, filename="full_response.txt")
-            if files is None:
-                files = []
-            files.append(text_file)
-
-            # The message becomes a notification about the attached file.
+        try:
+            content = action.content
+            # Per user request, add a mention to the user unless it's a reply in a thread.
             if action.meta.get('is_reply'):
-                content = f"{message.author.mention}\n\nThe response was too long to post directly. The full content is attached as a file."
-            else:
-                content = "The response was too long to post directly. The full content is attached as a file."
+                # Prepend mention only if content exists and is not just whitespace
+                if content and content.strip():
+                    content = f"{message.author.mention}\n\n{content}"
 
-        # Show typing indicator while sending the message
-        async with message.channel.typing():
-            try:
-                if content or action.embeds or files:
+            # Discord message character limit handling
+            if content and len(content) > 2000:
+                self.logger.warning(f"Message content for {message.id} exceeds 2000 characters. Attaching as file.")
+                file_content = io.BytesIO(content.encode('utf-8'))
+                text_file = discord.File(fp=file_content, filename="full_response.txt")
+                if files is None:
+                    files = []
+                files.append(text_file)
+
+                # The message becomes a notification about the attached file.
+                if action.meta.get('is_reply'):
+                    content = f"{message.author.mention}\n\nThe response was too long to post directly. The full content is attached as a file."
+                else:
+                    content = "The response was too long to post directly. The full content is attached as a file."
+
+            if content or action.embeds or files:
+                try:
                     # Use message.reply() for contextual replies.
                     await message.reply(content=content, embeds=action.embeds, files=files, mention_author=True)
-            except discord.errors.HTTPException as e:
-                # If replying fails (e.g., original message deleted), send a normal message instead.
-                if e.code == 50035: # Unknown Message
-                    self.logger.warning(f"Replying to message {message.id} failed (likely deleted). Falling back to channel send.")
-                    await message.channel.send(content=content, embeds=action.embeds, files=files)
-                else:
-                    self.logger.error(f"Failed to send message: {e} (msg_id: {message.id})")
-                    raise # Re-raise other HTTP exceptions
+                except discord.errors.HTTPException as e:
+                    # If replying fails (e.g., original message deleted), send a normal message instead.
+                    if e.code == 50035: # Unknown Message
+                        self.logger.warning(f"Replying to message {message.id} failed (likely deleted). Falling back to channel send.")
+                        await message.channel.send(content=content, embeds=action.embeds, files=files)
+                    else:
+                        raise # Re-raise other HTTP exceptions
+
+        except discord.errors.HTTPException as e:
+            self.logger.error(f"Failed to send message: {e} (msg_id: {message.id})")
 
     async def load_profiles(self) -> None:
         """Load user and server memory profiles."""
