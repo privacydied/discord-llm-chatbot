@@ -13,6 +13,7 @@ from bot.config import load_system_prompts
 from bot.util.logging import get_logger
 from bot.metrics import NullMetrics
 from bot.memory import load_all_profiles
+from bot.memory.context_manager import ContextManager
 
 if TYPE_CHECKING:
     from bot.router import Router, BotAction
@@ -22,17 +23,11 @@ if TYPE_CHECKING:
 class LLMBot(commands.Bot):
     """Main bot class that extends the base Bot class with LLM capabilities."""
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, config: dict, **kwargs):
         super().__init__(*args, **kwargs)
+        self.config = config
         self.logger = get_logger(__name__)
         self.metrics = NullMetrics()
-        self.config = {
-            'tts': {
-                'voice_model_path': os.getenv('TTS_MODEL_PATH'),
-                'voice_style_path': os.getenv('TTS_VOICES_PATH'),
-                'tokenizer_alias': os.getenv('TTS_TOKENISER', 'default')
-            }
-        }
         self.user_profiles = {}
         self.server_profiles = {}
         self.memory_save_task = None
@@ -43,6 +38,11 @@ class LLMBot(commands.Bot):
         self.system_prompts = {}
         self._processed_messages = set()
         self._dispatch_lock = asyncio.Lock()
+        self.context_manager = ContextManager(
+            self,
+            filepath=self.config.get("CONTEXT_FILE_PATH", "context.json"),
+            max_messages=self.config.get("MAX_CONTEXT_MESSAGES", 10)
+        )
 
     async def setup_hook(self) -> None:
         """Asynchronous setup phase for the bot."""
@@ -82,6 +82,11 @@ class LLMBot(commands.Bot):
             self._processed_messages.add(message.id)
 
         await self._is_ready.wait() # Wait until the bot is ready
+
+        # Append message to context
+        if self.context_manager:
+            self.context_manager.append(message)
+
         if message.author == self.user:
             return
 

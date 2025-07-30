@@ -5,7 +5,7 @@ import logging
 from typing import Any, Dict, Optional, Tuple
 from urllib.parse import urlparse, urljoin
 import httpx
-from bot.utils.web_capture import capture_with_playwright
+from bot.utils.external_api import external_screenshot
 from bs4 import BeautifulSoup
 import discord
 import trafilatura
@@ -28,8 +28,9 @@ USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTM
 DOMAIN_RULES = {
     'youtube.com': {'type': 'youtube', 'extract': False},
     'youtu.be': {'type': 'youtube', 'extract': False},
-    'twitter.com': {'type': 'twitter', 'extract': False},
-    'x.com': {'type': 'twitter', 'extract': False},
+    'twitter.com': {'type': 'twitter', 'extract': True, 'force_screenshot': True},
+    'x.com': {'type': 'twitter', 'extract': True, 'force_screenshot': True},
+    'fxtwitter.com': {'type': 'twitter', 'extract': True, 'force_screenshot': True},
     'reddit.com': {'type': 'reddit', 'extract': True},
     'github.com': {'type': 'github', 'extract': True},
     'wikipedia.org': {'type': 'wikipedia', 'extract': True},
@@ -71,11 +72,13 @@ def get_domain_info(url: str) -> Dict[str, str]:
         # Check for domain-specific rules
         domain_type = 'website'
         should_extract = True
+        force_screenshot = False
         
         for key, rule in DOMAIN_RULES.items():
             if key in domain:
                 domain_type = rule['type']
                 should_extract = rule.get('extract', True)
+                force_screenshot = rule.get('force_screenshot', False)
                 break
         
         # Check file extensions
@@ -88,6 +91,7 @@ def get_domain_info(url: str) -> Dict[str, str]:
             'main_domain': main_domain,
             'type': domain_type,
             'should_extract': should_extract,
+            'force_screenshot': force_screenshot,
             'scheme': parsed.scheme,
             'path': parsed.path,
             'query': parsed.query,
@@ -282,58 +286,54 @@ def strip_boilerplate(text: str) -> str:
     )
 
 async def process_url(url: str) -> Dict[str, Any]:
-    """Process a URL, fetching content with a fallback to Playwright for JS-heavy sites."""
-    text_content = None
+    """Process a URL, using an external API for screenshots and falling back to text extraction."""
+    domain_info = get_domain_info(url)
+    force_screenshot = domain_info.get('force_screenshot', False)
     screenshot_path = None
-    error_message = None
 
-    # 1. Attempt to fetch with httpx first
+    # 1. Attempt screenshot if forced
+    if force_screenshot:
+        logging.info(f"📷 Force screenshot enabled for {url}. Attempting external capture.")
+        screenshot_path = await external_screenshot(url)
+        if screenshot_path:
+            # If screenshot is successful, we can return it immediately.
+            return {'url': url, 'text': None, 'screenshot_path': screenshot_path, 'error': None}
+        else:
+            logging.warning(f"⚠️ External screenshot failed for forced domain {url}. Returning screenshot_failed indicator.")
+            # Return a special value to indicate screenshot failure for a forced domain.
+            return {'url': url, 'text': None, 'screenshot_path': None, 'error': 'screenshot_failed_for_forced_domain'}
+
+    # 2. Attempt standard text extraction (primary method for non-forced sites)
     try:
         httpx_content_data = await fetch_url_content(url)
         if httpx_content_data:
             content, content_type = httpx_content_data
             if 'text/html' in content_type:
-                try:
-                    html_string = content.decode('utf-8')
-                    raw_text = trafilatura.extract(html_string, url=url, config=trafilatura_config)
-                    text_content = strip_boilerplate(raw_text)
-                except (UnicodeDecodeError, TypeError):
-                    logging.warning(f"Could not decode or parse content from {url} via httpx.")
+                html_string = content.decode('utf-8')
+                raw_text = trafilatura.extract(html_string, url=url, config=trafilatura_config)
+                text_content = strip_boilerplate(raw_text or "")
+
+                # Check for placeholder content indicating a JS-heavy site
+                js_required_keywords = ['enable javascript', 'javascript is required', 'requires javascript']
+                if text_content and not any(keyword in text_content.lower() for keyword in js_required_keywords):
+                    return {'url': url, 'text': text_content, 'screenshot_path': None, 'error': None}
+                else:
+                    logging.warning(f"Content from {url} is empty or requires JavaScript. Attempting screenshot fallback.")
+
     except Exception as e:
-        logging.warning(f"httpx fetch failed for {url}: {e}")
-        error_message = f"Failed to fetch content: {e}"
+        logging.warning(f"Initial httpx fetch failed for {url}: {e}. Attempting screenshot fallback.")
 
-    # 2. Check if fallback to Playwright is needed
-    js_required_keywords = ['enable javascript', 'javascript is required', 'requires javascript']
-    is_placeholder = text_content and any(keyword in text_content.lower() for keyword in js_required_keywords)
+    # 3. Fallback to screenshot if text extraction fails or is insufficient
+    if not screenshot_path: # Avoid re-capturing if already attempted
+        logging.info(f"Falling back to external screenshot for {url}.")
+        screenshot_path = await external_screenshot(url)
+        if screenshot_path:
+            return {'url': url, 'text': None, 'screenshot_path': screenshot_path, 'error': None}
 
-    if not text_content or is_placeholder or len(text_content) < 150:
-        logging.info(f"httpx fetch for {url} yielded insufficient content. Falling back to Playwright.")
-        playwright_result = await capture_with_playwright(url)
-
-        if playwright_result and not playwright_result.get('error'):
-            # Only use playwright's text if it's substantial, otherwise prioritize the screenshot.
-            playwright_text = playwright_result.get('text')
-            if playwright_text:
-                cleaned_text = strip_boilerplate(playwright_text)
-                if len(cleaned_text) > 150:
-                    text_content = cleaned_text
-            screenshot_path = playwright_result.get('screenshot_path')
-        elif playwright_result and playwright_result.get('error') == 'BROWSER_NOT_INSTALLED':
-            error_message = "Sorry, this site requires JavaScript and the tool to process it isn't installed. Please ask the bot administrator to run `playwright install`."
-        else:
-            error_message = f"Playwright fallback failed: {playwright_result.get('error', 'Unknown error')}"
-            logging.error(f"Playwright fallback also failed for {url}. Reason: {error_message}")
-
-    if not text_content and not screenshot_path:
-        return {'error': error_message or 'Failed to fetch or render any content from URL.'}
-
-    return {
-        'url': url,
-        'text': text_content,
-        'screenshot_path': screenshot_path,
-        'error': None
-    }
+    # 4. If all methods fail
+    error_msg = f"All content extraction methods (text and screenshot) failed for {url}."
+    logging.error(error_msg)
+    return {'url': url, 'text': None, 'screenshot_path': None, 'error': error_msg}
 
 async def get_url_preview(url: str) -> discord.Embed:
     """

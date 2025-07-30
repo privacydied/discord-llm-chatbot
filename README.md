@@ -103,6 +103,7 @@ graph LR
 | `TEXT_BACKEND` | Backend for text generation (`openai` or `ollama`) | ❌ | `openai` |
 | `OPENAI_API_KEY` | API key for OpenAI/OpenRouter | ❌ | - |
 | `OPENAI_API_BASE` | Base URL for API | ❌ | `https://openrouter.ai/api/v1` |
+| `SCREENSHOT_API_KEY` | API key for screenshotmachine.com | ❌ | - |
 | `OPENAI_TEXT_MODEL` | Text model for chat | ❌ | `qwen/qwen3-235b-a22b:free` |
 | `VL_MODEL` | Vision model for images | ❌ | `qwen/qwen2.5-vl-72b-instruct:free` |
 | `OLLAMA_BASE_URL` | URL to Ollama server | ❌ | `http://localhost:11434` |
@@ -116,6 +117,9 @@ graph LR
 | `PROMPT_FILE` | System prompt file | ❌ | `prompts/prompt-pry-super-chill-v2.txt` |
 | `MAX_USER_MEMORY` | Max memories per user | ❌ | `1000` |
 | `MEMORY_SAVE_INTERVAL` | Memory save interval (sec) | ❌ | `30` |
+| `CONTEXT_FILE_PATH` | Path to context storage file | ❌ | `context.json` |
+| `MAX_CONTEXT_MESSAGES` | Max messages per context | ❌ | `10` |
+| `IN_MEMORY_CONTEXT_ONLY` | Disable all file-based context | ❌ | `false` |
 
 ## 🤖 Commands
 
@@ -208,3 +212,16 @@ MIT License - see [LICENSE](LICENSE) for details
 - [Discord.py](https://github.com/Rapptz/discord.py) for Discord API
 - [OpenRouter](https://openrouter.ai/) for model access
 - [Kokoro-ONNX TTS](https://github.com/Oleg-Yarosh/kokoro-onnx) for TTS functionality
+
+## ⚠️ Privacy & Security: Context Storage
+To maintain conversational context, this bot stores recent messages. By default, it operates in a hybrid privacy mode:
+
+- **Direct Messages (DMs)**: All DM conversations are stored **in-memory only** and are **never** written to disk. This history is ephemeral and will be lost on restart.
+- **Guild/Server Channels**: Conversation history from public channels is saved to `context.json` to persist across restarts. This file is included in `.gitignore`.
+
+**Security Recommendation**: For production environments, it is highly recommended to set restrictive file permissions for the context file (e.g., `chmod 600 context.json`) to protect its contents.
+
+To disable all file-based context storage and run the bot in a fully ephemeral, in-memory mode, set the following environment variable:
+```
+IN_MEMORY_CONTEXT_ONLY=true
+```

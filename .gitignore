@@ -89,3 +89,6 @@ local_settings.py
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
+
+# Context file for conversation history
+context.json

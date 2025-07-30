@@ -10,7 +10,7 @@ from typing import NoReturn
 import aiohttp
 import discord
 
-from bot.config import load_config, check_venv_activation, ConfigurationError
+from bot.config import load_config, check_venv_activation, ConfigurationError, load_system_prompts
 from bot.core.bot import LLMBot
 from bot.core.cli import parse_arguments, show_version_info, validate_configuration_only
 from bot.core.startup import run_pre_flight_checks, create_bot_intents, get_prefix
@@ -40,6 +40,7 @@ async def main() -> NoReturn:
     try:
         check_venv_activation()
         config = load_config()
+        config.update(load_system_prompts())
         run_pre_flight_checks(config)
     except ConfigurationError as e:
         logger.critical(f"Unhandled exception during bot startup: {e}", exc_info=True)
@@ -50,6 +51,7 @@ async def main() -> NoReturn:
 
     intents = create_bot_intents()
     bot = LLMBot(
+        config=config,
         command_prefix=get_prefix,
         intents=intents,
         help_command=None

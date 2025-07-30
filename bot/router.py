@@ -14,7 +14,7 @@ from enum import Enum, auto
 from pathlib import Path
 from typing import Any, Callable, Coroutine, Dict, Optional, TYPE_CHECKING, List
 
-from .context import get_conversation_history
+
 from . import web
 from discord import Message, DMChannel, Embed, File
 from bot.brain import brain_infer
@@ -146,50 +146,48 @@ class Router:
                 return None
 
             # --- Start of processing for DMs, Mentions, and Replies ---
-            self.logger.info(f"Processing message: DM={isinstance(message.channel, DMChannel)}, Mention={self.bot.user in message.mentions} (msg_id: {message.id})")
+            async with message.channel.typing():
+                self.logger.info(f"Processing message: DM={isinstance(message.channel, DMChannel)}, Mention={self.bot.user in message.mentions} (msg_id: {message.id})")
 
-            # 4. Gather conversation history for context
-            history = []
-            try:
-                history = get_conversation_history(message)
-                self.logger.info(f"📚 Gathered {len(history)} messages for context. (msg_id: {message.id})")
-            except Exception as e:
-                self.logger.warning(f"Could not fetch message history: {e} (msg_id: {message.id})")
+                # 4. Gather conversation history for context
+                context_str = await self.bot.context_manager.get_context_string(message)
+                self.logger.info(f"📚 Gathered context. (msg_id: {message.id})")
 
-            # 5. Determine modalities and process
-            input_modality = self._get_input_modality(message)
-            self._metric_inc('router_input_modality', {'modality': input_modality.name.lower()})
-            output_modality = self._get_output_modality(None, message)
-            action = None
-            text_content = message.content
-            if self.bot.user in message.mentions:
-                text_content = re.sub(r'^(<@!?&?{}>)'.format(self.bot.user.id), '', text_content).strip()
+                # 5. Determine modalities and process
+                input_modality = self._get_input_modality(message)
+                self._metric_inc('router_input_modality', {'modality': input_modality.name.lower()})
+                output_modality = self._get_output_modality(None, message)
+                action = None
+                text_content = message.content
+                if self.bot.user in message.mentions:
+                    text_content = re.sub(r'^(\u003c@!?\u0026?{})'.format(self.bot.user.id), '', text_content).strip()
 
-            if input_modality == InputModality.TEXT_ONLY:
-                action = await self._invoke_text_flow(text_content, message, history)
-            elif input_modality == InputModality.URL:
-                url_match = re.search(r'https?://[\S]+', text_content)
-                if url_match:
-                    action = await self._flows['process_url'](url_match.group(0), message)
-            elif message.attachments:
-                action = await self._flows['process_attachments'](message, message.attachments[0])
+                if input_modality == InputModality.TEXT_ONLY:
+                    action = await self._invoke_text_flow(text_content, message, context_str)
+                elif input_modality == InputModality.URL:
+                    url_match = re.search(r'https?://[\S]+', text_content)
+                    if url_match:
+                        action = await self._flow_process_url(url_match.group(0), message)
+                elif input_modality in [InputModality.IMAGE, InputModality.DOCUMENT, InputModality.AUDIO]:
+                    if message.attachments:
+                        action = await self._flow_process_attachments(message, message.attachments[0])
 
-            # 7. Finalize and return the action
-            if action and action.content:
-                # Prepend user mention if in a guild
-                if not isinstance(message.channel, DMChannel):
-                    action.content = f"{message.author.mention} {action.content}"
+                # 7. Finalize and return the action
+                if action and action.content:
+                    # Prepend user mention if in a guild
+                    if not isinstance(message.channel, DMChannel):
+                        action.content = f"{message.author.mention} {action.content}"
 
-                self.logger.info(f"✅ Preparing to reply with content: {action.content[:100]}... (msg_id: {message.id})")
+                    self.logger.info(f"✅ Preparing to reply with content: {action.content[:100]}... (msg_id: {message.id})")
 
-                # Generate TTS if needed
-                if output_modality == OutputModality.TTS and not action.files:
-                    action.audio_path = await self._generate_tts_safe(action.content)
+                    # Generate TTS if needed
+                    if output_modality == OutputModality.TTS and not action.files:
+                        action.audio_path = await self._generate_tts_safe(action.content)
 
-                return action
-            else:
-                self.logger.info(f"🤔 No action taken for message {message.id}. Inference result was empty.")
-                return None
+                    return action
+                else:
+                    self.logger.info(f"🤔 No action taken for message {message.id}. Inference result was empty.")
+                    return None
 
         except Exception as e:
             self.logger.error(f"❌ Error in router dispatch: {e} (msg_id: {message.id})", exc_info=True)
@@ -218,16 +216,10 @@ class Router:
         # Future: check for TTS commands or channel/user settings
         return OutputModality.TEXT
 
-    async def _invoke_text_flow(self, content: str, message: Message, history: List[Dict[str, Any]] = None) -> Optional[BotAction]:
+    async def _invoke_text_flow(self, content: str, message: Message, context_str: str) -> BotAction:
         """Invoke the text processing flow, formatting history into a context string."""
         self.logger.info(f"Routing to text flow. (msg_id: {message.id})")
         try:
-            context_str = ""
-            if history:
-                formatted_history = [f"{m.get('role', 'user')}: {m.get('content', '')}" for m in history]
-                context_str = "\n".join(formatted_history)
-                self.logger.info(f"Providing {len(history)} messages as context. (msg_id: {message.id})")
-
             action = await self._flows['process_text'](content, context_str)
             if action and action.has_payload:
                 return action
@@ -247,61 +239,63 @@ class Router:
         """
         Processes a URL, intelligently routing to a text or vision-language flow.
         """
-        self.logger.info(f"Processing URL: {url} (msg_id: {message.id})")
-        screenshot_path = None
-
+        self.logger.info(f"🌐 Processing URL: {url} (msg_id: {message.id})")
         try:
-            result = await web.process_url(url)
-            text_content = result.get('text')
-            screenshot_path = result.get('screenshot_path')
-            error_message = result.get('error')
+            processed_data = await web.process_url(url)
 
-            if error_message:
-                self.logger.error(f"❌ URL processing failed for {url}: {error_message} (msg_id: {message.id})")
-                return BotAction(content=error_message, error=True)
+            error = processed_data.get('error')
+            text_content = processed_data.get('text')
+            screenshot_path = processed_data.get('screenshot_path')
 
-            # --- Vision-Language Flow --- #
+            if error == 'screenshot_failed_for_forced_domain':
+                self.logger.warning(f"Screenshot failed for {url}, using placeholder image. (msg_id: {message.id})")
+                screenshot_path = "media/twitter-placeholder.png"
+                if not os.path.exists(screenshot_path):
+                    self.logger.error(f"Placeholder image not found at {screenshot_path}!")
+                    return BotAction(content=f"I couldn't get a screenshot of {url}, and the fallback image is missing.", error=True)
+            
+            elif error:
+                self.logger.error(f"URL processing failed: {error} (msg_id: {message.id})")
+                return BotAction(content=f"I couldn't process that URL: {error}", error=True)
+
+            # Prioritize screenshot if available and route to the vision-language flow.
             if screenshot_path:
-                self.logger.info(f"📸 Screenshot available. Routing to vision-language model for {url}. (msg_id: {message.id})")
-                try:
-                    vl_system_prompt = self.bot.system_prompts.get("vl_prompt", "Describe the content of this webpage screenshot.")
-                    vision_response = await see_infer(prompt=vl_system_prompt, image_path=screenshot_path)
+                self.logger.info(f"🖼️ Screenshot available for {url}. Routing to vision flow. (msg_id: {message.id})")
+                
+                # Use the VL_PROMPT_FILE content if available, otherwise a default prompt.
+                prompt = self.bot.system_prompts.get("VL_PROMPT_FILE") or "Describe this image based on the content of the URL."
+                vision_response = await see_infer(image_path=screenshot_path, prompt=prompt)
+                
+                if not vision_response or vision_response.error:
+                    self.logger.warning(f"Vision model returned no/error response for {url}. (msg_id: {message.id})")
+                    return BotAction(content=f"I couldn't understand the content of {url}.", error=True)
 
-                    if not vision_response or vision_response.error:
-                        return BotAction(content="I couldn't understand the image from that URL.", error=True)
+                vl_content = vision_response.content
+                # Truncate if response is too long for Discord
+                if len(vl_content) > 1999:
+                    self.logger.info(f"VL response is too long ({len(vl_content)} chars), truncating for text fallback.")
+                    vl_content = vl_content[:1999].rsplit('\n', 1)[0]
 
-                    # Combine vision result with any text for a final, context-rich summary
-                    final_prompt = (
-                        f"A user shared this URL: {url}. "
-                        f"A vision model described the page's screenshot as: '{vision_response.content}'."
-                    )
-                    if text_content:
-                        final_prompt += f"\n\nSome text was also extracted: '{text_content[:1000]}'"
-                    final_prompt += "\n\nPlease provide a concise summary or answer based on this combined information."
+                # The VL model's response is now the primary content to be processed by the text model.
+                final_prompt = f"User provided this URL: {url}. The content of the URL is: {vl_content}"
+                return await brain_infer(final_prompt)
 
-                    text_system_prompt = self.bot.system_prompts.get("text_prompt", "You are a helpful assistant.")
-                    return await brain_infer(prompt=final_prompt, system_prompt=text_system_prompt)
+            # If no screenshot, fall back to the text-only flow.
+            if text_content:
+                self.logger.info(f"📝 Text content available for {url}. Routing to text flow. (msg_id: {message.id})")
+                # Construct the prompt for the text model.
+                context_str = await self.bot.context_manager.get_context_string(message)
+                prompt = f"The user sent this URL: {url}. Here is the content:\n\n{text_content}"
+                # Invoke the standard text flow, which uses the correct text prompt file.
+                return await self._invoke_text_flow(prompt, message, context_str)
 
-                except Exception as e:
-                    self.logger.error(f"❌ Screenshot-to-vision flow failed: {e} (msg_id: {message.id})", exc_info=True)
-                    return BotAction(content="An error occurred while analyzing the webpage screenshot.", error=True)
+            # If no content could be extracted at all, return an error.
+            self.logger.warning(f"No content (screenshot or text) could be extracted from {url}. (msg_id: {message.id})")
+            return BotAction(content="I couldn't retrieve any content from that URL.", error=True)
 
-            # --- Text-Only Flow --- #
-            elif text_content:
-                self.logger.info(f"📚 No screenshot. Summarizing text content from {url}. (msg_id: {message.id})")
-                text_system_prompt = self.bot.system_prompts.get("text_prompt", "You are a helpful assistant.")
-                prompt = f"Please summarize the following content from the URL {url}:\n\n{text_content}"
-                return await brain_infer(prompt=prompt, system_prompt=text_system_prompt)
-
-            # --- Failure Flow --- #
-            else:
-                self.logger.warning(f"Could not extract any content from URL: {url} (msg_id: {message.id})")
-                return BotAction(content="I was unable to extract any content from that URL.", error=True)
-
-        finally:
-            if screenshot_path and os.path.exists(screenshot_path):
-                os.unlink(screenshot_path)
-                self.logger.debug(f"Cleaned up screenshot file: {screenshot_path}")
+        except Exception as e:
+            self.logger.error(f"❌ URL processing failed unexpectedly: {e} (msg_id: {message.id})", exc_info=True)
+            return BotAction(content="⚠️ An unexpected error occurred while processing this URL.", error=True)
 
     async def _flow_process_audio(self, message: Message) -> BotAction:
         """Process audio attachment through STT model."""
@@ -337,14 +331,20 @@ class Router:
             await attachment.save(tmp_path)
             self.logger.debug(f"Saved image to temp file: {tmp_path} (msg_id: {message.id})")
 
-            prompt = message.content.strip() or "Describe this image."
+            prompt = message.content.strip() or (self.bot.system_prompts.get("VL_PROMPT_FILE") or "Describe this image.")
             vision_response = await see_infer(image_path=tmp_path, prompt=prompt)
 
             if not vision_response or vision_response.error:
                 self.logger.warning(f"Vision model returned no/error response (msg_id: {message.id})")
                 return BotAction(content="I couldn't understand the image.", error=True)
 
-            final_prompt = f"User uploaded an image with the prompt: '{prompt}'. The image contains: {vision_response.content}"
+            vl_content = vision_response.content
+            # Truncate if response is too long for Discord
+            if len(vl_content) > 1999:
+                self.logger.info(f"VL response is too long ({len(vl_content)} chars), truncating for text fallback.")
+                vl_content = vl_content[:1999].rsplit('\n', 1)[0]
+
+            final_prompt = f"User uploaded an image with the prompt: '{prompt}'. The image contains: {vl_content}"
             return await brain_infer(final_prompt)
 
         except Exception as e:

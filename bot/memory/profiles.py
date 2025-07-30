@@ -23,7 +23,7 @@ server_profiles_last_saved: Dict[str, float] = {}
 
 def ensure_dirs():
     """Ensure all required directories exist."""
-    from .config import load_config
+    from bot.config import load_config
     config = load_config()
     
     for dir_path in [
@@ -106,7 +106,7 @@ def get_profile(user_id: str, username: Optional[str] = None) -> dict:
             return user_cache[user_id].copy()
         
         # Try to load from disk
-        from .config import load_config
+        from bot.config import load_config
         config = load_config()
         profile_path = config["USER_PROFILE_DIR"] / f"{user_id}.json"
         
@@ -143,7 +143,7 @@ def save_profile(profile: dict, force: bool = False) -> bool:
             profile['last_updated'] = datetime.now().isoformat()
             
             # Save to disk
-            from .config import load_config
+            from bot.config import load_config
             config = load_config()
             profile_path = config["USER_PROFILE_DIR"] / f"{user_id}.json"
             
@@ -230,7 +230,7 @@ def get_server_profile(guild_id: str, force_reload: bool = False) -> dict:
             return server_cache[guild_id].copy()
         
         # Try to load from disk
-        from .config import load_config
+        from bot.config import load_config
         config = load_config()
         profile_path = config["SERVER_PROFILE_DIR"] / f"{guild_id}.json"
         
@@ -262,7 +262,7 @@ def save_server_profile(guild_id: str, force: bool = False) -> bool:
             profile = server_cache[guild_id]
             profile['last_updated'] = datetime.now().isoformat()
             
-            from .config import load_config
+            from bot.config import load_config
             config = load_config()
             profile_path = config["SERVER_PROFILE_DIR"] / f"{guild_id}.json"
             
@@ -339,7 +339,7 @@ def load_all_profiles():
     Returns:
         tuple: A tuple containing (user_profiles, server_profiles)
     """
-    from .config import load_config
+    from bot.config import load_config
     config = load_config()
     
     # Load user profiles
@@ -395,7 +395,7 @@ def save_all_profiles() -> bool:
 
 def load_all_server_profiles() -> None:
     """Load all server profiles from disk into memory cache."""
-    from .config import load_config
+    from bot.config import load_config
     config = load_config()
     
     profile_dir = config["SERVER_PROFILE_DIR"]
@@ -479,7 +479,7 @@ def add_memory(user_id: str, memory_text: str, guild_id: Optional[str] = None, u
             profile["memories"].append(memory_text)
             
             # Enforce memory limit
-            from .config import load_config
+            from bot.config import load_config
             config = load_config()
             max_memories = config.get('MAX_MEMORIES', 100)
             if len(profile["memories"]) > max_memories:
@@ -513,7 +513,7 @@ def add_memory(user_id: str, memory_text: str, guild_id: Optional[str] = None, u
                 server_profile["memories"].append(server_memory)
                 
                 # Enforce server memory limit
-                from .config import load_config
+                from bot.config import load_config
                 config = load_config()
                 max_memories = config.get('MAX_SERVER_MEMORY', 100)
                 if len(server_profile["memories"]) > max_memories:
