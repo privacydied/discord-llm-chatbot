@@ -35,6 +35,7 @@ from .hear import hear_infer
 from .pdf_utils import PDFProcessor
 from .see import see_infer
 from .web import process_url
+from .utils.mention_utils import ensure_single_mention
 
 # Dependency availability flags
 try:
@@ -174,9 +175,9 @@ class Router:
 
                 # 7. Finalize and return the action
                 if action and action.content:
-                    # Prepend user mention if in a guild
+                    # Ensure user mention appears exactly once at the start if in a guild
                     if not isinstance(message.channel, DMChannel):
-                        action.content = f"{message.author.mention} {action.content}"
+                        action.content = ensure_single_mention(action.content, str(message.author.id))
 
                     self.logger.info(f"✅ Preparing to reply with content: {action.content[:100]}... (msg_id: {message.id})")
 

@@ -10,12 +10,17 @@ from typing import NoReturn
 import aiohttp
 import discord
 
-from bot.config import load_config, check_venv_activation, ConfigurationError, load_system_prompts
-from bot.core.bot import LLMBot
-from bot.core.cli import parse_arguments, show_version_info, validate_configuration_only
-from bot.core.startup import run_pre_flight_checks, create_bot_intents, get_prefix
-from bot.util.logging import init_logging, get_logger, shutdown_logging_and_exit
-from bot.shutdown import setup_signal_handlers
+from .config import load_config, load_system_prompts
+from .config_reload import setup_config_reload, start_file_watcher
+from .core.bot import LLMBot
+from .core.cli import parse_arguments, show_version_info, validate_configuration_only
+from .core.startup import run_pre_flight_checks, create_bot_intents, get_prefix
+from .exceptions import ConfigurationError
+from .memory import load_all_profiles, load_all_server_profiles
+from .tasks import spawn_background_tasks
+from .util.logging import init_logging, get_logger, shutdown_logging_and_exit
+from .util.system import check_venv_activation
+from .shutdown import setup_signal_handlers
 
 
 async def main() -> NoReturn:
@@ -39,6 +44,10 @@ async def main() -> NoReturn:
 
     try:
         check_venv_activation()
+        
+        # Set up dynamic configuration reload system
+        setup_config_reload()
+        
         config = load_config()
         config.update(load_system_prompts())
         run_pre_flight_checks(config)
@@ -77,6 +86,14 @@ async def main() -> NoReturn:
             logger.warning(f"Connection failed, retrying in {delay}s...")
             await asyncio.sleep(delay)
     
+    # Start background tasks
+    await spawn_background_tasks(bot)
+    
+    # Start configuration file watcher
+    await start_file_watcher()
+    
+    logger.info("🚀 Bot is ready and operational!")
+
     logger.critical("Bot event loop exited unexpectedly.")
     shutdown_logging_and_exit(1)
 
