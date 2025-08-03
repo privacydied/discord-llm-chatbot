@@ -14,6 +14,7 @@ from bot.util.logging import get_logger
 from bot.metrics import NullMetrics
 from bot.memory import load_all_profiles
 from bot.memory.context_manager import ContextManager
+from bot.memory.enhanced_context_manager import EnhancedContextManager
 
 if TYPE_CHECKING:
     from bot.router import Router, BotAction
@@ -42,6 +43,13 @@ class LLMBot(commands.Bot):
             self,
             filepath=self.config.get("CONTEXT_FILE_PATH", "context.json"),
             max_messages=self.config.get("MAX_CONTEXT_MESSAGES", 10)
+        )
+        # Enhanced context manager for multi-user conversation tracking
+        self.enhanced_context_manager = EnhancedContextManager(
+            self,
+            filepath=self.config.get("ENHANCED_CONTEXT_FILE_PATH", "enhanced_context.json"),
+            history_window=int(os.getenv("HISTORY_WINDOW", "10")),
+            max_token_limit=self.config.get("MAX_CONTEXT_TOKENS", 4000)
         )
 
     async def setup_hook(self) -> None:
@@ -83,9 +91,13 @@ class LLMBot(commands.Bot):
 
         await self._is_ready.wait() # Wait until the bot is ready
 
-        # Append message to context
+        # Append message to context (both managers for backward compatibility)
         if self.context_manager:
             self.context_manager.append(message)
+        
+        # Enhanced context tracking for multi-user conversations
+        if self.enhanced_context_manager:
+            self.enhanced_context_manager.append_message(message, role="user")
 
         if message.author == self.user:
             return
@@ -167,12 +179,20 @@ class LLMBot(commands.Bot):
             try:
                 if content or action.embeds or files:
                     # Use message.reply() for contextual replies.
-                    await message.reply(content=content, embeds=action.embeds, files=files, mention_author=True)
+                    sent_message = await message.reply(content=content, embeds=action.embeds, files=files, mention_author=True)
+                    
+                    # Track bot response in enhanced context manager
+                    if self.enhanced_context_manager and sent_message:
+                        self.enhanced_context_manager.append_message(sent_message, role="bot")
             except discord.errors.HTTPException as e:
                 # If replying fails (e.g., original message deleted), send a normal message instead.
                 if e.code == 50035: # Unknown Message
                     self.logger.warning(f"Replying to message {message.id} failed (likely deleted). Falling back to channel send.")
-                    await message.channel.send(content=content, embeds=action.embeds, files=files)
+                    sent_message = await message.channel.send(content=content, embeds=action.embeds, files=files)
+                    
+                    # Track bot response in enhanced context manager
+                    if self.enhanced_context_manager and sent_message:
+                        self.enhanced_context_manager.append_message(sent_message, role="bot")
                 else:
                     self.logger.error(f"Failed to send message: {e} (msg_id: {message.id})")
                     raise # Re-raise other HTTP exceptions

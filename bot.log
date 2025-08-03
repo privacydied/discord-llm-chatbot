@@ -4829,3 +4829,23 @@ ModuleNotFoundError: No module named 'bot.memory.context_manager'; 'bot.memory' 
            INFO     🔄 === ROUTER DISPATCH STARTED: MSG 1400130308489351229 ====
 [15:02:26] INFO     Shard ID None has successfully RESUMED session              
                     7f16b37fb33fd8c1234dcd092cc894ad.                           
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot-git/run.py", line 6, in <module>
+    from bot.main import run_bot
+  File "/volume1/py/discord-llm-chatbot-git/bot/__init__.py", line 21, in <module>
+    from .core.bot import LLMBot
+  File "/volume1/py/discord-llm-chatbot-git/bot/core/bot.py", line 17, in <module>
+    from bot.memory.enhanced_context_manager import EnhancedContextManager
+  File "/volume1/py/discord-llm-chatbot-git/bot/memory/enhanced_context_manager.py", line 12, in <module>
+    from cryptography.fernet import Fernet
+ModuleNotFoundError: No module named 'cryptography'
+Traceback (most recent call last):
+  File "/volume1/py/discord-llm-chatbot-git/run.py", line 6, in <module>
+    from bot.main import run_bot
+  File "/volume1/py/discord-llm-chatbot-git/bot/__init__.py", line 21, in <module>
+    from .core.bot import LLMBot
+  File "/volume1/py/discord-llm-chatbot-git/bot/core/bot.py", line 17, in <module>
+    from bot.memory.enhanced_context_manager import EnhancedContextManager
+  File "/volume1/py/discord-llm-chatbot-git/bot/memory/enhanced_context_manager.py", line 12, in <module>
+    from cryptography.fernet import Fernet
+ModuleNotFoundError: No module named 'cryptography'

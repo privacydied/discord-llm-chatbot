@@ -220,19 +220,34 @@ class Router:
         """Invoke the text processing flow, formatting history into a context string."""
         self.logger.info(f"Routing to text flow. (msg_id: {message.id})")
         try:
-            action = await self._flows['process_text'](content, context_str)
+            action = await self._flows['process_text'](content, context_str, message)
             if action and action.has_payload:
                 return action
             else:
-                self.logger.warning("Text flow returned no response. (msg_id: {message.id})")
+                self.logger.warning(f"Text flow returned no response. (msg_id: {message.id})")
                 return None
         except Exception as e:
             self.logger.error(f"Text processing flow failed: {e} (msg_id: {message.id})", exc_info=True)
             return BotAction(content="I had trouble processing that text.", error=True)
 
-    async def _flow_process_text(self, content: str, context: str = "") -> BotAction:
+    async def _flow_process_text(self, content: str, context: str = "", message: Optional[Message] = None) -> BotAction:
         """Process text input through the AI model, including conversation context."""
         self.logger.info("Processing text with AI model.")
+        
+        # Use contextual brain inference if enhanced context manager is available and message is provided
+        if (message and hasattr(self.bot, 'enhanced_context_manager') and 
+            self.bot.enhanced_context_manager and 
+            os.getenv("USE_ENHANCED_CONTEXT", "true").lower() == "true"):
+            
+            try:
+                from bot.contextual_brain import contextual_brain_infer_simple
+                self.logger.debug(f"🧠 Using contextual brain inference [msg_id={message.id}]")
+                response_text = await contextual_brain_infer_simple(message, content, self.bot)
+                return BotAction(content=response_text)
+            except Exception as e:
+                self.logger.warning(f"Contextual brain inference failed, falling back to basic: {e}")
+        
+        # Fallback to basic brain inference
         return await brain_infer(content, context=context)
 
     async def _flow_process_url(self, url: str, message: discord.Message) -> BotAction:
