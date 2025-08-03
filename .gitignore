@@ -92,3 +92,5 @@ local_settings.py
 
 # Context file for conversation history
 context.json
+enhanced_context.json
+enhanced_context.json.key
