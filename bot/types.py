@@ -19,6 +19,10 @@ class Command(Enum):
     MEMORY_DEL = auto() # Delete a memory
     MEMORY_SHOW = auto()# Show memories
     MEMORY_WIPE = auto()# Wipe memories
+    RAG = auto()        # RAG system commands
+    RAG_BOOTSTRAP = auto() # Bootstrap RAG knowledge base
+    RAG_SEARCH = auto() # Search RAG knowledge base
+    RAG_STATUS = auto() # Show RAG system status
     IGNORE = auto()     # A command to signify that the message should be ignored
 
 @dataclass

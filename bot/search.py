@@ -14,7 +14,8 @@ from pathlib import Path
 # Import bot modules
 from .config import load_config
 from .memory import get_profile, get_server_profile
-from .utils import download_file, is_text_file
+# Import from the utils.py module using absolute import to avoid package conflict
+from bot.utils import download_file, is_text_file
 
 # Load configuration
 config = load_config()

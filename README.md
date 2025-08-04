@@ -2,15 +2,18 @@
 
 An advanced Discord chatbot with memory, web search, file processing, vision capabilities, and AI-powered responses using Ollama or OpenAI as the backend.
 
-## ✨ Features
+## Features
 
-- **Multimodal AI**: Hybrid text/speech/vision processing pipeline
-- **Brain/Speak/See/Hear**: Centralized inference modules
-- **Persistent Memory**: Remembers context and user preferences
-- **Web Search**: Integrated web search for up-to-date information
-- **File Processing**: Read and process text files and PDFs
-- **Modular Architecture**: Clean, organized codebase
-- **User Profiles**: Per-user settings and memory storage
+- **Multi-modal AI Chat**: Support for text, voice, and image inputs
+- **Text-to-Speech (TTS)**: Convert AI responses to voice messages
+- **Speech-to-Text (STT)**: Process voice messages and convert to text with advanced preprocessing
+- **Image Analysis**: Analyze and describe uploaded images
+- **Conversation Context**: Maintain conversation history and context
+- **Retrieval Augmented Generation (RAG)**: Advanced knowledge base search with vector embeddings
+- **Hybrid Search**: Combines vector similarity search with keyword fallback
+- **Knowledge Base Management**: Automatic ingestion and versioning of documentation files
+- **Flexible AI Backend**: Support for multiple AI providers (OpenAI, Anthropic, etc.)
+- **Discord Integration**: Native Discord bot with slash commands and message handling
 - **Comprehensive Logging**: Detailed debugging logs
 - **Automatic Memory Extraction**: Learns from conversations
 

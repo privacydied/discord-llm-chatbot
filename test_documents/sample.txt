@@ -1,0 +1,13 @@
+
+This is a sample text document for testing RAG parsing.
+
+It contains multiple paragraphs with different types of content.
+Some technical information about Discord bots and AI systems.
+
+Features:
+- Text-to-speech capabilities
+- Speech-to-text processing
+- Image analysis
+- RAG-based knowledge retrieval
+
+This content should be properly chunked and embedded for vector search.

@@ -120,3 +120,57 @@ If TTS voice validation fails:
    ```
 
 The bot should now be online and responding to commands in your Discord server.
+
+## 5. RAG System Commands
+
+The bot includes a Retrieval Augmented Generation (RAG) system that allows it to search through and reference documents in its knowledge base. Here are the available RAG commands:
+
+### RAG Command Overview
+
+All RAG commands require administrator permissions and use the `!rag` prefix:
+
+```
+!rag - Shows all available RAG commands
+```
+
+### Status and Information Commands
+
+```
+!rag status - Shows the current status of the RAG system
+!rag stats - Displays search statistics
+!rag config - Shows the current RAG configuration
+```
+
+### Knowledge Base Management
+
+```
+!rag bootstrap [--force] - Initialize the knowledge base from files in the kb/ directory
+                           Use --force to rebuild the entire knowledge base
+                           Supports pdf, txt, md, html, docx, and other document formats
+```
+
+The bootstrap command supports multiple file formats:
+- PDF (.pdf)
+- Markdown (.md)
+- Text (.txt)
+- HTML (.html)
+- EPUB (.epub)
+- MOBI (.mobi)
+- Word Documents (.docx)
+
+### Testing and Search
+
+```
+!rag search <query> - Test the RAG search with a specific query
+!rag test - Run system tests to verify RAG functionality
+```
+
+### Troubleshooting RAG Issues
+
+If you encounter issues with the RAG system:
+
+1. Check that all required files exist in the `kb/` directory
+2. Verify that the ChromaDB backend is properly initialized
+3. Run `!rag status` to check system health
+4. Run `!rag test` to perform diagnostic tests
+5. Try rebuilding the knowledge base with `!rag bootstrap --force`

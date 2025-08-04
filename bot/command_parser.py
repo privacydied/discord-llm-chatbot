@@ -24,6 +24,10 @@ COMMAND_MAP = {
     "!memory-del": Command.MEMORY_DEL,
     "!memory-show": Command.MEMORY_SHOW,
     "!memory-wipe": Command.MEMORY_WIPE,
+    "!rag": Command.RAG,
+    "!rag bootstrap": Command.RAG_BOOTSTRAP,
+    "!rag search": Command.RAG_SEARCH,
+    "!rag status": Command.RAG_STATUS,
 }
 
 def parse_command(message: discord.Message, bot: commands.Bot) -> Optional[ParsedCommand]:
