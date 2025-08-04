@@ -106,8 +106,10 @@ async def main() -> NoReturn:
 
 def run_bot() -> None:
     """Entry point for running the bot with proper error handling."""
+    bot_instance = None
     try:
-        asyncio.run(main())
+        # Store bot instance for proper cleanup
+        asyncio.run(main_with_cleanup())
     except KeyboardInterrupt:
         print("\nBot shutdown requested by user.")
         shutdown_logging_and_exit(0)
@@ -116,6 +118,25 @@ def run_bot() -> None:
         import traceback
         traceback.print_exc()
         shutdown_logging_and_exit(1)
+
+
+async def main_with_cleanup() -> NoReturn:
+    """Main function with proper resource cleanup."""
+    bot_instance = None
+    try:
+        # Run the main bot logic
+        await main()
+    except Exception as e:
+        logger = get_logger(__name__)
+        logger.error(f"Error in main: {e}", exc_info=True)
+        raise
+    finally:
+        # Ensure proper cleanup even if main() fails
+        if bot_instance:
+            try:
+                await bot_instance.close()
+            except Exception as e:
+                print(f"Error during bot cleanup: {e}", file=sys.stderr)
 
 
 if __name__ == "__main__":

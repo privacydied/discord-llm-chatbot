@@ -192,10 +192,9 @@ class Router:
 
                 # 7. Finalize and return the action
                 if action and action.content:
-                    # Ensure user mention appears exactly once at the start if in a guild
-                    if not isinstance(message.channel, DMChannel):
-                        action.content = ensure_single_mention(action.content, str(message.author.id))
-
+                    # Note: User mentions are handled by Discord's mention_author=True in message.reply()
+                    # No manual mention processing needed here
+                    
                     self.logger.info(f"✅ Preparing to reply with content: {action.content[:100]}... (msg_id: {message.id})")
 
                     # Generate TTS if needed
@@ -262,10 +261,64 @@ class Router:
             return BotAction(content="I had trouble processing that text.", error=True)
 
     async def _flow_process_text(self, content: str, context: str = "", message: Optional[Message] = None) -> BotAction:
-        """Process text input through the AI model, including conversation context."""
-        self.logger.info("Processing text with AI model.")
+        """Process text input through the AI model with RAG integration and conversation context."""
+        self.logger.info("Processing text with AI model and RAG integration.")
         
-        # Use contextual brain inference if enhanced context manager is available and message is provided
+        enhanced_context = context
+        
+        # 1. RAG Integration - Search vector database for relevant knowledge
+        if os.getenv("ENABLE_RAG", "true").lower() == "true":
+            try:
+                from bot.rag.hybrid_search import get_hybrid_search
+                max_results = int(os.getenv("RAG_MAX_VECTOR_RESULTS", "5"))
+                self.logger.info(f"🔍 RAG: Searching vector database for: '{content[:100]}{'...' if len(content) > 100 else ''}' [msg_id={message.id if message else 'N/A'}]")
+                
+                search_engine = await get_hybrid_search()
+                if search_engine:
+                    rag_results = await search_engine.search(
+                        query=content,
+                        max_results=max_results
+                    )
+                    self.logger.info(f"📊 RAG: Search completed, found {len(rag_results) if rag_results else 0} results (max_results={max_results})")
+                    
+                    if rag_results:
+                        # Extract relevant content from search results (List[HybridSearchResult])
+                        rag_context_parts = []
+                        self.logger.info(f"📋 RAG: Processing {len(rag_results)} search results...")
+                        
+                        for i, result in enumerate(rag_results[:5]):  # Limit to top 5 results
+                            # HybridSearchResult should have content attribute or similar
+                            if hasattr(result, 'content'):
+                                chunk_content = result.content.strip()
+                            elif hasattr(result, 'text'):
+                                chunk_content = result.text.strip()
+                            elif isinstance(result, dict):
+                                chunk_content = result.get('content', result.get('text', '')).strip()
+                            else:
+                                chunk_content = str(result).strip()
+                            
+                            if chunk_content:
+                                rag_context_parts.append(chunk_content)
+                                # Show preview of each chunk found
+                                preview = chunk_content[:150] + "..." if len(chunk_content) > 150 else chunk_content
+                                self.logger.info(f"📄 RAG: Chunk {i+1}: {preview}")
+                            else:
+                                self.logger.debug(f"⚠️ RAG: Chunk {i+1} was empty or invalid")
+                        
+                        if rag_context_parts:
+                            rag_context = "\n\n".join(rag_context_parts)
+                            enhanced_context = f"{context}\n\n=== Relevant Knowledge ===\n{rag_context}\n=== End Knowledge ===\n" if context else f"=== Relevant Knowledge ===\n{rag_context}\n=== End Knowledge ===\n"
+                            self.logger.info(f"✅ RAG: Enhanced context with {len(rag_context_parts)} knowledge chunks (total chars: {len(rag_context)}) [msg_id={message.id if message else 'N/A'}]")
+                        else:
+                            self.logger.warning(f"⚠️ RAG: Search returned {len(rag_results)} results but all chunks were empty [msg_id={message.id if message else 'N/A'}]")
+                    else:
+                        self.logger.info(f"🚫 RAG: No relevant results found in vector database for query [msg_id={message.id if message else 'N/A'}]")
+                else:
+                    self.logger.warning(f"⚠️ RAG: Search engine not available - check RAG system initialization [msg_id={message.id if message else 'N/A'}]")
+            except Exception as e:
+                self.logger.error(f"❌ RAG: Search failed with error: {e} [msg_id={message.id if message else 'N/A'}]", exc_info=True)
+        
+        # 2. Use contextual brain inference if enhanced context manager is available and message is provided
         if (message and hasattr(self.bot, 'enhanced_context_manager') and 
             self.bot.enhanced_context_manager and 
             os.getenv("USE_ENHANCED_CONTEXT", "true").lower() == "true"):
@@ -278,8 +331,8 @@ class Router:
             except Exception as e:
                 self.logger.warning(f"Contextual brain inference failed, falling back to basic: {e}")
         
-        # Fallback to basic brain inference
-        return await brain_infer(content, context=context)
+        # 3. Fallback to basic brain inference with enhanced context (including RAG)
+        return await brain_infer(content, context=enhanced_context)
 
     async def _flow_process_url(self, url: str, message: discord.Message) -> BotAction:
         """

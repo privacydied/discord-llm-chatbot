@@ -70,6 +70,7 @@ pymupdf==1.26.3
 pynacl==1.5.0
 pyparsing==3.2.3
 pytesseract==0.3.13
+pdf2image
 python-dateutil==2.9.0.post0
 python-dotenv==1.1.1
 python-json-logger==3.3.0
@@ -81,6 +82,11 @@ regex==2024.11.6
 requests==2.31.0
 rfc3986==1.5.0
 sentence-transformers>=2.2.0
+
+# System dependencies that must be installed separately:
+# - poppler-utils (for PDF processing): sudo apt-get install poppler-utils
+# - tesseract-ocr (for OCR functionality): sudo apt-get install tesseract-ocr
+psutil>=5.9.0
 
 # Document parsing dependencies
 PyPDF2>=3.0.0
@@ -113,3 +119,4 @@ uv==0.8.3
 uvicorn==0.23.2
 websockets==11.0.3
 yarl==1.20.1
+aiofiles

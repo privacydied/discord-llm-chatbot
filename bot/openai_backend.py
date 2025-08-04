@@ -45,10 +45,11 @@ async def generate_openai_response(
     try:
         config = load_config()
         
-        # Configure OpenAI client
+        # Configure OpenAI client with timeout
         client = openai.AsyncOpenAI(
             api_key=config.get('OPENAI_API_KEY'),
-            base_url=config.get('OPENAI_API_BASE', 'https://api.openai.com/v1')
+            base_url=config.get('OPENAI_API_BASE', 'https://api.openai.com/v1'),
+            timeout=120.0  # 2 minute timeout to prevent hanging
         )
         
         # Get model configuration
@@ -109,8 +110,10 @@ Server Context: {server_context}"""
             max_tokens = config.get('MAX_RESPONSE_TOKENS', 1000)
         
         logger.info(f"Generating OpenAI response with model: {model}")
+        logger.debug(f"[OpenAI] Request params: temp={temperature}, max_tokens={max_tokens}, stream={stream}")
         
         # Generate the response
+        logger.debug("[OpenAI] 🔄 Sending request to API...")
         response = await client.chat.completions.create(
             model=model,
             messages=messages,
@@ -119,33 +122,55 @@ Server Context: {server_context}"""
             stream=stream,
             **kwargs
         )
+        logger.debug("[OpenAI] ✅ Received response from API")
         
         if stream:
             # Handle streaming response
+            logger.debug("[OpenAI] 🌊 Processing streaming response...")
             async def stream_generator():
+                chunk_count = 0
                 async for chunk in response:
+                    chunk_count += 1
                     if chunk.choices and chunk.choices[0].delta.content:
                         yield {
                             'text': chunk.choices[0].delta.content,
                             'finished': False
                         }
+                logger.debug(f"[OpenAI] ✅ Streaming complete, processed {chunk_count} chunks")
                 yield {'text': '', 'finished': True}
             
             return stream_generator()
         else:
             # Handle non-streaming response
-            response_text = response.choices[0].message.content
+            logger.debug("[OpenAI] 📝 Processing non-streaming response...")
+            logger.debug(f"[OpenAI] Response object type: {type(response)}")
             
-            return {
+            if not response.choices:
+                logger.error("[OpenAI] ❌ No choices in response")
+                raise APIError("No choices returned in OpenAI response")
+            
+            if not response.choices[0].message:
+                logger.error("[OpenAI] ❌ No message in first choice")
+                raise APIError("No message in OpenAI response choice")
+            
+            response_text = response.choices[0].message.content
+            logger.debug(f"[OpenAI] 📄 Extracted response text length: {len(response_text) if response_text else 0}")
+            
+            usage_info = {
+                'prompt_tokens': response.usage.prompt_tokens if response.usage else 0,
+                'completion_tokens': response.usage.completion_tokens if response.usage else 0,
+                'total_tokens': response.usage.total_tokens if response.usage else 0
+            }
+            logger.debug(f"[OpenAI] 📊 Usage info: {usage_info}")
+            
+            result = {
                 'text': response_text,
                 'model': model,
-                'usage': {
-                    'prompt_tokens': response.usage.prompt_tokens if response.usage else 0,
-                    'completion_tokens': response.usage.completion_tokens if response.usage else 0,
-                    'total_tokens': response.usage.total_tokens if response.usage else 0
-                },
+                'usage': usage_info,
                 'backend': 'openai'
             }
+            logger.debug("[OpenAI] ✅ Response processing complete")
+            return result
     
     except openai.AuthenticationError as e:
         logger.error(f"OpenAI authentication failed: {e}")

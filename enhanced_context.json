@@ -2,903 +2,903 @@
   "messages": {
     "guild_1156692144740892796_channel_1392318624508678154": [
       {
-        "user_id": "1393747399221973077",
+        "user_id": "254254168234131456",
         "channel_id": "1392318624508678154",
         "thread_id": null,
-        "timestamp": "2025-08-04T00:24:10.969000+00:00",
-        "role": "bot",
-        "content": "gAAAAABoj_2r57FU2NqIrtTfSEvBwl0PTVpQ0RsvXpMFPIOikAEfcYBOGqlKiqrtH8Kj7x36OQ50ZunDIYxIHIceO_2LkMn7ayD1vyUoS2EiAPVCFOLZe5KUl8RbbShmntm_QHrtBmekF0EwlKZXQrWfF5Q3-Yq8qUbH0480zevLJeqbnKBxEJb0AiCsZ9OYq-KxZfyWXLeB82CULHhUdxjir7WGNudqW1o0Si6y0HbtKvC4OrGlUCj3lhj1vl6NAb6fuVTNIQr9U_NjkhgnhWi6GWo4YPeqP5uswhaVnLqnpeuv56XS9sjpxHuUzbHoHJ4XXYHfRc8t1T3MtJ-8MFnwemQvJXABitMUVYRNjjhH7hZmp3X5rqjvBZ11k3J0cq7VameguDsdALqmM2mhu9Hk-HtkLdXhrm_ywy93atDkQaITBEQ-rCUUfEATHGH42r8EYKb3OXO4EKPaCu8Y9I38vIJuhEHaRDI3fXelG3kXHiQyytM93F_kzV4IuzG5QM8FsXyDVVMkoRTz8Vz-SvCIeXmO1tw06Q5eEWVXyfKwzzHWz1u7OtEaQ9vinKB417tzS_KhNEAWz3Btq46z8LXJS66AB5kpT8RA6X46XRedpj8sYw8IjKnhHotKxDwYjlJpMb8OpxFE",
+        "timestamp": "2025-08-04T18:36:41.149000+00:00",
+        "role": "user",
+        "content": "gAAAAABokP25KA2Ua-b1bz9oS-4MECfXW-mJVszd6NIf4YCCklgzEhPVgwyUt28VmLqlzFS73Ex-XgwnakmzVmhnEv4WIkotnQ==",
         "guild_id": "1156692144740892796"
       },
       {
         "user_id": "254254168234131456",
         "channel_id": "1392318624508678154",
         "thread_id": null,
-        "timestamp": "2025-08-04T00:24:20.129000+00:00",
+        "timestamp": "2025-08-04T18:36:45.875000+00:00",
         "role": "user",
-        "content": "gAAAAABoj_20FcqI6wJly2VY_gl5OXmzKchsuqoRbekV2R5oVE_CuP6CIyDe1LIEpYnh8K8YVVqblhQfn_Aldwu_EjOhjmZakA==",
+        "content": "gAAAAABokP2-vvI8vgXHEQ7ooDDcOyHW05bGCrpeD4nLXK_Mx0byEaAsi7_SCjhpJo8NSPp6GmKivz6Zu8tBXw9VbxR-P7Rt6g==",
         "guild_id": "1156692144740892796"
       },
       {
         "user_id": "254254168234131456",
         "channel_id": "1392318624508678154",
         "thread_id": null,
-        "timestamp": "2025-08-04T00:29:42.334000+00:00",
+        "timestamp": "2025-08-04T18:37:56.883000+00:00",
         "role": "user",
-        "content": "gAAAAABoj_72S0twRsiaKaU-F99Q4V6pV_d0c0-2WkeR94cueE8GCNy_tIrDGRb0Cr8ugEIrnkV63JvD7ZZYCOM3J_zI2j_7VmWloo9b5xkRVrH1coS3dFG8WCfGtTJgRp9DcDSEggfBgHowk03349vs4Hgts5FzPhNIYctpovGEtxikY5OPchi6xwIHYwCdjHbmNKSJ9VIOrSaEXylb8oMxbmzh6Wa7IjUj0j1wW5VbfCz4aSWeBYg4TbrbxRinNuQxIvYMK1_luLi2lTAgP3e-ybbC21ETZFJE6OFXm4yMbTBMLfkC_o-A8gm-0uNs6oioGDhxmIIcrz8j1mNylyVffdj1u1XVc5gE-EcUBZgGmmef9IaYOnE=",
+        "content": "gAAAAABokP4E2qgKp-qkXe98RMU1cpbzWbQ8vAMGX9rUor5mgJu2PC-IkTw9HlQSJvyia6jIdc5XgETITEmW7bjSwMp_O78P7w==",
         "guild_id": "1156692144740892796"
       },
       {
         "user_id": "1393747399221973077",
         "channel_id": "1392318624508678154",
         "thread_id": null,
-        "timestamp": "2025-08-04T00:29:49.332000+00:00",
+        "timestamp": "2025-08-04T18:37:57.205000+00:00",
         "role": "user",
-        "content": "gAAAAABoj_79PAPygK14aoVd8Omnd5m7PI3f6LzRUBAaXtJFxjfKRE4ou90mns87hwWtXNRDxGI3poEKf71-vI_1JmLvzzPggtxY1gJZxzHw0kRmn8miGAMz90epjKYARVfaLZGqgMBmJttROZkjb2zlhazNaSIHnkniWYkpeSlxkCZLgjvPU9wv7elMmobdbBaU759ZXcdG1HWJL6mCaljeCYAjf5yEN1tt_JFD7wTVzTuuKWtt2BAZYzbQEDUcm-ZJVal7PA3t2UAYvGdaT6FvYVSMn2v0g0IRT_OBAS8Kqd29KxIHF_VPaaOGhiORyk1Dv83t_0ZakdHtaYw3-1XiDp3E_egqfLX_4_PkibnEMGyCAzomdUMtZy5g1e-83CP7bwwepL7VwXIrqWLx9CvsrgJGt8Wb5vlUac-UEBxDU-7qaufLxyuehIBA35d7zKSJMwYESYfLoxwQR8ywCFKqLKLFgsk_-jrDRVNLeTMwK30PRyvOJ1ZjPZv7au5eJ_SNhhHMr86WKel--w_NwHEnuaOLLnLtamaMUQ_ONtkM41gXvc1--TGU5bFQfUDQpuGC6xVRMlX8FZ1c2eQnkLzEvj31ztK6tA==",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "1393747399221973077",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T00:29:49.332000+00:00",
-        "role": "bot",
-        "content": "gAAAAABoj_79JmN8ftTc_103_Hpw4U1llvLLh4EeKWKvjtCW0MwytCBPRZUtwDngeDJSSk6nhSzwRwWBIPc8-bHcI8YQ51ibnw1LYstL5C0zN7otXDMNI-BWZcF-HCYUOto-fjH6RNRGeIsgR_Mzu6HpdqJrNEMDL-4qFP3vbT4aDEmCJV8iZMBbR5yKWO0GFtTAPPfaJKmYVg0yJ5ahRXiZPHP-SPnoUgklYpiG3wh22FAKOHAx4Wy13zUovtIhaSKr98XoxoxcHzdixXcIQC4sYit2oOnNc0M8zAJVyh8DaLV68XQzobIUMky69O1n-YGvWQxzwCKdiH760odItYlFNVjQWzSp4zLkqoVwyrq3uZUawYiYbwhEQmd6-_dwbQx5jX3K-sksQitK_DJzwhFXkfgI-0TRsh68Zmsaj428y7krx-2Umc6oc43op1yhhY4QYLZcFqfCbZ9AsCAu9g9Doj5O2dWlVhWipGvFpqTOwORObXUF9BNA2o0xfcqKrFTBc_-ka-ukhfiG8gjCD25j-YPWcxBjVPcPIkIk1xGS6PHkdLBnUVLez2h8JiPmAYcWllVl1pGKlZhBTBlw3SbcTg5-FNm4uw==",
+        "content": "gAAAAABokP4F8i9YvF2vnlYFvmuEImaKWCNSwWMjTG99lEKXc6buMnRzzgjt3iqbFW5AAdiLSoycjK2i_jDP2yJlMrecqXwdaA==",
         "guild_id": "1156692144740892796"
       },
       {
         "user_id": "254254168234131456",
         "channel_id": "1392318624508678154",
         "thread_id": null,
-        "timestamp": "2025-08-04T01:02:14.661000+00:00",
+        "timestamp": "2025-08-04T18:45:35.122000+00:00",
         "role": "user",
-        "content": "gAAAAABokAaWLRPV7SaA5l5ksn1Xb_V6CvEIhmeZ3rteb5wb0u0oXxY5FAgwgXMyDtIKMIkP-rsPMHw40E1y9MWd1mexo91gtOB8XDa3Qya39cV8YA16LOZ4e5Fb5HVrdOpe-RgF0VGtshbdjABpNfubeVjTGia8jq8L-PSQaHR2JJ6RN0fMEtA=",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "1393747399221973077",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T01:02:28.451000+00:00",
-        "role": "user",
-        "content": "gAAAAABokAakaAQmqR-4HqpkIr7jmhWpk32ip10HSoRmZKPxVuGO4Jk-r83FitarqTuS7GZ8CcnEXBrjEknDjMKsPnQcoDgfBPnmJDIdeDr8R-QR0UWHCYv-FRYFVeeuKSFoJZjOt9f6AxAEx61zT-uYU50RyKxGaOQkH769KQJjE_dZmwed-eZ_NVYIvRAfryCPWrnLvKnJfGW28gm5t4daICOIbE8PJ8H5pRtJaHsjpAX7p7ypQwT1uubhEkBucX79txDZ2F7SnK4X1VmflFndI8Umpe9U6nnVDIgMrLDJe3XADCm8dNJ5sKWAyIA6kIPGpoW8ioXh-2lCqpUyoq3XXSoRvCv3U_TIS9Lebc6Z1w_Rfe9i4Gvzp562ZFVrb2Iz5EfxzwcXXw1ZTUfp_8YtSLmrvm6X2zjbBjXl3cxSEygy52CcZNtDdeLqQWRr6WFA-qggJb2uTWANRyadODX0Ol1A43-eyvPbk2_sO-9_0UNsXydpjUDlLmWy_eZDp3uD7WRpQVOSTpi-UuOD3hbTYec-apcdwF2C89613YnWqWd0MtFun7tYsjgBStuz0NptjX6V37pXis-fB24jwsP3imkE-5EMGbC_j0PKMhHcrLlRsrvHhW_WWPvT50L8F9Rn0tZ0icqRvZpDCLgfjUmz7J0m7Ey8rLafTpLV_tKie3neh1izOaPm0MsZ_eClCQe5DKHYJlW2Eorl3eEKlVwrwpMfPJ4qpTFO18TXZKgZgpFt5r2T5a3GeVK5gNwkX6EGzpDhhOm6OfCA7HTTurmCjijbsdUd9SRgqV5YbQlK2m8rgWySEC6SENgtQ6TtvZ_aY5UvxD_S9oswueBFYTc9UsVHDUt2RmUHU8PzMQXGn0FY7CfDInogECgcVv7KvNhiF8FaWfoyR_C3ilGORdtEBPFFui8WoO_-xwoCz6F7Z_-mcu2ZMIBNRQn0EYDVI_L6mPQRFR-JjG4HmnkBGnx_AzKtYSYvOg==",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "1393747399221973077",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T01:02:28.451000+00:00",
-        "role": "bot",
-        "content": "gAAAAABokAakPXnm8ny_2MMXEXxQgXdENrBdMs5yS74Y4DHoJcm42mEQW9I1teNHu_Q1N7nFGPZ7SLOySGyKOhYYEnIge75vlmqP3EqtyHFuamqs8tUNMLMftUy00ZxGsCeec83ZFoHtz-70MXVW22tm-mawkzC13BNmcGmFCk2yn4orkwG-1LCVcli6NuimxE7x4QSBfQt8drYzi4NSMeS07T0oPmKKieIDfipNBuekD0_HzdllPCRpNberm-37iI3ltTk3_ZnB0wx1WgP_W4ZbYaUW8flb4DIpfwLqLH9B85PM1rcDBiSLOb35K8FsAX9WNRk5W14PGHXi6T9o7IYVxcTbNKQlOPaXsqzjf0cKNDXpj1C92x_PVR5jiJzFwIh1OL7ksuOadqcBt3uBB8vXhStHGnX73kGq5_vd_BGm27ly1w6oJjXqtno5yisauLAaegMDEOF43I2JWwUcczj45PfGY1BE7ZSrCA5hdJ-1N-UbD6hsN0bFjK3WprURe62qlF17HObeA_fvB7Kmd1tEr9g19bLnctKGi3A5ZGkhFOMOpYuADUwHaaZkBhM69kpg-FHmTjI5gf8QwLNU7-wFBXyWrHGuIZbv2DOEzXSI2dtjO60AJ3lmBlA70aeLzL917dIfkDHc54fx4yEGDXLuaYmjUYH6znYh6a4WFHa1zSr6w7AyrtsXMBPhzRXN_NdHd6-f4D9I1BtcRxVPm-M68mcnuf6niY8OTV1DDhVAWXaYHtuFPo5Pv1p5ngqKF-8rBs1qxtr92z7fg-wL_5bpBqiem-Eu8rdvjQ53uAP5RxpxgzwPEfxrLZ1vSkPCyrQu5uJLdHEhY72KZ9BcGPSUG8eWyZMgVzE4Xg7cdXDVgnJYlwSPJsKpbNfboTew52lvV7OG7WNGV3kGcIi8VWYqzU3ph9pDW1rZFmwd05V6TJQxs84zbEBkwABaqfdGF4wSVGggndzNlEK7r406oZeGd7i_iDK07g==",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "254254168234131456",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T01:02:55.006000+00:00",
-        "role": "user",
-        "content": "gAAAAABokAa_pG9T5eFxolnf3R4p1B-Tm6Z0qzAEdY1HYS6YujPaZESLqPu4sBnrtV-AcmL075mXt5PPPbEE7QsQk-kddt8TrAn1ro2apcJAEu8J37fB9PLjCZVRQ5uIS_I0F8wofSgT0VvRb4VL1rCAqQXS9IUo5Q==",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "647368715742216193",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T01:02:55.112000+00:00",
-        "role": "user",
-        "content": "gAAAAABokAbAp0_g3cYhTxmm0h300rx6t6RFfNnwIym-MC04GIFk1BQ8eVXkMkLm7FkRs0DxKmLRzJIAo0924x7brtjqb4YFTtNLO66gYhX6UzhNi0_BTDt-i7RWTWVKBTu505q2808N",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "647368715742216193",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T01:02:55.392000+00:00",
-        "role": "user",
-        "content": "gAAAAABokAbAoHHDR-YmKH3TJ4Gt7cqDqaW_l26PYXP_GRc_BvVMwsm3wm9kIhYMKlUe3Wt2f_6N5pFrNdPY_vII72Mot2xCbA==",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "1393747399221973077",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T01:03:06.413000+00:00",
-        "role": "user",
-        "content": "gAAAAABokAbKz-yNp6Bvpvc7b_PODIhz8_99VTzPqc7uWO7sZPZC0fwVqp69ZGtBLQ0W3x6ZKmOge_PdBWdF3Fh8fXp6wqHJsDi0WJ7cG-JuCcTcUPl_tj-ngPO-xrnDXtIRpVVoqcDoVaFZd_5SlTBjsk3kvfi3WWnjxhNWZCMKAzyMWfkCR3xcOimojg5eZlY8ENwYVQhn",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "1393747399221973077",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T01:03:06.413000+00:00",
-        "role": "bot",
-        "content": "gAAAAABokAbK6FT2N8JB3qcAA1Ehwxs0XpFFmBQ6-ZQSFdGz0w3n41vpE-hoVrxrxJM6rooknpzeJgI26r2woSYvmLXg3ZH4oXzHV6LtsGMyyHw7ls8zgA-tEsDzshoUPiUotckbvB5Dv-4GnTEe5yc8Ra5-LByFBQJcFelqX6uoPfRUuvWDvOLorVpSMbjtegUoppzuNncn",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "254254168234131456",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T01:03:38.309000+00:00",
-        "role": "user",
-        "content": "gAAAAABokAbqBIh_ey33zoJeIO0uRM2e9eHzpoG4tJE_8OQeLIi5xWdcn79CytuMUwkjOd_kezorS6_comUS6c3pBwb4o85teXoqpABlt2rjjOzlOlmHpdqD75OIEmYbHrHw0Fcxpwgvpsq8lbhcwr6BUOlua5KuwQ==",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "647368715742216193",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T01:03:38.451000+00:00",
-        "role": "user",
-        "content": "gAAAAABokAbqvnL8y6ZWX44Oahct34YsYAdI_I5MxGv8q8gj7QUYuAxjE8RuEZmpXQw4JuJ6zJh0G5pKhpMv0pAKu77eGLAfH3jS_zrfddHECkj8_zxLupvxaY8RdTt2YQSPsuIxIVGK",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "647368715742216193",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T01:03:39.107000+00:00",
-        "role": "user",
-        "content": "gAAAAABokAbr9KVQtOEU5s4ykfsMC-bMG62fgycZauTzLtDAKipdk2AVHpuaZR7mGB8kaQ-PqHVtDCM9w6lPJKFD2SKMhYPqJg==",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "1393747399221973077",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T01:03:55.343000+00:00",
-        "role": "user",
-        "content": "gAAAAABokAb7IJrt81sDtBpVN5FB5G-I0su2TpVLCEOCK75QFNxmY79LxyqVj8RJ-eREXT-BeSXWiiQjHz4FV_cpGyuddAwo5e6IUJZCJ3up_dsT4w_UlXeaW_8Rx8SrB1SFmj5pnYEu8o8tlWKDp_olva2oC02Hg9H_7DhYpLY9EcKmz6Pni_hwgXa1xIHNXoCUkxwFbmC6",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "1393747399221973077",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T01:03:55.343000+00:00",
-        "role": "bot",
-        "content": "gAAAAABokAb7RaQjsqXnRSjiaqPi5Vzn5j1OgluTJMvGDuZdpZlVjHjdZQ47nlraBYY6H8Npr-1X2J0cJG5qNJ0AuEzrWgaJL79ExUHcvEeA0g2vheYFZpMZmgROLok5j-RKY6G02lwwD_3ZI1EyJ5RRu-7hxLD97VkSPkSLosbiKCSGplPcvHnsihgxakzw8NHlYQOq8ZJf",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "254254168234131456",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T01:06:44.833000+00:00",
-        "role": "user",
-        "content": "gAAAAABokAek8OE3sI6avTdvOtP5X5EY1fJIRR4yTA-E8B7Y_AFQ8p_te_nDPAs6dLZuTbfkbw7N8BErLhuy1KW1F1cz__RzKr6Ks2pSzUyR0QX2X3lHrD-7xVe8IIrduKaeXfFflk4-X6jNp1cB7z_Hani-oXSepQ==",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "647368715742216193",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T01:06:45+00:00",
-        "role": "user",
-        "content": "gAAAAABokAelUdWfmTJ8SAtSOiQeb5k0vtPreiSM2NM9IKJbbicwJFZgeC82X-DWdnPsKyyM0qGiTDzyiD2M7QPP7Dd7eEyVB3KVuKZY1NGYXjat3n4gdcm1TRbSssOumoeELKzX3TrI",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "647368715742216193",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T01:06:45.577000+00:00",
-        "role": "user",
-        "content": "gAAAAABokAelfV7n7NzZTYRVET68qV4M6F3cQaGuq87o_qlJy-5LrJxzx0kgy2XBnkrqJyiCxOHj9xMq2g2yexHd7EFiOhYLAg==",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "1393747399221973077",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T01:07:11.899000+00:00",
-        "role": "user",
-        "content": "gAAAAABokAe_T3yn8ONhivrT2uQlIGmgCyIn4TxtXg5Hygo2LbVF-V0bSPPOx8nL-wAxkzGEhwcA0FuR0BTYjaELMAPRSHsQbm9E8vdsMSaHiVytIp5kmtcc945OPg8MNqVcwWSmsk2oDvzt3POrP3N6oUcWIEST9-m7lYHhJYeBnS0nTIX1lhoQB-aeiH6Z43rnwVBC9-XMS3rV4NA8xu_Xnnrv2Mu6siChXDqsEHveOJHvsbV2bkGf50K437rQEMTkdog_TUatLiHXEjRj2bhcjX7p4AuUPYf7t5A0xd1H8QyImjwKS6Th3222qycFiurCDvioDY8FplFm3qSUpROiv6ceS2XFBSuvND62XNwP1XuDhh4cpe_daFKAvC28th3XAoHidMhMZlEr9J2_zQ0ShtJNfyWoEReY2kDpBt-hScbzpIV94Bv7zyklEhlV9jL0UBLQ8i2exTZmzqxzXWYAq-Ce05l8hdTqQ21vysB-KcHwfXBg9Tf5bQ_HgnZ2N6v-dcNW2a89RkS6AeBTULLT9vtMogv_fbG7OzaD22Ii0cILb9vPEFuqFJP8JDRZL3unYXrLGxButonIYohwlJ8N34onu5njEFl_fUEtuOUmsRXpvBWMgu_Gf8HWwq_FNHSQwLCk9YIoTHpsUqB4YoU_hf4lG3oaXGhcOFQcjtbnTRMuia_V1mnEc2iyOJpMo7p5djmEnprDdOWHWnBJeT-T_jWU_grT-s9ABHAxos-ie5r0eUTEX0O_lsYwvwlo48bldY7gw8HETr4PnnO6SstrljNLk2JvN8_PVR7VEyBVdsydiNoeCPdpVaWTmetNcWT3rM8OlOWIDwggE396gTAFuAiM6_wel9Tc2O_gq_4IGlUbTQHeXJ9c3viCFqN6Zw4x67SS0Fm3Apdu65FOqPu1QMoXIhrwdA==",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "1393747399221973077",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T01:07:11.899000+00:00",
-        "role": "bot",
-        "content": "gAAAAABokAfAeayjGdxxng_72ErWyivrZJVQGz5SlTpOJjTYd0eXf3g_FarZ2dEXIZuz7X2dWTm7CEsPEWU7R-BOZvBJJZy470qKzQiiPhQPe29aPjRwfIl3HKeKlszY6R3yoylOeJimS7F9ZuK5LYwg4QOSvotw9rOaRFpISO9NCuD4vvNp-GOustlaIlXeFijoMbDJ76eWyje3qC7J1C2qdjOq4P1gxeqfEotqVupD44o3uMDajEUyPjkxGbeo1bpPib-m3unfbQei6q_fF915iLCJKfxCOqvlboZsbcojn6yCQMO45I5OW060a2kou2mCKe7IYEbTk4h7WCuqriwaZf0ELBbHNqfaUbNJuZ0JR6DnOMp8VvjU3wHkc07q9ON_Pg_DFCCHNeewbXmsFiWhzq8inOPxyQGxKDMacmpeiDYnuERtJZ06gnkZ3bE8Q4hNZHthVv7I2RS-1pUjs6IPdJUgN0g23_PXVPdD2Hp34LUVqTot1bTuWs1WW0Lc8VNZoD2pWRybsGNIIqZqEAJYM5tUXdha-qpYH_p_9QBadfKCpO7gRpa089AHPBIwbbfRCak5Tm0gyYG7fnMlfgp8fu3f07Ywnw_x88pxB7WrU10UCokZmihh8mI8von3Zm4sWbsBXK_owexjak2BQnVQLfZTmouiTRoUuuGBRLeYVX1vlz7Q_FbaLsb4DVq3Pjy1W2GXv3lf8hXpFv9cJrYjfwNkYQ0r5FzlM48m7rW4sBcljWWCMycLB9N9YoEiTK4nWsdv_h8tEamGH5ZESdiT4_rjfwI1zV1ai2n_927ljOEHft8ArtvF6W-yYN_uqmgshZjSMUryBeV1E_coU_Ab4ioe9OmtNElx0irjZkm5GoEJpck2uYe3LdtZKcsGS9tENhy7lH53FWOurKx3AE8UJjJ9cUa-3g==",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "254254168234131456",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T01:07:22.685000+00:00",
-        "role": "user",
-        "content": "gAAAAABokAfKx_5V5SBRN0QApkIniQJxsmrsgTbEpSHlrKy9Y2LK7vMe7ffNFcPpCQ1Qxs-KtdIecYs7ySZVzLsGn2ozwVS1G_2i8lAZhzzQcCPOpjAuTXtVlREoWhMhgXffkM1B1joA9lTxyTfQyU6vYzpjiRlzzg==",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "647368715742216193",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T01:07:22.787000+00:00",
-        "role": "user",
-        "content": "gAAAAABokAfKz-sI4j7QEyrBm2RmPIXbFfPR-_GH1GAkr1Ka-qKbgGuiO3C_vq7-DBz6rBg3KqpOREq2wJiYsXBl3hkuN06sv5QHdiSpsS7FNIduBVsFdhfGmjUERVEmVWfDPSk5zJba",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "647368715742216193",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T01:07:23.005000+00:00",
-        "role": "user",
-        "content": "gAAAAABokAfL6OTwPeiEPRNDrOl31YMWL-miLo1jRtEQ3I2g0xWEzIaymAydHt-r73gWBZqsHEUgn85TNAV7tPS7p6gkHaabtA==",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "1393747399221973077",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T01:07:50.252000+00:00",
-        "role": "user",
-        "content": "gAAAAABokAfmEqYtmLKpiT9g4E_lqg264lEAdukbTp27Wg8KD18FUQOpidTrqNZ9iFb0S_viRwTGfipdoQZVEFo20ybFg_6ZM4MOL26JeSiZZPx357C17s0keYgX5tHFRKG9b1BUk4zVomU_Mo5yC5iebcU-IEQSg5W5yWrEQWj1SgmQZ2oth4EgNmlskBvYDu7m5yCcCuiU",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "1393747399221973077",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T01:07:50.252000+00:00",
-        "role": "bot",
-        "content": "gAAAAABokAfmuUj4yZvuxkqe18IHDzwzoMJhcU30fklGKToK9idRdC37uXliArQWS1sW_7sWvDnxSEVUctQ2F_4E-aLlohAVhVEGfUeWt1kP4cr8cVmZkdMGqTCrmJ8WiyF-sdv4wFeHignnmlP17ibypH5i-SGyLMHLkkBjaXSxogOA-5jZoIfclLPGFVpzvvrMCn6bxIZ7",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "254254168234131456",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T01:09:22.410000+00:00",
-        "role": "user",
-        "content": "gAAAAABokAhCIHO8DCCYLVw6pkuMf_ZIVQUcWmCpUtv6HQp2MMmvLZrYqIJscQnZtvC2zUB6iF_woY889CRvhgpPIpQLjpAgUTqegzlgQOTuq9ZxEGb4prKkUSLCCIZKjjL9cqy56bCYGutmhf6r14T_-J9Rt8fo2w==",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "647368715742216193",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T01:09:22.573000+00:00",
-        "role": "user",
-        "content": "gAAAAABokAhCuFWRGp2ItIMiV8dqeSnR4EyUU8PXX2F1Z2WW8Yb7NZuLnzbJAUO-sUcsNjZnUD8GKlz_rqswmlpXwVVP1ZXXQ7_tm-n9STCJupI3zTcHrIYHQrCjLZUmSnjnRiQVMsfV",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "647368715742216193",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T01:09:22.804000+00:00",
-        "role": "user",
-        "content": "gAAAAABokAhDh7Ee7Ib9nFhdmjRbLt-iLFXBl1_a5ov9aamFyfZzvTtsRo6_AbqE1U_PfUm_1Rd0nANqPlzEE6z_ace-sKpGzg==",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "1393747399221973077",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T01:09:58.510000+00:00",
-        "role": "user",
-        "content": "gAAAAABokAhm6C-p-xitcog8ywv98Lx6H0beNTMwNz4iIXNrxOk1IHJDcWlcegVr1PuHHl2cIXeJ-TaB63otLGpI9RadSEOUARlji-rJ1qiMeEETzVoEtinq84vg0EZFYCrZtA5W8uNAphb4BhSlt7sABCg5SY3jqJOZkcdagKZAbo3klhkQieAw8jDaXvDOaLfjlLCEGiBOneZNSIQ_RicTCXpY4rOq7vA6G99_02tRNkuBzE_Rl6QJptQ6Mgbipp3bBJgSOOawWfFNrn0nm5aoHoPkD_TT5_GCZ4F2MFzR8LMBPorJQz-s9J7W37iAUS74UakozKZJwMKhnNOEbQPaDzGrWKBgPBDPFgDUjGNxeA31nrii_nRam4TZeFaCm5Nh8qBMTO0Jfrmmg6SHb51fwJNf0tK7FPacsXH72PxqqeXZGAlG7TOHzuL02ZWfdRX6JOlcS4Me8a5JKo8HzztUYhOTZDaIvE2qagbJtZuCgtF22Gt3PPDIBIdQmzJwGkULHwRcgOWyQz0awe1RbsoUqZvrscT2xfGaSHc_jjnFacLGKG0ZCrPTMy17otHv-1LuJ8QxSx14XcRMockuANP5KY6j16IgIyzPHJitiXJsa5B7ciKtSc-EqZ3E7iP2jYdofSLIBccHzM0m7ojx2RSbNMIB40ByV0SXIVifZDQRl38n5dZIMA5OxtS8d-DP1GguSvwZjMPsHph-HglQczelgcMd1jwlwueNhUqvQGDnNBl6PyljGejX5VLc_X-64ljSOwrLiHJ3EO8gg85PKx4BPBloJ0tWkuWHDa205vtVD94OUL0gfl0LXRqEITY5Xs667CKm1Pm4",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "1393747399221973077",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T01:09:58.510000+00:00",
-        "role": "bot",
-        "content": "gAAAAABokAhmO-O6c84_F9XyGv8s0X4gJHJiFULSql3I7iNrnm-HCiSz3blIexY60o823sEqZpdI70dGLZ9tmtSqI5MG7dOHS_Ux4BsZYJOkOS_S7VqZbQmxNPjVsgAH18mV5KmUvtNAXXXWOcFaIoH91KQE7KrtzKMhWz2ECP-sSjN4F_2WjY9sI9IzWtk7FCbEUqWKsTrliPAIp6gw64FMHOfQdfkOmy1xyM85dTv4KZqoUVC9RQoAS2B9iEPigqj9PwAse3JxQf7c_Y1toEUtPOerRGJlBWSbxJg9AGuRZ3WWB_oSYavlZXXnUXd7ys7j17hBKnO3GLmCP4KpBexreJYKtPp6m2ATps_COpUpYQTjBLlkD1jaOC6dx7iqLkyK7e6KAapUltOIhvmlvjX_AXtY_5qxZlS1njPcml8lQtzICIlqph8teZYmxb6KGtF6Cl-k6vsQ4M9Cc15aRiGi158I8JjyCTweqbEl6ybKpxihxeaFOrvErXwVTJiBnF4K-B32-7eMOM0_N7vRkdOFz9oqZ7uiYH8XrlnsFbQInp1XpvXaExtLlScEygZzijChaTP8qlW6Dy9fk7xHWf4moHqyBcMQZjDlpSudi7pdYMFTMLm2HlJv6dATdKfyMivfi-ySVkz6mEL2Ccu29GMy2AXQhzSRBvJUXDaSdSwIHlyW62DrYcmN5lbrtiDIFwwQg6xVhiKS6ecylg4XbKsyMt9ZAVrOhMRsE_n4ra1bVdAI4PnEuvh_91vNfGpYCTr7Pdpe2ZD4jFXGKms_k0gFZNjadheHC7l6CDl2vvjlrl8ZTqZR9so1EJJhvcmlxRDyIZ1Oc7v5",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "254254168234131456",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T01:10:13.692000+00:00",
-        "role": "user",
-        "content": "gAAAAABokAh1H_sLhjDMYBPE3P4ecC9YAJBA-dK86Yi9rYZuHPGWLIB4XPYcJEAzMncJZdODSxSOCcLTCgKIQYE4IHx9Y5w1nESstbFEh63WtzDsoE5ZJ4Jsr9N6NPcZ-qF3NPeJM-Q7o438fF6S4MBBQdOjIq_dhw==",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "647368715742216193",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T01:10:13.927000+00:00",
-        "role": "user",
-        "content": "gAAAAABokAh2chwz0pDqOpmKQYmjwIPoDTUQr4mzMZwKZFkUZ1QCiitcHCNgp6dBluRJ-3PETYfqDQp8PZHuDTNwrH0PwcBOHJjzILJ9th1kKNC874AZfnW0jLREJtRpn4HHOLZu7LAs",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "647368715742216193",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T01:10:14.581000+00:00",
-        "role": "user",
-        "content": "gAAAAABokAh3KlGl5tcK3H3Jgk67csEXZU07mu2k-lZb4xsPQOZuR0g5mIWuB7nB_FGQB6Tg-IDbM5-CknayEj45AY5SNcrbNA==",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "1393747399221973077",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T01:11:23.971000+00:00",
-        "role": "user",
-        "content": "gAAAAABokAi8_PKEolwGHiwDjdaaJQJouR9xYqANjE2YZsTW4gweE-MlkcyIpP2jDEGwx9yOSh9Csyo2g-mkxjxg_PlxUNBePPGcNjTwXQ63SsvpOMm1CYcpqgsvyolVx6HVoqyyPwr3DWmfZDdPrxiQmatjWXMUKGazd4Vm_akw59X7rjFkrJVO7yPL_pZzYGPREW3Q9xVmX8gUX2pdPQp5nJN8ff8MlpZgS5V2uRvJUqtuJGLP-BCXh2i2PWjH8MEnv8k-UX62IXVCjzc1LvEEji1GrIGaywbSbldIRrkexSK_5JMT0NxN6bL4RvNdEErzB8E_Lygqyl8wuww4DtjdzDb7DYE_eHTClcW2_gZJMqpyaH_Vgug7BUNYJoSVz0NOU7M3rjA_P6yEBYT914FAP1VcOV7uSVBWoWbn_Mh9PYDEHCCjMr98_hbuNkqXSR8Mk7hh-mLCwnBXi5xcpe2_h3dl0dGmbxh-MFv7SoZZk6sLV4TqDEglmciULjka2H5zBTdvyMUfxMy5puwxVqWpPC-CPPfagLR1GQ7zQKBTVmpOg5siES09Q0_gO61yUPuxG4w_trJduUUbBkGh5HGPdcSw-Xo0DeJT_-3VC9qSg3YxWhAYdRiYCVyb2JyJyu8LAtuM9qbhdnhscjapzT_NN7hGPzRHtJHBxR11Be4XFoMKCJaUzGaNygp8hoYNPBjCq9nLo7iBdIkw0ih_9zyQfUz2WFfuKENHTBYdiwqPFnEVkLytVZmVt9VQjhFucyA3L3ktjE7fn-avbKXirGGgj0iFHBSOHib6HKA-NBl7hLx9JX8uDlVNZuAusUzTCBEUaLzgmPRibf3fXX_RmjxHdxCBJ0v2LRremvV1n1XSonrIgTYa1kqI0OU1utXAyzsTU-whDzDpWXsy4YJyUOxLZ_MKLwvXcA==",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "1393747399221973077",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T01:11:23.971000+00:00",
-        "role": "bot",
-        "content": "gAAAAABokAi8_nLawn6S-G-eMQSG_8GwekqcVJUinvLd7Zt6h_49Z736YamCnGJBtn2P3fp07EJpzM8ggAlCAF8RlRX8JKph5Dxy5sqdI2wQNm8in4nSu0UJrcjvPBZc2BSG3_Jc-m3wAuv0CnfZWcxxsfEvRsvzqbGqcwzicNX1RadXhMoMMUh_UYw2Zabv1lQovarIlT42OWlVCNmvWV193aUtdR4c75e1K4Yw93aZEEZrr-ExWC3zke0FdXzg5-9Nn3nPXQ2Wdx0O_aVb9buU48BjkDkdm9w7RwycuzCWfPc9mKnspiA-S2bBkxsFw7xWPTXuM9x5SZVZb3M7Q73nN-QsdV5aHBwy3YAUfaPQLd9GeJFmIPof4NJQkhbGWG2KAfgJYEF0P__igGtpehpFyZ5bV0WC0BGIrc_R3m3VKY1mgZGRGbsaov6myBXKXDtnRD-GKFQDc936HZwfxL1QHCmI9gtuowm2bjaUa95-PEbeBx3IfzwQnK99rWM3MBaYRnwRRAdB-xfiMlf-voEKuTF3OwmBWHkPtOeVVujoOKxyGn77A8tDWDkg5hm9bllwiEPZFmDYAzLXhu3oPDkMp8JkdlRdE_6vC01OAspnmMID9HwxUg3VB2RfcprFdqkUGF2olH2U9KsnSWX0T7QbktkiTmIRS0aLzt6lz6bFarx3UYgOLtJRIkJCnCbPfVjrJ-Cr8zWzwt8cCUU68PGW8UGxAzPZrZ5b20TXoqUFnxKoIat7KPqTMc_gUBgDaxh4qtpBZLTCucrACvnB60j_frLAXUZQVnO2fp9AOZxooJXrAW2SUP2ZRREMzo9s52xBzYm4KhBRDAZYl0707C1XYdH_23UhaKoZBw6Ov0E5UmR96MKZ2l0Nyp_OlN47JVtq9OttpyAt0BErEJDcat_8eVBMNTX-qw==",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "254254168234131456",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T01:11:34.179000+00:00",
-        "role": "user",
-        "content": "gAAAAABokAjGix3o6K4ksU35xYJGeVq1aph8_0PiTBaNc6hkBiJRoAxxIFX1Sn1mhCZtVEjANNLQIYYmXfchnRZdS0K7zkDtmty2ep3w93by-fdUPE0KRI0=",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "1393747399221973077",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T01:12:19.644000+00:00",
-        "role": "user",
-        "content": "gAAAAABokAjzsieog4zCmRVOANEa_ZX3kQ179WOF8E9QHhN3JNH1wSS8xSWhNAKxCF0-4dnVrREfYd7C4GxGMFU7DC9KbjS7IBFVdjZfYY-SvpPxwG-7-BvkfdfquAJBEP_x2S0OTzRdV2qg8jd_3osHzckDGGzDFi9YT_7QFcqhjEGFIr3Bi7UDulWho9_65Po9bcFAjLEIW8JkRYb69Ka3eTjkxAXOPgFBPwXH97t8JCJfCwvMT9VSXxXaswl2bCjlsdiQ-vCr5QNCi_c3qTxTwCsXnDVFgjCsCPBS3XZkcGSqcUfwgtpQ9Vu64q1ye_EqvBiq-96x4HalEOf_sySACBvAoHsfH1DgAGr_pb8g35-FUoe0R3NglWXjQejbWOZVgqjbA5a9C0dmA4nfKH50S3eQCiid4IDSHKIw6M75u_fXXJkhNcvU0YD-XrO8BkDChDSzD2V6U-ngln4nhW0ABzVVTQ0rkhdL46wjlID2sd0PYI9v2Eu83u9_SNposKIRirbNtYuGwzvQRTZ03Tvyw-NDeHjeLIjVuE8Om3dAyHJ79O5o3N3UHY1q6CNqkQFAnh05LH6owT-rJBcYJ4K3h3N0S_QL7UXZhDkATQGEYdz_mvOeCRINclDWBrFVY9AM9PxeJMGU2GAMH0ze_pBgGvftxz4HehExCNTzbCW8v8ZRrpvcqdBaIyWN2IuWuvd7Cu7G4uF2IhGKQ7p4VdVgJQ90iyArS1aT-Qa_AoiBomQw_gYUJM-4QE4oxjUrOz2Y3nFPXNwxIu1W1rRG8yzsJb7HImbyqHw2ZZeGAuuVHcCPFLLliKcWDixUI8rEMsak7qnaItkiPgwnPm0Umo5YuQ_DNyo1Lrk_uwkoN58pcZWg0LtYT0OW9rTxoO6O46cVw1D6QAgUiUlselIV-uzFXR4yxQypwngJd44j0HIWhLdOSAHMhYYCh68EAl2AU8dJYWpf5BEV9-xbQF3y80KxnwSZQVAMzA==",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "1393747399221973077",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T01:12:19.644000+00:00",
-        "role": "bot",
-        "content": "gAAAAABokAjzJdat_l6-zOYm8WoG30ZdkPuY9ulxKBJF5Z4G2sVQFScNdo70anyOLcZWkMMhC8gBJitq2bH1vZlEDtHpo9y89ku0Ts-dZIEgQy6R14wTGzj2o635x1YYJntDdqFxmiL5W8CYKySU2T-GcmQinQBHb5FBvgZN9STPXLKGUbgvqUO_jt23x5HxezAx8Zlp_Ul0THeTowZeI7uqeIIJ94O8pr4EDW2eg7wuFiplJqR-HvEg1lCJ6LZVwKJNGKGLMUWhLfC77aVYGTrmK01xrKwpAUgg4uVZNyGjgse16w3sPHO2MySkanq73Oguq4nVms7AscmYTTO6aOw-NJJh8ZOE9AvfuewCMOiCQMYHOSMHz3bV-9YcdbVjlrg5IukM3lK31gYUmow39rNBi8FpZMMEAQ2lcvChUli4P5rG4_D6galZeflF-jaNfURskfn9xSzFI8PVocLiQ3hCZUIdkrqblSN-iuzWgXs_m9D1gRl7aTj-_iSL2NmnI43HTk10kzKmuahr6G_j9_xBA8DSxIfw7l4IiTWZ7z55po2QHoXHnR3wX5E9Pm2DbJCkQTdwXrCFLtBirwoHeEi1W6CpihloLEFJwBCeto2euSreuVGCU-NBk-Sp5FuRS_enyrZrORXzV08CKefH6EPGKtF7dbqt6Mlf2frTSJH5DQP1sWAgxngzNGxIwr7bcGhaldjFBhMNL1p5DfGSAt93tAX4S7IV6-sEIOB37Bp8-w5Y4OqAlpMjHZ4gYKtUGrvTQof6JlAlD5DHKKNo_HhwUNBrKSqjFHeyOk4GRI6Sq1p-H2pNlpd_9g1KNO_WlVBQdRWk1vz4tka6E5wmAr8mnlQw4mdYXj3SofksRYqOQx0A5PDjotXSyenTJbs0UXabHia_fxPuW_0ciynLeFW4p17IhfovemgNssGeVaO4ox8BID0LnWHlDoSTyF9J1pkML3M1b5-pWXqqkISSoEr7iTcwVjQW5g==",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "254254168234131456",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T01:14:29.413000+00:00",
-        "role": "user",
-        "content": "gAAAAABokAl1tz9jRWSd9JGnCdx55uDDcRUp6L0_QuC8AvT8P75ApQUOQRAuYFYTgq4Tpm9UFSO3QAH82Fd0jP05z6nJfYY7VHrYulqvzFSg3tNJY4IzI-A=",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "1393747399221973077",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T01:15:13.285000+00:00",
-        "role": "user",
-        "content": "gAAAAABokAmhd3taa1G8quqdf8Ljbjs6VbZyvsCSDRs5ghZXIyuG91xf_5pQcEqjDutdxrBibg_-4sVNrckcvbkvqubThupOVVBNEOsK354q0XJgyS7D36VyKGwRIIDWK_Ctseg36QDTzKHA9PV7T3QQRKzHUtB98VsVGlmsqTl7zITtT7w66HddMlMgN7A1W39DZ9BAqSJkoKF8y9sBK2H-3p_ZKyI2MFykv8MUtD6KkG5zVcA5do_zTAvZgCgQu4400ntKUh36n_Q5MdW8GHizM-Lm5ia_JCrK_dYCOhKZcGvRIDEKfpyt6O970Jm7JZix1S2k3c8xN3pmbFQm2-p_N92tneftyAJTMC07xLGVZHDd2MMbqh_O23u4W6DymvkLr1rNAYlTNGwyy89xU6l5OIoPFNZIYEZFqr2TfcSu0OSwTpWAD8TXdzvjoC44F1ybX6IVenY2Vmi-cVMK8mcFzK9eUnPFlPMcx61VF65e2mzElZoG7T63W_sjZ1v11C0j71kp0JrJHGbcGgkQprfXm2N9T92WXoZwUxm9AiUWBuRNAU8gJSSgNgn6HTu8rYTk9Hsa-sK4vl9aJqKOYU1PMLDhWyK4Ay7zB1HvYumpmnYb0GnyM91W5j7mAQfOnGifDVhNQHXVZensxIonD8AXpEVzFvRQvqbgyu1WQVsLxHtF8nl7F91rKmLzJOKbwtrC_CCzLNL4ESDgqk56ShR2rCYwOn-cwl26uJGR2A0se-E2L6t6PXqVlZX7t9Ay8Qh3L0E-Qmc-468mFtguPggrwbv6DujnCRajM765IkMDbYqAu9584kYfvJgyxrSit3v0K8lsrwl0APLlbfpjvhXqLMSrYF8sExvq76_GL2suArdMeJPIdTZsXSbw0s-GaeoTtiwvej6ySo14Jy2k7qygw_--12OCVSsCMWSqb9GKh6tQDQfW7dCI3WtbSUSpNWkoV8eIRfbQygtV4nsms0RFF5QBPiF_kA==",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "1393747399221973077",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T01:15:13.285000+00:00",
-        "role": "bot",
-        "content": "gAAAAABokAmhl4h0EPCQCXq-OMx4mhxmUZ13TW8PFNyOi-MmnAA5u9UIYAjOWeN4IhAVTPfpdiAoO5xH_dw_4AW3Jga3edhQxb__4HcqbZgbOCJHs6XE3MiWoaFvWrPgWmPZGqMy0lTjh0-BS30WeOq6TGfyv7iZjtRRiEKt47ZiZVTtDimfX8kKwpcvYLgUzfHTdblU2te_anmYig0WupExkS8hOpOdF7KoQawL9Z06rIqWr4CBQwXVepyulwVpHIHsKDVM6DEYhUzOYSOSuX4TWFk7SVGSiUiWpAFvdzWzStkftk6Zi8jVP2lpCHtjpBz0-DkbN3A571RygSOqj4vTNPEbTIxrd4vo9cvpfHVYGV09SBfWL6rtBOw72ush28rZO8tA05ubSgMT9KKsaS4Ia9WMosPfY0zw0aJ3SQupDbWavg37Zvzzv3o7lW_HsnEdb5Xjy58uWfk1M6SDuU5sKHFaeFzRf8XiV4EWUniyWVZS0JnQ7hXabFR2IiJbwrpUuzPuV1iBfx5CWbnsbQM_nkqP33qdSbP2t8un5xG7HCvEzfyBSdbeITNfVEMFbhg_Yp4euqXdd3M_6eF1hci3eXJriN8NcX41Gqc5aiWYxHIqxNPCATcRggVxeDjFMwcpABh9GGfDBg3Qx-Y0TtYlgMCuoswKItGIe1oLLuD4vVRT5tmjAisLPt5mFC1RZTkAhXNkd4tG57F-XwHkRqGJB0Uj51Eoi5o2HTJ9Nefe6IaLMfmg5iiNNBJ4B-ilgV1LrJoPe6OJ6Ig5zxsEh1IsocXGWFMeVceLqn2Qnha2tXOsvHT7k2INNcaM9n0if_jJq2Z0eSYOq9N1y_Vpaved9FugkYpQhNmzE1wv-2iI7v77PxKfc-WAHITR5W41-ZmaWn5CqBHX7GsE2hGWUrOTrg3IiYQ_xS35810EsJT_25QQNpvh6Skb5i-qb3qlrlF3FmTPs4b7ua15AKWx51_kZ3w96S82Ng==",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "254254168234131456",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T01:15:31.713000+00:00",
-        "role": "user",
-        "content": "gAAAAABokAmz9T98eQkorm9ofHd6YTEAlw1gtld4UudW2rfcDcbHHgKiTp327GIsw0EbYvIrZHmZ34yYwE_gIeIxu8Xu6GRG4A==",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "254254168234131456",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T01:15:37.945000+00:00",
-        "role": "user",
-        "content": "gAAAAABokAm6DT54IYiBLb47w0BopnrS9bpFlNq7qMCYT8VI-coFAJeaCenhD2JnC4bK3uImhZJUfRQFA55GCXw6Y_6ca9t9yA==",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "254254168234131456",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T13:27:08.172000+00:00",
-        "role": "user",
-        "content": "gAAAAABokLUs6ws6xgm-nKOoBukrP7XsL46LAllhcgdp3L6GV0Ft-V6ZKjt6NEbFTY6WfPqk0eQUjHEznq6n90l7sLn9_rpuzAqMkoapurx9aThDxASq544DnANE4l1NYDfNsw9esBXa3v05ysjPALYXeThiaiLZfCg8WtPs6XbRTHTswu08MdDnlm3eER03xJayNOFDYRjOBLeRhBNctjYTthM3ckjsh4f5q_GMaEtdjAtKOR46EFI=",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "647368715742216193",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T13:27:08.317000+00:00",
-        "role": "user",
-        "content": "gAAAAABokLUsfU4P8MzUBwik9yX8hbcchkHJIW3dDL5e8Iq9CXA_EZtO03yaG53YFUKCN1t8T_Pbw8hSUWUuS3ltzlR-3cR-MzwGm0HEJYDRFT4sjWconUdMCXH9fqeWrXwjpu2q-lO-",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "647368715742216193",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T13:27:08.857000+00:00",
-        "role": "user",
-        "content": "gAAAAABokLUsmSPouHcbQMBVGF1p7IGzg6sS925JecPXgiXMt6nVCZNtW2BSwz-gd4IvabwsGXn2TX4iApoJifAPCd-16LIJ8tFJrFqbbkQGyBtQwmQz_MylYZX5ZTSIhFuWNW1fQsrxsnRhAE24KV44YQlkJSsz05fpGTI7x0z2QN_yO1QulD4=",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "1393747399221973077",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T13:27:40.223000+00:00",
-        "role": "user",
-        "content": "gAAAAABokLVMPhpDObd7osKGxmTYJ8707k7vz_3Hisg18x24leqc3MHltnxBU3_qlsCEVFvCbufvNdjorZYDj8eFXv2GnKIwgtKUUPTdTOdLIxU34hMcwv0E0m6jzxH4ciL90xLjxY0Cxpjiq2jPNGcohKXxybXLs0rMs2-6vEu-o2boWq_pOXvxkwEKssaN9Y3sIPq5u6K4cOvbThpAkylrHl_4h0IcaTL8bzf6qUiyfiGtrP6ywKATB0ac_Hj3u0nRyJro1KmehaYaqlJD8I20-0CuR4JicIl7ruyHpZCIwvVqc1eoIlx8abAC9YQUTAel_zpXxevC-rVoAkVSfgn8bGCEezsYc-qjw0fw-VK8Gpivyho__EN_EsF31px-0nFz4iDog2wa3Mkpjdj1J2Q8a-cD6hRSwCtuNL0ffbUrrCLJRpaYfl0142xDnpDWUbZojTNOJj4F45kcGgx0Xvdfk1ASH7Ae0nkQ3PaeTCTzZtSlEMBrM1lpISWPZpqkpZ_4TV3EflC3qD1-MInxS1itXw2BvCf3uDv5B8nvjHGaDyADaG3zwIjcSRGlR5SS0PqSVS_1tNkDd2J2daRj47y-IyL3fjI74pzoZdu6WUT7L2-XWoj9JdouOAPKfkeaFEn3aBv-V1ORakHLOXFvNXGQlkIFMpcDS_hbm2_sPfnDLGSC0io6CCrcBdGWxLDNIzEyB8QClt2Yvrc2RIupjQ4EQL0jcAK5oNOy8dz1VUOiS5UZChr79odqqH8Mr3D9F3rR5WR72pxtm3MDDje3WKjgnuGP1T1ocVLutv0-fKvF7AKQ0gVkZFWq2mE_1lFCrL6RRa-J2aHQsC5msmAW3WOk8woMCURsTtxQzXkXtqt9VHM6uDa0YvLUCuxio3U7m86M1y8K2_17Z4jLkFadSDkHXT80dLVlck4Q_4HWa68llJkdjr2Zs3CK6sSGgDTws6Q_u6lJ6yHlEk4jZ0sn-nFOavc6NBOiAAixgD-MCdYoqvJCLndp1mU=",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "1393747399221973077",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T13:27:40.223000+00:00",
-        "role": "bot",
-        "content": "gAAAAABokLVMzeWOcm_cftsS7E56fKTd6dIqbCbD1XXRVOhKmRXTeZAn6q6RBHItgeA6wUL3zBw2MArth0WiK9Wua09xbMNbKL42U6NgWqKAmR6YkB805V6gIYi8qPLq6c0ojS7HKIim9596sV2DNluarVbc_ykwN1l0yYcDzTgAnVt5nPLoEn3Nb8GkmbHN7JPkucweT4WxdTvHPDsxxBOiHXkkppPvpExP3EGNCY3WQg4U9Y80GPGxpaea7OuvaD7NBX-NsBLPXifaj-gU6W_Kg2-SdTnZ1wmECK7kkQH2zteCRhrAgYCmW_AazDzrtb9XEECufTHONm7cYsL10zGQwrj8KLbXb4T3Lyo7lvVtuFrCbKuDhem5w-ZLjyLTQQ2OvZmUJysFKT-xRtZrYKQF8zOYoRXdt26h6ohX9GQOQqnrj25DBOeakxLDojKXad41VODDR4x_pZ3MZBbkJZj056N6PhK7xHcGdXKejZAt7z2XuwMrAXQ0OJTynHXQvZH63ij4BTZ0i7GkbQF2pki9JNVFgXdOIYVVtHMEe1Jyuj8q0JPe9NF9xb-Vnk_gCKKLRZslAlGCClJVVfV4aQWXCdxgDUWOAVOMpeJtaAUoCwmNEfBbdDzLqL6T4z7R7ADrSWCl5WMzCwgDFxHgSTGiiTK9Y3pSb4ZBNNVHtpraFP7X_LRLhw7W9dbYSVMCcr2koRPA-7L1zIzGhDwr_01VBfRdNAYcuJUfhMZukUio1FS8EQEv-4l4pncvoRk8HMv3TtN4RSBD_zHdbjpvz0S3YPmSZ5FcCqiYNmSPg1p8UNpycObtPFIoDyt22w5tuedD2gAyRLPTg35O9LMHHf7NwCTarf48zTWLVGp2Mjq3eZ6wEryNii8L4pfvvjhipOXS1rOWljzFrKhgBhWBFcCgry1nU6DVcFTHmzGc_9h9LBlR-MrZmpkrMpNIkEDLHiHyFiynNJLe2j6JRUCVSg2QngaMJWaiyvQTsXGMOWjr8AMDcRKmDD8=",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "254254168234131456",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T16:33:19.593000+00:00",
-        "role": "user",
-        "content": "gAAAAABokODPB70-NHcD-3gLjHAGSLuEzM1wbRwZ-AI3qPgzLK0WCXIQHi4822hj6i-wHcZtVKsdBJ2wgu165zOpi2O8uKMONQ==",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "254254168234131456",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T16:33:27.866000+00:00",
-        "role": "user",
-        "content": "gAAAAABokODYCPwvNG727cNZNiMmYDCwmP5LTmKzNTdFTD-XL73HMsNOWfI7y5fPVJ5Dd-zJpDBkHiYCIjktOAps8o1FdvbKTapQax4lH5IzYErddQTQ1iA5-yKWtvaqTVRD2gzqRMM4",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "1393747399221973077",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T16:33:37.250000+00:00",
-        "role": "user",
-        "content": "gAAAAABokODhgSCtq_tKN-wk4i5nc1nKJcjcX9ByM8XP-3wXkPPwJCLH9cWC10-NQv2KCzpV48_n9xN_MX3mH_drev6qeDoT1GiQBNqTZtPBYCnqMnbSbenoxyYwDMx5W3BavDjhYBvxY_gFFTptAFuYU7FypzjQa_jnCgJ5YV4mZ4SjYegmGgkr16KsQ4BBcRqvc7Y9khE2jLRMIGFxb1Gg2cZH2JixY21M_iwyt79FLJZCiWEtH7Kd6kPvfOEjkfP_Q-pTsHxcG-xuQJr6XkvcPkw6ZREcAZfK49tyAVxHxE2Dqsz9zZ7oL7rof9av42rah3IRoMs_8cOSYjWJsr3Scm5HMORg7NGJW6K76N42dxiffq8Tx0WkNNCK5RxCD6v1P1gxOD61SzM8B6CalQOk3lQQQQQQ7IzXnbTH8Y8bvyDQnIbu4y4Z-yls_awWB9L8HYuuKIkzuQNnRLapi6CQ02TzHoBBkeLs7A6PU4LSqX4utueLg5LC1zUccg7UBtz9BJ2VTrNIC5zXaBUdGgLngJcFHqTqxYuPay4NVx-crA7OpkDYGluXXOsQI6EELHDZmtLoWKnS5JiYkyd2Roq9Bcn6nL3ZeGVbi7xxytCWZ2uOwxTZP8j1Ol_FMC6EsI_SI7-Eeh7A6JqQcClcvSXOQB68rx8dFFU_nQ8tvVsaZvTC6gAh39sR8BfBKvhzXUoRyGf7T-FeCp9KwmfplyYcw-lgekmcYcC_NWkcysVjgbB8969wVqInzgh0KZaTjwQ151pdSTOk6wLk-5_NtARSLa0fO4VDFcu1YbqMXL5gRGbgUP73tS9MU3BsKAbXwQXM_7v47NRH71ih2BW83OYT5mfEJNFkCAv7yWjSrBREBZQHHoQOqE73p-Q3iw1wdyvfFoNnrne3n1kkOh9mM3KaL5yH8yX4_IEY9nYgQHtgdmSDJZIRu195qB-C8zLRbk1fAdd49YeACQk00InKdjKQxrOjyw7qHE6QLSd45vOvZZMNhzFSAwbUrpCvYyCo0HVdA4UGF5AK",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "1393747399221973077",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T16:33:37.250000+00:00",
-        "role": "bot",
-        "content": "gAAAAABokODhuDRwsRbuS-bNWzS26ncObGOvLirZxdd3t8fD6zGUf1-b9uOPiEMFJcAZkOeyZt0dEKFNGEJlLLfQnxba545XE3EgRBTMLTMTUjnGNHFDsDhwcSrxtg1aLNwzbFWyTrbfN6NldPp2COeLDZaiTHh7hH08OUflEjQdFNR0QWHR1MWfLYct0vqBxG2Io2f_iWAtX8F8dGz3ijI1Sut4DHgepNs2tJOlANsvF3iSPdgakkJqFqCeyG40pWDxV8OWzAY8MKSYVk-P4Ei3xo1G2r3qAZg7rvDdACfy5PRJdw_7aANpghVXCoX3UtIc6hPbPvEI97nXT25LC-01YaTAVdymPKD5XCjzPMtYGfH1FwuHpfqhUHRn_7Q-83Lbu7pS6cmn4coQAB0-HA9NNcVmIbzw6J1a8e2FGy3MOUVssWW6OMeUU0oJxYX8m2bdzd96piwH0lGBRKP5zrVs36k-i8V5cXM0gpTotR5OwZWNhqysxfvSnCe8v941aDXmV1RbhihaGLq8gQMmx_3WOMWyUBYbo-PvWqcwgNT7r7n-09rs8kneFT8vf6Wf8MzBSnKjUlBmiTVY_Sa0viI2pr8NEzGvg74T3UH1UIY5f3H4mWWObDszNsng7qkzovcgwdVE9J3zJzpKeIXrK-x2UiGT0t15WTBCB7UkcPGBmv1ii2IyjVPnZpYzWU44NZx05aOvKSzUdbPmBuCXzF-J0v8bW-lhUnOa_Gcv83yY-xfE4Eaj8C_YQ5q3ZnAOaWiLGC-7PRJa_wetamd_r7mPldPe6Hruw72M4APRBnBnjbAKFRbJe37zNuMUR1IajfgrsDv4QlF8R1grAv43ZghhZgq4DRnmY4mCwZoHtiI484YAm1fuMpAGh9O2q7Q3D6jWvNMWJ36zFyz5bK8Ohs6jfs2oe-uoWGxbFmbH1UEn7b10uYdBt4sYWdJ1Po1eJXKLgRtHoawOMq1SnMmYIKoSOCbAwXXfggHz3MTxUyiQyd3K4qpyFP8N_CUqcZUEpeXuTKSAzW3E",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "254254168234131456",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T16:42:34.372000+00:00",
-        "role": "user",
-        "content": "gAAAAABokOL6VqrxJI9iERWLERHnyidhh9OcVRp4gk1uktO02H2HFxFVNZvp6z_z0LJIqBDnUDxX-GcrFVIKWJMvbg5SWtZ2JJCAuT3KvVVNhNTicBViM9JgfjGHFvY3U7IBmrN1llQXue2f6jEfyPktPYkF4gpqxA==",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "647368715742216193",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T16:42:34.498000+00:00",
-        "role": "user",
-        "content": "gAAAAABokOL6I30NbP9s7AQwcblUiDGQ_7E5YuE-BhhUiUru_B1T4agDHbg1grJcikT7g0niLYj7pLylaHyG0cBDx9yLhJOxjGGu0yty09wbwBHsZWS09ea9tWD2T72zz6jjMqhzJz9-",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "647368715742216193",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T16:42:34.849000+00:00",
-        "role": "user",
-        "content": "gAAAAABokOL6ngnKey7tPl1Ll2MehcSOKbFbF40IsVBvweDWYtz_hmZTU6hClzgeexwx8GFIwdNbormpo7V-B8bHWw-OLzelou5diQmSwUxvi_s3D7dJQ4RN9LaP5QjGSm_6jAmHcfxaSGcxFHcB0Z3SRJY1dLliTA==",
+        "content": "gAAAAABokP_PbWQPIFpkbjDF1G4WUNoMDlrzxkQIIxxI_PDAiPYIpg_h5q8-tNytUqb8z6I_qCyn-hBJ8sFAm906w9n8xm8g1SmkQtcFxqEqfcE7wUqij7OuNbvnCJxq4HYHlcNzCBC5",
         "guild_id": "1156692144740892796"
       },
       {
         "user_id": "1392310898311303259",
         "channel_id": "1392318624508678154",
         "thread_id": null,
-        "timestamp": "2025-08-04T16:42:58.874000+00:00",
+        "timestamp": "2025-08-04T18:45:50.194000+00:00",
         "role": "user",
-        "content": "gAAAAABokOMSSjR5X0PlFMsjZbAfJscFIbQk4Wxz1Z0qAvPuxf2O8KxzwhObv2iLDAw6dzSIJHLjdcirQGPTxSOE9sTHe_jp4ZV1vP7gTFeSIO1IPv-M5gx3OkYxNgAUIAkiWmNVXJfwVApOTq52MnnjCOELKPDKId8gQNz5JUftDjz0u7ItlIP40Hidud_hsAKO9xI8gVF0kvW9mLI_82YPQC1w7tIVR-57bhjb0yTNX-4B9hMosMoIAvOz8BsR7EyduGX1AVIFARF7eymMvJZpHQ48kPC-OjQDubGV4H5ciVFVndBZx9r_I0RbCQnv06ygDAxCcBQe9dol0YRcX5XcL1PUxDaQZ975mX-AluMcXdQDyRPXlVnz-Eq2LKLSqUhfy9mQFUsJiheo9eA1Zwjf13vaTx4sKqgdNzxfPd3NqFM5WTPOkr52Jb9PE6d-GerFN3PoST3FMnIEpv6PqFvEidc_dcHWQaHrstMbuKepuzlqbLgqyxk9QeEJiOnvd6S32IdKa4BaoiQlrv_tAtnxzs3Nllgfdi_zrL0Mb_PJdYQPFiykmDYOKk4rE77dYh3wQVP-YZTCiGz76Z5ZKh4iz7pQIIxIlVAMKBd2ERRVVBUFaqYKbxQv9SgSFH0nZFkAT8OyEyz4Wr1YOXz9xF6wVkj-RGfi-Ityq53XnDnxdEp0_kUzh1-_P2Rl_ecrGQPje-Iqo3-C2uQ9MBzTs0nQlFGTSqRXT7J2xpilpakBDayn_MbjaLhHZ9x6NL0qKAjZbUHmvXxSW-SkaD97ODbUuofPN-kPk2Yo76jRQFay1rBp2VfKON_86OUlCV-2z74U76OCUMdg",
+        "content": "gAAAAABokP_edjodljLXFgxdiRTYPjXGjk0xBwESbKbYMNtPmexZNuWa2uzWY1w0ydQyUv69kNOf_NZipnwnMi67H3l5FDM-QzVRcPPz_TFiZx_fh9kG79-DRGs-mhKrKmlLKv8BTNWxPQEh0PF0iLYR-NlFGw10blcv6IjUpDAhX9vAVqs5m4bivlyzHuUF1Noux-3dJ7gnkbZuCTfjqz5NIAQR0ZWx6CfU_BBBIHMZMEFZuhfuiYr2bzuVoVLEbIreUIvG70N_zv__Bo9kltnaOMVh-tD4io9AhpbU1Az3pmF6g8EvffR599XzuY6WIAKO6-q0jhXNWdTldZEBxwozdnCeClmVAB-cToR0SOkp-TppAUvgCGMMQj2ePkGyBnf5N0sknybb__1vNwfX9zRNdUffPmtv4UHnRkGSpP88lOys7WfXw6ABWjDa587IsTxGdNMe00w2RbF2Y_7hRNJ1nSDK3zSm2wsoIuffMNYbXra0KLSzAY_zNbPs6nXQlLB1pGRZWt632nXgFlEH3AFDGSoctx9dYaQ9P036YKGKg2NA-DuQUtSehZjG1E5-HWn6rn6y_ISY-9HVVn0SE1u8JtHHy6cI2xj3ASmBhzqyTh9MV6w4FL1QUUPkSJmV-WfQHRWQyPhryE6ywQT0Gi5Q0nvOrximJ0PpJJGAsFDR1UOIl_WGn4LniBsMtMNZFqWvhgyELKnZ",
         "guild_id": "1156692144740892796"
       },
       {
         "user_id": "254254168234131456",
         "channel_id": "1392318624508678154",
         "thread_id": null,
-        "timestamp": "2025-08-04T16:48:06.026000+00:00",
+        "timestamp": "2025-08-04T19:00:10.374000+00:00",
         "role": "user",
-        "content": "gAAAAABokORGerkfXYbaPNe_zaaAnE1uWRIRJbt_pXQGLwLcyUzpRWPIhVf7EUWWzkz5CQpaDM-GgmXa8tUtYKjLjsP3jx00Mw==",
+        "content": "gAAAAABokQM7TXCcSKkrIz_Lyxg9xXObsuAGPaZKyzEh8v6zekKt-fggI05DF-fTN_8oJrHrrQmY_OJ_a2QQdtNSAl2xR70q_w==",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "1393747399221973077",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T19:00:11.215000+00:00",
+        "role": "user",
+        "content": "gAAAAABokQM7YGm6JSK-tCoYcFUDKEXBAsPFf-ox_QrE_Q1-oiq7i4NJOQD1_T7KclzJ1Crc6QRpzayLdOL8A62Y3x7Qj9wp2w==",
         "guild_id": "1156692144740892796"
       },
       {
         "user_id": "254254168234131456",
         "channel_id": "1392318624508678154",
         "thread_id": null,
-        "timestamp": "2025-08-04T16:48:24.714000+00:00",
+        "timestamp": "2025-08-04T19:00:33.329000+00:00",
         "role": "user",
-        "content": "gAAAAABokORYgoK0wN_KS_5nM1NT3r8l2JNPWH8DftePZacjlOTqmhKJM6CG55o7SyphGRIlgYVxviMwV-6q-u4itqzrrcN3qw==",
+        "content": "gAAAAABokQNRw9OQCIFWgypoOi4vmc2p5gENogT9Q-1Wbwjo5QUu8_t25UTZlTLk80Ho_wBDVCnBB61Eghf-UhakYUmU0T_slA==",
         "guild_id": "1156692144740892796"
       },
       {
         "user_id": "1393747399221973077",
         "channel_id": "1392318624508678154",
         "thread_id": null,
-        "timestamp": "2025-08-04T16:49:05.121000+00:00",
+        "timestamp": "2025-08-04T19:00:33.851000+00:00",
         "role": "user",
-        "content": "gAAAAABokOSBTgRD8JEQQ6JcPZmpnZTsiQ6Fg1kEm1gPJA1C_na0rEmiwCPPrZBuztXCNQI4ckfprB8QZ2LZmpRrdil5tIy5xW6vZ4_qJHuXsB28zyZIELdOc_SbhRwlpFaYfl6LZAusN3nPYRCLnDlfKNmmviqTvJW35sWR5a-chI2DL3RAlT2pBEEcuGpO1Z4WyumgOURtKK7yJtiPqrb0lyDUxrlUUm6iIIx9EsgXTCBkb5jcVQL0BGyiZ_cf4B-WAzZ-OqrYWzFP-ocp0I8KsNqT9lyACpgio3pfHNT6s-y7jjtuHEvZyvKd1YjTStOfXpffuhu_r6bIOoX_0Nvhn1M8ITRKhK851hC1G7BeAbehNcLwvjtE60sa7JDXUC3TdliQGTp1VZ9iz0TZTDiFYDRPUHtnKQGa1YxjjPnudX_6gbprF0yCbfXKzUOgbCVm0AZLJSXBIQq6mcd4Pn5LFQ13H26WPbkXaRMNW0fFr9DgC8sqjqJA-Z3ATRO0-enRUHEbsqrn-zhlVTPjZSBfAbIaojBEHTaEH_Vin-zvySPYb-AlZFSCh-5l3uh2x_bw9UW35y_OzybrOACM8VYTcH39JmKljX9BAUyKLq25-HMvvDm5tc6QiE6cKC5axEzl-20KwsExyMTPMrpSGWhm0Oz_-v3qciNY5w1yMQIDxSNXAqIpDhs4GrsoK6NyDEfsLVcpjRFiXrN9Gro9u2Q1ig6OuntufQ==",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "1393747399221973077",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T16:49:05.121000+00:00",
-        "role": "bot",
-        "content": "gAAAAABokOSBMGA2bVZ_zvvcFfJTO2wjuUfjHRPnKfYQ8i_lEmZ5AV2FAR6D7T9j4YHE56Tb0f_0uOomZ57pqciTYpemt3WIfxLEpQUC3S5heNJEbmbERg0flgc2Kpq_44j4tkKHe-ifI08RjCVlzFqvlXLBaecpNZgnHYS3hBU1vX1E3fCWh-r9e0kZJZzToVGsHSsmiPqDua_Yje97VRVFBWPlRMD43R4ig5UrulMvXNdBegfFr-Wjb4SAqdDv4LmqAiOKLp8RRpNd2wWNHPq3kXw5iz64vDUXyvePpmYo3n9I6VIm7EZdUNnLLSaO5-rqoO0qme5zOVFC78Ri51XuchSGnqJ8rSTy3ttV8CW5XVXhl_WTvHUlvMfw1NyS0NGI0nAFqIh6dXvIHp7_1QVQGKj5qenXDFTg-9Pb-Fg7AmejOMolY70pgakkZsvQDfxS2OzQ5acTkA8Sm-lJwwObUZCdDv5DaZ-Oxj8SGcP2GTAw9PBThcaMg-1lN_7eiLsbCobESftmG0EeKAcE4JNuY80uhXiNKYlDFMpHDuVBa47HBqXpLosO_ISImoqH-srM5p0vLhyf-jZm3JuhCoAbvwUWVAxvqTBnD5ny_Ujmb21i1Uh1W1-AKukPhqZBKwhs_Z1Dw1Ia88s-EUWkpyaZ_cBTPUFNn_XB2p4pTSE5NX_7mPhqhpV30R_ukKkyG1Ljr0H8H6aQAsMMP1G60MOlVPIxfQaH5A==",
+        "content": "gAAAAABokQNRGSJVT272Ry7ogRty3YYjLO60tJcJJYVdu5ACw-kwpyR0JD_Xky7jBPTMvsLdAozTWNvGgM9ZXhgNb_cMxSR43Q==",
         "guild_id": "1156692144740892796"
       },
       {
         "user_id": "254254168234131456",
         "channel_id": "1392318624508678154",
         "thread_id": null,
-        "timestamp": "2025-08-04T17:18:25.157000+00:00",
+        "timestamp": "2025-08-04T19:00:53.697000+00:00",
         "role": "user",
-        "content": "gAAAAABokOth5vkwwVPV3K7WkHK16KzcSP3LKKRbTcfLsguGQ_3ufgCrrAw7pUikpW01WFKaH1_Z58FYxq4dLIkrIE9unjiing==",
+        "content": "gAAAAABokQNms99vQnotX0GjpTLpB2PQpR-_hhCWwrMQgxgwhFAzQ04LckvdpyzZzxGnhXz_yinlZClreTqCdwS7Zyl9btIWvg==",
         "guild_id": "1156692144740892796"
       },
       {
         "user_id": "1393747399221973077",
         "channel_id": "1392318624508678154",
         "thread_id": null,
-        "timestamp": "2025-08-04T17:19:36.288000+00:00",
+        "timestamp": "2025-08-04T19:00:54.178000+00:00",
         "role": "user",
-        "content": "gAAAAABokOuobv1UhQ3Iwr-NXmA1F2DaeJJfCvguuoaChUMtRjw_s9Kk6wDnjKY5M9-SEZvkJwY1bTsT1-PWxdno5D-MsFI-4LM1ED1v4NQNZmuI4ZMViifrSwQAjcbr0Z7ZwGhtRpH10Nu0zrDd61oH5uiBTiU2yD77nU7NMlF_q079Iix74EQIBnhYdil9PcZZZUsjPywkWlgAAFg-OFbw54_ze6vlQtk_u6cHw97aTtx1hEyr__Clh9nNhkXQW-GiEcI_R-oniRNQwFnR1TyFn_mmkc9WFBsofWn-ZNzB2GU2c2WGH6HXTvBxWbKENzKgxXrfsFg8ALJohA5VSuGN5hlEjBYa4RDVSNqifK-7dNkvDYCdarP7XNVUgyoibCsm7ZUFuUGjKjnllzsUGOptGWwsweKEjRYKmACF7aLhx5oxfhQcprm_y1MutRFbOMnovSOR48Hqr0tsH4CnF1J8byoGnroTFZgLP1LoHR11-HnmNqVum5Mf0Tfr9KM8M5p3kJsLsYJRxeUM3xvFbKJfsHSGJriLqzVhBPOUIausUZCUqL42M-bV0ymZ9CQYvDGluUkFtXHgGYnWCsfzoKnYODk4o0JzHWh2_wQ8mI6R1Vc0_E4Lnmj3VvQdLGSQD6ecoGIZJl1mHeh3feaAoTNA6VNZQkuf8vo-DcnL6nEj0LSIGZoLXr1n6BFIAHHd3KYG7xWEJgzGRep92XrEHn6psDqvGR8quyZY422u8YHLBVPIsnWUPijrdiocX11wVKzAMVR-ihvPlAaLnpCLzi9bja5P-bvsnw==",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "1393747399221973077",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T17:19:36.288000+00:00",
-        "role": "bot",
-        "content": "gAAAAABokOuofOoAEqsgvS2XTB8LgR7eNJVgC6sB-RATrHlt1lAukERTupWZdy5eWP3hLgtiPxMQSvh0TWSg3mXuFv8axNWhtq4XeWncyo-FfOHWWn3SzO_zNgBhXVJPlWg4K3KAaI4pNso6ffPotgKTpip2xKh0Plr-_MGhhAe_Hvdyg0o70jKx95xut_1PjW4Kzq5uIgDgsuO2IndOVl0UOqBK7vzfMtoKCKwTJCWfe3GpH0AiWo--4vUkwh_w4NUrpm5d6gez2GQlF0tT6e0O_cvQcKiwRiPb4Zp9hX83WSNwCIXihrqoDYm3pl6logj9EaPICa6axbkwwDBsq78HbcJJguLGLsgCuoMtEeSODs6KzKi3VilMFnv0gQ53UxXRmWQAEesCjv7O2OiEwjpcXiiZjA6GrG2rgsu7SeizcnpTHyVnIl9cjXAZkp4FgDW7cPLmY8kqbpwwdO9qWoHAzGAoDLk0ShMRfROZ3T3jnBYzrDpBEpYiIXEZUiSRI7iXmuSBn0cDB_vDfEsrMiKyGSnM6G9z9hjn68k6SHgITUj3Iz37TKqLMg2pPut-zImqpNGso_xwpHnwgo7bCdMN58lf-dHpD3fw_sr4x-uTLxZJK_yTaX9fAFNP-KzqpJAwFT6d22W2BiaUFpy08hDt0ckNVLFZloxjDXJ80vKoSK9dDnQwdhwLQorXbHHEzjnPQJE7YUA1Ips_SLKRfRdvUeG0BELnWAeG0wH-LNTApOi-IdH7PmK80x3SiDnlzbR-6gozpIw-u952hBY2ruPXBQ70NKJsQg==",
+        "content": "gAAAAABokQNm0t1PmBG0hwfEi5061bA1d51JXjWLoVbWGFE0cGj5aYK2Z8569kpkvR7nzznAyARbDlcFPVQLHPstQwCgN1uUgw==",
         "guild_id": "1156692144740892796"
       },
       {
         "user_id": "254254168234131456",
         "channel_id": "1392318624508678154",
         "thread_id": null,
-        "timestamp": "2025-08-04T17:25:39.985000+00:00",
+        "timestamp": "2025-08-04T19:03:02.874000+00:00",
         "role": "user",
-        "content": "gAAAAABokO0Ut7pmrpEld5KG6teL8Bd8hRY1DrrDUOlqLsInD-Hj9iDK_AegZ9A1D_g7NwV9L550kOvj2PSFKv_LgLCWrOqmbA==",
+        "content": "gAAAAABokQPmC2XhCD-Npn52sImrg4Xbom2macFerspI0CGaOSInyMZUf4dW77zjBv8oSCnrdWPa7SaRaF1HvJZWubwBUGEx2g==",
         "guild_id": "1156692144740892796"
       },
       {
         "user_id": "1393747399221973077",
         "channel_id": "1392318624508678154",
         "thread_id": null,
-        "timestamp": "2025-08-04T17:25:40.243000+00:00",
+        "timestamp": "2025-08-04T19:03:03.169000+00:00",
         "role": "user",
-        "content": "gAAAAABokO0UjWVJgIWKy4nbIvJEzi0WDUWKc4TdG-fmC7ZRqGdOujRik-weFPjsP52vczijvXFv2F2XXj4Q-YfQTIPPvI-pMQ==",
+        "content": "gAAAAABokQPoj2FtRj5Dikl-8Uf3cghhD0_oRC8ijqmqR18joonTjF5P1vxqKM_NxR6FfTweckNpfUh3lSv-uoDZTBYZ_hxW8g==",
         "guild_id": "1156692144740892796"
       },
       {
         "user_id": "254254168234131456",
         "channel_id": "1392318624508678154",
         "thread_id": null,
-        "timestamp": "2025-08-04T17:25:43.887000+00:00",
+        "timestamp": "2025-08-04T19:05:40.591000+00:00",
         "role": "user",
-        "content": "gAAAAABokO02Aby1aiFq4JBm0-4UgBIsxTD6Env5ftMba62x501SSrrhvR1RjF94Vkp70pJl7rMuwsmfV_LX-EI4r_8ZcG4FHg==",
+        "content": "gAAAAABokQSE_-TpTJaGAnDhitpfCBiJ_HlB6qu2lYMP-b0Yjl04fu92E1IeRQRJx4MmO0F0I0gXziGOoMVKKUXct6ne_16CRA==",
         "guild_id": "1156692144740892796"
       },
       {
         "user_id": "1393747399221973077",
         "channel_id": "1392318624508678154",
         "thread_id": null,
-        "timestamp": "2025-08-04T17:26:31.925000+00:00",
+        "timestamp": "2025-08-04T19:05:40.843000+00:00",
         "role": "user",
-        "content": "gAAAAABokO1It5OWB7d8g90ns-R7mS57a6-AK8V2W4xO100kmR7J1DVc1LsSWP4-1iAt-Sf3sUtzLp1Iiz4k0Tkrt_h3AS6Dfg==",
+        "content": "gAAAAABokQSEa-JH13SmH1mV2JVh4tU7aP0VpvwWimD-S_Bn0ZVzsoZGNBxzun3Kefxxn_YzInaBuBBJzrujRQLX7gF7T1dRUg==",
         "guild_id": "1156692144740892796"
       },
       {
         "user_id": "254254168234131456",
         "channel_id": "1392318624508678154",
         "thread_id": null,
-        "timestamp": "2025-08-04T17:36:48.320000+00:00",
+        "timestamp": "2025-08-04T19:09:12.540000+00:00",
         "role": "user",
-        "content": "gAAAAABokO-wtoclhO3b7l18M0LLvrRcXzLYUgLQhP6tigKrcTVpxng_IVMI5UMYJ4L8NTziJnU00MGr4RRG_J3PqfX0UpXj8Q==",
+        "content": "gAAAAABokQVYteAzsZAYG5WIAIVxVmpbs93H7mFTXQwK_IlM9jD_YIB_ODo20H4HcBqK-UmHbJnNoMb0nOwO-GERJBhujHq5zw==",
         "guild_id": "1156692144740892796"
       },
       {
         "user_id": "1393747399221973077",
         "channel_id": "1392318624508678154",
         "thread_id": null,
-        "timestamp": "2025-08-04T17:36:48.638000+00:00",
+        "timestamp": "2025-08-04T19:09:12.825000+00:00",
         "role": "user",
-        "content": "gAAAAABokO-wqV80Meby0AMSs3hha6DGtQX4PRVhHLtwgVmojdvb1syfW5bH4NDY3w-Sd_9UAEBmUQpSQhLiCzFfaO78l6svQQ==",
+        "content": "gAAAAABokQVZLAoXnMeeeqOwH8PBZwVTeDhu72IBkeEQ5wXm5Bv5vGVefGe9_tZLMya6U_Jgd4SSBrw2Ku4RrF6UE1yVZMYVCg==",
         "guild_id": "1156692144740892796"
       },
       {
         "user_id": "254254168234131456",
         "channel_id": "1392318624508678154",
         "thread_id": null,
-        "timestamp": "2025-08-04T17:42:07.116000+00:00",
+        "timestamp": "2025-08-04T19:12:32.473000+00:00",
         "role": "user",
-        "content": "gAAAAABokPDvuWKITl8GT5KopiKEX86j3GFCHDBKU3LkQY3rGyegC0Z1IKTiFs8WgK-O7u1UjDRuwSE4ADNDp4sKVCjC_0z0-w==",
+        "content": "gAAAAABokQYgQt8puPDJrIw3Lrz5DFihHfQvi1Me_lPq9YIGDMEqSZOFtvqBB3NkxRDSnFfb5CLVkI1hlBG4n5PW00U_7GahbQ==",
         "guild_id": "1156692144740892796"
       },
       {
         "user_id": "1393747399221973077",
         "channel_id": "1392318624508678154",
         "thread_id": null,
-        "timestamp": "2025-08-04T17:42:07.555000+00:00",
+        "timestamp": "2025-08-04T19:12:32.689000+00:00",
         "role": "user",
-        "content": "gAAAAABokPDvvfh619Pa-HVUm-JTd8FaO0MprlGp2-fa9ADWCTfMn6CSY9gRJYeLOzmpHlojeBa65JTYYSNO8CdveMBWZmmX9g==",
+        "content": "gAAAAABokQYg5J7PVxjYn0bcFrVWfizOifZWtWRCs-e-adMJIMHI8GWQBtnM4HLWmxY1G8YeKRX1RK-kZdHe7tzNhaITztz43Q==",
         "guild_id": "1156692144740892796"
       },
       {
         "user_id": "254254168234131456",
         "channel_id": "1392318624508678154",
         "thread_id": null,
-        "timestamp": "2025-08-04T17:50:18.004000+00:00",
+        "timestamp": "2025-08-04T19:15:15.370000+00:00",
         "role": "user",
-        "content": "gAAAAABokPLaLPJ6GIpl4escMBKDkvxY0x_4Odt9IOddya2E8ACA5HzOOT50_ssK_bp_Hn9_3DcuQ7slPM17-ptjJk7jHG0llvtNjR3nNQ0bozaqbhLrS2TwL1ha8n7HyTXLx3QtC-ouMFl1i4Hyo5kMV723MiN89A==",
+        "content": "gAAAAABokQbDtJQE0Dup_wBKnDWnxkQdR7X91tAGSm0ndB47cmr9tlZLJGlB5cXxLDriNgJWWrvWeYM1ccS5yenNTBldndZu6w==",
         "guild_id": "1156692144740892796"
       },
       {
         "user_id": "1393747399221973077",
         "channel_id": "1392318624508678154",
         "thread_id": null,
-        "timestamp": "2025-08-04T17:50:33.077000+00:00",
+        "timestamp": "2025-08-04T19:15:15.758000+00:00",
         "role": "user",
-        "content": "gAAAAABokPLpKrYIYfwqOhJEv1RiKBr2bn6Z-a4K7Xicu6f-z9UCYC6PPnwWcjpyqO2uih2gAJ9LH-oR1FQx_mlOpFZmILsJ6YyMFeGuNLe52WvSqt_kEavK4TC0e6AAVGzXZpiXin8-6E55NQcno2n6exUf9Ju-Id2pLZlVOt73N0S4lueY9PAoQvJbwxAOiyvF7KsX4xSG7OwnJTcXvCBLkgzUplveO4FDodDyUxGJ0VlY3wgytT583p2xoVk908Z9jFhaOpHD3gT0XHWsJo81hUQ1vRTc1nhOzG3IMo3MHGMJ3cT68U-UQvdtQA9UyajslDKH7r3XU07i24nPZKzhnV6TCPQfoib158xsC_QtG9bX19CjSGTCcW-Il5lwojx5FkKgHYJ_oOsnXPL-72Par04nsWPbZBuEo_q2f7xszxI8VqXYUkqvKCYZMLlXF08Sx-ZUuJPp0DrltacfZWgR-sNQts6ggYs9A4_D_E9gfA3hAhqfsn0D2aAlFjjYJUjtsUjZOhgz9rH8EnPx5_RGSVTxKkP516JvFA5T1na7ehiMIU2k07PtdY6O2G-iSLsINtzoe0vnPMFc841XYL1TLopQAYrtHF5ZTUQWEjTnZVLs_2hlqZ_T5seZ2q7OzLDwrxNvQbwTRg4LYanUmGz8ECBt_lSAs4kqUHhw_c4SycGyI4TDtozly1ybgZf1jATs2_AHFHRqet5Nm8DRaP_aOMqetAiH0ZA9IlcmmE6JIbEL123vP714ydNabj6gv0vJj1nFiMXOJugYA-XvGlabik8RJP27XR81t2SR2z1GUUI6ZwEml-yWYv14Q1oOwEONPMa_CE_jB7Fn7SAnddPR9q0Zm6-8lZCC9m8lV2Ts5pzJ-y1rHirq-fplSMuRhfi_0fFkT4yEMNYMHfkB17dDfUVNOXxXD_qFLgwT4OBCZAQhkU-NCN5KTHLgQUxsFI78iUka8F3QalW4hT1_ensOq1VmfhjRayWUZJSGSnx6Svt3FlXZ0oYMSLkKic3yzIQRTbaNawu3b3jrAZwYczvsCHDLuPWvLA==",
+        "content": "gAAAAABokQbD47qBNa-EexVN8YDvZ4pkJZ9O7WdrxZwev0TVi3RvRKaNcgtG8cxPFM538dkrsh0v-s9PAGSUAVxCtmLJ3hvP6Q==",
         "guild_id": "1156692144740892796"
       },
       {
-        "user_id": "1393747399221973077",
+        "user_id": "171102130776702976",
         "channel_id": "1392318624508678154",
         "thread_id": null,
-        "timestamp": "2025-08-04T17:50:33.077000+00:00",
-        "role": "bot",
-        "content": "gAAAAABokPLp3Dcu_YKcWkWjKLmjuWOJ_b3ivD4xNp_aqgyiD-ho-gXEmReLQoiDPwydW2C75RJcgK0XlL7DEqto05e3fxDP6T7zPdiUKEyhTvuU7UPisH_BqfPQtY5PRhMgOzvCTyLortukb_bGCirUc-nkK8c0-luQ7an7b2EqAuXMAXgVnJv4eyrKB4PCHqt3fk2TklHE6n0jeVptR1LnTLntarpuxMKqFxjuTpqG10X3AyiktxKIRSshbuhhkMx9aMMUgM9XE7SLjC-2tQab8IzjNVetNIvXtRyaLFHBVIMblbWpvpngcAKaXkr34i1hcuIM8rdbsC1-WHoDCn7CLXAwgZVD-StmLtZP2HmxbvZH1unxbTcOfB2NSg-JO0G8czuocM_jxmfSoDFfA22hHgxqbvngflo-5hPjO6Fz6QM4TrSTWzOuZsQCSAdVI_f2cF_kNP-dXMLNaNBdcccHg-fCpvpSHhj28mEB_tOaQzussM9F-MNJr4yOuC3sMBRkw-9isaQB2BtVR2O6AonV84SNYZqmU4y5SwCHPpevFxJct-8puJDy10ctD2sE-bwovDiTDKgTHvRVF9tmj0mcSgl9otLGhxFQOcJFP-J2ZwAbZ4JSYRVCP07-Wik_YZMrkSfzkrZKO_MpwERwvAz-GaWaf0Zf_D9toSkStzQTVqQ1SAEs08xfOXR0mPJPp4vCjHEbeJW15Pwt6etIFlXzX6C-PVqjEkB3YjRITLwznUSDshgyXSKIB8shcsMajcIuko-yFBaBTWCA2Ztc5iwNsbkfAEebZmaFC0ipm-1b7M0AWb_t0N8QYSxKFLzvHxizv5j2rlPZh9mtsrredJoPKDNZFZW6dx15c3R-KBP70xaMdoSHTzkQ7PBi_c3s8VS-7zYtbdrkfxr0ubpiZUkz3ha6FftDJrcrYZ6xjO4WgIcb-ZoolmdpAm7njCR3Oj9G5cFEee2bO-YDj-wvNfH_rncA9aKwvFY063-plnZvmeMhoCDNbCJPci_BIa3OL_9my0scBG4sRMA54AFZsVA8dvDyJ4egpA==",
+        "timestamp": "2025-08-04T19:16:26.193000+00:00",
+        "role": "user",
+        "content": "gAAAAABokQcKz6lEwl0QILz2p3sO-MNX05dzrvxKWa3bb_Y8oB13gDd4hjO9wl7rkpd-GJnHPp_uRvtyNv0o9ZhwrNzzGq224DwwoqejVcJ7aZN56PpsMseMCi9woXsOXGYyxnwBc5Qu-u9JV_nt8A3jG5E0ANWC1g==",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "254254168234131456",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T19:32:42.645000+00:00",
+        "role": "user",
+        "content": "gAAAAABokQrbf0g12RANYlCCDV7XimawFyTnATtkUy7ye812QXAjEPaQXM6Ih_Ce_3-2Ji3TkuMKy89QzQsJwAN0m-MMzryxn8VOmPd5OcmsJQ9ZHRc0IW0=",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "1392310898311303259",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T19:34:37.303000+00:00",
+        "role": "user",
+        "content": "gAAAAABokQtNtPlEXqbcdyAHc5BIp-wR7vX5n5t39lfTDwGo3kaM9A3tzSzgDtPl6PQxU3ZRjkdmdToRGEuEUxNBZn5LfqaKbHCG1vpEN_lJWH9nKRjjc14ayY9j4M9viQd9zVNVhq_z2JraYr7TiBp2tstug2fXehMp2R3f8GYwG_0jNV7sl3fnh4AGmI8fW9N3Egnewv9ml4C6z3ViHZdfaqz37ucVcwGQjRkOnZcqODuZiE-09sO2lhMtEKpyEWgGYgYZqR3DWqgLB-SlXgUFAgNLEgNiqA3jznRmhwpn54YUl5vgM_FTBhITIkgLCrUQjNh7H7hwnuQeMM67WMBpv0SFFdfe9JKgyL39vJbfOJHBzNaW4xWEef0A6Z2doMAGlit-Nu88vHYwENmTSfx9UH08PhjcJFkloaSpD1BA0WqWmsYzqpTLFR9O1RSMhfQ_fBPXAuUHbmGHHKl9LWXfQhXlMms8sIkn-LA-3RulP2nMRwdpI_uZ8G3z4T5k6jHJFckx7rz6tXplFPFocfydDYNE7DmXG9CatDv66mI2bqipsYfepJ3KecEVQ2YeDXBU4y6mnwXLTdgxySFsNb9HTieIuJZ20-aKFLXiZieFAKzCBZ2YWUVAdxXgezoCk2emE4zaml_AH2HshAemvOjmzO9y0bhVPQDQ6FuT2Lp8UwGWhMKbt3wFs9ibPRfCgbbCHhVqgg_6fhj-X3nU44dq6sl02y5WwgS6BCrF7FY0ZpKgj4CVIFVSGLy78TAZ9R7Wp7QxcoFrN0UGtbCTJsid_DlKX9DeJmFqXV0jqGkobSfirO09to7MA900eMbGk3E6NKtC5899ArrWTmlh8fn46MZFzQnkbejESw70J1vzQOyFj2GwNKY=",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "254254168234131456",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T19:50:30.090000+00:00",
+        "role": "user",
+        "content": "gAAAAABokQ8GLlDu0UQs80FapEx6VlbYRHRQUj7nXjUwSeAjkbxk56-XNqkU6JKS4Wm9v-f_-NTHKGyStlEXXHXmFhO-C8LEgpDFkOuNt07eHyCBZQzzV5d3ZrQZZOcMF6bmsGdQJYEI0bR8tWgtzDLlZcFmIHe0gZM6k4bBe4ZrxwQzjSP-xIA=",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "1392310898311303259",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T19:54:08.343000+00:00",
+        "role": "user",
+        "content": "gAAAAABokQ_gXth5IBTX1lzx6-LPnOieyCZUX--A5YhKhetWm7X7sz8z7iK1d01M9h4QgCIOjnkhcBfdSPWoHUpcv9v0VC9Gol3OUBycru2k3HrlSMgZ2e5ExR5PDh39brYqEF0hjrstSYZ9UyQUsrWL6tkI3DA6ZW_VFhgMdpzPZRfWqx_N7i1GilgStJtuMxuCulCl4MQ7R6StN1ITh-3CGWsIbo6giw==",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "254254168234131456",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T19:54:24.489000+00:00",
+        "role": "user",
+        "content": "gAAAAABokQ_wB2j_URBlJSmsarbFvimbzfi0wjhSjPIGY_93JOC1KUEpYBWVRZXXrQVgLnHoA_2MQ6fLRjwyeK-5idAlcIAMTPtZklqbqqSlP9X4orTnctbhvJTqt0lTP0QO74z9NkVWmyvglceduw7WmFNvBahxUw==",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "1392310898311303259",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T19:56:21.302000+00:00",
+        "role": "user",
+        "content": "gAAAAABokRBl9iHpZOcuB6LGndSOiz_NOW4pqXRoRdZiJJaYA5LGl123aEE2B_h0jIUZ6mB2FV_EDsyr0id4L-o-XjlJMsjBX9VofhwsiDN-1c1xmGuEI8qgBGpAEDtibBqtWLgRThMyDz-5TOErZ8Gfr3g-NxHrNeg32Xp3qX4ARlwUrja3iX9bakfSbpVtGkxDUsjXtO0jh9fZlXiofIn7XGdK96m-sMNjoL03fAjlBRxQF9XWVVY-hhUh6kaBIGDUgyyFXYJygLVSEShWA6-60CRMequJRbWx_CmlkDETYnZDcmWu30Q5bz5OF3fvExZtXOTmq90t3hkiP-d0mCHKDkJNjMzqjeithdxLQtpMEfRYGr555qinPekiymMOk6w0MX9eF0BqQKcFguk60TIww9YbkbhcrKgXPBMChFa2I0gdqBQjGgv6OL7-Yk_saicGiCp2AjBHoTwV_Zft__GxtJ-9eroqJtBf_GKts-sdFXklxOsvnXWKryb5mI_yyufT2auLusfr",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "254254168234131456",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T20:05:04.006000+00:00",
+        "role": "user",
+        "content": "gAAAAABokRJwo8JK0Gqjb7D6zaC8LjMDtnB20pXA6CAovpSfruLb9IVKPCK-_W7h7Q1WQhvqw5BTES93lqdI8TIZUr_AN75Hvw==",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "1392310898311303259",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T20:05:09.630000+00:00",
+        "role": "user",
+        "content": "gAAAAABokRJ2d1Y84K8HccnS_LVbwcvx8kBcIsV7n5iK3fKwDTlYUfTep0I_naVQ69dTgLl9oKSXSrAEdARER1LK_Mo8f7hd9aMOw4ndH3MH68SaQ1sIejYid63zNcXMRGHkb_Jj7PrLQ3_cejw2GCtm7_UOz56rY6OpkHk_c9p3ew2M4EUjMq4yaZ-ndWUwoWJ1GEelMJHbGFZkAs2FLOHWAVq7tFRkgE5_Y01R2l5yWToHL0OuZ6MX-UebFRFaY8uwvy5CIKdJ-wa1QWzh-Eo6pnr9s6QXSwNptw5Yn1491_mQ4aB2WwumDxS7rU8USoAJ18y8r5eUORS3qXHNcciPCeS18qEOemOinBsrFgjkdn2RMRbshgp-0VTZdi0ADvKwMExfEQ2CNK7McUThhJ0wBdcH8_GfTQ==",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "254254168234131456",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T20:14:52.501000+00:00",
+        "role": "user",
+        "content": "gAAAAABokRS8sK1MMK3n4i_GAdBTYQK1sdb9K2UjJBuOT0lotYQBFLV6S6vPkEXp2Fd8JJofDkW0fvBfEFf3RHqO53_j4hIeuGh0YOB7vC8NWboCdz0Y9HJIsvLgY7egQTNkgPaxrI00us7fytDp_iiIPkyEENcRcw==",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "647368715742216193",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T20:14:52.776000+00:00",
+        "role": "user",
+        "content": "gAAAAABokRS8_oGs5Mu3kZF_7GuamJ0BBL-dn31_JqeUm-B-PqvuaqExYoTCHhzBtnURPl4o1sWqraO8-61FUMiOR7UzjxaFU62_W2if_cXlLjjAZMsjqwu8RdBOF8SOcFDiVpF3CoZA",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "647368715742216193",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T20:14:53.216000+00:00",
+        "role": "user",
+        "content": "gAAAAABokRS92D6Ps2rByQw9p46vwWC1wk4HUSP_qR84c5MnnenMRRjgewCBz3Kwcy0lCtvmS7ZcJo4hIq-L0s7Fa2HrmE0Hzg==",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "1392310898311303259",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T20:15:36.741000+00:00",
+        "role": "user",
+        "content": "gAAAAABokRToNl-AGH5oTF63gknuLjWdfQhyjr6uHABoc902EI_A1sSXjtPCNjwleS5uwi--YR3-I8djH6P5VlA0O45XkrzjlRTfI0OstcRbNDNyfitKIsnkOZMOUSnjIbPt6cCe17QghqukjJPeni0ZOnhIYv409X6wnP6h4G_7ff9KV59GjGwI1Y1d7GXlIZcty6ffF7so2oZDuLM-cWBdruzKj5AAigcuxaX6Hw9sIcW3BU0-yzrX_DOKMm9Y2Aj0dl6EFLARoM744Uwahv5qD4FJS1eLD1VqG2vJO05z4ErZCTClndRxQiGAsxAos0gqr5d8K9VJdH8Hl4oWuKrJSYL5HQBpK-z5Jum6GuWc-12tIcZ7mddfIqQqTQRVjxW8wEzNybCkR6lEKoECUQQ_swqWBvurDHKiEfHJc2-EXDkx9EotAs2Qa0LBM1D16Q2O6UqLb-Cl-GAhuKHC_lP1DDvv6hcBEpLSBHzhd1jItzVKnFPvWVd9aKoVtP2Misako6WTjSs6YDxS_UBg2fKQLcrwCOFDrkmwmU0Guy3-94wUcAhI27nNDcV-pEeCuUcq3yXXBJsQGpNkz_-Czm39MiJiGN7F8w5aMnOkGH2SQ8UrcTK-IUMjcC5C4wmYL4Z_D10QoSwL0lMZj1OOY3yYgZfCJRQO697YQSlJAL5evPDedfiD1t_EnFf5jO37cpI6PPisHNSAFXNEfRpVYOIsB9-uTWT1gcWNWdjQ4wxl0WIO2pZuDm5frfXeVDCU8iHhyse3-J5p6Ka8QPhRXqWgJ1aiT2umYApeoVgIJGyLJDYpGjwb3tg_YIaexX3R1OMFyFLoGoHJhRN1HiNnGa_JnuZRttYwdY54_0tl5ozOKWud_S0XqMJOUFd7QEnDFFMuz3W1hBn2Njf3hzWdWdkoq4GXdkRjiQ==",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "254254168234131456",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T20:51:15.854000+00:00",
+        "role": "user",
+        "content": "gAAAAABokR1D-xq2ooDhhthRIuMWbPdxBNwUgliEdTkk8GnRpeJEeJY9jHORtaJm8KVpdrauiKFEaJWOva5A0VCbQb5C-Kz4zkA-dm752A2qBhLaydPqk6LMdlawEuHoiuXnCigBKdyjAA99-alaTiTLxfeW4fXXnA==",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "647368715742216193",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T20:51:16.024000+00:00",
+        "role": "user",
+        "content": "gAAAAABokR1Ete9L-Mds3PUyelyX9OiHXuF1YWup5urazjsrOPsWYrn_AGYFrHYtx2rzpfGhQ9mZi7XE3dBBooAXSsaBm4vDWoBLvGsBGdRwjf0bXx9ukPk5TDdlDYtgYIr0eTCyXSvv",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "647368715742216193",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T20:51:16.665000+00:00",
+        "role": "user",
+        "content": "gAAAAABokR1F9Mqcus_UWspxk9RmI8KLdq5tgWet1vzwnQ5Y1kUnW4msSUFT61D7Q_glzPwOpSSJLJjwPaTwRvS8gC20TqY8yQ==",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "1392310898311303259",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T20:51:49.536000+00:00",
+        "role": "user",
+        "content": "gAAAAABokR1lF07cNWg_Umn77cK_G5JI1ThNLeA-uiCjRztfDdYMSahYLloZ_V6DnT3StVnK8AYlla-AoPlTysW1osdDts81W2Wlu6xSPiY-n41kZRHvZh99kXl6vB5LVRxa7gyzXinfW5yIdkQNCuCVurdz5kAKoiLey87NlLvTpzQJz5TWW3rc8imSDfs2UZl256mBtASY4m3TPhk4ioGsiDxGYoHzwxrwO77Tb3-YB_czi90Sf4B07CEEr-AbllPs1OB5Wy5NsT6Qul22-m9bdJzZH3Gf3YLIccaslprNg3ImyTyEgxSVdHGXTIV_6Kzs1Ohgi2RvRwOmgCUM9OYmcWibdWWcZVry0MNJZThNnKlZo3RIvPB0PzM7zvVhJqm2LB9-qPcw1Z2gvgZL_8kOvibl1gh-IAu_yHqxhtgWZlcJo803E1ieEBObCNJnSJFseCfIUBv9Qf-7M5XBX6Y_RAOy0b5njeALHhWzeqSvHtmcWaKXYWyloPKGmt0rHoqVUYg1YRRJOQQPI24SRAoiQ6SOeagq4KzDKDYtzGP3kO2ldMuqFyyNymNZaQWvOLdLa-mNVBALN_bwY6DiNvwBnBNnet1zCSrhNX7WZLmXkAXpg4juNtDqbPapIgR7aej4re7U4YLGI3wf3sDkFOhS7k6-QugXXG-43PbAilJKf3rgdxGXU7wNU0ckyUTw0Gs4urFiU-Ejtnkyxf_xZ-cWUP-RQ4C-MNhxfsg5v2PE0q1HBmQiXDVgrktb8xV2-6hC4v3ezy4q-Rlk20CiD_EfiCWPf8p3dEKMOvWY3b7zcFMWH285ccJvNOym8BArlhsavLKCwlEXerStUCV7Ixh91L4cR4nP86PY7GIx6ZCgSYJRqgRfjJsndPD7vRIj6yBBQNBqfpsfL1qnrThkUFe6et8zwOvt-yOrRmHyfmm1EQmXph1IjceOroWym-XNTwzVZTgHrSG2OMwOZ61Gobx7yolzJOUHZA==",
         "guild_id": "1156692144740892796"
       },
       {
         "user_id": "199347457073610752",
         "channel_id": "1392318624508678154",
         "thread_id": null,
-        "timestamp": "2025-08-04T17:53:44.572000+00:00",
+        "timestamp": "2025-08-04T20:58:40.722000+00:00",
         "role": "user",
-        "content": "gAAAAABokPOoW_nB66b4qmhz93pPSmib_mlihywUzHhGvWBvasrNsF3ja17UXsOZU1uLaBG6S0IepXUQjF5-ERv_HJ_XElyU1A==",
+        "content": "gAAAAABokR8BUj7yeNaxU1z5SlWzLTUuLPUo6u1arBVaglGX-VW_zQtPaTWStjUwu7m1xWrcblx0W53vmCRk451cgb-a_LWn8kKDC29Se0A8vLYa4zE4wT0=",
         "guild_id": "1156692144740892796"
       },
       {
         "user_id": "254254168234131456",
         "channel_id": "1392318624508678154",
         "thread_id": null,
-        "timestamp": "2025-08-04T17:54:37.260000+00:00",
+        "timestamp": "2025-08-04T21:00:14.052000+00:00",
         "role": "user",
-        "content": "gAAAAABokPPdKPRhX_crOpu_lwIzAy4qDDwkUvu6a1E9AZQX14clkBUFOTCtrVDKJA9wVjOuZqbqEG3EqT58WBvhR0jRHBy8ZXpzYJKZhZO2g5GOL5JSHvMP-a7c4LmiwUGoVOdx5EKU",
+        "content": "gAAAAABokR9e1JDyf53sYuzu1trpkkbVCwtm2NOOk5TdYSPtSUlxosHZ7tu8sQcsVK6FnSrM38eRcEb18_AT6WyjXCTuM-S0xWVpQkINLmCwP9wwzZpuW0xrSGfKr1wiYl3ZqbDiOUhqWuB23PvCgGvoQBOxun3Veg==",
         "guild_id": "1156692144740892796"
       },
       {
-        "user_id": "199347457073610752",
+        "user_id": "647368715742216193",
         "channel_id": "1392318624508678154",
         "thread_id": null,
-        "timestamp": "2025-08-04T17:54:42.212000+00:00",
+        "timestamp": "2025-08-04T21:00:14.183000+00:00",
         "role": "user",
-        "content": "gAAAAABokPPithAd6LgFIEozGlHuWl6WXthq8PGBFrFAQPZA_StSN7VChKZoIYf07c38qgBTsMpl6IkC5acaJrgntrpL4tnLHJOjYmwE6eBHPkyESf2rmsrSW4nZUImeCRh-sBtUWSNnT8lVuv7b-_MROpwz9axnmR7RAqA-4ynQrDxA08cupHnxtlToxK2cRKlDLqwax6BLanp0pxbMXxiPgUjSUvRmKl2uYJ-zPGBNxC-rgeJlb_Y=",
+        "content": "gAAAAABokR9ejoBPrPMcJYTeLOR3a2fyVMYqbBNzlSBYgIkE-skzgjrGknprQ2XOSVs9sM6RydMDoFQZM6GuCtFJy6cZxPeYdPU_Z5sHHK1bQX7YMJyaFeO9PoQ4wV_FKzhvz8xK18TS",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "647368715742216193",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T21:00:15.607000+00:00",
+        "role": "user",
+        "content": "gAAAAABokR9gmRlwqHPEKI0Tg1BWchAo28Ua6hOdXg20gWIBsRo-loIUcLO5TJa3Hb1Yx4db0s5KQAz7gXPEegJosbxn06N2pA==",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "1392310898311303259",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T21:01:12.067000+00:00",
+        "role": "user",
+        "content": "gAAAAABokR-YXQqE8D_ltjhYo9uV9r86kTqD2RNJzsONUnXL8gv9MYXgJzSYReek3O1z76V-wV_jZ1GCdqiUFxZTaPcla4ksnA4-PduO9mcTRVtvnhSrpGMfrv4GKH4x8DElI1y4c-H1HZI5-LMIQVXiVfD63NZWnndg7NLyHHscp1K4OyJDOVNYV6542tiGklXDCO8ujINf5kvE-nwGa0XBd0932yZJD75g4n5zB7FQmHe08v8P_zn3GeRmKRCDdRgmvjetZXN2sJ-HEaWePzVnmimNdkrINYaw4t6tpb054qAGViqzaYIq2ICrYZzYY6-Czv-rRqwpc9L6gjJdCQhRf84Tqq8B3_6Vy8VfQa55jrMcy7IPon-CVm2KVfUMfrqigVSAfIv9zBdrWzkmsIAyYK1IuAxQGiSUWO2fMj4MbEajhEkcfT9HaZUHNajIDBDEMzSSmzAnejvN36SoK9oHquFs5V3MS0DknR3k4qr41HQmYyeZgTJsigoxPqQP-ybxO_XIPawoyRhIgcm5xbJQHoP7vnABJhQu2jU0c476bk_tXo5yyzc=",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "1392310898311303259",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T21:02:20.560000+00:00",
+        "role": "user",
+        "content": "gAAAAABokR_cGibz98XXFCrex04YYAa9DGx08dOocYilWgf-kwB9s0jXejqXMHhP6kPrzGrjgIvzx6_MurQ-4QsOJoDiWqQXYC3scZhILkamh_0wkRfLFZpnEKVV8xtVt6K0k5Z-X96GWC1nMy7aJeeUDlf2z5PN45mPiHCb41Gz5t8YOg7Tqy4OMbXPc1Z_QSumM4WPIfGscwI4aLKYXz3HOBy47BF6WfXLr_FUGeXfG4eImk5NxCZfGmA0zZMEZQK91LigV5jkAmPGY1IO8GGUnTeSk-un-opN6p3uz4ZvL0EH-wj2cDrz_L0urp3tb7FgXhAfLCAi88hHNakhbKW3xkxTR7VoH7Va9itHyzsPENaxM0vfHq10bOY4EpZvA38WFsm1UDGOMS9YnWvkkdYZJb0abJb39es6oIA6TUz28O35IM1xsXgW8YioZR7WFU2nn525Y2O62GumQIZK3WYunvd1Aqu7CjsvGloEFTl8hqDRevHaukRWipR-XGraTsvG4n-GYsBszA2JTFa5C9S9nGlItRQ7CohQHRu-E3PI-cKujngQkdlQXOM7Fi1ZeJrNHpkEhE2sseAPgAooTaznEOaxdnBtxeodAY6_f7hNLmhXGJX76tIwauHMMJ_BDMZiy5CBl1tf2-mP80bSfM61cv8YEMhEp2MKcObCoDx2EwZJroFappObn9jptoV4yvXfk6_4YXmvihL2pdAeIZWlcvbvBoYtkQlIBSzB_z9E7KOCxGbnI3pDtjiheaJ3iIrt7nUM-ZxH0KB15d8QLF0zT8t4Fdy8cT13cjLJAkxAiMvCpp_CBzDLr9teRFEUTj_hXSYvQZ2C2VPcxRXGWdORfB23tJkwt5satDRVUkFVl1HJ44ut-Yw=",
         "guild_id": "1156692144740892796"
       },
       {
         "user_id": "254254168234131456",
         "channel_id": "1392318624508678154",
         "thread_id": null,
-        "timestamp": "2025-08-04T17:54:56.256000+00:00",
+        "timestamp": "2025-08-04T21:03:30.896000+00:00",
         "role": "user",
-        "content": "gAAAAABokPPwfLa8cXW31TzhIdIRaHs9E4DDMHMcwTT7Y6V6kWMXzuBa55dmzarJqigz6TqXn5Ldo7qamrJ-8iYP98cMlmKlRDupdtd4gvQjfqYGMNKPQAe3_bkgprcg6EvBuS1Wk8capZiHXm-75eAq1rb62vVIyQ==",
+        "content": "gAAAAABokSAi7MdOREFXGnaCRMNnQNop2c6KKW6yJwxYvzGGn-XOTBn2iZDZQQUzpxKtznyVQr4atDB74iZq0A_x11LiXz2O-B0Ia_zcyanrmTHl73v2v4cFk7r3yHlKNxXYp6wvd6tyYfGu35wfhTmznb8BCM4rnzqATSoSvts_z3Pz-JyxLcw=",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "1392310898311303259",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T21:07:31.060000+00:00",
+        "role": "user",
+        "content": "gAAAAABokSETE_hRnxsullrWtmsM50gn6wRoThNSB5AfWcr88GRjg45Jrjh2Vo7l2LtCoZtccbrljiKu2aCV4shqaV2TKSoszD5cKY7zhXqdsPl-Y2lOGI3YZIm-lpjqFHNi5I2wvy__q-7pBt6Wyd56xAdH4AYAGxWFTzSpnr-CCl4p1ZmEEKZXDpny687TU0_myRrTDX7fjK8keIHHjN-gLRqKA8C2l7oecQpEbXhKYw9AOYpBI8V0uQNufZjnxBs99XefjmlqOe5-DJw-eRs1heXiCbSc_vTTZj2ZNeSnfxslL56NTKplfR9JiVCGJuZXh62fmh2M7WWDxGMgpMSNouYnUBJrY8X6W0pkP4KprUJ1ZnNuDnD60QJkxP4BiSPcO-7vjuFkYmtkrBbe0vCBj40kjDTQ__IOF_ymOotFnzdWpjurXSX9niZdJmGVQUrU8kLJbw0Wm8XiJSPUHGn98bgFMw8uXQ7NAsKuBz4Tkkp8F0-N7jiA_zs_fihk8Ch8ShMayAGJ",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "160138932372242432",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T21:10:32.816000+00:00",
+        "role": "user",
+        "content": "gAAAAABokSHIndXLHwP02nClKp6f6cK_5urSASeq3c-0meHrNQT1zgTaUkYa_vwFrsBkVLBFfpW4Cr0sy5j1CprZY2CRq2bAkKFEeqsC3f0oGtzKcB1uUMLCdKs0O1mFoDPKC30xTn2jEkjY_WRuNyzYDJtHuTutfqiVmJjCp3XK4udGwMEdGB8Y_UpeybDWL9p_iEdOAUiRt_1Z6r8coVyjCpO-T5MmMg==",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "160138932372242432",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T21:11:39.252000+00:00",
+        "role": "user",
+        "content": "gAAAAABokSILx0uijBIAG0qTxAEM-z-keIyrurJOMWdmNrVuJdstYBvFjKDdtTG2WuEGofo8XxV1SLuxrPjTcYDheBwiRh_CP-feZrcA7EZOTzTIkK23lss=",
         "guild_id": "1156692144740892796"
       },
       {
         "user_id": "254254168234131456",
         "channel_id": "1392318624508678154",
         "thread_id": null,
-        "timestamp": "2025-08-04T17:56:37.603000+00:00",
+        "timestamp": "2025-08-04T21:13:11.823000+00:00",
         "role": "user",
-        "content": "gAAAAABokPRV6shoWJtD-7Ieeisnfh5q8GkUILht13MzekojaveZn04t23KaJooEQ8njQCAZ_wWD3YSFkQG8J739gIzYJPXc7Q==",
+        "content": "gAAAAABokSJnt9LpTNP3pe_J3B0ioUe72cA5lOYbNJ-HUqEB3KhDULUJHWrabf8WY1gem4eF3VcU8ImM1EzuX2i4Phzv0RZ4fAc8weJL0dLMtrPne5i8PmIDxdU4LE7euryAUXFIkNT89CxBCehXxkeT61vRKuw3mQ==",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "254254168234131456",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T21:13:33.141000+00:00",
+        "role": "user",
+        "content": "gAAAAABokSJ9utsa4MR91DX8qtZOSyF6Q0nTHoFQ7-zp6oWZWE8vSe_hwjkCZFC_1GUkZWLemyWmIm6-kKYK5MkBB4jFtAz80Wnc56O9ekCzkbof7KAbvrQ9fnII0m8W6Fw0s_VKqs1SN3R7FjL7o_9WUMU7EhMPbG2zEfKhiZF9XEvM91dyafI=",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "160138932372242432",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T21:14:20.744000+00:00",
+        "role": "user",
+        "content": "gAAAAABokSKsSECiLC2Cw54JG2XS-BKO5xFUf_pvYh1P5oXHXA9Zq4h2i-y8kXyUSGMWw8TV92AzPQ5I0yArqvIZhnBbARCzrRao08QQwpeN0DqN9YklZF794AdZWNSrdlkHtj7N0BlZzoNc39pctyDaLM2PZuw1NA==",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "1392310898311303259",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T21:15:22.729000+00:00",
+        "role": "user",
+        "content": "gAAAAABokSLqC2SUC4HZ3xJsmyobsneDbxXzZfEwYkayHmw-Uzs6wHEUATZaehi_aZuPqocR_tIAK0he2-mbMwzvO2IJ3gKtjsvPrbT85VSN0WYGLO0rYJdYYSb4ZunbQhdzKDFyluh3i_vms0mVGzD31rovSHNPLwVP6vfjGFpTOeykzdIjw5No1i8UgJG0bSGJJnsX10Bcqd2PVvzu1BPDwQJw24p4hB2ElrpC5pj7TmYxdre_Wz3IO9KPRRNWYQxB1sT-HfA5fh2xPa8xVsb8QHqrQdDVK5dDZjr8l_npUg4UnWwK38fZpV8EZr6Dgcs9eGvdFxjapGHD56hkbqEx5ZOk8rVtQJmpnLGATnhFmvvmqZ6NIX-ZPJ50lFBP8h4s32XBR6BSGCJbKZUOzTWtlA4zPVomli8depe9B74O6GdW4yP8owMMUVOxg-nMf27oMLwD8vsxgR8xwVAJIWfim7Yp_BCPoV2LsPGKaqUbdEzeNwf-od6Z2x9_YMxLgd-D6yoDZ56mopkkVqk1FTwEkqZ2E2-Qo8DquNT9M2LPyeSNzJEKncWkmBo6KfkzrkkxMfzy6J4aK7Gk133NPfZs4pymy_FWbrRwIRZ4bpTT0GVIThUdpBKC4bj9LULF2f8g0_UKzEoXsTVLU-lR7D54ptNmEBdOOuUvNLaU-DDy82FRK0Ci9uWD4Z0JpVLqPgLaajDfYYjhO1bj4Mj342p8xBHButFVFJiB_BZefYgvn7XhFsPMVGVU7F405ADxWCH0A0aRoYzKekKzsmD5iYq1bd99OwCB1f9K2e_4A6otePUFQsKf7ohBqYAbhXSy59yY9iD_rIFAiMadKw3lc_IG8_QNzlI6Qg==",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "160138932372242432",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T21:17:21.622000+00:00",
+        "role": "user",
+        "content": "gAAAAABokSNhZsYdoBIs2w0Lrn1vXZaXnAYnFj4nVlVg0zWqinb4seSm5tndIJOzFZrDiIeyTmdTj7QGxKVTY4YQcyAOYGj5gGyAHvTLfq-pK3ug7QMzbJocRkQI2UEOQFuc1wx4nr6C-3qhV4T6xv13mXSxk4HTTg==",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "1392310898311303259",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T21:18:06.551000+00:00",
+        "role": "user",
+        "content": "gAAAAABokSOOZ9CY8rGAhtkNsedYuifVUuq3DxUJmz-GXkH8tQ-dYHBHO2V7GyuRR-1LtOCxkZ3iq8FFR46zlBKw8qXLjOQakCWq63SxznjTtMQc-rjLRaxKtWrD5PRb-UadB-Sa5voM12fD3ZF8Y2mM9mCuanJFYtdgjtuYWNJKiwZY-xjwgGZxuN-lrx5h8QXy1uJ5hsAnbOAsBke2QIZ_TBWQS2wZLurk7rLhCYXKH5tjR1DJjwPoPZwm2O4z_G3JydS1AFI4YzRB3Ng1ARVBdy1oao5G0DveOZkaAfTr_o4DFDGS6Czgmo_DPOveWU7pLIuWknpR3D5hd5iyhgqr3bPhmLlvv9i_9spX0Q4mN24rZKkQ1tJY4022t85d7DOKSZgRFtcchY-KMD9g017shkmG5h_Lqw7eWJ2ygk43Xtq6ELUSsq5CCUMoFIETiF7xMfkVLY-0czmDl_i8C16GbGDXuHJhkQL7O1IfHARlWdIrcI7JyRxEn949TUFfp_UiFK-P4ceUouj0ESC-PTYP3LztGHs0iyHtZFEc3YwFvCFsncjCdPv2nes3f6ms8ZzrsrYbLdG1-HRNpepvBzpor6qxBn5LTeK7duwRbo0LvUJf0uqcgV259cdv1J8Tmh9vFfbzCb64A1mnW_0A0-Ey9Zg1jRNEYhXnFzRXBbCr-PsJ5yBT_VeTW6fCtxl25RfIPqgvop3KsHUSjXdTT5DrIrzC-9Exi_IsJCMApArzfMxyOhi9_HtcN0UweTuTvMB64IJR0i68",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "171102130776702976",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T21:22:19.100000+00:00",
+        "role": "user",
+        "content": "gAAAAABokSSLPTx33LSVaRF5FXLLMWV3KxjhNxLv_XV8Zwfc54B8RNH86SQJSM0Ulj0UscKA4JUcWEpqInJ9Amdux0syKU10JMv43QJmqIKj0mXq1A3qDd4gXDKxdgPZrfvLttO_hG1w",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "254254168234131456",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T21:22:23.002000+00:00",
+        "role": "user",
+        "content": "gAAAAABokSSPxF89yyoNQhb0QdZeByb62yYkkTnSjivpKpGuRNGokMvIRNgZNdYyWOzBJYW18RmXJgxPSPzfbqIGLppG35OlvnqnsF0_b60jbK77Wn38XOlkgD8YSSN4hIO_u4iYGkalgoDKfh3DXKILqx1uafBi1A1ugnyyPiBRDcGHyKX357I=",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "647368715742216193",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T21:22:23.485000+00:00",
+        "role": "user",
+        "content": "gAAAAABokSSPM0lcic1Z4zlYXUt1cUydUFnWfhgt0sL7y_S3-ymVMvMMQTNJweWCBsYpRbFXTE66hqdiAT8Jpg_0ka4rYZ_dIpxnO2eM-D8SHwJ0FNHK_aznCC6Ys4BLw2rybFWxFZIv",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "647368715742216193",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T21:22:23.832000+00:00",
+        "role": "user",
+        "content": "gAAAAABokSSQFypvl16jrW6zxcJ6PQf64vh4c8118nmEjRIV5sPW2f2HiWagRQa_2o0xwy7hRdmyI9Ym2BVpcroBndvLR-VvfA==",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "1392310898311303259",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T21:23:01.498000+00:00",
+        "role": "user",
+        "content": "gAAAAABokSS1GZ7zQOsv-ZSOIMCaS41wuBRxshzZOBqJlbyRjLIsJoruEcnxK6N8vMmApgpd8OL3xsRZT_vV6biu-B_XXEmmPYs2qZxlQf0MxhviSD7NXDLTuQ-c_9UqffK4YzNw-H2TM1UzfDHXJKXxYs8uYe_jpygblndOYSDhylsJNhdy8P1exV3qeyci7RZchhHUHgmkrbCd7qpcGRxScjuxdXkdOi7PH9sUnsmKnq6Ea11daqoehAmNkyiaAHvKSRCbPcXylEAK8Tj3DBsmPTWf_uTPxqX6L0jdQ4izmZBHrLMBa7_pm4k91UZbbCroUV3mLLAwRDx-_CPbAf49zsbsgE48z3SK-0e7Z6Ls7p1pa8vGfX0fh-eg3NTlVsD0flhtHNlKrmqBx7QX6PJxYV848fgiM2VWdVKDiT790KFxYv7ZvnGfxsz9vm9KfY5jH7qWDELrLwAybWzEPTLCz4qNdo0E-VzSbkG4C_RgiE_DMGVx9XZD74eqM6a6fFWvRHFZrtrbKieDsRBWejDm_d72FW9pmdY5adeo4tCmAYpimz0rjwxMKFoX6bGJkhFUqwjlgv3MGTEim4mkUP2dpNG_1N4XKIDCmeZKe8xJuOSOFpJx0CWqXCtft4h-Sr3Ly9sq-QBecxLPUg-14P9JxrDGovFq8HdGpsG9htubofLCYpVnxPyOYWLFE8_j0LeaTVWjGhoiFX5ysylqVZVjRPuhbFXxpWiDdnBw28EiWQOG5DwGUuo9_lwZQbvYkx1fJ3aA_H4DwunVOPG6Dg2HfDBaMcjc8cS6UjrC642yMwIZVyIAgo4IcnZq8eu7okfSIAoPZLyuYzU96_Z-i7lVIZKFe2abRtogQEgt2QBC0neJ5wfo7O0Igz8FrUjA65XSQWATurlZC-U2R4sjai21I8Q2SSVV0K7KpsuIT2NKFIraeSTOoLuYPtfoWv0tCjbWIAotayYp05myIYgfmAt-xBnI7Zvw9_4KGNT1F5K_cDccMhfCNhEfFWsCSZT47C3wdMlEA_LjcKYmWcfiyw2kyRzk7gC7NlLAgOVdWtgBze4b2-IF-d3PJgC_X9cldyA46xfxmLJMx_MuBveeT0q7OaLL4sBcLWuWb8AKRTYO3Yh3nhK9Vo1dei7i1qX3hVw4uHd1BQ2V6g4idZzYeCcXfpbqcigeZB7-fuXcEAxOTpxLFKaT8ZIYZI7sFCZpriSLjgXzITQmz1Uy9zS5mEngOXkWhKdMguP8PbhoTAxxax2rOs4P8YStwKigtjkmXfQawldXWjehWt8zukzdIKxCZQQjrzf98f0VHo17ctJ6ecfXIBD4rY4=",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "1392310898311303259",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T21:23:02.155000+00:00",
+        "role": "user",
+        "content": "gAAAAABokSS2oQ0_qfn3bM0BcP_5qnmEMU2LuffHvS7TRdhmCw23PXyXCpysSQ-xH92ToqhPVHfoHBGuDDGGButhbl3DEaMWboIM3xH-ff_TP0EjBf-t9X7XkUtBMlQs3qVzpdmLDbbCOpSVoOMM2RjOoLUbJ2Hz50vT88iyzKSupkgiTWSBTkADvscSu3FDJ1k43xK561vuD3Gj4CVGuvyWSeiK5XYucGvb4fxm86g1YVBMiySToqCO4zbSAD5QFg9UsM6_DuAeMIQHoYy49FLQiVUstcTz2epoMr5yDQ08asrGwimqHjLSAj84pHRxHO-M2ArtKoWQg-K93CYYpCATDVj8KjcIM55gy2MNQUxy68XWNjGCoxzbCWkIagWg0FE4rbl-C08xfEL8i2yM2ZR9CiWxwM4xYZjPNVpTiTJb5r1q1eWR2gtoEydeXUxTlMZmOc24_NKD5AEp5F1zvCZB6_mV42yHXAKskA9dmx2JvWBSNxqfcxmUH0nIdqg7Uq5RlB1tFuPawlbSy6g3NjXF3qlH4CwDQr4Q6GB0jVqT6xHhIFtiGlQblG4PvuR_viOeIHmDQIOoTk1EVP6Xw5DphCNhS6PZLFPDBJZXccCOUJUkBV7ORPcz2cx1AzEft_bAxUjm6NZGQ_P24St9Qj-_TH-U9Ny60uQ0emCTzCaWLK1Pn0JpUjoE8OtL6KXblfnbYrVDTPqLb55_JonoqK4Ef1VnOOR8zg==",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "171102130776702976",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T21:23:21.674000+00:00",
+        "role": "user",
+        "content": "gAAAAABokSTJyDHLzSncEPq1devQ0KJSy03uxEhFm6nEtsd5prbNb8G6eC243db4256rtLhjqAzSbqrgNcru87JxSyv7Nd-UsIxBZE7kyzL8XfjYdLTKwz6AlUO2DIl4al66JSkkrI0RKy4AtI0nZBDRqLk5A_faPQ==",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "254254168234131456",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T21:36:48.650000+00:00",
+        "role": "user",
+        "content": "gAAAAABokSfws_wPcvpO24_Z9YhWz36cZSOlvKPfUX-ZXNb4-S6YxV7oE4G936LZEMYzWUO9wOZIg5-ZFE_TJYYeBGam71gfyg==",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "171102130776702976",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T21:41:53.327000+00:00",
+        "role": "user",
+        "content": "gAAAAABokSkhslkzF0JEtUdTeIUXW2MM6unqE8WFQgrwfOaGhDTZyLq2PsUX6cY-n3Ijr1q5wBCoOR8_XFmQ5afYHbEKgvkBnVF9NHmYeHXSE4OoY0OPiXXSCeQyy48RaGYLW0OE9OcwUg4nnCxhfUTMZIXXiGMOcQ==",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "171102130776702976",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T21:42:09.623000+00:00",
+        "role": "user",
+        "content": "gAAAAABokSkxQONj6_otZv2HLCrVKN9F4UAa2_7sMNZobIPmTPJdM1LbAsnZnkrWHORNipLQ4d5f5BRpe5aP9lukH7HFloF9uw==",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "171102130776702976",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T21:42:22.993000+00:00",
+        "role": "user",
+        "content": "gAAAAABokSk_0Yj2pMJQl4a4Up968f_gDB8yLC_0maYES1COyXrYnfujv2C64BPGUfU9DWWX3DiXthUMPc1Q8TuIis2mKo0lA6zAIz4SPptOXmxIW8MrpOp5qqM8XvSSO2fVik9kZ9kXNTgQcKHeILzNVafxoAKqVQ==",
         "guild_id": "1156692144740892796"
       },
       {
         "user_id": "1393747399221973077",
         "channel_id": "1392318624508678154",
         "thread_id": null,
-        "timestamp": "2025-08-04T17:56:37.740000+00:00",
-        "role": "user",
-        "content": "gAAAAABokPRV6Sfnr-kUKmNyFck4zzalPpRB-GDjW8750vcOHdqhaqxcqQ6MzJuQfK6JfJ_2okLLy6yA8NHlTw8-Lo5vP-0bsA==",
+        "timestamp": "2025-08-04T21:42:33.807000+00:00",
+        "role": "bot",
+        "content": "gAAAAABokSlK7g2X3OtWDxTku4EGpRJCu6ujNzcLLQuhJwNiunlMzX55hvj7i2jhxUsH_XX0fCqVVlN-gIpKNRYn5MJmjn74lIHObrb6ZkZOLG-QEr6a5I1E9OTsBbC11psmeYOpoqFG2zqsaFgPl29EU2Xe9YaGz7VE_VjQHL51J-jgJxyamYyOWYMFLtAUlFsIApizJ874LlIIg8nfcx8389KBIhZAosyfNJ5nsP9GIrW-IDlKxMqgeSbDRpX1bZ2vLLbiEk55lIz64j3L1Mq2vjW-SR2JvxYVXP1Eo2GjcArf-3q1-Tv8zoCamAVaHKqpf0-mFkSsB231zGyoOtjh_QFc52FmeLjagln56hXiLr5QwSxwxEA=",
         "guild_id": "1156692144740892796"
       },
       {
-        "user_id": "254254168234131456",
+        "user_id": "171102130776702976",
         "channel_id": "1392318624508678154",
         "thread_id": null,
-        "timestamp": "2025-08-04T17:58:56.410000+00:00",
+        "timestamp": "2025-08-04T21:43:11.691000+00:00",
         "role": "user",
-        "content": "gAAAAABokPTgQGw1akxSSwokatTvcCGqQIbj3lvFyyygyryTxwT70aaU2b3gSf4EbwX0pYxdjrAinmKQEa21EQIN7sz54OZ6Ew==",
+        "content": "gAAAAABokSlvvDPzoSXxqzpCdtKQM3mgqbnSJ4Sb4SxnJtVdN1MYoqFzVgRLcjE6IHvIl6V1V__ztkdy98VhADqDUQWKzHJvL8nZSmlFmOGRIhLU_KFzaew=",
         "guild_id": "1156692144740892796"
       },
       {
-        "user_id": "1393747399221973077",
+        "user_id": "171102130776702976",
         "channel_id": "1392318624508678154",
         "thread_id": null,
-        "timestamp": "2025-08-04T17:58:57.055000+00:00",
+        "timestamp": "2025-08-04T21:43:20.134000+00:00",
         "role": "user",
-        "content": "gAAAAABokPThwf3PYJGpBgBXVZdyrryZnczHreqOjlmROVrhJjA4D8bRwlppAM2YKB-z60PreMIqHxDi2jsMvSsPj2ub2BMuBw==",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "254254168234131456",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T17:59:08.814000+00:00",
-        "role": "user",
-        "content": "gAAAAABokPTs_kpjBhTFlWHd0G8WObXAR3FkAN6uzDyvv30sVscCQhxKoFfC8-7NM_1xgUWC6hbxW3DdEpVGkVB5XOpDgA7rrQ==",
+        "content": "gAAAAABokSl4sJWq7qwSyMfmemqNvCkB4DEFcqZM26SDuwr6SDIPsnCDGcY4OcuwARyRLf4WDhGxaxJsjrbw5uy8oR395oL3UCNUCvRrhlJ8WgfzqAMx52qXPrTkBCTYhfb8VzByHf0n",
         "guild_id": "1156692144740892796"
       },
       {
         "user_id": "1393747399221973077",
         "channel_id": "1392318624508678154",
         "thread_id": null,
-        "timestamp": "2025-08-04T17:59:09.067000+00:00",
+        "timestamp": "2025-08-04T21:43:26.602000+00:00",
+        "role": "bot",
+        "content": "gAAAAABokSl-CRNWCNzfbN9Gk8J1RkpOtqjUkheQjHHc1f86VAvTWI8i5HxCzj_M40mu3XB_dKOXYX2B9YvZTeRl1JG8QR_TZzE3j1DqhXBayNlh2QDPORHMRhBDozsB16wKUiqE3FEgNeBVOT7Wn8lkdi4hkaKYEC48lagVEhDd4muRbC8lSUq9LJ70cuqAsTx-5_8tlICvNaHCkHFhQrmVm7dUQS34f74-XH-UsO1Wl53Dei9in7zKr0wHPnL_t_VHpwV-dGr0XVWsTQEskU5nYV1IdazpindvTKZnBCWR8ADwNWC23sc_U0D3XF9Td3f2_6CuNrMsI3syw1gzUwfyBQ_7VMCwvAh8_9Bv6S0BEcZUmIamsaJbfUD_EFGqNpFEI-Z14EUEbsx_-UPu5Osv_1utJwHx6-iVl2tQV7sd33dp3B1jkxQ=",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "171102130776702976",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T21:43:43.794000+00:00",
         "role": "user",
-        "content": "gAAAAABokPTtmLGJiEUdd3849Lt1e0wytd56DvVp6qaKicvv96zTVqVegTLt138IkrzSE35KN9hxDzsoh4kU1SRVO5rowAihgQ==",
+        "content": "gAAAAABokSmPOKC-9TX_qbZT0x2H8S38rJo6OX0mA8EcdNrw4AarCnScDG0LLtOQ7oVjDN6SB7vDiJrTWYaela1zzWrE5oP37w==",
         "guild_id": "1156692144740892796"
       },
       {
         "user_id": "254254168234131456",
         "channel_id": "1392318624508678154",
         "thread_id": null,
-        "timestamp": "2025-08-04T17:59:15.798000+00:00",
+        "timestamp": "2025-08-04T21:55:59.736000+00:00",
         "role": "user",
-        "content": "gAAAAABokPTz_FrN4MeHTcLCavLyYiserHG7SdzZg2d8ieQuB5ave-X8kDo6JwXaWvVeFfjQ275PrJrjSWCtXWNeOJy6a39Fng==",
+        "content": "gAAAAABokSxvC3KY1SpNCw3Vqstom2ufkJHWtFBXEDzUsAa6vfdYaPIdbVhUK5QmHkl0SyScif1gG8trK-cw_Y5mgY-dC7s9yg==",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "254254168234131456",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T21:57:36.355000+00:00",
+        "role": "user",
+        "content": "gAAAAABokS63XmdA5ejujskzMdLBvJ0cHfe3CPw5TRa7db1yD3hhB4GUVuKpDs0sD2R4k8UrgTT48xvB0L_L3hBe8B8GlSFia-M5m7R6KrGLMeuO_lPWHRYVaf7xz6XBVOLBykr_RuiOLF1y6BmezXbH8chEEtPt2w==",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "254254168234131456",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T22:06:52.800000+00:00",
+        "role": "user",
+        "content": "gAAAAABokS79RXk_5yiEdirjpzsTZguPDXfBhv3pUWRYQryPcNmZ4RnvS_AxcOVNDqlX2WOGToB8QH9LohTxsDnTviK5OulXT1Vi5BRqhcscNGS6Fn1HX5OgwxYB15l934yF42oT0jFaNVs59TB8ELpCwvGpf7f0TQ==",
         "guild_id": "1156692144740892796"
       },
       {
         "user_id": "1393747399221973077",
         "channel_id": "1392318624508678154",
         "thread_id": null,
-        "timestamp": "2025-08-04T17:59:16.052000+00:00",
-        "role": "user",
-        "content": "gAAAAABokPT0JmlEJDA7zF8oWn4zaWOYHaESJxw5Y_LYK7ScUdorO0wVIV2cLeNg9WSw-gOoHv3POl7Q_tklOSF2y2k_8u_0CQ==",
+        "timestamp": "2025-08-04T22:07:07.736000+00:00",
+        "role": "bot",
+        "content": "gAAAAABokS8LoVdTh-1nzn1taEuDcbL0IO8Xij3SpEObqeOCnzc9Js5cxBjUMB5KXrJdYc1UG-MfxdhdtuF_z4cYE9_T_sTc6_tfuJB0g-jRIySjCbrrbjcBI29xl3nOrGdJV7POHp1g-ri-6EflYqus4WxNQnywJqe7bFTRPNQbjdhbGRQMDsXeYpsxH7wiSBY80qNLtUeSnCpD42-h8-tLrCMazeF_BSDuSYZRqTxPgBD32SQOELuW5KKnMwhjj9VVAbaYgtbEo7LRhZ-xUkcTOYbWGRN8EhDckgzAaNyscvVC6qnaG7bobeTRvZY2Yp08DINDgWzROGzK5OpSGMvH2Z-biE7_EOW2owQU6wL8BLW0O4Uqk1HyedhnEVX2mtfUI8AqmHX0ZS1UdbSaceYWlnZoTjGeJPCnO8Dh2Ekr96zYqNnLZYhC1Qq4y-ihBmfmatNRgrRwMlxhqIzE76q96sMo0A4w8z0Qc0NnsPKP-aVG3_RGBj_QzQjzEwOcdbndsKZxwttjMu621trz_7oPQrDZQCWLXn7axBNnf449MGLjIw3ciZatuZkkI3ch_O8VhzhGBGsQh6DJ7HXfzfH4_hvCQHTZHLAtHguaAKx8w8H-N-Cdualf4QjUT5x3rFJLAmKm8_Saw0tybcAsEs67gPxJNIeq91p9gVbKEuxtK6HykdExhqcKx-4VJMuG1QEEPwOFpwnJb6VVarlW5a3233PVdcGWMtU7BcsqA2rIe7owwOJJU-5m2j1lnMqzddLi43_qgQvog9y3z8KV-uvjxXUFXwBUs8X9nkbz7tUW4BID-bhCZOlnMXBSQgobU_urYwu0payo",
         "guild_id": "1156692144740892796"
       },
       {
         "user_id": "254254168234131456",
         "channel_id": "1392318624508678154",
         "thread_id": null,
-        "timestamp": "2025-08-04T18:00:24.058000+00:00",
+        "timestamp": "2025-08-04T22:08:23.191000+00:00",
         "role": "user",
-        "content": "gAAAAABokPU4tG3GkQbYlUxTp4ZsHqToYw_Q2QJak5fVFRBPI-yR1oEx-KviyWxGwek7w7_cgQhl2Q5XbWXoqj_YDX2MufiPEA==",
+        "content": "gAAAAABokS9XOuLFD4g-MbT3__DDm0lE6qepScENBjE5WKjMbr7n16sjsSwJpuEoP5Yh8l09vgubbOJeyDEoqvUldJZvVL-zhw==",
         "guild_id": "1156692144740892796"
       },
       {
         "user_id": "254254168234131456",
         "channel_id": "1392318624508678154",
         "thread_id": null,
-        "timestamp": "2025-08-04T18:08:24.871000+00:00",
+        "timestamp": "2025-08-04T22:14:52.178000+00:00",
         "role": "user",
-        "content": "gAAAAABokPcYlzFAaMHUv-E-nZ63Bjw6oksdZ9zeLAx5Sj8AtzUQgLcpGQ9xE7Bld3RmRpCnfNkKMNff3GZ-XJWyWYPn620HBA==",
+        "content": "gAAAAABokTDc6VSyhdBobWn820R2pBWJtbw733lqvjGFLFVV95vGuKlNaykZ0EsoooeBnDjHsZuZbEPicpuZKTpNCGYhkA3c5aXos3tza8GTJQtG0wp4HyO1Gt2KBsu-WVy9JjMocc09zpYbcZMZ5-OXeXr_T6ANf2PfsyvyCB2efzZPjQcQ8Y3KutpZEKoxMdLHbLZupbbP",
         "guild_id": "1156692144740892796"
       },
       {
         "user_id": "1393747399221973077",
         "channel_id": "1392318624508678154",
         "thread_id": null,
-        "timestamp": "2025-08-04T18:08:25.140000+00:00",
-        "role": "user",
-        "content": "gAAAAABokPcZO2qzXn2_06BcgIwfvAC6lJmFdkEHbjaCkfRg2qSBg3zhCmaT5XqJS78qjYueK60i7KhyAf-f7gHjfSX8XORySA==",
+        "timestamp": "2025-08-04T22:16:27.139000+00:00",
+        "role": "bot",
+        "content": "gAAAAABokTE7VVf3jK_3pp6ilrBXeUCHU_zh2fdf1NBxerz5KK3Ll8J8StHLc9T66csfNl3TOi8AWOcl1NCiGpBgXDjJQJJHIO0qPRMX2-tPJulk14fQQVzXnWa9dy0ivfHu55cyJuj8AKIdcVg9xFn4Z1pxAB4LsIzrHf4sek0hmn1U2kCUi-N-vluICF8MVMYy7l87g-r7KlBFrPvd2tSR_Q1vMW9jMDyigjpY6oyCpSrico92ieq378DakCWakcArdWlHfW-WsXJKjUtTBt9tOTcFleD7uzAe7_fC1aLzIXyLqWBTFWDgMctJzpfgPbyT4-wXJ3sOroqE2v3DYPNn5wtFRxf962xLdMdgn2rVrtFSuMyY0wZ0sMy8c4DsL0LtEu_faJ72qZp7QJWnkaaPfQeP2KZYBf_eBxfgIVlfpN3wUxGyXC_cY7Zo5mP14jmdE6wHhNTXFNbNhk_g0yM5TkPzZXAURtIRg2rpAE1udZFU6crDW7uFuU_L0S-OIln87tnUxU2cjb8CIq86G8Dr_5VMSsMYAogoGj57V3EOGlHgyKEf3psxp3V07CX8uCs3EZwUg-07EVpWmWIxw_Pv5KujsL5QDkpdrjP7Z7RzD5__B-TZjuTp8NuvtXc5LJjvcunAzHCdnOeTW-rRbGpZXmVZ8u7efm7xiRzxjrxvsZAzHN4ydVRHQjKjuM-wU85CIdhXVyQ-_-g8feA0llbKbCk1YZps5aTdECpIRA1iMNohCnPWYLBiLkMeWWVNCGwL2aGGlGgCFAlLxRBwQMNE0mpBoBU5lMZS1UjVkZoBLjyhMjhutQkee4zz6ObOfbR8vIMapoLddCryKfedJ4SvCQJWaty50YYIlk8eavHil6NLM6Mm765KyBYQ4jeyABFDUS7dMfd_",
         "guild_id": "1156692144740892796"
       },
       {
         "user_id": "254254168234131456",
         "channel_id": "1392318624508678154",
         "thread_id": null,
-        "timestamp": "2025-08-04T18:08:44.551000+00:00",
+        "timestamp": "2025-08-04T22:22:24.191000+00:00",
         "role": "user",
-        "content": "gAAAAABokPcsEJtXF9R4UscrshXl77SEikckGwDg3nPYsIu4tCCjlj0iO8xtjSouqhanddmBsKANXHT92VknHJI-AIVyJ9WSEg==",
+        "content": "gAAAAABokTKgGfV3WSnrHVc1gI4YVUjbizjf3vR5F7jHWVDRQq-d-OgEIt9aFJn_tOm1EkI6oTGF-bOCvhYQTwoW7uSgXuJpSOw93b10pnG1ole3_3LiF3DWM3hkW09eOHC7CQsjrqzFEOwiIg18DgyBZDuaJXVqM0qPnbWNgVt5XmyQM5Tk3iwyLXFfVeurUk3lm7r2Sj3QF7BPG4Re6Oo-h-cAnkT0u_-zuk-CQL1To-wGjr0nKAU=",
         "guild_id": "1156692144740892796"
       },
       {
         "user_id": "1393747399221973077",
         "channel_id": "1392318624508678154",
         "thread_id": null,
-        "timestamp": "2025-08-04T18:08:44.784000+00:00",
-        "role": "user",
-        "content": "gAAAAABokPcsiQJlwwRf9GMyU4QAXSzNijyYWN6uJldLNsTvxF7WHuq-a5FnYnRnTQsdTLzIsHwpZvKKE5Jyi-sp6XAM-_SBHg==",
+        "timestamp": "2025-08-04T22:23:23.425000+00:00",
+        "role": "bot",
+        "content": "gAAAAABokTLbvraqZFK3kn-HvcSgHpFFiakFZZwIxnXd8YJXaPQMKahmC4Vb-ist6W__ZeRX8KTkxwvjt7g_yl0DBBtiQ0LDokO21rv2-G31c8JNLwKGhVcJQ4nkxFuMoOuXeQ7xlv6I6JljVIFLOYi4dwl3A1r-DhLq9tFUIWtYlXc7j52Z6P0wc7r-mBVSudjNZR77TSBaA_sBJY1DcnfmnEpXGfkJ1WjSiF8lQGpqxWgOYQnoLgu2sc3jrLQbsjg0pZoKo21AOcNLg342DQOoZgJcrQ0VCw-ROTn5XvrldS1Eayu98fUWj1fFGJbYAh16tf_JC5CfsY6vu4TLmMjGqJeDv_-K4kXGFD1AbWg0on8guv4l2D0y5UQjyDVLA0xXLK1eLmXuTgyBN3wL7ew6FVb3i9nYXbKvG0i-AUYleQfCFsF69bMjmFAzn79FvgHu4MWhkR1Q1xKzjnrlNOHCV34shjj-7rgTBsFRxe-uQlt3CLIYZMHyCvjZ1qxO8xhI88Hr3FjRlaqgFWzijg2eP3QQPL7cA_tqY5QXHzCPjRsvjlCUxIs18bBukMkYDf8DAb2qpxa6_b_Puzj6KNX-JJfj4ermoJnmaoTf55asbxMRYPDL8l5vfYSqDic9HnqYx7ha7GNVArwqYtRhrjNsiYG4xTDhBBx0qpmsl4YmNXlrzUyRTPgsMkt3pM7qt9VYZ6XeqFMek0AXTZIPYV2IBOuWVIhp0ZscZ6pcuo5zh9E7swIsZmc=",
         "guild_id": "1156692144740892796"
       },
       {
         "user_id": "254254168234131456",
         "channel_id": "1392318624508678154",
         "thread_id": null,
-        "timestamp": "2025-08-04T18:20:17.031000+00:00",
+        "timestamp": "2025-08-04T22:23:05.601000+00:00",
         "role": "user",
-        "content": "gAAAAABokPnhlRkMseE9VsWFWMYcrz4nJhQxM1g_V1_27U_74El90BVFWzSaLx9mi3uhaFSsDWf_A2E0M-4aZw4rQ6r1FaLiXQ==",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "1393747399221973077",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T18:20:17.261000+00:00",
-        "role": "user",
-        "content": "gAAAAABokPnhmQtXTSkzgFZLGIPdv4GpQ9U-2xgtIeEY7O0x9tyv_TQmUNWjzP2QWb7XX4Eb3RypVefV8VjtMQP62vlWpy3dpg==",
+        "content": "gAAAAABokTLb3gNMt0LwgNZJuFmP7IwqcNjytogie6q1rcTo3141Prpukat6pIU5Yl5ZISa2gPW0THttZyZYr-wiwOPpcymfemmvFM1iLP-WKuwb9Jm9hoZkCuIBfXtGFUBQDxGaQVbGg0TV-fGZW7iKb6Gu8EkQ9mOgeeT_65DfAkxZ39RuGrE=",
         "guild_id": "1156692144740892796"
       },
       {
         "user_id": "254254168234131456",
         "channel_id": "1392318624508678154",
         "thread_id": null,
-        "timestamp": "2025-08-04T18:22:40.886000+00:00",
+        "timestamp": "2025-08-04T22:24:06.581000+00:00",
         "role": "user",
-        "content": "gAAAAABokPpxmvfww3KL6NIcu0fTAwgyzVDQkHgfxviEfrWHR57dZS1berlkGrsv_rhNq0M0CcyAdbXAuoBwgbWXp2GEqs5wqg==",
-        "guild_id": "1156692144740892796"
-      },
-      {
-        "user_id": "1393747399221973077",
-        "channel_id": "1392318624508678154",
-        "thread_id": null,
-        "timestamp": "2025-08-04T18:22:41.068000+00:00",
-        "role": "user",
-        "content": "gAAAAABokPpxwmTFtYUSYMCWoj1QKK1drqE0IguFz1wPVlsPgXUic2XhM9ADSOH6HP0p1VubLwwq5msCWy2sAd6N-X08cyFZtA==",
+        "content": "gAAAAABokTMGYX4HBdamSBomyLHiNl5WbfmUkAlgmRltdwdJ_AdOxLyh4Y9Wu5Xr6hmBHGOj34UR5tK8GjhjMG28aJcP-dZ-HQ==",
         "guild_id": "1156692144740892796"
       },
       {
         "user_id": "254254168234131456",
         "channel_id": "1392318624508678154",
         "thread_id": null,
-        "timestamp": "2025-08-04T18:25:00.728000+00:00",
+        "timestamp": "2025-08-04T22:24:14.158000+00:00",
         "role": "user",
-        "content": "gAAAAABokPr8oxsTCK98TgqCKHIf6J3bKUWdSaO8J6qinEcQ6V1mmA9m68LRfQqMBPdwGZuOhVJmA5W9smr1m3crwCGSYKx3NQ==",
+        "content": "gAAAAABokTMOV_gt_QrjSe9W4EpGgH3MsU7Izc1fwfUNUnGPnaXl7jCg3-R3CjseyFMez3gmqVfF1TFZymlvnah0_QKssl-46g==",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "254254168234131456",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T22:31:57.352000+00:00",
+        "role": "user",
+        "content": "gAAAAABokTTdOzC5ijklMCfJuZSLD3CkL24XTwbOFD3z2MeX7qISnWs7hW2p1G2xQpTAVY4HES3nLYHtsNzzWBMylr8JPrjQ_Q==",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "254254168234131456",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T22:43:32.544000+00:00",
+        "role": "user",
+        "content": "gAAAAABokTeUsLJCa2S01ae9rXoKSfA-W3FQXMlgBEG7rn6r_wUUYT85oqWWuDrGTSN3zQZWwbQ72Tac9CGdicXOWZJXmM5ZDQ==",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "254254168234131456",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T22:43:44.735000+00:00",
+        "role": "user",
+        "content": "gAAAAABokTegmz1noelYtG3kCTNb_ZxTW8M6ZBrO6QDZJ6nTH4gj4TH_s9bW5Q8j7QD7TAFC2GoZFx6pdUNuPQofnR-CT0EZQA==",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "254254168234131456",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T22:44:26.637000+00:00",
+        "role": "user",
+        "content": "gAAAAABokTfKiY8ubY02kI4WPYf9AsGsnvfvcBtiQMkisE7s4lKkrg7TtP4IrW9PdwuDNAeUa7qc4PQ7pvalxtjyDSunJpDMiw==",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "254254168234131456",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T22:45:46.489000+00:00",
+        "role": "user",
+        "content": "gAAAAABokTgairDHMhcki1DcUSe0NAKgfffwfZWSm6-V-VX5R5eCwfg8d6HhclrqfHz1JLTDLgjoL-QzqvrPPINFitN0DMN7sA==",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "161959731450085378",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T22:54:27.172000+00:00",
+        "role": "user",
+        "content": "gAAAAABokToj1i7q8wgyuXJIk_vWuxMPC7HVAChun2nUJOqgBlEZnsaZ5mlYnsw4PGMQX77byomlZYhaoE-zp9wyzhi-fN-wRiLJ2EBi6Kz_FKTsYCslq71YzJVbF3av0gbkFin6Xgq1",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "1392310898311303259",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T22:54:33.814000+00:00",
+        "role": "user",
+        "content": "gAAAAABokTopSVO0o4IW5_VB4TK43nk9fAyCEyyBf34Jlr3EROBpSC87Pz_sQtBvT_Uj89PesyPldcpK2WeROF9IvBpRcOfDewLoouM1MyGab4ZH97f4pRXOLj1hIWxBRzAwi4q9w7Jwvk5Lgb6KL2uv4OCkqZi3TUn0-x-ISYWi7C_hIlf5pYTa8n4_aqdZ3526Gd5eNPGwkzLWGwvRWbV6OzspxZuCjZkN5dkRLbxkiAmmA-jYpWyfjPY73QkOlwV0YrFUdr8WIPRNwL994jd__iGlH6zK0OBylIuJzEZNBRtQRvwdZcwaS463AE24k4EfnjKLC7WB4wLNqpT1vVSQ6cZp__fi69ZYTkzJTRWMu7aJ90izGByVUBBz8v2FOh3LFx9dceLKrBKnBiC46KyoNz3VlqizRyTbYr1FTIwvW2PfHOIBmSUoUBxsh7btfqaVH4tko2VgXoetn2eYYkBmJDlsgZRhifqLhShnGAfFKJKtnIbRJXoAxZK56jUwxNmx-wBq5S4gVKq4SxNU0U3wfdBhg1-QUZx0tq2b3YHmZPKsX-P68iE=",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "254254168234131456",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T22:54:35.586000+00:00",
+        "role": "user",
+        "content": "gAAAAABokTory9xvnxDzwH4eATJM2g5zSSSSR8RbyT2Slul6laFNjxRqkyUZTwuSoKavaF57745JxApQZ_wwCiOUUBx0r9FsGqJhDoiBH_60z6dsfLarmRzJIJ8OFe1-qYMI3u2dmmGn",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "254254168234131456",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T23:01:27.484000+00:00",
+        "role": "user",
+        "content": "gAAAAABokTvH608n4TkyUrKyTdyFm8k5uDf5jYvRn4lQWTfmZjtwYds4-7scimrZanLVyYYYz5_RV7ckxFQgY16PJ9KpC5qwLA==",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "254254168234131456",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T23:01:51.185000+00:00",
+        "role": "user",
+        "content": "gAAAAABokTvfECbv5ziJdVo6xiadzh1mNOISWkw425CSsuto_HcuQsfHAF5rNoVDx8R_Wi7dt8Ue-yvxKDQWcT0oObXyNQTJQQ==",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "254254168234131456",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T23:01:57.048000+00:00",
+        "role": "user",
+        "content": "gAAAAABokTvlOS6sksAprezTAXfK1w_eYuq2-CC0DYPDj0CmQjnvFQhFkjJp3hARVx7kMwcCGy1lMD-wLuz1pntr6QwZWudAvg==",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "254254168234131456",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T23:02:33.499000+00:00",
+        "role": "user",
+        "content": "gAAAAABokTwJpERZa3QmZ3iE3HWjG3H4bzv_czbCaCXutWvwfsoD2PWE6YcbCDXrIqfvO8JWlupiNZI7pvrqPn8YS-aHxxUiibYK68wnbDuTaWybwK2kBuDIayKNlu2lU3jh0-_J0Ay2YIxs8MsWPuht77bjKVn-s8x9ECs7uYVpMwySdcVfEac=",
         "guild_id": "1156692144740892796"
       },
       {
         "user_id": "1393747399221973077",
         "channel_id": "1392318624508678154",
         "thread_id": null,
-        "timestamp": "2025-08-04T18:25:00.987000+00:00",
+        "timestamp": "2025-08-04T23:02:39.225000+00:00",
+        "role": "bot",
+        "content": "gAAAAABokTwPymEQHQCq5mXdGDqoc1LEzTIDU1cWTmWZ-eFaGRw7nMzLO-Q9Q43VMrwyUIbIx7oZ98tIQOZzU4tAtwvEcgV4Y0lPBVgffn-kUWLIAKr7Y2kg-o2JX0AjROEftEcNkUSb0ujlRwUGckucb0rtM4lxfxX5KNhxAUcGIgRODP575PJgilSi5KT3rhbxfJVskpu6wqCYHhgrKh64jVtZRIW0R8ldv5mrV2-0YHQo0YJSD52xXwnRrehufz0tagJePcDvoIOCz5TpUZ_L8lOQRIDczh3NVNn2GlU8ZTBprrUcsEXw1HPxQoQ4N5mZOOE26mVi4rwO74AHiRKfLRgVFN1oU9EqQZNBLceMhaK2IiBvLwk=",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "254254168234131456",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T23:02:52.169000+00:00",
         "role": "user",
-        "content": "gAAAAABokPr9sCp7JmdE81r1mtTHYZgH4e9y08iog-mAC3KMfRjf1UNnqfR8MTB0BPk_vRFn2cvNEnFKni3EIxDekne_j877Zg==",
+        "content": "gAAAAABokTwcnxX5B5W6s7N5R22a88VkKOHuvL8wxOd0RL0gxeIQ369Und1csrDRMXx6aX-Sk-4LQsajuw6jBqNTAEokuSSvfA==",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "1393747399221973077",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T23:02:56.206000+00:00",
+        "role": "bot",
+        "content": "gAAAAABokTwg1AjnCFwyd2YeuvM90hbrzmAyZO7N1HczvaeayuVUdy5NiIRQcnnVmu0qQPdnSDsrlyQCCaKV2vsYmtoXV3i8CyMZk1tw2VS0RElRzdjjvY_sFLE8xNI0FluGmUH-jehK-14Zjg4qI0DrSVv3TTcpA2h3T3uX37jRxijsTJ7sbV1YLw6Tnwmsst0eW3c-e2ud",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "254254168234131456",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T23:03:24.265000+00:00",
+        "role": "user",
+        "content": "gAAAAABokTw8vrkBSephFrnDGmoAmzNuBD-bngkUVYa8pteVJo1ir8o51ZcVFh_OJTkwNzVaLIur7RJXyO1WHPxS20ELO3AMIDeI3DclD_u0aeBdBzmhANC_V01vIWHsxbyKQSajmoT4",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "1393747399221973077",
+        "channel_id": "1392318624508678154",
+        "thread_id": null,
+        "timestamp": "2025-08-04T23:03:29.632000+00:00",
+        "role": "bot",
+        "content": "gAAAAABokTxC1piCMyPal3y3dhZiiWVAzHf5Y7DB6bVoiRhSxlrkv8whGGgrjWTdvt_WRH8Q_6fkl3Cq8n_3Q7_wEgLQjM59TJ_JxiaMtEIoo-HdOw7Nc1rmJxbuiHN6IViMnQAiIIJLfXvRNSk1P7BWabF9Jlrt9phu8ziE-3bhyPDXrcC8YJf8XeRKOFPzY57gFSiQcPLheO1NNXUqX7KxtreOvGowm36-Hp764ddxNeELawA2n0mBjXuC3rdo-vgTAQfPjdgd50vy1rqPR298KZ2QXiQ-c8NWNm-jv5fTyUTbHqiJpIl8-IxBRhXrcX3LhqTDaLD8bDoD0bTSeuUtvMKp4yAWTVqa2oTFA_XV04IPd2yNilHALXS4nvFDVKNCKlhArtFXZswTwk18znDNjTnPgAcKJg==",
         "guild_id": "1156692144740892796"
       }
     ],
@@ -1019,12 +1019,165 @@
         "role": "user",
         "content": "gAAAAABokPi6pxlyJM--Xrs04vcPGi_-me9mcTs68JC0WzxHvkpc2VBIpFduNy2MgRtno-3PRS2D7AuVzv5xpI7BLtDtdHRCEzfxG4NLYFrm86MZ0ULa3L87cnUgFvnMFHc1FbLQCVMe",
         "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "254254168234131456",
+        "channel_id": "1156782003371388998",
+        "thread_id": null,
+        "timestamp": "2025-08-04T18:45:01.099000+00:00",
+        "role": "user",
+        "content": "gAAAAABokP-tOdDOT8JZbyKzscBQ3LK05AoPbXV0Z2Q41pfEjKsrgbdAk0G9zjylYP4R5mqc357TWltirxHbuPHlesStmmFa3fSg-RInB0b1_mYRwgZmzBFzkj-hcD7BouO_Ta6QP8Kh8Jag8-kOl9t3gFSYHSZeRA==",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "254254168234131456",
+        "channel_id": "1156782003371388998",
+        "thread_id": null,
+        "timestamp": "2025-08-04T18:45:05.741000+00:00",
+        "role": "user",
+        "content": "gAAAAABokP-xmxIQ0qrgeoO1-r99LyUJED_IMARq8j9X_CR7Lle04Vkc-j5jBh9urYR8u0pKltlNtykJJwtlCdxnfFJe77R0aQ==",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "254254168234131456",
+        "channel_id": "1156782003371388998",
+        "thread_id": null,
+        "timestamp": "2025-08-04T19:42:36.017000+00:00",
+        "role": "user",
+        "content": "gAAAAABokQ0sroLS_HcOkkCs0MscA4wj3wzFlLpxryWCzDxdAMdUCXx4qAC9Ec0LMJJ9QiHsRQYqnwXD2-A4QZBaR5cdokhOyA==",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "254254168234131456",
+        "channel_id": "1156782003371388998",
+        "thread_id": null,
+        "timestamp": "2025-08-04T19:42:57.726000+00:00",
+        "role": "user",
+        "content": "gAAAAABokQ1B5hNOqEAgDH7wmhYzBWBCLnBBdYAmZoy3NcBxxz4g16SKM1PpYDpgLbqK9GJRTRLTQLiZChKrTYD9ny07nTHDHN6H6ftIAdduTeHPwlb9NmfgaSnl4JHjESdYVnv3CdTApGdhiHegnyD7HvsRqOtWX8Qw9t-vEX210iVs7aQMBhw=",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "254254168234131456",
+        "channel_id": "1156782003371388998",
+        "thread_id": null,
+        "timestamp": "2025-08-04T19:43:20.526000+00:00",
+        "role": "user",
+        "content": "gAAAAABokQ1YlYQrGdhieifsqrLj6n9d8BpjyAfY6PMbzLrA2mycghPaXBkEny-bP3z67s5egB3vkaMvvSPmJgqo27bajnJij86y_XsAd4Z8JOLRZJt-Hw6c4YoQiFICuQzS4VKXeZOqR9oquq2UxP2lYT8FHTOD7g==",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "254254168234131456",
+        "channel_id": "1156782003371388998",
+        "thread_id": null,
+        "timestamp": "2025-08-04T19:43:31.303000+00:00",
+        "role": "user",
+        "content": "gAAAAABokQ1j-lhm0ofE2IiASApUT4CnBYPUMBnFbv8_o8uvKkeOU6_K0eQxNX04i1SWtvQdprU0ZUUZCHB5XUTAH243fHb8IfB7t1zmSuSsPq8Zq5ARtb0JtbuDyy1YeF6YyKkp7Lpa",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "254254168234131456",
+        "channel_id": "1156782003371388998",
+        "thread_id": null,
+        "timestamp": "2025-08-04T19:43:38.729000+00:00",
+        "role": "user",
+        "content": "gAAAAABokQ1qdl5p-O9v_dqQ2S0oDNiS_EKykGSMwDX1L4qXx1Y-RBU7a3EqqmwZE_Phv1w7dnwNbLYZjfbEQHwQtvDETg0-qPDM50OdgKlMF_Em8xPur9Y=",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "199347457073610752",
+        "channel_id": "1156782003371388998",
+        "thread_id": null,
+        "timestamp": "2025-08-04T22:02:41.185000+00:00",
+        "role": "user",
+        "content": "gAAAAABokS4BI2i-uhDY2fsFk5itTrlDZIGY_ZRcgRxy4y3ykmSNQHvguU0fX0t1uWGNAZKw6s4ywSxJH8ILn06CXzW7urOMPg==",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "199347457073610752",
+        "channel_id": "1156782003371388998",
+        "thread_id": null,
+        "timestamp": "2025-08-04T22:04:33.991000+00:00",
+        "role": "user",
+        "content": "gAAAAABokS5yV-LSjT__yVcy4unXMigC9-b2MI14rmu65peJpKIhc1rBfUX6NLXzgL-VdxuKL1nWYEpRuULVSOB83LUeq9NY_w==",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "199347457073610752",
+        "channel_id": "1156782003371388998",
+        "thread_id": null,
+        "timestamp": "2025-08-04T22:04:40.121000+00:00",
+        "role": "user",
+        "content": "gAAAAABokS54xAkD3OlCa8oV8d3SEh6XU7IUXrMpbLRHveWqrbUHVl2iWnB_QlTY8XGywJ5PZNfnUxrYXQ3hquEPYj5thvqOuzmdQtkGtKfPqDBgTRDKasaPPvM1vod7_pWShQJix3IE",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "199347457073610752",
+        "channel_id": "1156782003371388998",
+        "thread_id": null,
+        "timestamp": "2025-08-04T22:05:10.804000+00:00",
+        "role": "user",
+        "content": "gAAAAABokS6WsgB22SdvBdbKkOpywZPyY4VSsydwqYiDLl2CwDS6d0kei78hY1f-JiVXKVNwQ5dRuWO9HdLBY04RxvHc0gqTGg==",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "199347457073610752",
+        "channel_id": "1156782003371388998",
+        "thread_id": null,
+        "timestamp": "2025-08-04T22:05:30.330000+00:00",
+        "role": "user",
+        "content": "gAAAAABokS63fB0aE3E6LgiwhUqDQOZQ0Sz1Sb5lkd0AUNUU4LgpNPc7GEyLrApGHaxvveTEvEzz5YDQMddChQVmGeVPbGmzS_7lxclTgs6F0b_QX6AkNj4nZfl39kSDzM10AayarYqOfTYcMQqxofEFNh0CwrYZL5Bl7XQ8GgnTC4jB7A-UYutyqnKxZkP_msd-CLuERCI_",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "254254168234131456",
+        "channel_id": "1156782003371388998",
+        "thread_id": null,
+        "timestamp": "2025-08-04T22:07:52.741000+00:00",
+        "role": "user",
+        "content": "gAAAAABokS84UoLE0XvFi7vZPQMZ3TsLX9kqbUhUPGZVhAhKOZZug2g8TVvYaVgfHaRQFJQrVwzv5ZVCBMHsBleugB11ZJ8VUy8OC8Cobsi7_PuahsC8ZdEUlWVZxu0d_ClH6hjFa8kdPPfZTcNzRZ1NzSN_OMLdwCo3rDNRUCpGNGKClThfe9XLMfMuHNVhoqzudb0rmz5c",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "199347457073610752",
+        "channel_id": "1156782003371388998",
+        "thread_id": null,
+        "timestamp": "2025-08-04T22:08:55.090000+00:00",
+        "role": "user",
+        "content": "gAAAAABokS93p5pNkyMtf2Pk0WtP-7KIScXfSu2P68_r0wXGJQd4EYP6NY9WBNMNyNaJxgwjVIlovudI78wIhvEb-w0RMN5WOQ==",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "254254168234131456",
+        "channel_id": "1156782003371388998",
+        "thread_id": null,
+        "timestamp": "2025-08-04T22:09:19.508000+00:00",
+        "role": "user",
+        "content": "gAAAAABokS-PzRe3yjjyLya_QnavRoHG77KwHxZDvxjx5gpbmnbmRE80yraTJEr_qF4TU1UINtv389-uJi5XtYosLFTMsjiBeIi1RRxvuY5qrSUx67HWTVEfQrjapq6ZQO1mOk7v3eHT",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "254254168234131456",
+        "channel_id": "1156782003371388998",
+        "thread_id": null,
+        "timestamp": "2025-08-04T22:09:31.292000+00:00",
+        "role": "user",
+        "content": "gAAAAABokS-bOEk_enUVmXudosZAcyJUOj2M9pw8x3ZobqOubkKmKDYZ7kUcATP-VHYODzuk0lRnufGtGiN9pKNAHpOvOUrrd3qiR-IOrcZJuMi0KIiw4uM=",
+        "guild_id": "1156692144740892796"
+      },
+      {
+        "user_id": "254254168234131456",
+        "channel_id": "1156782003371388998",
+        "thread_id": null,
+        "timestamp": "2025-08-04T22:09:35.240000+00:00",
+        "role": "user",
+        "content": "gAAAAABokS-fxQj3VywJRBx5dfs3F-8-lDqz7cDef9ENilA9HOBub1SojyLoA_wUGjfx6PkK0ULKa_dB3BwzirXmdn9POZA0Qw==",
+        "guild_id": "1156692144740892796"
       }
     ]
   },
   "privacy_opt_outs": {},
   "metadata": {
     "version": "1.0",
-    "last_updated": "2025-08-04T18:25:01.082997+00:00"
+    "last_updated": "2025-08-04T23:03:30.158141+00:00"
   }
 }

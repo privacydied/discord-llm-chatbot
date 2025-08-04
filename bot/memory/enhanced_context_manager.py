@@ -100,6 +100,9 @@ class EnhancedContextManager:
         # Privacy opt-out tracking: {user_id: bool}
         self.privacy_opt_outs: Dict[str, bool] = {}
         
+        # Concurrency protection for thread-safe operations
+        self._memory_lock = asyncio.Lock()
+        
         self._load()
         logger.info(f"✔ Enhanced context manager initialized [history_window={self.history_window}, encryption=enabled]")
     
@@ -207,7 +210,7 @@ class EnhancedContextManager:
         """Check if user has opted out of context tracking."""
         return self.privacy_opt_outs.get(str(user_id), False)
     
-    def append_message(self, message: discord.Message, role: str = "user") -> None:
+    async def append_message(self, message: discord.Message, role: str = "user"):
         """
         Append a message to context storage.
         
@@ -215,34 +218,39 @@ class EnhancedContextManager:
             message: Discord message object
             role: 'user' or 'bot'
         """
-        # Check privacy opt-out
-        if self.is_privacy_opted_out(message.author.id):
-            logger.debug(f"Skipping message from opted-out user {message.author.id}")
+        if self.is_privacy_opted_out(str(message.author.id)):
+            logger.debug(f"Skipping context storage for opted-out user {message.author.id}")
             return
         
-        context_key = self._get_context_key(message)
-        
-        # Create message entry with encrypted content
-        entry = MessageEntry(
-            user_id=str(message.author.id),
-            channel_id=str(message.channel.id),
-            thread_id=str(message.channel.id) if hasattr(message.channel, 'parent') and message.channel.parent else None,
-            timestamp=message.created_at.isoformat(),
-            role=role,
-            content=self._encrypt_content(message.content),
-            guild_id=str(message.guild.id) if message.guild else None
-        )
-        
-        # Initialize context if needed
-        if context_key not in self.memory:
-            self.memory[context_key] = []
-        
-        # Add message and trim to history window
-        self.memory[context_key].append(entry)
-        self.memory[context_key] = self.memory[context_key][-self.history_window:]
-        
-        logger.debug(f"✔ Message appended to context [key={context_key}, role={role}, user={message.author.id}]")
-        self._save()
+        async with self._memory_lock:
+            context_key = self._get_context_key(message)
+            
+            # Create message entry
+            entry = MessageEntry(
+                user_id=str(message.author.id),
+                channel_id=str(message.channel.id),
+                thread_id=str(message.channel.id) if hasattr(message.channel, 'parent') and message.channel.parent else None,
+                timestamp=message.created_at.isoformat(),
+                role=role,
+                content=self._encrypt_content(message.content or ""),
+                guild_id=str(message.guild.id) if message.guild else None
+            )
+            
+            # Add to memory
+            if context_key not in self.memory:
+                self.memory[context_key] = []
+            
+            self.memory[context_key].append(entry)
+            
+            # Trim to history window
+            if len(self.memory[context_key]) > self.history_window:
+                self.memory[context_key] = self.memory[context_key][-self.history_window:]
+            
+            # Save to disk if not in memory-only mode
+            if not self.in_memory_only:
+                self._save()
+            
+            logger.debug(f"✔ Message stored [context={context_key}, role={role}, user={message.author.id}]")
     
     def _estimate_token_count(self, text: str) -> int:
         """Rough token count estimation (1 token ≈ 4 characters)."""

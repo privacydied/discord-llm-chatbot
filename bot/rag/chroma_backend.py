@@ -450,3 +450,70 @@ class ChromaRAGBackend:
         except Exception as e:
             logger.error(f"[RAG] Failed to get collection stats: {e}")
             return {"error": str(e)}
+    
+    async def wipe_collection(self) -> None:
+        """Completely wipe the collection, removing all documents and embeddings."""
+        await self.initialize()
+        
+        try:
+            loop = asyncio.get_event_loop()
+            
+            # Get count before wiping for logging (with timeout)
+            try:
+                count_before = await asyncio.wait_for(
+                    loop.run_in_executor(
+                        None,
+                        lambda: self.collection.count()
+                    ),
+                    timeout=30.0
+                )
+            except asyncio.TimeoutError:
+                logger.warning("[RAG] Count operation timed out, proceeding with wipe")
+                count_before = "unknown"
+            
+            # Delete the entire collection (with timeout)
+            await asyncio.wait_for(
+                loop.run_in_executor(
+                    None,
+                    lambda: self.client.delete_collection(name=self.collection_name)
+                ),
+                timeout=60.0
+            )
+            
+            # Small delay to allow cleanup
+            await asyncio.sleep(0.1)
+            
+            # Recreate the collection (with timeout)
+            self.collection = await asyncio.wait_for(
+                loop.run_in_executor(
+                    None,
+                    lambda: self.client.create_collection(
+                        name=self.collection_name,
+                        metadata={"description": "RAG knowledge base collection"}
+                    )
+                ),
+                timeout=30.0
+            )
+            
+            logger.info(f"[RAG] Successfully wiped collection '{self.collection_name}' ({count_before} chunks removed)")
+            
+        except asyncio.TimeoutError:
+            logger.error(f"[RAG] Wipe operation timed out for collection '{self.collection_name}'")
+            raise
+        except Exception as e:
+            logger.error(f"[RAG] Failed to wipe collection: {e}")
+            raise
+    
+    async def close(self) -> None:
+        """Clean up ChromaDB resources during shutdown."""
+        try:
+            if self.client:
+                # ChromaDB doesn't have an explicit close method, but we should
+                # clear references and log the cleanup
+                logger.debug("[RAG] Closing ChromaDB backend")
+                self.collection = None
+                self.client = None
+                self._initialized = False
+                logger.info("[RAG] ✔ ChromaDB backend closed successfully")
+        except Exception as e:
+            logger.warning(f"[RAG] Error closing ChromaDB backend: {e}")

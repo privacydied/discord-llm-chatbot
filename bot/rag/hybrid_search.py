@@ -381,21 +381,89 @@ class HybridRAGSearch:
                 stats["collection_error"] = str(e)
         
         return stats
+    
+    async def wipe_collection(self) -> bool:
+        """Wipe the entire RAG collection/database.
+        
+        Returns:
+            True if successful, False otherwise
+        """
+        rag_available = await self.initialize()
+        
+        if not rag_available:
+            logger.warning("[RAG] Cannot wipe collection - RAG system not available")
+            return False
+        
+        try:
+            # Wipe the collection in the backend
+            await self.rag_backend.wipe_collection()
+            
+            # Reset search statistics
+            self.search_stats = {
+                "vector_searches": 0,
+                "keyword_searches": 0,
+                "hybrid_searches": 0,
+                "fallback_searches": 0,
+                "total_searches": 0
+            }
+            
+            logger.info("[RAG] Successfully wiped RAG collection")
+            return True
+            
+        except Exception as e:
+            logger.error(f"[RAG] Failed to wipe collection: {e}")
+            return False
+    
+    async def close(self) -> None:
+        """Clean up RAG system resources during shutdown."""
+        try:
+            logger.debug("[RAG] Closing hybrid search system")
+            
+            if self.rag_backend:
+                await self.rag_backend.close()
+                self.rag_backend = None
+            
+            if self.bootstrap:
+                # Bootstrap doesn't have a close method, just clear reference
+                self.bootstrap = None
+            
+            self._initialized = False
+            logger.info("[RAG] ✔ Hybrid search system closed successfully")
+            
+        except Exception as e:
+            logger.warning(f"[RAG] Error closing hybrid search system: {e}")
 
 
 # Global instance for the bot
 _hybrid_search: Optional[HybridRAGSearch] = None
+_shutdown_in_progress: bool = False
 
 
 async def get_hybrid_search() -> HybridRAGSearch:
     """Get or create the global hybrid search instance."""
-    global _hybrid_search
+    global _hybrid_search, _shutdown_in_progress
+    
+    # Prevent initialization during shutdown
+    if _shutdown_in_progress:
+        logger.warning("[RAG] Preventing RAG initialization during shutdown")
+        raise RuntimeError("RAG system initialization blocked during shutdown")
     
     if _hybrid_search is None:
+        logger.info("[RAG] Initializing hybrid search system...")
         _hybrid_search = HybridRAGSearch()
         await _hybrid_search.initialize()
     
     return _hybrid_search
+
+
+def set_shutdown_flag(shutdown: bool = True) -> None:
+    """Set the shutdown flag to prevent RAG initialization during shutdown."""
+    global _shutdown_in_progress
+    _shutdown_in_progress = shutdown
+    if shutdown:
+        logger.info("[RAG] Shutdown flag set - blocking new RAG initialization")
+    else:
+        logger.info("[RAG] Shutdown flag cleared - RAG initialization allowed")
 
 
 async def hybrid_search(

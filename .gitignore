@@ -52,6 +52,13 @@ tts_cache/*.wav
 tts_cache/*
 cache/video_audio/*
 cache/video_audio/index.json
+kb/*
+rag_versions.json
+chroma_db/*
+test_documents/*
+cache/*
+temp/*
+vendor/*
 
 # Temporary files
 *.swp

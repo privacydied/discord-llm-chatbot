@@ -2,6 +2,7 @@
 RAG system management commands for Discord bot.
 """
 import asyncio
+from pathlib import Path
 from typing import Optional, Dict, Any, List, Tuple
 import discord
 from discord.ext import commands
@@ -11,6 +12,55 @@ from ..rag.config import get_rag_environment_info, validate_rag_environment
 from ..util.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+def is_admin_user():
+    """Custom check that allows admin users in both guilds and DMs."""
+    async def predicate(ctx):
+        try:
+            logger.info(f"[RAG Admin Check] User {ctx.author.id} ({ctx.author.name}) attempting RAG command")
+            logger.info(f"[RAG Admin Check] Channel type: {type(ctx.channel).__name__}")
+            
+            # In DMs, check if user has admin permissions in any mutual guild
+            if isinstance(ctx.channel, discord.DMChannel):
+                logger.info(f"[RAG Admin Check] DM context - checking mutual guilds")
+                # Check if user is admin in any mutual guild with the bot
+                for guild in ctx.bot.guilds:
+                    member = guild.get_member(ctx.author.id)
+                    if member:
+                        logger.debug(f"[RAG Admin Check] Found user in guild {guild.name} ({guild.id})")
+                        if member.guild_permissions.administrator:
+                            logger.info(f"[RAG Admin Check] ✅ User {ctx.author.id} has admin in guild {guild.id}, allowing DM access")
+                            return True
+                    else:
+                        logger.debug(f"[RAG Admin Check] User not found in guild {guild.name}")
+                
+                # Also allow bot owner in DMs
+                try:
+                    app_info = await ctx.bot.application_info()
+                    if ctx.author.id == app_info.owner.id:
+                        logger.info(f"[RAG Admin Check] ✅ Bot owner {ctx.author.id} allowed DM access")
+                        return True
+                except Exception as e:
+                    logger.error(f"[RAG Admin Check] Failed to get bot owner info: {e}")
+                
+                logger.warning(f"[RAG Admin Check] ❌ User {ctx.author.id} attempted RAG command in DM without admin permissions")
+                return False
+            
+            # In guilds, use standard admin permission check
+            if hasattr(ctx.author, 'guild_permissions') and ctx.author.guild_permissions:
+                is_admin = ctx.author.guild_permissions.administrator
+                logger.info(f"[RAG Admin Check] Guild context - User admin status: {is_admin}")
+                return is_admin
+            else:
+                logger.warning(f"[RAG Admin Check] ❌ Could not check guild permissions for user {ctx.author.id}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"[RAG Admin Check] ❌ Error in permission check: {e}", exc_info=True)
+            return False
+    
+    return commands.check(predicate)
 
 # Discord embed limits
 DISCORD_EMBED_DESCRIPTION_LIMIT = 4096
@@ -30,6 +80,37 @@ def safe_embed_value(text: str, limit: int = DISCORD_EMBED_FIELD_VALUE_LIMIT) ->
     return text[:limit-6] + "... ⚠️"
 
 
+async def check_bot_permissions(ctx, required_perms=None) -> Tuple[bool, List[str]]:
+    """Check if bot has required permissions in the current context.
+    
+    Args:
+        ctx: Discord command context
+        required_perms: List of permission names to check (defaults to basic set)
+        
+    Returns:
+        Tuple of (has_all_permissions, list_of_missing_permissions)
+    """
+    if required_perms is None:
+        required_perms = ['send_messages', 'embed_links']
+    
+    # In DMs, assume we have basic permissions
+    if not ctx.guild:
+        return True, []
+    
+    bot_member = ctx.guild.get_member(ctx.bot.user.id)
+    if not bot_member:
+        return False, ['Bot not found in guild']
+    
+    missing_perms = []
+    bot_perms = bot_member.permissions_in(ctx.channel)
+    
+    for perm in required_perms:
+        if not getattr(bot_perms, perm, False):
+            missing_perms.append(perm.replace('_', ' ').title())
+    
+    return len(missing_perms) == 0, missing_perms
+
+
 class RAGCommands(commands.Cog):
     """Commands for managing the RAG (Retrieval Augmented Generation) system."""
     
@@ -37,7 +118,7 @@ class RAGCommands(commands.Cog):
         self.bot = bot
     
     @commands.group(name='rag', invoke_without_command=True)
-    @commands.has_permissions(administrator=True)
+    @is_admin_user()
     async def rag_group(self, ctx):
         """RAG system management commands."""
         if ctx.invoked_subcommand is None:
@@ -55,7 +136,7 @@ class RAGCommands(commands.Cog):
             
             embed.add_field(
                 name="🔄 Management",
-                value="`!rag bootstrap` - Initialize knowledge base\n`!rag refresh` - Refresh all documents\n`!rag update` - Incremental update",
+                value="`!rag bootstrap` - Initialize knowledge base\n`!rag scan` - Scan for new documents only\n`!rag wipe` - Wipe entire database",
                 inline=False
             )
             
@@ -65,9 +146,16 @@ class RAGCommands(commands.Cog):
                 inline=False
             )
             
+            embed.add_field(
+                name="⏹️ Control",
+                value="`!rag stop` - Cancel running operations\n`!rag tasks` - Show active tasks",
+                inline=False
+            )
+            
             await ctx.send(embed=embed)
     
     @rag_group.command(name='status')
+    @is_admin_user()
     async def rag_status(self, ctx):
         """Show RAG system status and health."""
         try:
@@ -151,6 +239,7 @@ class RAGCommands(commands.Cog):
             await ctx.send(embed=embed)
     
     @rag_group.command(name='stats')
+    @is_admin_user()
     async def rag_stats(self, ctx):
         """Show RAG search statistics."""
         try:
@@ -212,6 +301,7 @@ class RAGCommands(commands.Cog):
             await ctx.send(f"❌ Failed to get statistics: {str(e)}")
     
     @rag_group.command(name='config')
+    @is_admin_user()
     async def rag_config(self, ctx):
         """Show RAG configuration information."""
         try:
@@ -265,6 +355,7 @@ class RAGCommands(commands.Cog):
             await ctx.send(f"❌ Failed to get configuration: {str(e)}")
     
     @rag_group.command(name='bootstrap')
+    @is_admin_user()
     async def rag_bootstrap(self, ctx, force: bool = False):
         """Bootstrap the RAG knowledge base from files."""
         try:
@@ -353,6 +444,7 @@ class RAGCommands(commands.Cog):
             await ctx.send(embed=embed)
     
     @rag_group.command(name='search')
+    @is_admin_user()
     async def rag_search(self, ctx, *, query: str):
         """Test RAG search with a query."""
         try:
@@ -417,6 +509,7 @@ class RAGCommands(commands.Cog):
             await ctx.send(embed=embed)
     
     @rag_group.command(name='test')
+    @is_admin_user()
     async def rag_test(self, ctx):
         """Run RAG system tests."""
         try:
@@ -509,9 +602,448 @@ class RAGCommands(commands.Cog):
                 color=discord.Color.red()
             )
             await ctx.send(embed=embed)
+    
+    @rag_group.command(name='wipe')
+    @is_admin_user()
+    async def rag_wipe(self, ctx):
+        """Wipe the entire RAG database. ⚠️ This action is irreversible!"""
+        try:
+            # Check bot permissions first
+            if ctx.guild:
+                bot_member = ctx.guild.get_member(self.bot.user.id)
+                if not bot_member:
+                    await ctx.send("❌ **Error**: Bot member not found in guild.")
+                    return
+                
+                required_perms = [
+                    'send_messages', 'embed_links', 'add_reactions', 
+                    'read_message_history', 'use_external_emojis'
+                ]
+                
+                missing_perms = []
+                bot_perms = ctx.channel.permissions_for(bot_member)
+                
+                for perm in required_perms:
+                    if not getattr(bot_perms, perm, False):
+                        missing_perms.append(perm.replace('_', ' ').title())
+                
+                if missing_perms:
+                    perm_list = ', '.join(missing_perms)
+                    error_msg = f"❌ **Missing Permissions**: The bot needs the following permissions: {perm_list}"
+                    try:
+                        await ctx.send(error_msg)
+                    except discord.Forbidden:
+                        logger.error(f"[RAG Commands] Cannot send permission error message - missing Send Messages permission")
+                    return
+            
+            # Send confirmation prompt
+            embed = discord.Embed(
+                title="⚠️ Confirm Database Wipe",
+                description=(
+                    "**This will permanently delete ALL documents from the RAG database!**\n\n"
+                    "This action cannot be undone. All indexed documents, embeddings, "
+                    "and metadata will be lost.\n\n"
+                    "React with ✅ to confirm or ❌ to cancel."
+                ),
+                color=discord.Color.red()
+            )
+            
+            message = await ctx.send(embed=embed)
+            await message.add_reaction("✅")
+            await message.add_reaction("❌")
+            
+            def check(reaction, user):
+                return (
+                    user == ctx.author and 
+                    str(reaction.emoji) in ["✅", "❌"] and 
+                    reaction.message.id == message.id
+                )
+            
+            try:
+                reaction, user = await self.bot.wait_for('reaction_add', timeout=30.0, check=check)
+                
+                if str(reaction.emoji) == "❌":
+                    embed = discord.Embed(
+                        title="❌ Database Wipe Cancelled",
+                        description="Database wipe operation was cancelled.",
+                        color=discord.Color.blue()
+                    )
+                    await message.edit(embed=embed)
+                    return
+                
+                # User confirmed, proceed with wipe
+                embed = discord.Embed(
+                    title="🗑️ Wiping Database...",
+                    description="Deleting all documents and embeddings. Please wait...",
+                    color=discord.Color.orange()
+                )
+                await message.edit(embed=embed)
+                
+                # Run wipe operation asynchronously to prevent Discord timeout
+                try:
+                    # Get hybrid search instance
+                    search_engine = await get_hybrid_search()
+                    
+                    # Create a task for the wipe operation
+                    async def wipe_with_progress():
+                        # Update progress message
+                        progress_embed = discord.Embed(
+                            title="🗑️ Wiping Database...",
+                            description="🔄 Initializing wipe operation...",
+                            color=discord.Color.orange()
+                        )
+                        await message.edit(embed=progress_embed)
+                        
+                        # Perform the actual wipe
+                        result = await search_engine.wipe_collection()
+                        return result
+                    
+                    # Run the wipe operation with a reasonable timeout
+                    wipe_successful = await asyncio.wait_for(wipe_with_progress(), timeout=120.0)
+                    
+                    if not wipe_successful:
+                        embed = discord.Embed(
+                            title="❌ Database Wipe Failed",
+                            description="Failed to wipe the database. Check logs for details.",
+                            color=discord.Color.red()
+                        )
+                        await message.edit(embed=embed)
+                        return
+                    
+                    # Also clear version tracking
+                    version_file = Path("kb/.rag_versions.json")
+                    if version_file.exists():
+                        version_file.unlink()
+                    
+                    embed = discord.Embed(
+                        title="✅ Database Wiped Successfully",
+                        description=(
+                            "All documents and embeddings have been deleted.\n\n"
+                            "You can now run `!rag bootstrap` to re-index your documents."
+                        ),
+                        color=discord.Color.green()
+                    )
+                    await message.edit(embed=embed)
+                    
+                except asyncio.TimeoutError:
+                    embed = discord.Embed(
+                        title="⏰ Database Wipe Timeout",
+                        description=(
+                            "The wipe operation is taking longer than expected.\n\n"
+                            "The operation may still be running in the background. "
+                            "Please check the logs and try again later if needed."
+                        ),
+                        color=discord.Color.orange()
+                    )
+                    await message.edit(embed=embed)
+                    logger.warning("[RAG Commands] Wipe operation timed out after 120 seconds")
+                    return
+                
+            except asyncio.TimeoutError:
+                embed = discord.Embed(
+                    title="⏰ Confirmation Timeout",
+                    description="Database wipe cancelled due to timeout.",
+                    color=discord.Color.blue()
+                )
+                await message.edit(embed=embed)
+                
+        except discord.Forbidden as e:
+            logger.error(f"[RAG Commands] Discord permission error in wipe command: {e}")
+            # Try to send a simple text message as fallback
+            try:
+                await ctx.send(f"❌ **Permission Error**: The bot lacks necessary Discord permissions.\n\nError: {e}\n\nPlease ensure the bot has these permissions:\n• Send Messages\n• Add Reactions\n• Embed Links\n• Read Message History\n• Use External Emojis")
+            except discord.Forbidden:
+                # If we can't even send messages, log it and give up
+                logger.critical(f"[RAG Commands] Cannot send any messages - bot lacks Send Messages permission in channel {ctx.channel.id}")
+        except Exception as e:
+            logger.error(f"[RAG Commands] Wipe command failed: {e}", exc_info=True)
+            # Try embed first, fallback to plain text
+            try:
+                embed = discord.Embed(
+                    title="❌ Wipe Error",
+                    description=safe_embed_value(f"Database wipe failed: {str(e)}"),
+                    color=discord.Color.red()
+                )
+                await ctx.send(embed=embed)
+            except discord.Forbidden:
+                # Fallback to plain text if embed permissions are missing
+                try:
+                    await ctx.send(f"❌ Database wipe failed: {str(e)}")
+                except discord.Forbidden:
+                    logger.critical(f"[RAG Commands] Cannot send error message - bot lacks Send Messages permission in channel {ctx.channel.id}")
+    
+    @rag_group.command(name='scan')
+    @is_admin_user()
+    async def rag_scan(self, ctx):
+        """Scan for new documents only (incremental update)."""
+        try:
+            embed = discord.Embed(
+                title="🔍 Scanning for New Documents...",
+                description="Checking for new or modified files in the knowledge base.",
+                color=discord.Color.blue()
+            )
+            message = await ctx.send(embed=embed)
+            
+            # Get hybrid search instance
+            search_engine = await get_hybrid_search()
+            
+            # Run incremental scan (force_refresh=False)
+            result = await search_engine.bootstrap.bootstrap_knowledge_base(force_refresh=False)
+            
+            # Parse results
+            files_processed = result.get('files_processed', 0)
+            files_skipped = result.get('files_skipped', 0)
+            total_chunks = result.get('total_chunks', 0)
+            errors = result.get('errors', [])
+            
+            # Determine embed color based on results
+            if errors:
+                color = discord.Color.orange()
+                status_icon = "⚠️"
+                status_text = "Completed with warnings"
+            elif files_processed > 0:
+                color = discord.Color.green()
+                status_icon = "✅"
+                status_text = "Scan completed successfully"
+            else:
+                color = discord.Color.blue()
+                status_icon = "ℹ️"
+                status_text = "No new documents found"
+            
+            embed = discord.Embed(
+                title=f"{status_icon} Incremental Scan {status_text}",
+                color=color
+            )
+            
+            # Add statistics
+            stats_value = (
+                f"**New Files Processed:** {files_processed}\n"
+                f"**Files Skipped:** {files_skipped}\n"
+                f"**New Chunks Created:** {total_chunks}"
+            )
+            embed.add_field(
+                name="📊 Scan Results",
+                value=safe_embed_value(stats_value),
+                inline=False
+            )
+            
+            # Add processed files if any
+            if 'processed_files' in result and result['processed_files']:
+                processed_list = []
+                for file_info in result['processed_files'][:5]:  # Show max 5 files
+                    filename = file_info.get('filename', 'Unknown')
+                    chunks = file_info.get('chunks', 0)
+                    processed_list.append(f"• {filename} ({chunks} chunks)")
+                
+                if len(result['processed_files']) > 5:
+                    processed_list.append(f"... and {len(result['processed_files']) - 5} more")
+                
+                embed.add_field(
+                    name="📄 New Files Processed",
+                    value=safe_embed_value("\n".join(processed_list)),
+                    inline=False
+                )
+            
+            # Add errors if any
+            if errors:
+                error_list = []
+                for error in errors[:3]:  # Show max 3 errors
+                    error_list.append(f"• {safe_embed_value(str(error), 100)}")
+                
+                if len(errors) > 3:
+                    error_list.append(f"... and {len(errors) - 3} more errors")
+                
+                embed.add_field(
+                    name="❌ Errors",
+                    value=safe_embed_value("\n".join(error_list)),
+                    inline=False
+                )
+            
+            # Add helpful tip
+            if files_processed == 0 and not errors:
+                embed.add_field(
+                    name="💡 Tip",
+                    value="All files are up to date. Use `!rag bootstrap force:True` to force re-process all files.",
+                    inline=False
+                )
+            
+            await message.edit(embed=embed)
+            
+        except Exception as e:
+            logger.error(f"[RAG Commands] Scan command failed: {e}")
+            embed = discord.Embed(
+                title="❌ Scan Error",
+                description=safe_embed_value(f"Incremental scan failed: {str(e)}"),
+                color=discord.Color.red()
+            )
+            await ctx.send(embed=embed)
+    
+    @rag_group.command(name='tasks')
+    @is_admin_user()
+    async def rag_tasks(self, ctx):
+        """Show active long-running RAG tasks."""
+        try:
+            # Get active tasks for this user
+            user_tasks = self.bot.get_active_tasks_for_user(ctx.author.id)
+            
+            embed = discord.Embed(
+                title="🔄 Active RAG Tasks",
+                color=discord.Color.blue()
+            )
+            
+            if not user_tasks:
+                embed.description = "No active RAG tasks running."
+                embed.add_field(
+                    name="💡 Tip",
+                    value="Long-running commands like `!rag bootstrap` will appear here while running.",
+                    inline=False
+                )
+            else:
+                task_list = []
+                for task_id, metadata in user_tasks:
+                    command = metadata.get('command', 'unknown')
+                    started_at = metadata.get('started_at', 0)
+                    current_time = asyncio.get_event_loop().time()
+                    duration = int(current_time - started_at)
+                    
+                    task_list.append(f"• `{command}` - Running for {duration}s")
+                    task_list.append(f"  Task ID: `{task_id}`")
+                
+                embed.description = "\n".join(task_list)
+                embed.add_field(
+                    name="⏹️ Stop Tasks",
+                    value="Use `!rag stop <task_id>` or `!rag stop all` to cancel tasks.",
+                    inline=False
+                )
+            
+            await ctx.send(embed=embed)
+            
+        except Exception as e:
+            logger.error(f"[RAG Commands] Tasks command failed: {e}")
+            embed = discord.Embed(
+                title="❌ Tasks Error",
+                description=f"Failed to get active tasks: {str(e)}",
+                color=discord.Color.red()
+            )
+            await ctx.send(embed=embed)
+    
+    @rag_group.command(name='stop')
+    @is_admin_user()
+    async def rag_stop(self, ctx, task_id: str = None):
+        """Stop/cancel active RAG tasks.
+        
+        Usage:
+        !rag stop <task_id>  - Stop specific task
+        !rag stop all        - Stop all your active tasks
+        !rag stop            - Show active tasks (same as !rag tasks)
+        """
+        try:
+            # If no task_id provided, show active tasks
+            if not task_id:
+                await self.rag_tasks(ctx)
+                return
+            
+            user_tasks = self.bot.get_active_tasks_for_user(ctx.author.id)
+            
+            if not user_tasks:
+                embed = discord.Embed(
+                    title="ℹ️ No Active Tasks",
+                    description="You have no active RAG tasks to stop.",
+                    color=discord.Color.blue()
+                )
+                await ctx.send(embed=embed)
+                return
+            
+            # Handle "all" to stop all user tasks
+            if task_id.lower() == "all":
+                stopped_count = 0
+                for tid, metadata in user_tasks:
+                    if await self.bot.cancel_task(tid):
+                        stopped_count += 1
+                
+                embed = discord.Embed(
+                    title="⏹️ Tasks Stopped",
+                    description=f"Successfully stopped {stopped_count} task(s).",
+                    color=discord.Color.green()
+                )
+                await ctx.send(embed=embed)
+                return
+            
+            # Stop specific task
+            task_found = False
+            for tid, metadata in user_tasks:
+                if tid == task_id or tid.endswith(f"_{task_id}"):
+                    task_found = True
+                    if await self.bot.cancel_task(tid):
+                        command = metadata.get('command', 'unknown')
+                        embed = discord.Embed(
+                            title="⏹️ Task Stopped",
+                            description=f"Successfully stopped task: `{command}`",
+                            color=discord.Color.green()
+                        )
+                        embed.add_field(
+                            name="Task ID",
+                            value=f"`{tid}`",
+                            inline=False
+                        )
+                    else:
+                        embed = discord.Embed(
+                            title="❌ Stop Failed",
+                            description=f"Failed to stop task: `{task_id}`",
+                            color=discord.Color.red()
+                        )
+                    break
+            
+            if not task_found:
+                embed = discord.Embed(
+                    title="❌ Task Not Found",
+                    description=f"Task `{task_id}` not found or not owned by you.",
+                    color=discord.Color.red()
+                )
+                embed.add_field(
+                    name="💡 Tip",
+                    value="Use `!rag tasks` to see your active tasks.",
+                    inline=False
+                )
+            
+            await ctx.send(embed=embed)
+            
+        except Exception as e:
+            logger.error(f"[RAG Commands] Stop command failed: {e}")
+            embed = discord.Embed(
+                title="❌ Stop Error",
+                description=f"Failed to stop task: {str(e)}",
+                color=discord.Color.red()
+            )
+            await ctx.send(embed=embed)
 
 
 async def setup(bot):
     """Set up RAG commands."""
-    await bot.add_cog(RAGCommands(bot))
-    logger.info("✔ RAG commands cog loaded")
+    try:
+        logger.info("[RAG Setup] Starting RAG commands cog initialization...")
+        
+        # Check if cog is already loaded
+        existing_cog = bot.get_cog('RAGCommands')
+        if existing_cog:
+            logger.warning("[RAG Setup] RAGCommands cog already loaded, removing first")
+            await bot.remove_cog('RAGCommands')
+        
+        # Create and add the cog
+        rag_cog = RAGCommands(bot)
+        await bot.add_cog(rag_cog)
+        
+        # Verify the cog was added
+        loaded_cog = bot.get_cog('RAGCommands')
+        if loaded_cog:
+            logger.info("✅ RAG commands cog loaded successfully")
+            
+            # List the commands that were registered
+            rag_commands = [cmd.name for cmd in loaded_cog.get_commands()]
+            logger.info(f"[RAG Setup] Registered commands: {rag_commands}")
+        else:
+            logger.error("❌ RAG commands cog failed to load - not found after adding")
+            
+    except Exception as e:
+        logger.error(f"❌ Failed to load RAG commands cog: {e}", exc_info=True)
+        raise

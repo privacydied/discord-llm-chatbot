@@ -45,34 +45,86 @@ async def setup_commands(bot):
     """
     import logging
     
+    logging.info("[Commands Setup] Starting command module initialization...")
+    
     try:
-        from . import test_cmds, memory_cmds, tts_cmds, config_commands, video_commands, rag_commands
-
-        # A set to keep track of loaded cogs and avoid duplicates
-        loaded_cogs = set(bot.cogs.keys())
-
-        # Define cogs to load
-        cogs_to_load = {
-            'TestCommands': test_cmds,
-            'MemoryCommands': memory_cmds,
-            'TTSCommands': tts_cmds,
-            'ConfigCommands': config_commands,
-            'VideoCommands': video_commands,
-            'RAGCommands': rag_commands
+        # Import command modules with individual error handling
+        modules = {}
+        module_imports = {
+            'test_cmds': 'TestCommands',
+            'memory_cmds': 'MemoryCommands', 
+            'tts_cmds': 'TTSCommands',
+            'config_commands': 'ConfigCommands',
+            'video_commands': 'VideoCommands',
+            'rag_commands': 'RAGCommands'
         }
-
-        for cog_name, module in cogs_to_load.items():
-            if cog_name not in loaded_cogs:
-                await module.setup(bot)
-                logging.info(f"✅ {cog_name} registered")
-            else:
-                logging.debug(f"Skipping already loaded cog: {cog_name}")
         
+        for module_name, cog_name in module_imports.items():
+            try:
+                logging.info(f"[Commands Setup] Importing {module_name}...")
+                module = __import__(f'bot.commands.{module_name}', fromlist=[module_name])
+                modules[cog_name] = module
+                logging.info(f"[Commands Setup] ✅ Successfully imported {module_name}")
+            except Exception as import_error:
+                logging.error(f"[Commands Setup] ❌ Failed to import {module_name}: {import_error}", exc_info=True)
+                continue
 
-        logging.info("🎉 All command modules registered successfully")
+        # Get currently loaded cogs to avoid duplicates
+        loaded_cogs = set(bot.cogs.keys())
+        logging.info(f"[Commands Setup] Currently loaded cogs: {list(loaded_cogs)}")
+
+        # Load each cog with individual error handling
+        successful_loads = 0
+        failed_loads = 0
+        
+        for cog_name, module in modules.items():
+            try:
+                if cog_name not in loaded_cogs:
+                    logging.info(f"[Commands Setup] Loading {cog_name} cog...")
+                    
+                    # Check if module has setup function
+                    if not hasattr(module, 'setup'):
+                        logging.error(f"[Commands Setup] ❌ {cog_name} module missing setup function")
+                        failed_loads += 1
+                        continue
+                    
+                    # Call the setup function
+                    await module.setup(bot)
+                    
+                    # Verify the cog was loaded
+                    if bot.get_cog(cog_name):
+                        logging.info(f"[Commands Setup] ✅ {cog_name} loaded successfully")
+                        successful_loads += 1
+                    else:
+                        logging.error(f"[Commands Setup] ❌ {cog_name} setup completed but cog not found")
+                        failed_loads += 1
+                else:
+                    logging.debug(f"[Commands Setup] Skipping already loaded cog: {cog_name}")
+                    
+            except Exception as cog_error:
+                logging.error(f"[Commands Setup] ❌ Failed to load {cog_name}: {cog_error}", exc_info=True)
+                failed_loads += 1
+                continue
+        
+        # Final status report
+        final_cogs = list(bot.cogs.keys())
+        logging.info(f"[Commands Setup] 🎉 Command setup complete: {successful_loads} loaded, {failed_loads} failed")
+        logging.info(f"[Commands Setup] Final loaded cogs: {final_cogs}")
+        
+        # List all registered commands for debugging
+        all_commands = []
+        for cog in bot.cogs.values():
+            cog_commands = [cmd.name for cmd in cog.get_commands()]
+            all_commands.extend(cog_commands)
+        
+        logging.info(f"[Commands Setup] Total registered commands: {len(all_commands)}")
+        logging.debug(f"[Commands Setup] Command list: {all_commands}")
+        
+        if failed_loads > 0:
+            logging.warning(f"[Commands Setup] ⚠️ {failed_loads} cogs failed to load - some commands may not be available")
         
     except Exception as e:
-        logging.error(f"Error setting up commands: {e}", exc_info=True)
+        logging.error(f"[Commands Setup] ❌ Critical error during command setup: {e}", exc_info=True)
         raise
 
 # Import all command modules to register them

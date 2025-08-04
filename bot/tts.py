@@ -439,5 +439,40 @@ class TTSManager:
     
     async def close(self) -> None:
         """Clean up resources when shutting down."""
-        # Nothing to clean up for now
-        logger.info("TTS manager shutting down")
+        try:
+            logger.debug("[TTS] Closing TTS manager")
+            
+            # Clean up Kokoro resources
+            if self.kokoro:
+                try:
+                    # Clear voice cache to free memory
+                    self.voice_cache.clear()
+                    
+                    # Clear references
+                    self.kokoro = None
+                    self.voices = []
+                    self._default_voice = None
+                    
+                    logger.debug("[TTS] Kokoro resources cleared")
+                except Exception as e:
+                    logger.warning(f"[TTS] Error cleaning up Kokoro: {e}")
+            
+            # Clean up temporary files
+            try:
+                if self.temp_dir.exists():
+                    import shutil
+                    temp_files = list(self.temp_dir.glob("*.wav"))
+                    if temp_files:
+                        logger.debug(f"[TTS] Cleaning up {len(temp_files)} temporary audio files")
+                        for temp_file in temp_files:
+                            try:
+                                temp_file.unlink()
+                            except Exception:
+                                pass  # Ignore individual file cleanup errors
+            except Exception as e:
+                logger.warning(f"[TTS] Error cleaning up temp files: {e}")
+            
+            logger.info("[TTS] ✔ TTS manager closed successfully")
+            
+        except Exception as e:
+            logger.warning(f"[TTS] Error during TTS manager shutdown: {e}")

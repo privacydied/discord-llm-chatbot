@@ -7,6 +7,7 @@ import hashlib
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 import asyncio
+import logging
 
 from .chroma_backend import ChromaRAGBackend
 from .vector_schema import HybridSearchConfig
@@ -15,6 +16,12 @@ from ..util.logging import get_logger
 
 logger = get_logger(__name__)
 
+async def main():
+    # Configure logging
+    logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    logger.setLevel(logging.DEBUG)
+
+    # ... existing code ...
 
 class RAGBootstrap:
     """Bootstrap utility for initial RAG system setup and data ingestion."""
@@ -106,70 +113,74 @@ class RAGBootstrap:
         version_tracking: Dict[str, str], 
         force_refresh: bool
     ) -> Dict[str, Any]:
-        """
-        Process a single knowledge base file.
-        
-        Args:
-            file_path: Path to the file to process
-            version_tracking: Dictionary tracking file versions
-            force_refresh: Whether to force re-processing
-            
-        Returns:
-            Dictionary with processing results
-        """
+        """Process a single knowledge base file."""
         relative_path = str(file_path.relative_to(self.kb_path))
-        
-        # Parse document content using appropriate parser
+        logger.debug(f"[RAG Bootstrap] Processing file: {relative_path}")
         try:
-            content, doc_metadata = document_parser_factory.parse_document(file_path)
-        except Exception as e:
-            logger.error(f"[RAG Bootstrap] Failed to parse {relative_path}: {e}")
-            return {"processed": False, "error": str(e)}
+            # Parse document content using appropriate parser
+            try:
+                # Parse the document
+                content, doc_metadata = await document_parser_factory.parse_document(file_path)
+                
+            except Exception as e:
+                logger.error(f"[RAG Bootstrap] Failed to parse {relative_path}: {e}")
+                return {"processed": False, "error": str(e)}
+            
+            if not content.strip():
+                logger.warning(f"[RAG Bootstrap] Empty content after parsing: {relative_path}")
+                return {"processed": False, "error": "Empty content after parsing"}
+            
+            # Calculate content hash
+            content_hash = hashlib.sha256(content.encode('utf-8')).hexdigest()
+            
+            # Check if file has changed (incremental scanning logic)
+            if not force_refresh:
+                if relative_path in version_tracking:
+                    existing_hash = version_tracking[relative_path]
+                    if existing_hash == content_hash:
+                        logger.info(f"[RAG Bootstrap] ⏭️ Skipping unchanged file: {relative_path} (hash: {content_hash[:8]}...)")
+                        return {"processed": False, "chunks_created": 0}
+                    else:
+                        logger.info(f"[RAG Bootstrap] 🔄 File changed, re-processing: {relative_path} (old: {existing_hash[:8]}..., new: {content_hash[:8]}...)")
+                else:
+                    logger.info(f"[RAG Bootstrap] 🆕 New file detected: {relative_path} (hash: {content_hash[:8]}...)")
+            else:
+                logger.info(f"[RAG Bootstrap] 🔄 Force refresh enabled, processing: {relative_path}")
+            
+            # Determine file type for chunking based on parser metadata
+            file_type = self._determine_file_type(file_path, doc_metadata)
+            
+            # Prepare metadata (combine base metadata with parser metadata)
+            metadata = {
+                "filename": file_path.name,
+                "filepath": relative_path,
+                "file_type": file_type,
+                "source_type": "knowledge_base",
+                "ingestion_method": "bootstrap"
+            }
+            # Add parser-specific metadata
+            metadata.update(doc_metadata)
+            
+            # Ingest the document
+            logger.info(f"[RAG Bootstrap] Processing: {relative_path}")
+            documents = await self.rag_backend.add_document(
+                source_id=relative_path,
+                text=content,
+                metadata=metadata,
+                file_type=file_type
+            )
+            
+            # Update version tracking
+            version_tracking[relative_path] = content_hash
+            
+            return {
+                "processed": True,
+                "chunks_created": len(documents),
+                "content_hash": content_hash
+            }
         
-        if not content.strip():
-            logger.warning(f"[RAG Bootstrap] Empty content after parsing: {relative_path}")
-            return {"processed": False, "error": "Empty content after parsing"}
-        
-        # Calculate content hash
-        content_hash = hashlib.sha256(content.encode('utf-8')).hexdigest()
-        
-        # Check if file has changed
-        if not force_refresh and relative_path in version_tracking:
-            if version_tracking[relative_path] == content_hash:
-                logger.debug(f"[RAG Bootstrap] Skipping unchanged file: {relative_path}")
-                return {"processed": False, "chunks_created": 0}
-        
-        # Determine file type for chunking based on parser metadata
-        file_type = self._determine_file_type(file_path, doc_metadata)
-        
-        # Prepare metadata (combine base metadata with parser metadata)
-        metadata = {
-            "filename": file_path.name,
-            "filepath": relative_path,
-            "file_type": file_type,
-            "source_type": "knowledge_base",
-            "ingestion_method": "bootstrap"
-        }
-        # Add parser-specific metadata
-        metadata.update(doc_metadata)
-        
-        # Ingest the document
-        logger.info(f"[RAG Bootstrap] Processing: {relative_path}")
-        documents = await self.rag_backend.add_document(
-            source_id=relative_path,
-            text=content,
-            metadata=metadata,
-            file_type=file_type
-        )
-        
-        # Update version tracking
-        version_tracking[relative_path] = content_hash
-        
-        return {
-            "processed": True,
-            "chunks_created": len(documents),
-            "content_hash": content_hash
-        }
+        finally:
+            logger.debug(f"[RAG Bootstrap] Finished processing file: {relative_path}")
     
     def _find_supported_files(self) -> List[Path]:
         """Find all supported files in the knowledge base directory."""
@@ -208,26 +219,101 @@ class RAGBootstrap:
     def _load_version_tracking(self) -> Dict[str, str]:
         """Load file version tracking from disk."""
         if not self.version_file.exists():
-            logger.debug("[RAG Bootstrap] No existing version tracking found")
+            logger.info(f"[RAG Bootstrap] 🆕 No existing version tracking found at: {self.version_file}")
             return {}
         
         try:
             with open(self.version_file, 'r', encoding='utf-8') as f:
-                versions = json.load(f)
-            logger.debug(f"[RAG Bootstrap] Loaded version tracking for {len(versions)} files")
-            return versions
+                content = f.read().strip()
+                
+            # Check if file is empty
+            if not content:
+                logger.info(f"[RAG Bootstrap] 📄 Empty version tracking file, starting fresh")
+                return {}
+            
+            # Attempt to parse JSON
+            try:
+                versions = json.loads(content)
+            except json.JSONDecodeError as json_err:
+                logger.error(f"[RAG Bootstrap] ❌ JSON parsing error in {self.version_file}: {json_err}")
+                logger.error(f"[RAG Bootstrap] Error at line {json_err.lineno}, column {json_err.colno}: {json_err.msg}")
+                
+                # Try to recover by backing up the corrupted file and starting fresh
+                backup_file = self.version_file.with_suffix('.json.backup')
+                try:
+                    import shutil
+                    shutil.copy2(self.version_file, backup_file)
+                    logger.warning(f"[RAG Bootstrap] 💾 Backed up corrupted file to: {backup_file}")
+                except Exception as backup_err:
+                    logger.error(f"[RAG Bootstrap] Failed to backup corrupted file: {backup_err}")
+                
+                logger.warning(f"[RAG Bootstrap] 🔄 Starting with empty version tracking due to JSON corruption")
+                return {}
+            
+            # Validate the loaded data
+            if not isinstance(versions, dict):
+                logger.warning(f"[RAG Bootstrap] ⚠️ Invalid version tracking format (not a dict), starting fresh")
+                return {}
+            
+            # Sanitize loaded data
+            sanitized_versions = {}
+            for file_path, version_hash in versions.items():
+                if isinstance(file_path, str) and isinstance(version_hash, str):
+                    sanitized_path = file_path.strip()
+                    sanitized_hash = version_hash.strip()
+                    
+                    # Validate hash format
+                    if sanitized_hash and all(c in '0123456789abcdefABCDEF' for c in sanitized_hash):
+                        sanitized_versions[sanitized_path] = sanitized_hash
+                    else:
+                        logger.warning(f"[RAG Bootstrap] Skipping invalid hash entry: {sanitized_path} -> {sanitized_hash}")
+                else:
+                    logger.warning(f"[RAG Bootstrap] Skipping invalid entry type: {type(file_path)} -> {type(version_hash)}")
+            
+            logger.info(f"[RAG Bootstrap] 📁 Loaded version tracking for {len(sanitized_versions)} files from: {self.version_file}")
+            if sanitized_versions:
+                # Show a few examples for debugging
+                sample_files = list(sanitized_versions.keys())[:3]
+                logger.debug(f"[RAG Bootstrap] Sample tracked files: {sample_files}")
+            
+            return sanitized_versions
+            
         except Exception as e:
-            logger.warning(f"[RAG Bootstrap] Failed to load version tracking: {e}")
+            logger.error(f"[RAG Bootstrap] ❌ Failed to load version tracking from {self.version_file}: {e}", exc_info=True)
             return {}
     
     def _save_version_tracking(self, versions: Dict[str, str]) -> None:
         """Save file version tracking to disk."""
         try:
+            # Sanitize the versions dictionary to ensure valid JSON
+            sanitized_versions = {}
+            for file_path, version_hash in versions.items():
+                # Ensure file paths are properly escaped and valid
+                sanitized_path = str(file_path).replace('\\', '/').strip()
+                sanitized_hash = str(version_hash).strip()
+                
+                # Validate that the hash is a valid hex string
+                if sanitized_hash and all(c in '0123456789abcdefABCDEF' for c in sanitized_hash):
+                    sanitized_versions[sanitized_path] = sanitized_hash
+                else:
+                    logger.warning(f"[RAG Bootstrap] Skipping invalid hash for {sanitized_path}: {sanitized_hash}")
+            
             with open(self.version_file, 'w', encoding='utf-8') as f:
-                json.dump(versions, f, indent=2)
-            logger.debug(f"[RAG Bootstrap] Saved version tracking for {len(versions)} files")
+                json.dump(
+                    sanitized_versions, 
+                    f, 
+                    indent=2, 
+                    ensure_ascii=False,
+                    separators=(',', ': '),
+                    sort_keys=True
+                )
+            logger.info(f"[RAG Bootstrap] 💾 Saved version tracking for {len(sanitized_versions)} files to: {self.version_file}")
+            if sanitized_versions:
+                # Show a few examples for debugging
+                sample_files = list(sanitized_versions.keys())[:3]
+                logger.debug(f"[RAG Bootstrap] Sample saved files: {sample_files}")
         except Exception as e:
-            logger.error(f"[RAG Bootstrap] Failed to save version tracking: {e}")
+            logger.error(f"[RAG Bootstrap] ❌ Failed to save version tracking to {self.version_file}: {e}", exc_info=True)
     
     async def reset_knowledge_base(self) -> Dict[str, Any]:
         """
@@ -369,3 +455,6 @@ async def create_rag_system(
     logger.info("✔ RAG system created and initialized")
     
     return rag_backend, bootstrap
+
+if __name__ == "__main__":
+    asyncio.run(main())
