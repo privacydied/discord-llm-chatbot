@@ -130,6 +130,15 @@ class MediaIngestionManager:
             except Exception as e:
                 last_error = str(e)
                 self.logger.warning(f"❌ Media extraction attempt {attempt + 1} failed for {url}: {last_error}")
+                
+                # Check if this is a "no media found" type error that should trigger immediate fallback
+                error_lower = last_error.lower()
+                if any(phrase in error_lower for phrase in [
+                    "no video", "unsupported url", "no media", "not available", 
+                    "private video", "video unavailable", "no audio", "no formats"
+                ]):
+                    self.logger.info(f"🔄 No media content found, triggering immediate fallback: {url}")
+                    break  # Exit retry loop immediately for "no content" errors
             
             attempt += 1
             
@@ -291,13 +300,19 @@ class MediaIngestionManager:
                 self.logger.info(f"🖼️ Processing image via vision-language model: {url}")
                 
                 try:
-                    from .vision import vision_infer
+                    from .see import see_infer
                     
                     # Use vision model to analyze the image
-                    vision_result = await vision_infer(screenshot_path, message.content or "Describe this image")
+                    vision_result = await see_infer(image_path=screenshot_path, prompt=message.content or "Describe this image")
+                    
+                    # Extract content from BotAction if needed
+                    if hasattr(vision_result, 'content'):
+                        vision_content = vision_result.content
+                    else:
+                        vision_content = str(vision_result)
                     
                     # Create enriched context combining vision analysis with any text
-                    context_parts = [f"Image analysis from {url}:", vision_result]
+                    context_parts = [f"Image analysis from {url}:", vision_content]
                     if text_content:
                         context_parts.extend(["\nAdditional text content:", text_content])
                     
@@ -392,7 +407,7 @@ class MediaIngestionManager:
                     # Media processing failed, fallback to scraping
                     fallback_reason = f"media extraction failed: {media_result.error_message}"
                     self.logger.warning(
-                        f"🔄 Media processing failed, falling back to scraping: {url} "
+                        f"🔄 Media processing failed, falling back to web scraping: {url} "
                         f"(reason: {fallback_reason}) (msg_id: {message.id})"
                     )
                     

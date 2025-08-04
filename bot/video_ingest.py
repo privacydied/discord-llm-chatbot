@@ -28,13 +28,52 @@ CACHE_DIR = Path(os.getenv("VIDEO_CACHE_DIR", "cache/video_audio"))
 DEFAULT_SPEEDUP = float(os.getenv("VIDEO_SPEEDUP", "1.5"))
 CACHE_EXPIRY_DAYS = int(os.getenv("VIDEO_CACHE_EXPIRY_DAYS", "7"))
 
-# Supported URL patterns
+# Supported URL patterns - must match MEDIA_CAPABLE_DOMAINS from media_capability.py
 SUPPORTED_PATTERNS = [
+    # YouTube patterns
     r'https?://(?:www\.)?youtube\.com/watch\?v=[\w-]+',
-    r'https?://(?:www\.)?youtube\.com/shorts/[\w-]+',  # YouTube Shorts
+    r'https?://(?:www\.)?youtube\.com/shorts/[\w-]+',
     r'https?://youtu\.be/[\w-]+',
+    
+    # TikTok patterns
     r'https?://(?:www\.)?tiktok\.com/@[\w.-]+/video/\d+',
     r'https?://(?:vm\.)?tiktok\.com/[\w-]+',
+    
+    # Twitter/X patterns
+    r'https?://(?:www\.)?twitter\.com/[\w]+/status/\d+',
+    r'https?://(?:www\.)?x\.com/[\w]+/status/\d+',
+    
+    # Other video platforms
+    r'https?://(?:www\.)?vimeo\.com/\d+',
+    r'https?://(?:www\.)?dailymotion\.com/video/[\w-]+',
+    r'https?://(?:www\.)?twitch\.tv/videos/\d+',
+    r'https?://(?:www\.)?twitch\.tv/[\w]+/clip/[\w-]+',
+    r'https?://(?:www\.)?bilibili\.com/video/[\w-]+',
+    r'https?://(?:www\.)?rumble\.com/[\w-]+',
+    r'https?://(?:www\.)?odysee\.com/@[\w-]+:[\w-]+/[\w-]+:[\w-]+',
+    r'https?://(?:www\.)?lbry\.tv/@[\w-]+:[\w-]+/[\w-]+:[\w-]+',
+    r'https?://(?:www\.)?veoh\.com/watch/[\w-]+',
+    r'https?://(?:www\.)?metacafe\.com/watch/\d+/[\w-]+',
+    
+    # Audio platforms
+    r'https?://(?:www\.)?soundcloud\.com/[\w-]+/[\w-]+',
+    r'https?://[\w-]+\.bandcamp\.com/track/[\w-]+',
+    r'https?://(?:www\.)?mixcloud\.com/[\w-]+/[\w-]+',
+    r'https?://(?:www\.)?audiomack\.com/song/[\w-]+/[\w-]+',
+    
+    # Educational/conference
+    r'https?://(?:www\.)?ted\.com/talks/[\w-]+',
+    r'https?://(?:www\.)?archive\.org/details/[\w-]+',
+    
+    # Social media (flexible patterns for various post formats)
+    r'https?://(?:www\.)?reddit\.com/r/[\w-]+/comments/[\w-]+',
+    r'https?://v\.redd\.it/[\w-]+',  # Reddit video direct links
+    r'https?://(?:www\.)?reddit\.com/video/[\w-]+',  # Reddit video pages
+    r'https?://(?:www\.)?facebook\.com/[\w.-]+/videos/\d+',
+    r'https?://(?:www\.)?fb\.com/[\w.-]+/videos/\d+',
+    r'https?://(?:www\.)?instagram\.com/p/[\w-]+',
+    r'https?://(?:www\.)?instagram\.com/reel/[\w-]+',
+    r'https?://(?:www\.)?linkedin\.com/posts/[\w-]+'
 ]
 
 # Global semaphore for download concurrency

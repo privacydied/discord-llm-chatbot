@@ -21,14 +21,43 @@ PROBE_CACHE_TTL_SECONDS = int(os.getenv("MEDIA_PROBE_CACHE_TTL", "300"))  # 5 mi
 PROBE_TIMEOUT_SECONDS = int(os.getenv("MEDIA_PROBE_TIMEOUT", "10"))  # 10 seconds default
 CACHE_DIR = Path("cache/media_probes")
 
-# Whitelisted domains for media ingestion
+# Domains that should be probed for media content
+# These domains may or may not have video/audio - we probe with yt-dlp and fallback to scraping
 MEDIA_CAPABLE_DOMAINS = {
+    # Video platforms (high confidence)
     "youtube.com",
     "youtu.be", 
     "tiktok.com",
     "vm.tiktok.com",
+    "vimeo.com",
+    "dailymotion.com",
+    "twitch.tv",
+    "bilibili.com",
+    "rumble.com",
+    "odysee.com",
+    "lbry.tv",
+    "veoh.com",
+    "metacafe.com",
+    
+    # Audio/music platforms
+    "soundcloud.com",
+    "bandcamp.com",
+    "mixcloud.com",
+    "audiomack.com",
+    
+    # Educational/conference
+    "ted.com",
+    "archive.org",
+    
+    # Social media with mixed content (probe first, fallback to scraping)
     "twitter.com",
-    "x.com"
+    "x.com",
+    "reddit.com",
+    "v.redd.it",  # Reddit video direct links
+    "facebook.com",
+    "fb.com",
+    "instagram.com",
+    "linkedin.com"
 }
 
 @dataclass
@@ -128,19 +157,34 @@ class MediaCapabilityDetector:
             stdout, stderr = await proc.communicate()
             
             if proc.returncode == 0:
-                # yt-dlp successfully extracted metadata
+                # yt-dlp successfully extracted metadata - check if it's actually video content
                 output_lines = stdout.decode().strip().split('\n')
                 if len(output_lines) >= 2 and output_lines[0] and output_lines[1]:
-                    return True, "media available"
+                    title = output_lines[0].strip()
+                    duration = output_lines[1].strip()
+                    
+                    # More rigorous check - ensure we have meaningful video metadata
+                    if title and title != "NA" and duration and duration != "NA":
+                        try:
+                            # Try to parse duration as a number (seconds)
+                            float(duration)
+                            return True, "video content detected"
+                        except ValueError:
+                            # Duration is not a number, might be text-only content
+                            return False, "no valid video duration found"
+                    else:
+                        return False, "incomplete video metadata"
                 else:
                     return False, "metadata extraction incomplete"
             else:
                 # yt-dlp failed to extract - likely no media
                 error_output = stderr.decode().lower()
                 if "unsupported url" in error_output or "no video" in error_output:
-                    return False, "unsupported url format"
+                    return False, "no video content found"
                 elif "private" in error_output or "unavailable" in error_output:
                     return False, "content unavailable"
+                elif "not a video" in error_output or "no formats" in error_output:
+                    return False, "no video formats available"
                 else:
                     return False, f"probe failed: {error_output[:100]}"
                     
