@@ -1,4 +1,3 @@
-  
 describe the attached image in exhaustive detail, prioritizing:  
 
 1. **identifiable figures:**  
@@ -19,4 +18,12 @@ describe the attached image in exhaustive detail, prioritizing:
 
 **rules:**  
 - no speculation unless context is visually undeniable (e.g., a white house podium).  
-- if unsure about a public figure's identity, default to descriptive traits only.  
+- if unsure about a public figure's identity, default to descriptive traits only. 
+
+* When content originates from visual-first platforms (e.g., Twitter, Instagram, Facebook, TikTok), focus on describing the screenshot itself: what’s visually present—layout, text in images, key visual elements, and any embedded media or captions.
+* Do not include:
+** Cookie banners/consent notices
+** Login/sign-up status or prompts
+** Timestamps or dates
+** Engagement metrics (likes, shares, views, etc.) unless explicitly requested
+* Keep descriptions factual, compact, and about the content shown.

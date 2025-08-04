@@ -149,17 +149,65 @@ async def transcribe_wav(path: Path) -> str:
     raise RuntimeError("No valid STT engine available")
 
 async def normalise_to_wav(attachment) -> Path:
-    """Normalize audio attachment to 16kHz mono WAV"""
+    """Normalize audio attachment to 16kHz mono WAV with smart preprocessing"""
     try:
         # Save original attachment to temp file
         with tempfile.NamedTemporaryFile(suffix=".tmp", delete=False) as tmp:
             await attachment.save(tmp.name)
             orig_path = Path(tmp.name)
         
+        logger.debug(f"[STT] Starting smart preprocessing for: {orig_path.name}")
+        
         # Create output WAV file
         wav_path = orig_path.with_suffix(".wav")
         
-        # Convert to 16kHz mono WAV using ffmpeg
+        # Smart preprocessing pipeline:
+        # 1. loudnorm - normalize audio levels first to prevent distortion
+        # 2. atempo=1.5 - increase speed by 50% for faster processing
+        # 3. silenceremove - cut silence so Whisper doesn't waste cycles on dead air
+        # 4. Convert to 16kHz mono WAV format required by Whisper
+        audio_filters = [
+            "loudnorm=I=-16:TP=-1.5:LRA=11",  # Normalize loudness (EBU R128)
+            "atempo=1.5",                      # Speed up by 50%
+            "silenceremove=start_periods=1:start_duration=0.1:start_threshold=-40dB:detection=peak,aformat=sample_fmts=s16:sample_rates=16000:channel_layouts=mono"  # Remove silence + format
+        ]
+        
+        cmd = [
+            "ffmpeg", "-y", "-i", str(orig_path),
+            "-af", ",".join(audio_filters),
+            "-acodec", "pcm_s16le",
+            str(wav_path)
+        ]
+        
+        logger.debug(f"[STT] Running ffmpeg with filters: {','.join(audio_filters)}")
+        
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
+        stdout, stderr = await proc.communicate()
+        
+        if proc.returncode != 0:
+            logger.error(f"[STT] ffmpeg preprocessing failed: {stderr.decode()}")
+            # Fallback to basic conversion if smart preprocessing fails
+            logger.warning("[STT] Falling back to basic audio conversion")
+            return await _basic_normalise_to_wav(orig_path, wav_path)
+        
+        logger.debug(f"[STT] Smart preprocessing completed successfully")
+        
+        # Clean up original file
+        orig_path.unlink()
+        
+        return wav_path
+    except Exception as e:
+        logger.error(f"[STT] Audio normalization failed: {e}")
+        raise
+
+
+async def _basic_normalise_to_wav(orig_path: Path, wav_path: Path) -> Path:
+    """Fallback basic audio conversion without smart preprocessing"""
+    try:
         cmd = [
             "ffmpeg", "-y", "-i", str(orig_path),
             "-ar", "16000", "-ac", "1", "-acodec", "pcm_s16le",
@@ -177,5 +225,5 @@ async def normalise_to_wav(attachment) -> Path:
         
         return wav_path
     except Exception as e:
-        logger.error(f"Audio normalization failed: {e}")
+        logger.error(f"[STT] Basic audio conversion failed: {e}")
         raise
