@@ -1,10 +1,12 @@
 """
 Centralized speech-to-text inference module (hear)
+Supports both Discord voice messages and URL-based video audio ingestion.
 """
 import asyncio
 import tempfile
 import os
 from pathlib import Path
+from typing import Union, Dict, Any
 from .stt import stt_manager
 from .exceptions import InferenceError
 from .util.logging import get_logger
@@ -110,3 +112,68 @@ async def hear_infer(audio_path: Path) -> str:
                     temp_file.unlink()
                 except Exception as e:
                     logger.warning(f"Error in final cleanup of {temp_file}: {e}")
+
+
+async def hear_infer_from_url(url: str, speedup: float = 1.5, force_refresh: bool = False) -> Dict[str, Any]:
+    """
+    Transcribe audio from YouTube/TikTok URL with metadata preservation.
+    
+    Args:
+        url: YouTube or TikTok URL
+        speedup: Audio speedup factor (default 1.5x)
+        force_refresh: Force re-download even if cached
+        
+    Returns:
+        Dict containing transcription and metadata
+    """
+    try:
+        logger.info(f"👂🎥 STT inference started for URL: {url}")
+        
+        if not stt_manager.is_available():
+            raise InferenceError("STT engine not available")
+        
+        # Import here to avoid circular imports
+        from .video_ingest import fetch_and_prepare_url_audio
+        
+        # Fetch and prepare audio from URL
+        processed_audio = await fetch_and_prepare_url_audio(url, speedup, force_refresh)
+        
+        # Transcribe the processed audio using existing STT pipeline
+        logger.debug(f"Transcribing processed video audio: {processed_audio.audio_path}")
+        transcription = await stt_manager.transcribe_async(processed_audio.audio_path)
+        
+        # Return transcription with rich metadata
+        result = {
+            'transcription': transcription,
+            'metadata': {
+                'source': processed_audio.metadata.source_type,
+                'url': processed_audio.metadata.url,
+                'title': processed_audio.metadata.title,
+                'uploader': processed_audio.metadata.uploader,
+                'upload_date': processed_audio.metadata.upload_date,
+                'original_duration_s': processed_audio.metadata.duration_seconds,
+                'processed_duration_s': processed_audio.processed_duration_seconds,
+                'speedup_factor': processed_audio.speedup_factor,
+                'cache_hit': processed_audio.cache_hit,
+                'timestamp': processed_audio.timestamp.isoformat()
+            }
+        }
+        
+        logger.info(f"✅ URL transcription completed: {processed_audio.metadata.title[:50]}...")
+        return result
+        
+    except Exception as e:
+        logger.error(f"👂🎥 URL STT inference failed: {str(e)}", exc_info=True)
+        error_msg = str(e).lower()
+        
+        # Provide user-friendly error messages
+        if "unsupported url" in error_msg:
+            raise InferenceError("This URL is not supported. Please use YouTube or TikTok links.")
+        elif "video too long" in error_msg:
+            raise InferenceError("This video is too long to process. Please try a shorter video.")
+        elif "download failed" in error_msg:
+            raise InferenceError("Could not download the video. It may be private or unavailable.")
+        elif "audio processing failed" in error_msg:
+            raise InferenceError("Could not process the audio from this video.")
+        else:
+            raise InferenceError(f"Video transcription failed: {str(e)}")

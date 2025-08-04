@@ -46,7 +46,7 @@ async def setup_commands(bot):
     import logging
     
     try:
-        from . import test_cmds, memory_cmds, tts_cmds, config_commands
+        from . import test_cmds, memory_cmds, tts_cmds, config_commands, video_commands
 
         # A set to keep track of loaded cogs and avoid duplicates
         loaded_cogs = set(bot.cogs.keys())
@@ -56,7 +56,8 @@ async def setup_commands(bot):
             'TestCommands': test_cmds,
             'MemoryCommands': memory_cmds,
             'TTSCommands': tts_cmds,
-            'ConfigCommands': config_commands
+            'ConfigCommands': config_commands,
+            'VideoCommands': video_commands
         }
 
         for cog_name, module in cogs_to_load.items():

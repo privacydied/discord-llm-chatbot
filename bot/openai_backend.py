@@ -147,8 +147,17 @@ Server Context: {server_context}"""
                 'backend': 'openai'
             }
     
+    except openai.AuthenticationError as e:
+        logger.error(f"OpenAI authentication failed: {e}")
+        raise APIError(f"OpenAI authentication failed - check API key: {str(e)}")
+    except openai.RateLimitError as e:
+        logger.warning(f"OpenAI rate limit exceeded: {e}")
+        raise APIError(f"OpenAI rate limit exceeded: {str(e)}")
+    except openai.APIError as e:
+        logger.error(f"OpenAI API error: {e}")
+        raise APIError(f"OpenAI API error: {str(e)}")
     except Exception as e:
-        logger.error(f"Error in generate_openai_response: {e}", exc_info=True)
+        logger.error(f"Unexpected error in generate_openai_response: {e}", exc_info=True)
         raise APIError(f"Failed to generate OpenAI response: {str(e)}")
 
 

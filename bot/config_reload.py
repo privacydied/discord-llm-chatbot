@@ -230,52 +230,42 @@ def _sighup_handler(signum: int, frame) -> None:
         logger.error(f"❌ SIGHUP handler error: {e}", exc_info=True)
 
 
-async def _file_watcher_task_func() -> None:
-    """Background task to watch .env file for changes."""
-    last_mtime = 0
-    debounce_seconds = 2  # Debounce to avoid rapid reloads
+async def _file_watcher_loop() -> None:
+    """Main file watcher loop with proper debouncing."""
+    env_file = Path(".env")
+    last_mtime = None
+    last_reload_time = 0
+    debounce_delay = 2.0  # Minimum seconds between reloads
     
     try:
-        if _env_file_path.exists():
-            last_mtime = _env_file_path.stat().st_mtime
-        
-        logger.info(f"👁️ File watcher started for {_env_file_path}")
-        
         while True:
-            await asyncio.sleep(5)  # Check every 5 seconds
+            await asyncio.sleep(1)  # Check every second
             
             try:
-                if not _env_file_path.exists():
-                    continue
-                
-                current_mtime = _env_file_path.stat().st_mtime
-                
-                if current_mtime > last_mtime:
-                    # File has been modified
-                    time_since_last_reload = time.time() - _last_reload_time
+                if env_file.exists():
+                    current_mtime = env_file.stat().st_mtime
+                    current_time = time.time()
                     
-                    if time_since_last_reload >= debounce_seconds:
-                        logger.info(f"📁 .env file modification detected, triggering reload...")
-                        result = reload_env()
+                    # Check if file changed and enough time passed since last reload
+                    if (last_mtime is not None and 
+                        current_mtime != last_mtime and 
+                        current_time - last_reload_time >= debounce_delay):
                         
-                        if result['success']:
-                            logger.info("✅ File watcher configuration reload completed")
-                        else:
-                            logger.error(f"❌ File watcher configuration reload failed: {result.get('error')}")
-                    else:
-                        logger.debug(f"🔄 File change detected but debounced (last reload {time_since_last_reload:.1f}s ago)")
+                        logger.info("📁 .env file changed, reloading configuration...")
+                        reload_env()
+                        last_reload_time = current_time
                     
                     last_mtime = current_mtime
                     
             except Exception as e:
-                logger.error(f"❌ File watcher error: {e}")
-                await asyncio.sleep(10)  # Wait longer on error
+                logger.error(f"❌ Error in file watcher: {e}")
+                await asyncio.sleep(5)  # Wait longer on error
                 
     except asyncio.CancelledError:
-        logger.info("👁️ File watcher task cancelled")
+        logger.info("🛑 File watcher cancelled")
         raise
     except Exception as e:
-        logger.error(f"❌ File watcher task failed: {e}", exc_info=True)
+        logger.error(f"💥 File watcher crashed: {e}", exc_info=True)
 
 
 def setup_config_reload() -> None:
@@ -297,15 +287,15 @@ def setup_config_reload() -> None:
 
 
 async def start_file_watcher() -> None:
-    """Start the file watcher background task."""
+    """Start file watcher task to monitor .env changes."""
     global _file_watcher_task
     
     if _file_watcher_task and not _file_watcher_task.done():
-        logger.warning("👁️ File watcher already running")
+        logger.warning("⚠️ File watcher already running")
         return
     
-    _file_watcher_task = asyncio.create_task(_file_watcher_task_func())
-    logger.info("👁️ File watcher task started")
+    _file_watcher_task = asyncio.create_task(_file_watcher_loop())
+    logger.info("👁️ Configuration file watcher started")
 
 
 async def stop_file_watcher() -> None:

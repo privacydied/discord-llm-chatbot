@@ -21,6 +21,7 @@ dlinfo==2.0.0
 espeakng-loader==0.2.4
 faster-whisper==1.1.1
 filelock==3.18.0
+yt-dlp>=2024.1.0
 flatbuffers==25.2.10
 
 fsspec==2025.5.1
@@ -59,6 +60,7 @@ pillow==11.3.0
 pip==25.1.1
 propcache==0.3.2
 protobuf==6.31.1
+psutil>=5.9.0
 pycparser==2.22
 pydantic==2.11.7
 pydantic-core==2.33.2

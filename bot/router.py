@@ -28,10 +28,9 @@ logger = get_logger(__name__)
 
 # Local application imports
 from .action import BotAction, ResponseMessage
-from .brain import brain_infer
 from .command_parser import Command, parse_command
 from .exceptions import DispatchEmptyError, DispatchTypeError
-from .hear import hear_infer
+from .hear import hear_infer, hear_infer_from_url
 from .pdf_utils import PDFProcessor
 from .see import see_infer
 from .web import process_url
@@ -51,9 +50,10 @@ except ImportError:
     PDF_SUPPORT = False
 
 class InputModality(Enum):
-    """Defines the type of input received from the user."""
+    """Defines the type of input the bot is processing."""
     TEXT_ONLY = auto()
     URL = auto()
+    VIDEO_URL = auto()  # YouTube/TikTok URLs for audio transcription
     IMAGE = auto()
     DOCUMENT = auto()
     AUDIO = auto() # Not implemented in this refactor
@@ -165,6 +165,23 @@ class Router:
 
                 if input_modality == InputModality.TEXT_ONLY:
                     action = await self._invoke_text_flow(text_content, message, context_str)
+                elif input_modality == InputModality.VIDEO_URL:
+                    # Extract video URL and process through STT pipeline
+                    video_patterns = [
+                        r'https?://(?:www\.)?youtube\.com/watch\?v=[\w-]+',
+                        r'https?://youtu\.be/[\w-]+',
+                        r'https?://(?:www\.)?tiktok\.com/@[\w.-]+/video/\d+',
+                        r'https?://(?:vm\.)?tiktok\.com/[\w-]+',
+                    ]
+                    video_url = None
+                    for pattern in video_patterns:
+                        match = re.search(pattern, text_content)
+                        if match:
+                            video_url = match.group(0)
+                            break
+                    
+                    if video_url:
+                        action = await self._flow_process_video_url(video_url, message)
                 elif input_modality == InputModality.URL:
                     url_match = re.search(r'https?://[\S]+', text_content)
                     if url_match:
@@ -207,6 +224,19 @@ class Router:
             if content_type and 'audio' in content_type:
                 return InputModality.AUDIO
 
+        # Check for video URLs (YouTube/TikTok) first
+        video_patterns = [
+            r'https?://(?:www\.)?youtube\.com/watch\?v=[\w-]+',
+            r'https?://youtu\.be/[\w-]+',
+            r'https?://(?:www\.)?tiktok\.com/@[\w.-]+/video/\d+',
+            r'https?://(?:vm\.)?tiktok\.com/[\w-]+',
+        ]
+        
+        for pattern in video_patterns:
+            if re.search(pattern, message.content):
+                return InputModality.VIDEO_URL
+        
+        # Check for other URLs
         if re.search(r'https?://[\S]+', message.content):
             return InputModality.URL
             
@@ -253,65 +283,103 @@ class Router:
 
     async def _flow_process_url(self, url: str, message: discord.Message) -> BotAction:
         """
-        Processes a URL, intelligently routing to a text or vision-language flow.
+        Processes a URL with smart media ingestion and graceful fallback to scraping.
         """
         self.logger.info(f"🌐 Processing URL: {url} (msg_id: {message.id})")
+        
         try:
-            processed_data = await web.process_url(url)
-
-            error = processed_data.get('error')
-            text_content = processed_data.get('text')
-            screenshot_path = processed_data.get('screenshot_path')
-
-            if error == 'screenshot_failed_for_forced_domain':
-                self.logger.warning(f"Screenshot failed for {url}, using placeholder image. (msg_id: {message.id})")
-                screenshot_path = "media/twitter-placeholder.png"
-                if not os.path.exists(screenshot_path):
-                    self.logger.error(f"Placeholder image not found at {screenshot_path}!")
-                    return BotAction(content=f"I couldn't get a screenshot of {url}, and the fallback image is missing.", error=True)
+            # Use smart media ingestion system
+            if not hasattr(self, '_media_ingestion_manager'):
+                from .media_ingestion import create_media_ingestion_manager
+                self._media_ingestion_manager = create_media_ingestion_manager(self.bot)
             
-            elif error:
-                self.logger.error(f"URL processing failed: {error} (msg_id: {message.id})")
-                return BotAction(content=f"I couldn't process that URL: {error}", error=True)
-
-            # Prioritize screenshot if available and route to the vision-language flow.
-            if screenshot_path:
-                self.logger.info(f"🖼️ Screenshot available for {url}. Routing to vision flow. (msg_id: {message.id})")
-                
-                # Use the VL_PROMPT_FILE content if available, otherwise a default prompt.
-                prompt = self.bot.system_prompts.get("VL_PROMPT_FILE") or "Describe this image based on the content of the URL."
-                vision_response = await see_infer(image_path=screenshot_path, prompt=prompt)
-                
-                if not vision_response or vision_response.error:
-                    self.logger.warning(f"Vision model returned no/error response for {url}. (msg_id: {message.id})")
-                    return BotAction(content=f"I couldn't understand the content of {url}.", error=True)
-
-                vl_content = vision_response.content
-                # Truncate if response is too long for Discord
-                if len(vl_content) > 1999:
-                    self.logger.info(f"VL response is too long ({len(vl_content)} chars), truncating for text fallback.")
-                    vl_content = vl_content[:1999].rsplit('\n', 1)[0]
-
-                # The VL model's response is now the primary content to be processed by the text model.
-                final_prompt = f"User provided this URL: {url}. The content of the URL is: {vl_content}"
-                return await brain_infer(final_prompt)
-
-            # If no screenshot, fall back to the text-only flow.
-            if text_content:
-                self.logger.info(f"📝 Text content available for {url}. Routing to text flow. (msg_id: {message.id})")
-                # Construct the prompt for the text model.
-                context_str = await self.bot.context_manager.get_context_string(message)
-                prompt = f"The user sent this URL: {url}. Here is the content:\n\n{text_content}"
-                # Invoke the standard text flow, which uses the correct text prompt file.
-                return await self._invoke_text_flow(prompt, message, context_str)
-
-            # If no content could be extracted at all, return an error.
-            self.logger.warning(f"No content (screenshot or text) could be extracted from {url}. (msg_id: {message.id})")
-            return BotAction(content="I couldn't retrieve any content from that URL.", error=True)
-
+            return await self._media_ingestion_manager.process_url_smart(url, message)
+            
         except Exception as e:
-            self.logger.error(f"❌ URL processing failed unexpectedly: {e} (msg_id: {message.id})", exc_info=True)
+            self.logger.error(f"❌ Smart URL processing failed unexpectedly: {e} (msg_id: {message.id})", exc_info=True)
             return BotAction(content="⚠️ An unexpected error occurred while processing this URL.", error=True)
+
+    async def _flow_process_video_url(self, url: str, message: Message) -> BotAction:
+        """Process video URL through STT pipeline and integrate with conversation context."""
+        self.logger.info(f"🎥 Processing video URL: {url} (msg_id: {message.id})")
+        
+        try:
+            # Transcribe video URL audio
+            result = await hear_infer_from_url(url)
+            
+            transcription = result['transcription']
+            metadata = result['metadata']
+            
+            # Create enriched context for the LLM
+            video_context = (
+                f"User shared a {metadata['source']} video: '{metadata['title']}' "
+                f"by {metadata['uploader']} (Duration: {metadata['original_duration_s']:.1f}s, "
+                f"processed at {metadata['speedup_factor']}x speed). "
+                f"The following is the audio transcription:\n\n{transcription}"
+            )
+            
+            # Get existing conversation context
+            context_str = await self.bot.context_manager.get_context_string(message)
+            
+            # Combine video context with conversation history
+            if context_str:
+                full_context = f"{context_str}\n\n--- VIDEO CONTENT ---\n{video_context}"
+            else:
+                full_context = video_context
+            
+            # Process through text flow with enriched context
+            prompt = (
+                f"Please summarize and discuss the key points from this video. "
+                f"Provide insights, analysis, or answer any questions about the content."
+            )
+            
+            # Use contextual brain inference if available
+            if (hasattr(self.bot, 'enhanced_context_manager') and 
+                self.bot.enhanced_context_manager and 
+                os.getenv("USE_ENHANCED_CONTEXT", "true").lower() == "true"):
+                
+                try:
+                    from bot.contextual_brain import contextual_brain_infer_simple
+                    self.logger.debug(f"🧠🎥 Using contextual brain for video analysis [msg_id={message.id}]")
+                    
+                    # Add video metadata to enhanced context
+                    video_metadata_context = {
+                        'source': metadata['source'],
+                        'url': metadata['url'],
+                        'title': metadata['title'],
+                        'uploader': metadata['uploader'],
+                        'original_duration_s': metadata['original_duration_s'],
+                        'processed_duration_s': metadata['processed_duration_s'],
+                        'speedup_factor': metadata['speedup_factor'],
+                        'timestamp': metadata['timestamp']
+                    }
+                    
+                    response_text = await contextual_brain_infer_simple(
+                        message, video_context, self.bot, additional_context=video_metadata_context
+                    )
+                    return BotAction(content=response_text)
+                    
+                except Exception as e:
+                    self.logger.warning(f"Contextual brain inference failed for video, falling back: {e}")
+            
+            # Fallback to basic brain inference
+            return await brain_infer(prompt, context=full_context)
+            
+        except Exception as e:
+            self.logger.error(f"❌ Video URL processing failed: {e} (msg_id: {message.id})", exc_info=True)
+            error_msg = str(e).lower()
+            
+            # Provide user-friendly error messages
+            if "unsupported url" in error_msg:
+                return BotAction(content="❌ This URL is not supported. Please use YouTube or TikTok links.", error=True)
+            elif "video too long" in error_msg:
+                return BotAction(content="❌ This video is too long to process. Please try a shorter video (max 10 minutes).", error=True)
+            elif "download failed" in error_msg:
+                return BotAction(content="❌ Could not download the video. It may be private, unavailable, or region-locked.", error=True)
+            elif "audio processing failed" in error_msg:
+                return BotAction(content="❌ Could not process the audio from this video. The audio format may be unsupported.", error=True)
+            else:
+                return BotAction(content="❌ An error occurred while processing the video. Please try again or use a different video.", error=True)
 
     async def _flow_process_audio(self, message: Message) -> BotAction:
         """Process audio attachment through STT model."""

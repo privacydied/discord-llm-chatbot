@@ -70,13 +70,24 @@ async def main() -> NoReturn:
     except Exception as e:
         logger.warning(f"Failed to setup signal handlers: {e}", exc_info=True)
 
+    # Set up background tasks and file watcher before starting bot
+    await spawn_background_tasks(bot)
+    await start_file_watcher()
+    
     max_retries = 3
     base_delay = 5  # seconds
     for attempt in range(max_retries):
         try:
             logger.info(f"Connecting to Discord... (Attempt {attempt + 1}/{max_retries})")
+            logger.info("🚀 Bot is ready and operational!")
+            
+            # This call blocks until bot disconnects
             await bot.start(config["DISCORD_TOKEN"])
-            break
+            
+            # If we reach here, bot disconnected gracefully
+            logger.info("Bot disconnected gracefully")
+            shutdown_logging_and_exit(0)
+            
         except (discord.HTTPException, aiohttp.ClientConnectorError):
             if attempt == max_retries - 1:
                 logger.error("Failed to log in. Please check your Discord token.")
@@ -84,16 +95,12 @@ async def main() -> NoReturn:
             delay = base_delay * (2 ** attempt)
             logger.warning(f"Connection failed, retrying in {delay}s...")
             await asyncio.sleep(delay)
+        except Exception as e:
+            logger.critical(f"Unexpected error during bot execution: {e}", exc_info=True)
+            shutdown_logging_and_exit(1)
     
-    # Start background tasks
-    await spawn_background_tasks(bot)
-    
-    # Start configuration file watcher
-    await start_file_watcher()
-    
-    logger.info("🚀 Bot is ready and operational!")
-
-    logger.critical("Bot event loop exited unexpectedly.")
+    # If all retries failed
+    logger.critical("All connection attempts failed")
     shutdown_logging_and_exit(1)
 
 

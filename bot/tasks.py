@@ -35,8 +35,8 @@ def setup_memory_save_task(bot: commands.Bot) -> tasks.Loop:
             save_all_server_profiles()
             logger.debug("Auto-saved all profiles", extra={"subsys": "memory", "event": "autosave"})
         except Exception as e:
-            logger.error(f"Error during profile autosave: {e}", exc_info=True, 
-                        extra={"subsys": "memory", "event": "autosave_error"})
+            logger.exception(f"Error during profile autosave: {e}", 
+                           extra={"subsys": "memory", "event": "autosave_error"})
     
     # Register the task
     _background_tasks["memory_save"] = memory_save_task
