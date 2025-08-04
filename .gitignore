@@ -50,6 +50,8 @@ user_profiles/*.json
 dm_logs/*.json  
 tts_cache/*.wav
 tts_cache/*
+cache/video_audio/*
+cache/video_audio/index.json
 
 # Temporary files
 *.swp

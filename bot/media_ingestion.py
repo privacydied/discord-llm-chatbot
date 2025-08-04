@@ -282,14 +282,46 @@ class MediaIngestionManager:
                     processing_time_ms=processing_time
                 )
             
-            # Extract content (prioritize screenshot over text as per existing logic)
-            content = None
-            if processed_data.get('screenshot_path'):
-                content = f"Screenshot available at: {processed_data['screenshot_path']}"
-            elif processed_data.get('text'):
-                content = processed_data['text']
+            # Handle image processing with vision-language models (restore original flow)
+            screenshot_path = processed_data.get('screenshot_path')
+            text_content = processed_data.get('text')
             
-            if not content:
+            if screenshot_path:
+                # Image processing: use vision-language model
+                self.logger.info(f"🖼️ Processing image via vision-language model: {url}")
+                
+                try:
+                    from .vision import vision_infer
+                    
+                    # Use vision model to analyze the image
+                    vision_result = await vision_infer(screenshot_path, message.content or "Describe this image")
+                    
+                    # Create enriched context combining vision analysis with any text
+                    context_parts = [f"Image analysis from {url}:", vision_result]
+                    if text_content:
+                        context_parts.extend(["\nAdditional text content:", text_content])
+                    
+                    enriched_content = "\n".join(context_parts)
+                    
+                    self.logger.info(f"✅ Vision processing completed in {processing_time:.1f}ms for: {url}")
+                    
+                    return MediaIngestionResult(
+                        success=True,
+                        content=enriched_content,
+                        metadata={'fallback_reason': fallback_reason, 'has_vision': True, 'screenshot_path': screenshot_path},
+                        fallback_triggered=True,
+                        source_type="vision",
+                        processing_time_ms=processing_time
+                    )
+                    
+                except Exception as vision_error:
+                    self.logger.warning(f"⚠️ Vision processing failed: {vision_error}, falling back to text")
+                    # Fall through to text processing
+            
+            # Text-only processing (original fallback)
+            if text_content:
+                content = text_content
+            else:
                 return MediaIngestionResult(
                     success=False,
                     error_message="No content could be extracted from URL",
