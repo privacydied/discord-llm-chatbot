@@ -11,7 +11,7 @@ from unittest.mock import patch, MagicMock
 
 # Import the fixed implementation
 from bot.kokoro_direct_fixed import KokoroDirect
-from bot.tts_errors import TTSWriteError
+from bot.tts.errors import TTSWriteError
 
 class TestKokoroDirect:
     """Test the fixed KokoroDirect implementation."""

@@ -114,15 +114,16 @@ class ChromaRAGBackend:
                 logger.warning(f"[RAG] No chunks generated for document: {source_id}")
                 return []
             
-            # Generate embeddings for all chunks
-            embeddings = await self.embedding_model.encode(chunking_result.chunks)
+            # Generate embeddings for all chunks (extract text content)
+            chunk_texts = [chunk for chunk in chunking_result.chunks]
+            embeddings = await self.embedding_model.encode(chunk_texts)
             
             # Create VectorDocument objects
             documents = []
             chunk_metadata = metadata or {}
             chunk_metadata.update(chunking_result.metadata)
             
-            for i, (chunk_text, embedding) in enumerate(zip(chunking_result.chunks, embeddings)):
+            for i, (chunk_text, embedding) in enumerate(zip(chunk_texts, embeddings)):
                 doc = VectorDocument.create(
                     source_id=source_id,
                     chunk_text=chunk_text,
@@ -240,7 +241,9 @@ class ChromaRAGBackend:
                     results['distances'][0]
                 )):
                     # Convert distance to similarity score (ChromaDB uses L2 distance)
-                    similarity_score = max(0.0, 1.0 - distance)
+                    # For L2 distance, smaller distance = higher similarity
+                    # Use inverse relationship: similarity = 1 / (1 + distance)
+                    similarity_score = 1.0 / (1.0 + distance)
                     
                     # Skip results below confidence threshold
                     if similarity_score < self.config.vector_confidence_threshold:
@@ -248,8 +251,17 @@ class ChromaRAGBackend:
                             logger.debug(f"[RAG] Skipping low confidence result: {similarity_score:.3f}")
                         continue
                     
-                    # Reconstruct VectorDocument from metadata
-                    vector_doc = VectorDocument.from_dict(metadata)
+                    # Create VectorDocument from ChromaDB data
+                    vector_doc = VectorDocument(
+                        id=doc_id,
+                        source_id=metadata.get('filepath', metadata.get('filename', 'unknown')),
+                        chunk_text=document_text,
+                        embedding=[],  # Empty embedding for search results
+                        metadata=metadata,
+                        version_hash=metadata.get('version_hash', ''),
+                        chunk_index=metadata.get('chunk_index', 0),
+                        confidence_score=metadata.get('confidence_score', 1.0)
+                    )
                     
                     search_result = SearchResult(
                         document=vector_doc,

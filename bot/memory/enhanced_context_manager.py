@@ -57,7 +57,7 @@ class EnhancedContextManager:
     def __init__(
         self,
         bot: discord.Client,
-        filepath: str = "enhanced_context.json",
+        filepath: str = "runtime/enhanced_context.json",
         history_window: Optional[int] = None,
         max_token_limit: int = 4000,
         encryption_key: Optional[bytes] = None

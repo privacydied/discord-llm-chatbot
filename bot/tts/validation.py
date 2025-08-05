@@ -12,7 +12,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Dict, Set, Optional, List, Tuple, Any, Union
 
-from .tts_errors import TTSGibberishError, MissingTokeniserError
+from .errors import TTSGibberishError, MissingTokeniserError
 
 logger = logging.getLogger(__name__)
 

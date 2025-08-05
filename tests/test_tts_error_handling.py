@@ -10,7 +10,7 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock, mock_open
 
 # Import the modules we want to test
-from bot.tts_errors import TTSSynthesisError
+from bot.tts.errors import TTSSynthesisError
 from bot.kokoro_direct_fixed import KokoroDirect
 from bot.pdf_utils import PDFProcessor, TESSERACT_AVAILABLE
 

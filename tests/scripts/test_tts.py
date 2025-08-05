@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 from bot.tts import TTSManager
-from bot.tts_state import TTSState
+from bot.tts.state import TTSState
 
 class TestTTSManager:
     @pytest.fixture

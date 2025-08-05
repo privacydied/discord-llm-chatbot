@@ -14,7 +14,7 @@ class ContextManager:
     or in-memory, with separation for guilds/channels and DMs.
     """
 
-    def __init__(self, bot: discord.Client, filepath: str = "context.json", max_messages: int = 10):
+    def __init__(self, bot: discord.Client, filepath: str = "runtime/context.json", max_messages: int = 10):
         """
         Initializes the ContextManager.
 

@@ -13,7 +13,7 @@ from discord.ext import commands
 
 logger = logging.getLogger(__name__)
 
-from bot.tts_state import tts_state
+from bot.tts.state import tts_state
 
 from bot.router import get_router
 

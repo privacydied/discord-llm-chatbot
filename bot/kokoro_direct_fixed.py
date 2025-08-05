@@ -18,7 +18,7 @@ from typing import Dict, List, Optional, Tuple, Union, Any
 from numpy.typing import NDArray
 
 # Import custom exceptions
-from .tts_errors import TTSWriteError
+from .tts.errors import TTSWriteError
 
 # Import tokenizer registry
 from .tokenizer_registry import select_tokenizer_for_language

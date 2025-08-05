@@ -3,7 +3,7 @@ Centralized TTS inference module (speak)
 """
 import logging
 from pathlib import Path
-from .tts_manager import tts_manager
+from .tts.interface import TTSManager
 import tempfile
 from .exceptions import TTSAudioError
 

@@ -29,7 +29,7 @@ class RAGBootstrap:
     def __init__(self, rag_backend: ChromaRAGBackend, kb_path: str = "kb"):
         self.rag_backend = rag_backend
         self.kb_path = Path(kb_path)
-        self.version_file = Path("rag_versions.json")
+        self.version_file = Path("runtime/rag_versions.json")
         
     async def bootstrap_knowledge_base(self, force_refresh: bool = False) -> Dict[str, Any]:
         """

@@ -209,7 +209,7 @@ def load_config():
         "MAX_USER_MEMORY": _safe_int(os.getenv("MAX_USER_MEMORY"), "20", "MAX_USER_MEMORY"),
         "MAX_SERVER_MEMORY": _safe_int(os.getenv("MAX_SERVER_MEMORY"), "100", "MAX_SERVER_MEMORY"),
         "MEMORY_SAVE_INTERVAL": _safe_int(os.getenv("MEMORY_SAVE_INTERVAL"), "30", "MEMORY_SAVE_INTERVAL"),
-        "CONTEXT_FILE_PATH": os.getenv("CONTEXT_FILE_PATH", "context.json"),
+        "CONTEXT_FILE_PATH": os.getenv("CONTEXT_FILE_PATH", "runtime/context.json"),
         "MAX_CONTEXT_MESSAGES": _safe_int(os.getenv("MAX_CONTEXT_MESSAGES"), "10", "MAX_CONTEXT_MESSAGES"),
         
         # DIRECTORY SETTINGS

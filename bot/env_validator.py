@@ -9,7 +9,7 @@ from typing import Dict, List, Optional, Tuple, Any
 
 # Import TTS utilities for validation
 try:
-    from .tts_utils_enhanced import validate_tts_environment, get_env_paths
+    from .tts.validation import validate_tts_environment, get_env_paths
     use_enhanced_utils = True
 except ImportError:
     use_enhanced_utils = False

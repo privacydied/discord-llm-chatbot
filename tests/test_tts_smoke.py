@@ -20,7 +20,7 @@ import numpy as np
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from bot.kokoro_direct_fixed import KokoroDirect
-from bot.tts_errors import TTSWriteError
+from bot.tts.errors import TTSWriteError
 import soundfile as sf
 
 

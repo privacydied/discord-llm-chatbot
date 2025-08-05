@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock
 
 from bot.commands.tts_cmds import TTSCommands
-from bot.tts_state import tts_state
+from bot.tts.state import tts_state
 
 
 @pytest.fixture

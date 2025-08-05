@@ -246,6 +246,100 @@ After migration, verify everything works:
 - **Automatic retries**: Built-in retry mechanisms
 - **Resource cleanup**: Proper cleanup on shutdown
 
+## Recent Refactoring: TTS Structure Consolidation (2025-01)
+
+### TTS Architecture Modernization
+
+The TTS system has been consolidated from a dual-structure approach to a unified modern architecture:
+
+#### Before (Dual TTS Structure)
+```
+bot/
+├── tts.py                    # Legacy TTS manager (479 lines)
+├── tts_*.py                  # 10+ scattered TTS files
+├── tts/                      # Modern engine-based architecture
+│   ├── engines/
+│   ├── interface.py
+│   └── manager.py
+└── [other files...]
+```
+
+#### After (Unified TTS Structure)
+```
+bot/
+├── tts/                      # ✅ Consolidated TTS system
+│   ├── engines/              # TTS engine implementations
+│   ├── interface.py          # Main TTS interface
+│   ├── manager.py            # TTS manager
+│   ├── validation.py         # ✅ Moved from tts_validation.py
+│   ├── instrumentation.py    # ✅ Moved from tts_instrumentation.py
+│   ├── state.py              # ✅ Moved from tts_state.py
+│   └── errors.py             # ✅ Enhanced from tts_errors.py
+└── [other files...]
+```
+
+#### Import Changes
+
+If you have custom code that imports TTS modules, update your imports:
+
+```python
+# OLD imports (no longer work)
+from bot.tts import TTSManager
+from bot.tts_validation import validate_tts_environment
+from bot.tts_errors import TTSWriteError
+from bot.tts_state import tts_state
+
+# NEW imports (current structure)
+from bot.tts.interface import TTSManager
+from bot.tts.validation import validate_tts_environment
+from bot.tts.errors import TTSWriteError
+from bot.tts.state import tts_state
+```
+
+### Test Organization
+
+All test files have been consolidated into the `tests/` directory:
+
+```
+tests/
+├── core/                     # Core functionality tests
+├── commands/                 # Command tests
+├── tts/                      # TTS-specific tests
+├── scripts/                  # ✅ Moved from scripts/tests/
+├── test_*.py                 # ✅ Moved from root directory
+└── [other test files...]
+```
+
+### Cleanup Summary
+
+**Files Removed:**
+- `bot/tts.py` (legacy 479-line TTS manager)
+- `bot/tts_manager_fixed.py` (redundant)
+- `bot/tts_utils.py` and `bot/tts_utils_enhanced.py` (functionality moved)
+- `bot/tts_cli.py` (standalone CLI not needed)
+- Duplicate test files and `.disabled` test files
+- Redundant requirements files (`requirements-new.txt`, `requirements.txt.bak`)
+
+**Files Moved:**
+- Runtime files → `runtime/` directory
+- Test files → unified `tests/` directory
+- TTS modules → `bot/tts/` subdirectory
+
+### Validation
+
+After this refactoring, verify TTS functionality:
+
+```bash
+# Test TTS import
+python -c "from bot.tts.interface import TTSManager; print('✅ TTS imports work')"
+
+# Run TTS tests
+python -m pytest tests/test_tts* -v
+
+# Test bot startup
+python run.py --config-check
+```
+
 ## Support
 
 If you encounter issues during migration:

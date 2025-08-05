@@ -119,7 +119,7 @@ class HybridSearchConfig:
     """Configuration for hybrid vector + keyword search."""
     
     # Vector search parameters
-    vector_confidence_threshold: float = 0.7
+    vector_confidence_threshold: float = 0.3  # Lowered from 0.7 to work with L2 distance conversion
     max_vector_results: int = 5
     vector_weight: float = 0.7
     
