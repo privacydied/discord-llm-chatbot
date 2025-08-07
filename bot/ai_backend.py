@@ -141,4 +141,5 @@ async def generate_vl_response(
             
     except Exception as e:
         logger.error(f"❌ Error in generate_vl_response: {e}", exc_info=True)
-        raise Exception(f"Failed to generate VL response: {str(e)}")
+        # Re-raise the original exception to preserve retry logic
+        raise e
