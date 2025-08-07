@@ -103,3 +103,4 @@ local_settings.py
 context.json
 enhanced_context.json
 enhanced_context.json.key
+QWEN.md
