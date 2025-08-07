@@ -27,6 +27,9 @@ from typing import Any, Callable, Coroutine, Dict, Optional, TYPE_CHECKING, List
 
 # Import new modality system
 from .modality import InputModality, InputItem, collect_input_items, map_item_to_modality
+from .multimodal_retry import run_with_retries
+from .result_aggregator import ResultAggregator
+from .enhanced_retry import get_retry_manager, ProviderConfig
 
 
 from . import web
@@ -171,95 +174,136 @@ class Router:
 
     async def _process_multimodal_message_internal(self, message: Message, context_str: str) -> None:
         """
-        Process all input items from a message sequentially.
-        Each item is processed through its appropriate handler and fed into the text flow.
+        Process all input items from a message sequentially with result aggregation.
+        Follows the 1 IN → 1 OUT rule by combining all results into a single response.
         """
         # Collect all input items from the message
         items = collect_input_items(message)
         
+        # Process original text content (remove URLs that will be processed separately)
+        original_text = message.content
+        if self.bot.user in message.mentions:
+            original_text = re.sub(r'^<@!?{}>\s*'.format(self.bot.user.id), '', original_text).strip()
+        
+        # Remove URLs from text content since they will be processed separately
+        url_pattern = r'https?://[^\s<>"\'\'[\]{}|\\\^`]+'
+        original_text = re.sub(url_pattern, '', original_text).strip()
+        
         # If no items found, process as text-only
         if not items:
-            text_content = message.content
-            if self.bot.user in message.mentions:
-                text_content = re.sub(r'^<@!?{}>\s*'.format(self.bot.user.id), '', text_content).strip()
-            
-            if text_content.strip():
-                await self._invoke_text_flow(text_content, message, context_str)
+            # No actionable items found, treat as text-only
+            await self._invoke_text_flow(message.content, message, context_str)
             return
         
-        self.logger.info(f"📋 Processing {len(items)} input items sequentially (msg_id: {message.id})")
+        self.logger.info(f"🔄 Processing {len(items)} input items sequentially (msg_id: {message.id})")
         
-        # Define timeout mappings for different modalities
-        TIMEOUTS = {
-            InputModality.SINGLE_IMAGE: 30.0,
-            InputModality.MULTI_IMAGE: 45.0,
-            InputModality.VIDEO_URL: 60.0,
-            InputModality.AUDIO_VIDEO_FILE: 45.0,
-            InputModality.PDF_DOCUMENT: 30.0,
-            InputModality.PDF_OCR: 45.0,
-            InputModality.GENERAL_URL: 15.0,
-            InputModality.SCREENSHOT_URL: 15.0,
-            InputModality.UNKNOWN: 10.0,
-        }
+        # Initialize result aggregator and retry manager
+        aggregator = ResultAggregator()
+        retry_manager = get_retry_manager()
         
-        # Handler mapping
+        # Per-item budget configuration (configurable via env)
+        PER_ITEM_BUDGET = float(os.environ.get('MULTIMODAL_PER_ITEM_BUDGET', '45.0'))
+        
+        # Process each item sequentially with enhanced retry/fallback
+        for i, item in enumerate(items, 1):
+            modality = map_item_to_modality(item)
+            
+            # Create description based on item type and payload
+            if item.source_type == "attachment":
+                description = f"{item.payload.filename} ({item.payload.content_type or 'unknown'})"
+            elif item.source_type == "url":
+                description = f"URL: {item.payload[:50]}{'...' if len(item.payload) > 50 else ''}"
+            elif item.source_type == "embed":
+                description = f"Embed: {item.payload.title or item.payload.url or 'untitled'}"
+            else:
+                description = f"{item.source_type}: {str(item.payload)[:50]}"
+            
+            self.logger.info(f"📋 Processing item {i}/{len(items)}: {modality.name} - {description}")
+            
+            # Determine modality type for retry manager
+            if modality in [InputModality.SINGLE_IMAGE, InputModality.MULTI_IMAGE]:
+                retry_modality = "vision"
+            else:
+                retry_modality = "text"  # Most other modalities use text processing
+            
+            # Create coroutine factory for this item
+            def create_handler_coro(provider_config: ProviderConfig):
+                async def handler_coro():
+                    return await self._handle_item_with_provider(item, modality, provider_config)
+                return handler_coro
+            
+            # Run with enhanced retry/fallback system
+            result = await retry_manager.run_with_fallback(
+                modality=retry_modality,
+                coro_factory=create_handler_coro,
+                per_item_budget=PER_ITEM_BUDGET
+            )
+            
+            # Record result (success or failure)
+            if result.success:
+                aggregator.add_result(
+                    item_index=i,
+                    item=item,
+                    modality=modality,
+                    result_text=result.result,
+                    success=True,
+                    duration=result.total_time,
+                    attempts=result.attempts
+                )
+                self.logger.info(f"✅ Item {i}/{len(items)} processed successfully ({result.total_time:.2f}s)")
+            else:
+                error_msg = f"❌ Failed after {result.attempts} attempts: {result.error}"
+                if result.fallback_occurred:
+                    error_msg += " (fallback attempted)"
+                
+                aggregator.add_result(
+                    item_index=i,
+                    item=item,
+                    modality=modality,
+                    result_text=error_msg,
+                    success=False,
+                    duration=result.total_time,
+                    attempts=result.attempts
+                )
+        
+        # Generate aggregated prompt and send single response
+        aggregated_prompt = aggregator.get_aggregated_prompt(original_text)
+        
+        # Log summary statistics
+        stats = aggregator.get_summary_stats()
+        self.logger.info(
+            f"📊 Multimodal processing complete: {stats['successful_items']}/{stats['total_items']} successful, "
+            f"avg duration: {stats['avg_duration']:.1f}s" if stats.get('avg_duration') else "📊 Multimodal processing complete"
+        )
+        
+        # Send single aggregated response through text flow (1 IN → 1 OUT)
+        if aggregated_prompt.strip():
+            await self._invoke_text_flow(aggregated_prompt, message, context_str)
+        else:
+            self.logger.warning(f"No content to process after multimodal aggregation (msg_id: {message.id})")
+
+    async def _handle_item_with_provider(self, item: InputItem, modality: InputModality, provider_config: ProviderConfig) -> str:
+        """
+        Handle a single input item with specific provider configuration.
+        Routes to appropriate handler and returns text result.
+        """
+        # Handler mapping - all handlers must return str, never reply directly
         handlers = {
             InputModality.SINGLE_IMAGE: self._handle_image,
-            InputModality.MULTI_IMAGE: self._handle_image,
+            InputModality.MULTI_IMAGE: self._handle_image,  # Process each image individually
             InputModality.VIDEO_URL: self._handle_video_url,
             InputModality.AUDIO_VIDEO_FILE: self._handle_audio_video_file,
             InputModality.PDF_DOCUMENT: self._handle_pdf,
             InputModality.PDF_OCR: self._handle_pdf_ocr,
             InputModality.GENERAL_URL: self._handle_general_url,
             InputModality.SCREENSHOT_URL: self._handle_screenshot_url,
-            InputModality.UNKNOWN: self._handle_unknown,
         }
         
-        # Process each item sequentially
-        for i, item in enumerate(items, 1):
-            modality = map_item_to_modality(item)
-            self.logger.info(f"🔄 Processing item {i}/{len(items)} as {modality.name} (msg_id: {message.id})")
-            
-            # Track metrics
-            self._metric_inc('router_input_modality', {'modality': modality.name.lower()})
-            
-            handler = handlers.get(modality, self._handle_unknown)
-            timeout = TIMEOUTS.get(modality, 10.0)
-            
-            try:
-                # Process the item with timeout
-                start_time = asyncio.get_event_loop().time()
-                result_text = await asyncio.wait_for(handler(item), timeout=timeout)
-                duration = asyncio.get_event_loop().time() - start_time
-                
-                self.logger.info(f"✅ {modality.name} handler completed in {duration:.2f}s (msg_id: {message.id})")
-                
-                # Feed result into text processing pipeline
-                if result_text and result_text.strip():
-                    await self._flow_process_text(result_text, context_str, message)
-                else:
-                    self.logger.warning(f"Handler returned empty result for {modality.name} (msg_id: {message.id})")
-                    
-            except asyncio.TimeoutError:
-                self.logger.error(f"⏰ {modality.name} handler timed out after {timeout}s (msg_id: {message.id})")
-                await message.reply(f"⚠️ Processing timed out on one of your inputs ({modality.name.lower()}).")
-                
-            except Exception as e:
-                self.logger.error(f"❌ Error in {modality.name} handler: {e} (msg_id: {message.id})", exc_info=True)
-                await message.reply(f"❌ An error occurred processing one of your inputs ({modality.name.lower()}).")
+        handler = handlers.get(modality, self._handle_unknown)
         
-        # Process any remaining text content after removing processed URLs
-        text_content = message.content
-        if self.bot.user in message.mentions:
-            text_content = re.sub(r'^<@!?{}>\s*'.format(self.bot.user.id), '', text_content).strip()
-        
-        # Remove URLs from text content since they were processed separately
-        url_pattern = r'https?://[^\s<>"\'\'[\]{}|\\^`]+'
-        text_content = re.sub(url_pattern, '', text_content).strip()
-        
-        # Only process remaining text if it has meaningful content
-        if text_content and len(text_content.strip()) > 0:
-            await self._flow_process_text(text_content, context_str, message)
+        # TODO: Pass provider_config to handlers that need it (vision handlers)
+        # For now, use existing handler interface
+        return await handler(item)
 
     # ===== NEW HANDLER METHODS FOR MULTIMODAL PROCESSING =====
     
@@ -288,22 +332,31 @@ class Router:
             return "Failed to process image."
     
     async def _process_image_from_attachment(self, attachment: discord.Attachment) -> str:
-        """Process image from Discord attachment."""
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as tmp_file:
-            tmp_path = tmp_file.name
-        
+        """Process image from Discord attachment. Pure function - never replies directly."""
+        tmp_path = None
         try:
-            await attachment.save(tmp_path)
-            self.logger.debug(f"Saved image attachment to temp file: {tmp_path}")
+            # Create temporary file for image processing
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as tmp_file:
+                tmp_path = tmp_file.name
             
-            # Use the message content as prompt, or default prompt
-            prompt = "Describe this image in detail."
+            # Save attachment to temporary file
+            await attachment.save(tmp_path)
+            self.logger.debug(f"📷 Saved image attachment to temp file: {tmp_path}")
+            
+            # Use vision inference with default prompt
+            prompt = "Describe this image in detail, focusing on key visual elements, objects, text, and context."
             vision_response = await see_infer(image_path=tmp_path, prompt=prompt)
             
-            if not vision_response or vision_response.error:
-                return "Could not analyze the image."
+            if not vision_response:
+                return "❌ Vision processing returned no response"
             
-            return f"Image analysis: {vision_response.content}"
+            if vision_response.error:
+                return f"❌ Vision processing error: {vision_response.error}"
+            
+            if not vision_response.content or not vision_response.content.strip():
+                return "❌ Vision processing returned empty content"
+            
+            return f"🖼️ **Image Analysis ({attachment.filename})**\n{vision_response.content.strip()}"
             
         finally:
             if os.path.exists(tmp_path):
@@ -788,9 +841,17 @@ class Router:
         """Increment a metric, if metrics are enabled."""
         if hasattr(self.bot, 'metrics') and self.bot.metrics:
             try:
-                self.bot.metrics.increment(metric_name, labels or {})
+                # Handle both increment() and inc() method names
+                if hasattr(self.bot.metrics, 'increment'):
+                    self.bot.metrics.increment(metric_name, labels or {})
+                elif hasattr(self.bot.metrics, 'inc'):
+                    self.bot.metrics.inc(metric_name, labels=labels or {})
+                else:
+                    # Fallback - metrics object doesn't have expected methods
+                    pass
             except Exception as e:
-                self.logger.warning(f"Failed to increment metric {metric_name}: {e}")
+                # Never let metrics failures break the application
+                self.logger.debug(f"Metrics increment failed for {metric_name}: {e}")
 
 # Backward compatibility
 MessageRouter = Router

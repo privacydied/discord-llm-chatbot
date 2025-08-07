@@ -468,5 +468,5 @@ async def generate_vl_response(
         }
     
     except Exception as e:
-        logger.error(f"❌ Error in generate_vl_response: {e}", exc_info=True)
+        logger.error(f"❌ Error in generate_vl_response: {e}")
         raise APIError(f"Failed to generate VL response: {str(e)}")

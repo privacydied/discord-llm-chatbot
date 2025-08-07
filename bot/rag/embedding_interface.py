@@ -9,6 +9,10 @@ from ..util.logging import get_logger
 
 logger = get_logger(__name__)
 
+# Global state to prevent spam logging
+_rag_misconfig_warned = False
+_rag_legacy_mode = False
+
 
 class EmbeddingInterface(ABC):
     """Abstract base class for embedding model implementations."""
@@ -188,20 +192,33 @@ class OpenAIEmbedding(EmbeddingInterface):
         return self.embedding_dim
 
 
-def create_embedding_model(model_type: str = "sentence-transformers", **kwargs) -> EmbeddingInterface:
+def create_embedding_model(model_type: str = "sentence-transformers", **kwargs) -> Optional[EmbeddingInterface]:
     """
-    Factory function to create embedding models.
+    Factory function to create embedding models with graceful fallback.
     
     Args:
         model_type: Type of model ("sentence-transformers" or "openai")
         **kwargs: Additional arguments passed to the model constructor
         
     Returns:
-        EmbeddingInterface implementation
+        EmbeddingInterface implementation or None if unsupported/failed
     """
+    global _rag_misconfig_warned, _rag_legacy_mode
+    
     if model_type == "sentence-transformers":
         return SentenceTransformerEmbedding(**kwargs)
     elif model_type == "openai":
         return OpenAIEmbedding(**kwargs)
     else:
-        raise ValueError(f"Unknown embedding model type: {model_type}")
+        # Cache the misconfig and warn only once
+        if not _rag_misconfig_warned:
+            logger.warning(f"[RAG] Unknown embedding model type: {model_type} → fallback to legacy mode")
+            _rag_misconfig_warned = True
+            _rag_legacy_mode = True
+        
+        # Return None to indicate fallback to legacy mode
+        return None
+
+def is_rag_legacy_mode() -> bool:
+    """Check if RAG is in legacy mode due to misconfig."""
+    return _rag_legacy_mode

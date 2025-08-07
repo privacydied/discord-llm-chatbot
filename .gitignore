@@ -104,3 +104,4 @@ context.json
 enhanced_context.json
 enhanced_context.json.key
 QWEN.md
+chroma_db/chroma.sqlite3

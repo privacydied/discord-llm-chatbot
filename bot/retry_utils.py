@@ -169,7 +169,7 @@ def with_retry(config: Optional[RetryConfig] = None):
 # Predefined retry configurations for common scenarios
 VISION_RETRY_CONFIG = RetryConfig(
     max_attempts=3,
-    base_delay=2.0,
+    base_delay=5.0,  # Increased to 5 seconds for provider outages
     max_delay=30.0,
     exponential_base=2.0,
     jitter=True,

@@ -75,5 +75,5 @@ async def see_infer(image_path: str, prompt: str = None) -> BotAction:
             raise InferenceError("Unexpected response format from vision model")
             
     except Exception as e:
-        logger.error(f"👁️ Vision inference failed: {str(e)}", exc_info=True)
+        logger.error(f"👁️ Vision inference failed: {str(e)}")
         raise InferenceError(f"Vision processing failed: {str(e)}")
