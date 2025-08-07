@@ -11,10 +11,12 @@ from .config import load_config
 from .memory import get_profile, get_server_profile
 from .exceptions import APIError
 from .util.logging import get_logger
+from .retry_utils import with_retry, VISION_RETRY_CONFIG, API_RETRY_CONFIG
 
 logger = get_logger(__name__)
 
 
+@with_retry(API_RETRY_CONFIG)
 async def generate_openai_response(
     prompt: str,
     context: str = "",
@@ -258,6 +260,7 @@ async def get_base64_image(image_url: str) -> str:
         raise APIError(error_msg)
 
 
+@with_retry(VISION_RETRY_CONFIG)
 async def generate_vl_response(
     image_url: str,
     user_prompt: str = "",

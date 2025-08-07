@@ -734,7 +734,19 @@ class Router:
 
         except Exception as e:
             self.logger.error(f"❌ Image processing failed: {e} (msg_id: {message.id})", exc_info=True)
-            return BotAction(content="⚠️ An error occurred while processing this image.", error=True)
+            
+            # Provide user-friendly error messages based on error type
+            error_str = str(e).lower()
+            if "502" in error_str or "provider returned error" in error_str:
+                return BotAction(content="🔄 Vision processing failed. This could be due to a temporary service issue. Please try again in a moment.", error=True)
+            elif "timeout" in error_str:
+                return BotAction(content="⏱️ Vision processing timed out. Please try again with a smaller image.", error=True)
+            elif "file format" in error_str or "unsupported" in error_str:
+                return BotAction(content="📷 Unsupported image format. Please try uploading a JPEG, PNG, or WebP image.", error=True)
+            elif "file size" in error_str or "too large" in error_str:
+                return BotAction(content="📏 Image is too large. Please try uploading a smaller image.", error=True)
+            else:
+                return BotAction(content="⚠️ An error occurred while processing this image. Please try again.", error=True)
         finally:
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)
