@@ -8,6 +8,9 @@ from typing import TYPE_CHECKING, Optional, Dict, List, Tuple, Any
 import discord
 import io
 from discord.ext import commands
+from rich.console import Console
+from rich.tree import Tree
+from rich.panel import Panel
 
 from bot.config import load_system_prompts
 from bot.util.logging import get_logger
@@ -19,6 +22,78 @@ from bot.memory.enhanced_context_manager import EnhancedContextManager
 if TYPE_CHECKING:
     from bot.router import Router, BotAction
     from bot.tts import TTSManager
+
+
+def log_commands_setup(
+    console: Console,
+    command_modules: List[Tuple[str, bool]],
+    command_cogs: List[Tuple[str, bool]],
+    total_commands: int
+) -> None:
+    """
+    Log command setup progress using Rich's Tree and Panel for visual reporting.
+    
+    This function creates a structured visual report of the command setup process,
+    showing the status of module imports and cog registrations in a tree format.
+    
+    Args:
+        console: Rich Console instance for output
+        command_modules: List of (module_name, success_status) tuples for imports
+        command_cogs: List of (cog_name, success_status) tuples for cog registration
+        total_commands: Total number of commands registered across all cogs
+    
+    The output includes:
+    - A root node titled "🎬 Commands Setup"
+    - A branch "📦 Import modules" with ✅/❌ status for each module
+    - A branch "⚙️ Load cogs" with ✅/❌ status for each cog
+    - A summary with success/failure counts and total command count
+    """
+    # Create the main tree structure
+    tree = Tree("🎬 Commands Setup")
+    
+    # Add modules branch
+    modules_branch = tree.add("📦 Import modules")
+    modules_success = 0
+    modules_failed = 0
+    
+    for module_name, module_ok in command_modules:
+        status_icon = "✅" if module_ok else "❌"
+        modules_branch.add(f"{status_icon} {module_name}")
+        if module_ok:
+            modules_success += 1
+        else:
+            modules_failed += 1
+    
+    # Add cogs branch
+    cogs_branch = tree.add("⚙️ Load cogs")
+    cogs_success = 0
+    cogs_failed = 0
+    
+    for cog_name, cog_ok in command_cogs:
+        status_icon = "✅" if cog_ok else "❌"
+        cogs_branch.add(f"{status_icon} {cog_name}")
+        if cog_ok:
+            cogs_success += 1
+        else:
+            cogs_failed += 1
+    
+    # Add summary branch
+    total_success = modules_success + cogs_success
+    total_failed = modules_failed + cogs_failed
+    
+    summary_branch = tree.add("📊 Summary")
+    summary_branch.add(f"🎉 Complete: {total_success} loaded, {total_failed} failed")
+    summary_branch.add(f"📋 Total commands registered: {total_commands}")
+    
+    # Create panel and print
+    panel = Panel(
+        tree,
+        title="Command Setup Report",
+        border_style="blue",
+        padding=(1, 2)
+    )
+    
+    console.print(panel)
 
 
 class LLMBot(commands.Bot):
@@ -48,6 +123,9 @@ class LLMBot(commands.Bot):
         
         # Idempotency guard to prevent duplicate initialization [DRY][REH]
         self._boot_completed = False
+        
+        # Rich console for enhanced command setup logging
+        self.console = Console()
         
         self.context_manager = ContextManager(
             self,
@@ -456,13 +534,88 @@ class LLMBot(commands.Bot):
             self.logger.error(f"Failed to set up router: {e}", exc_info=True)
 
     async def load_extensions(self) -> None:
-        """Load command extensions."""
-        try:
-            from bot.commands import setup_commands
-            await setup_commands(self)
-            self.logger.info("Commands loaded")
-        except Exception as e:
-            self.logger.error(f"Failed to load extensions: {e}", exc_info=True)
+        """Load command extensions using Rich visual reporting."""
+        import importlib
+        
+        # Define command modules and their corresponding cog classes
+        module_definitions = [
+            ("test_cmds", "TestCommands"),
+            ("memory_cmds", "MemoryCommands"),
+            ("tts_cmds", "TTSCommands"),
+            ("config_commands", "ConfigCommands"),
+            ("video_commands", "VideoCommands"),
+            ("rag_commands", "RAGCommands")
+        ]
+        
+        command_modules = []  # List of (module_name, success_status)
+        command_cogs = []     # List of (cog_name, success_status)
+        loaded_modules = {}   # Store successfully loaded modules
+        
+        # Phase 1: Import command modules
+        for module_name, cog_class_name in module_definitions:
+            try:
+                self.logger.debug(f"Importing {module_name}...")
+                module = importlib.import_module(f"bot.commands.{module_name}")
+                loaded_modules[cog_class_name] = module
+                command_modules.append((module_name, True))
+                self.logger.debug(f"✅ Successfully imported {module_name}")
+            except Exception as import_error:
+                command_modules.append((module_name, False))
+                self.logger.error(f"❌ Failed to import {module_name}: {import_error}", exc_info=True)
+        
+        # Phase 2: Load and register cogs
+        for cog_class_name, module in loaded_modules.items():
+            try:
+                # Check if cog is already loaded to avoid duplicates
+                if self.get_cog(cog_class_name):
+                    self.logger.debug(f"Skipping already loaded cog: {cog_class_name}")
+                    command_cogs.append((cog_class_name, True))
+                    continue
+                
+                self.logger.debug(f"Loading {cog_class_name} cog...")
+                
+                # Check if module has setup function
+                if hasattr(module, 'setup'):
+                    await module.setup(self)
+                    
+                    # Verify the cog was actually loaded
+                    if self.get_cog(cog_class_name):
+                        command_cogs.append((cog_class_name, True))
+                        self.logger.debug(f"✅ {cog_class_name} loaded successfully")
+                    else:
+                        command_cogs.append((cog_class_name, False))
+                        self.logger.error(f"❌ {cog_class_name} setup completed but cog not found")
+                else:
+                    command_cogs.append((cog_class_name, False))
+                    self.logger.error(f"❌ {cog_class_name} module missing setup function")
+                    
+            except Exception as cog_error:
+                command_cogs.append((cog_class_name, False))
+                self.logger.error(f"❌ Failed to load {cog_class_name}: {cog_error}", exc_info=True)
+        
+        # Count total registered commands across all cogs
+        total_commands = 0
+        for cog in self.cogs.values():
+            total_commands += len([cmd for cmd in cog.get_commands()])
+        
+        # Generate Rich visual report
+        log_commands_setup(
+            self.console,
+            command_modules,
+            command_cogs,
+            total_commands
+        )
+        
+        # Log summary at appropriate level
+        successful_modules = sum(1 for _, success in command_modules if success)
+        failed_modules = sum(1 for _, success in command_modules if not success)
+        successful_cogs = sum(1 for _, success in command_cogs if success)
+        failed_cogs = sum(1 for _, success in command_cogs if not success)
+        
+        if failed_modules > 0 or failed_cogs > 0:
+            self.logger.warning(f"⚠️ Command setup completed with failures: {failed_modules + failed_cogs} failed")
+        else:
+            self.logger.info(f"✅ Command setup completed successfully: {successful_modules + successful_cogs} loaded")
 
     async def connect(self, *, reconnect: bool = True) -> None:
         """Connect to Discord."""

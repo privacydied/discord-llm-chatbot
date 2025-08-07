@@ -9,11 +9,13 @@ import asyncio
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch, call
 from typing import Dict, Any
+import re
 
 import discord
 from discord.ext import commands
+from rich.console import Console
 
-from bot.core.bot import LLMBot
+from bot.core.bot import LLMBot, log_commands_setup
 
 
 @pytest.fixture
@@ -255,3 +257,221 @@ async def test_initialization_order_preserved(test_bot):
     ]
     
     assert call_order == expected_order
+
+
+@pytest.mark.asyncio
+async def test_log_commands_setup_all_success():
+    """Test Rich command setup logging with all successful operations."""
+    # Create a console that records output
+    console = Console(record=True, width=80)
+    
+    # Test data: all successful
+    command_modules = [
+        ("test_cmds", True),
+        ("memory_cmds", True),
+        ("tts_cmds", True)
+    ]
+    
+    command_cogs = [
+        ("TestCommands", True),
+        ("MemoryCommands", True),
+        ("TTSCommands", True)
+    ]
+    
+    total_commands = 15
+    
+    # Call the function
+    log_commands_setup(console, command_modules, command_cogs, total_commands)
+    
+    # Get the recorded output
+    output = console.export_text()
+    
+    # Verify tree structure and content
+    assert "🎬 Commands Setup" in output
+    assert "📦 Import modules" in output
+    assert "⚙️ Load cogs" in output
+    assert "📊 Summary" in output
+    
+    # Verify all modules show success
+    assert "✅ test_cmds" in output
+    assert "✅ memory_cmds" in output
+    assert "✅ tts_cmds" in output
+    
+    # Verify all cogs show success
+    assert "✅ TestCommands" in output
+    assert "✅ MemoryCommands" in output
+    assert "✅ TTSCommands" in output
+    
+    # Verify summary shows correct counts
+    assert "🎉 Complete: 6 loaded, 0 failed" in output
+    assert "📋 Total commands registered: 15" in output
+
+
+@pytest.mark.asyncio
+async def test_log_commands_setup_with_failures():
+    """Test Rich command setup logging with some failures."""
+    # Create a console that records output
+    console = Console(record=True, width=80)
+    
+    # Test data: mixed success/failure
+    command_modules = [
+        ("test_cmds", True),
+        ("memory_cmds", False),  # Failed import
+        ("tts_cmds", True)
+    ]
+    
+    command_cogs = [
+        ("TestCommands", True),
+        ("MemoryCommands", False),  # Failed to load
+        ("TTSCommands", True)
+    ]
+    
+    total_commands = 10  # Fewer commands due to failures
+    
+    # Call the function
+    log_commands_setup(console, command_modules, command_cogs, total_commands)
+    
+    # Get the recorded output
+    output = console.export_text()
+    
+    # Verify tree structure
+    assert "🎬 Commands Setup" in output
+    assert "📦 Import modules" in output
+    assert "⚙️ Load cogs" in output
+    assert "📊 Summary" in output
+    
+    # Verify mixed success/failure status
+    assert "✅ test_cmds" in output
+    assert "❌ memory_cmds" in output  # Failed
+    assert "✅ tts_cmds" in output
+    
+    assert "✅ TestCommands" in output
+    assert "❌ MemoryCommands" in output  # Failed
+    assert "✅ TTSCommands" in output
+    
+    # Verify summary shows correct failure counts
+    assert "🎉 Complete: 4 loaded, 2 failed" in output
+    assert "📋 Total commands registered: 10" in output
+
+
+@pytest.mark.asyncio
+async def test_load_extensions_with_rich_output(test_bot):
+    """Test that load_extensions produces Rich output and handles errors correctly."""
+    # Mock the console to capture output
+    test_bot.console = Console(record=True, width=80)
+    
+    # Mock importlib to simulate mixed success/failure
+    import importlib
+    
+    def mock_import_module(name):
+        if "memory_cmds" in name:
+            raise ImportError("Simulated import failure")
+        # Create a mock module with setup function
+        mock_module = MagicMock()
+        mock_module.setup = AsyncMock()
+        return mock_module
+    
+    # Mock get_cog to simulate cog loading behavior
+    def mock_get_cog(name):
+        if "MemoryCommands" in name:
+            return None  # Simulate cog not found after setup
+        # Return a mock cog for successful loads
+        mock_cog = MagicMock()
+        mock_cog.get_commands.return_value = [MagicMock() for _ in range(3)]  # 3 commands per cog
+        return mock_cog
+    
+    # Create a mock cogs property that returns our test cogs
+    mock_cogs = {
+        "TestCommands": mock_get_cog("TestCommands"),
+        "TTSCommands": mock_get_cog("TTSCommands")
+    }
+    
+    with patch('importlib.import_module', side_effect=mock_import_module), \
+         patch.object(test_bot, 'get_cog', side_effect=mock_get_cog), \
+         patch.object(type(test_bot), 'cogs', new_callable=lambda: mock_cogs):
+        
+        # Run load_extensions
+        await test_bot.load_extensions()
+        
+        # Get the recorded Rich output
+        output = test_bot.console.export_text()
+        
+        # Verify Rich tree structure is present
+        assert "🎬 Commands Setup" in output
+        assert "📦 Import modules" in output
+        assert "⚙️ Load cogs" in output
+        assert "📊 Summary" in output
+        
+        # Verify that failures are properly marked
+        assert "❌ memory_cmds" in output  # Import failure
+        assert "❌ MemoryCommands" in output  # Cog load failure
+        
+        # Verify some successes are present
+        assert "✅" in output  # At least some successes
+        
+        # Verify summary contains failure information
+        assert "failed" in output.lower()
+
+
+@pytest.mark.asyncio
+async def test_load_extensions_idempotency_with_rich(test_bot):
+    """Test that load_extensions respects idempotency and Rich output works correctly."""
+    # Mock the console to capture output
+    test_bot.console = Console(record=True, width=80)
+    
+    # Mock successful imports and cog loading
+    import importlib
+    
+    def mock_import_module(name):
+        mock_module = MagicMock()
+        mock_module.setup = AsyncMock()
+        return mock_module
+    
+    def mock_get_cog(name):
+        mock_cog = MagicMock()
+        mock_cog.get_commands.return_value = [MagicMock() for _ in range(2)]
+        return mock_cog
+    
+    # Create mock cogs for the property
+    mock_cogs = {"TestCommands": mock_get_cog("TestCommands")}
+    
+    with patch('importlib.import_module', side_effect=mock_import_module), \
+         patch.object(test_bot, 'get_cog', side_effect=mock_get_cog), \
+         patch.object(type(test_bot), 'cogs', new_callable=lambda: mock_cogs):
+        
+        # First call should work normally
+        await test_bot.load_extensions()
+        
+        # Get the first output
+        first_output = test_bot.console.export_text()
+        
+        # Verify Rich output was generated
+        assert "🎬 Commands Setup" in first_output
+        assert "✅" in first_output
+        
+        # Clear console for second call
+        test_bot.console = Console(record=True, width=80)
+        
+        # Second call should also work (cogs already loaded)
+        await test_bot.load_extensions()
+        
+        # Get the second output
+        second_output = test_bot.console.export_text()
+        
+        # Verify Rich output was generated again
+        assert "🎬 Commands Setup" in second_output
+        assert "✅" in second_output  # Should show success for already loaded cogs
+
+
+@pytest.mark.asyncio
+async def test_rich_console_initialization(test_bot):
+    """Test that Rich console is properly initialized in bot."""
+    # Verify console exists and is the right type
+    assert hasattr(test_bot, 'console')
+    assert isinstance(test_bot.console, Console)
+    
+    # Test that console can be used for output
+    test_bot.console.print("Test message")
+    
+    # Verify console is configured correctly (should not raise errors)
+    assert test_bot.console is not None
