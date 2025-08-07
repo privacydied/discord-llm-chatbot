@@ -46,6 +46,9 @@ class LLMBot(commands.Bot):
         self._active_long_running_tasks: Dict[str, asyncio.Task] = {}  # task_id -> task
         self._task_metadata: Dict[str, Dict[str, Any]] = {}  # task_id -> metadata
         
+        # Idempotency guard to prevent duplicate initialization [DRY][REH]
+        self._boot_completed = False
+        
         self.context_manager = ContextManager(
             self,
             filepath=self.config.get("CONTEXT_FILE_PATH", "context.json"),
@@ -61,29 +64,61 @@ class LLMBot(commands.Bot):
 
     async def setup_hook(self) -> None:
         """Asynchronous setup phase for the bot."""
-        self.logger.info("Setting up bot...")
+        # Prevent duplicate initialization [DRY][REH]
+        if self._boot_completed:
+            self.logger.debug("🔄 Setup hook called but boot already completed, skipping")
+            return
+        
+        self._boot_completed = True
+        self.logger.info("🔧 Starting bot setup")
+        
         try:
-            from bot.metrics.prometheus import PrometheusMetrics
-            self.metrics = PrometheusMetrics()
-        except Exception:
-            self.logger.warning("Prometheus metrics not available, using NullMetrics.")
+            # Initialize metrics
+            try:
+                from bot.metrics.prometheus import PrometheusMetrics
+                self.metrics = PrometheusMetrics()
+                self.logger.info("✅ Prometheus metrics initialized")
+            except Exception:
+                self.logger.warning("⚠️  Prometheus metrics not available, using NullMetrics")
 
-        self.system_prompts = load_system_prompts()
-        await self.load_profiles()
-        self.setup_background_tasks()
-        await self.setup_tts()
-        await self.setup_router()
-        await self.load_extensions()
-        self.logger.info("Bot setup complete")
+            # Load system prompts
+            self.system_prompts = load_system_prompts()
+            self.logger.info("✅ Loaded system prompts")
+            
+            # Load user and server profiles
+            await self.load_profiles()
+            self.logger.info("✅ Loaded user profiles")
+            
+            # Set up background tasks
+            self.setup_background_tasks()
+            self.logger.info("✅ Background tasks configured")
+            
+            # Initialize TTS if configured
+            await self.setup_tts()
+            self.logger.info("✅ TTS system initialized")
+            
+            # Set up message router
+            await self.setup_router()
+            self.logger.info("✅ Message router configured")
+            
+            # Load command extensions
+            await self.load_extensions()
+            self.logger.info("✅ Command extensions loaded")
+            
+            self.logger.info("🚀 Bot setup complete")
+            
+        except Exception as e:
+            self.logger.error(f"❌ Fatal error during bot setup: {e}", exc_info=True)
+            self._boot_completed = False  # Reset flag on failure to allow retry
+            raise
 
     async def on_ready(self):
         """Called when the bot is ready and connected to Discord."""
+        # Simple ready state logging - all setup is handled in setup_hook() [DRY]
         if not self._is_ready.is_set():
-            self.logger.info(f'Logged in as {self.user} (ID: {self.user.id})')
-            self.logger.info('Running setup_hook...')
-            await self.setup_hook()
+            self.logger.info(f"🤖 Logged in as {self.user} (ID: {self.user.id})")
             self._is_ready.set()
-            self.logger.info("Bot is ready to receive commands.")
+            self.logger.info("🎉 Bot is ready to receive commands!")
 
     def _get_user_queue(self, user_id: str) -> asyncio.Queue:
         """Get or create a message queue for a specific user."""
