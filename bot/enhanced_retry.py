@@ -90,13 +90,13 @@ class EnhancedRetryManager:
         # Optimized defaults with faster timeouts
         default_vision = [
             ProviderConfig("openrouter", "moonshotai/kimi-vl-a3b-thinking:free", timeout=6.0),
-            ProviderConfig("openrouter", "openai/gpt-4o-mini", timeout=8.0),
-            ProviderConfig("openrouter", "meta-llama/llama-3.2-11b-vision-instruct:free", timeout=10.0),
+            ProviderConfig("openrouter", "mistralai/mistral-small-3.2-24b-instruct:free", timeout=8.0),
+            ProviderConfig("openrouter", "qwen/qwen2.5-vl-32b-instruct:free", timeout=10.0),
         ]
         default_text = [
-            ProviderConfig("openrouter", "openai/gpt-4o-mini", timeout=10.0),
-            ProviderConfig("openrouter", "meta-llama/llama-3.1-8b-instruct:free", timeout=12.0),
-            ProviderConfig("ollama", "llama3.1", timeout=15.0),
+            ProviderConfig("openrouter", "deepseek/deepseek-r1-0528:free", timeout=10.0),
+            ProviderConfig("openrouter", "deepseek/deepseek-chat-v3-0324:free", timeout=12.0),
+            ProviderConfig("openrouter", "z-ai/glm-4.5-air:free", timeout=15.0),
         ]
 
         vision_models = os.getenv('VISION_FALLBACK_MODELS')
