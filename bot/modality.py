@@ -153,17 +153,30 @@ def _map_attachment_to_modality(attachment: discord.Attachment) -> InputModality
 
 def _map_url_to_modality(url: str) -> InputModality:
     """Map URL to modality based on domain and pattern matching."""
-    # Video URLs (YouTube/TikTok) - highest priority
-    video_patterns = [
-        r'https?://(?:www\.)?youtube\.com/watch\?v=[\w-]+',
-        r'https?://youtu\.be/[\w-]+',
-        r'https?://(?:www\.)?tiktok\.com/@[\w.-]+/video/\d+',
-        r'https?://(?:vm\.)?tiktok\.com/[\w-]+',
-    ]
-    
-    for pattern in video_patterns:
-        if re.match(pattern, url):
-            return InputModality.VIDEO_URL
+    # Video URLs - use comprehensive patterns from video_ingest.py
+    try:
+        from .video_ingest import SUPPORTED_PATTERNS
+        logger.debug(f"🎥 Testing {len(SUPPORTED_PATTERNS)} video patterns for modality mapping: {url}")
+        
+        for pattern in SUPPORTED_PATTERNS:
+            if re.search(pattern, url):
+                logger.info(f"✅ Video URL modality detected: {url} matched pattern: {pattern}")
+                return InputModality.VIDEO_URL
+                
+        logger.debug(f"❌ No video patterns matched for modality mapping: {url}")
+    except ImportError as e:
+        logger.warning(f"Could not import SUPPORTED_PATTERNS from video_ingest: {e}, using fallback patterns")
+        # Fallback to original limited patterns
+        video_patterns = [
+            r'https?://(?:www\.)?youtube\.com/watch\?v=[\w-]+',
+            r'https?://youtu\.be/[\w-]+',
+            r'https?://(?:www\.)?tiktok\.com/@[\w.-]+/video/\d+',
+            r'https?://(?:vm\.)?tiktok\.com/[\w-]+',
+        ]
+        
+        for pattern in video_patterns:
+            if re.match(pattern, url):
+                return InputModality.VIDEO_URL
     
     # Image URLs
     if re.search(r'\.(jpg|jpeg|png|gif|webp|bmp)(\?.*)?$', url, re.IGNORECASE):

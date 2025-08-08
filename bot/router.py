@@ -667,12 +667,16 @@ class Router:
         # Check for video URLs using comprehensive patterns from video_ingest.py
         try:
             from .video_ingest import SUPPORTED_PATTERNS
+            self.logger.debug(f"🎥 Testing {len(SUPPORTED_PATTERNS)} video patterns against: {message.content}")
             
             for pattern in SUPPORTED_PATTERNS:
                 if re.search(pattern, message.content):
+                    self.logger.info(f"✅ Video URL detected: {message.content} matched pattern: {pattern}")
                     return InputModality.VIDEO_URL
-        except ImportError:
-            self.logger.warning("Could not import SUPPORTED_PATTERNS from video_ingest, using fallback patterns")
+                    
+            self.logger.debug(f"❌ No video patterns matched for: {message.content}")
+        except ImportError as e:
+            self.logger.warning(f"Could not import SUPPORTED_PATTERNS from video_ingest: {e}, using fallback patterns")
             # Fallback patterns (original limited set)
             fallback_patterns = [
                 r'https?://(?:www\.)?youtube\.com/watch\?v=[\w-]+',
