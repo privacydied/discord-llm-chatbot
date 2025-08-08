@@ -92,10 +92,10 @@ async def test_command_handling(
     "modality, flow_key, expected_output",
     [
         (InputModality.TEXT_ONLY, "process_text", "Processed text"),
-        (InputModality.URL, "process_url", "Processed URL"),
-        (InputModality.AUDIO, "process_audio", "Processed audio"),
-        (InputModality.IMAGE, "process_attachments", "Processed attachments"),
-        (InputModality.DOCUMENT, "process_attachments", "Processed attachments"),
+        (InputModality.GENERAL_URL, "process_url", "Processed URL"),
+        (InputModality.AUDIO_VIDEO_FILE, "process_audio", "Processed audio"),
+        (InputModality.SINGLE_IMAGE, "process_attachments", "Processed attachments"),
+        (InputModality.PDF_DOCUMENT, "process_attachments", "Processed attachments"),
     ],
 )
 @patch("bot.router.parse_command")
@@ -112,7 +112,7 @@ async def test_modality_flows(
         command=Command.CHAT, cleaned_content="Test content"
     )
 
-    if modality == InputModality.URL:
+    if modality == InputModality.GENERAL_URL:
         mock_message.content = "https://example.com"
 
     # Mock the specific flow method in the _flows dictionary

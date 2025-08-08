@@ -213,7 +213,7 @@ class Router:
         
         # Create all processing tasks concurrently
         async def process_item_concurrent(i: int, item) -> tuple[int, bool, str, float, int]:
-            modality = map_item_to_modality(item)
+            modality = await map_item_to_modality(item)
             
             # Create description for logging (faster version)
             if item.source_type == "attachment":
@@ -297,16 +297,19 @@ class Router:
         
         # Log summary statistics with concurrent performance metrics
         stats = aggregator.get_summary_stats()
+        successful_items = stats.get('successful_items', 0)
+        total_items = stats.get('total_items', 0)
+        
         if len(items) > 1:
             sequential_estimate = sum(getattr(r, 'duration', 0) for r in concurrent_results if not isinstance(r, Exception))
             speedup = sequential_estimate / total_concurrent_time if total_concurrent_time > 0 else 1
             self.logger.info(
-                f"🚀 CONCURRENT MULTIMODAL COMPLETE: {stats['successful_items']}/{stats['total_items']} successful, "
+                f"🚀 CONCURRENT MULTIMODAL COMPLETE: {successful_items}/{total_items} successful, "
                 f"total: {total_concurrent_time:.1f}s (est. {speedup:.1f}x speedup vs sequential)"
             )
         else:
             self.logger.info(
-                f"📊 Processing complete: {stats['successful_items']}/{stats['total_items']} successful, "
+                f"📊 Processing complete: {successful_items}/{total_items} successful, "
                 f"duration: {total_concurrent_time:.1f}s"
             )
         
@@ -743,7 +746,8 @@ class Router:
         # 2. Wait for RAG search to complete and process results
         if rag_task:
             try:
-                rag_results = await rag_task
+                # Add timeout to prevent hanging [REH]
+                rag_results = await asyncio.wait_for(rag_task, timeout=5.0)
                 if rag_results:
                     self.logger.debug(f"📊 RAG: Search completed, found {len(rag_results)} results")
                     

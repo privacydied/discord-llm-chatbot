@@ -13,10 +13,12 @@ each input item sequentially, enabling full multimodal support.
 
 from __future__ import annotations
 
+import asyncio
 import re
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import List, Literal, Union, TYPE_CHECKING
+from functools import lru_cache
+from typing import List, Literal, Union, TYPE_CHECKING, Optional, Pattern
 
 import discord
 from .util.logging import get_logger
@@ -25,6 +27,20 @@ if TYPE_CHECKING:
     from discord import Message, Attachment, Embed
 
 logger = get_logger(__name__)
+
+# Pre-compile and cache regex patterns for performance [PA]
+_URL_PATTERN = re.compile(r'https?://[^\s<>"\'\'\[\]{}|\\^`]+')
+_IMAGE_EXT_PATTERN = re.compile(r'\.(jpg|jpeg|png|gif|webp|bmp)(\?.*)?$', re.IGNORECASE)
+_PDF_EXT_PATTERN = re.compile(r'\.pdf(\?.*)?$', re.IGNORECASE)
+
+# Cache for video patterns - loaded once and reused [PA]
+_VIDEO_PATTERNS: Optional[List[Pattern[str]]] = None
+_FALLBACK_PATTERNS = [
+    re.compile(r'https?://(?:www\.)?youtube\.com/watch\?(?:.*&)?v=[\w-]+'),
+    re.compile(r'https?://youtu\.be/[\w-]+'),
+    re.compile(r'https?://(?:www\.)?tiktok\.com/@[\w.-]+/video/\d+'),
+    re.compile(r'https?://(?:vm\.)?tiktok\.com/[\w-]+'),
+]
 
 
 class InputModality(Enum):
@@ -47,6 +63,13 @@ class InputItem:
     source_type: Literal["attachment", "url", "embed"]
     payload: Union[discord.Attachment, str, discord.Embed]
     order_index: int  # Preserve original message order
+    
+    def __post_init__(self):
+        """Validate input item data [IV]."""
+        if self.source_type not in ("attachment", "url", "embed"):
+            raise ValueError(f"Invalid source_type: {self.source_type}")
+        if self.order_index < 0:
+            raise ValueError(f"Invalid order_index: {self.order_index}")
 
 
 def collect_input_items(message: Message) -> List[InputItem]:
@@ -62,9 +85,13 @@ def collect_input_items(message: Message) -> List[InputItem]:
     items = []
     order_index = 0
     
-    # Extract URLs from message content in order of appearance
-    url_pattern = r'https?://[^\s<>"\'\[\]{}|\\^`]+'
-    urls = re.findall(url_pattern, message.content)
+    # Input validation [IV]
+    if not message or not hasattr(message, 'content'):
+        logger.warning("Invalid message object provided")
+        return []
+    
+    # Extract URLs from message content in order of appearance [PA]
+    urls = _URL_PATTERN.findall(message.content)
     
     # Add URLs first (they appear in text content)
     for url in urls:
@@ -97,7 +124,7 @@ def collect_input_items(message: Message) -> List[InputItem]:
     return items
 
 
-def map_item_to_modality(item: InputItem) -> InputModality:
+async def map_item_to_modality(item: InputItem) -> InputModality:
     """
     Map an input item to its appropriate modality.
     
@@ -109,11 +136,11 @@ def map_item_to_modality(item: InputItem) -> InputModality:
     """
     try:
         if item.source_type == "attachment":
-            return _map_attachment_to_modality(item.payload)
+            return await _map_attachment_to_modality(item.payload)
         elif item.source_type == "url":
-            return _map_url_to_modality(item.payload)
+            return await _map_url_to_modality(item.payload)
         elif item.source_type == "embed":
-            return _map_embed_to_modality(item.payload)
+            return await _map_embed_to_modality(item.payload)
         else:
             logger.warning(f"Unknown source_type: {item.source_type}")
             return InputModality.UNKNOWN
@@ -123,74 +150,69 @@ def map_item_to_modality(item: InputItem) -> InputModality:
         return InputModality.UNKNOWN
 
 
-def _map_attachment_to_modality(attachment: discord.Attachment) -> InputModality:
+async def _map_attachment_to_modality(attachment: discord.Attachment) -> InputModality:
     """Map attachment to modality based on content type and filename."""
+    # Cache string operations [PA]
     content_type = attachment.content_type or ""
-    filename = attachment.filename.lower()
+    filename_lower = attachment.filename.lower()
     
     # Image attachments
     if content_type.startswith("image/"):
         return InputModality.SINGLE_IMAGE
     
     # PDF documents
-    if filename.endswith('.pdf'):
+    if filename_lower.endswith('.pdf'):
         # For now, assume all PDFs are text-based
         # TODO: Implement OCR detection logic
         return InputModality.PDF_DOCUMENT
     
     # Audio/video files
     if (content_type.startswith(("audio/", "video/")) or 
-        filename.endswith(('.mp3', '.wav', '.mp4', '.avi', '.mov', '.mkv', '.webm'))):
+        filename_lower.endswith(('.mp3', '.wav', '.mp4', '.avi', '.mov', '.mkv', '.webm'))):
         return InputModality.AUDIO_VIDEO_FILE
     
     # Document files (future expansion)
-    if filename.endswith(('.docx', '.txt', '.rtf')):
+    if filename_lower.endswith(('.docx', '.txt', '.rtf')):
         return InputModality.PDF_DOCUMENT  # Reuse document processing
     
-    logger.warning(f"Unrecognized attachment type: {filename} ({content_type})")
+    logger.warning(f"Unrecognized attachment type: {filename_lower} ({content_type})")
     return InputModality.UNKNOWN
 
 
-def _map_url_to_modality(url: str) -> InputModality:
-    """Map URL to modality based on domain and pattern matching."""
-    # Video URLs - use comprehensive patterns from video_ingest.py
-    try:
-        from .video_ingest import SUPPORTED_PATTERNS
-        logger.debug(f"🎥 Testing {len(SUPPORTED_PATTERNS)} video patterns for modality mapping: {url}")
-        
-        for pattern in SUPPORTED_PATTERNS:
-            if re.search(pattern, url):
-                logger.info(f"✅ Video URL modality detected: {url} matched pattern: {pattern}")
-                return InputModality.VIDEO_URL
-                
-        logger.debug(f"❌ No video patterns matched for modality mapping: {url}")
-    except ImportError as e:
-        logger.warning(f"Could not import SUPPORTED_PATTERNS from video_ingest: {e}, using fallback patterns")
-        # Fallback to original limited patterns
-        video_patterns = [
-            r'https?://(?:www\.)?youtube\.com/watch\?v=[\w-]+',
-            r'https?://youtu\.be/[\w-]+',
-            r'https?://(?:www\.)?tiktok\.com/@[\w.-]+/video/\d+',
-            r'https?://(?:vm\.)?tiktok\.com/[\w-]+',
-        ]
-        
-        for pattern in video_patterns:
-            if re.match(pattern, url):
-                return InputModality.VIDEO_URL
+async def _map_url_to_modality(url: str) -> InputModality:
+    """Map URL to modality based on domain and pattern matching [PA]."""
+    global _VIDEO_PATTERNS
     
-    # Image URLs
-    if re.search(r'\.(jpg|jpeg|png|gif|webp|bmp)(\?.*)?$', url, re.IGNORECASE):
+    # Load and cache video patterns once [PA]
+    if _VIDEO_PATTERNS is None:
+        try:
+            from .video_ingest import SUPPORTED_PATTERNS
+            # Pre-compile patterns for performance [PA]
+            _VIDEO_PATTERNS = [re.compile(pattern) for pattern in SUPPORTED_PATTERNS]
+            logger.debug(f"🎥 Loaded and compiled {len(_VIDEO_PATTERNS)} video patterns")
+        except ImportError as e:
+            logger.warning(f"Could not import SUPPORTED_PATTERNS from video_ingest: {e}, using fallback patterns")
+            _VIDEO_PATTERNS = _FALLBACK_PATTERNS
+    
+    # Test video patterns with compiled regex [PA]
+    for pattern in _VIDEO_PATTERNS:
+        if pattern.search(url):  # Fixed: use .search() consistently [REH]
+            logger.info(f"✅ Video URL modality detected: {url}")
+            return InputModality.VIDEO_URL
+    
+    # Image URLs [PA]
+    if _IMAGE_EXT_PATTERN.search(url):
         return InputModality.SINGLE_IMAGE
     
-    # PDF URLs
-    if re.search(r'\.pdf(\?.*)?$', url, re.IGNORECASE):
+    # PDF URLs [PA]
+    if _PDF_EXT_PATTERN.search(url):
         return InputModality.PDF_DOCUMENT
     
     # General URLs (will try oEmbed first, fallback to screenshot)
     return InputModality.GENERAL_URL
 
 
-def _map_embed_to_modality(embed: discord.Embed) -> InputModality:
+async def _map_embed_to_modality(embed: discord.Embed) -> InputModality:
     """Map embed to modality based on embed type and content."""
     # Image embeds
     if embed.image or embed.thumbnail:
@@ -204,7 +226,7 @@ def _map_embed_to_modality(embed: discord.Embed) -> InputModality:
     return InputModality.GENERAL_URL
 
 
-def detect_modality(message: Message) -> InputModality:
+async def detect_modality(message: Message) -> InputModality:
     """
     Legacy function for backward compatibility.
     Returns the modality of the first detected input item.
@@ -219,4 +241,53 @@ def detect_modality(message: Message) -> InputModality:
     if not items:
         return InputModality.TEXT_ONLY
     
-    return map_item_to_modality(items[0])
+    return await map_item_to_modality(items[0])
+
+
+# New async bulk processing functions [PA]
+async def map_items_to_modalities_concurrent(items: List[InputItem]) -> List[InputModality]:
+    """
+    Map multiple items to modalities concurrently for performance [PA].
+    
+    Args:
+        items: List of InputItem objects to process
+        
+    Returns:
+        List of InputModality enum values in same order
+    """
+    if not items:
+        return []
+    
+    # Process items concurrently [PA]
+    tasks = [map_item_to_modality(item) for item in items]
+    modalities = await asyncio.gather(*tasks, return_exceptions=True)
+    
+    # Handle any exceptions [REH]
+    results = []
+    for i, modality in enumerate(modalities):
+        if isinstance(modality, Exception):
+            logger.error(f"Error processing item {i}: {modality}", exc_info=True)
+            results.append(InputModality.UNKNOWN)
+        else:
+            results.append(modality)
+    
+    return results
+
+
+@lru_cache(maxsize=1000)  # Cache frequent pattern checks [PA]
+def _cached_url_check(url: str, pattern_type: str) -> bool:
+    """
+    Cached URL pattern checking for frequently accessed URLs [PA].
+    
+    Args:
+        url: URL to check
+        pattern_type: Type of pattern ('image', 'pdf')
+        
+    Returns:
+        True if URL matches pattern
+    """
+    if pattern_type == 'image':
+        return bool(_IMAGE_EXT_PATTERN.search(url))
+    elif pattern_type == 'pdf':
+        return bool(_PDF_EXT_PATTERN.search(url))
+    return False

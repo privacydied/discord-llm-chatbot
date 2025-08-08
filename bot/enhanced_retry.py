@@ -38,7 +38,7 @@ class CircuitBreakerState:
     status: ProviderStatus = ProviderStatus.HEALTHY
     failure_count: int = 0
     last_failure_time: float = 0.0
-    cooldown_duration: float = 15.0  # Faster cooldown recovery
+    cooldown_duration: float = 2.0  # Much faster cooldown recovery
     failure_threshold: int = 2  # Trigger circuit breaker faster
 
 @dataclass

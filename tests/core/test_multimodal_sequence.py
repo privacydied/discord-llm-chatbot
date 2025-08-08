@@ -319,34 +319,39 @@ class TestModalityDetection:
         assert items[2].source_type == "attachment"
         assert items[3].source_type == "embed"
 
-    def test_map_item_to_modality_attachment(self, mock_attachment):
+    @pytest.mark.asyncio
+    async def test_map_item_to_modality_attachment(self, mock_attachment):
         """Test modality mapping for attachments."""
         item = InputItem("attachment", mock_attachment, 0)
-        modality = map_item_to_modality(item)
+        modality = await map_item_to_modality(item)
         assert modality == InputModality.SINGLE_IMAGE
 
-    def test_map_item_to_modality_video_url(self):
+    @pytest.mark.asyncio
+    async def test_map_item_to_modality_video_url(self):
         """Test modality mapping for video URLs."""
         item = InputItem("url", "https://youtube.com/watch?v=test123", 0)
-        modality = map_item_to_modality(item)
+        modality = await map_item_to_modality(item)
         assert modality == InputModality.VIDEO_URL
 
-    def test_map_item_to_modality_general_url(self):
+    @pytest.mark.asyncio
+    async def test_map_item_to_modality_general_url(self):
         """Test modality mapping for general URLs."""
         item = InputItem("url", "https://example.com/page", 0)
-        modality = map_item_to_modality(item)
+        modality = await map_item_to_modality(item)
         assert modality == InputModality.GENERAL_URL
 
-    def test_map_item_to_modality_pdf_url(self):
+    @pytest.mark.asyncio
+    async def test_map_item_to_modality_pdf_url(self):
         """Test modality mapping for PDF URLs."""
         item = InputItem("url", "https://example.com/document.pdf", 0)
-        modality = map_item_to_modality(item)
+        modality = await map_item_to_modality(item)
         assert modality == InputModality.PDF_DOCUMENT
 
-    def test_map_item_to_modality_unknown(self):
+    @pytest.mark.asyncio
+    async def test_map_item_to_modality_unknown(self):
         """Test modality mapping for unknown items."""
         item = InputItem("unknown_type", "unknown_payload", 0)
-        modality = map_item_to_modality(item)
+        modality = await map_item_to_modality(item)
         assert modality == InputModality.UNKNOWN
 
 
