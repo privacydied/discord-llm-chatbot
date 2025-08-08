@@ -12,7 +12,9 @@ SCREENSHOT_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 def _normalize_url_for_screenshot(url: str) -> str:
     """Normalizes URLs for the screenshot API (e.g., x.com -> twitter.com)."""
     try:
-        parsed_url = urlparse(url)
+        # Coerce to string to avoid passing non-str objects (e.g., yarl.URL) into urlparse/quote
+        url_str = str(url)
+        parsed_url = urlparse(url_str)
         if parsed_url.netloc in ("x.com", "mobile.twitter.com"):
             normalized_parts = parsed_url._replace(netloc="twitter.com")
             normalized_url = urlunparse(normalized_parts)
@@ -20,7 +22,8 @@ def _normalize_url_for_screenshot(url: str) -> str:
             return normalized_url
     except Exception as e:
         logger.error(f"URL normalization failed for {url}: {e}", exc_info=True)
-    return url
+    # Always return a string
+    return str(url)
 
 async def external_screenshot(url: str) -> str | None:
     """
@@ -46,16 +49,18 @@ async def external_screenshot(url: str) -> str | None:
     delay = os.getenv("SCREENSHOT_API_DELAY", "2000")
     cookies = os.getenv("SCREENSHOT_API_COOKIES", "")
 
-    normalized_url = _normalize_url_for_screenshot(url)
+    # Coerce to string early to prevent quote_from_bytes TypeError
+    original_url_str = str(url)
+    normalized_url = _normalize_url_for_screenshot(original_url_str)
     
     # Construct API URL in the exact format expected by screenshotmachine.com
     # Format: ?key=X&url=Y&device=Z&dimension=W&format=V&delay=U&cookies=T
     # Note: Only encode colons in URL, not forward slashes (per API spec)
-    api_url = f"{api_url_base}?key={api_key}&url={quote(normalized_url, safe='/')}&device={device}&dimension={dimension}&format={format_type}&delay={delay}"
+    api_url = f"{api_url_base}?key={api_key}&url={quote(normalized_url, safe='/', encoding='utf-8')}&device={device}&dimension={dimension}&format={format_type}&delay={delay}"
     
     # Add cookies parameter if provided (properly URL-encoded)
     if cookies and cookies.strip():
-        encoded_cookies = quote(cookies, safe='')
+        encoded_cookies = quote(cookies, safe='', encoding='utf-8')
         api_url += f"&cookies={encoded_cookies}"
         logger.debug(f"🍪 Added URL-encoded cookies: {encoded_cookies[:50]}...")
     
@@ -69,8 +74,8 @@ async def external_screenshot(url: str) -> str | None:
             response = await client.get(api_url, follow_redirects=True, timeout=60.0)
             response.raise_for_status()
 
-        # Generate a safe filename from the original URL
-        parsed_url = urlparse(url)
+        # Generate a safe filename from the original URL (use coerced string)
+        parsed_url = urlparse(original_url_str)
         domain = parsed_url.netloc.replace(".", "_")
         path = parsed_url.path.replace("/", "_").strip("_") or "index"
         filename = f"{domain}_{path}.png"
@@ -83,11 +88,11 @@ async def external_screenshot(url: str) -> str | None:
         return str(filepath)
 
     except httpx.HTTPStatusError as e:
-        logger.error(f"❌ Screenshot Machine API returned an error: {e.response.status_code} for URL: {url}")
+        logger.error(f"❌ Screenshot Machine API returned an error: {e.response.status_code} for URL: {original_url_str}")
         return None
     except httpx.RequestError as e:
-        logger.error(f"❌ Failed to connect to Screenshot Machine API for URL: {url}. Error: {e}")
+        logger.error(f"❌ Failed to connect to Screenshot Machine API for URL: {original_url_str}. Error: {e}")
         return None
     except Exception as e:
-        logger.error(f"❌ An unexpected error occurred during screenshot capture for {url}: {e}", exc_info=True)
+        logger.error(f"❌ An unexpected error occurred during screenshot capture for {original_url_str}: {e}", exc_info=True)
         return None

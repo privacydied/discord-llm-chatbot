@@ -8,6 +8,7 @@ import random
 from typing import Any, Callable, List, Type, Union, Optional
 from functools import wraps
 from .exceptions import APIError, InferenceError
+import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -47,29 +48,34 @@ def is_retryable_error(error: Exception, config: RetryConfig) -> bool:
     Returns:
         True if the error should be retried, False otherwise
     """
-    # Check if it's a retryable exception type
+    error_str = str(error).lower()
+
+    # 1) Direct type match
     if any(isinstance(error, exc_type) for exc_type in config.retryable_exceptions):
-        # For API errors, check if it contains retryable status codes
-        error_str = str(error).lower()
-        if any(str(code) in error_str for code in config.retryable_status_codes):
-            return True
-        # Also check for common transient error patterns
-        transient_patterns = [
-            'internal server error',
-            'bad gateway',
-            'service unavailable',
-            'gateway timeout',
-            'too many requests',
-            'provider returned error',
-            'connection error',
-            'timeout',
-            'no choices returned',
-            'no choices in response',
-            'empty response from api'
-        ]
-        if any(pattern in error_str for pattern in transient_patterns):
-            return True
-    
+        return True
+
+    # 2) HTTP status codes present in message (e.g., '429 Too Many Requests')
+    if any(str(code) in error_str for code in config.retryable_status_codes):
+        return True
+
+    # 3) Common transient error patterns
+    transient_patterns = [
+        'internal server error',
+        'bad gateway',
+        'service unavailable',
+        'gateway timeout',
+        'too many requests',
+        'provider returned error',
+        'connection error',
+        'timeout',
+        'timed out',
+        'no choices returned',
+        'no choices in response',
+        'empty response from api'
+    ]
+    if any(pattern in error_str for pattern in transient_patterns):
+        return True
+
     return False
 
 def calculate_delay(attempt: int, config: RetryConfig) -> float:
@@ -176,7 +182,7 @@ VISION_RETRY_CONFIG = RetryConfig(
     max_delay=30.0,
     exponential_base=2.0,
     jitter=True,
-    retryable_exceptions=[APIError, InferenceError, ConnectionError, TimeoutError],
+    retryable_exceptions=[APIError, InferenceError, ConnectionError, TimeoutError, httpx.HTTPStatusError],
     retryable_status_codes=[500, 502, 503, 504, 429]
 )
 
@@ -186,7 +192,7 @@ API_RETRY_CONFIG = RetryConfig(
     max_delay=60.0,
     exponential_base=2.0,
     jitter=True,
-    retryable_exceptions=[APIError, ConnectionError, TimeoutError],
+    retryable_exceptions=[APIError, ConnectionError, TimeoutError, httpx.HTTPStatusError],
     retryable_status_codes=[500, 502, 503, 504, 429]
 )
 
@@ -196,6 +202,6 @@ QUICK_RETRY_CONFIG = RetryConfig(
     max_delay=5.0,
     exponential_base=2.0,
     jitter=True,
-    retryable_exceptions=[APIError, ConnectionError, TimeoutError],
+    retryable_exceptions=[APIError, ConnectionError, TimeoutError, httpx.HTTPStatusError],
     retryable_status_codes=[500, 502, 503, 504, 429]
 )

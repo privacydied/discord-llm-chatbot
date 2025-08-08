@@ -4,6 +4,7 @@ OpenAI/OpenRouter Backend - Handles OpenAI API calls including OpenRouter.
 from typing import Dict, Any, Union, AsyncGenerator
 import openai
 import aiohttp
+import httpx
 import base64
 import os
 
@@ -193,6 +194,13 @@ Server Context: {server_context}"""
     except openai.APIError as e:
         logger.error(f"OpenAI API error: {e}")
         raise APIError(f"OpenAI API error: {str(e)}")
+    except httpx.HTTPStatusError as e:
+        # Surface HTTP errors (e.g., 429 Too Many Requests from OpenRouter) as retriable APIError
+        status = e.response.status_code if e.response is not None else 'unknown'
+        retry_after = e.response.headers.get('retry-after') if getattr(e, 'response', None) else None
+        extra = f" (retry-after={retry_after}s)" if retry_after else ""
+        logger.warning(f"OpenAI HTTP error: {status} {e}{extra}")
+        raise APIError(f"HTTP {status}: {str(e)}{extra}")
     except APIError as e:
         # Already normalized, don't double-wrap or spam error-level logs
         logger.warning(f"[OpenAI] Retriable APIError: {e}")
