@@ -218,12 +218,14 @@ class HybridRAGSearch:
                 config=self.config
             )
             
-            # Check if we need to bootstrap
+            # Check collection status (for informational purposes only)
             stats = await self.rag_backend.get_collection_stats()
-            if stats.get("total_chunks", 0) == 0:
-                logger.info("[RAG] Empty collection detected during lazy load, running bootstrap...")
-                bootstrap_result = await self.bootstrap.bootstrap_knowledge_base()
-                logger.info(f"[RAG] Bootstrap completed: {bootstrap_result}")
+            total_chunks = stats.get("total_chunks", 0)
+            if total_chunks == 0:
+                logger.info("[RAG] ⚠️ Vector index loaded but collection is empty - no documents indexed yet")
+                logger.info("[RAG] 💡 To populate the knowledge base, run: !rag bootstrap")
+            else:
+                logger.info(f"[RAG] ✅ Vector index loaded successfully with {total_chunks:,} chunks")
             
             self._vector_load_time = (time.time() - vector_load_start) * 1000
             
