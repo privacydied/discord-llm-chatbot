@@ -4,6 +4,17 @@ An advanced Discord chatbot with memory, web search, file processing, vision cap
 
 ## Features
 
+### 🔍 **Enhanced Observability & Performance** (NEW)
+- **Dual-Sink Logging**: Rich console output + structured JSON logs
+- **Startup Orchestrator**: 3-5s faster parallel startup with dependency management
+- **Health Monitoring**: Liveness/readiness checks with degraded mode detection
+- **Background Task Watchdogs**: Heartbeat monitoring with automatic restarts
+- **Resource Monitoring**: RSS memory, CPU, event loop lag tracking with threshold alerts
+- **Prometheus Metrics**: Optional metrics collection (disabled by default)
+- **Configuration Validation**: Fail-fast validation with detailed diagnostics
+
+### 🎯 **Core Features**
+
 - **Multi-modal AI Chat**: Support for text, voice, and image inputs
 - **Text-to-Speech (TTS)**: Convert AI responses to voice messages
 - **Speech-to-Text (STT)**: Process voice messages and convert to text with advanced preprocessing
@@ -54,7 +65,44 @@ graph LR
 - (For local models) Ollama installed and running ([Installation Guide](https://ollama.com/))
 - (For OpenAI/OpenRouter) API key
 
-### Installation
+### Observability Configuration
+
+### Environment Variables
+
+```bash
+# ===== OBSERVABILITY SETTINGS =====
+# Enable Prometheus metrics (optional, default: false)
+OBS_ENABLE_PROMETHEUS=false
+PROMETHEUS_PORT=8001
+PROMETHEUS_HTTP_SERVER=true
+
+# Enable parallel startup orchestrator (3-5s improvement)
+OBS_PARALLEL_STARTUP=false
+
+# Health and resource monitoring (recommended: true)
+OBS_ENABLE_HEALTHCHECKS=true
+OBS_ENABLE_RESOURCE_METRICS=true
+
+# Resource monitoring thresholds
+RESOURCE_MEMORY_WARNING_MB=1024
+RESOURCE_MEMORY_CRITICAL_MB=2048
+RESOURCE_EVENT_LOOP_LAG_WARNING_MS=100
+RESOURCE_EVENT_LOOP_LAG_CRITICAL_MS=500
+RESOURCE_CPU_WARNING_PERCENT=80
+RESOURCE_CPU_CRITICAL_PERCENT=95
+```
+
+### Health Check Endpoints
+
+The bot provides health monitoring through the observability system:
+
+- **Liveness**: Process responsive, event loop healthy
+- **Readiness**: All components initialized and ready
+- **Degraded Mode**: System running but with reduced functionality
+
+Access comprehensive health status via the `get_comprehensive_health_status()` method.
+
+## Installation
 
 1. Clone the repository:
    ```bash
@@ -80,7 +128,14 @@ graph LR
    source .venv/bin/activate  # On Windows: .venv\Scripts\activate
    
    # Install locked dependencies
-   uv pip install -r requirements.lock
+   uv pip install -r requirements.txt
+
+# For Prometheus metrics (optional)
+pip install prometheus-client==0.22.1
+
+# For enhanced resource monitoring 
+pip install psutil>=5.8.0
+
    uv pip install --no-deps -e .
    
    # Run the bot
