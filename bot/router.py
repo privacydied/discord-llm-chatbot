@@ -511,12 +511,12 @@ class Router:
                     return f"⚠️ No video or audio content found in this URL. This appears to be a text-only post."
             
             # For non-Twitter URLs, provide user-friendly message  
-            self.logger.error(f"❌ Video processing failed: {ve}")
+            self.logger.info(f"ℹ️ Video processing: {ve}")
             return f"⚠️ {str(ve)}"
             
         except InferenceError as ie:
             # InferenceError already has user-friendly messages
-            self.logger.error(f"❌ Video inference failed: {ie}")
+            self.logger.info(f"ℹ️ Video inference: {ie}")
             return f"⚠️ {str(ie)}"
             
         except Exception as e:
