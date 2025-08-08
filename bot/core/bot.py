@@ -176,6 +176,20 @@ class LLMBot(commands.Bot):
             except Exception:
                 self.logger.warning("⚠️  Prometheus metrics not available, using NullMetrics")
 
+            # Proactively register gate counters to avoid 'not defined' warnings [PA][REH][CMV]
+            try:
+                if hasattr(self.metrics, "define_counter"):
+                    # Both counters use a 'reason' label
+                    self.metrics.define_counter("gate.allowed", "Messages allowed by SSOT gate", labels=["reason"]) 
+                    self.metrics.define_counter("gate.blocked", "Messages blocked by SSOT gate", labels=["reason"]) 
+                    self.logger.debug(
+                        "📈 Registered gate counters",
+                        extra={"event": "metrics.define", "counters": ["gate.allowed", "gate.blocked"]},
+                    )
+            except Exception as e:
+                # Never allow metrics registration failure to impact startup
+                self.logger.debug(f"Metrics counter registration failed: {e}")
+
             # Load system prompts
             self.system_prompts = load_system_prompts()
             self.logger.info("✅ Loaded system prompts")
