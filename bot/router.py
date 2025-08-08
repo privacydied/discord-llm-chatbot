@@ -144,13 +144,23 @@ class Router:
         self.logger.info(f"🔄 === ROUTER DISPATCH STARTED: MSG {message.id} ====")
 
         try:
-            # 1. Parse for a command from the message content.
-            parsed_command = parse_command(message, self.bot)
-
-            # 2. If a command is found, delegate it to the command processor (cogs).
-            if parsed_command:
-                self.logger.info(f"Found command '{parsed_command.command.name}', delegating to cog. (msg_id: {message.id})")
-                return BotAction(meta={'delegated_to_cog': True})
+            # 1. Quick pre-filter: Only parse commands for messages that start with '!' to avoid unnecessary parsing
+            content = message.content.strip()
+            
+            # Remove bot mention to check for command pattern
+            mention_pattern = fr'^<@!?{self.bot.user.id}>\s*'
+            clean_content = re.sub(mention_pattern, '', content)
+            
+            # Only parse if it looks like a command (starts with '!')
+            if clean_content.startswith('!'):
+                parsed_command = parse_command(message, self.bot)
+                
+                # 2. If a command is found, delegate it to the command processor (cogs).
+                if parsed_command:
+                    self.logger.info(f"Found command '{parsed_command.command.name}', delegating to cog. (msg_id: {message.id})")
+                    return BotAction(meta={'delegated_to_cog': True})
+                # If it starts with '!' but isn't a known command, let it continue to normal processing
+                self.logger.debug(f"Unknown command pattern ignored: {clean_content.split()[0] if clean_content else '(empty)'} (msg_id: {message.id})")
 
             # 3. Determine if the bot should process this message (DM, mention, or reply).
             if not self._should_process_message(message):
@@ -461,68 +471,93 @@ class Router:
         For Twitter/X URLs: tries yt-dlp first, falls back to screenshot + VL if no video found.
         Returns transcribed text for further processing.
         """
+        from .video_ingest import VideoIngestError
+        from .exceptions import InferenceError
+        
+        url = item.payload
+        self.logger.info(f"🎥 Processing video URL: {url}")
+        
+        # For Twitter/X URLs, implement fallback logic
+        is_twitter = re.match(r'https?://(?:www\.)?(?:twitter|x)\.com/', url)
+        
         try:
-            if item.source_type != "url":
-                return f"Video handler received non-URL item: {item.source_type}"
-            
-            url = item.payload
-            self.logger.info(f"🎥 Processing video URL: {url}")
-            
-            # Use existing video processing logic
+            # Try video/audio extraction first
             result = await hear_infer_from_url(url)
-            if not result or not result.get('transcription'):
+            if result and result.get('transcription'):
+                transcription = result['transcription']
+                metadata = result.get('metadata', {})
+                title = metadata.get('title', 'Unknown')
+                
+                return f"Video transcription from {url} ('{title}'): {transcription}"
+            else:
                 return f"Could not transcribe audio from video: {url}"
             
-            transcription = result['transcription']
-            metadata = result.get('metadata', {})
-            title = metadata.get('title', 'Unknown')
+        except VideoIngestError as ve:
+            error_str = str(ve).lower()
             
-            if not transcription.strip():
-                return f"Could not transcribe audio from video: {url}"
+            # For Twitter URLs, if no video content found, fall back to screenshot + VL
+            if is_twitter and (
+                "no video or audio content found" in error_str or
+                "no video could be found" in error_str or
+                "failed to download video" in error_str
+            ):
+                self.logger.info(f"🐦 No video in Twitter URL, falling back to screenshot: {url}")
+                try:
+                    # Fall back to screenshot + vision processing
+                    screenshot_result = await self._process_image_from_url(url)
+                    return f"Twitter post screenshot analysis: {screenshot_result}"
+                except Exception as screenshot_error:
+                    self.logger.error(f"❌ Screenshot fallback failed: {screenshot_error}")
+                    return f"⚠️ No video or audio content found in this URL. This appears to be a text-only post."
             
-            return f"Video transcription from {url} ('{title}'): {transcription}"
+            # For non-Twitter URLs, provide user-friendly message  
+            self.logger.error(f"❌ Video processing failed: {ve}")
+            return f"⚠️ {str(ve)}"
+            
+        except InferenceError as ie:
+            # InferenceError already has user-friendly messages
+            self.logger.error(f"❌ Video inference failed: {ie}")
+            return f"⚠️ {str(ie)}"
             
         except Exception as e:
+            # Handle any other unexpected errors gracefully
             error_str = str(e).lower()
+            self.logger.error(f"❌ Unexpected video processing error: {e}", exc_info=True)
             
-            # Check if this is a Twitter/X URL that failed video extraction
-            is_twitter_url = ("twitter.com" in url.lower() or "x.com" in url.lower()) and "/status/" in url.lower()
-            no_video_found = (
-                "no video could be found" in error_str or 
-                "no video" in error_str or 
-                "video extraction failed" in error_str
-            )
-            
-            if is_twitter_url and no_video_found:
-                self.logger.info(f"🔄 No video found in tweet, falling back to screenshot + VL processing: {url}")
+            # For Twitter URLs, still attempt fallback for unexpected errors
+            if is_twitter:
+                self.logger.info(f"🐦 Attempting Twitter screenshot fallback due to unexpected error: {url}")
                 try:
-                    # Fallback to image processing (screenshot + VL)
-                    return await self._handle_image(item)
-                except Exception as fallback_error:
-                    self.logger.error(f"❌ Both video and image fallback failed for {url}: {fallback_error}", exc_info=True)
-                    return f"Could not process Twitter URL (tried both video and image processing): {url}"
+                    screenshot_result = await self._process_image_from_url(url)
+                    return f"Twitter post screenshot analysis: {screenshot_result}"
+                except Exception:
+                    return "⚠️ Could not process this Twitter URL as either video or image content."
             
-            self.logger.error(f"Error processing video URL: {e}", exc_info=True)
-            return f"Failed to process video URL: {item.payload}"
-    
+            return f"⚠️ Video processing failed: {str(e)}"
+
     async def _handle_audio_video_file(self, item: InputItem) -> str:
         """
         Handle audio/video file attachments.
         Returns transcribed text for further processing.
         """
+        from .video_ingest import VideoIngestError
+        from .exceptions import InferenceError
+        
+        attachment = item.payload
+        self.logger.info(f"🎵 Processing audio/video file: {attachment.filename}")
+        
         try:
-            if item.source_type != "attachment":
-                return f"Audio/video handler received non-attachment item: {item.source_type}"
-            
-            attachment = item.payload
-            self.logger.info(f"🎵 Processing audio/video file: {attachment.filename}")
-            
-            # For now, return placeholder - would need STT implementation
-            return f"Audio/video file detected: {attachment.filename}. Audio transcription not yet fully implemented."
-            
+            result = await hear_infer(attachment)
+            return result
+        except VideoIngestError as ve:
+            self.logger.error(f"❌ Audio/video file ingestion failed: {ve}")
+            return f"⚠️ {str(ve)}"
+        except InferenceError as ie:
+            self.logger.error(f"❌ Audio/video inference failed: {ie}")
+            return f"⚠️ {str(ie)}"
         except Exception as e:
-            self.logger.error(f"Error processing audio/video file: {e}", exc_info=True)
-            return f"Failed to process audio/video file: {item.payload.filename if hasattr(item.payload, 'filename') else 'unknown'}"
+            self.logger.error(f"❌ Audio/video file processing failed: {e}", exc_info=True)
+            return f"⚠️ Could not process this audio/video file: {str(e)}"
     
     async def _handle_pdf(self, item: InputItem) -> str:
         """
