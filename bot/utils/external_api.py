@@ -49,18 +49,38 @@ async def external_screenshot(url: str) -> str | None:
     delay = os.getenv("SCREENSHOT_API_DELAY", "2000")
     cookies = os.getenv("SCREENSHOT_API_COOKIES", "")
 
-    # Coerce to string early to prevent quote_from_bytes TypeError
+    # Coerce to string early to prevent quote_from_bytes TypeError and handle bytes safely
     original_url_str = str(url)
     normalized_url = _normalize_url_for_screenshot(original_url_str)
-    
+
+    # Defensive: ensure we pass a proper str to urllib.parse.quote
+    try:
+        if isinstance(normalized_url, (bytes, bytearray)):
+            normalized_url_str = bytes(normalized_url).decode("utf-8", errors="replace")
+        else:
+            normalized_url_str = str(normalized_url)
+    except Exception:
+        # Fallback to string coercion on any unexpected type
+        normalized_url_str = str(normalized_url)
+
+    logger.debug(
+        f"🧭 URL types | original={type(url).__name__} normalized={type(normalized_url).__name__} as_str={type(normalized_url_str).__name__}"
+    )
+
     # Construct API URL in the exact format expected by screenshotmachine.com
     # Format: ?key=X&url=Y&device=Z&dimension=W&format=V&delay=U&cookies=T
     # Note: Only encode colons in URL, not forward slashes (per API spec)
-    api_url = f"{api_url_base}?key={api_key}&url={quote(normalized_url, safe='/', encoding='utf-8')}&device={device}&dimension={dimension}&format={format_type}&delay={delay}"
+    api_url = (
+        f"{api_url_base}?key={api_key}"
+        f"&url={quote(normalized_url_str, safe='/', encoding='utf-8', errors='strict')}"
+        f"&device={device}&dimension={dimension}&format={format_type}&delay={delay}"
+    )
     
     # Add cookies parameter if provided (properly URL-encoded)
     if cookies and cookies.strip():
-        encoded_cookies = quote(cookies, safe='', encoding='utf-8')
+        # Ensure cookies is a str before quoting
+        cookies_str = cookies if isinstance(cookies, str) else str(cookies)
+        encoded_cookies = quote(cookies_str, safe='', encoding='utf-8', errors='strict')
         api_url += f"&cookies={encoded_cookies}"
         logger.debug(f"🍪 Added URL-encoded cookies: {encoded_cookies[:50]}...")
     
