@@ -192,7 +192,13 @@ class Router:
         # If no items found, process as text-only
         if not items:
             # No actionable items found, treat as text-only
-            await self._invoke_text_flow(message.content, message, context_str)
+            response_action = await self._invoke_text_flow(message.content, message, context_str)
+            if response_action and response_action.has_payload:
+                # [REH] Execute the response action to send it to Discord
+                await self.bot._execute_action(message, response_action)
+                self.logger.info(f"✅ Text-only response sent successfully (msg_id: {message.id})")
+            else:
+                self.logger.warning(f"No response generated from text-only flow (msg_id: {message.id})")
             return
         
         self.logger.info(f"🔄 Processing {len(items)} input items sequentially (msg_id: {message.id})")
@@ -278,7 +284,13 @@ class Router:
         
         # Send single aggregated response through text flow (1 IN → 1 OUT)
         if aggregated_prompt.strip():
-            await self._invoke_text_flow(aggregated_prompt, message, context_str)
+            response_action = await self._invoke_text_flow(aggregated_prompt, message, context_str)
+            if response_action and response_action.has_payload:
+                # [REH] Execute the response action to send it to Discord
+                await self.bot._execute_action(message, response_action)
+                self.logger.info(f"✅ Response sent successfully (msg_id: {message.id})")
+            else:
+                self.logger.warning(f"No response generated from text flow (msg_id: {message.id})")
         else:
             self.logger.warning(f"No content to process after multimodal aggregation (msg_id: {message.id})")
 
@@ -299,10 +311,11 @@ class Router:
             InputModality.SCREENSHOT_URL: self._handle_screenshot_url,
         }
         
+        # Vision modalities need model override from provider ladder
+        if modality in (InputModality.SINGLE_IMAGE, InputModality.MULTI_IMAGE):
+            return await self._handle_image_with_model(item, model_override=provider_config.model)
+
         handler = handlers.get(modality, self._handle_unknown)
-        
-        # TODO: Pass provider_config to handlers that need it (vision handlers)
-        # For now, use existing handler interface
         return await handler(item)
 
     # ===== NEW HANDLER METHODS FOR MULTIMODAL PROCESSING =====
@@ -358,6 +371,50 @@ class Router:
             
             return f"🖼️ **Image Analysis ({attachment.filename})**\n{vision_response.content.strip()}"
             
+        finally:
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+
+    async def _handle_image_with_model(self, item: InputItem, model_override: str | None = None) -> str:
+        """Handle image item using an explicit model override (from fallback ladder)."""
+        try:
+            if item.source_type == "attachment":
+                return await self._process_image_from_attachment_with_model(item.payload, model_override)
+            elif item.source_type == "url":
+                # TODO: implement URL image processing with model override
+                return await self._process_image_from_url(item.payload)
+            elif item.source_type == "embed":
+                if item.payload.image:
+                    return await self._process_image_from_url(item.payload.image.url)
+                elif item.payload.thumbnail:
+                    return await self._process_image_from_url(item.payload.thumbnail.url)
+                else:
+                    return "Image embed found but no accessible image URL."
+            else:
+                return f"Unsupported image source type: {item.source_type}"
+        except Exception as e:
+            self.logger.error(f"Error processing image item with model override: {e}", exc_info=True)
+            return "Failed to process image."
+
+    async def _process_image_from_attachment_with_model(self, attachment: discord.Attachment, model_override: str | None) -> str:
+        """Process image attachment using a specific VL model override."""
+        tmp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as tmp_file:
+                tmp_path = tmp_file.name
+            await attachment.save(tmp_path)
+            self.logger.debug(f"📷 Saved image attachment to temp file: {tmp_path}")
+
+            prompt = "Describe this image in detail, focusing on key visual elements, objects, text, and context."
+            vision_response = await see_infer(image_path=tmp_path, prompt=prompt, model_override=model_override)
+
+            if not vision_response:
+                return "❌ Vision processing returned no response"
+            if vision_response.error:
+                return f"❌ Vision processing error: {vision_response.error}"
+            if not vision_response.content or not vision_response.content.strip():
+                return "❌ Vision processing returned empty content"
+            return f"🖼️ **Image Analysis ({attachment.filename})**\n{vision_response.content.strip()}"
         finally:
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)

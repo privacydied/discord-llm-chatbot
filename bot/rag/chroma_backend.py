@@ -38,6 +38,16 @@ class ChromaRAGBackend:
         else:
             self.embedding_model = embedding_model
         
+        # Validate embedding model is available and usable
+        if self.embedding_model is None or not (
+            hasattr(self.embedding_model, "encode") and hasattr(self.embedding_model, "encode_single")
+        ):
+            logger.error(
+                "[RAG] Embedding model is not initialized or missing required methods. "
+                "Check RAG_EMBEDDING_MODEL_TYPE and RAG_EMBEDDING_MODEL_NAME environment variables."
+            )
+            raise ValueError("Embedding model initialization failed: missing encode/encode_single")
+        
         # ChromaDB components (lazy initialization)
         self.client = None
         self.collection = None
@@ -101,7 +111,7 @@ class ChromaRAGBackend:
         """
         await self.initialize()
         
-        if not text.strip():
+        if not text or not text.strip():
             logger.warning(f"[RAG] Empty document provided: {source_id}")
             return []
         
@@ -193,6 +203,8 @@ class ChromaRAGBackend:
         self,
         query: str,
         n_results: int = 5,
+        *,
+        max_results: Optional[int] = None,
         user_id: Optional[str] = None,
         guild_id: Optional[str] = None,
         filters: Optional[Dict[str, Any]] = None
@@ -202,7 +214,8 @@ class ChromaRAGBackend:
         
         Args:
             query: Search query text
-            n_results: Maximum number of results to return
+            n_results: Maximum number of results to return (deprecated if max_results provided)
+            max_results: Optional alias for maximum number of results (backward-compat)
             user_id: Optional user ID for scoped search
             guild_id: Optional guild ID for scoped search
             filters: Optional metadata filters
@@ -216,8 +229,15 @@ class ChromaRAGBackend:
             # Generate query embedding
             query_embedding = await self.embedding_model.encode_single(query)
             
-            # Build metadata filters
+            # Build metadata filters; let None mean no filter
             where_clause = self._build_where_clause(user_id, guild_id, filters)
+
+            # Determine effective number of results to request
+            effective_n = max_results if isinstance(max_results, int) and max_results > 0 else n_results
+            try:
+                effective_n = min(effective_n, self.config.max_vector_results)
+            except Exception:
+                pass
             
             # Perform vector search (run in thread pool)
             loop = asyncio.get_event_loop()
@@ -225,7 +245,7 @@ class ChromaRAGBackend:
                 None,
                 lambda: self.collection.query(
                     query_embeddings=[query_embedding.tolist()],
-                    n_results=min(n_results, self.config.max_vector_results),
+                    n_results=effective_n,
                     where=where_clause,
                     include=["metadatas", "documents", "distances"]
                 )
@@ -240,6 +260,8 @@ class ChromaRAGBackend:
                     results['documents'][0],
                     results['distances'][0]
                 )):
+                    # Ensure metadata is a dict to avoid NoneType errors
+                    metadata = metadata or {}
                     # Convert distance to similarity score (ChromaDB uses L2 distance)
                     # For L2 distance, smaller distance = higher similarity
                     # Use inverse relationship: similarity = 1 / (1 + distance)
@@ -310,18 +332,35 @@ class ChromaRAGBackend:
             query_words = set(query.lower().split())
             matches = []
             
-            if all_results['ids']:
+            ids_list = all_results.get('ids') or []
+            metadatas_list = all_results.get('metadatas') or []
+            documents_list = all_results.get('documents') or []
+            if ids_list:
                 for i, (doc_id, metadata, document_text) in enumerate(zip(
-                    all_results['ids'],
-                    all_results['metadatas'],
-                    all_results['documents']
+                    ids_list,
+                    metadatas_list,
+                    documents_list
                 )):
-                    doc_words = set(document_text.lower().split())
+                    # Ensure metadata is a dict
+                    metadata = metadata or {}
+                    if not document_text:
+                        continue
+                    doc_words = set(str(document_text).lower().split())
                     overlap = len(query_words.intersection(doc_words))
                     
                     if overlap > 0:
                         score = overlap / len(query_words)  # Simple scoring
-                        vector_doc = VectorDocument.from_dict(metadata)
+                        # Construct a VectorDocument safely from available fields
+                        vector_doc = VectorDocument(
+                            id=doc_id if isinstance(doc_id, str) else str(doc_id),
+                            source_id=metadata.get('filepath', metadata.get('filename', 'unknown')),
+                            chunk_text=document_text,
+                            embedding=[],
+                            metadata=metadata,
+                            version_hash=metadata.get('version_hash', ''),
+                            chunk_index=metadata.get('chunk_index', 0),
+                            confidence_score=metadata.get('confidence_score', 1.0)
+                        )
                         
                         matches.append(SearchResult(
                             document=vector_doc,
@@ -350,16 +389,16 @@ class ChromaRAGBackend:
         
         # Add user scoping if enabled and provided
         if self.config.enforce_user_scoping and user_id:
-            where_conditions.append({"metadata.user_id": {"$eq": user_id}})
+            where_conditions.append({"user_id": {"$eq": user_id}})
         
         # Add guild scoping if enabled and provided
         if self.config.enforce_guild_scoping and guild_id:
-            where_conditions.append({"metadata.guild_id": {"$eq": guild_id}})
+            where_conditions.append({"guild_id": {"$eq": guild_id}})
         
-        # Add additional filters
+        # Add additional filters (metadata keys)
         if additional_filters:
             for key, value in additional_filters.items():
-                where_conditions.append({f"metadata.{key}": {"$eq": value}})
+                where_conditions.append({key: {"$eq": value}})
         
         # Combine conditions with AND
         if len(where_conditions) == 0:
@@ -419,7 +458,7 @@ class ChromaRAGBackend:
             existing = await loop.run_in_executor(
                 None,
                 lambda: self.collection.get(
-                    where={"metadata.source_id": {"$eq": source_id}},
+                    where={"source_id": {"$eq": source_id}},
                     include=["metadatas"]
                 )
             )
@@ -451,12 +490,24 @@ class ChromaRAGBackend:
                 lambda: self.collection.count()
             )
             
+            # Safely handle cases where embedding_model may be absent/misconfigured
+            model_name = getattr(self.embedding_model, "model_name", "unknown")
+            try:
+                embedding_dim = (
+                    await self.embedding_model.get_embedding_dimension()
+                    if self.embedding_model is not None
+                    else None
+                )
+            except Exception as dim_err:
+                logger.warning(f"[RAG] Could not get embedding dimension: {dim_err}")
+                embedding_dim = None
+
             return {
                 "total_chunks": count,
                 "collection_name": self.collection_name,
                 "db_path": str(self.db_path),
-                "embedding_model": self.embedding_model.model_name,
-                "embedding_dimension": await self.embedding_model.get_embedding_dimension()
+                "embedding_model": model_name,
+                "embedding_dimension": embedding_dim
             }
             
         except Exception as e:

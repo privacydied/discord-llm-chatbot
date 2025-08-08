@@ -424,7 +424,8 @@ class RAGBootstrap:
 async def create_rag_system(
     kb_path: str = "kb",
     db_path: str = "./chroma_db",
-    config: Optional[HybridSearchConfig] = None
+    config: Optional[HybridSearchConfig] = None,
+    load_vector_index: bool = True
 ) -> tuple[ChromaRAGBackend, RAGBootstrap]:
     """
     Factory function to create and initialize a complete RAG system.
@@ -433,6 +434,8 @@ async def create_rag_system(
         kb_path: Path to knowledge base directory
         db_path: Path to ChromaDB storage
         config: Optional configuration
+        load_vector_index: If True, fully initialize the vector backend now. If False,
+            defer initialization to a later lazy-load path.
         
     Returns:
         Tuple of (ChromaRAGBackend, RAGBootstrap)
@@ -449,10 +452,12 @@ async def create_rag_system(
     # Create bootstrap utility
     bootstrap = RAGBootstrap(rag_backend, kb_path)
     
-    # Initialize the backend
-    await rag_backend.initialize()
-    
-    logger.info("✔ RAG system created and initialized")
+    # Initialize the backend if requested (supports lazy-load deferral)
+    if load_vector_index:
+        await rag_backend.initialize()
+        logger.info("✔ RAG system created and initialized")
+    else:
+        logger.info("✔ RAG system created (vector index deferred)")
     
     return rag_backend, bootstrap
 

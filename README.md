@@ -64,7 +64,7 @@ graph LR
 
 2. Create a `.env` file based on the example:
    ```bash
-   cp .env-sample .env
+   cp .env.example .env
    ```
    Edit the `.env` file with your configuration
 
@@ -123,6 +123,13 @@ graph LR
 | `CONTEXT_FILE_PATH` | Path to context storage file | ❌ | `context.json` |
 | `MAX_CONTEXT_MESSAGES` | Max messages per context | ❌ | `10` |
 | `IN_MEMORY_CONTEXT_ONLY` | Disable all file-based context | ❌ | `false` |
+
+| `RAG_EAGER_VECTOR_LOAD` | Eagerly load RAG vector index on startup (legacy behavior) | ❌ | `true` |
+| `RAG_BACKGROUND_INDEXING` | Enable asynchronous background document indexing | ❌ | `true` |
+| `RAG_INDEXING_QUEUE_SIZE` | Max pending indexing tasks in queue | ❌ | `256` |
+| `RAG_INDEXING_WORKERS` | Number of concurrent indexing workers | ❌ | `2` |
+| `RAG_INDEXING_BATCH_SIZE` | Number of docs per indexing batch/flush | ❌ | `32` |
+| `RAG_LAZY_LOAD_TIMEOUT` | Seconds to wait in search path for lazy load (0 = non-blocking) | ❌ | `0.0` |
 
 ## 🤖 Commands
 
@@ -194,6 +201,13 @@ graph LR
 - DuckDuckGo integration for factual queries
 - Automatic triggering for "who/what/when" questions
 - Results integrated into AI responses
+
+### RAG Subsystem (Lazy Load + Background Indexing)
+- Immediate replies: The bot never blocks responses while the vector index is loading. A keyword fallback is used until the vector index is ready.
+- Lazy vector index loading: Controlled by `RAG_EAGER_VECTOR_LOAD` (default `true` to preserve legacy). When set to `false`, the index loads on first query in a background task.
+- Background indexing: When `RAG_BACKGROUND_INDEXING` is `true` (default), new documents are enqueued to an async queue processed by workers (`RAG_INDEXING_WORKERS`) with backpressure (`RAG_INDEXING_QUEUE_SIZE`).
+- Observability: Structured logs and metrics track lazy load start/success/failure, queue events, and search completions. The system adheres to the 1 IN → 1 OUT rule.
+- Tunables: `RAG_INDEXING_BATCH_SIZE` controls batching; `RAG_LAZY_LOAD_TIMEOUT` keeps the reply path non-blocking when set to `0.0`.
 
 ### TTS/STT System
 - DIA TTS for text-to-speech

@@ -11,7 +11,7 @@ from .config import load_config
 
 logger = logging.getLogger(__name__)
 
-async def see_infer(image_path: str, prompt: str = None) -> BotAction:
+async def see_infer(image_path: str, prompt: str = None, model_override: str | None = None) -> BotAction:
     """Generate response from image path and prompt
     
     Args:
@@ -61,7 +61,8 @@ async def see_infer(image_path: str, prompt: str = None) -> BotAction:
         logger.debug(f"Calling VL backend with prompt length: {len(prompt)} chars and image: {image_path}")
         response = await generate_vl_response(
             image_url=image_path,  # Pass the raw file path directly
-            user_prompt=prompt
+            user_prompt=prompt,
+            model_override=model_override if model_override else None
         )
         
         # Handle the response format from generate_vl_response

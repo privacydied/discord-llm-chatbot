@@ -10,6 +10,8 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Union
 from enum import Enum
 import logging
+import os
+from .config import load_config
 
 logger = logging.getLogger(__name__)
 
@@ -59,20 +61,59 @@ class EnhancedRetryManager:
         self._load_default_configs()
     
     def _load_default_configs(self):
-        """Load default provider configurations."""
-        # Vision providers ladder (configurable via env/config)
-        self.provider_configs["vision"] = [
+        """Load provider configurations from .env/config with sensible fallbacks."""
+        cfg = load_config()
+
+        def _parse_ladder(models_env: str | None, timeouts_env: str | None, default: List[ProviderConfig]) -> List[ProviderConfig]:
+            # models entries may be either "provider|model" or just "model" (defaults to openrouter)
+            if not models_env:
+                return default
+            models = [m.strip() for m in models_env.split(',') if m.strip()]
+            timeouts: List[float] = []
+            if timeouts_env:
+                try:
+                    timeouts = [float(t.strip()) for t in timeouts_env.split(',') if t.strip()]
+                except Exception:
+                    timeouts = []
+            ladder: List[ProviderConfig] = []
+            for idx, entry in enumerate(models):
+                if '|' in entry:
+                    provider, model = entry.split('|', 1)
+                    provider = provider.strip() or 'openrouter'
+                    model = model.strip()
+                else:
+                    provider, model = 'openrouter', entry
+                timeout = timeouts[idx] if idx < len(timeouts) else (15.0 if provider == 'openrouter' else 20.0)
+                ladder.append(ProviderConfig(provider, model, timeout=timeout))
+            return ladder
+
+        # Defaults if .env not provided
+        default_vision = [
             ProviderConfig("openrouter", "moonshotai/kimi-vl-a3b-thinking:free", timeout=12.0),
             ProviderConfig("openrouter", "openai/gpt-4o-mini", timeout=15.0),
-            ProviderConfig("openrouter", "meta-llama/llama-3.2-11b-vision-instruct:free", timeout=18.0)
+            ProviderConfig("openrouter", "meta-llama/llama-3.2-11b-vision-instruct:free", timeout=18.0),
         ]
-        
-        # Text LLM providers ladder
-        self.provider_configs["text"] = [
+        default_text = [
             ProviderConfig("openrouter", "openai/gpt-4o-mini", timeout=20.0),
             ProviderConfig("openrouter", "meta-llama/llama-3.1-8b-instruct:free", timeout=25.0),
-            ProviderConfig("ollama", "llama3.1", timeout=30.0)
+            ProviderConfig("ollama", "llama3.1", timeout=30.0),
         ]
+
+        vision_models = os.getenv('VISION_FALLBACK_MODELS')
+        vision_timeouts = os.getenv('VISION_FALLBACK_TIMEOUTS')
+        text_models = os.getenv('TEXT_FALLBACK_MODELS')
+        text_timeouts = os.getenv('TEXT_FALLBACK_TIMEOUTS')
+
+        self.provider_configs["vision"] = _parse_ladder(vision_models, vision_timeouts, default_vision)
+        self.provider_configs["text"] = _parse_ladder(text_models, text_timeouts, default_text)
+
+        # Log parsed ladders
+        try:
+            v = ", ".join([f"{pc.name}|{pc.model}(t={pc.timeout}s)" for pc in self.provider_configs["vision"]])
+            t = ", ".join([f"{pc.name}|{pc.model}(t={pc.timeout}s)" for pc in self.provider_configs["text"]])
+            logger.info(f"🔧 Fallback ladders loaded → vision: [{v}] | text: [{t}]")
+        except Exception:
+            pass
     
     def _get_circuit_breaker(self, provider_key: str) -> CircuitBreakerState:
         """Get or create circuit breaker for provider."""

@@ -287,6 +287,8 @@ async def generate_vl_response(
         Dictionary with the generated VL analysis and metadata
     """
     try:
+        # Extract custom kwargs that should NOT be forwarded to OpenAI client
+        model_override = kwargs.pop('model_override', None)
         logger.info("🎨 === VL RESPONSE GENERATION STARTED ===")
         logger.debug(f"🎨 Image URL: {image_url[:100]}{'...' if len(image_url) > 100 else ''}")
         logger.debug(f"🎨 User prompt: '{user_prompt[:100]}{'...' if len(user_prompt) > 100 else ''}'")
@@ -301,13 +303,16 @@ async def generate_vl_response(
         )
         logger.debug(f"🎨 Using API base: {config.get('OPENAI_API_BASE', 'https://api.openai.com/v1')}")
         
-        # Get VL model configuration
-        vl_model = config.get('VL_MODEL')
+        # Get VL model configuration (honor override)
+        vl_model = (model_override or config.get('VL_MODEL'))
         if not vl_model:
             logger.error("❌ VL_MODEL not configured in environment variables")
             raise APIError("VL_MODEL not configured in environment variables")
         
-        logger.info(f"🎨 Using VL model: {vl_model}")
+        if model_override:
+            logger.info(f"🎨 Using VL model OVERRIDE from ladder: {vl_model}")
+        else:
+            logger.info(f"🎨 Using VL model: {vl_model}")
         
         # CHANGE: Load VL prompt from VL_PROMPT_FILE with enhanced logging
         vl_prompt_file_path = config.get("VL_PROMPT_FILE")

@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Optional, Dict, List, Tuple, Any
 
 import discord
 import io
+import uuid
 from discord.ext import commands
 from rich.console import Console
 from rich.tree import Tree
@@ -431,15 +432,49 @@ class LLMBot(commands.Bot):
         )
 
     async def _execute_action(self, message: discord.Message, action: BotAction):
-        """Executes a BotAction by sending its content to the appropriate channel."""
-        self.logger.info(f"Executing action with meta: {action.meta} for message {message.id}")
+        """Executes a BotAction by sending its content to the appropriate channel.
+        Adds detailed dispatch instrumentation, readiness gating, and empty-content guardrails.
+        """
+        # Metadata for logging
+        guild_id = getattr(message.guild, 'id', None)
+        channel_id = getattr(message.channel, 'id', None)
+        user_id = getattr(message.author, 'id', None)
+        is_dm = isinstance(message.channel, discord.DMChannel)
+        debug_token = f"d{message.id}-{uuid.uuid4().hex[:8]}"
+
+        base_extra = {"guild_id": guild_id, "user_id": user_id, "msg_id": message.id}
+        self.logger.info(
+            f"dispatch:pre | channel_id={channel_id} is_dm={is_dm} ready={self._is_ready.is_set()} "
+            f"embeds={len(action.embeds) if action.embeds else 0} meta={action.meta}",
+            extra={**base_extra, "event": "dispatch.send.pre"},
+        )
+
+        # Gate on bot readiness (avoid sending before on_ready); wait briefly if needed
+        if not self._is_ready.is_set():
+            try:
+                await asyncio.wait_for(self._is_ready.wait(), timeout=5.0)
+                self.logger.info(
+                    f"dispatch:ready | ready=True",
+                    extra={**base_extra, "event": "dispatch.ready.wait.ok"},
+                )
+            except asyncio.TimeoutError:
+                self.logger.warning(
+                    f"dispatch:ready | ready=False",
+                    extra={**base_extra, "event": "dispatch.ready.wait.timeout"},
+                )
 
         files = None
         # If action requires TTS, process it.
         if action.meta.get('requires_tts'):
-            self.logger.info(f"Action requires TTS, processing... (msg_id: {message.id})")
+            self.logger.info(
+                "TTS requested, processing…",
+                extra={**base_extra, "event": "tts.process.start"},
+            )
             if not self.tts_manager:
-                self.logger.error(f"TTS Manager not available, cannot process TTS action. (msg_id: {message.id})")
+                self.logger.error(
+                    "tts:missing",
+                    extra={**base_extra, "event": "tts.manager.missing"},
+                )
                 action.content = "I tried to respond with voice, but the TTS service is not working."
             else:
                 action = await self.tts_manager.process(action)
@@ -449,24 +484,34 @@ class LLMBot(commands.Bot):
             if os.path.exists(action.audio_path):
                 files = [discord.File(action.audio_path, filename="voice_message.ogg")]
             else:
-                self.logger.error(f"Audio file not found: {action.audio_path} (msg_id: {message.id})")
+                self.logger.error(
+                    f"tts:file_missing | path={action.audio_path}",
+                    extra={**base_extra, "event": "tts.file.missing"},
+                )
                 action.content = "I tried to send a voice message, but the audio file was missing."
-        elif action.meta.get('requires_tts'): # Log error only if TTS was expected but failed
-            self.logger.error(f"Audio file not generated after TTS processing. (msg_id: {message.id})")
+        elif action.meta.get('requires_tts'):  # TTS expected but failed
+            self.logger.error(
+                "tts:no_audio",
+                extra={**base_extra, "event": "tts.audio.not_generated"},
+            )
             action.content = "I tried to send a voice message, but the audio file was missing."
 
-        content = action.content
-        # Note: User mentions are handled by Discord's mention_author=True in message.reply()
-        # No manual mention prepending needed to avoid duplicate mentions
+        content = action.content or ""
+        embed_count = len(action.embeds) if action.embeds else 0
+        file_count = len(files) if files else 0
 
-        # Discord has a 2000 character limit.
+        # Discord has a 2000 character limit: attach overflow as file
         if content and len(content) > 2000:
-            self.logger.warning(f"Message content for {message.id} exceeds 2000 characters. Attaching as file.")
+            self.logger.warning(
+                f"dispatch:overflow | length={len(content)}",
+                extra={**base_extra, "event": "dispatch.content.overflow"},
+            )
             file_content = io.BytesIO(content.encode('utf-8'))
             text_file = discord.File(fp=file_content, filename="full_response.txt")
             if files is None:
                 files = []
             files.append(text_file)
+            file_count = len(files)
 
             # The message becomes a notification about the attached file.
             if action.meta.get('is_reply'):
@@ -474,28 +519,73 @@ class LLMBot(commands.Bot):
             else:
                 content = "The response was too long to post directly. The full content is attached as a file."
 
+        # Guardrail: if everything is empty, synthesize a fallback message
+        if (not content.strip()) and embed_count == 0 and file_count == 0:
+            content = (
+                f"ℹ️ I generated an empty response. I've logged this so it can be fixed. "
+                f"Please try again. [ref: {debug_token}]"
+            )
+            self.logger.warning(
+                f"dispatch:empty | ref={debug_token}",
+                extra={**base_extra, "event": "dispatch.guard.empty"},
+            )
+
+        # Prepare preview for logs
+        preview = content.replace("\n", " ")[:120] if content else ""
+        self.logger.info(
+            f"dispatch:attempt | content_len={len(content)} preview=\"{preview}\" embeds={embed_count} files={file_count}",
+            extra={**base_extra, "event": "dispatch.send.attempt"},
+        )
+
+        sent_message = None
         # Show typing indicator while sending the message
         async with message.channel.typing():
             try:
                 if content or action.embeds or files:
                     # Use message.reply() for contextual replies.
-                    sent_message = await message.reply(content=content, embeds=action.embeds, files=files, mention_author=True)
+                    sent_message = await message.reply(
+                        content=content,
+                        embeds=action.embeds,
+                        files=files,
+                        mention_author=True,
+                    )
+
+                    self.logger.info(
+                        f"dispatch:ok | discord_msg_id={getattr(sent_message, 'id', None)} embeds={embed_count} files={file_count}",
+                        extra={**base_extra, "event": "dispatch.send.ok"},
+                    )
                     
                     # Track bot response in enhanced context manager
                     if self.enhanced_context_manager and sent_message:
                         await self.enhanced_context_manager.append_message(sent_message, role="bot")
             except discord.errors.HTTPException as e:
                 # If replying fails (e.g., original message deleted), send a normal message instead.
-                if e.code == 50035: # Unknown Message
-                    self.logger.warning(f"Replying to message {message.id} failed (likely deleted). Falling back to channel send.")
+                if e.code == 50035:  # Unknown Message
+                    self.logger.warning(
+                        "dispatch:fallback | reason=unknown_message",
+                        extra={**base_extra, "event": "dispatch.send.reply_fallback"},
+                    )
                     sent_message = await message.channel.send(content=content, embeds=action.embeds, files=files)
                     
+                    self.logger.info(
+                        f"dispatch:ok | discord_msg_id={getattr(sent_message, 'id', None)} embeds={embed_count} files={file_count}",
+                        extra={**base_extra, "event": "dispatch.send.ok"},
+                    )
                     # Track bot response in enhanced context manager
                     if self.enhanced_context_manager and sent_message:
                         await self.enhanced_context_manager.append_message(sent_message, role="bot")
                 else:
-                    self.logger.error(f"Failed to send message: {e} (msg_id: {message.id})")
-                    raise # Re-raise other HTTP exceptions
+                    self.logger.error(
+                        f"dispatch:error | code={e.code} status={getattr(e, 'status', 'n/a')} details={str(e)}",
+                        extra={**base_extra, "event": "dispatch.send.error"},
+                        exc_info=True,
+                    )
+                    raise  # Re-raise other HTTP exceptions
+            finally:
+                self.logger.debug(
+                    f"dispatch:finalize | sent={(sent_message is not None)}",
+                    extra={**base_extra, "event": "dispatch.send.finalize"},
+                )
 
     async def load_profiles(self) -> None:
         """Load user and server memory profiles."""

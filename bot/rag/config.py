@@ -47,7 +47,17 @@ def load_rag_config() -> HybridSearchConfig:
         
         # Access control
         enforce_user_scoping=os.getenv("RAG_ENFORCE_USER_SCOPING", "true").lower() == "true",
-        enforce_guild_scoping=os.getenv("RAG_ENFORCE_GUILD_SCOPING", "true").lower() == "true"
+        enforce_guild_scoping=os.getenv("RAG_ENFORCE_GUILD_SCOPING", "true").lower() == "true",
+        
+        # Performance & Loading [RAG]
+        eager_vector_load=os.getenv("RAG_EAGER_VECTOR_LOAD", "true").lower() == "true",
+        background_indexing=os.getenv("RAG_BACKGROUND_INDEXING", "true").lower() == "true",
+        
+        # Background Processing [RAG]
+        indexing_queue_size=int(os.getenv("RAG_INDEXING_QUEUE_SIZE", "1000")),
+        indexing_workers=int(os.getenv("RAG_INDEXING_WORKERS", "2")),
+        indexing_batch_size=int(os.getenv("RAG_INDEXING_BATCH_SIZE", "10")),
+        lazy_load_timeout=float(os.getenv("RAG_LAZY_LOAD_TIMEOUT", "30.0"))
     )
     
     try:
@@ -95,7 +105,17 @@ def get_rag_environment_info() -> dict:
         
         # Logging settings
         "RAG_LOG_RETRIEVAL_PATHS": os.getenv("RAG_LOG_RETRIEVAL_PATHS", "true"),
-        "RAG_LOG_CONFIDENCE_SCORES": os.getenv("RAG_LOG_CONFIDENCE_SCORES", "true")
+        "RAG_LOG_CONFIDENCE_SCORES": os.getenv("RAG_LOG_CONFIDENCE_SCORES", "true"),
+        
+        # Performance & Loading settings [RAG]
+        "RAG_EAGER_VECTOR_LOAD": os.getenv("RAG_EAGER_VECTOR_LOAD", "true"),
+        "RAG_BACKGROUND_INDEXING": os.getenv("RAG_BACKGROUND_INDEXING", "true"),
+        
+        # Background Processing settings [RAG]
+        "RAG_INDEXING_QUEUE_SIZE": os.getenv("RAG_INDEXING_QUEUE_SIZE", "1000"),
+        "RAG_INDEXING_WORKERS": os.getenv("RAG_INDEXING_WORKERS", "2"),
+        "RAG_INDEXING_BATCH_SIZE": os.getenv("RAG_INDEXING_BATCH_SIZE", "10"),
+        "RAG_LAZY_LOAD_TIMEOUT": os.getenv("RAG_LAZY_LOAD_TIMEOUT", "30.0")
     }
     
     return env_vars

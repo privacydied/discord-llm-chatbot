@@ -150,6 +150,16 @@ class HybridSearchConfig:
     enforce_user_scoping: bool = True
     enforce_guild_scoping: bool = True
     
+    # Performance & Loading [RAG]
+    eager_vector_load: bool = True         # Load vector index at startup vs lazy load on first search
+    background_indexing: bool = True       # Process new documents asynchronously vs synchronously
+    
+    # Background Processing [RAG]
+    indexing_queue_size: int = 1000        # Maximum items in indexing queue
+    indexing_workers: int = 2              # Number of background indexing workers
+    indexing_batch_size: int = 10          # Documents to process per batch
+    lazy_load_timeout: float = 30.0       # Timeout for lazy vector index loading (seconds)
+    
     def validate(self) -> None:
         """Validate configuration parameters."""
         if not 0 <= self.vector_confidence_threshold <= 1:
@@ -169,6 +179,19 @@ class HybridSearchConfig:
             
         if self.min_chunk_size <= 0:
             raise ValueError("min_chunk_size must be positive")
+            
+        # Validate new RAG performance fields [RAG]
+        if self.indexing_queue_size <= 0:
+            raise ValueError("indexing_queue_size must be positive")
+            
+        if self.indexing_workers <= 0:
+            raise ValueError("indexing_workers must be positive")
+            
+        if self.indexing_batch_size <= 0:
+            raise ValueError("indexing_batch_size must be positive")
+            
+        if self.lazy_load_timeout <= 0:
+            raise ValueError("lazy_load_timeout must be positive")
 
 
 @dataclass 

@@ -6,6 +6,7 @@ Creates sample documents in various formats and tests parsing.
 import os
 import sys
 from pathlib import Path
+import pytest
 
 # Add bot module to path
 sys.path.insert(0, str(Path(__file__).parent))
@@ -105,6 +106,13 @@ This content demonstrates markdown structure preservation during chunking.
     
     print(f"✅ Created test documents in {test_dir}/")
     return test_dir
+
+@pytest.fixture
+def test_dir(tmp_path, monkeypatch):
+    """Pytest fixture that prepares test documents in an isolated temp directory."""
+    # Run the test in an isolated temp CWD to avoid polluting the repo
+    monkeypatch.chdir(tmp_path)
+    return create_test_documents()
 
 def test_document_parsing(test_dir):
     """Test parsing of different document formats."""
