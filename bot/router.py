@@ -25,6 +25,7 @@ from enum import Enum, auto
 from pathlib import Path
 from typing import Any, Callable, Coroutine, Dict, Optional, TYPE_CHECKING, List
 import time
+import discord
 
 # Import new modality system
 from .modality import InputModality, InputItem, collect_input_items, map_item_to_modality
@@ -106,38 +107,108 @@ class Router:
         return False
 
     def _should_process_message(self, message: Message) -> bool:
-        """Determine if the message should be processed based on context (DM, mention, or URL content)."""
+        """Single source-of-truth gate: decide if this message should be processed.
+        Cheap, synchronous, and config-driven. No network or heavy CPU allowed here.
+        """
+        cfg = self.config
+        owners: list[int] = cfg.get("OWNER_IDS", [])
+        triggers: list[str] = cfg.get("REPLY_TRIGGERS", [
+            "dm", "mention", "reply", "bot_threads", "owner", "command_prefix"
+        ])
+
+        # Master switch: if disabled, allow everything (legacy behavior)
+        if not cfg.get("BOT_SPEAKS_ONLY_WHEN_SPOKEN_TO", True):
+            self.logger.debug(
+                f"gate.allow | reason=master_switch_off msg_id={message.id}",
+                extra={"event": "gate.allow", "reason": "master_switch_off", "msg_id": message.id},
+            )
+            self._metric_inc("gate.allowed", {"reason": "master_switch_off"})
+            return True
+
+        content = (message.content or "").strip()
         is_dm = isinstance(message.channel, DMChannel)
-        is_mentioned = self.bot.user in message.mentions
+        is_mentioned = self.bot.user in message.mentions if hasattr(message, "mentions") else False
         is_reply = self._is_reply_to_bot(message)
-        
-        # Check if message contains Twitter URLs that need screenshot fallback in guilds
-        # NOTE: Only Twitter URLs should trigger guild processing without mention!
-        # Other video URLs (YouTube, TikTok) require normal mention/reply rules
-        has_twitter_url = False
-        if message.content:
-            twitter_patterns = [
-                r'https?://(?:www\.)?(?:twitter|x|fxtwitter|vxtwitter)\.com/'
-            ]
-            has_twitter_url = any(re.search(pattern, message.content) for pattern in twitter_patterns)
+        is_owner = message.author.id in owners if getattr(message, "author", None) else False
 
-        if is_dm:
-            self.logger.debug(f"Processing message {message.id}: It's a DM.")
+        in_bot_thread = False
+        try:
+            if isinstance(message.channel, discord.Thread):
+                # Cheap ownership check only; do not fetch history here.
+                in_bot_thread = (getattr(message.channel, "owner_id", None) == self.bot.user.id)
+        except Exception:
+            in_bot_thread = False
+
+        # Prefix command detection (strip leading mention if present)
+        command_prefix = cfg.get("COMMAND_PREFIX", "!")
+        if content:
+            mention_pattern = fr'^<@!?{self.bot.user.id}>\s*'
+            clean_content = re.sub(mention_pattern, "", content)
+        else:
+            clean_content = ""
+        has_prefix = bool(clean_content.startswith(command_prefix)) if clean_content else False
+
+        # Evaluate triggers
+        if is_owner and "owner" in triggers:
+            self.logger.info(
+                f"gate.allow | reason=owner_override msg_id={message.id}",
+                extra={"event": "gate.allow", "reason": "owner_override", "user_id": message.author.id, "msg_id": message.id},
+            )
+            self._metric_inc("gate.allowed", {"reason": "owner_override"})
             return True
 
-        if is_mentioned:
-            self.logger.debug(f"Processing message {message.id}: Bot is mentioned.")
+        if is_dm and "dm" in triggers:
+            self.logger.debug(
+                f"gate.allow | reason=dm msg_id={message.id}",
+                extra={"event": "gate.allow", "reason": "dm", "msg_id": message.id},
+            )
+            self._metric_inc("gate.allowed", {"reason": "dm"})
             return True
 
-        if is_reply:
-            self.logger.debug(f"Processing message {message.id}: It's a reply to the bot.")
-            return True
-            
-        if has_twitter_url:
-            self.logger.debug(f"Processing message {message.id}: Contains Twitter URL needing screenshot fallback.")
+        if is_mentioned and "mention" in triggers:
+            self.logger.debug(
+                f"gate.allow | reason=mention msg_id={message.id}",
+                extra={"event": "gate.allow", "reason": "mention", "msg_id": message.id},
+            )
+            self._metric_inc("gate.allowed", {"reason": "mention"})
             return True
 
-        self.logger.debug(f"Ignoring message {message.id}: Not a DM, mention, reply, or processable URL.")
+        if is_reply and "reply" in triggers:
+            self.logger.debug(
+                f"gate.allow | reason=reply_to_bot msg_id={message.id}",
+                extra={"event": "gate.allow", "reason": "reply_to_bot", "msg_id": message.id},
+            )
+            self._metric_inc("gate.allowed", {"reason": "reply_to_bot"})
+            return True
+
+        if in_bot_thread and "bot_threads" in triggers:
+            self.logger.debug(
+                f"gate.allow | reason=bot_thread msg_id={message.id}",
+                extra={"event": "gate.allow", "reason": "bot_thread", "msg_id": message.id},
+            )
+            self._metric_inc("gate.allowed", {"reason": "bot_thread"})
+            return True
+
+        if has_prefix and "command_prefix" in triggers:
+            self.logger.debug(
+                f"gate.allow | reason=command_prefix msg_id={message.id}",
+                extra={"event": "gate.allow", "reason": "command_prefix", "msg_id": message.id},
+            )
+            self._metric_inc("gate.allowed", {"reason": "command_prefix"})
+            return True
+
+        # Do NOT allow on mere presence of URLs (e.g., twitter) – must be addressed first
+        self.logger.info(
+            f"gate.block | reason=not_addressed msg_id={message.id}",
+            extra={
+                "event": "gate.block",
+                "reason": "not_addressed",
+                "msg_id": message.id,
+                "guild_id": getattr(message.guild, 'id', None),
+                "is_dm": is_dm,
+            },
+        )
+        self._metric_inc("gate.blocked", {"reason": "not_addressed"})
         return False
 
     def _bind_flow_methods(self, flow_overrides: Optional[Dict[str, Callable]] = None):

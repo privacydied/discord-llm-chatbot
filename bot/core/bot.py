@@ -420,8 +420,6 @@ class LLMBot(commands.Bot):
                 self._processed_messages.pop()
             self._processed_messages.add(message.id)
 
-        await self._is_ready.wait() # Wait until the bot is ready
-
         # Early returns before processing
         if message.author == self.user:
             return
@@ -429,12 +427,28 @@ class LLMBot(commands.Bot):
         if (not message.content or not message.content.strip()) and not message.attachments:
             return
 
+        # SSOT gate: enforce "speak only when spoken to" BEFORE any heavy work or readiness waits
+        try:
+            if self.router is not None and not self._is_long_running_admin_command(message):
+                if not self.router._should_process_message(message):
+                    guild_info = 'DM' if isinstance(message.channel, discord.DMChannel) else f"guild:{getattr(message.guild, 'id', None)}"
+                    self.logger.info(
+                        f"gate.block early | msg_id:{message.id} in:{guild_info}",
+                        extra={"event": "gate.block.early", "msg_id": message.id, "guild_id": getattr(message.guild, 'id', None)},
+                    )
+                    return
+        except Exception as e:
+            # Never let gate failures crash on_message; fall back to readiness wait and normal flow
+            self.logger.warning(f"Gate check failed for msg_id:{message.id}: {e}")
+
+        await self._is_ready.wait()  # Wait until the bot is ready
+
         # Check if this is a long-running admin command
         if self._is_long_running_admin_command(message):
             # Execute long-running commands out-of-band to not block user's message queue
             task_id = self._generate_task_id(message)
             command = message.content.split()[0] if message.content else 'unknown'
-            
+
             # Create and register the task
             task = asyncio.create_task(self._execute_out_of_band_command(message))
             self._register_long_running_task(task_id, task, message, command)
@@ -442,14 +456,14 @@ class LLMBot(commands.Bot):
 
         # Queue regular messages for per-user processing to prevent lockout and ensure proper ordering
         user_id = str(message.author.id)
-        
+
         # Get user's message queue and ensure processor is running
         user_queue = self._get_user_queue(user_id)
         await self._ensure_user_processor(user_id)
-        
+
         # Add message to user's queue for sequential processing
         await user_queue.put(message)
-        
+
         guild_info = 'DM' if isinstance(message.channel, discord.DMChannel) else f"guild:{message.guild.id}"
         self.logger.info(
             f"Message queued: msg_id:{message.id} author:{message.author.id} in:{guild_info} len:{len(message.content)} queue_size:{user_queue.qsize()}"

@@ -211,6 +211,14 @@ def load_config():
         "MAX_FILE_SIZE": _safe_int(os.getenv("MAX_FILE_SIZE"), "2097152", "MAX_FILE_SIZE"),  # 2 MB
         "MAX_ATTACHMENT_SIZE_MB": _safe_int(os.getenv("MAX_ATTACHMENT_SIZE_MB"), "25", "MAX_ATTACHMENT_SIZE_MB"),
         
+        # SILENCE GATE - SPEAK ONLY WHEN SPOKEN TO
+        "BOT_SPEAKS_ONLY_WHEN_SPOKEN_TO": os.getenv("BOT_SPEAKS_ONLY_WHEN_SPOKEN_TO", "True").lower() == "true",
+        # Comma-separated list of triggers: dm, mention, reply, bot_threads, owner, command_prefix
+        "REPLY_TRIGGERS": [s.strip() for s in os.getenv(
+            "REPLY_TRIGGERS",
+            "dm,mention,reply,bot_threads,owner,command_prefix"
+        ).split(",") if s.strip()],
+        
         # PROMPT FILES - CRITICAL FOR MULTIMODAL FUNCTIONALITY
         "PROMPT_FILE": _clean_env_value(os.getenv("PROMPT_FILE")),  # CHANGE: Added PROMPT_FILE for text model prompts
         "VL_PROMPT_FILE": _clean_env_value(os.getenv("VL_PROMPT_FILE")),  # CHANGE: Added VL_PROMPT_FILE for vision prompts
