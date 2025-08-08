@@ -37,6 +37,8 @@ from .contextual_brain import contextual_brain_infer
 import re
 from . import web
 from discord import Message, DMChannel, Embed, File
+from .search.factory import get_search_provider
+from .search.types import SearchQueryParams, SafeSearch, SearchResult
 
 if TYPE_CHECKING:
     from bot.core.bot import LLMBot as DiscordBot
@@ -286,10 +288,16 @@ class Router:
         url_pattern = r'https?://[^\s<>"\'\'[\]{}|\\\^`]+'
         original_text = re.sub(url_pattern, '', original_text).strip()
         
+        # Resolve inline [search(...)] directives inside the remaining text
+        try:
+            original_text = await self._resolve_inline_searches(original_text, message)
+        except Exception as e:
+            self.logger.error(f"Inline search resolution failed: {e} (msg_id: {message.id})", exc_info=True)
+        
         # If no items found, process as text-only
         if not items:
             # No actionable items found, treat as text-only
-            response_action = await self._invoke_text_flow(message.content, message, context_str)
+            response_action = await self._invoke_text_flow(original_text, message, context_str)
             if response_action and response_action.has_payload:
                 self.logger.info(f"✅ Text-only response generated successfully (msg_id: {message.id})")
                 return response_action
@@ -966,6 +974,120 @@ class Router:
         
         # 4. Fallback to basic brain inference with enhanced context (including RAG)
         return await brain_infer(content, context=enhanced_context)
+
+    # ===== Inline [search(...)] directive handling =====
+    def _extract_inline_search_queries(self, text: str) -> list[tuple[tuple[int, int], str]]:
+        """
+        Extract inline search directives of the form [search(<query>)] from text.
+        Returns list of ((start, end), query) for replacement.
+        """
+        if not text:
+            return []
+        pattern = re.compile(r"\[search\s*\((.*?)\)\]", re.IGNORECASE | re.DOTALL)
+        matches = []
+        for m in pattern.finditer(text):
+            query = (m.group(1) or '').strip()
+            if query:
+                matches.append(((m.start(), m.end()), query))
+        return matches
+
+    async def _resolve_inline_searches(self, text: str, message: Message) -> str:
+        """
+        Find and execute inline search directives in text, replacing each directive
+        with a compact, formatted markdown block of results.
+        """
+        directives = self._extract_inline_search_queries(text)
+        if not directives:
+            return text
+
+        self.logger.info(f"🔎 Found {len(directives)} inline search directive(s) (msg_id: {message.id})")
+
+        # Config [IV]: pull from self.config with safe defaults
+        provider_name = str(self.config.get("SEARCH_PROVIDER", "ddg"))
+        max_results = int(self.config.get("SEARCH_MAX_RESULTS", 5))
+        locale = self.config.get("SEARCH_LOCALE") or None
+        safe_str = str(self.config.get("SEARCH_SAFE", "moderate")).lower()
+        try:
+            safesearch = SafeSearch(safe_str)
+        except Exception:
+            safesearch = SafeSearch.MODERATE
+        timeout_ms = int(self.config.get("DDG_TIMEOUT_MS", 5000)) if provider_name == "ddg" else int(self.config.get("CUSTOM_SEARCH_TIMEOUT_MS", 8000))
+        max_concurrency = int(os.getenv("SEARCH_INLINE_MAX_CONCURRENCY", "3"))
+
+        provider = get_search_provider()
+
+        # Execute searches with bounded concurrency [PA]
+        sem = asyncio.Semaphore(max(1, max_concurrency))
+        async def run_search(q: str):
+            async with sem:
+                params = SearchQueryParams(
+                    query=q,
+                    max_results=max_results,
+                    safesearch=safesearch,
+                    locale=locale,
+                    timeout_ms=timeout_ms,
+                )
+                try:
+                    self.logger.debug(f"[InlineSearch] Executing: '{q[:80]}'")
+                    return await provider.search(params)
+                except Exception as e:
+                    self.logger.error(f"[InlineSearch] provider error for '{q}': {e}", exc_info=True)
+                    return e
+
+        tasks = [run_search(q) for _, q in directives]
+        results_list = await asyncio.gather(*tasks, return_exceptions=False)
+
+        # Build replacements
+        pieces: list[str] = []
+        cursor = 0
+        for ((start, end), query), results in zip(directives, results_list):
+            # Append text before directive
+            if cursor < start:
+                pieces.append(text[cursor:start])
+
+            # Format replacement
+            if isinstance(results, Exception):
+                replacement = f"❌ Search failed for '{query}': please try again later."
+            else:
+                replacement = self._format_inline_search_block(query, results, provider_name, safesearch)
+
+            pieces.append(replacement)
+            cursor = end
+
+        # Append trailing text
+        pieces.append(text[cursor:])
+        new_text = "".join(pieces)
+        self.logger.debug(f"[InlineSearch] Rewrote text with {len(directives)} replacement(s). New length={len(new_text)}")
+        return new_text
+
+    def _format_inline_search_block(self, query: str, results: List[SearchResult], provider_name: str, safesearch: SafeSearch) -> str:
+        """Format search results into a compact markdown block to inline into the prompt."""
+        # Truncation limits aligned with Discord embed norms but adapted for text [PA]
+        TITLE_LIMIT = 120
+        SNIPPET_LIMIT = 240
+        MAX_ITEMS = min(5, len(results))
+
+        def trunc(s: str, limit: int) -> str:
+            s = s or ""
+            return s if len(s) <= limit else s[: max(0, limit - 1)] + "…"
+
+        header = f"🔎 Search: `{trunc(query, 256)}`\n"
+        lines: list[str] = [header]
+
+        if not results:
+            lines.append("No results found.")
+        else:
+            for idx, r in enumerate(results[:MAX_ITEMS], start=1):
+                title = trunc(r.title or r.url, TITLE_LIMIT)
+                snippet = trunc(r.snippet or "", SNIPPET_LIMIT)
+                # Minimal, readable line per result
+                lines.append(f"{idx}. {title}\n{r.url}")
+                if snippet:
+                    lines.append(f"    {snippet}")
+                lines.append("")
+
+        lines.append(f"Provider: {provider_name} • Safe: {safesearch.value}")
+        return "\n".join(lines).strip()
 
     async def _flow_process_url(self, url: str, message: discord.Message) -> BotAction:
         """

@@ -271,6 +271,41 @@ def load_config():
         "COMMAND_PREFIX": os.getenv("COMMAND_PREFIX", "!"),
         "OWNER_IDS": [int(id.strip()) for id in os.getenv("OWNER_IDS", "").split(",") if id.strip()],
         "LOG_FILE": os.getenv("LOG_FILE", "logs/bot.jsonl"),
+
+        # SEARCH SUBSYSTEM [CA][CMV][IV]
+        # Provider selection: 'ddg' (default) or 'custom'
+        "SEARCH_PROVIDER": os.getenv("SEARCH_PROVIDER", "ddg").lower(),
+        # Default knobs
+        "SEARCH_MAX_RESULTS": _safe_int(os.getenv("SEARCH_MAX_RESULTS"), "5", "SEARCH_MAX_RESULTS"),
+        "SEARCH_SAFE": os.getenv("SEARCH_SAFE", "moderate").lower(),  # off|moderate|strict
+        "SEARCH_LOCALE": os.getenv("SEARCH_LOCALE", ""),
+        # DuckDuckGo provider options (DDG typically requires no API key; kept for pluggability)
+        "DDG_API_ENDPOINT": os.getenv("DDG_API_ENDPOINT", "https://duckduckgo.com/html/"),
+        "DDG_API_KEY": os.getenv("DDG_API_KEY"),
+        "DDG_TIMEOUT_MS": _safe_int(os.getenv("DDG_TIMEOUT_MS"), "5000", "DDG_TIMEOUT_MS"),
+        # Custom provider HTTP options
+        "CUSTOM_SEARCH_API_ENDPOINT": os.getenv("CUSTOM_SEARCH_API_ENDPOINT", ""),
+        "CUSTOM_SEARCH_API_KEY": os.getenv("CUSTOM_SEARCH_API_KEY", ""),
+        # Optional JSON headers, comma-separated key:value pairs
+        "CUSTOM_SEARCH_HEADERS": os.getenv("CUSTOM_SEARCH_HEADERS", ""),
+        "CUSTOM_SEARCH_TIMEOUT_MS": _safe_int(os.getenv("CUSTOM_SEARCH_TIMEOUT_MS"), "8000", "CUSTOM_SEARCH_TIMEOUT_MS"),
+        # Optional JSONPath-like comma-separated selectors for result extraction
+        "CUSTOM_SEARCH_RESULT_PATHS": os.getenv("CUSTOM_SEARCH_RESULT_PATHS", ""),
+        # Shared HTTP pool
+        "SEARCH_POOL_MAX_CONNECTIONS": _safe_int(os.getenv("SEARCH_POOL_MAX_CONNECTIONS"), "10", "SEARCH_POOL_MAX_CONNECTIONS"),
+        # Circuit breaker (search)
+        "SEARCH_BREAKER_FAILURE_WINDOW": _safe_int(os.getenv("SEARCH_BREAKER_FAILURE_WINDOW"), "5", "SEARCH_BREAKER_FAILURE_WINDOW"),
+        "SEARCH_BREAKER_OPEN_MS": _safe_int(os.getenv("SEARCH_BREAKER_OPEN_MS"), "15000", "SEARCH_BREAKER_OPEN_MS"),
+        "SEARCH_BREAKER_HALFOPEN_PROB": _safe_float(os.getenv("SEARCH_BREAKER_HALFOPEN_PROB"), "0.25", "SEARCH_BREAKER_HALFOPEN_PROB"),
+
+        # STREAMING STATUS CARDS [CA][CMV]
+        # Global enable for streaming card UX (text-only remains non-streaming)
+        "STREAMING_ENABLE": os.getenv("STREAMING_ENABLE", "false").lower() == "true",
+        # Style preset: 'compact' | 'detailed'
+        "STREAMING_EMBED_STYLE": os.getenv("STREAMING_EMBED_STYLE", "compact"),
+        # Edit throttle and max step count
+        "STREAMING_TICK_MS": _safe_int(os.getenv("STREAMING_TICK_MS"), "750", "STREAMING_TICK_MS"),
+        "STREAMING_MAX_STEPS": _safe_int(os.getenv("STREAMING_MAX_STEPS"), "8", "STREAMING_MAX_STEPS"),
     }
     
     # Cache the config for performance (avoid repeated env var lookups)

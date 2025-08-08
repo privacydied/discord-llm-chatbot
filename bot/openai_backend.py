@@ -148,7 +148,8 @@ Server Context: {server_context}"""
             logger.debug(f"[OpenAI] Response object type: {type(response)}")
             
             if not response.choices:
-                logger.error("[OpenAI] ❌ No choices in response - API returned empty choices array")
+                # Treat as transient; let retry handle it. Reduce log severity to WARNING.
+                logger.warning("[OpenAI] ⚠️ No choices in response - empty choices array (transient)")
                 logger.debug(f"[OpenAI] Response object: {response}")
                 raise APIError("No choices returned in OpenAI response")
             
@@ -192,6 +193,10 @@ Server Context: {server_context}"""
     except openai.APIError as e:
         logger.error(f"OpenAI API error: {e}")
         raise APIError(f"OpenAI API error: {str(e)}")
+    except APIError as e:
+        # Already normalized, don't double-wrap or spam error-level logs
+        logger.warning(f"[OpenAI] Retriable APIError: {e}")
+        raise
     except Exception as e:
         logger.error(f"Unexpected error in generate_openai_response: {e}", exc_info=True)
         raise APIError(f"Failed to generate OpenAI response: {str(e)}")

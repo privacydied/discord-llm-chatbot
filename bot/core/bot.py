@@ -717,7 +717,8 @@ class LLMBot(commands.Bot):
             ("tts_cmds", "TTSCommands"),
             ("config_commands", "ConfigCommands"),
             ("video_commands", "VideoCommands"),
-            ("rag_commands", "RAGCommands")
+            ("rag_commands", "RAGCommands"),
+            ("search_commands", "SearchCommands"),
         ]
         
         command_modules = []  # List of (module_name, success_status)

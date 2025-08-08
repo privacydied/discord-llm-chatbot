@@ -14,7 +14,9 @@ from .chroma_backend import ChromaRAGBackend
 from .vector_schema import HybridSearchConfig, SearchResult as RAGSearchResult
 from .bootstrap import create_rag_system
 from .indexing_queue import IndexingQueue, IndexingTask
-from ..search import SearchResult as LegacySearchResult, search_memories, search_files, web_search
+from ..search import SearchResult as LegacySearchResult
+from ..search.factory import get_search_provider
+from ..search.types import SearchQueryParams, SafeSearch
 from ..util.logging import get_logger
 
 logger = get_logger(__name__)
@@ -476,24 +478,44 @@ class HybridRAGSearch:
         self.search_stats["keyword_searches"] += 1
         
         try:
-            # Use existing search functions
-            memory_results = await search_memories(query, user_id, guild_id)
-            
-            # Convert legacy results to hybrid format
-            hybrid_results = []
-            
-            for i, result in enumerate(memory_results[:max_results]):
-                hybrid_result = HybridSearchResult(
-                    title=result.title,
-                    snippet=result.snippet,
-                    source=result.source,
-                    score=0.5,  # Default score for keyword results
-                    search_type="keyword",
-                    explanation="Legacy keyword search match",
-                    metadata={"legacy_result": True}
+            # Use pluggable search provider for keyword/web search
+            provider = get_search_provider()
+
+            # Resolve SafeSearch from env (default: moderate)
+            safe_env = os.getenv("SEARCH_SAFE", SafeSearch.MODERATE.value).lower()
+            safe_level = SafeSearch(safe_env) if safe_env in {s.value for s in SafeSearch} else SafeSearch.MODERATE
+
+            # Build query params
+            try:
+                timeout_ms = int(os.getenv("DDG_TIMEOUT_MS", "5000"))
+            except ValueError:
+                timeout_ms = 5000
+
+            params = SearchQueryParams(
+                query=query,
+                max_results=max_results,
+                safesearch=safe_level,
+                locale=os.getenv("SEARCH_LOCALE") or None,
+                timeout_ms=timeout_ms,
+            )
+
+            web_results = await provider.search(params)
+
+            # Convert provider results to hybrid format
+            hybrid_results: List[HybridSearchResult] = []
+            for res in web_results[:max_results]:
+                hybrid_results.append(
+                    HybridSearchResult(
+                        title=res.title,
+                        snippet=res.snippet or "",
+                        source=res.url or "web",
+                        score=0.5,  # Default score for keyword results
+                        search_type="keyword",
+                        explanation="Web keyword search match",
+                        metadata={"url": res.url}
+                    )
                 )
-                hybrid_results.append(hybrid_result)
-            
+
             return hybrid_results
             
         except Exception as e:

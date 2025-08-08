@@ -18,6 +18,7 @@ COMMAND_MAP = {
     "!ping": Command.PING,
     "!help": Command.HELP,
     "!chat": Command.CHAT,
+    "!search": Command.SEARCH,
     "!tts": Command.TTS,
     "!say": Command.SAY,
     "!memory-add": Command.MEMORY_ADD,
