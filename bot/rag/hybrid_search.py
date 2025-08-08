@@ -426,6 +426,13 @@ class HybridRAGSearch:
                 guild_id=guild_id
             )
             
+            # Check for None results
+            if vector_results is None:
+                logger.warning("[RAG] Vector search returned None, falling back to keyword")
+                if self.config.fallback_to_keyword_on_failure:
+                    return await self._keyword_search(query, user_id, guild_id, max_results)
+                return []
+            
             # Convert to hybrid results
             hybrid_results = []
             for i, result in enumerate(vector_results):

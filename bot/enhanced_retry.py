@@ -155,15 +155,19 @@ class EnhancedRetryManager:
     def _is_retryable_error(self, error: Exception) -> bool:
         """Check if error is retryable."""
         error_str = str(error).lower()
+        error_type = type(error).__name__.lower()
+        
         retryable_patterns = [
-            "502", "503", "504", "500",  # HTTP server errors
+            "502", "503", "504", "500", "429",  # HTTP server errors and rate limits
             "bad gateway", "service unavailable", "gateway timeout",
             "provider returned error", "provider error",
             "timeout", "connection", "network",
-            "rate limit", "too many requests"
+            "rate limit", "too many requests", "client error"
         ]
         
-        return any(pattern in error_str for pattern in retryable_patterns)
+        # Check both error message and error type name
+        return any(pattern in error_str for pattern in retryable_patterns) or \
+               any(pattern in error_type for pattern in retryable_patterns)
     
     async def run_with_fallback(
         self,
@@ -246,10 +250,10 @@ class EnhancedRetryManager:
                     )
                 
                 except Exception as e:
-                    logger.warning(f"⚠️ Attempt {attempt + 1} failed with {provider_key}: {e}")
+                    logger.warning(f"⚠️ Attempt {attempt + 1} failed with {provider_key}: {type(e).__name__}: {e}")
                     
                     if not self._is_retryable_error(e):
-                        logger.info(f"❌ Non-retryable error, skipping remaining attempts for {provider_key}")
+                        logger.error(f"❌ Non-retryable error, skipping remaining attempts for {provider_key}: {type(e).__name__}: {e}")
                         break
                     
                     # Record failure for circuit breaker

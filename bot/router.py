@@ -468,11 +468,18 @@ class Router:
             self.logger.info(f"🎥 Processing video URL: {url}")
             
             # Use existing video processing logic
-            transcription = await hear_infer_from_url(url)
-            if not transcription or not transcription.strip():
+            result = await hear_infer_from_url(url)
+            if not result or not result.get('transcription'):
                 return f"Could not transcribe audio from video: {url}"
             
-            return f"Video transcription from {url}: {transcription}"
+            transcription = result['transcription']
+            metadata = result.get('metadata', {})
+            title = metadata.get('title', 'Unknown')
+            
+            if not transcription.strip():
+                return f"Could not transcribe audio from video: {url}"
+            
+            return f"Video transcription from {url} ('{title}'): {transcription}"
             
         except Exception as e:
             self.logger.error(f"Error processing video URL: {e}", exc_info=True)
