@@ -91,15 +91,20 @@ async def hear_infer(audio_path: Path) -> str:
                         logger.warning(f"Error deleting temporary file {temp_file}: {e}")
                     
     except Exception as e:
-        logger.error(f"👂 STT inference failed: {str(e)}", exc_info=True)
-        error_msg = str(e).lower()
+        # Check if this is an expected VideoIngestError or InferenceError
+        from .video_ingest import VideoIngestError
+        if isinstance(e, (VideoIngestError, InferenceError)):
+            logger.info(f"👂🎵 File STT: {str(e)}")
+        else:
+            logger.error(f"👂🎵 File STT inference failed: {str(e)}", exc_info=True)
+        raise InferenceError(f"Audio transcription failed: {str(e)}")
         
         # Provide more user-friendly error messages
-        if "no such file or directory" in error_msg:
+        if "no such file or directory" in str(e).lower():
             raise InferenceError("Could not access the audio file")
-        elif "invalid data" in error_msg or "invalid argument" in error_msg:
+        elif "invalid data" in str(e).lower() or "invalid argument" in str(e).lower():
             raise InferenceError("The audio file is corrupted or in an unsupported format")
-        elif "operation not permitted" in error_msg:
+        elif "operation not permitted" in str(e).lower():
             raise InferenceError("Permission denied when processing the audio file")
         else:
             raise InferenceError(f"Speech recognition failed: {str(e)}")
@@ -163,8 +168,20 @@ async def hear_infer_from_url(url: str, speedup: float = 1.5, force_refresh: boo
         return result
         
     except Exception as e:
-        logger.error(f"👂🎥 URL STT inference failed: {str(e)}", exc_info=True)
         error_msg = str(e).lower()
+        
+        # Check if this is an expected VideoIngestError (already logged appropriately upstream)
+        from .video_ingest import VideoIngestError
+        if isinstance(e, VideoIngestError) and (
+            "no video or audio content found" in error_msg or
+            "no video could be found" in error_msg or
+            "failed to download video" in error_msg
+        ):
+            # Don't log scary tracebacks for expected "no video content" errors
+            logger.info(f"👂🎥 URL STT: {str(e)}")
+        else:
+            # Log unexpected errors with full tracebacks
+            logger.error(f"👂🎥 URL STT inference failed: {str(e)}", exc_info=True)
         
         # Provide user-friendly error messages
         if "unsupported url" in error_msg:

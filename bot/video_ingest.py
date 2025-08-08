@@ -333,7 +333,21 @@ class VideoIngestionManager:
             logger.error(f"❌ Failed to parse yt-dlp JSON metadata: {e}")
             raise VideoIngestError(f"Failed to parse video metadata: {str(e)}")
         except Exception as e:
-            logger.error(f"❌ yt-dlp download failed: {e}")
+            # Log at INFO level for expected "no video content" errors to avoid scary tracebacks
+            error_str = str(e).lower()
+            if any(phrase in error_str for phrase in [
+                "no video could be found", 
+                "no video formats found",
+                "no audio could be found",
+                "no extractors found",
+                "unable to extract video info",
+                "private video",
+                "video not available"
+            ]):
+                logger.info(f"ℹ️ yt-dlp: {e}")
+            else:
+                # Only log unexpected errors with tracebacks
+                logger.error(f"❌ yt-dlp download failed: {e}", exc_info=True)
             raise VideoIngestError(f"Failed to download video: {str(e)}")
     
     async def _process_audio(self, raw_audio_path: Path, speedup: float = DEFAULT_SPEEDUP) -> Path:
@@ -514,7 +528,12 @@ class VideoIngestionManager:
                     )
                     
                 except Exception as e:
-                    logger.error(f"❌ Failed to process URL {url}: {e}")
+                    # Check if this is an expected VideoIngestError or unexpected error
+                    if isinstance(e, VideoIngestError):
+                        # Don't log VideoIngestError again - it was already logged appropriately in _download_with_ytdlp
+                        logger.debug(f"VideoIngestError propagating: {e}")
+                    else:
+                        logger.error(f"❌ Failed to process URL {url}: {e}", exc_info=True)
                     raise
 
 
