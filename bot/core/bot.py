@@ -155,7 +155,7 @@ class LLMBot(commands.Bot):
         try:
             # Initialize metrics
             try:
-                from bot.metrics.prometheus import PrometheusMetrics
+                from bot.metrics.prometheus_metrics import PrometheusMetrics
                 self.metrics = PrometheusMetrics()
                 self.logger.info("✅ Prometheus metrics initialized")
             except Exception:
