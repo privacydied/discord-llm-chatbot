@@ -253,12 +253,18 @@ class ChromaRAGBackend:
             
             # Convert to SearchResult objects
             search_results = []
-            if results['ids'] and results['ids'][0]:  # Check if we have results
+            # Check if we have valid results and all required arrays are present
+            if (results and results.get('ids') and results['ids'] and 
+                results['ids'][0] and results.get('metadatas') and 
+                results.get('documents') and results.get('distances')):
+                
+                ids = results['ids'][0] or []
+                metadatas = results['metadatas'][0] or []
+                documents = results['documents'][0] or []
+                distances = results['distances'][0] or []
+                
                 for i, (doc_id, metadata, document_text, distance) in enumerate(zip(
-                    results['ids'][0],
-                    results['metadatas'][0],
-                    results['documents'][0],
-                    results['distances'][0]
+                    ids, metadatas, documents, distances
                 )):
                     # Ensure metadata is a dict to avoid NoneType errors
                     metadata = metadata or {}
