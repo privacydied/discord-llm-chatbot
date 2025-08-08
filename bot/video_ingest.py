@@ -30,51 +30,157 @@ CACHE_EXPIRY_DAYS = int(os.getenv("VIDEO_CACHE_EXPIRY_DAYS", "7"))
 
 # Supported URL patterns - must match MEDIA_CAPABLE_DOMAINS from media_capability.py
 SUPPORTED_PATTERNS = [
-    # YouTube patterns
-    r'https?://(?:www\.)?youtube\.com/watch\?v=[\w-]+',
-    r'https?://(?:www\.)?youtube\.com/shorts/[\w-]+',
-    r'https?://youtu\.be/[\w-]+',
-    
-    # TikTok patterns
-    r'https?://(?:www\.)?tiktok\.com/@[\w.-]+/video/\d+',
-    r'https?://(?:vm\.)?tiktok\.com/[\w-]+',
-    
-    # Twitter/X patterns
-    r'https?://(?:www\.)?twitter\.com/[\w]+/status/\d+',
-    r'https?://(?:www\.)?x\.com/[\w]+/status/\d+',
-    
-    # Other video platforms
-    r'https?://(?:www\.)?vimeo\.com/\d+',
-    r'https?://(?:www\.)?dailymotion\.com/video/[\w-]+',
+    # ---------- YouTube (full set of common forms) ----------
+    r'https?://(?:www\.)?youtube\.com/watch\?(?:.*&)?v=[0-9A-Za-z_-]{6,}',
+    r'https?://(?:www\.)?youtube\.com/shorts/[0-9A-Za-z_-]{6,}',
+    r'https?://(?:www\.)?youtube\.com/(?:live|embed)/[0-9A-Za-z_-]{6,}',
+    r'https?://youtu\.be/[0-9A-Za-z_-]{6,}',
+
+    # ---------- TikTok ----------
+    r'https?://(?:www\.)?tiktok\.com/@[\w\.-]+/video/\d+',
+    r'https?://(?:www\.)?tiktok\.com/t/[\w-]+',          # share links
+    r'https?://(?:m|vm)\.tiktok\.com/[\w-]+',
+
+    # ---------- Twitter / X ----------
+    r'https?://(?:www\.)?(?:twitter|x)\.com/\w{1,15}/status/\d+',
+    r'https?://(?:www\.)?(?:twitter|x)\.com/i/broadcasts/\w+',
+
+    # ---------- Reddit (common variants) ----------
+    r'https?://(?:www|m)\.reddit\.com/r/[\w-]+/comments/[0-9A-Za-z]+(?:/[\w-]+)?/?',
+    r'https?://(?:www|m)\.reddit\.com/video/[0-9A-Za-z_-]+/?',
+    r'https?://v\.redd\.it/[0-9A-Za-z]+',
+
+    # ---------- Facebook ----------
+    r'https?://(?:www|m|mbasic)\.facebook\.com/(?:[^/?#]+/)?videos/\d+/?',
+    r'https?://fb\.watch/[0-9A-Za-z_-]+/?',
+
+    # ---------- Instagram ----------
+    r'https?://(?:www\.)?instagram\.com/(?:p|reel|tv)/[0-9A-Za-z_-]+/?',
+    r'https?://(?:www\.)?instagram\.com/stories/[^/]+/\d+/?',
+
+    # ---------- Vimeo ----------
+    r'https?://(?:www\.)?vimeo\.com/(?:\d+|ondemand/[^/?#]+/[^/?#]+|channels/[^/?#]+/\d+)',
+
+    # ---------- Dailymotion ----------
+    r'https?://(?:www\.)?dailymotion\.com/video/[0-9A-Za-z]+',
+
+    # ---------- Twitch ----------
     r'https?://(?:www\.)?twitch\.tv/videos/\d+',
-    r'https?://(?:www\.)?twitch\.tv/[\w]+/clip/[\w-]+',
-    r'https?://(?:www\.)?bilibili\.com/video/[\w-]+',
-    r'https?://(?:www\.)?rumble\.com/[\w-]+',
+    r'https?://(?:www\.)?twitch\.tv/\w+/clip/[0-9A-Za-z_-]+',
+    r'https?://(?:www\.)?twitch\.tv/\w+(?:\?.*)?$',   # live channels
+
+    # ---------- Bilibili ----------
+    r'https?://(?:www\.)?bilibili\.com/video/(?:BV[0-9A-Za-z]+|av\d+)',
+    r'https?://b23\.tv/[0-9A-Za-z]+',
+
+    # ---------- Rumble / Odysee / LBRY ----------
+    r'https?://(?:www\.)?rumble\.com/(?:v|[\w-]+)/[0-9A-Za-z-]+',
     r'https?://(?:www\.)?odysee\.com/@[\w-]+:[\w-]+/[\w-]+:[\w-]+',
     r'https?://(?:www\.)?lbry\.tv/@[\w-]+:[\w-]+/[\w-]+:[\w-]+',
-    r'https?://(?:www\.)?veoh\.com/watch/[\w-]+',
+
+    # ---------- Veoh / Metacafe ----------
+    r'https?://(?:www\.)?veoh\.com/watch/[0-9A-Za-z_-]+',
     r'https?://(?:www\.)?metacafe\.com/watch/\d+/[\w-]+',
-    
-    # Audio platforms
+
+    # ---------- Sound / Music ----------
     r'https?://(?:www\.)?soundcloud\.com/[\w-]+/[\w-]+',
-    r'https?://[\w-]+\.bandcamp\.com/track/[\w-]+',
+    r'https?://[\w-]+\.bandcamp\.com/(?:track|album)/[\w-]+',
     r'https?://(?:www\.)?mixcloud\.com/[\w-]+/[\w-]+',
-    r'https?://(?:www\.)?audiomack\.com/song/[\w-]+/[\w-]+',
-    
-    # Educational/conference
-    r'https?://(?:www\.)?ted\.com/talks/[\w-]+',
-    r'https?://(?:www\.)?archive\.org/details/[\w-]+',
-    
-    # Social media (flexible patterns for various post formats)
-    r'https?://(?:www\.)?reddit\.com/r/[\w-]+/comments/[\w-]+',
-    r'https?://v\.redd\.it/[\w-]+',  # Reddit video direct links
-    r'https?://(?:www\.)?reddit\.com/video/[\w-]+',  # Reddit video pages
-    r'https?://(?:www\.)?facebook\.com/[\w.-]+/videos/\d+',
-    r'https?://(?:www\.)?fb\.com/[\w.-]+/videos/\d+',
-    r'https?://(?:www\.)?instagram\.com/p/[\w-]+',
-    r'https?://(?:www\.)?instagram\.com/reel/[\w-]+',
-    r'https?://(?:www\.)?linkedin\.com/posts/[\w-]+'
+    r'https?://(?:www\.)?audiomack\.com/(?:song|playlist)/[\w-]+/[\w-]+',
+    r'https?://open\.spotify\.com/(?:track|album|playlist|episode|show)/[0-9A-Za-z]+',
+
+    # ---------- News / Major broadcasters (commonly requested) ----------
+    r'https?://(?:www\.)?cnn\.com/(?:videos?|[^?#]+/video)/[^?#]+',
+    r'https?://(?:www\.)?bbc\.co\.uk/(?:iplayer|sounds)/[^?#]+',
+    r'https?://(?:www\.)?abc\.net\.au/(?:news|iview)/[^?#]+',
+    r'https?://(?:www\.)?nbcnews\.com/video/[^?#]+',
+    r'https?://(?:www\.)?foxnews\.com/(?:video|media)/[^?#]+',
+    r'https?://(?:www\.)?reuters\.com/video/[^?#]+',
+
+    # ---------- LinkedIn / Pinterest ----------
+    r'https?://(?:www\.)?linkedin\.com/(?:posts|feed|learning|video)/[^/?#]+',
+    r'https?://(?:www\.)?pinterest\.[a-z.]+/pin/\d+/',
+
+    # ---------- Streamable / VK / Niconico / iQIYI / Viki / VLive ----------
+    r'https?://streamable\.com/[0-9A-Za-z]+',
+    r'https?://(?:www\.)?vk\.com/(?:video-?\d+_\d+|clip-?\d+_\d+)',
+    r'https?://(?:www\.)?nicovideo\.jp/watch/[a-z]{2}\d+',
+    r'https?://(?:www\.)?iqiyi\.com/[a-z0-9/_-]+\.html',
+    r'https?://(?:www\.)?viki\.com/(?:videos|tv)/[0-9A-Za-z-]+',
+    r'https?://(?:www\.)?vlive\.tv/(?:video|post)/\d+',
+
+    # ---------- Adult (explicitly listed in supported sites) ----------
+    r'https?://(?:www\.)?pornhub\.com/(?:view_video\.php\?viewkey=|(?:(?:channels|pornstar|model)/[^/]+/)?videos/)\w+',
+    r'https?://(?:www\.)?xvideos\.com/video\d+/\w+',
+    r'https?://(?:www\.)?xhamster\.com/(?:videos|movies|users/[^/]+/videos)/[0-9A-Za-z-]+',
+
+    # ---------- Massive catch-all union for many additional supported sites ----------
+    # Matches ANY path on these domains so you don’t need per-site path rules.
+    # Keep this list in sync with yt-dlp/youtube-dl supported sites.
+    rf'https?://(?:www\.)?(?:'
+    r'1tv\.ru|20min\.ch|220\.ro|23video\.com|247sports\.com|24video\.[a-z.]+|3sat\.de|4tube\.com|56\.com|6play\.fr|7plus\.com\.au|'
+    r'8tracks\.com|91porn\.com|9gag\.com|9now\.com\.au|abc\.net\.au|abcnews\.go\.com|abc7\.[a-z.]+|acast\.com|adobe(?:tv|connect)\.com|'
+    r'afreecatv\.com|aljazeera\.com|allocine\.fr|amara\.org|aparat\.com|apple\.com/trailers|podcasts\.apple\.com|archive\.org|'
+    r'ardmediathek\.de|arte\.tv|asiancrush\.com|atresplayer\.com|att\.com|atv\.at|audioboom\.com|awaan\.ae|baidu\.com|bandcamp\.com|'
+    r'bangumi\.bilibili\.com|bbc\.co\.uk|bild\.de|bilibili\.com|bitchute\.com|bleacherreport\.com|bloomberg\.com|box\.com|br\.de|'
+    r'bravotv\.com|break\.com|brightcove\.(?:com|net)|businessinsider\.com|buzzfeed\.com|byutv\.org|cbc\.ca|cbsnews\.com|cbssports\.com|'
+    r'cctv\.com|ceskatelevize\.cz|channel9\.msdn\.com|chaturbate\.com|cielotv\.it|cinemax\.com|cloudflarestream\.com|cmt\.com|cnbc\.com|'
+    r'cnn\.com|comedycentral\.(?:com|de|tv)|crackle\.com|crunchyroll\.com|c-span\.org|ctvnews\.ca|curiositystream\.com|cwseed\.com|'
+    r'dailymail\.co\.uk|dailymotion\.com|daum\.net|dbtv\.dk|deezer\.com|defense\.gouv\.fr|democracynow\.org|discovery\.(?:com|plus)|'
+    r'disney\.(?:com|plus)|dlive\.tv|douyu\.com|dr\.dk|dropbox\.com|dtube\.tv|dumpert\.nl|dw\.com|ebaumsworld\.com|echomsk\.ru|'
+    r'egghead\.io|ehftv\.com|ehow\.com|einthusan\.tv|eitb\.eus|ellentube\.com|elpais\.com|embedly\.com|empflix\.com|engadget\.com|'
+    r'eporner\.com|eroprofile\.com|escapistmagazine\.com|espn\.com|esri\.com|expressen\.se|extremetube\.com|facebook\.com|fb\.com|'
+    r'faz\.net|fc2\.com|filmon\.com|filmweb\.pl|fivethirtyeight\.com|flickr\.com|formula1\.com|fox(?:news|sports)\.com|france\.tv|'
+    r'francetvinfo\.fr|freesound\.org|frontendmasters\.com|funimation\.com|gaia\.com|gamespot\.com|giantbomb\.com|gfycat\.com|gogo\.gl|'
+    r'globo\.com|godtube\.com|google\.com/drive|hearthis\.at|heise\.de|hgtv\.com|hketv\.hk|hotstar\.com|howcast\.com|huffpost\.com|'
+    r'ign\.com|imdb\.com|imgur\.com|ina\.fr|infoq\.com|instagram\.com|internazionale\.it|iprima\.cz|iqiyi\.com|ittf\.com|itv\.com|'
+    r'ivi\.ru|ivideon\.com|iwara\.tv|izlesene\.com|jamendo\.com|jeuxvideo\.com|joj\.sk|jwplayer\.com|kakao\.com|kaltura\.com|kankan\.com|'
+    r'khanacademy\.org|kickstarter\.com|kinopoisk\.ru|konserthuset\.se|ku6\.com|kusi\.com|kuwo\.cn|la7\.it|laola1\.tv|lbry\.tv|lci\.fr|'
+    r'lemonde\.fr|lenta\.ru|libsyn\.com|life\.ru|limelight\.com|line\.me|linetv\.tw|linkedin\.com|linuxacademy\.com|litv\.tv|'
+    r'livejournal\.com|livestream\.com|loc\.gov|lrt\.lt|lynda\.com|m6\.fr|mail\.ru|mall\.tv|manyvids\.com|markiza\.sk|matchtv\.ru|'
+    r'mdr\.de|medal\.tv|media\.ccc\.de|mediaset\.it|medici\.tv|megaphone\.fm|meipai\.com|metacafe\.com|metacritic\.com|mewatch\.sg|'
+    r'mgoon\.com|mgtv\.com|miaopai\.com|minds\.com|ministrygrid\.com|miomio\.tv|mitele\.es|mixcloud\.com|mlb\.com|mnet\.com|'
+    r'motherless\.com|motorsport\.com|movieclips\.com|movingimage\.us|msn\.com|mtv\.(?:com|de|co\.uk|jp)|mwave\.me|myspace\.com|'
+    r'myspass\.de|myvi\.ru|myvidster\.com|n-tv\.de|nationalgeographic\.com|naver\.com|nba\.com|nbcnews\.com|nbcolympics\.com|'
+    r'nbcsports\.com|ndr\.de|ndtv\.com|netflix\.com|netease\.com|netplus\.tv|netzkino\.de|newgrounds\.com|nexttv\.com\.tw|nfl\.com|'
+    r'nhk\.or\.jp|nhl\.com|nicovideo\.jp|nintendo\.com|njoy\.de|njpwworld\.com|nobelprize\.org|noovo\.ca|npr\.org|nrk\.no|nrl\.com|'
+    r'ntv\.ru|nytimes\.com|nzz\.ch|ocw\.mit\.edu|odnoklassniki\.ru|onet\.pl|ooyala\.com|ora\.tv|orf\.at|outsideonline\.com|packtpub\.com|'
+    r'palcomp3\.com\.br|pandora\.tv|paramountnetwork\.com|parliamentlive\.tv|patreon\.com|pbs\.org|peertube\.|people\.com|periscope\.tv|'
+    r'philharmoniedeparis\.fr|phoenix\.de|photobucket\.com|picarto\.tv|piksel\.com|pinkbike\.com|pinterest\.[a-z.]+|pladform\.ru|'
+    r'platzi\.com|play\.fm|playplus\.com|plays\.tv|play\.idnes\.cz|playvid\.com|playwire\.com|pluralsight\.com|podomatic\.com|'
+    r'pokemon\.com|polskieradio\.pl|popcorntimes\.com|popcorntv\.it|pornhub\.com|porntube\.com|redtube\.com|pressTV\.ir|prosiebensat1\.|'
+    r'puhutv\.com|qq\.com|qub\.com|quickline\.com|r7\.com|radiocanada\.ca|rai\.it|raiplay\.it|raywenderlich\.com|rbmaradio\.com|'
+    r'rds\.ca|redbull\.(?:com|tv)|reddit\.com|regiotv\.de|reuters\.com|reverbnation\.com|rmcdecouverte\.bfmtv\.com|rockstargames\.com|'
+    r'rottentomatoes\.com|rtbf\.be|rte\.ie|rtmp|rtve\.es|rtvs\.sk|rutube\.ru|r7\.com|ruhd\.ru|rumble\.com|ruutu\.fi|ruzhe\.|safari(booksonline)?\.|'
+    r'sapo\.pt|savefrom\.net|sbs\.com\.au|screencast(?:-o-matic)?\.com|scrippsnetwork|seeker\.com|sendtonews\.com|servus\.com|'
+    r'sexu\.com|seznamzpravy\.cz|shahid\.net|shared\.sx|showroom-live\.com|simplecast\.com|sina\.com\.cn|sky\.it|skynewsarabia\.com|'
+    r'slideshare\.net|slideslive\.com|slutload\.com|snotr\.com|sohu\.com|sonyliv\.com|soundcloud\.com|soundgasm\.net|southpark\.(?:cc\.com|de|nl)|'
+    r'spankbang\.com|spankwire\.com|spiegel\.de|sport\.francetvinfo\.fr|sport5\.co\.il|sportbox\.ru|spotify\.com|spreaker\.com|'
+    r'springboardplatform\.com|sproutonline\.com|srf\.ch|stanford\.edu|store\.steampowered\.com|stitcher\.com|storyfire\.com|'
+    r'streamable\.com|streamcloud\.eu|streamcz\.cz|streetvoice\.com|stretchinternet\.com|stv\.tv|sunporno\.com|sverigesradio\.se|'
+    r'svt(?:play)?\.se|swrmediathek\.de|syfy\.com|tagesschau\.de|tass\.ru|tbs\.com|teachable\.com|teachertube\.com|teachingchannel\.org|'
+    r'teamcoco\.com|teamtreehouse\.com|techtalks\.tv|ted\.com|telecinco\.es|teleq(?:uebec|u)\.tv|tenplay\.com\.au|tf1\.fr|tfo\.org|'
+    r'theintercept\.com|theplatform\.com|thescene\.com|thesun\.co\.uk|weather\.com|thisamericanlife\.org|thisav\.com|thisoldhouse\.com|'
+    r'tiktok\.com|tmz\.com|tnaflix\.com|toggle\.sg|tou\.tv|trailers\.|trilulilu\.ro|trovo\.live|tru(?:(?:news|tv))\.com|tube8\.com|'
+    r'tubitv\.com|tumblr\.com|tunein\.com|tunepk\.com|tv(?:2|4|5|8)\.[a-z.]+|tva\.ca|tvc\.ru|tver\.jp|tvigle\.ru|tvland\.com|tvp\.pl|'
+    r'tvplayer\.com|tvplay(?:home)?\.|tweakers\.net|twitcasting\.tv|twitch\.tv|twitter\.com|x\.com|udemy\.com|udn\.com|ufc\.|uktvplay\.|'
+    r'unity3d\.com|uol\.com\.br|uplynk\.com|urplay\.se|usanetwork\.com|usatoday\.com|ustream\.tv|ustudio\.com|varzesh3\.com|vbox7\.com|'
+    r'vee?oh?\.com|vesti\.ru|vevo\.com|vgtv\.no|vh1\.com|viafree\.|vice\.com|viddler\.com|videa\.hu|video\.arnes\.si|video\.sky\.it|'
+    r'videodetective\.com|videomore\.ru|videopress\.com|vidio\.com|vidlii\.com|vier\.be|viewlift\.com|viidea\.fi|viki\.com|vimeo\.com|'
+    r'vimple\.ru|vine\.co|viqeo\.tv|viu\.(?:com|tv)|vivo\.sx|vk\.com|vlive\.tv|vodlocker\.com|voice\.republic\.|voot\.com|voxmedia\.|'
+    r'vrt\.be|vrv\.co|vshare\.io|vtm\.be|vtx\.ch|vuclip\.com|vvvvid\.it|vzaar\.com|wakanim\.tv|walla\.co\.il|washingtonpost\.com|'
+    r'wat\.tv|watchbox\.de|watchindianporn\.|wdr\.de|webcaster\.|webofstories\.com|weibo\.com|wistia\.(?:com|net)|worldstarhiphop\.com|'
+    r'wsj\.com|wwe\.com|xbef\.|xboxclips\.com|xfileshare\.|xhamster\.com|xiami\.com|ximalaya\.com|xminus\.me|xnxx\.com|xstream\.|'
+    r'xtube\.com|xuite\.net|xvideos\.com|xxxy\.|yahoo\.(?:com|co\.jp)|yandex\.(?:ru|com)|yandex\.music|yandex\.video|yapfiles\.ru|'
+    r'yesjapan\.com|yinyuetai\.com|ynet\.co\.il|youjizz\.com|youku\.com|younow\.com|youporn\.com|yourporn\.se|yourupload\.com|'
+    r'youtube\.com|youtu\.be|zapiks\.fr|zattoo\.com|zdf\.de|zhihu\.com|zingmp3\.vn|zoom\.us|zype\.com'
+    r')/[^\s>]+',
+
+    # ---------- Final safety net ----------
+    # If you want to simply try yt-dlp on ANY URL and let it decide:
+    r'https?://[^\s>]+'
 ]
+
 
 # Global semaphore for download concurrency
 _download_semaphore = asyncio.Semaphore(MAX_CONCURRENT_DOWNLOADS)

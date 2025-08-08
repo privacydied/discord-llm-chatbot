@@ -558,8 +558,63 @@ class Router:
             url = item.payload
             self.logger.info(f"🌐 Processing general URL: {url}")
             
-            # Use existing URL processing logic
-            content = await process_url(url)
+            # Use existing URL processing logic - process_url returns a dict
+            url_result = await process_url(url)
+            
+            # Handle errors
+            if not url_result or url_result.get('error'):
+                return f"Could not extract content from URL: {url}"
+            
+            # Check if smart routing detected media and should route to yt-dlp
+            route_to_ytdlp = url_result.get('route_to_ytdlp', False)
+            if route_to_ytdlp:
+                self.logger.info(f"🎥 Smart routing detected media in {url}, routing to yt-dlp flow")
+                
+                try:
+                    # Import video processing to handle the URL
+                    from bot.hear import hear_infer_from_url
+                    
+                    # Process through yt-dlp flow
+                    transcription_result = await hear_infer_from_url(url)
+                    
+                    if transcription_result and transcription_result.get('transcription'):
+                        transcription = transcription_result['transcription']
+                        metadata = transcription_result.get('metadata', {})
+                        title = metadata.get('title', 'Unknown')
+                        
+                        return f"Video/audio content from {url} ('{title}'): {transcription}"
+                    else:
+                        return f"Successfully detected media in {url} but transcription failed"
+                        
+                except Exception as e:
+                    self.logger.error(f"yt-dlp processing failed for {url}: {e}")
+                    return f"Successfully detected media in {url} but could not process it: {str(e)}"
+            
+            # Check if we got a screenshot (e.g., from Twitter/X.com with no media)
+            screenshot_path = url_result.get('screenshot_path')
+            if screenshot_path:
+                self.logger.info(f"🖼️ URL returned screenshot, processing through VL flow: {screenshot_path}")
+                
+                # Import vision processing to handle the screenshot
+                from bot.see import see_infer
+                try:
+                    # Process the screenshot through the VL flow
+                    vision_response = await see_infer(
+                        image_path=screenshot_path,
+                        prompt=f"Describe what you see in this screenshot from {url}. Focus on the main content, text, and any important details."
+                    )
+                    
+                    if vision_response:
+                        return f"Screenshot content from {url}: {vision_response}"
+                    else:
+                        return f"Successfully captured screenshot from {url} but vision processing failed"
+                        
+                except Exception as e:
+                    self.logger.error(f"VL processing failed for screenshot {screenshot_path}: {e}")
+                    return f"Successfully captured screenshot from {url} but could not analyze it: {str(e)}"
+            
+            # Fallback to text content if no screenshot
+            content = url_result.get('text', '')
             if not content or not content.strip():
                 return f"Could not extract content from URL: {url}"
             
@@ -609,17 +664,26 @@ class Router:
             if content_type and 'audio' in content_type:
                 return InputModality.AUDIO
 
-        # Check for video URLs (YouTube/TikTok) first
-        video_patterns = [
-            r'https?://(?:www\.)?youtube\.com/watch\?v=[\w-]+',
-            r'https?://youtu\.be/[\w-]+',
-            r'https?://(?:www\.)?tiktok\.com/@[\w.-]+/video/\d+',
-            r'https?://(?:vm\.)?tiktok\.com/[\w-]+',
-        ]
-        
-        for pattern in video_patterns:
-            if re.search(pattern, message.content):
-                return InputModality.VIDEO_URL
+        # Check for video URLs using comprehensive patterns from video_ingest.py
+        try:
+            from .video_ingest import SUPPORTED_PATTERNS
+            
+            for pattern in SUPPORTED_PATTERNS:
+                if re.search(pattern, message.content):
+                    return InputModality.VIDEO_URL
+        except ImportError:
+            self.logger.warning("Could not import SUPPORTED_PATTERNS from video_ingest, using fallback patterns")
+            # Fallback patterns (original limited set)
+            fallback_patterns = [
+                r'https?://(?:www\.)?youtube\.com/watch\?v=[\w-]+',
+                r'https?://youtu\.be/[\w-]+',
+                r'https?://(?:www\.)?tiktok\.com/@[\w.-]+/video/\d+',
+                r'https?://(?:vm\.)?tiktok\.com/[\w-]+',
+            ]
+            
+            for pattern in fallback_patterns:
+                if re.search(pattern, message.content):
+                    return InputModality.VIDEO_URL
         
         # Check for other URLs
         if re.search(r'https?://[\S]+', message.content):
@@ -652,59 +716,61 @@ class Router:
         
         enhanced_context = context
         
-        # 1. RAG Integration - Search vector database for relevant knowledge
+        # 1. RAG Integration - Search vector database concurrently for speed
+        rag_task = None
         if os.getenv("ENABLE_RAG", "true").lower() == "true":
             try:
                 from bot.rag.hybrid_search import get_hybrid_search
                 max_results = int(os.getenv("RAG_MAX_VECTOR_RESULTS", "5"))
-                self.logger.info(f"🔍 RAG: Searching vector database for: '{content[:100]}{'...' if len(content) > 100 else ''}' [msg_id={message.id if message else 'N/A'}]")
+                self.logger.debug(f"🔍 RAG: Starting concurrent search for: '{content[:50]}...' [msg_id={message.id if message else 'N/A'}]")
                 
-                search_engine = await get_hybrid_search()
-                if search_engine:
-                    rag_results = await search_engine.search(
-                        query=content,
-                        max_results=max_results
-                    )
-                    self.logger.info(f"📊 RAG: Search completed, found {len(rag_results) if rag_results else 0} results (max_results={max_results})")
-                    
-                    if rag_results:
-                        # Extract relevant content from search results (List[HybridSearchResult])
-                        rag_context_parts = []
-                        self.logger.info(f"📋 RAG: Processing {len(rag_results)} search results...")
-                        
-                        for i, result in enumerate(rag_results[:5]):  # Limit to top 5 results
-                            # HybridSearchResult should have content attribute or similar
-                            if hasattr(result, 'content'):
-                                chunk_content = result.content.strip()
-                            elif hasattr(result, 'text'):
-                                chunk_content = result.text.strip()
-                            elif isinstance(result, dict):
-                                chunk_content = result.get('content', result.get('text', '')).strip()
-                            else:
-                                chunk_content = str(result).strip()
-                            
-                            if chunk_content:
-                                rag_context_parts.append(chunk_content)
-                                # Show preview of each chunk found
-                                preview = chunk_content[:150] + "..." if len(chunk_content) > 150 else chunk_content
-                                self.logger.info(f"📄 RAG: Chunk {i+1}: {preview}")
-                            else:
-                                self.logger.debug(f"⚠️ RAG: Chunk {i+1} was empty or invalid")
-                        
-                        if rag_context_parts:
-                            rag_context = "\n\n".join(rag_context_parts)
-                            enhanced_context = f"{context}\n\n=== Relevant Knowledge ===\n{rag_context}\n=== End Knowledge ===\n" if context else f"=== Relevant Knowledge ===\n{rag_context}\n=== End Knowledge ===\n"
-                            self.logger.info(f"✅ RAG: Enhanced context with {len(rag_context_parts)} knowledge chunks (total chars: {len(rag_context)}) [msg_id={message.id if message else 'N/A'}]")
-                        else:
-                            self.logger.warning(f"⚠️ RAG: Search returned {len(rag_results)} results but all chunks were empty [msg_id={message.id if message else 'N/A'}]")
-                    else:
-                        self.logger.info(f"🚫 RAG: No relevant results found in vector database for query [msg_id={message.id if message else 'N/A'}]")
-                else:
-                    self.logger.warning(f"⚠️ RAG: Search engine not available - check RAG system initialization [msg_id={message.id if message else 'N/A'}]")
+                # Start RAG search concurrently - don't await here
+                async def rag_search_task():
+                    search_engine = await get_hybrid_search()
+                    if search_engine:
+                        return await search_engine.search(query=content, max_results=max_results)
+                    return None
+                
+                rag_task = asyncio.create_task(rag_search_task())
             except Exception as e:
-                self.logger.error(f"❌ RAG: Search failed with error: {e} [msg_id={message.id if message else 'N/A'}]", exc_info=True)
+                self.logger.error(f"❌ RAG: Failed to start concurrent search: {e} [msg_id={message.id if message else 'N/A'}]", exc_info=True)
+                rag_task = None
         
-        # 2. Use contextual brain inference if enhanced context manager is available and message is provided
+        # 2. Wait for RAG search to complete and process results
+        if rag_task:
+            try:
+                rag_results = await rag_task
+                if rag_results:
+                    self.logger.debug(f"📊 RAG: Search completed, found {len(rag_results)} results")
+                    
+                    # Extract relevant content from search results (List[HybridSearchResult])
+                    rag_context_parts = []
+                    for i, result in enumerate(rag_results[:5]):  # Limit to top 5 results
+                        # HybridSearchResult should have content attribute or similar
+                        if hasattr(result, 'content'):
+                            chunk_content = result.content.strip()
+                        elif hasattr(result, 'text'):
+                            chunk_content = result.text.strip()
+                        elif isinstance(result, dict):
+                            chunk_content = result.get('content', result.get('text', '')).strip()
+                        else:
+                            chunk_content = str(result).strip()
+                        
+                        if chunk_content:
+                            rag_context_parts.append(chunk_content)
+                    
+                    if rag_context_parts:
+                        rag_context = "\n\n".join(rag_context_parts)
+                        enhanced_context = f"{context}\n\n=== Relevant Knowledge ===\n{rag_context}\n=== End Knowledge ===\n" if context else f"=== Relevant Knowledge ===\n{rag_context}\n=== End Knowledge ===\n"
+                        self.logger.debug(f"✅ RAG: Enhanced context with {len(rag_context_parts)} knowledge chunks")
+                    else:
+                        self.logger.debug(f"⚠️ RAG: Search returned results but all chunks were empty")
+                else:
+                    self.logger.debug(f"🚫 RAG: No relevant results found")
+            except Exception as e:
+                self.logger.error(f"❌ RAG: Concurrent search failed: {e}")
+
+        # 3. Use contextual brain inference if enhanced context manager is available and message is provided
         if (message and hasattr(self.bot, 'enhanced_context_manager') and 
             self.bot.enhanced_context_manager and 
             os.getenv("USE_ENHANCED_CONTEXT", "true").lower() == "true"):
@@ -717,7 +783,7 @@ class Router:
             except Exception as e:
                 self.logger.warning(f"Contextual brain inference failed, falling back to basic: {e}")
         
-        # 3. Fallback to basic brain inference with enhanced context (including RAG)
+        # 4. Fallback to basic brain inference with enhanced context (including RAG)
         return await brain_infer(content, context=enhanced_context)
 
     async def _flow_process_url(self, url: str, message: discord.Message) -> BotAction:

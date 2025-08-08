@@ -24,7 +24,7 @@ def _normalize_url_for_screenshot(url: str) -> str:
 
 async def external_screenshot(url: str) -> str | None:
     """
-    Captures a screenshot of a URL using the screenshotmachine.com API
+    Captures a screenshot of a URL using the configurable screenshot API
     and saves it to the local cache.
 
     Args:
@@ -33,16 +33,39 @@ async def external_screenshot(url: str) -> str | None:
     Returns:
         Optional[str]: The file path to the saved screenshot, or None if failed.
     """
+    # Load configurable screenshot API parameters
     api_key = os.getenv("SCREENSHOT_API_KEY")
     if not api_key:
         logger.error("❌ SCREENSHOT_API_KEY is not set. Cannot capture screenshot.")
         return None
 
+    api_url_base = os.getenv("SCREENSHOT_API_URL", "https://api.screenshotmachine.com")
+    device = os.getenv("SCREENSHOT_API_DEVICE", "desktop")
+    dimension = os.getenv("SCREENSHOT_API_DIMENSION", "1024x768")
+    format_type = os.getenv("SCREENSHOT_API_FORMAT", "jpg")
+    cache_limit = os.getenv("SCREENSHOT_API_CACHE_LIMIT", "2")
+    timeout = os.getenv("SCREENSHOT_API_TIMEOUT", "5000")
+    delay = os.getenv("SCREENSHOT_API_DELAY", "2000")
+    cookies = os.getenv("SCREENSHOT_API_COOKIES", "")
+    click = os.getenv("SCREENSHOT_API_CLICK", "")
+
     normalized_url = _normalize_url_for_screenshot(url)
-    # Construct the API URL for screenshotmachine.com
-    api_url = f"https://api.screenshotmachine.com/?key={api_key}&url={normalized_url}&dimension=1200x675&cacheLimit=2&timeout=5000"
     
-    logger.info(f"📷 Requesting screenshot from Screenshot Machine for {normalized_url}")
+    # Construct the configurable API URL with base parameters
+    api_url = f"{api_url_base}/?key={api_key}&url={normalized_url}&device={device}&dimension={dimension}&format={format_type}&cacheLimit={cache_limit}&timeout={timeout}&delay={delay}"
+    
+    # Add optional parameters if they are set
+    if cookies and cookies.strip():
+        api_url += f"&cookies={cookies}"
+        logger.debug(f"🍪 Added cookies to screenshot request: {cookies[:50]}...")
+    
+    if click and click.strip():
+        api_url += f"&click={click}"
+        logger.debug(f"👆 Added click target to screenshot request: {click}")
+    
+    logger.debug(f"⏱️ Using screenshot delay: {delay}ms")
+    
+    logger.info(f"📷 Requesting screenshot from {api_url_base} for {normalized_url} [{dimension}, {format_type}]")
 
     try:
         async with httpx.AsyncClient() as client:

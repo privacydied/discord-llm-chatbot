@@ -28,9 +28,9 @@ USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTM
 DOMAIN_RULES = {
     'youtube.com': {'type': 'youtube', 'extract': False},
     'youtu.be': {'type': 'youtube', 'extract': False},
-    'twitter.com': {'type': 'twitter', 'extract': True, 'force_screenshot': True},
-    'x.com': {'type': 'twitter', 'extract': True, 'force_screenshot': True},
-    'fxtwitter.com': {'type': 'twitter', 'extract': True, 'force_screenshot': True},
+    'twitter.com': {'type': 'twitter', 'extract': True, 'smart_routing': True},
+    'x.com': {'type': 'twitter', 'extract': True, 'smart_routing': True},
+    'fxtwitter.com': {'type': 'twitter', 'extract': True, 'smart_routing': True},
     'reddit.com': {'type': 'reddit', 'extract': True},
     'github.com': {'type': 'github', 'extract': True},
     'wikipedia.org': {'type': 'wikipedia', 'extract': True},
@@ -73,12 +73,14 @@ def get_domain_info(url: str) -> Dict[str, str]:
         domain_type = 'website'
         should_extract = True
         force_screenshot = False
+        smart_routing = False
         
         for key, rule in DOMAIN_RULES.items():
             if key in domain:
                 domain_type = rule['type']
                 should_extract = rule.get('extract', True)
                 force_screenshot = rule.get('force_screenshot', False)
+                smart_routing = rule.get('smart_routing', False)
                 break
         
         # Check file extensions
@@ -92,6 +94,7 @@ def get_domain_info(url: str) -> Dict[str, str]:
             'type': domain_type,
             'should_extract': should_extract,
             'force_screenshot': force_screenshot,
+            'smart_routing': smart_routing,
             'scheme': parsed.scheme,
             'path': parsed.path,
             'query': parsed.query,
@@ -286,12 +289,47 @@ def strip_boilerplate(text: str) -> str:
     )
 
 async def process_url(url: str) -> Dict[str, Any]:
-    """Process a URL, using an external API for screenshots and falling back to text extraction."""
+    """Process a URL, using smart routing for Twitter/X.com URLs and falling back to text extraction."""
     domain_info = get_domain_info(url)
     force_screenshot = domain_info.get('force_screenshot', False)
+    smart_routing = domain_info.get('smart_routing', False)
     screenshot_path = None
 
-    # 1. Attempt screenshot if forced
+    # 1. Smart routing for Twitter/X.com URLs (detect media first)
+    if smart_routing:
+        logging.info(f"🧠 Smart routing enabled for {url}. Checking for media content...")
+        
+        try:
+            # Import media capability detector
+            from .media_capability import is_twitter_video_url
+            
+            # Check if this Twitter URL contains video/audio
+            probe_result = await is_twitter_video_url(url)
+            
+            if probe_result.is_media_capable:
+                logging.info(f"🎥 Media detected in Twitter URL {url}. Routing to yt-dlp flow.")
+                # Return special indicator that this should be routed to yt-dlp
+                return {'url': url, 'text': None, 'screenshot_path': None, 'error': None, 'route_to_ytdlp': True}
+            else:
+                logging.info(f"📷 No media in Twitter URL {url}. Using screenshot API.")
+                # No media detected, use screenshot API
+                screenshot_path = await external_screenshot(url)
+                if screenshot_path:
+                    return {'url': url, 'text': None, 'screenshot_path': screenshot_path, 'error': None}
+                else:
+                    logging.warning(f"⚠️ Screenshot failed for Twitter URL {url}.")
+                    return {'url': url, 'text': None, 'screenshot_path': None, 'error': 'screenshot_failed_for_smart_routing'}
+                    
+        except Exception as e:
+            logging.error(f"❌ Smart routing failed for {url}: {e}. Falling back to screenshot.")
+            # If smart routing fails, fall back to screenshot
+            screenshot_path = await external_screenshot(url)
+            if screenshot_path:
+                return {'url': url, 'text': None, 'screenshot_path': screenshot_path, 'error': None}
+            else:
+                return {'url': url, 'text': None, 'screenshot_path': None, 'error': 'smart_routing_failed'}
+
+    # 2. Attempt screenshot if forced (legacy behavior for non-smart domains)
     if force_screenshot:
         logging.info(f"📷 Force screenshot enabled for {url}. Attempting external capture.")
         screenshot_path = await external_screenshot(url)
