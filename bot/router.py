@@ -30,12 +30,12 @@ import time
 from .modality import InputModality, InputItem, collect_input_items, map_item_to_modality
 from .multimodal_retry import run_with_retries
 from .result_aggregator import ResultAggregator
-from .enhanced_retry import get_retry_manager, ProviderConfig
-
-
+from .enhanced_retry import EnhancedRetryManager, ProviderConfig, get_retry_manager
+from .brain import brain_infer
+from .contextual_brain import contextual_brain_infer
+import re
 from . import web
 from discord import Message, DMChannel, Embed, File
-from bot.brain import brain_infer
 
 if TYPE_CHECKING:
     from bot.core.bot import LLMBot as DiscordBot
@@ -461,9 +461,34 @@ class Router:
                 os.unlink(tmp_path)
     
     async def _process_image_from_url(self, url: str) -> str:
-        """Process image from URL."""
-        # For now, return a placeholder - would need to download and process
-        return f"Image URL detected: {url}. Image processing from URLs not yet implemented."
+        """Process image from URL using screenshot API + vision analysis."""
+        from .utils.external_api import external_screenshot
+        from .see import see_infer
+        
+        try:
+            # Take screenshot using the configured screenshot API
+            self.logger.info(f"📸 Taking screenshot of URL: {url}")
+            screenshot_path = await external_screenshot(url)
+            
+            if not screenshot_path:
+                self.logger.error(f"❌ Failed to capture screenshot of URL: {url}")
+                return f"⚠️ Failed to capture screenshot of URL: {url}"
+            
+            # Process the screenshot with vision model
+            self.logger.info(f"👁️ Processing screenshot with vision model: {screenshot_path}")
+            vision_result = await see_infer(image_path=screenshot_path, prompt="Describe the contents of this screenshot")
+            
+            if vision_result and hasattr(vision_result, 'content') and vision_result.content:
+                analysis = vision_result.content
+                self.logger.info(f"✅ Screenshot analysis completed: {len(analysis)} chars")
+                return f"Screenshot analysis of {url}: {analysis}"
+            else:
+                self.logger.warning(f"⚠️ Vision analysis returned empty result for: {screenshot_path}")
+                return f"⚠️ Screenshot captured but vision analysis failed for: {url}"
+                
+        except Exception as e:
+            self.logger.error(f"❌ Error in screenshot + vision processing: {e}", exc_info=True)
+            return f"⚠️ Failed to process screenshot of URL: {url} (Error: {str(e)})"
     
     async def _handle_video_url(self, item: InputItem) -> str:
         """
