@@ -155,9 +155,24 @@ class LLMBot(commands.Bot):
         try:
             # Initialize metrics
             try:
-                from bot.metrics.prometheus_metrics import PrometheusMetrics
-                self.metrics = PrometheusMetrics()
-                self.logger.info("✅ Prometheus metrics initialized")
+                import os
+                
+                # Read Prometheus configuration from environment
+                prometheus_enabled = os.getenv("PROMETHEUS_ENABLED", "true").lower() == "true"
+                prometheus_port = int(os.getenv("PROMETHEUS_PORT", "8000"))
+                prometheus_http_server = os.getenv("PROMETHEUS_HTTP_SERVER", "true").lower() == "true"
+                
+                if prometheus_enabled:
+                    from bot.metrics.prometheus_metrics import PrometheusMetrics
+                    self.metrics = PrometheusMetrics(
+                        port=prometheus_port,
+                        enable_http_server=prometheus_http_server
+                    )
+                    self.logger.info("✅ Prometheus metrics initialized")
+                else:
+                    from bot.metrics.null_metrics import NoopMetrics
+                    self.metrics = NoopMetrics()
+                    self.logger.info("📊 Prometheus disabled via config, using NoopMetrics")
             except Exception:
                 self.logger.warning("⚠️  Prometheus metrics not available, using NullMetrics")
 

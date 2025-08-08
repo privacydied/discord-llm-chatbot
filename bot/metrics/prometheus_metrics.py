@@ -19,27 +19,33 @@ logger = logging.getLogger(__name__)
 class PrometheusMetrics:
     """Prometheus-based metrics provider for comprehensive bot monitoring."""
     
-    def __init__(self, port: int = 8000):
-        """Initialize Prometheus metrics with HTTP server for scraping.
+    def __init__(self, port: int = 8000, enable_http_server: bool = True):
+        """Initialize Prometheus metrics with optional HTTP server for scraping.
         
         Args:
-            port: Port for Prometheus metrics HTTP server
+            port: Port for Prometheus metrics HTTP server (0 for auto-select)
+            enable_http_server: Whether to start HTTP server for metrics scraping
         """
         self.port = port
+        self.enable_http_server = enable_http_server
         self._counters: Dict[str, Counter] = {}
         self._histograms: Dict[str, Histogram] = {}
         self._gauges: Dict[str, Gauge] = {}
         self._http_server_started = False
         
-        logger.info(f"📊 Initializing Prometheus metrics on port {port}")
+        logger.info(f"📊 Initializing Prometheus metrics (HTTP server: {enable_http_server}, port: {port})")
         
-        # Start HTTP server for metrics scraping
-        try:
-            start_http_server(port)
-            self._http_server_started = True
-            logger.info(f"✅ Prometheus HTTP server started on port {port}")
-        except Exception as e:
-            logger.warning(f"⚠️  Failed to start Prometheus HTTP server: {e}")
+        # Start HTTP server for metrics scraping if enabled
+        if enable_http_server:
+            try:
+                actual_port = start_http_server(port)
+                self._http_server_started = True
+                self.port = actual_port if port == 0 else port
+                logger.info(f"✅ Prometheus HTTP server started on port {self.port}")
+            except Exception as e:
+                logger.warning(f"⚠️  Failed to start Prometheus HTTP server: {e}")
+        else:
+            logger.info("📊 Prometheus metrics initialized without HTTP server")
     
     def define_counter(self, name: str, description: str, labels: Optional[list] = None) -> None:
         """Define a counter metric.
