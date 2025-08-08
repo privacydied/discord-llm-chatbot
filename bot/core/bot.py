@@ -799,12 +799,27 @@ class LLMBot(commands.Bot):
                 self._user_queues.clear()
             
             # Cancel memory save task
-            if self.memory_save_task and not self.memory_save_task.done():
-                self.memory_save_task.cancel()
+            if self.memory_save_task:
                 try:
-                    await asyncio.wait_for(self.memory_save_task, timeout=2.0)
-                except (asyncio.CancelledError, asyncio.TimeoutError):
-                    pass
+                    # Handle both Task and Loop objects
+                    if hasattr(self.memory_save_task, 'done'):
+                        # It's an asyncio.Task
+                        if not self.memory_save_task.done():
+                            self.memory_save_task.cancel()
+                            try:
+                                await asyncio.wait_for(self.memory_save_task, timeout=2.0)
+                            except (asyncio.CancelledError, asyncio.TimeoutError):
+                                pass
+                    elif hasattr(self.memory_save_task, 'is_being_cancelled'):
+                        # It's a tasks.Loop
+                        if not self.memory_save_task.is_being_cancelled():
+                            self.memory_save_task.cancel()
+                            self.logger.debug("Cancelled memory save task loop")
+                    else:
+                        # Unknown type, try to cancel anyway
+                        self.memory_save_task.cancel()
+                except Exception as e:
+                    self.logger.warning(f"Error cancelling memory save task: {e}")
             
             # Cancel background tasks
             for task in self.background_tasks:
