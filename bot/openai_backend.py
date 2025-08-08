@@ -148,14 +148,23 @@ Server Context: {server_context}"""
             logger.debug(f"[OpenAI] Response object type: {type(response)}")
             
             if not response.choices:
-                logger.error("[OpenAI] ❌ No choices in response")
+                logger.error("[OpenAI] ❌ No choices in response - API returned empty choices array")
+                logger.debug(f"[OpenAI] Response object: {response}")
                 raise APIError("No choices returned in OpenAI response")
             
             if not response.choices[0].message:
                 logger.error("[OpenAI] ❌ No message in first choice")
+                logger.debug(f"[OpenAI] First choice: {response.choices[0]}")
                 raise APIError("No message in OpenAI response choice")
+                
+            if not response.choices[0].message.content:
+                logger.warning("[OpenAI] ⚠️ Empty message content returned")
+                logger.debug(f"[OpenAI] Message object: {response.choices[0].message}")
+                # Don't raise error for empty content, return empty string
+                response_text = ""
+            else:
+                response_text = response.choices[0].message.content
             
-            response_text = response.choices[0].message.content
             logger.debug(f"[OpenAI] 📄 Extracted response text length: {len(response_text) if response_text else 0}")
             
             usage_info = {

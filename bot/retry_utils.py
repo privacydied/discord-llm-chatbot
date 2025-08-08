@@ -62,7 +62,10 @@ def is_retryable_error(error: Exception, config: RetryConfig) -> bool:
             'too many requests',
             'provider returned error',
             'connection error',
-            'timeout'
+            'timeout',
+            'no choices returned',
+            'no choices in response',
+            'empty response from api'
         ]
         if any(pattern in error_str for pattern in transient_patterns):
             return True
