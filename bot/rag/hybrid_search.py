@@ -372,9 +372,13 @@ class HybridRAGSearch:
         
         # Try vector search first (with lazy loading)
         vector_results = await self._vector_search(query, user_id, guild_id, self.config.max_vector_results)
+        if vector_results is None:
+            vector_results = []
         
         # Get keyword results
         keyword_results = await self._keyword_search(query, user_id, guild_id, self.config.max_keyword_results)
+        if keyword_results is None:
+            keyword_results = []
         
         # Combine and rank results
         if self.config.combine_results:

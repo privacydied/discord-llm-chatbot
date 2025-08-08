@@ -41,9 +41,9 @@ SUPPORTED_PATTERNS = [
     r'https?://(?:www\.)?tiktok\.com/t/[\w-]+',          # share links
     r'https?://(?:m|vm)\.tiktok\.com/[\w-]+',
 
-    # ---------- Twitter / X ----------
-    r'https?://(?:www\.)?(?:twitter|x)\.com/\w{1,15}/status/\d+',
-    r'https?://(?:www\.)?(?:twitter|x)\.com/i/broadcasts/\w+',
+    # ---------- Twitter / X (try yt-dlp first, fallback to screenshot if no video) ----------
+    r'https?://(?:www\.)?(?:twitter|x)\.com/\w{1,15}/status/\d+',  # All tweet status URLs - fallback logic will handle non-video tweets
+    r'https?://(?:www\.)?(?:twitter|x)\.com/i/broadcasts/\w+',  # Twitter Spaces/Live broadcasts
 
     # ---------- Reddit (common variants) ----------
     r'https?://(?:www|m)\.reddit\.com/r/[\w-]+/comments/[0-9A-Za-z]+(?:/[\w-]+)?/?',
@@ -163,7 +163,7 @@ SUPPORTED_PATTERNS = [
     r'theintercept\.com|theplatform\.com|thescene\.com|thesun\.co\.uk|weather\.com|thisamericanlife\.org|thisav\.com|thisoldhouse\.com|'
     r'tiktok\.com|tmz\.com|tnaflix\.com|toggle\.sg|tou\.tv|trailers\.|trilulilu\.ro|trovo\.live|tru(?:(?:news|tv))\.com|tube8\.com|'
     r'tubitv\.com|tumblr\.com|tunein\.com|tunepk\.com|tv(?:2|4|5|8)\.[a-z.]+|tva\.ca|tvc\.ru|tver\.jp|tvigle\.ru|tvland\.com|tvp\.pl|'
-    r'tvplayer\.com|tvplay(?:home)?\.|tweakers\.net|twitcasting\.tv|twitch\.tv|twitter\.com|x\.com|udemy\.com|udn\.com|ufc\.|uktvplay\.|'
+    r'tvplayer\.com|tvplay(?:home)?\.|tweakers\.net|twitcasting\.tv|twitch\.tv|udemy\.com|udn\.com|ufc\.|uktvplay\.|'
     r'unity3d\.com|uol\.com\.br|uplynk\.com|urplay\.se|usanetwork\.com|usatoday\.com|ustream\.tv|ustudio\.com|varzesh3\.com|vbox7\.com|'
     r'vee?oh?\.com|vesti\.ru|vevo\.com|vgtv\.no|vh1\.com|viafree\.|vice\.com|viddler\.com|videa\.hu|video\.arnes\.si|video\.sky\.it|'
     r'videodetective\.com|videomore\.ru|videopress\.com|vidio\.com|vidlii\.com|vier\.be|viewlift\.com|viidea\.fi|viki\.com|vimeo\.com|'
@@ -174,11 +174,7 @@ SUPPORTED_PATTERNS = [
     r'xtube\.com|xuite\.net|xvideos\.com|xxxy\.|yahoo\.(?:com|co\.jp)|yandex\.(?:ru|com)|yandex\.music|yandex\.video|yapfiles\.ru|'
     r'yesjapan\.com|yinyuetai\.com|ynet\.co\.il|youjizz\.com|youku\.com|younow\.com|youporn\.com|yourporn\.se|yourupload\.com|'
     r'youtube\.com|youtu\.be|zapiks\.fr|zattoo\.com|zdf\.de|zhihu\.com|zingmp3\.vn|zoom\.us|zype\.com'
-    r')/[^\s>]+',
-
-    # ---------- Final safety net ----------
-    # If you want to simply try yt-dlp on ANY URL and let it decide:
-    r'https?://[^\s>]+'
+    r')/[^\s>]+'
 ]
 
 

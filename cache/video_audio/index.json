@@ -64,5 +64,16 @@
     "processed_path": "cache/video_audio/07ab15606dec9281.wav",
     "cached_at": "2025-08-08T04:18:15.130089+00:00",
     "speedup_factor": 1.5
+  },
+  "a5d299cd06d079be": {
+    "url": "https://x.com/RpsAgainstTrump/status/1953578643042840689",
+    "title": "Republicans against Trump - In a desperate attempt to convince Americans to ignore the latest bad...",
+    "duration_seconds": 24.324,
+    "uploader": "Republicans against Trump",
+    "upload_date": "20250807",
+    "source_type": "unknown",
+    "processed_path": "cache/video_audio/a5d299cd06d079be.wav",
+    "cached_at": "2025-08-08T05:21:50.985763+00:00",
+    "speedup_factor": 1.5
   }
 }

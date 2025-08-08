@@ -458,6 +458,7 @@ class Router:
     async def _handle_video_url(self, item: InputItem) -> str:
         """
         Handle video URL input items (YouTube, TikTok, etc.).
+        For Twitter/X URLs: tries yt-dlp first, falls back to screenshot + VL if no video found.
         Returns transcribed text for further processing.
         """
         try:
@@ -482,6 +483,25 @@ class Router:
             return f"Video transcription from {url} ('{title}'): {transcription}"
             
         except Exception as e:
+            error_str = str(e).lower()
+            
+            # Check if this is a Twitter/X URL that failed video extraction
+            is_twitter_url = ("twitter.com" in url.lower() or "x.com" in url.lower()) and "/status/" in url.lower()
+            no_video_found = (
+                "no video could be found" in error_str or 
+                "no video" in error_str or 
+                "video extraction failed" in error_str
+            )
+            
+            if is_twitter_url and no_video_found:
+                self.logger.info(f"🔄 No video found in tweet, falling back to screenshot + VL processing: {url}")
+                try:
+                    # Fallback to image processing (screenshot + VL)
+                    return await self._handle_image(item)
+                except Exception as fallback_error:
+                    self.logger.error(f"❌ Both video and image fallback failed for {url}: {fallback_error}", exc_info=True)
+                    return f"Could not process Twitter URL (tried both video and image processing): {url}"
+            
             self.logger.error(f"Error processing video URL: {e}", exc_info=True)
             return f"Failed to process video URL: {item.payload}"
     
