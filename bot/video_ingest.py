@@ -275,7 +275,9 @@ class VideoIngestionManager:
                     "no extractors found",
                     "unable to extract video info",
                     "private video",
-                    "video not available"
+                    "video not available",
+                    "no video",
+                    "no audio"
                 ]):
                     logger.info(f"ℹ️ No video/audio content found in URL: {url}")
                     raise VideoIngestError(f"No video or audio content found in this URL. This might be a text-only post or unavailable content.")
@@ -335,14 +337,16 @@ class VideoIngestionManager:
         except Exception as e:
             # Log at INFO level for expected "no video content" errors to avoid scary tracebacks
             error_str = str(e).lower()
-            if any(phrase in error_str for phrase in [
-                "no video could be found", 
-                "no video formats found",
+            if any(expected_error in error_str for expected_error in [
+                "no video could be found",
+                "no video formats found", 
                 "no audio could be found",
                 "no extractors found",
                 "unable to extract video info",
                 "private video",
-                "video not available"
+                "video not available",
+                "no video",
+                "no audio"
             ]):
                 logger.info(f"ℹ️ yt-dlp: {e}")
             else:

@@ -148,36 +148,78 @@ class SentenceTransformerEmbedding(EmbeddingInterface):
             raise
 
     async def _get_local_model_path(self) -> Optional[Path]:
-        """Get the expected local cache path for the model."""
+        """Get the exact local cache path containing the model files."""
         try:
-            # HuggingFace cache directory
-            from sentence_transformers.util import snapshot_download
+            # Try multiple import options for cache detection (older/newer sentence-transformers versions)
+            snapshot_download = None
+            try:
+                from sentence_transformers.util import snapshot_download
+            except ImportError:
+                try:
+                    from huggingface_hub import snapshot_download
+                except ImportError:
+                    # If neither import works, we'll use manual path detection
+                    logger.debug("No snapshot_download available, using manual cache detection")
+                    pass
             
-            # Standard HuggingFace cache locations
+            # Standard HuggingFace cache locations (expanded for comprehensive coverage)
             cache_homes = [
                 os.environ.get("SENTENCE_TRANSFORMERS_HOME"),
                 os.environ.get("HF_HOME"), 
+                os.environ.get("TRANSFORMERS_CACHE"),
                 Path.home() / ".cache" / "huggingface" / "hub",
-                Path.home() / ".cache" / "torch" / "sentence_transformers"
+                Path.home() / ".cache" / "torch" / "sentence_transformers",
+                Path.home() / ".cache" / "sentence_transformers",
+                # Additional common locations
+                Path("/tmp") / "sentence_transformers_cache",
+                Path(".") / ".cache" / "sentence_transformers"
             ]
             
             model_id = self.model_name.replace("/", "--")
+            self._cached_model_path = None  # Reset cached path
             
             for cache_home in cache_homes:
                 if not cache_home:
                     continue
                     
                 cache_path = Path(cache_home)
+                
+                # Comprehensive path checking for different cache structures
                 potential_paths = [
+                    # HuggingFace Hub standard format
+                    cache_path / f"models--{model_id}" / "snapshots",
                     cache_path / f"models--{model_id}",
+                    # Sentence-transformers specific formats
                     cache_path / "sentence_transformers" / model_id,
-                    cache_path / model_id
+                    cache_path / model_id,
+                    # Alternative formats
+                    cache_path / self.model_name,
+                    # Direct model name (for manual installs)
+                    cache_path / self.model_name.split("/")[-1] if "/" in self.model_name else None
                 ]
                 
-                for path in potential_paths:
+                # Remove None entries and check each path
+                for path in filter(None, potential_paths):
                     if await self._is_model_locally_cached(path):
-                        return path
+                        # Return the exact path where model files were found
+                        actual_path = getattr(self, '_cached_model_path', path)
+                        logger.debug(f"📂 Found cached model at: {actual_path}")
+                        return actual_path
+                        
+                # Also check for snapshots subdirectories in Hub format
+                hub_model_path = cache_path / f"models--{model_id}"
+                if hub_model_path.exists():
+                    # Check all snapshot directories
+                    snapshots_dir = hub_model_path / "snapshots"
+                    if snapshots_dir.exists():
+                        for snapshot_dir in snapshots_dir.iterdir():
+                            if snapshot_dir.is_dir() and await self._is_model_locally_cached(snapshot_dir):
+                                # Return the exact snapshot directory containing model files
+                                actual_path = getattr(self, '_cached_model_path', snapshot_dir)
+                                logger.debug(f"📂 Found cached model in snapshot: {actual_path}")
+                                return actual_path
             
+            logger.debug(f"❌ No local cache found for {self.model_name}")
             return None
             
         except Exception as e:
@@ -185,38 +227,57 @@ class SentenceTransformerEmbedding(EmbeddingInterface):
             return None
 
     async def _is_model_locally_cached(self, path: Path) -> bool:
-        """Check if model is fully cached locally."""
+        """Check if model is fully cached locally and return the correct model directory path."""
         if not path or not path.exists():
             return False
             
         try:
-            # Check for essential model files
-            essential_files = [
-                "config.json", 
-                "modules.json",
-                "pytorch_model.bin"
-            ]
+            # Essential files that must be present for a valid model
+            core_files = ["config.json", "modules.json"]
+            model_files = ["pytorch_model.bin", "model.safetensors", "pytorch_model.safetensors"]
             
-            # Look in the path and subdirectories
-            for root, dirs, files in os.walk(path):
-                root_path = Path(root)
-                files_present = set(files)
-                
-                # Check if all essential files are present
-                if all(f in files_present for f in essential_files):
-                    logger.debug(f"✅ Found complete model cache at: {root_path}")
-                    return True
+            # Look in the path and reasonable subdirectories
+            max_depth = 3  # Prevent excessive recursion
+            
+            def find_model_directory(dir_path: Path, current_depth: int = 0) -> Optional[Path]:
+                if current_depth > max_depth:
+                    return None
                     
-                # Also check for model.safetensors (alternative format)
-                if "config.json" in files_present and "modules.json" in files_present:
-                    if "model.safetensors" in files_present or any("pytorch_model" in f for f in files_present):
-                        logger.debug(f"✅ Found complete model cache at: {root_path}")
-                        return True
-                        
-            return False
+                try:
+                    files_in_dir = set(f.name for f in dir_path.iterdir() if f.is_file())
+                    
+                    # Check if core configuration files are present
+                    core_files_present = all(f in files_in_dir for f in core_files)
+                    
+                    # Check if at least one model file is present
+                    model_file_present = any(f in files_in_dir for f in model_files) or \
+                                       any("pytorch_model" in f for f in files_in_dir)
+                    
+                    if core_files_present and model_file_present:
+                        logger.debug(f"✅ Complete model found at: {dir_path} (files: {sorted(files_in_dir)})")
+                        # Store the exact path where the model files are located
+                        self._cached_model_path = dir_path
+                        return dir_path
+                    
+                    # If not found at current level, check subdirectories  
+                    if current_depth < max_depth:
+                        for subdir in dir_path.iterdir():
+                            if subdir.is_dir() and not subdir.name.startswith("."):
+                                result = find_model_directory(subdir, current_depth + 1)
+                                if result:
+                                    return result
+                                    
+                except (PermissionError, OSError) as e:
+                    logger.debug(f"Cannot access directory {dir_path}: {e}")
+                    
+                return None
+            
+            # Find the exact directory containing model files
+            model_dir = find_model_directory(path)
+            return model_dir is not None
             
         except Exception as e:
-            logger.debug(f"Error checking local cache: {e}")
+            logger.debug(f"Error checking local cache at {path}: {e}")
             return False
 
     async def _handle_fallback(self, error_reason: str):
