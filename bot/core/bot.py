@@ -180,6 +180,10 @@ class LLMBot(commands.Bot):
             await self.setup_router()
             self.logger.info("✅ Message router configured")
             
+            # Initialize RAG system (with eager loading if configured)
+            await self.setup_rag()
+            self.logger.info("✅ RAG system configured")
+            
             # Load command extensions
             await self.load_extensions()
             self.logger.info("✅ Command extensions loaded")
@@ -618,10 +622,41 @@ class LLMBot(commands.Bot):
         """Set up message router."""
         try:
             from bot.router import Router
-            self.router = Router(self)
-            self.logger.info("Router initialized")
+            self.router = Router(self)  # Pass bot instance, not config dict
+            self.logger.debug("✅ Message router initialized successfully")
         except Exception as e:
-            self.logger.error(f"Failed to set up router: {e}", exc_info=True)
+            self.logger.error(f"❌ Failed to initialize message router: {e}", exc_info=True)
+            raise
+    
+    async def setup_rag(self) -> None:
+        """Set up RAG system to enable eager loading if configured."""
+        try:
+            # Check if RAG is configured and eager loading is enabled
+            rag_enabled = self.config.get('rag_enabled', True)
+            if not rag_enabled:
+                self.logger.info("⚠️  RAG system disabled via configuration")
+                return
+                
+            # Import RAG config and check eager loading setting
+            from bot.rag.config import get_rag_config
+            rag_config = get_rag_config()
+            
+            if rag_config.eager_vector_load:
+                self.logger.info("🚀 RAG eager loading enabled - initializing RAG system at startup")
+                
+                # Initialize the RAG system to trigger eager loading
+                from bot.rag.hybrid_search import get_hybrid_search
+                search_engine = await get_hybrid_search()
+                
+                self.logger.info("✅ RAG system initialized with eager vector loading")
+            else:
+                self.logger.info("⏱️  RAG lazy loading enabled - deferring initialization until first use")
+                
+        except Exception as e:
+            # RAG initialization failure should not crash the bot
+            self.logger.warning(f"⚠️  RAG system initialization failed (bot will continue without RAG): {e}")
+            if self.config.get('debug', False):
+                self.logger.debug("RAG initialization traceback:", exc_info=True)
 
     async def load_extensions(self) -> None:
         """Load command extensions using Rich visual reporting."""

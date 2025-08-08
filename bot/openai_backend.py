@@ -47,11 +47,11 @@ async def generate_openai_response(
     try:
         config = load_config()
         
-        # Configure OpenAI client with timeout
+        # Configure OpenAI client with optimized timeout
         client = openai.AsyncOpenAI(
             api_key=config.get('OPENAI_API_KEY'),
             base_url=config.get('OPENAI_API_BASE', 'https://api.openai.com/v1'),
-            timeout=120.0  # 2 minute timeout to prevent hanging
+            timeout=30.0  # Faster timeout for speed
         )
         
         # Get model configuration
@@ -287,32 +287,32 @@ async def generate_vl_response(
         Dictionary with the generated VL analysis and metadata
     """
     try:
-        # Extract custom kwargs that should NOT be forwarded to OpenAI client
-        model_override = kwargs.pop('model_override', None)
-        logger.info("🎨 === VL RESPONSE GENERATION STARTED ===")
-        logger.debug(f"🎨 Image URL: {image_url[:100]}{'...' if len(image_url) > 100 else ''}")
-        logger.debug(f"🎨 User prompt: '{user_prompt[:100]}{'...' if len(user_prompt) > 100 else ''}'")
-        
+        # Load configuration
         config = load_config()
         
-        # Configure OpenAI client
+        # Extract custom kwargs that should NOT be forwarded to OpenAI client
+        model_override = kwargs.pop('model_override', None)
+        
+        # Get VL model configuration (honor override) - MUST be defined before logging
+        vl_model = (model_override or config.get('VL_MODEL'))
+        if not vl_model:
+            logger.error("❌ VL_MODEL not configured in environment variables")
+            raise APIError("VL_MODEL not configured in environment variables")
+        
+        logger.info("🎨 === VL RESPONSE GENERATION STARTED ===")
+        logger.info(f"🎨 Processing with model: {vl_model}")
+        
+        if model_override:
+            logger.info(f"🎨 Using VL model OVERRIDE from ladder: {vl_model}")
+        else:
+            logger.info(f"🎨 Using VL model: {vl_model}")
+            
         logger.debug("🎨 Configuring OpenAI client for VL")
         client = openai.AsyncOpenAI(
             api_key=config.get('OPENAI_API_KEY'),
             base_url=config.get('OPENAI_API_BASE', 'https://api.openai.com/v1')
         )
         logger.debug(f"🎨 Using API base: {config.get('OPENAI_API_BASE', 'https://api.openai.com/v1')}")
-        
-        # Get VL model configuration (honor override)
-        vl_model = (model_override or config.get('VL_MODEL'))
-        if not vl_model:
-            logger.error("❌ VL_MODEL not configured in environment variables")
-            raise APIError("VL_MODEL not configured in environment variables")
-        
-        if model_override:
-            logger.info(f"🎨 Using VL model OVERRIDE from ladder: {vl_model}")
-        else:
-            logger.info(f"🎨 Using VL model: {vl_model}")
         
         # CHANGE: Load VL prompt from VL_PROMPT_FILE with enhanced logging
         vl_prompt_file_path = config.get("VL_PROMPT_FILE")
@@ -408,53 +408,26 @@ async def generate_vl_response(
             logger.error("❌ VL API returned None response")
             raise APIError("VL API returned None response")
         
-        # Log complete response for debugging
-        logger.debug(f"🎨 Full API response: {response}")
-        logger.debug(f"🎨 Response type: {type(response)}")
-        logger.debug(f"🎨 Response attributes: {dir(response)}")
+        # Minimal response logging for performance
+        if response is None:
+            logger.error("❌ VL API returned None response")
+            raise APIError("VL API returned None response")
         
-        # Try to dump the response model if possible
-        try:
-            if hasattr(response, 'model_dump'):
-                logger.debug(f"🎨 Response model_dump: {response.model_dump()}")
-        except Exception as dump_error:
-            logger.warning(f"⚠️ Failed to dump response model: {dump_error}")
+        # Fast validation with minimal logging
+        if not (hasattr(response, 'choices') and response.choices and 
+                hasattr(response.choices[0], 'message') and response.choices[0].message):
+            logger.error("❌ Invalid VL API response structure")
+            raise APIError("Invalid VL API response structure")
         
-        # Validate response structure
-        if not hasattr(response, 'choices'):
-            logger.error("❌ VL API response has no 'choices' attribute")
-            raise APIError("VL API response has no 'choices' attribute")
-        
-        if response.choices is None:
-            logger.error("❌ VL API response.choices is None")
-            raise APIError("VL API response.choices is None")
-        
-        if not response.choices:
-            logger.error("❌ VL API response choices list is empty")
-            logger.debug(f"❌ Choices: {response.choices}")
-            raise APIError("VL API response choices list is empty")
-        
-        # Validate first choice
-        choice = response.choices[0]
-        if not hasattr(choice, 'message'):
-            logger.error("❌ VL API response choice has no 'message' attribute")
-            logger.debug(f"❌ Choice attributes: {dir(choice)}")
-            raise APIError("VL API response choice has no 'message' attribute")
-        
-        if choice.message is None:
-            logger.error("❌ VL API response choice message is None")
-            raise APIError("VL API response choice message is None")
-        
-        logger.info("✅ VL API call completed successfully")
+        # Removed redundant log message for performance
         
         # Extract the response text
-        response_text = choice.message.content
+        response_text = response.choices[0].message.content
         
         if not response_text:
             logger.warning("⚠️  VL model returned empty response")
         else:
-            logger.info(f"✅ VL response received: {len(response_text)} characters")
-            logger.debug(f"🎨 VL response preview: {response_text[:200]}{'...' if len(response_text) > 200 else ''}")
+            logger.info(f"✅ VL response: {len(response_text)} chars")
         
         usage_info = {
             'prompt_tokens': response.usage.prompt_tokens if response.usage else 0,
@@ -462,8 +435,7 @@ async def generate_vl_response(
             'total_tokens': response.usage.total_tokens if response.usage else 0
         }
         
-        logger.debug(f"🎨 Token usage: {usage_info}")
-        logger.info("🎉 === VL RESPONSE GENERATION COMPLETED ===")
+        logger.info("✅ VL response completed")
         
         return {
             'text': response_text,

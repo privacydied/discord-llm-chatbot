@@ -25,11 +25,11 @@ class ProviderConfig:
     """Configuration for a provider/model combination."""
     name: str
     model: str
-    timeout: float = 12.0  # Per-attempt timeout
-    max_attempts: int = 3
-    base_delay: float = 5.0
-    max_delay: float = 30.0
-    exponential_base: float = 2.0
+    timeout: float = 8.0  # Faster per-attempt timeout
+    max_attempts: int = 2  # Reduce attempts for speed
+    base_delay: float = 1.0  # Much faster base delay
+    max_delay: float = 8.0  # Reduce max delay significantly
+    exponential_base: float = 1.5  # Less aggressive backoff
     jitter: bool = True
 
 @dataclass
@@ -38,8 +38,8 @@ class CircuitBreakerState:
     status: ProviderStatus = ProviderStatus.HEALTHY
     failure_count: int = 0
     last_failure_time: float = 0.0
-    cooldown_duration: float = 60.0  # 60s cooldown
-    failure_threshold: int = 3
+    cooldown_duration: float = 15.0  # Faster cooldown recovery
+    failure_threshold: int = 2  # Trigger circuit breaker faster
 
 @dataclass
 class RetryResult:
@@ -87,16 +87,16 @@ class EnhancedRetryManager:
                 ladder.append(ProviderConfig(provider, model, timeout=timeout))
             return ladder
 
-        # Defaults if .env not provided
+        # Optimized defaults with faster timeouts
         default_vision = [
-            ProviderConfig("openrouter", "moonshotai/kimi-vl-a3b-thinking:free", timeout=12.0),
-            ProviderConfig("openrouter", "openai/gpt-4o-mini", timeout=15.0),
-            ProviderConfig("openrouter", "meta-llama/llama-3.2-11b-vision-instruct:free", timeout=18.0),
+            ProviderConfig("openrouter", "moonshotai/kimi-vl-a3b-thinking:free", timeout=6.0),
+            ProviderConfig("openrouter", "openai/gpt-4o-mini", timeout=8.0),
+            ProviderConfig("openrouter", "meta-llama/llama-3.2-11b-vision-instruct:free", timeout=10.0),
         ]
         default_text = [
-            ProviderConfig("openrouter", "openai/gpt-4o-mini", timeout=20.0),
-            ProviderConfig("openrouter", "meta-llama/llama-3.1-8b-instruct:free", timeout=25.0),
-            ProviderConfig("ollama", "llama3.1", timeout=30.0),
+            ProviderConfig("openrouter", "openai/gpt-4o-mini", timeout=10.0),
+            ProviderConfig("openrouter", "meta-llama/llama-3.1-8b-instruct:free", timeout=12.0),
+            ProviderConfig("ollama", "llama3.1", timeout=15.0),
         ]
 
         vision_models = os.getenv('VISION_FALLBACK_MODELS')
@@ -263,7 +263,7 @@ class EnhancedRetryManager:
                         )
                         
                         if provider_config.jitter:
-                            delay *= (0.5 + random.random() * 0.5)  # ±25% jitter
+                            delay *= (0.8 + random.random() * 0.4)  # Reduced jitter for speed
                         
                         # Check if we have budget for the delay
                         elapsed = time.time() - start_time

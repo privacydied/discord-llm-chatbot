@@ -24,6 +24,7 @@ from dataclasses import dataclass, field
 from enum import Enum, auto
 from pathlib import Path
 from typing import Any, Callable, Coroutine, Dict, Optional, TYPE_CHECKING, List
+import time
 
 # Import new modality system
 from .modality import InputModality, InputItem, collect_input_items, map_item_to_modality
@@ -201,36 +202,34 @@ class Router:
                 self.logger.warning(f"No response generated from text-only flow (msg_id: {message.id})")
             return
         
-        self.logger.info(f"🔄 Processing {len(items)} input items sequentially (msg_id: {message.id})")
+        self.logger.info(f"🚀 Processing {len(items)} input items CONCURRENTLY for maximum speed (msg_id: {message.id})")
         
         # Initialize result aggregator and retry manager
         aggregator = ResultAggregator()
         retry_manager = get_retry_manager()
         
-        # Per-item budget configuration (configurable via env)
-        PER_ITEM_BUDGET = float(os.environ.get('MULTIMODAL_PER_ITEM_BUDGET', '45.0'))
+        # Per-item budget configuration (optimized for concurrent processing)
+        PER_ITEM_BUDGET = float(os.environ.get('MULTIMODAL_PER_ITEM_BUDGET', '30.0'))  # Reduced since parallel
         
-        # Process each item sequentially with enhanced retry/fallback
-        for i, item in enumerate(items, 1):
+        # Create all processing tasks concurrently
+        async def process_item_concurrent(i: int, item) -> tuple[int, bool, str, float, int]:
             modality = map_item_to_modality(item)
             
-            # Create description based on item type and payload
+            # Create description for logging (faster version)
             if item.source_type == "attachment":
-                description = f"{item.payload.filename} ({item.payload.content_type or 'unknown'})"
+                description = f"{item.payload.filename}"
             elif item.source_type == "url":
-                description = f"URL: {item.payload[:50]}{'...' if len(item.payload) > 50 else ''}"
-            elif item.source_type == "embed":
-                description = f"Embed: {item.payload.title or item.payload.url or 'untitled'}"
+                description = f"URL: {item.payload[:30]}{'...' if len(item.payload) > 30 else ''}"
             else:
-                description = f"{item.source_type}: {str(item.payload)[:50]}"
+                description = f"{item.source_type}"
             
-            self.logger.info(f"📋 Processing item {i}/{len(items)}: {modality.name} - {description}")
+            self.logger.info(f"📋 Starting concurrent item {i}: {modality.name} - {description}")
             
             # Determine modality type for retry manager
             if modality in [InputModality.SINGLE_IMAGE, InputModality.MULTI_IMAGE]:
                 retry_modality = "vision"
             else:
-                retry_modality = "text"  # Most other modalities use text processing
+                retry_modality = "text"
             
             # Create coroutine factory for this item
             def create_handler_coro(provider_config: ProviderConfig):
@@ -238,49 +237,78 @@ class Router:
                     return await self._handle_item_with_provider(item, modality, provider_config)
                 return handler_coro
             
-            # Run with enhanced retry/fallback system
-            result = await retry_manager.run_with_fallback(
-                modality=retry_modality,
-                coro_factory=create_handler_coro,
-                per_item_budget=PER_ITEM_BUDGET
-            )
-            
-            # Record result (success or failure)
-            if result.success:
-                aggregator.add_result(
-                    item_index=i,
-                    item=item,
-                    modality=modality,
-                    result_text=result.result,
-                    success=True,
-                    duration=result.total_time,
-                    attempts=result.attempts
+            try:
+                # Run with enhanced retry/fallback system
+                result = await retry_manager.run_with_fallback(
+                    modality=retry_modality,
+                    coro_factory=create_handler_coro,
+                    per_item_budget=PER_ITEM_BUDGET
                 )
-                self.logger.info(f"✅ Item {i}/{len(items)} processed successfully ({result.total_time:.2f}s)")
-            else:
-                error_msg = f"❌ Failed after {result.attempts} attempts: {result.error}"
-                if result.fallback_occurred:
-                    error_msg += " (fallback attempted)"
                 
-                aggregator.add_result(
-                    item_index=i,
-                    item=item,
-                    modality=modality,
-                    result_text=error_msg,
-                    success=False,
-                    duration=result.total_time,
-                    attempts=result.attempts
-                )
+                if result.success:
+                    self.logger.info(f"✅ Item {i} completed successfully ({result.total_time:.2f}s)")
+                    return i, True, result.result, result.total_time, result.attempts, item, modality
+                else:
+                    error_msg = f"❌ Failed after {result.attempts} attempts: {result.error}"
+                    if result.fallback_occurred:
+                        error_msg += " (fallback attempted)"
+                    self.logger.warning(f"❌ Item {i} failed ({result.total_time:.2f}s)")
+                    return i, False, error_msg, result.total_time, result.attempts, item, modality
+            except Exception as e:
+                self.logger.error(f"❌ Item {i} exception: {e}")
+                return i, False, f"❌ Exception: {e}", 0.0, 0, item, modality
+        
+        # Execute all items concurrently using asyncio.gather for maximum speed
+        self.logger.info("🚀 Launching concurrent processing tasks...")
+        start_time = time.time()
+        
+        # Create all tasks and run them concurrently
+        tasks = [
+            process_item_concurrent(i + 1, item) 
+            for i, item in enumerate(items)
+        ]
+        
+        # Wait for all tasks to complete concurrently
+        concurrent_results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        total_concurrent_time = time.time() - start_time
+        self.logger.info(f"🚀 Concurrent processing completed in {total_concurrent_time:.2f}s!")
+        
+        # Process results and add to aggregator
+        for result in concurrent_results:
+            if isinstance(result, Exception):
+                self.logger.error(f"❌ Task exception: {result}")
+                continue
+                
+            i, success, result_text, duration, attempts, item, modality = result
+            
+            aggregator.add_result(
+                item_index=i,
+                item=item,
+                modality=modality,
+                result_text=result_text,
+                success=success,
+                duration=duration,
+                attempts=attempts
+            )
         
         # Generate aggregated prompt and send single response
         aggregated_prompt = aggregator.get_aggregated_prompt(original_text)
         
-        # Log summary statistics
+        # Log summary statistics with concurrent performance metrics
         stats = aggregator.get_summary_stats()
-        self.logger.info(
-            f"📊 Multimodal processing complete: {stats['successful_items']}/{stats['total_items']} successful, "
-            f"avg duration: {stats['avg_duration']:.1f}s" if stats.get('avg_duration') else "📊 Multimodal processing complete"
-        )
+        if len(items) > 1:
+            sequential_estimate = sum(getattr(r, 'duration', 0) for r in concurrent_results if not isinstance(r, Exception))
+            speedup = sequential_estimate / total_concurrent_time if total_concurrent_time > 0 else 1
+            self.logger.info(
+                f"🚀 CONCURRENT MULTIMODAL COMPLETE: {stats['successful_items']}/{stats['total_items']} successful, "
+                f"total: {total_concurrent_time:.1f}s (est. {speedup:.1f}x speedup vs sequential)"
+            )
+        else:
+            self.logger.info(
+                f"📊 Processing complete: {stats['successful_items']}/{stats['total_items']} successful, "
+                f"duration: {total_concurrent_time:.1f}s"
+            )
         
         # Send single aggregated response through text flow (1 IN → 1 OUT)
         if aggregated_prompt.strip():

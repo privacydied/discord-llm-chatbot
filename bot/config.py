@@ -1,12 +1,12 @@
-"""
-Configuration loading and environment setup.
-"""
+"""Configuration loading and environment setup."""
 import os
 import sys
 from pathlib import Path
 from dotenv import load_dotenv
 from .exceptions import ConfigurationError
 from .util.logging import get_logger
+import time
+from typing import Dict, Any, Optional
 
 # CHANGE: Enhanced .env loading with comprehensive audit and logging
 logger = get_logger(__name__)
@@ -160,12 +160,33 @@ def _clean_env_value(value: str) -> str:
     return value.split('#')[0].strip()
 
 
+# Global config cache for performance optimization
+_config_cache: Optional[Dict[str, Any]] = None
+_cache_timestamp: float = 0
+CACHE_TTL = 300  # 5 minute cache TTL
+
 def load_config():
     """
-    Load configuration from environment variables.
-    CHANGE: Enhanced to include all .env variables including PROMPT_FILE, VL_PROMPT_FILE, and VL_MODEL.
+    Load configuration from environment variables with intelligent caching.
     """
-    return {
+    global _config_cache, _cache_timestamp
+    
+    # Check if we have a valid cached config (performance optimization)
+    current_time = time.time()
+    if _config_cache and (current_time - _cache_timestamp) < CACHE_TTL:
+        return _config_cache
+    
+    def _safe_int(value, default, var_name):
+        """Safely convert environment variable to int, handling malformed values."""
+        try:
+            # Clean value by removing comments and whitespace
+            clean_value = value.split('#')[0].strip() if value else default
+            return int(clean_value)
+        except (ValueError, AttributeError):
+            print(f"Warning: Invalid {var_name} value '{value}', using default {default}")
+            return int(default)
+
+    config = {
         # DISCORD BOT SETTINGS
         "DISCORD_TOKEN": os.getenv("DISCORD_TOKEN"),
         "TEXT_BACKEND": os.getenv("TEXT_BACKEND", "openai"),
@@ -243,3 +264,10 @@ def load_config():
         "OWNER_IDS": [int(id.strip()) for id in os.getenv("OWNER_IDS", "").split(",") if id.strip()],
         "LOG_FILE": os.getenv("LOG_FILE", "logs/bot.jsonl"),
     }
+    
+    # Cache the config for performance (avoid repeated env var lookups)
+    _config_cache = config
+    _cache_timestamp = current_time
+    logger.debug(f"✅ Configuration cached for {CACHE_TTL}s")
+    
+    return config
