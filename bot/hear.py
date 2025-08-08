@@ -171,6 +171,8 @@ async def hear_infer_from_url(url: str, speedup: float = 1.5, force_refresh: boo
             raise InferenceError("This URL is not supported. Please use YouTube or TikTok links.")
         elif "video too long" in error_msg:
             raise InferenceError("This video is too long to process. Please try a shorter video.")
+        elif "no video or audio content found" in error_msg:
+            raise InferenceError("🔍 No video or audio content found in this URL. This appears to be a text-only post or the content is not accessible.")
         elif "download failed" in error_msg:
             raise InferenceError("Could not download the video. It may be private or unavailable.")
         elif "audio processing failed" in error_msg:

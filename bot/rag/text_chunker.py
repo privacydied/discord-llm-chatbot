@@ -21,11 +21,11 @@ class TextChunker:
         source_metadata: Optional[Dict[str, Any]] = None
     ) -> ChunkingResult:
         """
-        Chunk text into overlapping segments optimized for retrieval.
+        Chunk text into smaller pieces based on configuration.
         
         Args:
-            text: Input text to chunk
-            source_metadata: Optional metadata about the source
+            text: Input text to be chunked
+            source_metadata: Additional metadata to include
             
         Returns:
             ChunkingResult with chunks and metadata
@@ -34,11 +34,14 @@ class TextChunker:
             logger.warning("[RAG] Empty text provided for chunking")
             return ChunkingResult.create(text, [], source_metadata)
         
+        # Store original text length before cleaning [CSD]
+        original_text = text
+        
         # Clean and normalize text
-        text = self._clean_text(text)
+        cleaned_text = self._clean_text(text)
         
         # Try semantic chunking first (paragraph-aware)
-        chunks = self._semantic_chunk(text)
+        chunks = self._semantic_chunk(cleaned_text)
         
         # If chunks are too large, apply sliding window
         final_chunks = []
@@ -50,15 +53,22 @@ class TextChunker:
                 sub_chunks = self._sliding_window_chunk(chunk)
                 final_chunks.extend(sub_chunks)
         
-        # Filter out chunks that are too small
+        # Filter out chunks that are too small, but be more lenient [REH]
+        # If we have very little text overall, allow smaller chunks to avoid losing content
+        original_text_length = len(original_text.strip())
+        effective_min_size = min(
+            self.config.min_chunk_size,
+            max(50, original_text_length // 2)  # Allow chunks as small as half the original text, min 50 chars
+        )
+        
         final_chunks = [
             chunk for chunk in final_chunks 
-            if len(chunk.strip()) >= self.config.min_chunk_size
+            if len(chunk.strip()) >= effective_min_size
         ]
         
-        logger.debug(f"[RAG] Chunked text: {len(text)} chars → {len(final_chunks)} chunks")
+        logger.debug(f"[RAG] Chunked text: {len(original_text)} chars → {len(final_chunks)} chunks")
         
-        return ChunkingResult.create(text, final_chunks, source_metadata)
+        return ChunkingResult.create(original_text, final_chunks, source_metadata)
     
     def _clean_text(self, text: str) -> str:
         """Clean and normalize text for chunking."""

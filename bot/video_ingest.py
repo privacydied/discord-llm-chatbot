@@ -266,6 +266,20 @@ class VideoIngestionManager:
             
             if proc.returncode != 0:
                 error_msg = stderr.decode() if stderr else "Unknown yt-dlp error"
+                
+                # Handle specific cases where no video/audio content is found
+                if any(phrase in error_msg.lower() for phrase in [
+                    "no video could be found", 
+                    "no video formats found",
+                    "no audio could be found",
+                    "no extractors found",
+                    "unable to extract video info",
+                    "private video",
+                    "video not available"
+                ]):
+                    logger.info(f"ℹ️ No video/audio content found in URL: {url}")
+                    raise VideoIngestError(f"No video or audio content found in this URL. This might be a text-only post or unavailable content.")
+                
                 raise VideoIngestError(f"yt-dlp metadata extraction failed: {error_msg}")
             
             # Parse JSON metadata

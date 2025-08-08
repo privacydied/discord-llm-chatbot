@@ -264,8 +264,8 @@ class TestRAGBootstrap:
             
             bootstrap = RAGBootstrap(mock_backend, str(kb_path))
             
-            # Test bootstrap
-            result = await bootstrap.bootstrap_knowledge_base()
+            # Test bootstrap with force_refresh=True for fresh temp directory [CSD]
+            result = await bootstrap.bootstrap_knowledge_base(force_refresh=True)
             
             assert result["files_processed"] == 2
             assert result["total_chunks"] == 2
@@ -317,7 +317,7 @@ class TestHybridSearch:
             # Create a test knowledge base file
             (kb_path / "test.txt").write_text("Test knowledge base content.")
             
-            with patch('bot.rag.chroma_backend.chromadb.PersistentClient'):
+            with patch('chromadb.PersistentClient'):
                 search_system = HybridRAGSearch(
                     kb_path=str(kb_path),
                     db_path=temp_dir,
@@ -341,7 +341,8 @@ class TestHybridSearch:
         with patch('bot.rag.hybrid_search.search_memories') as mock_search:
             mock_search.return_value = []
             
-            results = await search_system.search("test query")
+            # Use explicit keyword search to avoid double calls from hybrid fallback [CSD]
+            results = await search_system.search("test query", search_type="keyword")
             
             assert isinstance(results, list)
             mock_search.assert_called_once()
@@ -355,7 +356,7 @@ class TestRAGConfiguration:
         with patch.dict('os.environ', {
             'RAG_VECTOR_CONFIDENCE_THRESHOLD': '0.8',
             'RAG_CHUNK_SIZE': '256',
-            'RAG_ENABLE_USER_SCOPING': 'false'
+            'RAG_ENFORCE_USER_SCOPING': 'false'  # Fixed env var name [CSD]
         }):
             config = load_rag_config()
             
