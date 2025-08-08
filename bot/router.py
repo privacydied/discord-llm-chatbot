@@ -106,10 +106,22 @@ class Router:
         return False
 
     def _should_process_message(self, message: Message) -> bool:
-        """Determine if the message should be processed based on context (DM, mention)."""
+        """Determine if the message should be processed based on context (DM, mention, or URL content)."""
         is_dm = isinstance(message.channel, DMChannel)
         is_mentioned = self.bot.user in message.mentions
         is_reply = self._is_reply_to_bot(message)
+        
+        # Check if message contains video/media URLs (Twitter, YouTube, etc.)
+        has_processable_url = False
+        if message.content:
+            url_patterns = [
+                r'https?://(?:www\.)?(?:twitter|x)\.com/',
+                r'https?://(?:www\.)?youtube\.com/watch',
+                r'https?://youtu\.be/',
+                r'https?://(?:www\.)?tiktok\.com/',
+                r'https?://vm\.tiktok\.com/'
+            ]
+            has_processable_url = any(re.search(pattern, message.content) for pattern in url_patterns)
 
         if is_dm:
             self.logger.debug(f"Processing message {message.id}: It's a DM.")
@@ -122,8 +134,12 @@ class Router:
         if is_reply:
             self.logger.debug(f"Processing message {message.id}: It's a reply to the bot.")
             return True
+            
+        if has_processable_url:
+            self.logger.debug(f"Processing message {message.id}: Contains processable media URL.")
+            return True
 
-        self.logger.debug(f"Ignoring message {message.id}: Not a DM, mention, or reply to the bot.")
+        self.logger.debug(f"Ignoring message {message.id}: Not a DM, mention, reply, or processable URL.")
         return False
 
     def _bind_flow_methods(self, flow_overrides: Optional[Dict[str, Callable]] = None):
@@ -176,17 +192,18 @@ class Router:
                 self.logger.info(f"📚 Gathered context. (msg_id: {message.id})")
 
                 # 5. Sequential multimodal processing
-                await self._process_multimodal_message_internal(message, context_str)
-                return None  # All processing handled internally
+                result_action = await self._process_multimodal_message_internal(message, context_str)
+                return result_action  # Return the actual processing result
 
         except Exception as e:
             self.logger.error(f"❌ Error in router dispatch: {e} (msg_id: {message.id})", exc_info=True)
             return BotAction(content="I encountered an error while processing your message.", error=True)
 
-    async def _process_multimodal_message_internal(self, message: Message, context_str: str) -> None:
+    async def _process_multimodal_message_internal(self, message: Message, context_str: str) -> Optional[BotAction]:
         """
         Process all input items from a message sequentially with result aggregation.
         Follows the 1 IN → 1 OUT rule by combining all results into a single response.
+        Returns the BotAction instead of executing it directly.
         """
         # Collect all input items from the message
         items = collect_input_items(message)
@@ -205,12 +222,11 @@ class Router:
             # No actionable items found, treat as text-only
             response_action = await self._invoke_text_flow(message.content, message, context_str)
             if response_action and response_action.has_payload:
-                # [REH] Execute the response action to send it to Discord
-                await self.bot._execute_action(message, response_action)
-                self.logger.info(f"✅ Text-only response sent successfully (msg_id: {message.id})")
+                self.logger.info(f"✅ Text-only response generated successfully (msg_id: {message.id})")
+                return response_action
             else:
                 self.logger.warning(f"No response generated from text-only flow (msg_id: {message.id})")
-            return
+                return None
         
         self.logger.info(f"🚀 Processing {len(items)} input items CONCURRENTLY for maximum speed (msg_id: {message.id})")
         
@@ -323,17 +339,18 @@ class Router:
                 f"duration: {total_concurrent_time:.1f}s"
             )
         
-        # Send single aggregated response through text flow (1 IN → 1 OUT)
+        # Generate single aggregated response through text flow (1 IN → 1 OUT)
         if aggregated_prompt.strip():
             response_action = await self._invoke_text_flow(aggregated_prompt, message, context_str)
             if response_action and response_action.has_payload:
-                # [REH] Execute the response action to send it to Discord
-                await self.bot._execute_action(message, response_action)
-                self.logger.info(f"✅ Response sent successfully (msg_id: {message.id})")
+                self.logger.info(f"✅ Multimodal response generated successfully (msg_id: {message.id})")
+                return response_action
             else:
                 self.logger.warning(f"No response generated from text flow (msg_id: {message.id})")
+                return None
         else:
             self.logger.warning(f"No content to process after multimodal aggregation (msg_id: {message.id})")
+            return None
 
     async def _handle_item_with_provider(self, item: InputItem, modality: InputModality, provider_config: ProviderConfig) -> str:
         """
