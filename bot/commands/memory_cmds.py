@@ -50,10 +50,30 @@ class MemoryCommands(commands.Cog):
         !memory add I prefer to be called by my nickname, not my full name
         """
         try:
+            # Input validation [REH][SFT]
+            if not content or not content.strip():
+                await ctx.send("❌ Memory content cannot be empty.")
+                return
+            
+            content = content.strip()
+            
+            # Length validation to prevent memory abuse [SFT]
+            MAX_MEMORY_LENGTH = 2000  # Discord message limit is 2000 chars
+            if len(content) > MAX_MEMORY_LENGTH:
+                await ctx.send(f"❌ Memory too long. Maximum length is {MAX_MEMORY_LENGTH} characters.")
+                return
+            
+            # Content validation - basic safety checks [SFT]
+            prohibited_patterns = ['<script', 'javascript:', 'data:', 'vbscript:']
+            content_lower = content.lower()
+            if any(pattern in content_lower for pattern in prohibited_patterns):
+                await ctx.send("❌ Memory contains prohibited content.")
+                return
+            
             # Get user's profile
             profile = get_profile(str(ctx.author.id), str(ctx.author))
             
-            # Add the memory
+            # Add the memory with sanitized content
             memory = {
                 'content': content,
                 'timestamp': discord.utils.utcnow().isoformat(),

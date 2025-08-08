@@ -19,6 +19,7 @@ from bot.metrics import NullMetrics
 from bot.memory import load_all_profiles
 from bot.memory.context_manager import ContextManager
 from bot.memory.enhanced_context_manager import EnhancedContextManager
+from bot.events import setup_command_error_handler
 
 if TYPE_CHECKING:
     from bot.router import Router, BotAction
@@ -187,6 +188,10 @@ class LLMBot(commands.Bot):
             # Load command extensions
             await self.load_extensions()
             self.logger.info("✅ Command extensions loaded")
+            
+            # Setup global command error handler
+            self.command_error_handler = await setup_command_error_handler(self)
+            self.logger.info("✅ Global command error handler configured")
             
             self.logger.info("🚀 Bot setup complete")
             

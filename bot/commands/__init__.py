@@ -10,24 +10,70 @@ import logging
 commands: Dict[str, Any] = {}
 
 def register_command(name: str, func: callable, **kwargs):
-    """Register a command with the given name and handler function."""
+    """
+    Register a command with the given name and handler function.
+    
+    [REH] Robust error handling with input validation
+    [SFT] Security-first thinking with parameter validation
+    """
+    # Input validation [SFT]
+    if not name or not isinstance(name, str):
+        raise ValueError("Command name must be a non-empty string")
+    if not callable(func):
+        raise ValueError("Command handler must be callable")
+    
+    # Sanitize command name
+    name = name.strip().lower()
+    if not name.replace('_', '').replace('-', '').isalnum():
+        raise ValueError(f"Command name '{name}' contains invalid characters")
+    
+    # Check for duplicates with stronger handling [REH]
     if name in commands:
-        logging.warning(f"Command '{name}' is already registered and will be overwritten")
+        existing_cmd = commands[name]
+        if existing_cmd['handler'] != func:
+            logging.error(f"❌ CRITICAL: Command '{name}' already exists with different handler!")
+            logging.error(f"   Existing: {existing_cmd['handler'].__module__}.{existing_cmd['handler'].__name__}")
+            logging.error(f"   New: {func.__module__}.{func.__name__}")
+            raise ValueError(f"Command '{name}' is already registered with a different handler")
+        else:
+            logging.debug(f"🔄 Command '{name}' re-registered with same handler")
+            return  # Skip duplicate registration
+    
+    # Validate aliases [SFT]
+    aliases = kwargs.get('aliases', [])
+    if not isinstance(aliases, list):
+        raise ValueError("Aliases must be a list")
+    
+    validated_aliases = []
+    for alias in aliases:
+        if not isinstance(alias, str) or not alias.strip():
+            logging.warning(f"⚠️ Invalid alias '{alias}' for command '{name}', skipping")
+            continue
+        alias = alias.strip().lower()
+        if not alias.replace('_', '').replace('-', '').isalnum():
+            logging.warning(f"⚠️ Alias '{alias}' contains invalid characters, skipping")
+            continue
+        validated_aliases.append(alias)
     
     commands[name] = {
         'handler': func,
         'name': name,
-        'aliases': kwargs.get('aliases', []),
-        'description': kwargs.get('description', 'No description provided'),
-        'usage': kwargs.get('usage', ''),
-        'admin_only': kwargs.get('admin_only', False)
+        'aliases': validated_aliases,
+        'description': kwargs.get('description', 'No description provided')[:500],  # Limit description length
+        'usage': kwargs.get('usage', '')[:200],  # Limit usage length
+        'admin_only': bool(kwargs.get('admin_only', False))
     }
     
-    # Register aliases
-    for alias in commands[name]['aliases']:
-        if alias in commands and commands[alias] != commands[name]:
-            logging.warning(f"Alias '{alias}' for command '{name}' is already registered")
+    # Register aliases with conflict detection [REH]
+    for alias in validated_aliases:
+        if alias in commands:
+            existing_cmd = commands[alias]
+            if existing_cmd != commands[name]:
+                logging.error(f"❌ CONFLICT: Alias '{alias}' for command '{name}' conflicts with existing command/alias")
+                continue  # Skip conflicting alias instead of overwriting
         commands[alias] = commands[name]
+    
+    logging.debug(f"✅ Registered command '{name}' with {len(validated_aliases)} aliases")
 
 def get_command(name: str) -> dict:
     """Get a command by name."""
