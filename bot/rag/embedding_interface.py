@@ -2,8 +2,11 @@
 Abstract interface for embedding models with pluggable implementations.
 """
 import asyncio
+import os
+import sys
+from pathlib import Path
 from abc import ABC, abstractmethod
-from typing import List, Union, Optional
+from typing import List, Union, Optional, Dict, Any
 import numpy as np
 from ..util.logging import get_logger
 
@@ -12,6 +15,11 @@ logger = get_logger(__name__)
 # Global state to prevent spam logging
 _rag_misconfig_warned = False
 _rag_legacy_mode = False
+
+# Global async lock and cache for SentenceTransformer models to prevent race conditions
+_model_locks: Dict[str, asyncio.Lock] = {}
+_model_cache: Dict[str, Any] = {}
+_initialization_status: Dict[str, bool] = {}
 
 
 class EmbeddingInterface(ABC):
@@ -65,33 +73,184 @@ class SentenceTransformerEmbedding(EmbeddingInterface):
         self._initialized = False
         
     async def _initialize(self):
-        """Lazy initialization of the model."""
-        if self._initialized:
+        """Robust async initialization with caching and graceful fallback."""
+        if self._initialized and self.model is not None:
             return
             
+        global _model_locks, _model_cache, _initialization_status
+        
+        # Get or create async lock for this model
+        if self.model_name not in _model_locks:
+            _model_locks[self.model_name] = asyncio.Lock()
+        
+        async with _model_locks[self.model_name]:
+            # Double-check after acquiring lock
+            if self._initialized and self.model is not None:
+                return
+                
+            # Check if model is already cached globally
+            if self.model_name in _model_cache:
+                logger.debug(f"📋 Using cached {self.model_name}")
+                self.model = _model_cache[self.model_name]
+                self.embedding_dim = self.model.get_sentence_embedding_dimension()
+                self._initialized = True
+                return
+            
+            try:
+                await self._load_sentence_transformer()
+                
+                # Cache the loaded model globally
+                _model_cache[self.model_name] = self.model
+                _initialization_status[self.model_name] = True
+                
+            except ImportError as e:
+                logger.error(f"❌ sentence-transformers not installed: {e}")
+                await self._handle_fallback("ImportError: sentence-transformers not available")
+                raise
+            except Exception as e:
+                logger.error(f"❌ Failed to initialize {self.model_name}: {e}")
+                await self._handle_fallback(str(e))
+                raise
+
+    async def _load_sentence_transformer(self):
+        """Load SentenceTransformer with local cache checking and graceful handling."""
         try:
             from sentence_transformers import SentenceTransformer
             
-            # Run model loading in thread pool to avoid blocking
-            loop = asyncio.get_event_loop()
-            self.model = await loop.run_in_executor(
-                None, 
-                lambda: SentenceTransformer(self.model_name)
-            )
+            # Check if model exists locally first
+            local_path = await self._get_local_model_path()
             
-            # Get embedding dimension
-            test_embedding = self.model.encode(["test"], convert_to_numpy=True)
-            self.embedding_dim = test_embedding.shape[1]
-            
+            if local_path and await self._is_model_locally_cached(local_path):
+                logger.info(f"📂 Loading {self.model_name} from local cache: {local_path}")
+                # Load from local cache - much faster, no network requests
+                loop = asyncio.get_event_loop()
+                self.model = await loop.run_in_executor(
+                    None,
+                    lambda: SentenceTransformer(str(local_path), device='cpu')
+                )
+            else:
+                logger.info(f"🌐 Loading {self.model_name} from HuggingFace (first time or cache miss)")
+                # Download from HuggingFace - will cache locally
+                loop = asyncio.get_event_loop()
+                self.model = await loop.run_in_executor(
+                    None,
+                    lambda: SentenceTransformer(self.model_name, device='cpu')
+                )
+                
+            # Get embedding dimension efficiently
+            self.embedding_dim = self.model.get_sentence_embedding_dimension()
             self._initialized = True
-            logger.info(f"✔ Initialized {self.model_name} [dim={self.embedding_dim}]")
             
-        except ImportError:
-            logger.error("sentence-transformers not installed. Install with: pip install sentence-transformers")
-            raise
+            logger.info(f"✅ Initialized {self.model_name} [dim={self.embedding_dim}]")
+            
         except Exception as e:
-            logger.error(f"Failed to initialize sentence-transformers model: {e}")
+            logger.error(f"❌ SentenceTransformer loading failed: {e}")
             raise
+
+    async def _get_local_model_path(self) -> Optional[Path]:
+        """Get the expected local cache path for the model."""
+        try:
+            # HuggingFace cache directory
+            from sentence_transformers.util import snapshot_download
+            
+            # Standard HuggingFace cache locations
+            cache_homes = [
+                os.environ.get("SENTENCE_TRANSFORMERS_HOME"),
+                os.environ.get("HF_HOME"), 
+                Path.home() / ".cache" / "huggingface" / "hub",
+                Path.home() / ".cache" / "torch" / "sentence_transformers"
+            ]
+            
+            model_id = self.model_name.replace("/", "--")
+            
+            for cache_home in cache_homes:
+                if not cache_home:
+                    continue
+                    
+                cache_path = Path(cache_home)
+                potential_paths = [
+                    cache_path / f"models--{model_id}",
+                    cache_path / "sentence_transformers" / model_id,
+                    cache_path / model_id
+                ]
+                
+                for path in potential_paths:
+                    if await self._is_model_locally_cached(path):
+                        return path
+            
+            return None
+            
+        except Exception as e:
+            logger.debug(f"Could not determine local model path: {e}")
+            return None
+
+    async def _is_model_locally_cached(self, path: Path) -> bool:
+        """Check if model is fully cached locally."""
+        if not path or not path.exists():
+            return False
+            
+        try:
+            # Check for essential model files
+            essential_files = [
+                "config.json", 
+                "modules.json",
+                "pytorch_model.bin"
+            ]
+            
+            # Look in the path and subdirectories
+            for root, dirs, files in os.walk(path):
+                root_path = Path(root)
+                files_present = set(files)
+                
+                # Check if all essential files are present
+                if all(f in files_present for f in essential_files):
+                    logger.debug(f"✅ Found complete model cache at: {root_path}")
+                    return True
+                    
+                # Also check for model.safetensors (alternative format)
+                if "config.json" in files_present and "modules.json" in files_present:
+                    if "model.safetensors" in files_present or any("pytorch_model" in f for f in files_present):
+                        logger.debug(f"✅ Found complete model cache at: {root_path}")
+                        return True
+                        
+            return False
+            
+        except Exception as e:
+            logger.debug(f"Error checking local cache: {e}")
+            return False
+
+    async def _handle_fallback(self, error_reason: str):
+        """Handle graceful fallback when model loading fails."""
+        logger.warning(f"⚠️ {self.model_name} failed ({error_reason}), attempting fallback...")
+        
+        # Try fallback to a smaller, more reliable model
+        fallback_models = [
+            "sentence-transformers/all-MiniLM-L12-v2",  # Slightly larger but still fast
+            "sentence-transformers/paraphrase-MiniLM-L6-v2",  # Alternative architecture
+            "sentence-transformers/distilbert-base-nli-stsb-mean-tokens"  # Older but reliable
+        ]
+        
+        for fallback_model in fallback_models:
+            if fallback_model == self.model_name:
+                continue  # Don't retry the same model
+                
+            try:
+                logger.info(f"🔄 Trying fallback model: {fallback_model}")
+                original_model_name = self.model_name
+                self.model_name = fallback_model
+                
+                await self._load_sentence_transformer()
+                
+                logger.warning(f"✅ Using fallback model {fallback_model} instead of {original_model_name}")
+                return  # Success with fallback
+                
+            except Exception as e:
+                logger.debug(f"Fallback {fallback_model} also failed: {e}")
+                continue
+                
+        # If all fallbacks fail, restore original model name and re-raise
+        logger.error(f"❌ All fallback attempts failed for {self.model_name}")
+        raise RuntimeError(f"Failed to initialize any SentenceTransformer model (original: {error_reason})")
     
     async def encode(self, texts: Union[str, List[str]]) -> np.ndarray:
         """Encode texts using sentence-transformers."""
