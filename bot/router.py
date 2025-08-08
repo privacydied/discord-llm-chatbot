@@ -111,17 +111,15 @@ class Router:
         is_mentioned = self.bot.user in message.mentions
         is_reply = self._is_reply_to_bot(message)
         
-        # Check if message contains video/media URLs (Twitter, YouTube, etc.)
-        has_processable_url = False
+        # Check if message contains Twitter URLs that need screenshot fallback in guilds
+        # NOTE: Only Twitter URLs should trigger guild processing without mention!
+        # Other video URLs (YouTube, TikTok) require normal mention/reply rules
+        has_twitter_url = False
         if message.content:
-            url_patterns = [
-                r'https?://(?:www\.)?(?:twitter|x)\.com/',
-                r'https?://(?:www\.)?youtube\.com/watch',
-                r'https?://youtu\.be/',
-                r'https?://(?:www\.)?tiktok\.com/',
-                r'https?://vm\.tiktok\.com/'
+            twitter_patterns = [
+                r'https?://(?:www\.)?(?:twitter|x|fxtwitter|vxtwitter)\.com/'
             ]
-            has_processable_url = any(re.search(pattern, message.content) for pattern in url_patterns)
+            has_twitter_url = any(re.search(pattern, message.content) for pattern in twitter_patterns)
 
         if is_dm:
             self.logger.debug(f"Processing message {message.id}: It's a DM.")
@@ -135,8 +133,8 @@ class Router:
             self.logger.debug(f"Processing message {message.id}: It's a reply to the bot.")
             return True
             
-        if has_processable_url:
-            self.logger.debug(f"Processing message {message.id}: Contains processable media URL.")
+        if has_twitter_url:
+            self.logger.debug(f"Processing message {message.id}: Contains Twitter URL needing screenshot fallback.")
             return True
 
         self.logger.debug(f"Ignoring message {message.id}: Not a DM, mention, reply, or processable URL.")
@@ -520,7 +518,7 @@ class Router:
         self.logger.info(f"🎥 Processing video URL: {url}")
         
         # For Twitter/X URLs, implement fallback logic
-        is_twitter = re.match(r'https?://(?:www\.)?(?:twitter|x)\.com/', url)
+        is_twitter = re.match(r'https?://(?:www\.)?(?:twitter|x|fxtwitter|vxtwitter)\.com/', url)
         
         try:
             # Try video/audio extraction first
