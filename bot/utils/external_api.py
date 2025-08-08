@@ -2,7 +2,7 @@ import httpx
 import logging
 import os
 from pathlib import Path
-from urllib.parse import urlparse, urlunparse
+from urllib.parse import urlparse, urlunparse, quote
 
 logger = logging.getLogger(__name__)
 
@@ -43,27 +43,24 @@ async def external_screenshot(url: str) -> str | None:
     device = os.getenv("SCREENSHOT_API_DEVICE", "desktop")
     dimension = os.getenv("SCREENSHOT_API_DIMENSION", "1024x768")
     format_type = os.getenv("SCREENSHOT_API_FORMAT", "jpg")
-    cache_limit = os.getenv("SCREENSHOT_API_CACHE_LIMIT", "2")
-    timeout = os.getenv("SCREENSHOT_API_TIMEOUT", "5000")
     delay = os.getenv("SCREENSHOT_API_DELAY", "2000")
     cookies = os.getenv("SCREENSHOT_API_COOKIES", "")
-    click = os.getenv("SCREENSHOT_API_CLICK", "")
 
     normalized_url = _normalize_url_for_screenshot(url)
     
-    # Construct the configurable API URL with base parameters
-    api_url = f"{api_url_base}/?key={api_key}&url={normalized_url}&device={device}&dimension={dimension}&format={format_type}&cacheLimit={cache_limit}&timeout={timeout}&delay={delay}"
+    # Construct API URL in the exact format expected by screenshotmachine.com
+    # Format: ?key=X&url=Y&device=Z&dimension=W&format=V&delay=U&cookies=T
+    # Note: Only encode colons in URL, not forward slashes (per API spec)
+    api_url = f"{api_url_base}?key={api_key}&url={quote(normalized_url, safe='/')}&device={device}&dimension={dimension}&format={format_type}&delay={delay}"
     
-    # Add optional parameters if they are set
+    # Add cookies parameter if provided (properly URL-encoded)
     if cookies and cookies.strip():
-        api_url += f"&cookies={cookies}"
-        logger.debug(f"🍪 Added cookies to screenshot request: {cookies[:50]}...")
-    
-    if click and click.strip():
-        api_url += f"&click={click}"
-        logger.debug(f"👆 Added click target to screenshot request: {click}")
+        encoded_cookies = quote(cookies, safe='')
+        api_url += f"&cookies={encoded_cookies}"
+        logger.debug(f"🍪 Added URL-encoded cookies: {encoded_cookies[:50]}...")
     
     logger.debug(f"⏱️ Using screenshot delay: {delay}ms")
+    logger.debug(f"🔗 Final API URL: {api_url}")
     
     logger.info(f"📷 Requesting screenshot from {api_url_base} for {normalized_url} [{dimension}, {format_type}]")
 
