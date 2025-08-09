@@ -98,6 +98,30 @@ class EnhancedRetryManager:
             ProviderConfig("openrouter", "deepseek/deepseek-chat-v3-0324:free", timeout=12.0),
             ProviderConfig("openrouter", "z-ai/glm-4.5-air:free", timeout=15.0),
         ]
+        # Media tasks (e.g., video/audio downloads) are not LLM calls; they often need longer timeouts
+        # and fewer attempts. Use an internal single-step "provider" to reuse the retry harness.
+        # Timeout policy:
+        # - MEDIA_PROVIDER_TIMEOUT env, if set, wins (float seconds)
+        # - Else derive from MEDIA_PER_ITEM_BUDGET (minus small margin) if present
+        # - Else fallback to sensible default 100s
+        try:
+            media_timeout_env = os.getenv('MEDIA_PROVIDER_TIMEOUT')
+            if media_timeout_env is not None:
+                media_timeout = float(media_timeout_env)
+            else:
+                budget_env = os.getenv('MEDIA_PER_ITEM_BUDGET')
+                if budget_env is not None:
+                    budget_val = float(budget_env)
+                    # keep a 5s safety margin within the overall budget
+                    media_timeout = max(30.0, budget_val - 5.0)
+                else:
+                    media_timeout = 100.0
+        except Exception:
+            media_timeout = 100.0
+
+        default_media = [
+            ProviderConfig("internal", "media-handler", timeout=media_timeout, max_attempts=1),
+        ]
 
         vision_models = os.getenv('VISION_FALLBACK_MODELS')
         vision_timeouts = os.getenv('VISION_FALLBACK_TIMEOUTS')
@@ -106,12 +130,17 @@ class EnhancedRetryManager:
 
         self.provider_configs["vision"] = _parse_ladder(vision_models, vision_timeouts, default_vision)
         self.provider_configs["text"] = _parse_ladder(text_models, text_timeouts, default_text)
+        # Media ladder can be overridden via env; if not provided, use defaults above
+        media_models = os.getenv('MEDIA_FALLBACK_MODELS')
+        media_timeouts = os.getenv('MEDIA_FALLBACK_TIMEOUTS')
+        self.provider_configs["media"] = _parse_ladder(media_models, media_timeouts, default_media)
 
         # Log parsed ladders
         try:
             v = ", ".join([f"{pc.name}|{pc.model}(t={pc.timeout}s)" for pc in self.provider_configs["vision"]])
             t = ", ".join([f"{pc.name}|{pc.model}(t={pc.timeout}s)" for pc in self.provider_configs["text"]])
-            logger.info(f"🔧 Fallback ladders loaded → vision: [{v}] | text: [{t}]")
+            m = ", ".join([f"{pc.name}|{pc.model}(t={pc.timeout}s)" for pc in self.provider_configs["media"]])
+            logger.info(f"🔧 Fallback ladders loaded → vision: [{v}] | text: [{t}] | media: [{m}]")
         except Exception:
             pass
     

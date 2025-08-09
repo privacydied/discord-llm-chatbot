@@ -460,13 +460,35 @@ class LLMBot(commands.Bot):
 
             # Attachment and URL heuristics
             img_count = count_ext(IMAGE_EXTS)
+            has_pdf = has_ext(PDF_EXTS)
+
+            # Combined plan when both images and a PDF are present
+            if (img_count >= 1) and has_pdf:
+                img_plan = MULTI_IMAGE if img_count >= 2 else SINGLE_IMAGE
+                pdf_plan = PDF_DOCS_OCR if "ocr" in content else PDF_DOCS
+
+                # Compose by concatenation then dedup while preserving order.
+                combined = []
+                seen = set()
+                for step in (img_plan + pdf_plan + ["Generating response"]):
+                    if step == "Generating response" and (len(combined) > 0 and combined[-1] == "Generating response"):
+                        continue
+                    if step not in seen:
+                        combined.append(step)
+                        seen.add(step)
+                # Ensure single final "Generating response"
+                if combined and combined[-1] != "Generating response":
+                    combined.append("Generating response")
+                return combined
+
+            # Image-only
             if img_count >= 2:
                 return MULTI_IMAGE
             if img_count == 1:
                 return SINGLE_IMAGE
 
-            if has_ext(PDF_EXTS):
-                # If user explicitly mentions OCR, switch to OCR pipeline
+            # PDF-only
+            if has_pdf:
                 if "ocr" in content:
                     return PDF_DOCS_OCR
                 return PDF_DOCS

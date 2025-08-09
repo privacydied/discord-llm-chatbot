@@ -36,73 +36,9 @@ class BotEventHandler(commands.Cog):
 
         return False
 
-
-
-        # This file is now obsolete - message handling is done in bot.py
-        # All message filtering and routing is now handled by the bot's on_message implementation
-        # This prevents CommandNotFound spam and ensures proper routing
-
-        if not self._is_relevant(message):
-            return
-
-        extra = self._get_log_extra(message)
-        logger.info(
-            "[WIND][EVENT] Relevant message received. Type: %s",
-            'DM' if isinstance(message.channel, discord.DMChannel) else 'Mention',
-            extra={**extra, 'event': 'message_received'}
-        )
-        logger.debug(
-            "[WIND][AUDIT] Router input audit: guild=%s, author=%s, content=%s",
-            message.guild.id if message.guild else 'dm',
-            message.author.id,
-            message.content,
-            extra={**extra, 'event': 'input_audit'}
-        )
-
-        # Let the commands extension handle actual commands first
-        # This prevents the router from processing a message that is also a command
-        ctx = await self.bot.get_context(message)
-        if ctx.valid:
-            logger.info(
-                f"[WIND][EVENT] Message is a valid command, letting command processor handle it: {ctx.command.name}",
-                extra={**extra, 'event': 'command_dispatch'}
-            )
-            return
-
-        # If not a command, dispatch to the router
-        try:
-            # The router now handles all message types, including attachments,
-            # mention stripping, and command parsing.
-            response = await self.router.dispatch_message(message)
-
-            if response:
-                # Send text response if available
-                if response.text:
-                    logger.debug(f"Sending text response to channel {message.channel.id}", extra=extra)
-                    await message.channel.send(response.text)
-                
-                # Send audio response if available
-                if response.audio_path:
-                    logger.debug(f"Sending audio response to channel {message.channel.id}", extra=extra)
-                    audio_file = discord.File(response.audio_path)
-                    await message.channel.send(file=audio_file)
-                    # Clean up the temporary audio file
-                    try:
-                        Path(response.audio_path).unlink()
-                    except OSError as e:
-                        logger.error(f"Error removing temporary audio file {response.audio_path}: {e}", extra=extra)
-
-                logger.info("[WIND][EVENT] Response sent successfully.", extra={**extra, 'event': 'response_sent'})
-            else:
-                logger.info("[WIND][EVENT] Router returned no response; taking no action.", extra={**extra, 'event': 'no_response'})
-
-
-        except Exception as e:
-            logger.error(
-                f"[WIND][EVENT] Error processing message: {e}",
-                exc_info=True,
-                extra={**extra, 'event': 'router_fail'}
-            )
+    # NOTE:
+    # This file's message handling is obsolete; routing is handled in bot.py (on_message).
+    # The previous top-level await-based block has been removed to avoid SyntaxError.
 
     async def _is_admin(self, user: discord.Member, guild: discord.Guild) -> bool:
         """Check if user has admin permissions."""

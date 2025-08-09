@@ -62,6 +62,19 @@ These steps will guide you through setting up the project environment from scrat
     - `KOKORO_VOICE_PACK_PATH`: Path to the Kokoro voice pack.
     - Any other required API keys (e.g., `OPENAI_API_KEY`).
 
+    #### Media Retry Profiles & Budgets
+
+    Media tasks (video/audio download + transcription) can take longer than LLM requests. These settings control timeouts and per-item budgets for media vs LLM/vision tasks:
+
+    - `MULTIMODAL_PER_ITEM_BUDGET` — Per-item budget for LLM/vision tasks. Default: `30.0` seconds.
+    - `MEDIA_PER_ITEM_BUDGET` — Per-item budget for media tasks (e.g., yt-dlp + STT). Default: `120.0` seconds.
+    - `MEDIA_FALLBACK_MODELS` — Override the media retry ladder (format: `provider|model,provider|model,...`). Default ladder: `internal|media-handler`.
+    - `MEDIA_FALLBACK_TIMEOUTS` — Comma-separated timeouts (seconds) matching the order of `MEDIA_FALLBACK_MODELS`.
+
+    Notes:
+    - Video URLs and audio/video files are routed through the `media` retry profile.
+    - LLM/vision keep using the `text`/`vision` profiles respectively.
+
 ## 2. Running the Tests
 
 To ensure all components are working correctly, run the test suite using `pytest`. Note that we need to override the default pytest options defined in pyproject.toml.

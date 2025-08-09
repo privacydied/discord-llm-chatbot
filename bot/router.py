@@ -311,8 +311,10 @@ class Router:
         aggregator = ResultAggregator()
         retry_manager = get_retry_manager()
         
-        # Per-item budget configuration (optimized for concurrent processing)
-        PER_ITEM_BUDGET = float(os.environ.get('MULTIMODAL_PER_ITEM_BUDGET', '30.0'))  # Reduced since parallel
+        # Per-item budgets (optimized for concurrent processing)
+        # LLM/vision tasks can be shorter; media (yt-dlp/transcribe) needs more time.
+        LLM_PER_ITEM_BUDGET = float(os.environ.get('MULTIMODAL_PER_ITEM_BUDGET', '30.0'))
+        MEDIA_PER_ITEM_BUDGET = float(os.environ.get('MEDIA_PER_ITEM_BUDGET', '120.0'))
         
         # Create all processing tasks concurrently
         async def process_item_concurrent(i: int, item) -> tuple[int, bool, str, float, int]:
@@ -328,11 +330,20 @@ class Router:
             
             self.logger.info(f"📋 Starting concurrent item {i}: {modality.name} - {description}")
             
-            # Determine modality type for retry manager
+            # Determine modality type for retry manager and per-item budget
             if modality in [InputModality.SINGLE_IMAGE, InputModality.MULTI_IMAGE]:
                 retry_modality = "vision"
+                selected_budget = LLM_PER_ITEM_BUDGET
+            elif modality in [InputModality.VIDEO_URL, InputModality.AUDIO_VIDEO_FILE]:
+                retry_modality = "media"
+                selected_budget = MEDIA_PER_ITEM_BUDGET
+            elif modality in [InputModality.PDF_DOCUMENT, InputModality.PDF_OCR]:
+                # PDFs (especially OCR) can be slow; treat as media for longer timeouts/budget
+                retry_modality = "media"
+                selected_budget = MEDIA_PER_ITEM_BUDGET
             else:
                 retry_modality = "text"
+                selected_budget = LLM_PER_ITEM_BUDGET
             
             # Create coroutine factory for this item
             def create_handler_coro(provider_config: ProviderConfig):
@@ -345,7 +356,7 @@ class Router:
                 result = await retry_manager.run_with_fallback(
                     modality=retry_modality,
                     coro_factory=create_handler_coro,
-                    per_item_budget=PER_ITEM_BUDGET
+                    per_item_budget=selected_budget
                 )
                 
                 if result.success:
@@ -466,12 +477,17 @@ class Router:
             elif item.source_type == "url":
                 return await self._process_image_from_url(item.payload)
             elif item.source_type == "embed":
-                if item.payload.image:
-                    return await self._process_image_from_url(item.payload.image.url)
-                elif item.payload.thumbnail:
-                    return await self._process_image_from_url(item.payload.thumbnail.url)
-                else:
-                    return "Image embed found but no accessible image URL."
+                # Prefer embed.image.url, then embed.thumbnail.url, but only if valid [IV]
+                try:
+                    img = getattr(item.payload, 'image', None)
+                    if img and getattr(img, 'url', None):
+                        return await self._process_image_from_url(img.url)
+                    thumb = getattr(item.payload, 'thumbnail', None)
+                    if thumb and getattr(thumb, 'url', None):
+                        return await self._process_image_from_url(thumb.url)
+                except Exception as _e:
+                    self.logger.debug(f"Embed URL extraction failed: {_e}")
+                return "Image embed found but no accessible image URL."
             else:
                 return f"Unsupported image source type: {item.source_type}"
                 
@@ -519,12 +535,17 @@ class Router:
                 # TODO: implement URL image processing with model override
                 return await self._process_image_from_url(item.payload)
             elif item.source_type == "embed":
-                if item.payload.image:
-                    return await self._process_image_from_url(item.payload.image.url)
-                elif item.payload.thumbnail:
-                    return await self._process_image_from_url(item.payload.thumbnail.url)
-                else:
-                    return "Image embed found but no accessible image URL."
+                # Prefer embed.image.url, then embed.thumbnail.url, but only if valid [IV]
+                try:
+                    img = getattr(item.payload, 'image', None)
+                    if img and getattr(img, 'url', None):
+                        return await self._process_image_from_url(img.url)
+                    thumb = getattr(item.payload, 'thumbnail', None)
+                    if thumb and getattr(thumb, 'url', None):
+                        return await self._process_image_from_url(thumb.url)
+                except Exception as _e:
+                    self.logger.debug(f"Embed URL extraction failed (override): {_e}")
+                return "Image embed found but no accessible image URL."
             else:
                 return f"Unsupported image source type: {item.source_type}"
         except Exception as e:
@@ -560,6 +581,11 @@ class Router:
         from .see import see_infer
         
         try:
+            # Validate URL before attempting screenshot [IV]
+            if not url or not isinstance(url, str) or not re.match(r'^https?://', url):
+                self.logger.warning(f"⚠️ Skipping screenshot: invalid URL: {url}")
+                return "⚠️ Skipping screenshot: invalid or missing image URL."
+
             # Take screenshot using the configured screenshot API
             self.logger.info(f"📸 Taking screenshot of URL: {url}")
             screenshot_path = await external_screenshot(url)

@@ -114,6 +114,26 @@ def collect_input_items(message: Message) -> List[InputItem]:
     
     # Add embeds (they appear last)
     for embed in message.embeds:
+        # Deduplicate: skip embeds that are previews of video URLs already in message content [IV][PA]
+        try:
+            embed_url = getattr(embed, 'url', None)
+            if embed_url:
+                # If the embed points to a known video platform URL that is already present in text, skip it
+                video_hosts = (
+                    'tiktok.com', 'vm.tiktok.com', 'm.tiktok.com',
+                    'youtube.com', 'youtu.be',
+                    'twitter.com', 'x.com', 'fxtwitter.com', 'vxtwitter.com'
+                )
+                def _host_match(u: str) -> bool:
+                    return any(h in u for h in video_hosts)
+
+                if _host_match(embed_url) and any(_host_match(u) for u in urls):
+                    logger.info("🧹 Skipping video preview embed; corresponding video URL present in message")
+                    continue
+        except Exception as _e:
+            # Non-fatal: proceed to include the embed if dedupe check fails [REH]
+            logger.debug(f"Embed dedupe check failed: {_e}")
+
         items.append(InputItem(
             source_type="embed",
             payload=embed,

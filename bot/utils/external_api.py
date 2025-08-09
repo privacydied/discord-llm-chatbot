@@ -36,6 +36,14 @@ async def external_screenshot(url: str) -> str | None:
     Returns:
         Optional[str]: The file path to the saved screenshot, or None if failed.
     """
+    # Basic input validation [IV]
+    if not url or not isinstance(url, str) or not url.strip():
+        logger.warning("⚠️ Skipping screenshot: missing URL input")
+        return None
+    if not url.lower().startswith(("http://", "https://")):
+        logger.warning(f"⚠️ Skipping screenshot: unsupported URL scheme: {url}")
+        return None
+
     # Load configurable screenshot API parameters
     api_key = os.getenv("SCREENSHOT_API_KEY")
     if not api_key:
