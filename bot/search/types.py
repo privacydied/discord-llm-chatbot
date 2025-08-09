@@ -15,6 +15,16 @@ class SafeSearch(str, Enum):
     STRICT = "strict"
 
 
+class SearchCategory(str, Enum):
+    """Supported search verticals. Additive and non-breaking.
+    [CA][CMV]
+    """
+    TEXT = "text"      # general web
+    NEWS = "news"
+    IMAGES = "images"
+    VIDEOS = "videos"
+
+
 @dataclass(frozen=True)
 class SearchQueryParams:
     query: str
@@ -22,6 +32,8 @@ class SearchQueryParams:
     safesearch: SafeSearch = SafeSearch.MODERATE
     locale: Optional[str] = None
     timeout_ms: int = 5000
+    # Optional category (vertical). Defaults to TEXT if not provided. [CMV]
+    category: Optional[SearchCategory] = None
 
 
 @dataclass(frozen=True)

@@ -281,6 +281,8 @@ def load_config():
         "SEARCH_LOCALE": os.getenv("SEARCH_LOCALE", ""),
         # DuckDuckGo provider options (DDG typically requires no API key; kept for pluggability)
         "DDG_API_ENDPOINT": os.getenv("DDG_API_ENDPOINT", "https://duckduckgo.com/html/"),
+        # Force legacy HTML endpoint instead of ddgs client. [CMV]
+        "DDG_FORCE_HTML": os.getenv("DDG_FORCE_HTML", "true").lower() == "true",
         "DDG_API_KEY": os.getenv("DDG_API_KEY"),
         "DDG_TIMEOUT_MS": _safe_int(os.getenv("DDG_TIMEOUT_MS"), "5000", "DDG_TIMEOUT_MS"),
         # Custom provider HTTP options
