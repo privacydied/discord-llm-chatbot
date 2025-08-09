@@ -1,0 +1,7668 @@
+{
+  "PROMPT_FILE": {
+    "uses": [
+      {
+        "key": "PROMPT_FILE",
+        "source": "getenv",
+        "file": "archive/main-old.py",
+        "line": 277,
+        "default": "'prompt.txt'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "PROMPT_FILE",
+        "source": "getenv",
+        "file": "archive/main.py",
+        "line": 275,
+        "default": "'prompt.txt'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "PROMPT_FILE",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 85,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "PROMPT_FILE",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 105,
+        "default": "'prompts/prompt-yoroi-super-chill.txt'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "PROMPT_FILE",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 223,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "PROMPT_FILE",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 85,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "PROMPT_FILE",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 105,
+        "default": "'prompts/prompt-yoroi-super-chill.txt'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "PROMPT_FILE",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 194,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 8,
+    "defaults": [
+      "'prompt.txt'",
+      "'prompts/prompt-yoroi-super-chill.txt'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "VL_PROMPT_FILE": {
+    "uses": [
+      {
+        "key": "VL_PROMPT_FILE",
+        "source": "getenv",
+        "file": "archive/main-old.py",
+        "line": 286,
+        "default": "'prompts/vl-prompt.txt'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "VL_PROMPT_FILE",
+        "source": "getenv",
+        "file": "archive/main.py",
+        "line": 284,
+        "default": "'prompts/vl-prompt.txt'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "VL_PROMPT_FILE",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 86,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "VL_PROMPT_FILE",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 106,
+        "default": "'prompts/vl-prompt.txt'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "VL_PROMPT_FILE",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 224,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "VL_PROMPT_FILE",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 86,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "VL_PROMPT_FILE",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 106,
+        "default": "'prompts/vl-prompt.txt'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "VL_PROMPT_FILE",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 195,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 8,
+    "defaults": [
+      "'prompts/vl-prompt.txt'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "DISCORD_TOKEN": {
+    "uses": [
+      {
+        "key": "DISCORD_TOKEN",
+        "source": "getenv",
+        "file": "archive/main-old.py",
+        "line": 1003,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "DISCORD_TOKEN",
+        "source": "getenv",
+        "file": "archive/main.py",
+        "line": 1001,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "DISCORD_TOKEN",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 191,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "DISCORD_TOKEN",
+        "source": "getenv",
+        "file": "tests/test_bot_scripts.py",
+        "line": 23,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "DISCORD_TOKEN",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 170,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 5,
+    "defaults": [],
+    "coercions": [],
+    "sensitivity": "sensitive"
+  },
+  "TEXT_BACKEND": {
+    "uses": [
+      {
+        "key": "TEXT_BACKEND",
+        "source": "getenv",
+        "file": "archive/main-old.py",
+        "line": 1004,
+        "default": "'ollama'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TEXT_BACKEND",
+        "source": "getenv",
+        "file": "archive/main.py",
+        "line": 1002,
+        "default": "'ollama'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TEXT_BACKEND",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 192,
+        "default": "'openai'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TEXT_BACKEND",
+        "source": "environ_get",
+        "file": "bot/env_validator.py",
+        "line": 58,
+        "default": "''",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TEXT_BACKEND",
+        "source": "environ_get",
+        "file": "bot/env_validator.py",
+        "line": 104,
+        "default": "'unknown'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TEXT_BACKEND",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 171,
+        "default": "'openai'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TEXT_BACKEND",
+        "source": "environ_get",
+        "file": "build/lib/bot/env_validator.py",
+        "line": 58,
+        "default": "''",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TEXT_BACKEND",
+        "source": "environ_get",
+        "file": "build/lib/bot/env_validator.py",
+        "line": 104,
+        "default": "'unknown'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 8,
+    "defaults": [
+      "''",
+      "'ollama'",
+      "'openai'",
+      "'unknown'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "OLLAMA_BASE_URL": {
+    "uses": [
+      {
+        "key": "OLLAMA_BASE_URL",
+        "source": "getenv",
+        "file": "archive/main-old.py",
+        "line": 1005,
+        "default": "'http://localhost:11434'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "OLLAMA_BASE_URL",
+        "source": "getenv",
+        "file": "archive/main.py",
+        "line": 1003,
+        "default": "'http://localhost:11434'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "OLLAMA_BASE_URL",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 201,
+        "default": "'http://localhost:11434'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "OLLAMA_BASE_URL",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 180,
+        "default": "'http://localhost:11434'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 4,
+    "defaults": [
+      "'http://localhost:11434'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "TEXT_MODEL": {
+    "uses": [
+      {
+        "key": "TEXT_MODEL",
+        "source": "getenv",
+        "file": "archive/main-old.py",
+        "line": 1006,
+        "default": "'qwen3-235b-a22b'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TEXT_MODEL",
+        "source": "getenv",
+        "file": "archive/main.py",
+        "line": 1004,
+        "default": "'qwen3-235b-a22b'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TEXT_MODEL",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 203,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TEXT_MODEL",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 182,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 4,
+    "defaults": [
+      "'qwen3-235b-a22b'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "OPENAI_API_KEY": {
+    "uses": [
+      {
+        "key": "OPENAI_API_KEY",
+        "source": "getenv",
+        "file": "archive/main-old.py",
+        "line": 1007,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "OPENAI_API_KEY",
+        "source": "getenv",
+        "file": "archive/main.py",
+        "line": 1005,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "OPENAI_API_KEY",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 195,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "OPENAI_API_KEY",
+        "source": "getenv",
+        "file": "bot/core/config_validation.py",
+        "line": 283,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "OPENAI_API_KEY",
+        "source": "getenv",
+        "file": "bot/core/observability_integration.py",
+        "line": 115,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "OPENAI_API_KEY",
+        "source": "getenv",
+        "file": "bot/rag/config.py",
+        "line": 147,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "OPENAI_API_KEY",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 174,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "OPENAI_API_KEY",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/config.py",
+        "line": 147,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 8,
+    "defaults": [],
+    "coercions": [],
+    "sensitivity": "sensitive"
+  },
+  "OPENAI_API_BASE": {
+    "uses": [
+      {
+        "key": "OPENAI_API_BASE",
+        "source": "getenv",
+        "file": "archive/main-old.py",
+        "line": 1008,
+        "default": "'https://api.openai.com/v1'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "OPENAI_API_BASE",
+        "source": "getenv",
+        "file": "archive/main.py",
+        "line": 1006,
+        "default": "'https://api.openai.com/v1'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "OPENAI_API_BASE",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 196,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "OPENAI_API_BASE",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 175,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 4,
+    "defaults": [
+      "'https://api.openai.com/v1'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "OPENAI_TEXT_MODEL": {
+    "uses": [
+      {
+        "key": "OPENAI_TEXT_MODEL",
+        "source": "getenv",
+        "file": "archive/main-old.py",
+        "line": 1009,
+        "default": "'gpt-4o'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "OPENAI_TEXT_MODEL",
+        "source": "getenv",
+        "file": "archive/main.py",
+        "line": 1007,
+        "default": "'gpt-4o'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "OPENAI_TEXT_MODEL",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 197,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "OPENAI_TEXT_MODEL",
+        "source": "environ_get",
+        "file": "bot/env_validator.py",
+        "line": 105,
+        "default": "os.environ.get('OPENAI_MODEL', os.environ.get('OLLAMA_MODEL', 'unknown'))",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "OPENAI_TEXT_MODEL",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 176,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "OPENAI_TEXT_MODEL",
+        "source": "environ_get",
+        "file": "build/lib/bot/env_validator.py",
+        "line": 105,
+        "default": "os.environ.get('OPENAI_MODEL', os.environ.get('OLLAMA_MODEL', 'unknown'))",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 6,
+    "defaults": [
+      "'gpt-4o'",
+      "os.environ.get('OPENAI_MODEL', os.environ.get('OLLAMA_MODEL', 'unknown'))"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "VL_MODEL": {
+    "uses": [
+      {
+        "key": "VL_MODEL",
+        "source": "getenv",
+        "file": "archive/main-old.py",
+        "line": 1010,
+        "default": "'gpt-4-vision-preview'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "VL_MODEL",
+        "source": "getenv",
+        "file": "archive/main.py",
+        "line": 1008,
+        "default": "'gpt-4-vision-preview'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "VL_MODEL",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 198,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "VL_MODEL",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 177,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 4,
+    "defaults": [
+      "'gpt-4-vision-preview'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "WHISPER_API_KEY": {
+    "uses": [
+      {
+        "key": "WHISPER_API_KEY",
+        "source": "getenv",
+        "file": "archive/main-old.py",
+        "line": 1012,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "WHISPER_API_KEY",
+        "source": "getenv",
+        "file": "archive/main.py",
+        "line": 1010,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "WHISPER_API_KEY",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 233,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "WHISPER_API_KEY",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 204,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 4,
+    "defaults": [],
+    "coercions": [],
+    "sensitivity": "sensitive"
+  },
+  "WHISPER_API_BASE": {
+    "uses": [
+      {
+        "key": "WHISPER_API_BASE",
+        "source": "getenv",
+        "file": "archive/main-old.py",
+        "line": 1013,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "WHISPER_API_BASE",
+        "source": "getenv",
+        "file": "archive/main.py",
+        "line": 1011,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "WHISPER_API_BASE",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 234,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "WHISPER_API_BASE",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 205,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 4,
+    "defaults": [],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "WHISPER_MODEL": {
+    "uses": [
+      {
+        "key": "WHISPER_MODEL",
+        "source": "getenv",
+        "file": "archive/main-old.py",
+        "line": 1014,
+        "default": "'whisper-1'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "WHISPER_MODEL",
+        "source": "getenv",
+        "file": "archive/main.py",
+        "line": 1012,
+        "default": "'whisper-1'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "WHISPER_MODEL",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 235,
+        "default": "'whisper-1'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "WHISPER_MODEL",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 206,
+        "default": "'whisper-1'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 4,
+    "defaults": [
+      "'whisper-1'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "TEMPERATURE": {
+    "uses": [
+      {
+        "key": "TEMPERATURE",
+        "source": "getenv",
+        "file": "archive/main-old.py",
+        "line": 1015,
+        "default": "'0.7'",
+        "coerced_as": "float",
+        "notes": null
+      },
+      {
+        "key": "TEMPERATURE",
+        "source": "getenv",
+        "file": "archive/main.py",
+        "line": 1013,
+        "default": "'0.7'",
+        "coerced_as": "float",
+        "notes": null
+      },
+      {
+        "key": "TEMPERATURE",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 206,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TEMPERATURE",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 185,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 4,
+    "defaults": [
+      "'0.7'"
+    ],
+    "coercions": [
+      "float"
+    ],
+    "sensitivity": "normal"
+  },
+  "TIMEOUT": {
+    "uses": [
+      {
+        "key": "TIMEOUT",
+        "source": "getenv",
+        "file": "archive/main-old.py",
+        "line": 1016,
+        "default": "'120.0'",
+        "coerced_as": "float",
+        "notes": null
+      },
+      {
+        "key": "TIMEOUT",
+        "source": "getenv",
+        "file": "archive/main.py",
+        "line": 1014,
+        "default": "'120.0'",
+        "coerced_as": "float",
+        "notes": null
+      },
+      {
+        "key": "TIMEOUT",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 207,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TIMEOUT",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 186,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 4,
+    "defaults": [
+      "'120.0'"
+    ],
+    "coercions": [
+      "float"
+    ],
+    "sensitivity": "normal"
+  },
+  "CHANGE_NICKNAME": {
+    "uses": [
+      {
+        "key": "CHANGE_NICKNAME",
+        "source": "getenv",
+        "file": "archive/main-old.py",
+        "line": 1017,
+        "default": "'True'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "CHANGE_NICKNAME",
+        "source": "getenv",
+        "file": "archive/main.py",
+        "line": 1015,
+        "default": "'True'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "CHANGE_NICKNAME",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 208,
+        "default": "'False'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "CHANGE_NICKNAME",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 187,
+        "default": "'False'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 4,
+    "defaults": [
+      "'False'",
+      "'True'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "MAX_CONVERSATION_LENGTH": {
+    "uses": [
+      {
+        "key": "MAX_CONVERSATION_LENGTH",
+        "source": "getenv",
+        "file": "archive/main-old.py",
+        "line": 1018,
+        "default": "'30'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "MAX_CONVERSATION_LENGTH",
+        "source": "getenv",
+        "file": "archive/main.py",
+        "line": 1016,
+        "default": "'30'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "MAX_CONVERSATION_LENGTH",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 209,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "MAX_CONVERSATION_LENGTH",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 188,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 4,
+    "defaults": [
+      "'30'"
+    ],
+    "coercions": [
+      "int"
+    ],
+    "sensitivity": "normal"
+  },
+  "MAX_FILE_SIZE": {
+    "uses": [
+      {
+        "key": "MAX_FILE_SIZE",
+        "source": "getenv",
+        "file": "archive/main-old.py",
+        "line": 1019,
+        "default": "'20'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "MAX_FILE_SIZE",
+        "source": "getenv",
+        "file": "archive/main.py",
+        "line": 1017,
+        "default": "'20'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "MAX_FILE_SIZE",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 211,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "MAX_FILE_SIZE",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 190,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 4,
+    "defaults": [
+      "'20'"
+    ],
+    "coercions": [
+      "int"
+    ],
+    "sensitivity": "normal"
+  },
+  "MAX_AUDIO_SIZE": {
+    "uses": [
+      {
+        "key": "MAX_AUDIO_SIZE",
+        "source": "getenv",
+        "file": "archive/main-old.py",
+        "line": 1020,
+        "default": "'50'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "MAX_AUDIO_SIZE",
+        "source": "getenv",
+        "file": "archive/main.py",
+        "line": 1018,
+        "default": "'50'",
+        "coerced_as": "int",
+        "notes": null
+      }
+    ],
+    "count": 2,
+    "defaults": [
+      "'50'"
+    ],
+    "coercions": [
+      "int"
+    ],
+    "sensitivity": "normal"
+  },
+  "MAX_TEXT_ATTACHMENT_SIZE": {
+    "uses": [
+      {
+        "key": "MAX_TEXT_ATTACHMENT_SIZE",
+        "source": "getenv",
+        "file": "archive/main-old.py",
+        "line": 1021,
+        "default": "'20000'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "MAX_TEXT_ATTACHMENT_SIZE",
+        "source": "getenv",
+        "file": "archive/main.py",
+        "line": 1019,
+        "default": "'20000'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "MAX_TEXT_ATTACHMENT_SIZE",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 210,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "MAX_TEXT_ATTACHMENT_SIZE",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 189,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 4,
+    "defaults": [
+      "'20000'"
+    ],
+    "coercions": [
+      "int"
+    ],
+    "sensitivity": "normal"
+  },
+  "MAX_USER_MEMORY": {
+    "uses": [
+      {
+        "key": "MAX_USER_MEMORY",
+        "source": "getenv",
+        "file": "archive/main-old.py",
+        "line": 1023,
+        "default": "'10'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "MAX_USER_MEMORY",
+        "source": "getenv",
+        "file": "archive/main-old.py",
+        "line": 1678,
+        "default": "100",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "MAX_USER_MEMORY",
+        "source": "getenv",
+        "file": "archive/main.py",
+        "line": 1021,
+        "default": "'10'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "MAX_USER_MEMORY",
+        "source": "getenv",
+        "file": "archive/main.py",
+        "line": 1676,
+        "default": "100",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "MAX_USER_MEMORY",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 238,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "MAX_USER_MEMORY",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 209,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 6,
+    "defaults": [
+      "'10'",
+      "100"
+    ],
+    "coercions": [
+      "int"
+    ],
+    "sensitivity": "normal"
+  },
+  "MEMORY_SAVE_INTERVAL": {
+    "uses": [
+      {
+        "key": "MEMORY_SAVE_INTERVAL",
+        "source": "getenv",
+        "file": "archive/main-old.py",
+        "line": 1024,
+        "default": "'30'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "MEMORY_SAVE_INTERVAL",
+        "source": "getenv",
+        "file": "archive/main.py",
+        "line": 1022,
+        "default": "'30'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "MEMORY_SAVE_INTERVAL",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 240,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "MEMORY_SAVE_INTERVAL",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 211,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 4,
+    "defaults": [
+      "'30'"
+    ],
+    "coercions": [
+      "int"
+    ],
+    "sensitivity": "normal"
+  },
+  "SERVER_PROFILE_DIR": {
+    "uses": [
+      {
+        "key": "SERVER_PROFILE_DIR",
+        "source": "getenv",
+        "file": "archive/main-old.py",
+        "line": 1029,
+        "default": "'server_profiles'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "SERVER_PROFILE_DIR",
+        "source": "getenv",
+        "file": "archive/main.py",
+        "line": 1027,
+        "default": "'server_profiles'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "SERVER_PROFILE_DIR",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 246,
+        "default": "'server_profiles'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "SERVER_PROFILE_DIR",
+        "source": "environ_index",
+        "file": "tests/scripts/test_bot.py",
+        "line": 43,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "SERVER_PROFILE_DIR",
+        "source": "environ_index",
+        "file": "tests/scripts/test_bot.py",
+        "line": 49,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "SERVER_PROFILE_DIR",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 217,
+        "default": "'server_profiles'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 6,
+    "defaults": [
+      "'server_profiles'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "MAX_SERVER_MEMORY": {
+    "uses": [
+      {
+        "key": "MAX_SERVER_MEMORY",
+        "source": "getenv",
+        "file": "archive/main-old.py",
+        "line": 1710,
+        "default": "100",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "MAX_SERVER_MEMORY",
+        "source": "getenv",
+        "file": "archive/main-old.py",
+        "line": 2102,
+        "default": "100",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "MAX_SERVER_MEMORY",
+        "source": "getenv",
+        "file": "archive/main.py",
+        "line": 1708,
+        "default": "100",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "MAX_SERVER_MEMORY",
+        "source": "getenv",
+        "file": "archive/main.py",
+        "line": 2100,
+        "default": "100",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "MAX_SERVER_MEMORY",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 239,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "MAX_SERVER_MEMORY",
+        "source": "environ_index",
+        "file": "scripts/test_server_memory.py",
+        "line": 109,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "MAX_SERVER_MEMORY",
+        "source": "environ_index",
+        "file": "scripts/test_server_memory.py",
+        "line": 134,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "MAX_SERVER_MEMORY",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 210,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 8,
+    "defaults": [
+      "100"
+    ],
+    "coercions": [
+      "int"
+    ],
+    "sensitivity": "normal"
+  },
+  "OLLAMA_MODEL": {
+    "uses": [
+      {
+        "key": "OLLAMA_MODEL",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 202,
+        "default": "'llama3'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "OLLAMA_MODEL",
+        "source": "environ_get",
+        "file": "bot/env_validator.py",
+        "line": 105,
+        "default": "'unknown'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "OLLAMA_MODEL",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 181,
+        "default": "'llama3'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "OLLAMA_MODEL",
+        "source": "environ_get",
+        "file": "build/lib/bot/env_validator.py",
+        "line": 105,
+        "default": "'unknown'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 4,
+    "defaults": [
+      "'llama3'",
+      "'unknown'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "MAX_ATTACHMENT_SIZE_MB": {
+    "uses": [
+      {
+        "key": "MAX_ATTACHMENT_SIZE_MB",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 212,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "MAX_ATTACHMENT_SIZE_MB",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 191,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 2,
+    "defaults": [],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "BOT_SPEAKS_ONLY_WHEN_SPOKEN_TO": {
+    "uses": [
+      {
+        "key": "BOT_SPEAKS_ONLY_WHEN_SPOKEN_TO",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 215,
+        "default": "'True'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [
+      "'True'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "REPLY_TRIGGERS": {
+    "uses": [
+      {
+        "key": "REPLY_TRIGGERS",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 217,
+        "default": "'dm,mention,reply,bot_threads,owner,command_prefix'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [
+      "'dm,mention,reply,bot_threads,owner,command_prefix'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "STT_ENGINE": {
+    "uses": [
+      {
+        "key": "STT_ENGINE",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 227,
+        "default": "'faster-whisper'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "STT_ENGINE",
+        "source": "getenv",
+        "file": "bot/stt.py",
+        "line": 20,
+        "default": "'faster-whisper'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "STT_ENGINE",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 198,
+        "default": "'faster-whisper'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "STT_ENGINE",
+        "source": "getenv",
+        "file": "build/lib/bot/stt.py",
+        "line": 20,
+        "default": "'faster-whisper'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 4,
+    "defaults": [
+      "'faster-whisper'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "STT_FALLBACK": {
+    "uses": [
+      {
+        "key": "STT_FALLBACK",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 228,
+        "default": "'whispercpp'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "STT_FALLBACK",
+        "source": "getenv",
+        "file": "bot/stt.py",
+        "line": 21,
+        "default": "'whispercpp'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "STT_FALLBACK",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 199,
+        "default": "'whispercpp'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "STT_FALLBACK",
+        "source": "getenv",
+        "file": "build/lib/bot/stt.py",
+        "line": 21,
+        "default": "'whispercpp'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 4,
+    "defaults": [
+      "'whispercpp'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "WHISPER_MODEL_SIZE": {
+    "uses": [
+      {
+        "key": "WHISPER_MODEL_SIZE",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 229,
+        "default": "'medium-int8'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "WHISPER_MODEL_SIZE",
+        "source": "getenv",
+        "file": "bot/stt.py",
+        "line": 22,
+        "default": "'base-int8'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "WHISPER_MODEL_SIZE",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 200,
+        "default": "'medium-int8'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "WHISPER_MODEL_SIZE",
+        "source": "getenv",
+        "file": "build/lib/bot/stt.py",
+        "line": 22,
+        "default": "'base-int8'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 4,
+    "defaults": [
+      "'base-int8'",
+      "'medium-int8'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "WHISPER_CPP_MODEL": {
+    "uses": [
+      {
+        "key": "WHISPER_CPP_MODEL",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 230,
+        "default": "'ggml-medium.bin'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "WHISPER_CPP_MODEL",
+        "source": "getenv",
+        "file": "bot/stt.py",
+        "line": 120,
+        "default": "'models/ggml-medium.bin'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "WHISPER_CPP_MODEL",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 201,
+        "default": "'ggml-medium.bin'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "WHISPER_CPP_MODEL",
+        "source": "getenv",
+        "file": "build/lib/bot/stt.py",
+        "line": 120,
+        "default": "'models/ggml-medium.bin'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 4,
+    "defaults": [
+      "'ggml-medium.bin'",
+      "'models/ggml-medium.bin'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "CONTEXT_FILE_PATH": {
+    "uses": [
+      {
+        "key": "CONTEXT_FILE_PATH",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 241,
+        "default": "'runtime/context.json'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "CONTEXT_FILE_PATH",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 212,
+        "default": "'runtime/context.json'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 2,
+    "defaults": [
+      "'runtime/context.json'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "MAX_CONTEXT_MESSAGES": {
+    "uses": [
+      {
+        "key": "MAX_CONTEXT_MESSAGES",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 242,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "MAX_CONTEXT_MESSAGES",
+        "source": "getenv",
+        "file": "bot/memory/context_manager.py",
+        "line": 26,
+        "default": "max_messages",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "MAX_CONTEXT_MESSAGES",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 213,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "MAX_CONTEXT_MESSAGES",
+        "source": "getenv",
+        "file": "build/lib/bot/memory/context_manager.py",
+        "line": 26,
+        "default": "max_messages",
+        "coerced_as": "int",
+        "notes": null
+      }
+    ],
+    "count": 4,
+    "defaults": [
+      "max_messages"
+    ],
+    "coercions": [
+      "int"
+    ],
+    "sensitivity": "normal"
+  },
+  "USER_PROFILE_DIR": {
+    "uses": [
+      {
+        "key": "USER_PROFILE_DIR",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 245,
+        "default": "'user_profiles'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "USER_PROFILE_DIR",
+        "source": "environ_index",
+        "file": "tests/scripts/test_bot.py",
+        "line": 42,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "USER_PROFILE_DIR",
+        "source": "environ_index",
+        "file": "tests/scripts/test_bot.py",
+        "line": 48,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "USER_PROFILE_DIR",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 216,
+        "default": "'user_profiles'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 4,
+    "defaults": [
+      "'user_profiles'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "USER_LOGS_DIR": {
+    "uses": [
+      {
+        "key": "USER_LOGS_DIR",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 247,
+        "default": "'user_logs'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "USER_LOGS_DIR",
+        "source": "environ_index",
+        "file": "tests/scripts/test_bot.py",
+        "line": 44,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "USER_LOGS_DIR",
+        "source": "environ_index",
+        "file": "tests/scripts/test_bot.py",
+        "line": 50,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "USER_LOGS_DIR",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 218,
+        "default": "'user_logs'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 4,
+    "defaults": [
+      "'user_logs'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "DM_LOGS_DIR": {
+    "uses": [
+      {
+        "key": "DM_LOGS_DIR",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 248,
+        "default": "'dm_logs'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "DM_LOGS_DIR",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 219,
+        "default": "'dm_logs'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 2,
+    "defaults": [
+      "'dm_logs'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "TEMP_DIR": {
+    "uses": [
+      {
+        "key": "TEMP_DIR",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 249,
+        "default": "'temp'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TEMP_DIR",
+        "source": "environ_index",
+        "file": "tests/scripts/test_bot.py",
+        "line": 45,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TEMP_DIR",
+        "source": "environ_index",
+        "file": "tests/scripts/test_bot.py",
+        "line": 51,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TEMP_DIR",
+        "source": "environ_index",
+        "file": "tests/scripts/test_bot.py",
+        "line": 190,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TEMP_DIR",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 220,
+        "default": "'temp'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 5,
+    "defaults": [
+      "'temp'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "LOGS_DIR": {
+    "uses": [
+      {
+        "key": "LOGS_DIR",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 250,
+        "default": "'logs'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "LOGS_DIR",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 221,
+        "default": "'logs'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 2,
+    "defaults": [
+      "'logs'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "TTS_BACKEND": {
+    "uses": [
+      {
+        "key": "TTS_BACKEND",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 253,
+        "default": "'kokoro-onnx'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_BACKEND",
+        "source": "getenv",
+        "file": "tests/test_tts_scripts.py",
+        "line": 34,
+        "default": "'kokoro-onnx'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_BACKEND",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 224,
+        "default": "'kokoro-onnx'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 3,
+    "defaults": [
+      "'kokoro-onnx'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "TTS_VOICE": {
+    "uses": [
+      {
+        "key": "TTS_VOICE",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 254,
+        "default": "'af'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_VOICE",
+        "source": "environ_get",
+        "file": "bot/env_validator.py",
+        "line": 106,
+        "default": "'unknown'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_VOICE",
+        "source": "getenv",
+        "file": "tests/test_tts_scripts.py",
+        "line": 35,
+        "default": "'am_michael'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_VOICE",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 225,
+        "default": "'af'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_VOICE",
+        "source": "environ_get",
+        "file": "build/lib/bot/env_validator.py",
+        "line": 106,
+        "default": "'unknown'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 5,
+    "defaults": [
+      "'af'",
+      "'am_michael'",
+      "'unknown'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "TTS_PREFS_FILE": {
+    "uses": [
+      {
+        "key": "TTS_PREFS_FILE",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 257,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_PREFS_FILE",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 228,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 2,
+    "defaults": [],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "DEBUG": {
+    "uses": [
+      {
+        "key": "DEBUG",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 258,
+        "default": "'False'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "DEBUG",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 229,
+        "default": "'False'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 2,
+    "defaults": [
+      "'False'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "MAX_CONVERSATION_LOG_SIZE": {
+    "uses": [
+      {
+        "key": "MAX_CONVERSATION_LOG_SIZE",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 259,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "MAX_CONVERSATION_LOG_SIZE",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 230,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 2,
+    "defaults": [],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "OPENAI_MODEL": {
+    "uses": [
+      {
+        "key": "OPENAI_MODEL",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 262,
+        "default": "'gpt-4'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "OPENAI_MODEL",
+        "source": "environ_get",
+        "file": "bot/env_validator.py",
+        "line": 105,
+        "default": "os.environ.get('OLLAMA_MODEL', 'unknown')",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "OPENAI_MODEL",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 233,
+        "default": "'gpt-4'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "OPENAI_MODEL",
+        "source": "environ_get",
+        "file": "build/lib/bot/env_validator.py",
+        "line": 105,
+        "default": "os.environ.get('OLLAMA_MODEL', 'unknown')",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 4,
+    "defaults": [
+      "'gpt-4'",
+      "os.environ.get('OLLAMA_MODEL', 'unknown')"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "MAX_MEMORIES": {
+    "uses": [
+      {
+        "key": "MAX_MEMORIES",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 263,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "MAX_MEMORIES",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 234,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 2,
+    "defaults": [],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "DEFAULT_TIMEOUT": {
+    "uses": [
+      {
+        "key": "DEFAULT_TIMEOUT",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 264,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "DEFAULT_TIMEOUT",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 235,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 2,
+    "defaults": [],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "MAX_CONTEXT_LENGTH": {
+    "uses": [
+      {
+        "key": "MAX_CONTEXT_LENGTH",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 265,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "MAX_CONTEXT_LENGTH",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 236,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 2,
+    "defaults": [],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "MAX_RESPONSE_TOKENS": {
+    "uses": [
+      {
+        "key": "MAX_RESPONSE_TOKENS",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 266,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "MAX_RESPONSE_TOKENS",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 237,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 2,
+    "defaults": [],
+    "coercions": [],
+    "sensitivity": "sensitive"
+  },
+  "TOP_P": {
+    "uses": [
+      {
+        "key": "TOP_P",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 267,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TOP_P",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 238,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 2,
+    "defaults": [],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "FREQUENCY_PENALTY": {
+    "uses": [
+      {
+        "key": "FREQUENCY_PENALTY",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 268,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "FREQUENCY_PENALTY",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 239,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 2,
+    "defaults": [],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "PRESENCE_PENALTY": {
+    "uses": [
+      {
+        "key": "PRESENCE_PENALTY",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 269,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "PRESENCE_PENALTY",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 240,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 2,
+    "defaults": [],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "LOG_LEVEL": {
+    "uses": [
+      {
+        "key": "LOG_LEVEL",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 270,
+        "default": "'INFO'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "LOG_LEVEL",
+        "source": "environ_index",
+        "file": "bot/main.py",
+        "line": 36,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "LOG_LEVEL",
+        "source": "getenv",
+        "file": "bot/util/logging.py",
+        "line": 163,
+        "default": "'INFO'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "LOG_LEVEL",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 241,
+        "default": "'INFO'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "LOG_LEVEL",
+        "source": "environ_index",
+        "file": "build/lib/bot/main.py",
+        "line": 36,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "LOG_LEVEL",
+        "source": "getenv",
+        "file": "build/lib/bot/util/logging.py",
+        "line": 90,
+        "default": "'INFO'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 6,
+    "defaults": [
+      "'INFO'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "COMMAND_PREFIX": {
+    "uses": [
+      {
+        "key": "COMMAND_PREFIX",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 271,
+        "default": "'!'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "COMMAND_PREFIX",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 242,
+        "default": "'!'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 2,
+    "defaults": [
+      "'!'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "OWNER_IDS": {
+    "uses": [
+      {
+        "key": "OWNER_IDS",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 272,
+        "default": "''",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "OWNER_IDS",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 243,
+        "default": "''",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 2,
+    "defaults": [
+      "''"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "LOG_FILE": {
+    "uses": [
+      {
+        "key": "LOG_FILE",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 273,
+        "default": "'logs/bot.jsonl'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "LOG_FILE",
+        "source": "getenv",
+        "file": "build/lib/bot/config.py",
+        "line": 244,
+        "default": "'logs/bot.jsonl'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 2,
+    "defaults": [
+      "'logs/bot.jsonl'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "ALERT_ENABLE": {
+    "uses": [
+      {
+        "key": "ALERT_ENABLE",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 280,
+        "default": "'false'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [
+      "'false'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "ALERT_SESSION_TIMEOUT_S": {
+    "uses": [
+      {
+        "key": "ALERT_SESSION_TIMEOUT_S",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 281,
+        "default": "'1800'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [
+      "'1800'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "ALERT_ADMIN_USER_IDS": {
+    "uses": [
+      {
+        "key": "ALERT_ADMIN_USER_IDS",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 282,
+        "default": "''",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [
+      "''"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "SEARCH_PROVIDER": {
+    "uses": [
+      {
+        "key": "SEARCH_PROVIDER",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 286,
+        "default": "'ddg'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [
+      "'ddg'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "SEARCH_MAX_RESULTS": {
+    "uses": [
+      {
+        "key": "SEARCH_MAX_RESULTS",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 288,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "SEARCH_SAFE": {
+    "uses": [
+      {
+        "key": "SEARCH_SAFE",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 289,
+        "default": "'moderate'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "SEARCH_SAFE",
+        "source": "getenv",
+        "file": "bot/rag/hybrid_search.py",
+        "line": 485,
+        "default": "SafeSearch.MODERATE.value",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "SEARCH_SAFE",
+        "source": "getenv",
+        "file": "bot/search/__init__.py",
+        "line": 20,
+        "default": "SafeSearch.MODERATE.value",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 3,
+    "defaults": [
+      "'moderate'",
+      "SafeSearch.MODERATE.value"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "SEARCH_LOCALE": {
+    "uses": [
+      {
+        "key": "SEARCH_LOCALE",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 290,
+        "default": "''",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "SEARCH_LOCALE",
+        "source": "getenv",
+        "file": "bot/rag/hybrid_search.py",
+        "line": 498,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "SEARCH_LOCALE",
+        "source": "getenv",
+        "file": "bot/search/__init__.py",
+        "line": 32,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 3,
+    "defaults": [
+      "''"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "DDG_API_ENDPOINT": {
+    "uses": [
+      {
+        "key": "DDG_API_ENDPOINT",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 292,
+        "default": "'https://html.duckduckgo.com/html/'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [
+      "'https://html.duckduckgo.com/html/'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "DDG_FORCE_HTML": {
+    "uses": [
+      {
+        "key": "DDG_FORCE_HTML",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 294,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [
+      "'true'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "DDG_API_KEY": {
+    "uses": [
+      {
+        "key": "DDG_API_KEY",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 295,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [],
+    "coercions": [],
+    "sensitivity": "sensitive"
+  },
+  "DDG_TIMEOUT_MS": {
+    "uses": [
+      {
+        "key": "DDG_TIMEOUT_MS",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 296,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "DDG_TIMEOUT_MS",
+        "source": "getenv",
+        "file": "bot/rag/hybrid_search.py",
+        "line": 490,
+        "default": "'5000'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "DDG_TIMEOUT_MS",
+        "source": "getenv",
+        "file": "bot/search/__init__.py",
+        "line": 24,
+        "default": "'5000'",
+        "coerced_as": "int",
+        "notes": null
+      }
+    ],
+    "count": 3,
+    "defaults": [
+      "'5000'"
+    ],
+    "coercions": [
+      "int"
+    ],
+    "sensitivity": "normal"
+  },
+  "CUSTOM_SEARCH_API_ENDPOINT": {
+    "uses": [
+      {
+        "key": "CUSTOM_SEARCH_API_ENDPOINT",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 298,
+        "default": "''",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [
+      "''"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "CUSTOM_SEARCH_API_KEY": {
+    "uses": [
+      {
+        "key": "CUSTOM_SEARCH_API_KEY",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 299,
+        "default": "''",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [
+      "''"
+    ],
+    "coercions": [],
+    "sensitivity": "sensitive"
+  },
+  "CUSTOM_SEARCH_HEADERS": {
+    "uses": [
+      {
+        "key": "CUSTOM_SEARCH_HEADERS",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 301,
+        "default": "''",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [
+      "''"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "CUSTOM_SEARCH_TIMEOUT_MS": {
+    "uses": [
+      {
+        "key": "CUSTOM_SEARCH_TIMEOUT_MS",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 302,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "CUSTOM_SEARCH_RESULT_PATHS": {
+    "uses": [
+      {
+        "key": "CUSTOM_SEARCH_RESULT_PATHS",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 304,
+        "default": "''",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [
+      "''"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "SEARCH_POOL_MAX_CONNECTIONS": {
+    "uses": [
+      {
+        "key": "SEARCH_POOL_MAX_CONNECTIONS",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 306,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "SEARCH_BREAKER_FAILURE_WINDOW": {
+    "uses": [
+      {
+        "key": "SEARCH_BREAKER_FAILURE_WINDOW",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 308,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "SEARCH_BREAKER_OPEN_MS": {
+    "uses": [
+      {
+        "key": "SEARCH_BREAKER_OPEN_MS",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 309,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "SEARCH_BREAKER_HALFOPEN_PROB": {
+    "uses": [
+      {
+        "key": "SEARCH_BREAKER_HALFOPEN_PROB",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 310,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "X_API_ENABLED": {
+    "uses": [
+      {
+        "key": "X_API_ENABLED",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 314,
+        "default": "'false'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [
+      "'false'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "X_API_AUTH_MODE": {
+    "uses": [
+      {
+        "key": "X_API_AUTH_MODE",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 315,
+        "default": "'oauth2_app'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [
+      "'oauth2_app'"
+    ],
+    "coercions": [],
+    "sensitivity": "sensitive"
+  },
+  "X_API_BEARER_TOKEN": {
+    "uses": [
+      {
+        "key": "X_API_BEARER_TOKEN",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 316,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [],
+    "coercions": [],
+    "sensitivity": "sensitive"
+  },
+  "X_API_REQUIRE_API_FOR_TWITTER": {
+    "uses": [
+      {
+        "key": "X_API_REQUIRE_API_FOR_TWITTER",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 319,
+        "default": "'false'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "X_API_REQUIRE_API_FOR_TWITTER",
+        "source": "getenv",
+        "file": "utils/check_syndication.py",
+        "line": 35,
+        "default": "'false'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 2,
+    "defaults": [
+      "'false'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "X_API_ALLOW_FALLBACK_ON_5XX": {
+    "uses": [
+      {
+        "key": "X_API_ALLOW_FALLBACK_ON_5XX",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 320,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [
+      "'true'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "X_SYNDICATION_ENABLED": {
+    "uses": [
+      {
+        "key": "X_SYNDICATION_ENABLED",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 324,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "X_SYNDICATION_ENABLED",
+        "source": "getenv",
+        "file": "utils/check_syndication.py",
+        "line": 31,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 2,
+    "defaults": [
+      "'true'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "X_TWITTER_STT_PROBE_FIRST": {
+    "uses": [
+      {
+        "key": "X_TWITTER_STT_PROBE_FIRST",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 327,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [
+      "'true'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "X_API_ROUTE_PHOTOS_TO_VL": {
+    "uses": [
+      {
+        "key": "X_API_ROUTE_PHOTOS_TO_VL",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 331,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [
+      "'true'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "X_API_TIMEOUT_MS": {
+    "uses": [
+      {
+        "key": "X_API_TIMEOUT_MS",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 334,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "X_API_RETRY_MAX_ATTEMPTS": {
+    "uses": [
+      {
+        "key": "X_API_RETRY_MAX_ATTEMPTS",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 335,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "X_API_BREAKER_FAILURE_WINDOW": {
+    "uses": [
+      {
+        "key": "X_API_BREAKER_FAILURE_WINDOW",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 336,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "X_API_BREAKER_OPEN_MS": {
+    "uses": [
+      {
+        "key": "X_API_BREAKER_OPEN_MS",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 337,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "X_API_BREAKER_HALFOPEN_PROB": {
+    "uses": [
+      {
+        "key": "X_API_BREAKER_HALFOPEN_PROB",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 338,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "X_TWEET_FIELDS": {
+    "uses": [
+      {
+        "key": "X_TWEET_FIELDS",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 341,
+        "default": "'id,text,created_at,author_id,public_metrics,possibly_sensitive,lang,attachments,entities,referenced_tweets,conversation_id'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [
+      "'id,text,created_at,author_id,public_metrics,possibly_sensitive,lang,attachments,entities,referenced_tweets,conversation_id'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "X_EXPANSIONS": {
+    "uses": [
+      {
+        "key": "X_EXPANSIONS",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 345,
+        "default": "'author_id,attachments.media_keys,referenced_tweets.id,referenced_tweets.id.author_id'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [
+      "'author_id,attachments.media_keys,referenced_tweets.id,referenced_tweets.id.author_id'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "X_MEDIA_FIELDS": {
+    "uses": [
+      {
+        "key": "X_MEDIA_FIELDS",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 349,
+        "default": "'media_key,type,url,preview_image_url,variants,width,height,alt_text,public_metrics'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [
+      "'media_key,type,url,preview_image_url,variants,width,height,alt_text,public_metrics'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "X_USER_FIELDS": {
+    "uses": [
+      {
+        "key": "X_USER_FIELDS",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 353,
+        "default": "'id,name,username,profile_image_url,verified,protected'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [
+      "'id,name,username,profile_image_url,verified,protected'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "X_POLL_FIELDS": {
+    "uses": [
+      {
+        "key": "X_POLL_FIELDS",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 357,
+        "default": "'id,options,duration_minutes,end_datetime,voting_status'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [
+      "'id,options,duration_minutes,end_datetime,voting_status'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "X_PLACE_FIELDS": {
+    "uses": [
+      {
+        "key": "X_PLACE_FIELDS",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 361,
+        "default": "'full_name,id,country_code,geo,name,place_type'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [
+      "'full_name,id,country_code,geo,name,place_type'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "TWITTER_ROUTE_DEFAULT": {
+    "uses": [
+      {
+        "key": "TWITTER_ROUTE_DEFAULT",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 367,
+        "default": "'api_first'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [
+      "'api_first'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "STREAMING_ENABLE": {
+    "uses": [
+      {
+        "key": "STREAMING_ENABLE",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 371,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [
+      "'true'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "STREAMING_EMBED_STYLE": {
+    "uses": [
+      {
+        "key": "STREAMING_EMBED_STYLE",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 373,
+        "default": "'compact'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [
+      "'compact'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "STREAMING_TICK_MS": {
+    "uses": [
+      {
+        "key": "STREAMING_TICK_MS",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 375,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "STREAMING_MAX_STEPS": {
+    "uses": [
+      {
+        "key": "STREAMING_MAX_STEPS",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 376,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "STREAMING_ENABLE_TEXT": {
+    "uses": [
+      {
+        "key": "STREAMING_ENABLE_TEXT",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 379,
+        "default": "'false'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [
+      "'false'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "STREAMING_ENABLE_SEARCH": {
+    "uses": [
+      {
+        "key": "STREAMING_ENABLE_SEARCH",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 380,
+        "default": "'false'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [
+      "'false'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "STREAMING_ENABLE_RAG": {
+    "uses": [
+      {
+        "key": "STREAMING_ENABLE_RAG",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 381,
+        "default": "'false'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [
+      "'false'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "STREAMING_ENABLE_MEDIA": {
+    "uses": [
+      {
+        "key": "STREAMING_ENABLE_MEDIA",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 382,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [
+      "'true'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "STT_ENABLE": {
+    "uses": [
+      {
+        "key": "STT_ENABLE",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 386,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [
+      "'true'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "STT_MODE": {
+    "uses": [
+      {
+        "key": "STT_MODE",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 388,
+        "default": "'single'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [
+      "'single'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "STT_ACTIVE_PROVIDERS": {
+    "uses": [
+      {
+        "key": "STT_ACTIVE_PROVIDERS",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 390,
+        "default": "'local_whisper'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [
+      "'local_whisper'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "STT_CONFIDENCE_MIN": {
+    "uses": [
+      {
+        "key": "STT_CONFIDENCE_MIN",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 392,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "STT_CACHE_TTL": {
+    "uses": [
+      {
+        "key": "STT_CACHE_TTL",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 394,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "STT_LOCAL_CONCURRENCY": {
+    "uses": [
+      {
+        "key": "STT_LOCAL_CONCURRENCY",
+        "source": "getenv",
+        "file": "bot/config.py",
+        "line": 396,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "MEDIA_PROBE_CACHE_TTL": {
+    "uses": [
+      {
+        "key": "MEDIA_PROBE_CACHE_TTL",
+        "source": "getenv",
+        "file": "bot/media_capability.py",
+        "line": 20,
+        "default": "'300'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "MEDIA_PROBE_CACHE_TTL",
+        "source": "getenv",
+        "file": "bot/config/media_config.py",
+        "line": 16,
+        "default": "'300'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "MEDIA_PROBE_CACHE_TTL",
+        "source": "getenv",
+        "file": "build/lib/bot/media_capability.py",
+        "line": 20,
+        "default": "'300'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "MEDIA_PROBE_CACHE_TTL",
+        "source": "getenv",
+        "file": "build/lib/bot/config/media_config.py",
+        "line": 16,
+        "default": "'300'",
+        "coerced_as": "int",
+        "notes": null
+      }
+    ],
+    "count": 4,
+    "defaults": [
+      "'300'"
+    ],
+    "coercions": [
+      "int"
+    ],
+    "sensitivity": "normal"
+  },
+  "MEDIA_PROBE_TIMEOUT": {
+    "uses": [
+      {
+        "key": "MEDIA_PROBE_TIMEOUT",
+        "source": "getenv",
+        "file": "bot/media_capability.py",
+        "line": 21,
+        "default": "'10'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "MEDIA_PROBE_TIMEOUT",
+        "source": "getenv",
+        "file": "bot/config/media_config.py",
+        "line": 17,
+        "default": "'10'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "MEDIA_PROBE_TIMEOUT",
+        "source": "getenv",
+        "file": "build/lib/bot/media_capability.py",
+        "line": 21,
+        "default": "'10'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "MEDIA_PROBE_TIMEOUT",
+        "source": "getenv",
+        "file": "build/lib/bot/config/media_config.py",
+        "line": 17,
+        "default": "'10'",
+        "coerced_as": "int",
+        "notes": null
+      }
+    ],
+    "count": 4,
+    "defaults": [
+      "'10'"
+    ],
+    "coercions": [
+      "int"
+    ],
+    "sensitivity": "normal"
+  },
+  "VIDEO_MAX_DURATION": {
+    "uses": [
+      {
+        "key": "VIDEO_MAX_DURATION",
+        "source": "getenv",
+        "file": "bot/video_ingest.py",
+        "line": 25,
+        "default": "'600'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "VIDEO_MAX_DURATION",
+        "source": "getenv",
+        "file": "build/lib/bot/video_ingest.py",
+        "line": 25,
+        "default": "'600'",
+        "coerced_as": "int",
+        "notes": null
+      }
+    ],
+    "count": 2,
+    "defaults": [
+      "'600'"
+    ],
+    "coercions": [
+      "int"
+    ],
+    "sensitivity": "normal"
+  },
+  "VIDEO_MAX_CONCURRENT": {
+    "uses": [
+      {
+        "key": "VIDEO_MAX_CONCURRENT",
+        "source": "getenv",
+        "file": "bot/video_ingest.py",
+        "line": 26,
+        "default": "'3'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "VIDEO_MAX_CONCURRENT",
+        "source": "getenv",
+        "file": "build/lib/bot/video_ingest.py",
+        "line": 26,
+        "default": "'3'",
+        "coerced_as": "int",
+        "notes": null
+      }
+    ],
+    "count": 2,
+    "defaults": [
+      "'3'"
+    ],
+    "coercions": [
+      "int"
+    ],
+    "sensitivity": "normal"
+  },
+  "VIDEO_CACHE_DIR": {
+    "uses": [
+      {
+        "key": "VIDEO_CACHE_DIR",
+        "source": "getenv",
+        "file": "bot/video_ingest.py",
+        "line": 27,
+        "default": "'cache/video_audio'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "VIDEO_CACHE_DIR",
+        "source": "getenv",
+        "file": "bot/config/media_config.py",
+        "line": 30,
+        "default": "'cache/video_audio'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "VIDEO_CACHE_DIR",
+        "source": "getenv",
+        "file": "build/lib/bot/video_ingest.py",
+        "line": 27,
+        "default": "'cache/video_audio'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "VIDEO_CACHE_DIR",
+        "source": "getenv",
+        "file": "build/lib/bot/config/media_config.py",
+        "line": 30,
+        "default": "'cache/video_audio'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 4,
+    "defaults": [
+      "'cache/video_audio'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "VIDEO_SPEEDUP": {
+    "uses": [
+      {
+        "key": "VIDEO_SPEEDUP",
+        "source": "getenv",
+        "file": "bot/video_ingest.py",
+        "line": 28,
+        "default": "'1.5'",
+        "coerced_as": "float",
+        "notes": null
+      },
+      {
+        "key": "VIDEO_SPEEDUP",
+        "source": "getenv",
+        "file": "build/lib/bot/video_ingest.py",
+        "line": 28,
+        "default": "'1.5'",
+        "coerced_as": "float",
+        "notes": null
+      }
+    ],
+    "count": 2,
+    "defaults": [
+      "'1.5'"
+    ],
+    "coercions": [
+      "float"
+    ],
+    "sensitivity": "normal"
+  },
+  "VIDEO_CACHE_EXPIRY_DAYS": {
+    "uses": [
+      {
+        "key": "VIDEO_CACHE_EXPIRY_DAYS",
+        "source": "getenv",
+        "file": "bot/video_ingest.py",
+        "line": 29,
+        "default": "'7'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "VIDEO_CACHE_EXPIRY_DAYS",
+        "source": "getenv",
+        "file": "bot/config/media_config.py",
+        "line": 31,
+        "default": "'7'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "VIDEO_CACHE_EXPIRY_DAYS",
+        "source": "getenv",
+        "file": "build/lib/bot/video_ingest.py",
+        "line": 29,
+        "default": "'7'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "VIDEO_CACHE_EXPIRY_DAYS",
+        "source": "getenv",
+        "file": "build/lib/bot/config/media_config.py",
+        "line": 31,
+        "default": "'7'",
+        "coerced_as": "int",
+        "notes": null
+      }
+    ],
+    "count": 4,
+    "defaults": [
+      "'7'"
+    ],
+    "coercions": [
+      "int"
+    ],
+    "sensitivity": "normal"
+  },
+  "TTS_LANGUAGE": {
+    "uses": [
+      {
+        "key": "TTS_LANGUAGE",
+        "source": "environ_get",
+        "file": "bot/env_validator.py",
+        "line": 107,
+        "default": "'unknown'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_LANGUAGE",
+        "source": "environ_get",
+        "file": "bot/kokoro_direct_fixed.py",
+        "line": 128,
+        "default": "'en'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_LANGUAGE",
+        "source": "environ_get",
+        "file": "bot/tokenizer_registry.py",
+        "line": 297,
+        "default": "'en'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_LANGUAGE",
+        "source": "environ_get",
+        "file": "bot/tts/validation.py",
+        "line": 303,
+        "default": "'en'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_LANGUAGE",
+        "source": "environ_index",
+        "file": "tests/test_tts_tokenizer_integration.py",
+        "line": 82,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_LANGUAGE",
+        "source": "environ_index",
+        "file": "tests/test_tts_tokenizer_integration.py",
+        "line": 121,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_LANGUAGE",
+        "source": "environ_get",
+        "file": "build/lib/bot/env_validator.py",
+        "line": 107,
+        "default": "'unknown'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_LANGUAGE",
+        "source": "environ_get",
+        "file": "build/lib/bot/kokoro_direct_fixed.py",
+        "line": 128,
+        "default": "'en'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_LANGUAGE",
+        "source": "environ_get",
+        "file": "build/lib/bot/tokenizer_registry.py",
+        "line": 297,
+        "default": "'en'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_LANGUAGE",
+        "source": "environ_get",
+        "file": "build/lib/bot/tts/validation.py",
+        "line": 303,
+        "default": "'en'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 10,
+    "defaults": [
+      "'en'",
+      "'unknown'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "XDG_CACHE_HOME": {
+    "uses": [
+      {
+        "key": "XDG_CACHE_HOME",
+        "source": "environ_get",
+        "file": "bot/kokoro_direct_fixed.py",
+        "line": 32,
+        "default": "Path('tts/cache')",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "XDG_CACHE_HOME",
+        "source": "environ_get",
+        "file": "build/lib/bot/kokoro_direct_fixed.py",
+        "line": 32,
+        "default": "Path('tts/cache')",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 2,
+    "defaults": [
+      "Path('tts/cache')"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "TTS_PHONEMISER": {
+    "uses": [
+      {
+        "key": "TTS_PHONEMISER",
+        "source": "environ_get",
+        "file": "bot/kokoro_direct_fixed.py",
+        "line": 151,
+        "default": "''",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_PHONEMISER",
+        "source": "environ_index",
+        "file": "tests/test_tts_env_compat.py",
+        "line": 168,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_PHONEMISER",
+        "source": "environ_index",
+        "file": "tests/test_tts_env_compat.py",
+        "line": 185,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_PHONEMISER",
+        "source": "environ_index",
+        "file": "tests/test_tts_tokenizer_integration.py",
+        "line": 156,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_PHONEMISER",
+        "source": "environ_get",
+        "file": "build/lib/bot/kokoro_direct_fixed.py",
+        "line": 151,
+        "default": "''",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 5,
+    "defaults": [
+      "''"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "TTS_TOKENISER": {
+    "uses": [
+      {
+        "key": "TTS_TOKENISER",
+        "source": "environ_get",
+        "file": "bot/tokenizer_registry.py",
+        "line": 216,
+        "default": "''",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_TOKENISER",
+        "source": "getenv",
+        "file": "bot/core/bot-old.py",
+        "line": 33,
+        "default": "'default'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_TOKENISER",
+        "source": "environ_get",
+        "file": "bot/tts/validation.py",
+        "line": 214,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_TOKENISER",
+        "source": "environ_get",
+        "file": "bot/tts/validation.py",
+        "line": 252,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_TOKENISER",
+        "source": "environ_index",
+        "file": "tests/test_tokenizer_discovery.py",
+        "line": 242,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_TOKENISER",
+        "source": "environ_index",
+        "file": "tests/test_tokenizer_discovery.py",
+        "line": 264,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_TOKENISER",
+        "source": "environ_get",
+        "file": "build/lib/bot/tokenizer_registry.py",
+        "line": 216,
+        "default": "''",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_TOKENISER",
+        "source": "getenv",
+        "file": "build/lib/bot/core/bot-old.py",
+        "line": 33,
+        "default": "'default'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_TOKENISER",
+        "source": "environ_get",
+        "file": "build/lib/bot/tts/validation.py",
+        "line": 214,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_TOKENISER",
+        "source": "environ_get",
+        "file": "build/lib/bot/tts/validation.py",
+        "line": 252,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 10,
+    "defaults": [
+      "''",
+      "'default'"
+    ],
+    "coercions": [],
+    "sensitivity": "sensitive"
+  },
+  "MEDIA_MAX_CONCURRENT": {
+    "uses": [
+      {
+        "key": "MEDIA_MAX_CONCURRENT",
+        "source": "getenv",
+        "file": "bot/media_ingestion.py",
+        "line": 21,
+        "default": "'2'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "MEDIA_MAX_CONCURRENT",
+        "source": "getenv",
+        "file": "bot/config/media_config.py",
+        "line": 21,
+        "default": "'2'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "MEDIA_MAX_CONCURRENT",
+        "source": "getenv",
+        "file": "build/lib/bot/media_ingestion.py",
+        "line": 21,
+        "default": "'2'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "MEDIA_MAX_CONCURRENT",
+        "source": "getenv",
+        "file": "build/lib/bot/config/media_config.py",
+        "line": 21,
+        "default": "'2'",
+        "coerced_as": "int",
+        "notes": null
+      }
+    ],
+    "count": 4,
+    "defaults": [
+      "'2'"
+    ],
+    "coercions": [
+      "int"
+    ],
+    "sensitivity": "normal"
+  },
+  "MEDIA_DOWNLOAD_TIMEOUT": {
+    "uses": [
+      {
+        "key": "MEDIA_DOWNLOAD_TIMEOUT",
+        "source": "getenv",
+        "file": "bot/media_ingestion.py",
+        "line": 22,
+        "default": "'60'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "MEDIA_DOWNLOAD_TIMEOUT",
+        "source": "getenv",
+        "file": "bot/config/media_config.py",
+        "line": 22,
+        "default": "'60'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "MEDIA_DOWNLOAD_TIMEOUT",
+        "source": "getenv",
+        "file": "build/lib/bot/media_ingestion.py",
+        "line": 22,
+        "default": "'60'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "MEDIA_DOWNLOAD_TIMEOUT",
+        "source": "getenv",
+        "file": "build/lib/bot/config/media_config.py",
+        "line": 22,
+        "default": "'60'",
+        "coerced_as": "int",
+        "notes": null
+      }
+    ],
+    "count": 4,
+    "defaults": [
+      "'60'"
+    ],
+    "coercions": [
+      "int"
+    ],
+    "sensitivity": "normal"
+  },
+  "MEDIA_RETRY_MAX_ATTEMPTS": {
+    "uses": [
+      {
+        "key": "MEDIA_RETRY_MAX_ATTEMPTS",
+        "source": "getenv",
+        "file": "bot/media_ingestion.py",
+        "line": 23,
+        "default": "'3'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "MEDIA_RETRY_MAX_ATTEMPTS",
+        "source": "getenv",
+        "file": "bot/config/media_config.py",
+        "line": 26,
+        "default": "'3'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "MEDIA_RETRY_MAX_ATTEMPTS",
+        "source": "getenv",
+        "file": "build/lib/bot/media_ingestion.py",
+        "line": 23,
+        "default": "'3'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "MEDIA_RETRY_MAX_ATTEMPTS",
+        "source": "getenv",
+        "file": "build/lib/bot/config/media_config.py",
+        "line": 26,
+        "default": "'3'",
+        "coerced_as": "int",
+        "notes": null
+      }
+    ],
+    "count": 4,
+    "defaults": [
+      "'3'"
+    ],
+    "coercions": [
+      "int"
+    ],
+    "sensitivity": "normal"
+  },
+  "MEDIA_RETRY_BASE_DELAY": {
+    "uses": [
+      {
+        "key": "MEDIA_RETRY_BASE_DELAY",
+        "source": "getenv",
+        "file": "bot/media_ingestion.py",
+        "line": 24,
+        "default": "'2.0'",
+        "coerced_as": "float",
+        "notes": null
+      },
+      {
+        "key": "MEDIA_RETRY_BASE_DELAY",
+        "source": "getenv",
+        "file": "bot/config/media_config.py",
+        "line": 27,
+        "default": "'2.0'",
+        "coerced_as": "float",
+        "notes": null
+      },
+      {
+        "key": "MEDIA_RETRY_BASE_DELAY",
+        "source": "getenv",
+        "file": "build/lib/bot/media_ingestion.py",
+        "line": 24,
+        "default": "'2.0'",
+        "coerced_as": "float",
+        "notes": null
+      },
+      {
+        "key": "MEDIA_RETRY_BASE_DELAY",
+        "source": "getenv",
+        "file": "build/lib/bot/config/media_config.py",
+        "line": 27,
+        "default": "'2.0'",
+        "coerced_as": "float",
+        "notes": null
+      }
+    ],
+    "count": 4,
+    "defaults": [
+      "'2.0'"
+    ],
+    "coercions": [
+      "float"
+    ],
+    "sensitivity": "normal"
+  },
+  "MEDIA_SPEEDUP_FACTOR": {
+    "uses": [
+      {
+        "key": "MEDIA_SPEEDUP_FACTOR",
+        "source": "getenv",
+        "file": "bot/media_ingestion.py",
+        "line": 25,
+        "default": "'1.5'",
+        "coerced_as": "float",
+        "notes": null
+      },
+      {
+        "key": "MEDIA_SPEEDUP_FACTOR",
+        "source": "getenv",
+        "file": "bot/config/media_config.py",
+        "line": 23,
+        "default": "'1.5'",
+        "coerced_as": "float",
+        "notes": null
+      },
+      {
+        "key": "MEDIA_SPEEDUP_FACTOR",
+        "source": "getenv",
+        "file": "build/lib/bot/media_ingestion.py",
+        "line": 25,
+        "default": "'1.5'",
+        "coerced_as": "float",
+        "notes": null
+      },
+      {
+        "key": "MEDIA_SPEEDUP_FACTOR",
+        "source": "getenv",
+        "file": "build/lib/bot/config/media_config.py",
+        "line": 23,
+        "default": "'1.5'",
+        "coerced_as": "float",
+        "notes": null
+      }
+    ],
+    "count": 4,
+    "defaults": [
+      "'1.5'"
+    ],
+    "coercions": [
+      "float"
+    ],
+    "sensitivity": "normal"
+  },
+  "USE_ENHANCED_CONTEXT": {
+    "uses": [
+      {
+        "key": "USE_ENHANCED_CONTEXT",
+        "source": "getenv",
+        "file": "bot/media_ingestion.py",
+        "line": 463,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "USE_ENHANCED_CONTEXT",
+        "source": "getenv",
+        "file": "bot/router.py",
+        "line": 1659,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "USE_ENHANCED_CONTEXT",
+        "source": "getenv",
+        "file": "bot/router.py",
+        "line": 1841,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "USE_ENHANCED_CONTEXT",
+        "source": "getenv",
+        "file": "bot/config/media_config.py",
+        "line": 52,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "USE_ENHANCED_CONTEXT",
+        "source": "getenv",
+        "file": "build/lib/bot/media_ingestion.py",
+        "line": 463,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "USE_ENHANCED_CONTEXT",
+        "source": "getenv",
+        "file": "build/lib/bot/router.py",
+        "line": 625,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "USE_ENHANCED_CONTEXT",
+        "source": "getenv",
+        "file": "build/lib/bot/router.py",
+        "line": 693,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "USE_ENHANCED_CONTEXT",
+        "source": "getenv",
+        "file": "build/lib/bot/config/media_config.py",
+        "line": 51,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 8,
+    "defaults": [
+      "'true'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "MULTIMODAL_PER_ITEM_BUDGET": {
+    "uses": [
+      {
+        "key": "MULTIMODAL_PER_ITEM_BUDGET",
+        "source": "environ_get",
+        "file": "bot/router.py",
+        "line": 772,
+        "default": "'30.0'",
+        "coerced_as": "float",
+        "notes": null
+      },
+      {
+        "key": "MULTIMODAL_PER_ITEM_BUDGET",
+        "source": "environ_get",
+        "file": "utils/diagnose_retry_profiles.py",
+        "line": 14,
+        "default": "'30.0'",
+        "coerced_as": "float",
+        "notes": null
+      },
+      {
+        "key": "MULTIMODAL_PER_ITEM_BUDGET",
+        "source": "environ_get",
+        "file": "build/lib/bot/router.py",
+        "line": 205,
+        "default": "'45.0'",
+        "coerced_as": "float",
+        "notes": null
+      }
+    ],
+    "count": 3,
+    "defaults": [
+      "'30.0'",
+      "'45.0'"
+    ],
+    "coercions": [
+      "float"
+    ],
+    "sensitivity": "normal"
+  },
+  "MEDIA_PER_ITEM_BUDGET": {
+    "uses": [
+      {
+        "key": "MEDIA_PER_ITEM_BUDGET",
+        "source": "environ_get",
+        "file": "bot/router.py",
+        "line": 773,
+        "default": "'120.0'",
+        "coerced_as": "float",
+        "notes": null
+      },
+      {
+        "key": "MEDIA_PER_ITEM_BUDGET",
+        "source": "getenv",
+        "file": "bot/enhanced_retry.py",
+        "line": 112,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "MEDIA_PER_ITEM_BUDGET",
+        "source": "environ_get",
+        "file": "utils/diagnose_retry_profiles.py",
+        "line": 15,
+        "default": "'120.0'",
+        "coerced_as": "float",
+        "notes": null
+      }
+    ],
+    "count": 3,
+    "defaults": [
+      "'120.0'"
+    ],
+    "coercions": [
+      "float"
+    ],
+    "sensitivity": "normal"
+  },
+  "ENABLE_RAG": {
+    "uses": [
+      {
+        "key": "ENABLE_RAG",
+        "source": "getenv",
+        "file": "bot/router.py",
+        "line": 1603,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "ENABLE_RAG",
+        "source": "getenv",
+        "file": "bot/rag/config.py",
+        "line": 82,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "ENABLE_RAG",
+        "source": "getenv",
+        "file": "bot/rag/config.py",
+        "line": 134,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "ENABLE_RAG",
+        "source": "getenv",
+        "file": "bot/rag/hybrid_search.py",
+        "line": 68,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "ENABLE_RAG",
+        "source": "getenv",
+        "file": "build/lib/bot/router.py",
+        "line": 571,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "ENABLE_RAG",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/config.py",
+        "line": 82,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "ENABLE_RAG",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/config.py",
+        "line": 134,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "ENABLE_RAG",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/hybrid_search.py",
+        "line": 66,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 8,
+    "defaults": [
+      "'true'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "RAG_MAX_VECTOR_RESULTS": {
+    "uses": [
+      {
+        "key": "RAG_MAX_VECTOR_RESULTS",
+        "source": "getenv",
+        "file": "bot/router.py",
+        "line": 1606,
+        "default": "'5'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "RAG_MAX_VECTOR_RESULTS",
+        "source": "getenv",
+        "file": "bot/rag/config.py",
+        "line": 22,
+        "default": "'5'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "RAG_MAX_VECTOR_RESULTS",
+        "source": "getenv",
+        "file": "bot/rag/config.py",
+        "line": 92,
+        "default": "'5'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "RAG_MAX_VECTOR_RESULTS",
+        "source": "getenv",
+        "file": "build/lib/bot/router.py",
+        "line": 574,
+        "default": "'5'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "RAG_MAX_VECTOR_RESULTS",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/config.py",
+        "line": 22,
+        "default": "'5'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "RAG_MAX_VECTOR_RESULTS",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/config.py",
+        "line": 92,
+        "default": "'5'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 6,
+    "defaults": [
+      "'5'"
+    ],
+    "coercions": [
+      "int"
+    ],
+    "sensitivity": "normal"
+  },
+  "SEARCH_INLINE_MAX_CONCURRENCY": {
+    "uses": [
+      {
+        "key": "SEARCH_INLINE_MAX_CONCURRENCY",
+        "source": "getenv",
+        "file": "bot/router.py",
+        "line": 1709,
+        "default": "'3'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "SEARCH_INLINE_MAX_CONCURRENCY",
+        "source": "getenv",
+        "file": "utils/validate_config.py",
+        "line": 83,
+        "default": "''",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 2,
+    "defaults": [
+      "''",
+      "'3'"
+    ],
+    "coercions": [
+      "int"
+    ],
+    "sensitivity": "normal"
+  },
+  "MEDIA_PROVIDER_TIMEOUT": {
+    "uses": [
+      {
+        "key": "MEDIA_PROVIDER_TIMEOUT",
+        "source": "getenv",
+        "file": "bot/enhanced_retry.py",
+        "line": 108,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "VISION_FALLBACK_MODELS": {
+    "uses": [
+      {
+        "key": "VISION_FALLBACK_MODELS",
+        "source": "getenv",
+        "file": "bot/enhanced_retry.py",
+        "line": 126,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "VISION_FALLBACK_TIMEOUTS": {
+    "uses": [
+      {
+        "key": "VISION_FALLBACK_TIMEOUTS",
+        "source": "getenv",
+        "file": "bot/enhanced_retry.py",
+        "line": 127,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "TEXT_FALLBACK_MODELS": {
+    "uses": [
+      {
+        "key": "TEXT_FALLBACK_MODELS",
+        "source": "getenv",
+        "file": "bot/enhanced_retry.py",
+        "line": 128,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "TEXT_FALLBACK_TIMEOUTS": {
+    "uses": [
+      {
+        "key": "TEXT_FALLBACK_TIMEOUTS",
+        "source": "getenv",
+        "file": "bot/enhanced_retry.py",
+        "line": 129,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "MEDIA_FALLBACK_MODELS": {
+    "uses": [
+      {
+        "key": "MEDIA_FALLBACK_MODELS",
+        "source": "getenv",
+        "file": "bot/enhanced_retry.py",
+        "line": 134,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "MEDIA_FALLBACK_TIMEOUTS": {
+    "uses": [
+      {
+        "key": "MEDIA_FALLBACK_TIMEOUTS",
+        "source": "getenv",
+        "file": "bot/enhanced_retry.py",
+        "line": 135,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "WEBEX_TIER_A_TIMEOUT_S": {
+    "uses": [
+      {
+        "key": "WEBEX_TIER_A_TIMEOUT_S",
+        "source": "getenv",
+        "file": "bot/web_extraction_service.py",
+        "line": 19,
+        "default": "'6.0'",
+        "coerced_as": "float",
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [
+      "'6.0'"
+    ],
+    "coercions": [
+      "float"
+    ],
+    "sensitivity": "normal"
+  },
+  "WEBEX_TIER_B_TIMEOUT_S": {
+    "uses": [
+      {
+        "key": "WEBEX_TIER_B_TIMEOUT_S",
+        "source": "getenv",
+        "file": "bot/web_extraction_service.py",
+        "line": 20,
+        "default": "'12.0'",
+        "coerced_as": "float",
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [
+      "'12.0'"
+    ],
+    "coercions": [
+      "float"
+    ],
+    "sensitivity": "normal"
+  },
+  "WEBEX_UA_DESKTOP": {
+    "uses": [
+      {
+        "key": "WEBEX_UA_DESKTOP",
+        "source": "getenv",
+        "file": "bot/web_extraction_service.py",
+        "line": 21,
+        "default": "'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [
+      "'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "WEBEX_ENABLE_TIER_B": {
+    "uses": [
+      {
+        "key": "WEBEX_ENABLE_TIER_B",
+        "source": "getenv",
+        "file": "bot/web_extraction_service.py",
+        "line": 26,
+        "default": "'1'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [
+      "'1'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "WEBEX_ACCEPT_LANGUAGE": {
+    "uses": [
+      {
+        "key": "WEBEX_ACCEPT_LANGUAGE",
+        "source": "getenv",
+        "file": "bot/web_extraction_service.py",
+        "line": 27,
+        "default": "'en-US,en;q=0.9'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [
+      "'en-US,en;q=0.9'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "TTS_MODEL_PATH": {
+    "uses": [
+      {
+        "key": "TTS_MODEL_PATH",
+        "source": "getenv",
+        "file": "bot/core/bot-old.py",
+        "line": 31,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_MODEL_PATH",
+        "source": "getenv",
+        "file": "bot/tts/interface.py",
+        "line": 40,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_MODEL_PATH",
+        "source": "environ_get",
+        "file": "tests/test_tts_fixed.py",
+        "line": 27,
+        "default": "'tts/onnx/kokoro-v1.0.onnx'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_MODEL_PATH",
+        "source": "environ_get",
+        "file": "tests/debug_tts.py",
+        "line": 50,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_MODEL_PATH",
+        "source": "getenv",
+        "file": "tests/test_kokoro_direct_fixed.py",
+        "line": 21,
+        "default": "'tts/onnx/kokoro-v1.0.onnx'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_MODEL_PATH",
+        "source": "environ_index",
+        "file": "tests/test_tts_env_compat.py",
+        "line": 49,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_MODEL_PATH",
+        "source": "environ_index",
+        "file": "tests/test_tts_env_compat.py",
+        "line": 89,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_MODEL_PATH",
+        "source": "getenv",
+        "file": "build/lib/bot/core/bot-old.py",
+        "line": 31,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_MODEL_PATH",
+        "source": "getenv",
+        "file": "build/lib/bot/tts/interface.py",
+        "line": 40,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 9,
+    "defaults": [
+      "'tts/onnx/kokoro-v1.0.onnx'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "TTS_VOICES_PATH": {
+    "uses": [
+      {
+        "key": "TTS_VOICES_PATH",
+        "source": "getenv",
+        "file": "bot/core/bot-old.py",
+        "line": 32,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_VOICES_PATH",
+        "source": "getenv",
+        "file": "bot/tts/interface.py",
+        "line": 41,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_VOICES_PATH",
+        "source": "environ_get",
+        "file": "tests/test_tts_fixed.py",
+        "line": 28,
+        "default": "'tts/voices/voices-v1.0.bin'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_VOICES_PATH",
+        "source": "environ_get",
+        "file": "tests/debug_tts.py",
+        "line": 51,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_VOICES_PATH",
+        "source": "getenv",
+        "file": "tests/test_kokoro_direct_fixed.py",
+        "line": 22,
+        "default": "'tts/onnx/voices/voices-v1.0.bin'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_VOICES_PATH",
+        "source": "environ_index",
+        "file": "tests/test_tts_env_compat.py",
+        "line": 50,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_VOICES_PATH",
+        "source": "environ_index",
+        "file": "tests/test_tts_env_compat.py",
+        "line": 90,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_VOICES_PATH",
+        "source": "getenv",
+        "file": "build/lib/bot/core/bot-old.py",
+        "line": 32,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_VOICES_PATH",
+        "source": "getenv",
+        "file": "build/lib/bot/tts/interface.py",
+        "line": 41,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 9,
+    "defaults": [
+      "'tts/onnx/voices/voices-v1.0.bin'",
+      "'tts/voices/voices-v1.0.bin'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "BOT_PREFIX": {
+    "uses": [
+      {
+        "key": "BOT_PREFIX",
+        "source": "getenv",
+        "file": "bot/core/startup.py",
+        "line": 114,
+        "default": "'!'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "BOT_PREFIX",
+        "source": "getenv",
+        "file": "build/lib/bot/core/startup.py",
+        "line": 114,
+        "default": "'!'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 2,
+    "defaults": [
+      "'!'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "ANTHROPIC_API_KEY": {
+    "uses": [
+      {
+        "key": "ANTHROPIC_API_KEY",
+        "source": "getenv",
+        "file": "bot/core/config_validation.py",
+        "line": 284,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [],
+    "coercions": [],
+    "sensitivity": "sensitive"
+  },
+  "OLLAMA_HOST": {
+    "uses": [
+      {
+        "key": "OLLAMA_HOST",
+        "source": "getenv",
+        "file": "bot/core/config_validation.py",
+        "line": 285,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "OBS_ENABLE_PROMETHEUS": {
+    "uses": [
+      {
+        "key": "OBS_ENABLE_PROMETHEUS",
+        "source": "getenv",
+        "file": "bot/core/config_validation.py",
+        "line": 293,
+        "default": "'false'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "OBS_ENABLE_PROMETHEUS",
+        "source": "getenv",
+        "file": "bot/core/config_validation.py",
+        "line": 465,
+        "default": "'false'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "OBS_ENABLE_PROMETHEUS",
+        "source": "getenv",
+        "file": "bot/metrics/__init__.py",
+        "line": 60,
+        "default": "'false'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 3,
+    "defaults": [
+      "'false'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "PROMETHEUS_PORT": {
+    "uses": [
+      {
+        "key": "PROMETHEUS_PORT",
+        "source": "getenv",
+        "file": "bot/core/config_validation.py",
+        "line": 294,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "PROMETHEUS_PORT",
+        "source": "getenv",
+        "file": "bot/core/bot.py",
+        "line": 162,
+        "default": "'8000'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "PROMETHEUS_PORT",
+        "source": "getenv",
+        "file": "bot/metrics/__init__.py",
+        "line": 73,
+        "default": "'8001'",
+        "coerced_as": "int",
+        "notes": null
+      }
+    ],
+    "count": 3,
+    "defaults": [
+      "'8000'",
+      "'8001'"
+    ],
+    "coercions": [
+      "int"
+    ],
+    "sensitivity": "normal"
+  },
+  "PROMETHEUS_HTTP_SERVER": {
+    "uses": [
+      {
+        "key": "PROMETHEUS_HTTP_SERVER",
+        "source": "getenv",
+        "file": "bot/core/config_validation.py",
+        "line": 295,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "PROMETHEUS_HTTP_SERVER",
+        "source": "getenv",
+        "file": "bot/core/bot.py",
+        "line": 163,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "PROMETHEUS_HTTP_SERVER",
+        "source": "getenv",
+        "file": "bot/metrics/__init__.py",
+        "line": 74,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 3,
+    "defaults": [
+      "'true'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "OBS_ENABLE_RESOURCE_METRICS": {
+    "uses": [
+      {
+        "key": "OBS_ENABLE_RESOURCE_METRICS",
+        "source": "getenv",
+        "file": "bot/core/resource_monitor.py",
+        "line": 200,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [
+      "'true'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "RESOURCE_EVENT_LOOP_LAG_WARNING_MS": {
+    "uses": [
+      {
+        "key": "RESOURCE_EVENT_LOOP_LAG_WARNING_MS",
+        "source": "getenv",
+        "file": "bot/core/resource_monitor.py",
+        "line": 491,
+        "default": "DEFAULT_EVENT_LOOP_LAG_WARNING_MS",
+        "coerced_as": "float",
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [
+      "DEFAULT_EVENT_LOOP_LAG_WARNING_MS"
+    ],
+    "coercions": [
+      "float"
+    ],
+    "sensitivity": "normal"
+  },
+  "RESOURCE_EVENT_LOOP_LAG_CRITICAL_MS": {
+    "uses": [
+      {
+        "key": "RESOURCE_EVENT_LOOP_LAG_CRITICAL_MS",
+        "source": "getenv",
+        "file": "bot/core/resource_monitor.py",
+        "line": 492,
+        "default": "DEFAULT_EVENT_LOOP_LAG_CRITICAL_MS",
+        "coerced_as": "float",
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [
+      "DEFAULT_EVENT_LOOP_LAG_CRITICAL_MS"
+    ],
+    "coercions": [
+      "float"
+    ],
+    "sensitivity": "normal"
+  },
+  "RESOURCE_RSS_WARNING_MB": {
+    "uses": [
+      {
+        "key": "RESOURCE_RSS_WARNING_MB",
+        "source": "getenv",
+        "file": "bot/core/resource_monitor.py",
+        "line": 493,
+        "default": "DEFAULT_RSS_WARNING_MB",
+        "coerced_as": "float",
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [
+      "DEFAULT_RSS_WARNING_MB"
+    ],
+    "coercions": [
+      "float"
+    ],
+    "sensitivity": "normal"
+  },
+  "RESOURCE_RSS_CRITICAL_MB": {
+    "uses": [
+      {
+        "key": "RESOURCE_RSS_CRITICAL_MB",
+        "source": "getenv",
+        "file": "bot/core/resource_monitor.py",
+        "line": 494,
+        "default": "DEFAULT_RSS_CRITICAL_MB",
+        "coerced_as": "float",
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [
+      "DEFAULT_RSS_CRITICAL_MB"
+    ],
+    "coercions": [
+      "float"
+    ],
+    "sensitivity": "normal"
+  },
+  "RESOURCE_CPU_WARNING_PERCENT": {
+    "uses": [
+      {
+        "key": "RESOURCE_CPU_WARNING_PERCENT",
+        "source": "getenv",
+        "file": "bot/core/resource_monitor.py",
+        "line": 495,
+        "default": "DEFAULT_CPU_WARNING_PERCENT",
+        "coerced_as": "float",
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [
+      "DEFAULT_CPU_WARNING_PERCENT"
+    ],
+    "coercions": [
+      "float"
+    ],
+    "sensitivity": "normal"
+  },
+  "RESOURCE_CPU_CRITICAL_PERCENT": {
+    "uses": [
+      {
+        "key": "RESOURCE_CPU_CRITICAL_PERCENT",
+        "source": "getenv",
+        "file": "bot/core/resource_monitor.py",
+        "line": 496,
+        "default": "DEFAULT_CPU_CRITICAL_PERCENT",
+        "coerced_as": "float",
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [
+      "DEFAULT_CPU_CRITICAL_PERCENT"
+    ],
+    "coercions": [
+      "float"
+    ],
+    "sensitivity": "normal"
+  },
+  "RESOURCE_CHECK_INTERVAL": {
+    "uses": [
+      {
+        "key": "RESOURCE_CHECK_INTERVAL",
+        "source": "getenv",
+        "file": "bot/core/resource_monitor.py",
+        "line": 499,
+        "default": "DEFAULT_RESOURCE_CHECK_INTERVAL",
+        "coerced_as": "float",
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [
+      "DEFAULT_RESOURCE_CHECK_INTERVAL"
+    ],
+    "coercions": [
+      "float"
+    ],
+    "sensitivity": "normal"
+  },
+  "OBS_PARALLEL_STARTUP": {
+    "uses": [
+      {
+        "key": "OBS_PARALLEL_STARTUP",
+        "source": "getenv",
+        "file": "bot/core/observability_integration.py",
+        "line": 86,
+        "default": "'false'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "OBS_PARALLEL_STARTUP",
+        "source": "getenv",
+        "file": "bot/core/observability_integration.py",
+        "line": 271,
+        "default": "'false'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 2,
+    "defaults": [
+      "'false'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "RAG_EAGER_VECTOR_LOAD": {
+    "uses": [
+      {
+        "key": "RAG_EAGER_VECTOR_LOAD",
+        "source": "getenv",
+        "file": "bot/core/observability_integration.py",
+        "line": 117,
+        "default": "'false'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "RAG_EAGER_VECTOR_LOAD",
+        "source": "getenv",
+        "file": "bot/core/observability_integration.py",
+        "line": 472,
+        "default": "'false'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "RAG_EAGER_VECTOR_LOAD",
+        "source": "getenv",
+        "file": "bot/rag/config.py",
+        "line": 53,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "RAG_EAGER_VECTOR_LOAD",
+        "source": "getenv",
+        "file": "bot/rag/config.py",
+        "line": 111,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "RAG_EAGER_VECTOR_LOAD",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/config.py",
+        "line": 53,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "RAG_EAGER_VECTOR_LOAD",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/config.py",
+        "line": 111,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 6,
+    "defaults": [
+      "'false'",
+      "'true'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "TTS_ENABLED": {
+    "uses": [
+      {
+        "key": "TTS_ENABLED",
+        "source": "getenv",
+        "file": "bot/core/observability_integration.py",
+        "line": 119,
+        "default": "'false'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_ENABLED",
+        "source": "getenv",
+        "file": "bot/core/observability_integration.py",
+        "line": 461,
+        "default": "'false'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 2,
+    "defaults": [
+      "'false'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "HISTORY_WINDOW": {
+    "uses": [
+      {
+        "key": "HISTORY_WINDOW",
+        "source": "getenv",
+        "file": "bot/core/bot.py",
+        "line": 141,
+        "default": "'10'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "HISTORY_WINDOW",
+        "source": "getenv",
+        "file": "bot/memory/enhanced_context_manager.py",
+        "line": 77,
+        "default": "'10'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "HISTORY_WINDOW",
+        "source": "getenv",
+        "file": "build/lib/bot/core/bot.py",
+        "line": 139,
+        "default": "'10'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "HISTORY_WINDOW",
+        "source": "getenv",
+        "file": "build/lib/bot/memory/enhanced_context_manager.py",
+        "line": 77,
+        "default": "'10'",
+        "coerced_as": "int",
+        "notes": null
+      }
+    ],
+    "count": 4,
+    "defaults": [
+      "'10'"
+    ],
+    "coercions": [
+      "int"
+    ],
+    "sensitivity": "normal"
+  },
+  "PROMETHEUS_ENABLED": {
+    "uses": [
+      {
+        "key": "PROMETHEUS_ENABLED",
+        "source": "getenv",
+        "file": "bot/core/bot.py",
+        "line": 161,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [
+      "'true'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "TTS_ENGINE": {
+    "uses": [
+      {
+        "key": "TTS_ENGINE",
+        "source": "getenv",
+        "file": "bot/tts/interface.py",
+        "line": 31,
+        "default": "'stub'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_ENGINE",
+        "source": "getenv",
+        "file": "build/lib/bot/tts/interface.py",
+        "line": 31,
+        "default": "'stub'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 2,
+    "defaults": [
+      "'stub'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "PATH": {
+    "uses": [
+      {
+        "key": "PATH",
+        "source": "environ_get",
+        "file": "bot/tts/validation.py",
+        "line": 68,
+        "default": "''",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "PATH",
+        "source": "environ_get",
+        "file": "build/lib/bot/tts/validation.py",
+        "line": 68,
+        "default": "''",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 2,
+    "defaults": [
+      "''"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "LOG_JSONL_PATH": {
+    "uses": [
+      {
+        "key": "LOG_JSONL_PATH",
+        "source": "getenv",
+        "file": "bot/util/logging.py",
+        "line": 164,
+        "default": "'./logs/bot.jsonl'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "LOG_JSONL_PATH",
+        "source": "getenv",
+        "file": "build/lib/bot/util/logging.py",
+        "line": 91,
+        "default": "'./logs/bot.jsonl'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 2,
+    "defaults": [
+      "'./logs/bot.jsonl'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "SCREENSHOT_API_KEY": {
+    "uses": [
+      {
+        "key": "SCREENSHOT_API_KEY",
+        "source": "getenv",
+        "file": "bot/utils/external_api.py",
+        "line": 78,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "SCREENSHOT_API_KEY",
+        "source": "getenv",
+        "file": "utils/validate_config.py",
+        "line": 57,
+        "default": "''",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "SCREENSHOT_API_KEY",
+        "source": "getenv",
+        "file": "build/lib/bot/utils/external_api.py",
+        "line": 36,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 3,
+    "defaults": [
+      "''"
+    ],
+    "coercions": [],
+    "sensitivity": "sensitive"
+  },
+  "SCREENSHOT_FALLBACK_PLAYWRIGHT": {
+    "uses": [
+      {
+        "key": "SCREENSHOT_FALLBACK_PLAYWRIGHT",
+        "source": "getenv",
+        "file": "bot/utils/external_api.py",
+        "line": 79,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [
+      "'true'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "SCREENSHOT_API_URL": {
+    "uses": [
+      {
+        "key": "SCREENSHOT_API_URL",
+        "source": "getenv",
+        "file": "bot/utils/external_api.py",
+        "line": 86,
+        "default": "'https://api.screenshotmachine.com'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "SCREENSHOT_API_URL",
+        "source": "getenv",
+        "file": "utils/validate_config.py",
+        "line": 58,
+        "default": "''",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 2,
+    "defaults": [
+      "''",
+      "'https://api.screenshotmachine.com'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "SCREENSHOT_API_DEVICE": {
+    "uses": [
+      {
+        "key": "SCREENSHOT_API_DEVICE",
+        "source": "getenv",
+        "file": "bot/utils/external_api.py",
+        "line": 87,
+        "default": "'desktop'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "SCREENSHOT_API_DEVICE",
+        "source": "getenv",
+        "file": "utils/validate_config.py",
+        "line": 59,
+        "default": "''",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 2,
+    "defaults": [
+      "''",
+      "'desktop'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "SCREENSHOT_API_DIMENSION": {
+    "uses": [
+      {
+        "key": "SCREENSHOT_API_DIMENSION",
+        "source": "getenv",
+        "file": "bot/utils/external_api.py",
+        "line": 88,
+        "default": "'1024x768'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "SCREENSHOT_API_DIMENSION",
+        "source": "getenv",
+        "file": "utils/validate_config.py",
+        "line": 60,
+        "default": "''",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 2,
+    "defaults": [
+      "''",
+      "'1024x768'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "SCREENSHOT_API_FORMAT": {
+    "uses": [
+      {
+        "key": "SCREENSHOT_API_FORMAT",
+        "source": "getenv",
+        "file": "bot/utils/external_api.py",
+        "line": 90,
+        "default": "'png'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "SCREENSHOT_API_FORMAT",
+        "source": "getenv",
+        "file": "utils/validate_config.py",
+        "line": 61,
+        "default": "''",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 2,
+    "defaults": [
+      "''",
+      "'png'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "SCREENSHOT_API_DELAY": {
+    "uses": [
+      {
+        "key": "SCREENSHOT_API_DELAY",
+        "source": "getenv",
+        "file": "bot/utils/external_api.py",
+        "line": 91,
+        "default": "'2000'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "SCREENSHOT_API_DELAY",
+        "source": "getenv",
+        "file": "utils/validate_config.py",
+        "line": 62,
+        "default": "''",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 2,
+    "defaults": [
+      "''",
+      "'2000'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "SCREENSHOT_API_COOKIES": {
+    "uses": [
+      {
+        "key": "SCREENSHOT_API_COOKIES",
+        "source": "getenv",
+        "file": "bot/utils/external_api.py",
+        "line": 92,
+        "default": "''",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "SCREENSHOT_API_COOKIES",
+        "source": "getenv",
+        "file": "utils/validate_config.py",
+        "line": 63,
+        "default": "''",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 2,
+    "defaults": [
+      "''"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "SCREENSHOT_PW_VIEWPORT": {
+    "uses": [
+      {
+        "key": "SCREENSHOT_PW_VIEWPORT",
+        "source": "getenv",
+        "file": "bot/utils/external_api.py",
+        "line": 179,
+        "default": "'1280x1024'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [
+      "'1280x1024'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "SCREENSHOT_PW_USER_AGENT": {
+    "uses": [
+      {
+        "key": "SCREENSHOT_PW_USER_AGENT",
+        "source": "getenv",
+        "file": "bot/utils/external_api.py",
+        "line": 180,
+        "default": "''",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [
+      "''"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "SCREENSHOT_PW_TIMEOUT_MS": {
+    "uses": [
+      {
+        "key": "SCREENSHOT_PW_TIMEOUT_MS",
+        "source": "getenv",
+        "file": "bot/utils/external_api.py",
+        "line": 181,
+        "default": "'15000'",
+        "coerced_as": "int",
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [
+      "'15000'"
+    ],
+    "coercions": [
+      "int"
+    ],
+    "sensitivity": "normal"
+  },
+  "IN_MEMORY_CONTEXT_ONLY": {
+    "uses": [
+      {
+        "key": "IN_MEMORY_CONTEXT_ONLY",
+        "source": "getenv",
+        "file": "bot/memory/context_manager.py",
+        "line": 27,
+        "default": "'false'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "IN_MEMORY_CONTEXT_ONLY",
+        "source": "getenv",
+        "file": "bot/memory/enhanced_context_manager.py",
+        "line": 79,
+        "default": "'false'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "IN_MEMORY_CONTEXT_ONLY",
+        "source": "getenv",
+        "file": "build/lib/bot/memory/context_manager.py",
+        "line": 27,
+        "default": "'false'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "IN_MEMORY_CONTEXT_ONLY",
+        "source": "getenv",
+        "file": "build/lib/bot/memory/enhanced_context_manager.py",
+        "line": 79,
+        "default": "'false'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 4,
+    "defaults": [
+      "'false'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "MEDIA_PROBE_CACHE_DIR": {
+    "uses": [
+      {
+        "key": "MEDIA_PROBE_CACHE_DIR",
+        "source": "getenv",
+        "file": "bot/config/media_config.py",
+        "line": 18,
+        "default": "'cache/media_probes'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "MEDIA_PROBE_CACHE_DIR",
+        "source": "getenv",
+        "file": "build/lib/bot/config/media_config.py",
+        "line": 18,
+        "default": "'cache/media_probes'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 2,
+    "defaults": [
+      "'cache/media_probes'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "MEDIA_MAX_TITLE_LENGTH": {
+    "uses": [
+      {
+        "key": "MEDIA_MAX_TITLE_LENGTH",
+        "source": "getenv",
+        "file": "bot/config/media_config.py",
+        "line": 45,
+        "default": "'200'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "MEDIA_MAX_TITLE_LENGTH",
+        "source": "getenv",
+        "file": "build/lib/bot/config/media_config.py",
+        "line": 44,
+        "default": "'200'",
+        "coerced_as": "int",
+        "notes": null
+      }
+    ],
+    "count": 2,
+    "defaults": [
+      "'200'"
+    ],
+    "coercions": [
+      "int"
+    ],
+    "sensitivity": "normal"
+  },
+  "MEDIA_MAX_UPLOADER_LENGTH": {
+    "uses": [
+      {
+        "key": "MEDIA_MAX_UPLOADER_LENGTH",
+        "source": "getenv",
+        "file": "bot/config/media_config.py",
+        "line": 46,
+        "default": "'100'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "MEDIA_MAX_UPLOADER_LENGTH",
+        "source": "getenv",
+        "file": "build/lib/bot/config/media_config.py",
+        "line": 45,
+        "default": "'100'",
+        "coerced_as": "int",
+        "notes": null
+      }
+    ],
+    "count": 2,
+    "defaults": [
+      "'100'"
+    ],
+    "coercions": [
+      "int"
+    ],
+    "sensitivity": "normal"
+  },
+  "MEDIA_MAX_URL_LENGTH": {
+    "uses": [
+      {
+        "key": "MEDIA_MAX_URL_LENGTH",
+        "source": "getenv",
+        "file": "bot/config/media_config.py",
+        "line": 47,
+        "default": "'500'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "MEDIA_MAX_URL_LENGTH",
+        "source": "getenv",
+        "file": "build/lib/bot/config/media_config.py",
+        "line": 46,
+        "default": "'500'",
+        "coerced_as": "int",
+        "notes": null
+      }
+    ],
+    "count": 2,
+    "defaults": [
+      "'500'"
+    ],
+    "coercions": [
+      "int"
+    ],
+    "sensitivity": "normal"
+  },
+  "ENABLE_MEDIA_INGESTION": {
+    "uses": [
+      {
+        "key": "ENABLE_MEDIA_INGESTION",
+        "source": "getenv",
+        "file": "bot/config/media_config.py",
+        "line": 50,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "ENABLE_MEDIA_INGESTION",
+        "source": "getenv",
+        "file": "build/lib/bot/config/media_config.py",
+        "line": 49,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 2,
+    "defaults": [
+      "'true'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "ENABLE_TWITTER_VIDEO_DETECTION": {
+    "uses": [
+      {
+        "key": "ENABLE_TWITTER_VIDEO_DETECTION",
+        "source": "getenv",
+        "file": "bot/config/media_config.py",
+        "line": 51,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "ENABLE_TWITTER_VIDEO_DETECTION",
+        "source": "getenv",
+        "file": "build/lib/bot/config/media_config.py",
+        "line": 50,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 2,
+    "defaults": [
+      "'true'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "RAG_VECTOR_CONFIDENCE_THRESHOLD": {
+    "uses": [
+      {
+        "key": "RAG_VECTOR_CONFIDENCE_THRESHOLD",
+        "source": "getenv",
+        "file": "bot/rag/config.py",
+        "line": 21,
+        "default": "'0.7'",
+        "coerced_as": "float",
+        "notes": null
+      },
+      {
+        "key": "RAG_VECTOR_CONFIDENCE_THRESHOLD",
+        "source": "getenv",
+        "file": "bot/rag/config.py",
+        "line": 91,
+        "default": "'0.7'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "RAG_VECTOR_CONFIDENCE_THRESHOLD",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/config.py",
+        "line": 21,
+        "default": "'0.7'",
+        "coerced_as": "float",
+        "notes": null
+      },
+      {
+        "key": "RAG_VECTOR_CONFIDENCE_THRESHOLD",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/config.py",
+        "line": 91,
+        "default": "'0.7'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 4,
+    "defaults": [
+      "'0.7'"
+    ],
+    "coercions": [
+      "float"
+    ],
+    "sensitivity": "normal"
+  },
+  "RAG_VECTOR_WEIGHT": {
+    "uses": [
+      {
+        "key": "RAG_VECTOR_WEIGHT",
+        "source": "getenv",
+        "file": "bot/rag/config.py",
+        "line": 23,
+        "default": "'0.7'",
+        "coerced_as": "float",
+        "notes": null
+      },
+      {
+        "key": "RAG_VECTOR_WEIGHT",
+        "source": "getenv",
+        "file": "bot/rag/config.py",
+        "line": 93,
+        "default": "'0.7'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "RAG_VECTOR_WEIGHT",
+        "source": "getenv",
+        "file": "bot/rag/config.py",
+        "line": 171,
+        "default": "'0.7'",
+        "coerced_as": "float",
+        "notes": null
+      },
+      {
+        "key": "RAG_VECTOR_WEIGHT",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/config.py",
+        "line": 23,
+        "default": "'0.7'",
+        "coerced_as": "float",
+        "notes": null
+      },
+      {
+        "key": "RAG_VECTOR_WEIGHT",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/config.py",
+        "line": 93,
+        "default": "'0.7'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "RAG_VECTOR_WEIGHT",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/config.py",
+        "line": 171,
+        "default": "'0.7'",
+        "coerced_as": "float",
+        "notes": null
+      }
+    ],
+    "count": 6,
+    "defaults": [
+      "'0.7'"
+    ],
+    "coercions": [
+      "float"
+    ],
+    "sensitivity": "normal"
+  },
+  "RAG_MAX_KEYWORD_RESULTS": {
+    "uses": [
+      {
+        "key": "RAG_MAX_KEYWORD_RESULTS",
+        "source": "getenv",
+        "file": "bot/rag/config.py",
+        "line": 26,
+        "default": "'3'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "RAG_MAX_KEYWORD_RESULTS",
+        "source": "getenv",
+        "file": "bot/rag/config.py",
+        "line": 94,
+        "default": "'3'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "RAG_MAX_KEYWORD_RESULTS",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/config.py",
+        "line": 26,
+        "default": "'3'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "RAG_MAX_KEYWORD_RESULTS",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/config.py",
+        "line": 94,
+        "default": "'3'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 4,
+    "defaults": [
+      "'3'"
+    ],
+    "coercions": [
+      "int"
+    ],
+    "sensitivity": "sensitive"
+  },
+  "RAG_KEYWORD_WEIGHT": {
+    "uses": [
+      {
+        "key": "RAG_KEYWORD_WEIGHT",
+        "source": "getenv",
+        "file": "bot/rag/config.py",
+        "line": 27,
+        "default": "'0.3'",
+        "coerced_as": "float",
+        "notes": null
+      },
+      {
+        "key": "RAG_KEYWORD_WEIGHT",
+        "source": "getenv",
+        "file": "bot/rag/config.py",
+        "line": 95,
+        "default": "'0.3'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "RAG_KEYWORD_WEIGHT",
+        "source": "getenv",
+        "file": "bot/rag/config.py",
+        "line": 172,
+        "default": "'0.3'",
+        "coerced_as": "float",
+        "notes": null
+      },
+      {
+        "key": "RAG_KEYWORD_WEIGHT",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/config.py",
+        "line": 27,
+        "default": "'0.3'",
+        "coerced_as": "float",
+        "notes": null
+      },
+      {
+        "key": "RAG_KEYWORD_WEIGHT",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/config.py",
+        "line": 95,
+        "default": "'0.3'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "RAG_KEYWORD_WEIGHT",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/config.py",
+        "line": 172,
+        "default": "'0.3'",
+        "coerced_as": "float",
+        "notes": null
+      }
+    ],
+    "count": 6,
+    "defaults": [
+      "'0.3'"
+    ],
+    "coercions": [
+      "float"
+    ],
+    "sensitivity": "sensitive"
+  },
+  "RAG_FALLBACK_ON_FAILURE": {
+    "uses": [
+      {
+        "key": "RAG_FALLBACK_ON_FAILURE",
+        "source": "getenv",
+        "file": "bot/rag/config.py",
+        "line": 30,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "RAG_FALLBACK_ON_FAILURE",
+        "source": "getenv",
+        "file": "bot/rag/config.py",
+        "line": 98,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "RAG_FALLBACK_ON_FAILURE",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/config.py",
+        "line": 30,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "RAG_FALLBACK_ON_FAILURE",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/config.py",
+        "line": 98,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 4,
+    "defaults": [
+      "'true'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "RAG_FALLBACK_ON_LOW_CONFIDENCE": {
+    "uses": [
+      {
+        "key": "RAG_FALLBACK_ON_LOW_CONFIDENCE",
+        "source": "getenv",
+        "file": "bot/rag/config.py",
+        "line": 31,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "RAG_FALLBACK_ON_LOW_CONFIDENCE",
+        "source": "getenv",
+        "file": "bot/rag/config.py",
+        "line": 99,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "RAG_FALLBACK_ON_LOW_CONFIDENCE",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/config.py",
+        "line": 31,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "RAG_FALLBACK_ON_LOW_CONFIDENCE",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/config.py",
+        "line": 99,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 4,
+    "defaults": [
+      "'true'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "RAG_MIN_RESULTS_THRESHOLD": {
+    "uses": [
+      {
+        "key": "RAG_MIN_RESULTS_THRESHOLD",
+        "source": "getenv",
+        "file": "bot/rag/config.py",
+        "line": 32,
+        "default": "'1'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "RAG_MIN_RESULTS_THRESHOLD",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/config.py",
+        "line": 32,
+        "default": "'1'",
+        "coerced_as": "int",
+        "notes": null
+      }
+    ],
+    "count": 2,
+    "defaults": [
+      "'1'"
+    ],
+    "coercions": [
+      "int"
+    ],
+    "sensitivity": "normal"
+  },
+  "RAG_COMBINE_RESULTS": {
+    "uses": [
+      {
+        "key": "RAG_COMBINE_RESULTS",
+        "source": "getenv",
+        "file": "bot/rag/config.py",
+        "line": 35,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "RAG_COMBINE_RESULTS",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/config.py",
+        "line": 35,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 2,
+    "defaults": [
+      "'true'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "RAG_MAX_COMBINED_RESULTS": {
+    "uses": [
+      {
+        "key": "RAG_MAX_COMBINED_RESULTS",
+        "source": "getenv",
+        "file": "bot/rag/config.py",
+        "line": 36,
+        "default": "'5'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "RAG_MAX_COMBINED_RESULTS",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/config.py",
+        "line": 36,
+        "default": "'5'",
+        "coerced_as": "int",
+        "notes": null
+      }
+    ],
+    "count": 2,
+    "defaults": [
+      "'5'"
+    ],
+    "coercions": [
+      "int"
+    ],
+    "sensitivity": "normal"
+  },
+  "RAG_DEDUPLICATION_THRESHOLD": {
+    "uses": [
+      {
+        "key": "RAG_DEDUPLICATION_THRESHOLD",
+        "source": "getenv",
+        "file": "bot/rag/config.py",
+        "line": 37,
+        "default": "'0.9'",
+        "coerced_as": "float",
+        "notes": null
+      },
+      {
+        "key": "RAG_DEDUPLICATION_THRESHOLD",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/config.py",
+        "line": 37,
+        "default": "'0.9'",
+        "coerced_as": "float",
+        "notes": null
+      }
+    ],
+    "count": 2,
+    "defaults": [
+      "'0.9'"
+    ],
+    "coercions": [
+      "float"
+    ],
+    "sensitivity": "normal"
+  },
+  "RAG_LOG_RETRIEVAL_PATHS": {
+    "uses": [
+      {
+        "key": "RAG_LOG_RETRIEVAL_PATHS",
+        "source": "getenv",
+        "file": "bot/rag/config.py",
+        "line": 40,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "RAG_LOG_RETRIEVAL_PATHS",
+        "source": "getenv",
+        "file": "bot/rag/config.py",
+        "line": 107,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "RAG_LOG_RETRIEVAL_PATHS",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/config.py",
+        "line": 40,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "RAG_LOG_RETRIEVAL_PATHS",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/config.py",
+        "line": 107,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 4,
+    "defaults": [
+      "'true'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "RAG_LOG_CONFIDENCE_SCORES": {
+    "uses": [
+      {
+        "key": "RAG_LOG_CONFIDENCE_SCORES",
+        "source": "getenv",
+        "file": "bot/rag/config.py",
+        "line": 41,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "RAG_LOG_CONFIDENCE_SCORES",
+        "source": "getenv",
+        "file": "bot/rag/config.py",
+        "line": 108,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "RAG_LOG_CONFIDENCE_SCORES",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/config.py",
+        "line": 41,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "RAG_LOG_CONFIDENCE_SCORES",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/config.py",
+        "line": 108,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 4,
+    "defaults": [
+      "'true'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "RAG_CHUNK_SIZE": {
+    "uses": [
+      {
+        "key": "RAG_CHUNK_SIZE",
+        "source": "getenv",
+        "file": "bot/rag/config.py",
+        "line": 44,
+        "default": "'512'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "RAG_CHUNK_SIZE",
+        "source": "getenv",
+        "file": "bot/rag/config.py",
+        "line": 102,
+        "default": "'512'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "RAG_CHUNK_SIZE",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/config.py",
+        "line": 44,
+        "default": "'512'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "RAG_CHUNK_SIZE",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/config.py",
+        "line": 102,
+        "default": "'512'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 4,
+    "defaults": [
+      "'512'"
+    ],
+    "coercions": [
+      "int"
+    ],
+    "sensitivity": "normal"
+  },
+  "RAG_CHUNK_OVERLAP": {
+    "uses": [
+      {
+        "key": "RAG_CHUNK_OVERLAP",
+        "source": "getenv",
+        "file": "bot/rag/config.py",
+        "line": 45,
+        "default": "'50'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "RAG_CHUNK_OVERLAP",
+        "source": "getenv",
+        "file": "bot/rag/config.py",
+        "line": 103,
+        "default": "'50'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "RAG_CHUNK_OVERLAP",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/config.py",
+        "line": 45,
+        "default": "'50'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "RAG_CHUNK_OVERLAP",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/config.py",
+        "line": 103,
+        "default": "'50'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 4,
+    "defaults": [
+      "'50'"
+    ],
+    "coercions": [
+      "int"
+    ],
+    "sensitivity": "normal"
+  },
+  "RAG_MIN_CHUNK_SIZE": {
+    "uses": [
+      {
+        "key": "RAG_MIN_CHUNK_SIZE",
+        "source": "getenv",
+        "file": "bot/rag/config.py",
+        "line": 46,
+        "default": "'100'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "RAG_MIN_CHUNK_SIZE",
+        "source": "getenv",
+        "file": "bot/rag/config.py",
+        "line": 104,
+        "default": "'100'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "RAG_MIN_CHUNK_SIZE",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/config.py",
+        "line": 46,
+        "default": "'100'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "RAG_MIN_CHUNK_SIZE",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/config.py",
+        "line": 104,
+        "default": "'100'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 4,
+    "defaults": [
+      "'100'"
+    ],
+    "coercions": [
+      "int"
+    ],
+    "sensitivity": "normal"
+  },
+  "RAG_ENFORCE_USER_SCOPING": {
+    "uses": [
+      {
+        "key": "RAG_ENFORCE_USER_SCOPING",
+        "source": "getenv",
+        "file": "bot/rag/config.py",
+        "line": 49,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "RAG_ENFORCE_USER_SCOPING",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/config.py",
+        "line": 49,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 2,
+    "defaults": [
+      "'true'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "RAG_ENFORCE_GUILD_SCOPING": {
+    "uses": [
+      {
+        "key": "RAG_ENFORCE_GUILD_SCOPING",
+        "source": "getenv",
+        "file": "bot/rag/config.py",
+        "line": 50,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "RAG_ENFORCE_GUILD_SCOPING",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/config.py",
+        "line": 50,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 2,
+    "defaults": [
+      "'true'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "RAG_BACKGROUND_INDEXING": {
+    "uses": [
+      {
+        "key": "RAG_BACKGROUND_INDEXING",
+        "source": "getenv",
+        "file": "bot/rag/config.py",
+        "line": 54,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "RAG_BACKGROUND_INDEXING",
+        "source": "getenv",
+        "file": "bot/rag/config.py",
+        "line": 112,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "RAG_BACKGROUND_INDEXING",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/config.py",
+        "line": 54,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "RAG_BACKGROUND_INDEXING",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/config.py",
+        "line": 112,
+        "default": "'true'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 4,
+    "defaults": [
+      "'true'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "RAG_INDEXING_QUEUE_SIZE": {
+    "uses": [
+      {
+        "key": "RAG_INDEXING_QUEUE_SIZE",
+        "source": "getenv",
+        "file": "bot/rag/config.py",
+        "line": 57,
+        "default": "'1000'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "RAG_INDEXING_QUEUE_SIZE",
+        "source": "getenv",
+        "file": "bot/rag/config.py",
+        "line": 115,
+        "default": "'1000'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "RAG_INDEXING_QUEUE_SIZE",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/config.py",
+        "line": 57,
+        "default": "'1000'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "RAG_INDEXING_QUEUE_SIZE",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/config.py",
+        "line": 115,
+        "default": "'1000'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 4,
+    "defaults": [
+      "'1000'"
+    ],
+    "coercions": [
+      "int"
+    ],
+    "sensitivity": "normal"
+  },
+  "RAG_INDEXING_WORKERS": {
+    "uses": [
+      {
+        "key": "RAG_INDEXING_WORKERS",
+        "source": "getenv",
+        "file": "bot/rag/config.py",
+        "line": 58,
+        "default": "'2'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "RAG_INDEXING_WORKERS",
+        "source": "getenv",
+        "file": "bot/rag/config.py",
+        "line": 116,
+        "default": "'2'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "RAG_INDEXING_WORKERS",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/config.py",
+        "line": 58,
+        "default": "'2'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "RAG_INDEXING_WORKERS",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/config.py",
+        "line": 116,
+        "default": "'2'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 4,
+    "defaults": [
+      "'2'"
+    ],
+    "coercions": [
+      "int"
+    ],
+    "sensitivity": "normal"
+  },
+  "RAG_INDEXING_BATCH_SIZE": {
+    "uses": [
+      {
+        "key": "RAG_INDEXING_BATCH_SIZE",
+        "source": "getenv",
+        "file": "bot/rag/config.py",
+        "line": 59,
+        "default": "'10'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "RAG_INDEXING_BATCH_SIZE",
+        "source": "getenv",
+        "file": "bot/rag/config.py",
+        "line": 117,
+        "default": "'10'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "RAG_INDEXING_BATCH_SIZE",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/config.py",
+        "line": 59,
+        "default": "'10'",
+        "coerced_as": "int",
+        "notes": null
+      },
+      {
+        "key": "RAG_INDEXING_BATCH_SIZE",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/config.py",
+        "line": 117,
+        "default": "'10'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 4,
+    "defaults": [
+      "'10'"
+    ],
+    "coercions": [
+      "int"
+    ],
+    "sensitivity": "normal"
+  },
+  "RAG_LAZY_LOAD_TIMEOUT": {
+    "uses": [
+      {
+        "key": "RAG_LAZY_LOAD_TIMEOUT",
+        "source": "getenv",
+        "file": "bot/rag/config.py",
+        "line": 60,
+        "default": "'30.0'",
+        "coerced_as": "float",
+        "notes": null
+      },
+      {
+        "key": "RAG_LAZY_LOAD_TIMEOUT",
+        "source": "getenv",
+        "file": "bot/rag/config.py",
+        "line": 118,
+        "default": "'30.0'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "RAG_LAZY_LOAD_TIMEOUT",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/config.py",
+        "line": 60,
+        "default": "'30.0'",
+        "coerced_as": "float",
+        "notes": null
+      },
+      {
+        "key": "RAG_LAZY_LOAD_TIMEOUT",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/config.py",
+        "line": 118,
+        "default": "'30.0'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 4,
+    "defaults": [
+      "'30.0'"
+    ],
+    "coercions": [
+      "float"
+    ],
+    "sensitivity": "normal"
+  },
+  "RAG_DB_PATH": {
+    "uses": [
+      {
+        "key": "RAG_DB_PATH",
+        "source": "getenv",
+        "file": "bot/rag/config.py",
+        "line": 83,
+        "default": "'./chroma_db'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "RAG_DB_PATH",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/config.py",
+        "line": 83,
+        "default": "'./chroma_db'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 2,
+    "defaults": [
+      "'./chroma_db'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "RAG_KB_PATH": {
+    "uses": [
+      {
+        "key": "RAG_KB_PATH",
+        "source": "getenv",
+        "file": "bot/rag/config.py",
+        "line": 84,
+        "default": "'kb'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "RAG_KB_PATH",
+        "source": "getenv",
+        "file": "bot/rag/config.py",
+        "line": 138,
+        "default": "'kb'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "RAG_KB_PATH",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/config.py",
+        "line": 84,
+        "default": "'kb'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "RAG_KB_PATH",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/config.py",
+        "line": 138,
+        "default": "'kb'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 4,
+    "defaults": [
+      "'kb'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "RAG_EMBEDDING_MODEL_TYPE": {
+    "uses": [
+      {
+        "key": "RAG_EMBEDDING_MODEL_TYPE",
+        "source": "getenv",
+        "file": "bot/rag/config.py",
+        "line": 87,
+        "default": "'sentence-transformers'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "RAG_EMBEDDING_MODEL_TYPE",
+        "source": "getenv",
+        "file": "bot/rag/config.py",
+        "line": 143,
+        "default": "'sentence-transformers'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "RAG_EMBEDDING_MODEL_TYPE",
+        "source": "getenv",
+        "file": "bot/rag/chroma_backend.py",
+        "line": 35,
+        "default": "'sentence-transformers'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "RAG_EMBEDDING_MODEL_TYPE",
+        "source": "getenv",
+        "file": "utils/debug_rag_pipeline.py",
+        "line": 245,
+        "default": "'sentence-transformers'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "RAG_EMBEDDING_MODEL_TYPE",
+        "source": "getenv",
+        "file": "utils/debug_rag_pipeline.py",
+        "line": 330,
+        "default": "'sentence-transformers'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "RAG_EMBEDDING_MODEL_TYPE",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/config.py",
+        "line": 87,
+        "default": "'sentence-transformers'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "RAG_EMBEDDING_MODEL_TYPE",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/config.py",
+        "line": 143,
+        "default": "'sentence-transformers'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "RAG_EMBEDDING_MODEL_TYPE",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/chroma_backend.py",
+        "line": 35,
+        "default": "'sentence-transformers'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 8,
+    "defaults": [
+      "'sentence-transformers'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "RAG_EMBEDDING_MODEL_NAME": {
+    "uses": [
+      {
+        "key": "RAG_EMBEDDING_MODEL_NAME",
+        "source": "getenv",
+        "file": "bot/rag/config.py",
+        "line": 88,
+        "default": "'sentence-transformers/all-MiniLM-L6-v2'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "RAG_EMBEDDING_MODEL_NAME",
+        "source": "getenv",
+        "file": "bot/rag/chroma_backend.py",
+        "line": 36,
+        "default": "'sentence-transformers/all-MiniLM-L6-v2'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "RAG_EMBEDDING_MODEL_NAME",
+        "source": "getenv",
+        "file": "utils/debug_rag_pipeline.py",
+        "line": 246,
+        "default": "'sentence-transformers/all-MiniLM-L6-v2'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "RAG_EMBEDDING_MODEL_NAME",
+        "source": "getenv",
+        "file": "utils/debug_rag_pipeline.py",
+        "line": 331,
+        "default": "'sentence-transformers/all-MiniLM-L6-v2'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "RAG_EMBEDDING_MODEL_NAME",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/config.py",
+        "line": 88,
+        "default": "'sentence-transformers/all-MiniLM-L6-v2'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "RAG_EMBEDDING_MODEL_NAME",
+        "source": "getenv",
+        "file": "build/lib/bot/rag/chroma_backend.py",
+        "line": 36,
+        "default": "'sentence-transformers/all-MiniLM-L6-v2'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 6,
+    "defaults": [
+      "'sentence-transformers/all-MiniLM-L6-v2'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "SENTENCE_TRANSFORMERS_HOME": {
+    "uses": [
+      {
+        "key": "SENTENCE_TRANSFORMERS_HOME",
+        "source": "environ_get",
+        "file": "bot/rag/embedding_interface.py",
+        "line": 167,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "HF_HOME": {
+    "uses": [
+      {
+        "key": "HF_HOME",
+        "source": "environ_get",
+        "file": "bot/rag/embedding_interface.py",
+        "line": 168,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "TRANSFORMERS_CACHE": {
+    "uses": [
+      {
+        "key": "TRANSFORMERS_CACHE",
+        "source": "environ_get",
+        "file": "bot/rag/embedding_interface.py",
+        "line": 169,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "TTS_MODEL_FILE": {
+    "uses": [
+      {
+        "key": "TTS_MODEL_FILE",
+        "source": "environ_get",
+        "file": "scripts/inspect_model.py",
+        "line": 13,
+        "default": "'tts/onnx/kokoro-v1.0.onnx'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_MODEL_FILE",
+        "source": "environ_get",
+        "file": "tests/debug_tts.py",
+        "line": 52,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_MODEL_FILE",
+        "source": "environ_get",
+        "file": "tests/test_tts_direct.py",
+        "line": 18,
+        "default": "'tts/onnx/kokoro-v1.0.onnx'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_MODEL_FILE",
+        "source": "getenv",
+        "file": "tests/test_tts_scripts.py",
+        "line": 37,
+        "default": "'tts/kokoro-v1.0.onnx'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_MODEL_FILE",
+        "source": "environ_get",
+        "file": "tests/test_tts_smoke.py",
+        "line": 33,
+        "default": "'tts/onnx/model.onnx'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_MODEL_FILE",
+        "source": "environ_index",
+        "file": "tests/test_tts_env_compat.py",
+        "line": 68,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_MODEL_FILE",
+        "source": "environ_index",
+        "file": "tests/test_tts_env_compat.py",
+        "line": 87,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 7,
+    "defaults": [
+      "'tts/kokoro-v1.0.onnx'",
+      "'tts/onnx/kokoro-v1.0.onnx'",
+      "'tts/onnx/model.onnx'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "TTS_VOICE_FILE": {
+    "uses": [
+      {
+        "key": "TTS_VOICE_FILE",
+        "source": "environ_get",
+        "file": "tests/debug_tts.py",
+        "line": 53,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_VOICE_FILE",
+        "source": "environ_get",
+        "file": "tests/test_tts_direct.py",
+        "line": 19,
+        "default": "'tts/voices/voices-v1.0.bin'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_VOICE_FILE",
+        "source": "getenv",
+        "file": "tests/test_tts_scripts.py",
+        "line": 36,
+        "default": "'tts/voices.json'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_VOICE_FILE",
+        "source": "environ_get",
+        "file": "tests/test_tts_smoke.py",
+        "line": 34,
+        "default": "'tts/voices/voices.npz'",
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_VOICE_FILE",
+        "source": "environ_index",
+        "file": "tests/test_tts_env_compat.py",
+        "line": 69,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      },
+      {
+        "key": "TTS_VOICE_FILE",
+        "source": "environ_index",
+        "file": "tests/test_tts_env_compat.py",
+        "line": 88,
+        "default": null,
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 6,
+    "defaults": [
+      "'tts/voices.json'",
+      "'tts/voices/voices-v1.0.bin'",
+      "'tts/voices/voices.npz'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "TTS_CACHE_DIR": {
+    "uses": [
+      {
+        "key": "TTS_CACHE_DIR",
+        "source": "getenv",
+        "file": "tests/test_tts_scripts.py",
+        "line": 38,
+        "default": "'tts_cache'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [
+      "'tts_cache'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "X_SYNDICATION_FIRST": {
+    "uses": [
+      {
+        "key": "X_SYNDICATION_FIRST",
+        "source": "getenv",
+        "file": "utils/check_syndication.py",
+        "line": 32,
+        "default": "'false'",
+        "coerced_as": null,
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [
+      "'false'"
+    ],
+    "coercions": [],
+    "sensitivity": "normal"
+  },
+  "X_SYNDICATION_TTL_S": {
+    "uses": [
+      {
+        "key": "X_SYNDICATION_TTL_S",
+        "source": "getenv",
+        "file": "utils/check_syndication.py",
+        "line": 33,
+        "default": "'900'",
+        "coerced_as": "float",
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [
+      "'900'"
+    ],
+    "coercions": [
+      "float"
+    ],
+    "sensitivity": "normal"
+  },
+  "X_SYNDICATION_TIMEOUT_MS": {
+    "uses": [
+      {
+        "key": "X_SYNDICATION_TIMEOUT_MS",
+        "source": "getenv",
+        "file": "utils/check_syndication.py",
+        "line": 34,
+        "default": "'4000'",
+        "coerced_as": "int",
+        "notes": null
+      }
+    ],
+    "count": 1,
+    "defaults": [
+      "'4000'"
+    ],
+    "coercions": [
+      "int"
+    ],
+    "sensitivity": "normal"
+  }
+}
