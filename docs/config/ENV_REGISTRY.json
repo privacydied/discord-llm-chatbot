@@ -1,0 +1,2843 @@
+{
+  "CORE": [
+    {
+      "key": "ALERT_ADMIN_USER_IDS",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "''",
+      "all_defaults": [
+        "''"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "ALERT_ENABLE",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'false'",
+      "all_defaults": [
+        "'false'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "ALERT_SESSION_TIMEOUT_S",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'1800'",
+      "all_defaults": [
+        "'1800'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "ANTHROPIC_API_KEY",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": true,
+      "type": "unknown",
+      "default": null,
+      "all_defaults": [],
+      "valid_values": null
+    },
+    {
+      "key": "BOT_PREFIX",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'!'",
+      "all_defaults": [
+        "'!'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "BOT_SPEAKS_ONLY_WHEN_SPOKEN_TO",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'True'",
+      "all_defaults": [
+        "'True'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "CHANGE_NICKNAME",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'False'",
+      "all_defaults": [
+        "'False'",
+        "'True'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "COMMAND_PREFIX",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'!'",
+      "all_defaults": [
+        "'!'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "CONTEXT_FILE_PATH",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'runtime/context.json'",
+      "all_defaults": [
+        "'runtime/context.json'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "CUSTOM_SEARCH_API_ENDPOINT",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "''",
+      "all_defaults": [
+        "''"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "CUSTOM_SEARCH_API_KEY",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": true,
+      "type": "unknown",
+      "default": "''",
+      "all_defaults": [
+        "''"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "CUSTOM_SEARCH_HEADERS",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "''",
+      "all_defaults": [
+        "''"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "CUSTOM_SEARCH_RESULT_PATHS",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "''",
+      "all_defaults": [
+        "''"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "CUSTOM_SEARCH_TIMEOUT_MS",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": null,
+      "all_defaults": [],
+      "valid_values": null
+    },
+    {
+      "key": "DDG_API_ENDPOINT",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'https://html.duckduckgo.com/html/'",
+      "all_defaults": [
+        "'https://html.duckduckgo.com/html/'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "DDG_API_KEY",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": true,
+      "type": "unknown",
+      "default": null,
+      "all_defaults": [],
+      "valid_values": null
+    },
+    {
+      "key": "DDG_FORCE_HTML",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'true'",
+      "all_defaults": [
+        "'true'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "DDG_TIMEOUT_MS",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "int",
+      "default": "'5000'",
+      "all_defaults": [
+        "'5000'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "DEBUG",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'False'",
+      "all_defaults": [
+        "'False'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "DEFAULT_TIMEOUT",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": null,
+      "all_defaults": [],
+      "valid_values": null
+    },
+    {
+      "key": "DISCORD_TOKEN",
+      "group": "CORE",
+      "description": "",
+      "required": true,
+      "sensitive": true,
+      "type": "unknown",
+      "default": null,
+      "all_defaults": [],
+      "valid_values": null
+    },
+    {
+      "key": "DM_LOGS_DIR",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'dm_logs'",
+      "all_defaults": [
+        "'dm_logs'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "ENABLE_MEDIA_INGESTION",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'true'",
+      "all_defaults": [
+        "'true'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "ENABLE_RAG",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'true'",
+      "all_defaults": [
+        "'true'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "ENABLE_TWITTER_VIDEO_DETECTION",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'true'",
+      "all_defaults": [
+        "'true'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "FREQUENCY_PENALTY",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": null,
+      "all_defaults": [],
+      "valid_values": null
+    },
+    {
+      "key": "HF_HOME",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": null,
+      "all_defaults": [],
+      "valid_values": null
+    },
+    {
+      "key": "HISTORY_WINDOW",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "int",
+      "default": "'10'",
+      "all_defaults": [
+        "'10'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "IN_MEMORY_CONTEXT_ONLY",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'false'",
+      "all_defaults": [
+        "'false'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "LOGS_DIR",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'logs'",
+      "all_defaults": [
+        "'logs'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "LOG_FILE",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'logs/bot.jsonl'",
+      "all_defaults": [
+        "'logs/bot.jsonl'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "LOG_JSONL_PATH",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'./logs/bot.jsonl'",
+      "all_defaults": [
+        "'./logs/bot.jsonl'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "LOG_LEVEL",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'INFO'",
+      "all_defaults": [
+        "'INFO'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "MAX_ATTACHMENT_SIZE_MB",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": null,
+      "all_defaults": [],
+      "valid_values": null
+    },
+    {
+      "key": "MAX_AUDIO_SIZE",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "int",
+      "default": "'50'",
+      "all_defaults": [
+        "'50'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "MAX_CONTEXT_LENGTH",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": null,
+      "all_defaults": [],
+      "valid_values": null
+    },
+    {
+      "key": "MAX_CONTEXT_MESSAGES",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "int",
+      "default": "max_messages",
+      "all_defaults": [
+        "max_messages"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "MAX_CONVERSATION_LENGTH",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "int",
+      "default": "'30'",
+      "all_defaults": [
+        "'30'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "MAX_CONVERSATION_LOG_SIZE",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": null,
+      "all_defaults": [],
+      "valid_values": null
+    },
+    {
+      "key": "MAX_FILE_SIZE",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "int",
+      "default": "'20'",
+      "all_defaults": [
+        "'20'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "MAX_MEMORIES",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": null,
+      "all_defaults": [],
+      "valid_values": null
+    },
+    {
+      "key": "MAX_RESPONSE_TOKENS",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": true,
+      "type": "unknown",
+      "default": null,
+      "all_defaults": [],
+      "valid_values": null
+    },
+    {
+      "key": "MAX_SERVER_MEMORY",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "int",
+      "default": "100",
+      "all_defaults": [
+        "100"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "MAX_TEXT_ATTACHMENT_SIZE",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "int",
+      "default": "'20000'",
+      "all_defaults": [
+        "'20000'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "MAX_USER_MEMORY",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "int",
+      "default": "'10'",
+      "all_defaults": [
+        "'10'",
+        "100"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "MEMORY_SAVE_INTERVAL",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "int",
+      "default": "'30'",
+      "all_defaults": [
+        "'30'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "MULTIMODAL_PER_ITEM_BUDGET",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "float",
+      "default": "'30.0'",
+      "all_defaults": [
+        "'30.0'",
+        "'45.0'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "OBS_ENABLE_PROMETHEUS",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'false'",
+      "all_defaults": [
+        "'false'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "OBS_ENABLE_RESOURCE_METRICS",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'true'",
+      "all_defaults": [
+        "'true'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "OBS_PARALLEL_STARTUP",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'false'",
+      "all_defaults": [
+        "'false'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "OLLAMA_BASE_URL",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'http://localhost:11434'",
+      "all_defaults": [
+        "'http://localhost:11434'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "OLLAMA_HOST",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": null,
+      "all_defaults": [],
+      "valid_values": null
+    },
+    {
+      "key": "OLLAMA_MODEL",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'llama3'",
+      "all_defaults": [
+        "'llama3'",
+        "'unknown'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "OPENAI_API_BASE",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'https://api.openai.com/v1'",
+      "all_defaults": [
+        "'https://api.openai.com/v1'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "OPENAI_API_KEY",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": true,
+      "type": "unknown",
+      "default": null,
+      "all_defaults": [],
+      "valid_values": null
+    },
+    {
+      "key": "OPENAI_MODEL",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'gpt-4'",
+      "all_defaults": [
+        "'gpt-4'",
+        "os.environ.get('OLLAMA_MODEL', 'unknown')"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "OPENAI_TEXT_MODEL",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'gpt-4o'",
+      "all_defaults": [
+        "'gpt-4o'",
+        "os.environ.get('OPENAI_MODEL', os.environ.get('OLLAMA_MODEL', 'unknown'))"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "OWNER_IDS",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "''",
+      "all_defaults": [
+        "''"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "PATH",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "''",
+      "all_defaults": [
+        "''"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "PRESENCE_PENALTY",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": null,
+      "all_defaults": [],
+      "valid_values": null
+    },
+    {
+      "key": "PROMPT_FILE",
+      "group": "CORE",
+      "description": "",
+      "required": true,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'prompt.txt'",
+      "all_defaults": [
+        "'prompt.txt'",
+        "'prompts/prompt-yoroi-super-chill.txt'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "REPLY_TRIGGERS",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'dm,mention,reply,bot_threads,owner,command_prefix'",
+      "all_defaults": [
+        "'dm,mention,reply,bot_threads,owner,command_prefix'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "RESOURCE_CHECK_INTERVAL",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "float",
+      "default": "DEFAULT_RESOURCE_CHECK_INTERVAL",
+      "all_defaults": [
+        "DEFAULT_RESOURCE_CHECK_INTERVAL"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "RESOURCE_CPU_CRITICAL_PERCENT",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "float",
+      "default": "DEFAULT_CPU_CRITICAL_PERCENT",
+      "all_defaults": [
+        "DEFAULT_CPU_CRITICAL_PERCENT"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "RESOURCE_CPU_WARNING_PERCENT",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "float",
+      "default": "DEFAULT_CPU_WARNING_PERCENT",
+      "all_defaults": [
+        "DEFAULT_CPU_WARNING_PERCENT"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "RESOURCE_EVENT_LOOP_LAG_CRITICAL_MS",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "float",
+      "default": "DEFAULT_EVENT_LOOP_LAG_CRITICAL_MS",
+      "all_defaults": [
+        "DEFAULT_EVENT_LOOP_LAG_CRITICAL_MS"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "RESOURCE_EVENT_LOOP_LAG_WARNING_MS",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "float",
+      "default": "DEFAULT_EVENT_LOOP_LAG_WARNING_MS",
+      "all_defaults": [
+        "DEFAULT_EVENT_LOOP_LAG_WARNING_MS"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "RESOURCE_RSS_CRITICAL_MB",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "float",
+      "default": "DEFAULT_RSS_CRITICAL_MB",
+      "all_defaults": [
+        "DEFAULT_RSS_CRITICAL_MB"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "RESOURCE_RSS_WARNING_MB",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "float",
+      "default": "DEFAULT_RSS_WARNING_MB",
+      "all_defaults": [
+        "DEFAULT_RSS_WARNING_MB"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "SENTENCE_TRANSFORMERS_HOME",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": null,
+      "all_defaults": [],
+      "valid_values": null
+    },
+    {
+      "key": "SERVER_PROFILE_DIR",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'server_profiles'",
+      "all_defaults": [
+        "'server_profiles'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "TEMPERATURE",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "float",
+      "default": "'0.7'",
+      "all_defaults": [
+        "'0.7'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "TEMP_DIR",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'temp'",
+      "all_defaults": [
+        "'temp'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "TEXT_BACKEND",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "''",
+      "all_defaults": [
+        "''",
+        "'ollama'",
+        "'openai'",
+        "'unknown'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "TEXT_FALLBACK_MODELS",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": null,
+      "all_defaults": [],
+      "valid_values": null
+    },
+    {
+      "key": "TEXT_FALLBACK_TIMEOUTS",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": null,
+      "all_defaults": [],
+      "valid_values": null
+    },
+    {
+      "key": "TEXT_MODEL",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'qwen3-235b-a22b'",
+      "all_defaults": [
+        "'qwen3-235b-a22b'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "TIMEOUT",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "float",
+      "default": "'120.0'",
+      "all_defaults": [
+        "'120.0'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "TOP_P",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": null,
+      "all_defaults": [],
+      "valid_values": null
+    },
+    {
+      "key": "TRANSFORMERS_CACHE",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": null,
+      "all_defaults": [],
+      "valid_values": null
+    },
+    {
+      "key": "TWITTER_ROUTE_DEFAULT",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'api_first'",
+      "all_defaults": [
+        "'api_first'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "USER_LOGS_DIR",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'user_logs'",
+      "all_defaults": [
+        "'user_logs'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "USER_PROFILE_DIR",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'user_profiles'",
+      "all_defaults": [
+        "'user_profiles'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "USE_ENHANCED_CONTEXT",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'true'",
+      "all_defaults": [
+        "'true'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "VISION_FALLBACK_MODELS",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": null,
+      "all_defaults": [],
+      "valid_values": null
+    },
+    {
+      "key": "VISION_FALLBACK_TIMEOUTS",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": null,
+      "all_defaults": [],
+      "valid_values": null
+    },
+    {
+      "key": "VL_MODEL",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'gpt-4-vision-preview'",
+      "all_defaults": [
+        "'gpt-4-vision-preview'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "VL_PROMPT_FILE",
+      "group": "CORE",
+      "description": "",
+      "required": true,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'prompts/vl-prompt.txt'",
+      "all_defaults": [
+        "'prompts/vl-prompt.txt'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "WHISPER_API_BASE",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": null,
+      "all_defaults": [],
+      "valid_values": null
+    },
+    {
+      "key": "WHISPER_API_KEY",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": true,
+      "type": "unknown",
+      "default": null,
+      "all_defaults": [],
+      "valid_values": null
+    },
+    {
+      "key": "WHISPER_CPP_MODEL",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'ggml-medium.bin'",
+      "all_defaults": [
+        "'ggml-medium.bin'",
+        "'models/ggml-medium.bin'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "WHISPER_MODEL",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'whisper-1'",
+      "all_defaults": [
+        "'whisper-1'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "WHISPER_MODEL_SIZE",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'base-int8'",
+      "all_defaults": [
+        "'base-int8'",
+        "'medium-int8'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "XDG_CACHE_HOME",
+      "group": "CORE",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "Path('tts/cache')",
+      "all_defaults": [
+        "Path('tts/cache')"
+      ],
+      "valid_values": null
+    }
+  ],
+  "STT": [
+    {
+      "key": "STT_ACTIVE_PROVIDERS",
+      "group": "STT",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'local_whisper'",
+      "all_defaults": [
+        "'local_whisper'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "STT_CACHE_TTL",
+      "group": "STT",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": null,
+      "all_defaults": [],
+      "valid_values": null
+    },
+    {
+      "key": "STT_CONFIDENCE_MIN",
+      "group": "STT",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": null,
+      "all_defaults": [],
+      "valid_values": null
+    },
+    {
+      "key": "STT_ENABLE",
+      "group": "STT",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'true'",
+      "all_defaults": [
+        "'true'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "STT_ENGINE",
+      "group": "STT",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'faster-whisper'",
+      "all_defaults": [
+        "'faster-whisper'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "STT_FALLBACK",
+      "group": "STT",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'whispercpp'",
+      "all_defaults": [
+        "'whispercpp'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "STT_LOCAL_CONCURRENCY",
+      "group": "STT",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": null,
+      "all_defaults": [],
+      "valid_values": null
+    },
+    {
+      "key": "STT_MODE",
+      "group": "STT",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'single'",
+      "all_defaults": [
+        "'single'"
+      ],
+      "valid_values": null
+    }
+  ],
+  "TTS": [
+    {
+      "key": "TTS_BACKEND",
+      "group": "TTS",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'kokoro-onnx'",
+      "all_defaults": [
+        "'kokoro-onnx'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "TTS_CACHE_DIR",
+      "group": "TTS",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'tts_cache'",
+      "all_defaults": [
+        "'tts_cache'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "TTS_ENABLED",
+      "group": "TTS",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'false'",
+      "all_defaults": [
+        "'false'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "TTS_ENGINE",
+      "group": "TTS",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'stub'",
+      "all_defaults": [
+        "'stub'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "TTS_LANGUAGE",
+      "group": "TTS",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'en'",
+      "all_defaults": [
+        "'en'",
+        "'unknown'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "TTS_MODEL_FILE",
+      "group": "TTS",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'tts/kokoro-v1.0.onnx'",
+      "all_defaults": [
+        "'tts/kokoro-v1.0.onnx'",
+        "'tts/onnx/kokoro-v1.0.onnx'",
+        "'tts/onnx/model.onnx'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "TTS_MODEL_PATH",
+      "group": "TTS",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'tts/onnx/kokoro-v1.0.onnx'",
+      "all_defaults": [
+        "'tts/onnx/kokoro-v1.0.onnx'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "TTS_PHONEMISER",
+      "group": "TTS",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "''",
+      "all_defaults": [
+        "''"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "TTS_PREFS_FILE",
+      "group": "TTS",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": null,
+      "all_defaults": [],
+      "valid_values": null
+    },
+    {
+      "key": "TTS_TOKENISER",
+      "group": "TTS",
+      "description": "",
+      "required": false,
+      "sensitive": true,
+      "type": "unknown",
+      "default": "''",
+      "all_defaults": [
+        "''",
+        "'default'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "TTS_VOICE",
+      "group": "TTS",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'af'",
+      "all_defaults": [
+        "'af'",
+        "'am_michael'",
+        "'unknown'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "TTS_VOICES_PATH",
+      "group": "TTS",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'tts/onnx/voices/voices-v1.0.bin'",
+      "all_defaults": [
+        "'tts/onnx/voices/voices-v1.0.bin'",
+        "'tts/voices/voices-v1.0.bin'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "TTS_VOICE_FILE",
+      "group": "TTS",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'tts/voices.json'",
+      "all_defaults": [
+        "'tts/voices.json'",
+        "'tts/voices/voices-v1.0.bin'",
+        "'tts/voices/voices.npz'"
+      ],
+      "valid_values": null
+    }
+  ],
+  "SEARCH": [
+    {
+      "key": "SEARCH_BREAKER_FAILURE_WINDOW",
+      "group": "SEARCH",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": null,
+      "all_defaults": [],
+      "valid_values": null
+    },
+    {
+      "key": "SEARCH_BREAKER_HALFOPEN_PROB",
+      "group": "SEARCH",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": null,
+      "all_defaults": [],
+      "valid_values": null
+    },
+    {
+      "key": "SEARCH_BREAKER_OPEN_MS",
+      "group": "SEARCH",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": null,
+      "all_defaults": [],
+      "valid_values": null
+    },
+    {
+      "key": "SEARCH_INLINE_MAX_CONCURRENCY",
+      "group": "SEARCH",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "int",
+      "default": "''",
+      "all_defaults": [
+        "''",
+        "'3'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "SEARCH_LOCALE",
+      "group": "SEARCH",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "''",
+      "all_defaults": [
+        "''"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "SEARCH_MAX_RESULTS",
+      "group": "SEARCH",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": null,
+      "all_defaults": [],
+      "valid_values": null
+    },
+    {
+      "key": "SEARCH_POOL_MAX_CONNECTIONS",
+      "group": "SEARCH",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": null,
+      "all_defaults": [],
+      "valid_values": null
+    },
+    {
+      "key": "SEARCH_PROVIDER",
+      "group": "SEARCH",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'ddg'",
+      "all_defaults": [
+        "'ddg'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "SEARCH_SAFE",
+      "group": "SEARCH",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'moderate'",
+      "all_defaults": [
+        "'moderate'",
+        "SafeSearch.MODERATE.value"
+      ],
+      "valid_values": null
+    }
+  ],
+  "X_API": [
+    {
+      "key": "X_API_ALLOW_FALLBACK_ON_5XX",
+      "group": "X_API",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'true'",
+      "all_defaults": [
+        "'true'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "X_API_AUTH_MODE",
+      "group": "X_API",
+      "description": "",
+      "required": false,
+      "sensitive": true,
+      "type": "unknown",
+      "default": "'oauth2_app'",
+      "all_defaults": [
+        "'oauth2_app'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "X_API_BEARER_TOKEN",
+      "group": "X_API",
+      "description": "",
+      "required": false,
+      "sensitive": true,
+      "type": "unknown",
+      "default": null,
+      "all_defaults": [],
+      "valid_values": null
+    },
+    {
+      "key": "X_API_BREAKER_FAILURE_WINDOW",
+      "group": "X_API",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": null,
+      "all_defaults": [],
+      "valid_values": null
+    },
+    {
+      "key": "X_API_BREAKER_HALFOPEN_PROB",
+      "group": "X_API",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": null,
+      "all_defaults": [],
+      "valid_values": null
+    },
+    {
+      "key": "X_API_BREAKER_OPEN_MS",
+      "group": "X_API",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": null,
+      "all_defaults": [],
+      "valid_values": null
+    },
+    {
+      "key": "X_API_ENABLED",
+      "group": "X_API",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'false'",
+      "all_defaults": [
+        "'false'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "X_API_REQUIRE_API_FOR_TWITTER",
+      "group": "X_API",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'false'",
+      "all_defaults": [
+        "'false'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "X_API_RETRY_MAX_ATTEMPTS",
+      "group": "X_API",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": null,
+      "all_defaults": [],
+      "valid_values": null
+    },
+    {
+      "key": "X_API_ROUTE_PHOTOS_TO_VL",
+      "group": "X_API",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'true'",
+      "all_defaults": [
+        "'true'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "X_API_TIMEOUT_MS",
+      "group": "X_API",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": null,
+      "all_defaults": [],
+      "valid_values": null
+    }
+  ],
+  "X": [
+    {
+      "key": "X_EXPANSIONS",
+      "group": "X",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'author_id,attachments.media_keys,referenced_tweets.id,referenced_tweets.id.author_id'",
+      "all_defaults": [
+        "'author_id,attachments.media_keys,referenced_tweets.id,referenced_tweets.id.author_id'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "X_MEDIA_FIELDS",
+      "group": "X",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'media_key,type,url,preview_image_url,variants,width,height,alt_text,public_metrics'",
+      "all_defaults": [
+        "'media_key,type,url,preview_image_url,variants,width,height,alt_text,public_metrics'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "X_PLACE_FIELDS",
+      "group": "X",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'full_name,id,country_code,geo,name,place_type'",
+      "all_defaults": [
+        "'full_name,id,country_code,geo,name,place_type'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "X_POLL_FIELDS",
+      "group": "X",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'id,options,duration_minutes,end_datetime,voting_status'",
+      "all_defaults": [
+        "'id,options,duration_minutes,end_datetime,voting_status'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "X_SYNDICATION_ENABLED",
+      "group": "X",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'true'",
+      "all_defaults": [
+        "'true'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "X_SYNDICATION_FIRST",
+      "group": "X",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'false'",
+      "all_defaults": [
+        "'false'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "X_SYNDICATION_TIMEOUT_MS",
+      "group": "X",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "int",
+      "default": "'4000'",
+      "all_defaults": [
+        "'4000'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "X_SYNDICATION_TTL_S",
+      "group": "X",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "float",
+      "default": "'900'",
+      "all_defaults": [
+        "'900'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "X_TWEET_FIELDS",
+      "group": "X",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'id,text,created_at,author_id,public_metrics,possibly_sensitive,lang,attachments,entities,referenced_tweets,conversation_id'",
+      "all_defaults": [
+        "'id,text,created_at,author_id,public_metrics,possibly_sensitive,lang,attachments,entities,referenced_tweets,conversation_id'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "X_TWITTER_STT_PROBE_FIRST",
+      "group": "X",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'true'",
+      "all_defaults": [
+        "'true'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "X_USER_FIELDS",
+      "group": "X",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'id,name,username,profile_image_url,verified,protected'",
+      "all_defaults": [
+        "'id,name,username,profile_image_url,verified,protected'"
+      ],
+      "valid_values": null
+    }
+  ],
+  "STREAMING": [
+    {
+      "key": "STREAMING_EMBED_STYLE",
+      "group": "STREAMING",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'compact'",
+      "all_defaults": [
+        "'compact'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "STREAMING_ENABLE",
+      "group": "STREAMING",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'true'",
+      "all_defaults": [
+        "'true'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "STREAMING_ENABLE_MEDIA",
+      "group": "STREAMING",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'true'",
+      "all_defaults": [
+        "'true'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "STREAMING_ENABLE_RAG",
+      "group": "STREAMING",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'false'",
+      "all_defaults": [
+        "'false'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "STREAMING_ENABLE_SEARCH",
+      "group": "STREAMING",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'false'",
+      "all_defaults": [
+        "'false'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "STREAMING_ENABLE_TEXT",
+      "group": "STREAMING",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'false'",
+      "all_defaults": [
+        "'false'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "STREAMING_MAX_STEPS",
+      "group": "STREAMING",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": null,
+      "all_defaults": [],
+      "valid_values": null
+    },
+    {
+      "key": "STREAMING_TICK_MS",
+      "group": "STREAMING",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": null,
+      "all_defaults": [],
+      "valid_values": null
+    }
+  ],
+  "MEDIA": [
+    {
+      "key": "MEDIA_DOWNLOAD_TIMEOUT",
+      "group": "MEDIA",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "int",
+      "default": "'60'",
+      "all_defaults": [
+        "'60'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "MEDIA_FALLBACK_MODELS",
+      "group": "MEDIA",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": null,
+      "all_defaults": [],
+      "valid_values": null
+    },
+    {
+      "key": "MEDIA_FALLBACK_TIMEOUTS",
+      "group": "MEDIA",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": null,
+      "all_defaults": [],
+      "valid_values": null
+    },
+    {
+      "key": "MEDIA_MAX_CONCURRENT",
+      "group": "MEDIA",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "int",
+      "default": "'2'",
+      "all_defaults": [
+        "'2'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "MEDIA_MAX_TITLE_LENGTH",
+      "group": "MEDIA",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "int",
+      "default": "'200'",
+      "all_defaults": [
+        "'200'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "MEDIA_MAX_UPLOADER_LENGTH",
+      "group": "MEDIA",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "int",
+      "default": "'100'",
+      "all_defaults": [
+        "'100'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "MEDIA_MAX_URL_LENGTH",
+      "group": "MEDIA",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "int",
+      "default": "'500'",
+      "all_defaults": [
+        "'500'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "MEDIA_PER_ITEM_BUDGET",
+      "group": "MEDIA",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "float",
+      "default": "'120.0'",
+      "all_defaults": [
+        "'120.0'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "MEDIA_PROBE_CACHE_DIR",
+      "group": "MEDIA",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'cache/media_probes'",
+      "all_defaults": [
+        "'cache/media_probes'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "MEDIA_PROBE_CACHE_TTL",
+      "group": "MEDIA",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "int",
+      "default": "'300'",
+      "all_defaults": [
+        "'300'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "MEDIA_PROBE_TIMEOUT",
+      "group": "MEDIA",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "int",
+      "default": "'10'",
+      "all_defaults": [
+        "'10'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "MEDIA_PROVIDER_TIMEOUT",
+      "group": "MEDIA",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": null,
+      "all_defaults": [],
+      "valid_values": null
+    },
+    {
+      "key": "MEDIA_RETRY_BASE_DELAY",
+      "group": "MEDIA",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "float",
+      "default": "'2.0'",
+      "all_defaults": [
+        "'2.0'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "MEDIA_RETRY_MAX_ATTEMPTS",
+      "group": "MEDIA",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "int",
+      "default": "'3'",
+      "all_defaults": [
+        "'3'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "MEDIA_SPEEDUP_FACTOR",
+      "group": "MEDIA",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "float",
+      "default": "'1.5'",
+      "all_defaults": [
+        "'1.5'"
+      ],
+      "valid_values": null
+    }
+  ],
+  "VIDEO": [
+    {
+      "key": "VIDEO_CACHE_DIR",
+      "group": "VIDEO",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'cache/video_audio'",
+      "all_defaults": [
+        "'cache/video_audio'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "VIDEO_CACHE_EXPIRY_DAYS",
+      "group": "VIDEO",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "int",
+      "default": "'7'",
+      "all_defaults": [
+        "'7'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "VIDEO_MAX_CONCURRENT",
+      "group": "VIDEO",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "int",
+      "default": "'3'",
+      "all_defaults": [
+        "'3'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "VIDEO_MAX_DURATION",
+      "group": "VIDEO",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "int",
+      "default": "'600'",
+      "all_defaults": [
+        "'600'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "VIDEO_SPEEDUP",
+      "group": "VIDEO",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "float",
+      "default": "'1.5'",
+      "all_defaults": [
+        "'1.5'"
+      ],
+      "valid_values": null
+    }
+  ],
+  "RAG": [
+    {
+      "key": "RAG_BACKGROUND_INDEXING",
+      "group": "RAG",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'true'",
+      "all_defaults": [
+        "'true'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "RAG_CHUNK_OVERLAP",
+      "group": "RAG",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "int",
+      "default": "'50'",
+      "all_defaults": [
+        "'50'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "RAG_CHUNK_SIZE",
+      "group": "RAG",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "int",
+      "default": "'512'",
+      "all_defaults": [
+        "'512'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "RAG_COMBINE_RESULTS",
+      "group": "RAG",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'true'",
+      "all_defaults": [
+        "'true'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "RAG_DB_PATH",
+      "group": "RAG",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'./chroma_db'",
+      "all_defaults": [
+        "'./chroma_db'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "RAG_DEDUPLICATION_THRESHOLD",
+      "group": "RAG",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "float",
+      "default": "'0.9'",
+      "all_defaults": [
+        "'0.9'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "RAG_EAGER_VECTOR_LOAD",
+      "group": "RAG",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'false'",
+      "all_defaults": [
+        "'false'",
+        "'true'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "RAG_EMBEDDING_MODEL_NAME",
+      "group": "RAG",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'sentence-transformers/all-MiniLM-L6-v2'",
+      "all_defaults": [
+        "'sentence-transformers/all-MiniLM-L6-v2'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "RAG_EMBEDDING_MODEL_TYPE",
+      "group": "RAG",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'sentence-transformers'",
+      "all_defaults": [
+        "'sentence-transformers'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "RAG_ENFORCE_GUILD_SCOPING",
+      "group": "RAG",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'true'",
+      "all_defaults": [
+        "'true'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "RAG_ENFORCE_USER_SCOPING",
+      "group": "RAG",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'true'",
+      "all_defaults": [
+        "'true'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "RAG_FALLBACK_ON_FAILURE",
+      "group": "RAG",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'true'",
+      "all_defaults": [
+        "'true'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "RAG_FALLBACK_ON_LOW_CONFIDENCE",
+      "group": "RAG",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'true'",
+      "all_defaults": [
+        "'true'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "RAG_INDEXING_BATCH_SIZE",
+      "group": "RAG",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "int",
+      "default": "'10'",
+      "all_defaults": [
+        "'10'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "RAG_INDEXING_QUEUE_SIZE",
+      "group": "RAG",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "int",
+      "default": "'1000'",
+      "all_defaults": [
+        "'1000'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "RAG_INDEXING_WORKERS",
+      "group": "RAG",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "int",
+      "default": "'2'",
+      "all_defaults": [
+        "'2'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "RAG_KB_PATH",
+      "group": "RAG",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'kb'",
+      "all_defaults": [
+        "'kb'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "RAG_KEYWORD_WEIGHT",
+      "group": "RAG",
+      "description": "",
+      "required": false,
+      "sensitive": true,
+      "type": "float",
+      "default": "'0.3'",
+      "all_defaults": [
+        "'0.3'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "RAG_LAZY_LOAD_TIMEOUT",
+      "group": "RAG",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "float",
+      "default": "'30.0'",
+      "all_defaults": [
+        "'30.0'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "RAG_LOG_CONFIDENCE_SCORES",
+      "group": "RAG",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'true'",
+      "all_defaults": [
+        "'true'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "RAG_LOG_RETRIEVAL_PATHS",
+      "group": "RAG",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'true'",
+      "all_defaults": [
+        "'true'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "RAG_MAX_COMBINED_RESULTS",
+      "group": "RAG",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "int",
+      "default": "'5'",
+      "all_defaults": [
+        "'5'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "RAG_MAX_KEYWORD_RESULTS",
+      "group": "RAG",
+      "description": "",
+      "required": false,
+      "sensitive": true,
+      "type": "int",
+      "default": "'3'",
+      "all_defaults": [
+        "'3'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "RAG_MAX_VECTOR_RESULTS",
+      "group": "RAG",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "int",
+      "default": "'5'",
+      "all_defaults": [
+        "'5'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "RAG_MIN_CHUNK_SIZE",
+      "group": "RAG",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "int",
+      "default": "'100'",
+      "all_defaults": [
+        "'100'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "RAG_MIN_RESULTS_THRESHOLD",
+      "group": "RAG",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "int",
+      "default": "'1'",
+      "all_defaults": [
+        "'1'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "RAG_VECTOR_CONFIDENCE_THRESHOLD",
+      "group": "RAG",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "float",
+      "default": "'0.7'",
+      "all_defaults": [
+        "'0.7'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "RAG_VECTOR_WEIGHT",
+      "group": "RAG",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "float",
+      "default": "'0.7'",
+      "all_defaults": [
+        "'0.7'"
+      ],
+      "valid_values": null
+    }
+  ],
+  "WEBEX": [
+    {
+      "key": "WEBEX_ACCEPT_LANGUAGE",
+      "group": "WEBEX",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'en-US,en;q=0.9'",
+      "all_defaults": [
+        "'en-US,en;q=0.9'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "WEBEX_ENABLE_TIER_B",
+      "group": "WEBEX",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'1'",
+      "all_defaults": [
+        "'1'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "WEBEX_TIER_A_TIMEOUT_S",
+      "group": "WEBEX",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "float",
+      "default": "'6.0'",
+      "all_defaults": [
+        "'6.0'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "WEBEX_TIER_B_TIMEOUT_S",
+      "group": "WEBEX",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "float",
+      "default": "'12.0'",
+      "all_defaults": [
+        "'12.0'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "WEBEX_UA_DESKTOP",
+      "group": "WEBEX",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36'",
+      "all_defaults": [
+        "'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36'"
+      ],
+      "valid_values": null
+    }
+  ],
+  "PROMETHEUS": [
+    {
+      "key": "PROMETHEUS_ENABLED",
+      "group": "PROMETHEUS",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'true'",
+      "all_defaults": [
+        "'true'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "PROMETHEUS_HTTP_SERVER",
+      "group": "PROMETHEUS",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'true'",
+      "all_defaults": [
+        "'true'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "PROMETHEUS_PORT",
+      "group": "PROMETHEUS",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "int",
+      "default": "'8000'",
+      "all_defaults": [
+        "'8000'",
+        "'8001'"
+      ],
+      "valid_values": null
+    }
+  ],
+  "SCREENSHOT": [
+    {
+      "key": "SCREENSHOT_API_COOKIES",
+      "group": "SCREENSHOT",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "''",
+      "all_defaults": [
+        "''"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "SCREENSHOT_API_DELAY",
+      "group": "SCREENSHOT",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "''",
+      "all_defaults": [
+        "''",
+        "'2000'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "SCREENSHOT_API_DEVICE",
+      "group": "SCREENSHOT",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "''",
+      "all_defaults": [
+        "''",
+        "'desktop'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "SCREENSHOT_API_DIMENSION",
+      "group": "SCREENSHOT",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "''",
+      "all_defaults": [
+        "''",
+        "'1024x768'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "SCREENSHOT_API_FORMAT",
+      "group": "SCREENSHOT",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "''",
+      "all_defaults": [
+        "''",
+        "'png'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "SCREENSHOT_API_KEY",
+      "group": "SCREENSHOT",
+      "description": "",
+      "required": false,
+      "sensitive": true,
+      "type": "unknown",
+      "default": "''",
+      "all_defaults": [
+        "''"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "SCREENSHOT_API_URL",
+      "group": "SCREENSHOT",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "''",
+      "all_defaults": [
+        "''",
+        "'https://api.screenshotmachine.com'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "SCREENSHOT_FALLBACK_PLAYWRIGHT",
+      "group": "SCREENSHOT",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'true'",
+      "all_defaults": [
+        "'true'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "SCREENSHOT_PW_TIMEOUT_MS",
+      "group": "SCREENSHOT",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "int",
+      "default": "'15000'",
+      "all_defaults": [
+        "'15000'"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "SCREENSHOT_PW_USER_AGENT",
+      "group": "SCREENSHOT",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "''",
+      "all_defaults": [
+        "''"
+      ],
+      "valid_values": null
+    },
+    {
+      "key": "SCREENSHOT_PW_VIEWPORT",
+      "group": "SCREENSHOT",
+      "description": "",
+      "required": false,
+      "sensitive": false,
+      "type": "unknown",
+      "default": "'1280x1024'",
+      "all_defaults": [
+        "'1280x1024'"
+      ],
+      "valid_values": null
+    }
+  ]
+}
