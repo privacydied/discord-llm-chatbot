@@ -11,6 +11,7 @@ from urllib.parse import urlencode
 
 import httpx
 from bs4 import BeautifulSoup  # beautifulsoup4 is in requirements
+import importlib
 
 from bot.util.logging import get_logger
 from bot.config import load_config
@@ -39,9 +40,31 @@ class DDGSearchProvider:
         try:
             async def _ddgs_call() -> List[dict]:
                 def _worker() -> List[dict]:
-                    from duckduckgo_search import DDGS  # type: ignore
-                    with DDGS() as ddgs:
-                        gen = ddgs.text(
+                    # Prefer 'ddgs' package first
+                    try:
+                        mod = importlib.import_module("ddgs")
+                        DDGS_cls = getattr(mod, "DDGS", None)
+                        if DDGS_cls is not None:
+                            with DDGS_cls() as client:
+                                gen = client.text(
+                                    query,
+                                    region=region or "wt-wt",
+                                    safesearch=safesearch,
+                                    timelimit=None,
+                                    max_results=params.max_results,
+                                )
+                                return list(gen)
+                    except Exception:
+                        # Try next fallback
+                        pass
+
+                    # Fallback to 'duckduckgo_search' package
+                    mod = importlib.import_module("duckduckgo_search")
+                    DDGS_cls = getattr(mod, "DDGS", None)
+                    if DDGS_cls is None:
+                        raise ImportError("duckduckgo_search.DDGS not found")
+                    with DDGS_cls() as client:
+                        gen = client.text(
                             query,
                             region=region or "wt-wt",
                             safesearch=safesearch,
