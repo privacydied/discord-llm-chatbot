@@ -182,6 +182,17 @@ class LLMBot(commands.Bot):
                     # Both counters use a 'reason' label
                     self.metrics.define_counter("gate.allowed", "Messages allowed by SSOT gate", labels=["reason"]) 
                     self.metrics.define_counter("gate.blocked", "Messages blocked by SSOT gate", labels=["reason"]) 
+                    # X photo→VL routing counters [CMV][REH]
+                    # Note on labels:
+                    # - .attempt/.success/.failure use an index label (idx)
+                    # - .skipped uses an 'enabled' label to indicate false
+                    # - .enabled and .no_urls are simple counters (no labels)
+                    self.metrics.define_counter("x.photo_to_vl.enabled", "X photos routed to VL (feature enabled)")
+                    self.metrics.define_counter("x.photo_to_vl.no_urls", "X photo routing: no photo URLs available")
+                    self.metrics.define_counter("x.photo_to_vl.skipped", "X photo routing skipped", labels=["enabled"]) 
+                    self.metrics.define_counter("x.photo_to_vl.attempt", "X photo routing attempts", labels=["idx"]) 
+                    self.metrics.define_counter("x.photo_to_vl.success", "X photo routing success", labels=["idx"]) 
+                    self.metrics.define_counter("x.photo_to_vl.failure", "X photo routing failure", labels=["idx"]) 
                     self.logger.debug(
                         "📈 Registered gate counters",
                         extra={"event": "metrics.define", "counters": ["gate.allowed", "gate.blocked"]},

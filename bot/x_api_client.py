@@ -192,9 +192,26 @@ class XApiClient:
             raise APIError(f"X API post not found or deleted ({status})")
         if status == 429:
             retry_after = resp.headers.get("retry-after")
-            logger.warning("X API rate limited", extra={"detail": {**extra["detail"], "retry_after": retry_after}})
+            # Best-effort parse Retry-After seconds (Twitter typically returns seconds)
+            retry_after_secs = None
+            if retry_after:
+                try:
+                    retry_after_secs = float(retry_after)
+                except Exception:
+                    retry_after_secs = None
+            logger.warning(
+                "X API rate limited",
+                extra={"detail": {**extra["detail"], "retry_after": retry_after}},
+            )
+            # Attach advisory delay for the retry logic to respect [REH]
+            err = APIError("429 Too Many Requests")
+            try:
+                if retry_after_secs and retry_after_secs > 0:
+                    setattr(err, "retry_after_seconds", float(retry_after_secs))
+            except Exception:
+                pass
             # Allow retries via decorator
-            raise APIError("429 Too Many Requests")
+            raise err
         if 500 <= status <= 599:
             logger.warning("X API server error", extra=extra)
             raise APIError(f"X API server error ({status})")

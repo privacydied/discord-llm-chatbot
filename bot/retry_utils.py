@@ -143,10 +143,24 @@ async def retry_async(
                 logger.error(f"❌ All {config.max_attempts} retry attempts failed for {func.__name__}")
                 break
             
+            # Base exponential backoff
             delay = calculate_delay(attempt, config)
+            # If the exception carries a Retry-After hint, respect it within bounds [REH][PA]
+            retry_after_hint = getattr(e, "retry_after_seconds", None)
+            extra_note = ""
+            try:
+                if retry_after_hint is not None:
+                    ra = float(retry_after_hint)
+                    if ra > 0:
+                        # Respect server-provided cooldown but do not exceed configured max_delay
+                        bounded_ra = min(ra, config.max_delay)
+                        delay = max(delay, bounded_ra)
+                        extra_note = f" (respecting Retry-After={bounded_ra:.2f}s)"
+            except Exception:
+                pass
             logger.warning(
                 f"⚠️ Attempt {attempt + 1} failed for {func.__name__}: {e}. "
-                f"Retrying in {delay:.2f}s..."
+                f"Retrying in {delay:.2f}s...{extra_note}"
             )
             
             await asyncio.sleep(delay)
