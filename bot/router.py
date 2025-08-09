@@ -27,6 +27,7 @@ from typing import Any, Callable, Coroutine, Dict, Optional, TYPE_CHECKING, List
 import time
 import discord
 import httpx
+from html import unescape
 
 # Import new modality system
 from .modality import InputModality, InputItem, collect_input_items, map_item_to_modality
@@ -145,6 +146,9 @@ class Router:
         now = time.time()
         cached = self._syn_cache.get(tweet_id)
         if cached and (now - float(cached.get("ts", 0))) < self._syn_ttl_s:
+            if cached.get("neg"):
+                self._metric_inc("x.syndication.neg_cache_hit", None)
+                return None
             self._metric_inc("x.syndication.cache_hit", None)
             return cached.get("data")
 
@@ -157,27 +161,100 @@ class Router:
             # Check cache again inside lock
             cached = self._syn_cache.get(tweet_id)
             if cached and (now - float(cached.get("ts", 0))) < self._syn_ttl_s:
+                if cached.get("neg"):
+                    self._metric_inc("x.syndication.neg_cache_hit_locked", None)
+                    return None
                 self._metric_inc("x.syndication.cache_hit_locked", None)
                 return cached.get("data")
 
-            url = f"https://cdn.syndication.twimg.com/widgets/tweet?id={tweet_id}"
             timeout_ms = int(self.config.get("X_SYNDICATION_TIMEOUT_MS", 4000))
             headers = {
-                "User-Agent": "Mozilla/5.0 (X-Bot Syndication Fetch)",
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                    "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+                ),
                 "Accept": "application/json, text/javascript;q=0.9, */*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Referer": "https://platform.twitter.com/",
             }
-            self._metric_inc("x.syndication.fetch", None)
+            params_variants = [
+                ("widgets", {"id": tweet_id, "lang": "en"}),
+                ("tweet-result", {"id": tweet_id, "lang": "en"}),
+                ("widgets", {"id": tweet_id, "lang": "en", "dnt": "false"}),
+            ]
+            base = "https://cdn.syndication.twimg.com/"
+            data = None
             try:
                 async with httpx.AsyncClient(timeout=timeout_ms / 1000.0) as client:
-                    resp = await client.get(url, headers=headers)
-                    if resp.status_code != 200:
-                        self.logger.info(
-                            "Syndication non-200",
-                            extra={"detail": {"tweet_id": tweet_id, "status": resp.status_code}},
-                        )
-                        self._metric_inc("x.syndication.non_200", {"status": str(resp.status_code)})
-                        return None
-                    data = resp.json()
+                    for endpoint, params in params_variants:
+                        url = base + ("widgets/tweet" if endpoint == "widgets" else "tweet-result")
+                        self._metric_inc("x.syndication.fetch", {"endpoint": endpoint})
+                        resp = await client.get(url, headers=headers, params=params)
+                        if resp.status_code != 200:
+                            self.logger.info(
+                                "Syndication non-200",
+                                extra={"detail": {"tweet_id": tweet_id, "status": resp.status_code, "endpoint": endpoint}},
+                            )
+                            self._metric_inc("x.syndication.non_200", {"status": str(resp.status_code), "endpoint": endpoint})
+                            continue
+                        try:
+                            data = resp.json()
+                        except Exception:
+                            self._metric_inc("x.syndication.invalid_json", {"endpoint": endpoint})
+                            continue
+                        # Found a candidate
+                        break
+                    # If no usable JSON with text/full_text, try oEmbed as last resort
+                    if not (isinstance(data, dict) and (data.get("text") or data.get("full_text"))):
+                        oembed_url = "https://publish.twitter.com/oembed"
+                        oembed_params = {
+                            "url": f"https://twitter.com/i/status/{tweet_id}",
+                            "dnt": "false",
+                            "omit_script": "true",
+                            "hide_thread": "true",
+                            "lang": "en",
+                        }
+                        self._metric_inc("x.syndication.fetch", {"endpoint": "oembed"})
+                        resp = await client.get(oembed_url, headers=headers, params=oembed_params)
+                        if resp.status_code == 200:
+                            try:
+                                obj = resp.json()
+                            except Exception:
+                                obj = None
+                            if isinstance(obj, dict):
+                                html = obj.get("html")
+                                if html:
+                                    # Very light HTML → text conversion
+                                    txt = re.sub(r"<br\\s*/?>", "\n", html)
+                                    txt = re.sub(r"<[^>]+>", "", txt)
+                                    txt = unescape(txt).strip()
+                                    if txt:
+                                        data = {
+                                            "text": txt,
+                                            "user": {"name": obj.get("author_name")},
+                                        }
+                        # Try x.com oembed variant if still no data
+                        if not (isinstance(data, dict) and (data.get("text") or data.get("full_text"))):
+                            oembed_params_x = dict(oembed_params)
+                            oembed_params_x["url"] = f"https://x.com/i/status/{tweet_id}"
+                            self._metric_inc("x.syndication.fetch", {"endpoint": "oembed_x"})
+                            resp2 = await client.get(oembed_url, headers=headers, params=oembed_params_x)
+                            if resp2.status_code == 200:
+                                try:
+                                    obj2 = resp2.json()
+                                except Exception:
+                                    obj2 = None
+                                if isinstance(obj2, dict):
+                                    html2 = obj2.get("html")
+                                    if html2:
+                                        txt2 = re.sub(r"<br\\s*/?>", "\n", html2)
+                                        txt2 = re.sub(r"<[^>]+>", "", txt2)
+                                        txt2 = unescape(txt2).strip()
+                                        if txt2:
+                                            data = {
+                                                "text": txt2,
+                                                "user": {"name": obj2.get("author_name")},
+                                            }
             except Exception as e:
                 self.logger.info(
                     "Syndication fetch failed",
@@ -189,6 +266,9 @@ class Router:
             # Minimal validation: require text field
             if not isinstance(data, dict) or not (data.get("text") or data.get("full_text")):
                 self._metric_inc("x.syndication.invalid", None)
+                # Negative cache to avoid repeated hits for unavailable/blocked tweets
+                self._syn_cache[tweet_id] = {"neg": True, "ts": time.time()}
+                self._metric_inc("x.syndication.neg_store", None)
                 return None
 
             # Cache and return

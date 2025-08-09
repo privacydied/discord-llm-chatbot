@@ -11,11 +11,11 @@ class NoopMetrics:
     def __init__(self):
         logger.info("📊 Prometheus disabled: using NoopMetrics")
     
-    def define_counter(self, name: str, description: str) -> None:
+    def define_counter(self, name: str, description: str, labels: Optional[list] = None) -> None:
         """Define a counter metric (no-op)."""
         pass
         
-    def define_histogram(self, name: str, description: str) -> None:
+    def define_histogram(self, name: str, description: str, labels: Optional[list] = None, buckets: Optional[tuple] = None) -> None:
         """Define a histogram metric (no-op)."""
         pass
         

@@ -193,6 +193,20 @@ class LLMBot(commands.Bot):
                     self.metrics.define_counter("x.photo_to_vl.attempt", "X photo routing attempts", labels=["idx"]) 
                     self.metrics.define_counter("x.photo_to_vl.success", "X photo routing success", labels=["idx"]) 
                     self.metrics.define_counter("x.photo_to_vl.failure", "X photo routing failure", labels=["idx"]) 
+                    # X syndication tier counters [CMV][REH][PA]
+                    # Label schema mirrors Router._get_tweet_via_syndication() usage
+                    self.metrics.define_counter("x.syndication.fetch", "Syndication fetch attempts", labels=["endpoint"]) 
+                    self.metrics.define_counter("x.syndication.non_200", "Syndication non-200 responses", labels=["status", "endpoint"]) 
+                    self.metrics.define_counter("x.syndication.invalid_json", "Syndication: invalid JSON payload", labels=["endpoint"]) 
+                    self.metrics.define_counter("x.syndication.success", "Syndication: successful retrieval") 
+                    self.metrics.define_counter("x.syndication.error", "Syndication: unexpected exception") 
+                    self.metrics.define_counter("x.syndication.invalid", "Syndication: structurally invalid response") 
+                    self.metrics.define_counter("x.syndication.neg_store", "Syndication: negative cache store") 
+                    self.metrics.define_counter("x.syndication.cache_hit", "Syndication: positive cache hit") 
+                    self.metrics.define_counter("x.syndication.neg_cache_hit", "Syndication: negative cache hit") 
+                    self.metrics.define_counter("x.syndication.cache_hit_locked", "Syndication: positive cache hit (within lock)") 
+                    self.metrics.define_counter("x.syndication.neg_cache_hit_locked", "Syndication: negative cache hit (within lock)") 
+                    self.metrics.define_counter("x.syndication.hit", "Syndication: final tier hit (produced text)") 
                     self.logger.debug(
                         "📈 Registered gate counters",
                         extra={"event": "metrics.define", "counters": ["gate.allowed", "gate.blocked"]},
