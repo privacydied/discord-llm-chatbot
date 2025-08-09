@@ -44,6 +44,7 @@ class TranscriptResult:
     cost_usd: Optional[float] = None
     success: bool = True
     detail: Optional[str] = None
+    cache_hit: bool = False  # [PA] Instrumentation: track if result came from cache
 
     def acceptable(self, min_conf: float) -> bool:
         # If provider does not report confidence, treat as acceptable under current policy.
@@ -156,7 +157,22 @@ class STTOrchestrator:
         cache_key = self._hash_audio_file(audio_path)
         cached = self._cache_get(cache_key)
         if cached:
-            logger.info(f"[STT-Orch] Cache hit by {cached.provider} ({cached.latency_ms}ms)")
+            # [PA] Instrumentation: log cache hit with detailed metrics
+            logger.info(
+                f"[STT-Orch] Cache hit by {cached.provider} ({cached.latency_ms}ms)",
+                extra={
+                    "event": "stt.cache_hit",
+                    "detail": {
+                        "provider": cached.provider,
+                        "latency_ms": cached.latency_ms,
+                        "confidence": cached.confidence,
+                        "cache_key": cache_key[:16],  # Short hash for logging
+                        "audio_file": str(audio_path.name)
+                    }
+                }
+            )
+            # Mark as cache hit and return
+            cached.cache_hit = True
             return cached.text
 
         # Single-flight [PA]
@@ -165,8 +181,34 @@ class STTOrchestrator:
             # Check cache again after awaiting lock (thundering herd) [PA]
             cached2 = self._cache_get(cache_key)
             if cached2:
-                logger.info(f"[STT-Orch] Cache hit (post-lock) by {cached2.provider}")
+                logger.info(
+                    f"[STT-Orch] Cache hit (post-lock) by {cached2.provider}",
+                    extra={
+                        "event": "stt.cache_hit_post_lock",
+                        "detail": {
+                            "provider": cached2.provider,
+                            "latency_ms": cached2.latency_ms,
+                            "cache_key": cache_key[:16]
+                        }
+                    }
+                )
+                cached2.cache_hit = True
                 return cached2.text
+
+            # [PA] Instrumentation: log cache miss and start processing
+            start_processing_time = time.time()
+            logger.info(
+                f"[STT-Orch] Cache miss, processing with mode '{self.mode}'",
+                extra={
+                    "event": "stt.cache_miss",
+                    "detail": {
+                        "mode": self.mode,
+                        "cache_key": cache_key[:16],
+                        "audio_file": str(audio_path.name),
+                        "providers_available": len(self._providers)
+                    }
+                }
+            )
 
             # Dispatch based on mode
             if self.mode == "single":
@@ -183,12 +225,37 @@ class STTOrchestrator:
                 logger.warning(f"[STT-Orch] Unknown mode '{self.mode}', defaulting to single")
                 res = await self._run_single(audio_path)
 
+            # [PA] Instrumentation: log completion with comprehensive metrics
+            total_processing_time_ms = (time.time() - start_processing_time) * 1000
+            logger.info(
+                f"[STT-Orch] Processing complete: {res.provider} ({res.latency_ms}ms provider, {total_processing_time_ms:.1f}ms total)",
+                extra={
+                    "event": "stt.processing_complete",
+                    "detail": {
+                        "provider": res.provider,
+                        "provider_latency_ms": res.latency_ms,
+                        "total_processing_ms": total_processing_time_ms,
+                        "confidence": res.confidence,
+                        "success": res.success,
+                        "acceptable": res.acceptable(self.min_conf),
+                        "text_length": len(res.text) if res.text else 0,
+                        "cost_usd": res.cost_usd,
+                        "cache_key": cache_key[:16],
+                        "cache_hit": False  # This was a cache miss
+                    }
+                }
+            )
+
             if not res.success:
                 raise RuntimeError(res.detail or "STT orchestration failed")
 
             # Cache acceptable result only [IV]
             if res.acceptable(self.min_conf):
                 self._cache_set(cache_key, res)
+                logger.debug(f"[STT-Orch] Result cached for {self.cache_ttl}s")
+            else:
+                logger.warning(f"[STT-Orch] Result not cached (confidence {res.confidence} < {self.min_conf})")
+            
             return res.text
 
     async def _run_single(self, audio_path: Path) -> TranscriptResult:
