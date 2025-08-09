@@ -604,6 +604,96 @@ class Router:
             self.logger.error(f"❌ Error in router dispatch: {e} (msg_id: {message.id})", exc_info=True)
             return BotAction(content="I encountered an error while processing your message.", error=True)
 
+    def compute_streaming_eligibility(self, message: Message) -> Dict[str, Any]:
+        """Preflight: determine if streaming status cards should be enabled for this message.
+        This must be cheap and avoid network calls. [CA][IV][PA]
+
+        Returns a dict with:
+        - eligible: bool
+        - modality: str ("TEXT_ONLY" | "MEDIA_OR_HEAVY")
+        - domains: set[str] subset of {"text","media","search","rag"}
+        - reason: str short reason string for logging
+        """
+        try:
+            cfg = self.config
+            if not cfg.get("STREAMING_ENABLE", True):
+                return {"eligible": False, "modality": "TEXT_ONLY", "domains": {"text"}, "reason": "streaming_master_disabled"}
+
+            content = (message.content or "").lower().strip()
+            domains: set[str] = set()
+
+            # Command-based detections (search/rag)
+            if content.startswith("!search") or content.startswith("[search]"):
+                domains.add("search")
+            if content.startswith("!rag "):
+                domains.add("rag")
+
+            # Collect items and mark media when confidently heavy without network
+            items = collect_input_items(message)
+            has_media = False
+            if items:
+                # Lightweight modality mapping – should inspect filenames/urls only
+                # Avoid network; map_item_to_modality may be async but typically local; use best-effort heuristics here.
+                for it in items:
+                    # Attachments by filename
+                    if it.source_type == "attachment":
+                        name = getattr(it.payload, "filename", "").lower()
+                        if any(name.endswith(ext) for ext in (".png",".jpg",".jpeg",".webp",".gif",".bmp",".pdf",".mp4",".mov",".mkv",".webm",".avi",".m4v",".mp3",".wav",".ogg",".m4a",".flac")):
+                            has_media = True
+                    elif it.source_type == "url":
+                        url = str(it.payload).lower()
+                        # Heuristics deemed heavy: youtube/streaming video links, explicit screenshot directives
+                        if "youtu" in url or "youtube" in url:
+                            has_media = True
+                        # Some flows generate screenshots via explicit markers; prefer conservative enabling only when explicit
+                        if "[screenshot]" in content:
+                            has_media = True
+                    elif it.source_type == "embed":
+                        # Embeds with image/video hints may be heavy; conservative: don't enable by embeds alone
+                        pass
+
+            if has_media:
+                domains.add("media")
+
+            # If nothing detected, default to text
+            if not domains:
+                domains.add("text")
+
+            # Apply config toggles per domain
+            allow = False
+            reasons = []
+            if "media" in domains:
+                if cfg.get("STREAMING_ENABLE_MEDIA", True):
+                    allow = True
+                    reasons.append("media_allowed")
+                else:
+                    reasons.append("media_disabled")
+            if "search" in domains:
+                if cfg.get("STREAMING_ENABLE_SEARCH", False):
+                    allow = True
+                    reasons.append("search_allowed")
+                else:
+                    reasons.append("search_disabled")
+            if "rag" in domains:
+                if cfg.get("STREAMING_ENABLE_RAG", False):
+                    allow = True
+                    reasons.append("rag_allowed")
+                else:
+                    reasons.append("rag_disabled")
+            if domains == {"text"}:
+                if cfg.get("STREAMING_ENABLE_TEXT", False):
+                    allow = True
+                    reasons.append("text_allowed")
+                else:
+                    reasons.append("text_disabled")
+
+            modality = "MEDIA_OR_HEAVY" if ("media" in domains or "search" in domains or "rag" in domains) else "TEXT_ONLY"
+            return {"eligible": bool(allow), "modality": modality, "domains": domains, "reason": ",".join(reasons) or "none"}
+        except Exception as e:
+            # Fail-closed to quiet mode for safety
+            self.logger.debug(f"stream:eligibility_failed | {e}")
+            return {"eligible": False, "modality": "TEXT_ONLY", "domains": {"text"}, "reason": "exception"}
+
     async def _process_multimodal_message_internal(self, message: Message, context_str: str) -> Optional[BotAction]:
         """
         Process all input items from a message sequentially with result aggregation.

@@ -362,6 +362,12 @@ def load_config():
         # Edit throttle and max step count
         "STREAMING_TICK_MS": _safe_int(os.getenv("STREAMING_TICK_MS"), "750", "STREAMING_TICK_MS"),
         "STREAMING_MAX_STEPS": _safe_int(os.getenv("STREAMING_MAX_STEPS"), "8", "STREAMING_MAX_STEPS"),
+        # Domain-specific eligibility gates [CMV]
+        # Defaults: text/search/rag disabled, media enabled
+        "STREAMING_ENABLE_TEXT": os.getenv("STREAMING_ENABLE_TEXT", "false").lower() == "true",
+        "STREAMING_ENABLE_SEARCH": os.getenv("STREAMING_ENABLE_SEARCH", "false").lower() == "true",
+        "STREAMING_ENABLE_RAG": os.getenv("STREAMING_ENABLE_RAG", "false").lower() == "true",
+        "STREAMING_ENABLE_MEDIA": os.getenv("STREAMING_ENABLE_MEDIA", "true").lower() == "true",
     }
     
     # Cache the config for performance (avoid repeated env var lookups)

@@ -328,7 +328,15 @@ class LLMBot(commands.Bot):
                 stream_ctx = None
                 if self.config.get("STREAMING_ENABLE", False):
                     try:
-                        stream_ctx = await self._start_streaming_status(message)
+                        eligible = {"eligible": False, "reason": "no_router"}
+                        if hasattr(self.router, "compute_streaming_eligibility"):
+                            eligible = self.router.compute_streaming_eligibility(message)  # cheap preflight
+                        if eligible.get("eligible"):
+                            stream_ctx = await self._start_streaming_status(message)
+                        else:
+                            self.logger.debug(
+                                f"stream:skipped | msg:{message.id} reason:{eligible.get('reason')} domains:{eligible.get('domains')} modality:{eligible.get('modality')}"
+                            )
                     except Exception as e:
                         self.logger.debug(f"stream:start_failed | {e}")
 

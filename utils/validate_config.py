@@ -88,6 +88,10 @@ def main() -> int:
         "STREAMING_EMBED_STYLE": cfg.get("STREAMING_EMBED_STYLE"),
         "STREAMING_TICK_MS": cfg.get("STREAMING_TICK_MS"),
         "STREAMING_MAX_STEPS": cfg.get("STREAMING_MAX_STEPS"),
+        "STREAMING_ENABLE_TEXT": cfg.get("STREAMING_ENABLE_TEXT"),
+        "STREAMING_ENABLE_SEARCH": cfg.get("STREAMING_ENABLE_SEARCH"),
+        "STREAMING_ENABLE_RAG": cfg.get("STREAMING_ENABLE_RAG"),
+        "STREAMING_ENABLE_MEDIA": cfg.get("STREAMING_ENABLE_MEDIA"),
     }
 
     console.print(_kv_table("Screenshot API", screenshot))
