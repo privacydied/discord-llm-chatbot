@@ -280,7 +280,7 @@ def load_config():
         "SEARCH_SAFE": os.getenv("SEARCH_SAFE", "moderate").lower(),  # off|moderate|strict
         "SEARCH_LOCALE": os.getenv("SEARCH_LOCALE", ""),
         # DuckDuckGo provider options (DDG typically requires no API key; kept for pluggability)
-        "DDG_API_ENDPOINT": os.getenv("DDG_API_ENDPOINT", "https://duckduckgo.com/html/"),
+        "DDG_API_ENDPOINT": os.getenv("DDG_API_ENDPOINT", "https://html.duckduckgo.com/html/"),
         # Force legacy HTML endpoint instead of ddgs client. [CMV]
         "DDG_FORCE_HTML": os.getenv("DDG_FORCE_HTML", "true").lower() == "true",
         "DDG_API_KEY": os.getenv("DDG_API_KEY"),

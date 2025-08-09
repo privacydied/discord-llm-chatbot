@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import asyncio
 from typing import List, Optional, Set
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse, parse_qsl, urlunparse
 
 import httpx
 from bs4 import BeautifulSoup  # beautifulsoup4 is in requirements
@@ -205,11 +205,24 @@ class DDGSearchProvider:
             if not url or not isinstance(url, str):
                 return None, None
 
-            u = urlparse(url)
-            if not u.scheme or not u.netloc:
-                return None, None
+            # Handle scheme-relative URLs: //example.com/path
+            if url.startswith("//"):
+                url = "https:" + url
 
-            scheme = u.scheme.lower()
+            u = urlparse(url)
+
+            # Decode DuckDuckGo redirect links: https://duckduckgo.com/l/?uddg=<target>
+            if (u.netloc.endswith("duckduckgo.com") and u.path.startswith("/l/") and u.query):
+                qdict = dict(parse_qsl(u.query, keep_blank_values=False))
+                target = qdict.get("uddg")
+                if target:
+                    url = target
+                    u = urlparse(url)
+
+            if not u.netloc:
+                return url, url
+
+            scheme = (u.scheme or "https").lower()
             netloc = u.netloc.lower()
             # Strip default ports
             if netloc.endswith(":80") and scheme == "http":
@@ -301,9 +314,14 @@ class DDGSearchProvider:
 
         client: httpx.AsyncClient = await get_search_client()
         try:
-            resp = await client.get(url, timeout=timeout_s, headers={
-                "User-Agent": "Mozilla/5.0 (compatible; LLMDiscordBot/1.0; +https://example.invalid)",
-            })
+            resp = await client.get(
+                url,
+                timeout=timeout_s,
+                headers={
+                    # Use a modern desktop UA to avoid sparse/202 responses from the HTML mirror. [REH]
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+                },
+            )
             resp.raise_for_status()
         except httpx.TimeoutException:
             logger.warning("DDG HTML request timed out")
@@ -315,7 +333,9 @@ class DDGSearchProvider:
         results: List[SearchResult] = []
         try:
             soup = BeautifulSoup(resp.text, "html.parser")
-            for a in soup.find_all("a", class_="result__a"):
+            anchors = soup.find_all("a", class_="result__a")
+            logger.debug(f"DDG HTML parsed anchors: {len(anchors)}")
+            for a in anchors:
                 title = a.get_text(strip=True)
                 href = a.get("href")
                 if not href:
