@@ -97,5 +97,27 @@
     "processed_path": "cache/video_audio/7e477df3fd9d85d1.wav",
     "cached_at": "2025-08-09T06:00:29.749923+00:00",
     "speedup_factor": 1.5
+  },
+  "53c34874ed0e13b3": {
+    "url": "https://x.com/PicturesFoIder/status/1954142599150809466",
+    "title": "non aesthetic things - I love the honesty and vulnerability here. Just straight honesty.",
+    "duration_seconds": 54.9,
+    "uploader": "non aesthetic things",
+    "upload_date": "20250809",
+    "source_type": "unknown",
+    "processed_path": "cache/video_audio/53c34874ed0e13b3.wav",
+    "cached_at": "2025-08-09T17:37:25.523847+00:00",
+    "speedup_factor": 1.5
+  },
+  "0437a5186b51343f": {
+    "url": "https://www.youtube.com/shorts/FFs5mZ4eQ_c",
+    "title": "\"He Hit Me So Hard... I Went Blind\" \u2013 Khalil Rountree on Alex Pereira",
+    "duration_seconds": 58.0,
+    "uploader": "CAGECUTS",
+    "upload_date": "20250802",
+    "source_type": "youtube",
+    "processed_path": "cache/video_audio/0437a5186b51343f.wav",
+    "cached_at": "2025-08-09T17:43:33.534264+00:00",
+    "speedup_factor": 1.5
   }
 }

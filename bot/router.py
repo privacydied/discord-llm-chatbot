@@ -430,6 +430,36 @@ class Router:
             # Fallback to raw dump if unexpected structure
             return f"Tweet → {url}\n{str(api_data)[:4000]}"
 
+    def _format_x_tweet_with_transcription(
+        self,
+        *,
+        base_text: Optional[str],
+        url: str,
+        stt_res: Dict[str, Any],
+    ) -> str:
+        """Combine formatted tweet text with STT transcription and lightweight media metadata. [CA][PA]
+
+        base_text: already formatted tweet string (e.g., from _format_x_tweet_result or _format_syndication_result)
+        stt_res: result dict from hear_infer_from_url()
+        """
+        try:
+            transcription = (stt_res or {}).get("transcription") or ""
+            meta = (stt_res or {}).get("metadata") or {}
+            src = meta.get("source") or "media"
+            title = meta.get("title") or ""
+            dur = meta.get("original_duration_s") or meta.get("processed_duration_s")
+            dur_s = f" • {int(dur)}s" if isinstance(dur, (int, float)) else ""
+            title_str = f" • '{title}'" if title else ""
+            header = f"🎙️ Transcription ({src}{title_str}{dur_s})"
+            if base_text and base_text.strip():
+                return f"{base_text}\n\n{header}:\n{transcription}"
+            # Fallback if no tweet text available
+            return f"Tweet → {url}\n\n{header}:\n{transcription}"
+        except Exception:
+            # Last-resort fallback: just return transcription string
+            transcription = (stt_res or {}).get("transcription") or ""
+            return f"Video/audio content from {url}: {transcription}"
+
     def _is_reply_to_bot(self, message: Message) -> bool:
         """Check if a message is a reply to the bot."""
         if message.reference and message.reference.message_id:
@@ -768,6 +798,23 @@ class Router:
                 retry_modality = "text"
                 selected_budget = LLM_PER_ITEM_BUDGET
 
+            # Special-case: Twitter/X GENERAL_URL items may invoke heavy media (STT) work even though
+            # we keep API-first logic in _handle_general_url(). To avoid cancelling STT with short
+            # text timeouts, treat these items as 'media' for retry/budget purposes. [PA][REH]
+            try:
+                if modality == InputModality.GENERAL_URL and item.source_type == "url":
+                    raw_url = str(item.payload)
+                    if self._is_twitter_url(raw_url):
+                        self.logger.info(
+                            "⚙️ Treating Twitter/X GENERAL_URL as media for retry budget/timeouts",
+                            extra={"event": "x.retry_policy.media_budget", "detail": {"url": raw_url}},
+                        )
+                        retry_modality = "media"
+                        selected_budget = MEDIA_PER_ITEM_BUDGET
+            except Exception:
+                # Never break dispatch due to budgeting heuristics
+                pass
+
             # Create coroutine factory for this item
             def create_handler_coro(provider_config: ProviderConfig):
                 async def handler_coro():
@@ -957,10 +1004,33 @@ class Router:
             # Try video/audio extraction first
             result = await hear_infer_from_url(url)
             if result and result.get('transcription'):
+                if is_twitter:
+                    cfg = self.config
+                    tweet_id = XApiClient.extract_tweet_id(str(url))
+                    x_client = await self._get_x_api_client()
+                    base_text = None
+                    if tweet_id and x_client is not None:
+                        try:
+                            api_data = await x_client.get_tweet_by_id(tweet_id)
+                            base_text = self._format_x_tweet_result(api_data, url)
+                        except Exception:
+                            base_text = None
+                    if base_text is None and tweet_id and bool(cfg.get("X_SYNDICATION_ENABLED", True)):
+                        try:
+                            syn = await self._get_tweet_via_syndication(tweet_id)
+                            if syn:
+                                base_text = self._format_syndication_result(syn, url)
+                        except Exception:
+                            base_text = None
+                    return self._format_x_tweet_with_transcription(
+                        base_text=base_text,
+                        url=url,
+                        stt_res=result,
+                    )
+                # Non-Twitter: keep existing concise output
                 transcription = result['transcription']
                 metadata = result.get('metadata', {})
                 title = metadata.get('title', 'Unknown')
-                
                 return f"Video transcription from {url} ('{title}'): {transcription}"
             else:
                 return f"Could not transcribe audio from video: {url}"
@@ -1112,8 +1182,16 @@ class Router:
                     try:
                         stt_res = await hear_infer_from_url(url)
                         if stt_res and stt_res.get("transcription"):
-                            transcription = stt_res["transcription"]
-                            return f"Video/audio content from {url}: {transcription}"
+                            base_text = None
+                            if syndication_enabled and tweet_id:
+                                syn = await self._get_tweet_via_syndication(tweet_id)
+                                if syn:
+                                    base_text = self._format_syndication_result(syn, url)
+                            return self._format_x_tweet_with_transcription(
+                                base_text=base_text,
+                                url=url,
+                                stt_res=stt_res,
+                            )
                     except Exception as stt_err:
                         err_str = str(stt_err).lower()
                         # Only bypass to API/syndication if clearly not video/audio or unsupported URL
@@ -1134,6 +1212,24 @@ class Router:
                         photos = syn.get("photos") or []
                         base = self._format_syndication_result(syn, url)
                         if not photos:
+                            # Attempt STT for potential video tweets; silently fall back if not video [PA][REH]
+                            try:
+                                stt_res = await hear_infer_from_url(url)
+                                if stt_res and stt_res.get("transcription"):
+                                    return self._format_x_tweet_with_transcription(
+                                        base_text=base,
+                                        url=url,
+                                        stt_res=stt_res,
+                                    )
+                            except Exception as stt_err:
+                                err_s = str(stt_err).lower()
+                                if ("no video or audio content" in err_s) or ("no video" in err_s):
+                                    pass  # text-only tweet; just return base
+                                else:
+                                    self.logger.info(
+                                        "X syndication STT attempt non-fatal error",
+                                        extra={"event": "x.syndication.stt.warn", "detail": {"url": url, "error": str(stt_err)}},
+                                    )
                             return base
                         # Respect photo-to-VL flag
                         route_photos = bool(cfg.get("X_API_ROUTE_PHOTOS_TO_VL", False))
@@ -1177,15 +1273,21 @@ class Router:
                             try:
                                 stt_res = await hear_infer_from_url(url)
                                 if stt_res and stt_res.get("transcription"):
-                                    transcription = stt_res["transcription"]
-                                    return f"Video/audio content from {url}: {transcription}"
-                                return f"Detected media in {url} but transcription failed."
+                                    base = self._format_x_tweet_result(api_data, url)
+                                    return self._format_x_tweet_with_transcription(
+                                        base_text=base,
+                                        url=url,
+                                        stt_res=stt_res,
+                                    )
+                                base = self._format_x_tweet_result(api_data, url)
+                                return f"{base}\n\nDetected media in this tweet but transcription failed."
                             except Exception as stt_err:
                                 self.logger.error(
                                     f"X media STT route failed for {url}: {stt_err}",
                                     extra={"detail": {"url": url}},
                                 )
-                                return f"Detected media in {url} but could not process it right now."
+                                base = self._format_x_tweet_result(api_data, url)
+                                return f"{base}\n\nDetected media in this tweet but could not process it right now."
 
                         if media_types == {"photo"} or ("photo" in media_types and len(media_types) == 1):
                             route_photos = bool(cfg.get("X_API_ROUTE_PHOTOS_TO_VL", False))
