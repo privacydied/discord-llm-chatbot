@@ -302,7 +302,7 @@ def load_config():
 
         # STREAMING STATUS CARDS [CA][CMV]
         # Global enable for streaming card UX (text-only remains non-streaming)
-        "STREAMING_ENABLE": os.getenv("STREAMING_ENABLE", "false").lower() == "true",
+        "STREAMING_ENABLE": os.getenv("STREAMING_ENABLE", "true").lower() == "true",
         # Style preset: 'compact' | 'detailed'
         "STREAMING_EMBED_STYLE": os.getenv("STREAMING_EMBED_STYLE", "compact"),
         # Edit throttle and max step count

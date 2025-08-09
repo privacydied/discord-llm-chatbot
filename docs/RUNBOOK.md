@@ -94,6 +94,48 @@ source .venv/bin/activate
 python run.py
 ```
 
+## Streaming Status Cards: Labeled Phases
+
+The bot shows a streaming status card (placeholder embed) while it works on long-running tasks. These cards now include labeled phases with a spinner and an i/N footer.
+
+-  The title shows the current phase with a spinner (e.g., `⠋ Vision analysis`).
+-  The footer shows progress `i/N`. When a plan is inferred, `N` equals the number of phases; otherwise `N = STREAMING_MAX_STEPS`.
+-  At completion, the placeholder is finalized and the final message either edits it (no files/audio) or replaces it (files/audio present) to preserve the 1 IN → 1 OUT rule.
+
+### Configuration
+
+- `STREAMING_ENABLE` (default: true)
+- `STREAMING_EMBED_STYLE` (e.g., `compact`)
+- `STREAMING_TICK_MS` (update cadence in ms)
+- `STREAMING_MAX_STEPS` (fallback step count when no plan inferred)
+
+### Phase Detection Rules (Heuristics)
+
+The bot infers a plan from the message content and attachments:
+
+-  **Online Search** (`!search`, `[search]`)
+   - Parsing query → Hitting provider → Collecting results → Ranking & dedupe → Generating response
+-  **Multi-Image** (2+ image attachments)
+   - Collecting images → Pre-processing (hash/resize) → Vision analysis → Fusing context → Generating response
+-  **Video URLs (yt-dlp)** (URL contains `youtu`)
+   - Processing link → Fetching metadata → Extracting audio → Transcribing audio → Generating response
+-  **Audio/Video Files** (audio/video attachments)
+   - Validating file → Extracting audio → Transcribing audio → Generating response
+-  **Single Image** (exactly 1 image attachment)
+   - Uploading/validating → Vision analysis → Generating response
+-  **PDF Documents** (PDF attachment)
+   - Parsing PDF → Chunking pages → Extracting text → Summarizing → Generating response
+-  **PDF Documents (OCR)** (PDF + content mentions `ocr`)
+   - Rasterizing pages → OCR → Text cleanup → Summarizing → Generating response
+-  **General URLs** (non-YouTube URL in content)
+   - Fetching page → Extracting content → De-boilerplating → Summarizing → Generating response
+-  **RAG commands**
+   - `!rag bootstrap`: Discovering sources → Chunking → Embedding → Indexing → Ready
+   - `!rag scan`: Scanning changes → Chunking → Embedding → Indexing → Updated
+   - `!rag wipe`: Stopping jobs → Dropping index → Clearing cache → Verifying → Done
+
+If no plan can be inferred, the bot falls back to generic phases labeled “Working…” with the configured step count.
+
 ## 4. Troubleshooting
 
 ### Dependency Issues

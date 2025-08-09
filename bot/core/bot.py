@@ -299,16 +299,41 @@ class LLMBot(commands.Bot):
 
             # The router decides if this is a command, a direct message, or something to ignore.
             if self.router:
+                # Optional streaming status cards while the router works [CA][REH][PA]
+                stream_ctx = None
+                if self.config.get("STREAMING_ENABLE", False):
+                    try:
+                        stream_ctx = await self._start_streaming_status(message)
+                    except Exception as e:
+                        self.logger.debug(f"stream:start_failed | {e}")
+
                 action = await self.router.dispatch_message(message)
                 if action:
                     if action.meta.get('delegated_to_cog'):
                         self.logger.info(f"Message {message.id} delegated to command processor.")
+                        # If streaming was started, clean it up as we hand off to cogs
+                        if stream_ctx and stream_ctx.get("message"):
+                            try:
+                                await stream_ctx["message"].delete()
+                            except Exception:
+                                # Fallback to editing the status message
+                                try:
+                                    await stream_ctx["message"].edit(content="", embeds=[self._build_stream_embed("ℹ️ Delegated to command…", style=self.config.get("STREAMING_EMBED_STYLE", "compact"))])
+                                except Exception:
+                                    pass
                         await self.process_commands(message)
                     elif action.has_payload:
-                        await self._execute_action(message, action)
+                        # Stop streaming and mark as ready before sending the final response
+                        target_msg = None
+                        if stream_ctx and stream_ctx.get("task"):
+                            await self._stop_streaming_status(stream_ctx)
+                            target_msg = stream_ctx.get("message")
+                        await self._execute_action(message, action, target_message=target_msg)
                     # If no payload and not delegated, the router decided to do nothing.
                 else:
                     # Fallback for messages that don't trigger the router (e.g. standard commands)
+                    if stream_ctx and stream_ctx.get("task"):
+                        await self._stop_streaming_status(stream_ctx, final_label="🚫 No response generated")
                     await self.process_commands(message)
             else:
                 self.logger.error("Router not initialized, falling back to command processing.")
@@ -316,6 +341,381 @@ class LLMBot(commands.Bot):
                 
         except Exception as e:
             self.logger.error(f"Error in _process_single_message for {message.id}: {e}", exc_info=True)
+
+    def _infer_streaming_plan(self, message: discord.Message) -> list[str] | None:
+        """Infer a labeled streaming plan (list of step labels) based on message content and attachments.
+        Returns None if no specific plan can be inferred.
+        """
+        try:
+            content = (message.content or "").lower().strip()
+            atts = getattr(message, "attachments", []) or []
+
+            # Helpers
+            def has_ext(exts: set[str]) -> bool:
+                for a in atts:
+                    name = getattr(a, "filename", "").lower()
+                    if any(name.endswith(ext) for ext in exts):
+                        return True
+                return False
+
+            def count_ext(exts: set[str]) -> int:
+                c = 0
+                for a in atts:
+                    name = getattr(a, "filename", "").lower()
+                    if any(name.endswith(ext) for ext in exts):
+                        c += 1
+                return c
+
+            IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
+            VIDEO_EXTS = {".mp4", ".mov", ".mkv", ".webm", ".avi", ".m4v"}
+            AUDIO_EXTS = {".mp3", ".wav", ".ogg", ".m4a", ".flac"}
+            PDF_EXTS = {".pdf"}
+
+            ONLINE_SEARCH = [
+                "Parsing query",
+                "Hitting provider",
+                "Collecting results",
+                "Ranking & dedupe",
+                "Generating response",
+            ]
+            MULTI_IMAGE = [
+                "Collecting images",
+                "Pre-processing (hash/resize)",
+                "Vision analysis",
+                "Fusing context",
+                "Generating response",
+            ]
+            VIDEO_URLS = [
+                "Processing link",
+                "Fetching metadata",
+                "Extracting audio",
+                "Transcribing audio",
+                "Generating response",
+            ]
+            AV_FILES = [
+                "Validating file",
+                "Extracting audio",
+                "Transcribing audio",
+                "Generating response",
+            ]
+            SINGLE_IMAGE = [
+                "Uploading/validating",
+                "Vision analysis",
+                "Generating response",
+            ]
+            PDF_DOCS = [
+                "Parsing PDF",
+                "Chunking pages",
+                "Extracting text",
+                "Summarizing",
+                "Generating response",
+            ]
+            PDF_DOCS_OCR = [
+                "Rasterizing pages",
+                "OCR",
+                "Text cleanup",
+                "Summarizing",
+                "Generating response",
+            ]
+            GENERAL_URLS = [
+                "Fetching page",
+                "Extracting content",
+                "De-boilerplating",
+                "Summarizing",
+                "Generating response",
+            ]
+            RAG_BOOTSTRAP = [
+                "Discovering sources",
+                "Chunking",
+                "Embedding",
+                "Indexing",
+                "Ready",
+            ]
+            RAG_SCAN = [
+                "Scanning changes",
+                "Chunking",
+                "Embedding",
+                "Indexing",
+                "Updated",
+            ]
+            RAG_WIPE = [
+                "Stopping jobs",
+                "Dropping index",
+                "Clearing cache",
+                "Verifying",
+                "Done",
+            ]
+
+            # Command-based plans
+            if content.startswith("!search") or content.startswith("[search]"):
+                return ONLINE_SEARCH
+
+            if content.startswith("!rag "):
+                if " bootstrap" in content:
+                    return RAG_BOOTSTRAP
+                if " scan" in content:
+                    return RAG_SCAN
+                if " wipe" in content:
+                    return RAG_WIPE
+
+            # Attachment and URL heuristics
+            img_count = count_ext(IMAGE_EXTS)
+            if img_count >= 2:
+                return MULTI_IMAGE
+            if img_count == 1:
+                return SINGLE_IMAGE
+
+            if has_ext(PDF_EXTS):
+                # If user explicitly mentions OCR, switch to OCR pipeline
+                if "ocr" in content:
+                    return PDF_DOCS_OCR
+                return PDF_DOCS
+
+            if has_ext(VIDEO_EXTS) or has_ext(AUDIO_EXTS):
+                return AV_FILES
+
+            # URL-based detection in content
+            if "http://" in content or "https://" in content:
+                if "youtu" in content:
+                    return VIDEO_URLS
+                return GENERAL_URLS
+
+        except Exception as e:
+            self.logger.debug(f"stream:plan_infer_failed | {e}")
+        return None
+
+    async def _start_streaming_status(self, message: discord.Message) -> dict:
+        """Start a streaming status card message and background updater.
+        Returns a context dict with 'message' and 'task'.
+        """
+        # Build initial embed
+        style = self.config.get("STREAMING_EMBED_STYLE", "compact")
+        plan = self._infer_streaming_plan(message)
+        max_steps = len(plan) if plan else int(self.config.get("STREAMING_MAX_STEPS", 8))
+        first_label = plan[0] if plan else "Working…"
+        initial = self._build_stream_embed(f"⏳ {first_label}", style=style, step=0, max_steps=max_steps)
+
+        sent = await message.reply(content="", embeds=[initial], mention_author=True)
+        # Track in enhanced context
+        if self.enhanced_context_manager:
+            await self.enhanced_context_manager.append_message(sent, role="bot")
+
+        tick_ms = int(self.config.get("STREAMING_TICK_MS", 750))
+
+        task = asyncio.create_task(self._streaming_updater(sent, style, tick_ms, max_steps, plan))
+        return {"message": sent, "task": task, "plan": plan, "max_steps": max_steps}
+
+    async def _stop_streaming_status(self, stream_ctx: dict, final_label: str = "✅ Generating reply…") -> None:
+        """Stop the background updater and finalize the status card."""
+        try:
+            task = stream_ctx.get("task")
+            if task and not task.done():
+                task.cancel()
+                try:
+                    await task
+                except Exception:
+                    pass
+            msg: discord.Message = stream_ctx.get("message")
+            if msg:
+                style = self.config.get("STREAMING_EMBED_STYLE", "compact")
+                await msg.edit(content="", embeds=[self._build_stream_embed(final_label, style=style, done=True)])
+        except Exception as e:
+            self.logger.debug(f"stream:stop_failed | {e}")
+
+    async def _streaming_updater(self, msg: discord.Message, style: str, tick_ms: int, max_steps: int, plan: list[str] | None) -> None:
+        """Background loop to update the streaming status embed.
+        Stops automatically after max_steps or if cancelled.
+        """
+        # Braille spinner frames
+        frames = ["⠋","⠙","⠹","⠸","⠼","⠴","⠦","⠧","⠇","⠏"]
+        try:
+            for i in range(max_steps):
+                phase = plan[i] if plan and i < len(plan) else "Working…"
+                label = f"{frames[i % len(frames)]} {phase}"
+                embed = self._build_stream_embed(label, style=style, step=i+1, max_steps=max_steps)
+                await msg.edit(content="", embeds=[embed])
+                await asyncio.sleep(max(0.05, tick_ms / 1000))
+        except asyncio.CancelledError:
+            # Normal cancellation path when finalizing
+            return
+        except Exception as e:
+            # Swallow updater errors; streaming is best-effort
+            self.logger.debug(f"stream:update_failed | {e}")
+
+    def _build_stream_embed(self, label: str, *, style: str = "compact", step: int | None = None, max_steps: int | None = None, done: bool = False) -> discord.Embed:
+        """Create an embed for streaming status according to style."""
+        color = 0x2ecc71 if done else 0x3498db  # green when done, blue otherwise
+        embed = discord.Embed(title=label if style == "compact" else "Processing", color=color)
+        if style != "compact":
+            desc_lines = ["I'm working on your request."]
+            if step and max_steps:
+                desc_lines.append(f"Step {step}/{max_steps}")
+            if done:
+                desc_lines.append("Ready to send the final answer.")
+            embed.description = "\n".join(desc_lines)
+        else:
+            if step and max_steps and not done:
+                embed.set_footer(text=f"{step}/{max_steps}")
+            if done:
+                embed.set_footer(text="done")
+        return embed
+
+    async def _execute_action(self, message: discord.Message, action: BotAction, target_message: discord.Message | None = None):
+        """Executes a BotAction by sending or editing a message.
+        If target_message is provided and there are no files/audio, we edit it to keep 1 IN → 1 OUT.
+        Otherwise, we delete the placeholder and send a new reply.
+        """
+        # Metadata for logging
+        guild_id = getattr(message.guild, 'id', None)
+        channel_id = getattr(message.channel, 'id', None)
+        user_id = getattr(message.author, 'id', None)
+        is_dm = isinstance(message.channel, discord.DMChannel)
+        debug_token = f"d{message.id}-{uuid.uuid4().hex[:8]}"
+
+        base_extra = {"guild_id": guild_id, "user_id": user_id, "msg_id": message.id}
+        self.logger.info(
+            f"dispatch:pre | channel_id={channel_id} is_dm={is_dm} ready={self._is_ready.is_set()} "
+            f"embeds={len(action.embeds) if action.embeds else 0} meta={action.meta}",
+            extra={**base_extra, "event": "dispatch.send.pre"},
+        )
+
+        files = None
+        # If action requires TTS, process it.
+        if action.meta.get('requires_tts'):
+            self.logger.info(
+                "TTS requested, processing…",
+                extra={**base_extra, "event": "tts.process.start"},
+            )
+            if not self.tts_manager:
+                self.logger.error(
+                    "tts:missing",
+                    extra={**base_extra, "event": "tts.manager.missing"},
+                )
+                action.content = "I tried to respond with voice, but the TTS service is not working."
+            else:
+                action = await self.tts_manager.process(action)
+
+        # If action has an audio path after processing, prepare it for sending.
+        if action.audio_path:
+            if os.path.exists(action.audio_path):
+                files = [discord.File(action.audio_path, filename="voice_message.ogg")]
+            else:
+                self.logger.error(
+                    f"tts:file_missing | path={action.audio_path}",
+                    extra={**base_extra, "event": "tts.file.missing"},
+                )
+                action.content = "I tried to send a voice message, but the audio file was missing."
+        elif action.meta.get('requires_tts'):  # TTS expected but failed
+            self.logger.error(
+                "tts:no_audio",
+                extra={**base_extra, "event": "tts.audio.not_generated"},
+            )
+            action.content = "I tried to send a voice message, but the audio file was missing."
+
+        content = action.content or ""
+        embed_count = len(action.embeds) if action.embeds else 0
+        file_count = len(files) if files else 0
+
+        # Discord has a 2000 character limit: attach overflow as file
+        if content and len(content) > 2000:
+            self.logger.warning(
+                f"dispatch:overflow | length={len(content)}",
+                extra={**base_extra, "event": "dispatch.content.overflow"},
+            )
+            file_content = io.BytesIO(content.encode('utf-8'))
+            text_file = discord.File(fp=file_content, filename="full_response.txt")
+            if files is None:
+                files = []
+            files.append(text_file)
+            file_count = len(files)
+
+            # The message becomes a notification about the attached file.
+            if action.meta.get('is_reply'):
+                content = f"{message.author.mention}\n\nThe response was too long to post directly. The full content is attached as a file."
+            else:
+                content = "The response was too long to post directly. The full content is attached as a file."
+
+        # Guardrail: if everything is empty, synthesize a fallback message
+        if (not content.strip()) and embed_count == 0 and file_count == 0:
+            content = (
+                f"ℹ️ I generated an empty response. I've logged this so it can be fixed. "
+                f"Please try again. [ref: {debug_token}]"
+            )
+            self.logger.warning(
+                f"dispatch:empty | ref={debug_token}",
+                extra={**base_extra, "event": "dispatch.guard.empty"},
+            )
+
+        # Prepare preview for logs
+        preview = content.replace("\n", " ")[:120] if content else ""
+        self.logger.info(
+            f"dispatch:attempt | content_len={len(content)} preview=\"{preview}\" embeds={embed_count} files={file_count}",
+            extra={**base_extra, "event": "dispatch.send.attempt"},
+        )
+
+        sent_message = None
+        # Show typing indicator while sending the message
+        async with message.channel.typing():
+            try:
+                if content or action.embeds or files:
+                    if target_message and not files:
+                        # Edit the existing streaming message
+                        sent_message = target_message
+                        await sent_message.edit(content=content, embeds=action.embeds)
+                        self.logger.info(
+                            f"dispatch:edit.ok | discord_msg_id={getattr(sent_message, 'id', None)} embeds={embed_count} files={file_count}",
+                            extra={**base_extra, "event": "dispatch.edit.ok"},
+                        )
+                    else:
+                        # Remove placeholder if present, then send a proper reply
+                        if target_message:
+                            try:
+                                await target_message.delete()
+                            except Exception:
+                                pass
+                        sent_message = await message.reply(
+                            content=content,
+                            embeds=action.embeds,
+                            files=files,
+                            mention_author=True,
+                        )
+
+                        self.logger.info(
+                            f"dispatch:ok | discord_msg_id={getattr(sent_message, 'id', None)} embeds={embed_count} files={file_count}",
+                            extra={**base_extra, "event": "dispatch.send.ok"},
+                        )
+                        
+                        # Track bot response in enhanced context manager
+                        if self.enhanced_context_manager and sent_message:
+                            await self.enhanced_context_manager.append_message(sent_message, role="bot")
+            except discord.errors.HTTPException as e:
+                # If replying fails (e.g., original message deleted), send a normal message instead.
+                if e.code == 50035:  # Unknown Message
+                    self.logger.warning(
+                        "dispatch:fallback | reason=unknown_message",
+                        extra={**base_extra, "event": "dispatch.send.reply_fallback"},
+                    )
+                    sent_message = await message.channel.send(content=content, embeds=action.embeds, files=files)
+                    
+                    self.logger.info(
+                        f"dispatch:ok | discord_msg_id={getattr(sent_message, 'id', None)} embeds={embed_count} files={file_count}",
+                        extra={**base_extra, "event": "dispatch.send.ok"},
+                    )
+                    # Track bot response in enhanced context manager
+                    if self.enhanced_context_manager and sent_message:
+                        await self.enhanced_context_manager.append_message(sent_message, role="bot")
+                else:
+                    self.logger.error(
+                        f"dispatch:error | code={e.code} status={getattr(e, 'status', 'n/a')} details={str(e)}",
+                        extra={**base_extra, "event": "dispatch.send.error"},
+                        exc_info=True,
+                    )
+                    raise  # Re-raise other HTTP exceptions
+            finally:
+                self.logger.debug(
+                    f"dispatch:finalize | sent={(sent_message is not None)}",
+                    extra={**base_extra, "event": "dispatch.send.finalize"},
+                )
 
     def _is_long_running_admin_command(self, message: discord.Message) -> bool:
         """Check if this is a long-running admin command that should run out-of-band."""
@@ -482,162 +882,6 @@ class LLMBot(commands.Bot):
         self.logger.info(
             f"Message queued: msg_id:{message.id} author:{message.author.id} in:{guild_info} len:{len(message.content)} queue_size:{user_queue.qsize()}"
         )
-
-    async def _execute_action(self, message: discord.Message, action: BotAction):
-        """Executes a BotAction by sending its content to the appropriate channel.
-        Adds detailed dispatch instrumentation, readiness gating, and empty-content guardrails.
-        """
-        # Metadata for logging
-        guild_id = getattr(message.guild, 'id', None)
-        channel_id = getattr(message.channel, 'id', None)
-        user_id = getattr(message.author, 'id', None)
-        is_dm = isinstance(message.channel, discord.DMChannel)
-        debug_token = f"d{message.id}-{uuid.uuid4().hex[:8]}"
-
-        base_extra = {"guild_id": guild_id, "user_id": user_id, "msg_id": message.id}
-        self.logger.info(
-            f"dispatch:pre | channel_id={channel_id} is_dm={is_dm} ready={self._is_ready.is_set()} "
-            f"embeds={len(action.embeds) if action.embeds else 0} meta={action.meta}",
-            extra={**base_extra, "event": "dispatch.send.pre"},
-        )
-
-        # Gate on bot readiness (avoid sending before on_ready); wait briefly if needed
-        if not self._is_ready.is_set():
-            try:
-                await asyncio.wait_for(self._is_ready.wait(), timeout=5.0)
-                self.logger.info(
-                    f"dispatch:ready | ready=True",
-                    extra={**base_extra, "event": "dispatch.ready.wait.ok"},
-                )
-            except asyncio.TimeoutError:
-                self.logger.warning(
-                    f"dispatch:ready | ready=False",
-                    extra={**base_extra, "event": "dispatch.ready.wait.timeout"},
-                )
-
-        files = None
-        # If action requires TTS, process it.
-        if action.meta.get('requires_tts'):
-            self.logger.info(
-                "TTS requested, processing…",
-                extra={**base_extra, "event": "tts.process.start"},
-            )
-            if not self.tts_manager:
-                self.logger.error(
-                    "tts:missing",
-                    extra={**base_extra, "event": "tts.manager.missing"},
-                )
-                action.content = "I tried to respond with voice, but the TTS service is not working."
-            else:
-                action = await self.tts_manager.process(action)
-
-        # If action has an audio path after processing, prepare it for sending.
-        if action.audio_path:
-            if os.path.exists(action.audio_path):
-                files = [discord.File(action.audio_path, filename="voice_message.ogg")]
-            else:
-                self.logger.error(
-                    f"tts:file_missing | path={action.audio_path}",
-                    extra={**base_extra, "event": "tts.file.missing"},
-                )
-                action.content = "I tried to send a voice message, but the audio file was missing."
-        elif action.meta.get('requires_tts'):  # TTS expected but failed
-            self.logger.error(
-                "tts:no_audio",
-                extra={**base_extra, "event": "tts.audio.not_generated"},
-            )
-            action.content = "I tried to send a voice message, but the audio file was missing."
-
-        content = action.content or ""
-        embed_count = len(action.embeds) if action.embeds else 0
-        file_count = len(files) if files else 0
-
-        # Discord has a 2000 character limit: attach overflow as file
-        if content and len(content) > 2000:
-            self.logger.warning(
-                f"dispatch:overflow | length={len(content)}",
-                extra={**base_extra, "event": "dispatch.content.overflow"},
-            )
-            file_content = io.BytesIO(content.encode('utf-8'))
-            text_file = discord.File(fp=file_content, filename="full_response.txt")
-            if files is None:
-                files = []
-            files.append(text_file)
-            file_count = len(files)
-
-            # The message becomes a notification about the attached file.
-            if action.meta.get('is_reply'):
-                content = f"{message.author.mention}\n\nThe response was too long to post directly. The full content is attached as a file."
-            else:
-                content = "The response was too long to post directly. The full content is attached as a file."
-
-        # Guardrail: if everything is empty, synthesize a fallback message
-        if (not content.strip()) and embed_count == 0 and file_count == 0:
-            content = (
-                f"ℹ️ I generated an empty response. I've logged this so it can be fixed. "
-                f"Please try again. [ref: {debug_token}]"
-            )
-            self.logger.warning(
-                f"dispatch:empty | ref={debug_token}",
-                extra={**base_extra, "event": "dispatch.guard.empty"},
-            )
-
-        # Prepare preview for logs
-        preview = content.replace("\n", " ")[:120] if content else ""
-        self.logger.info(
-            f"dispatch:attempt | content_len={len(content)} preview=\"{preview}\" embeds={embed_count} files={file_count}",
-            extra={**base_extra, "event": "dispatch.send.attempt"},
-        )
-
-        sent_message = None
-        # Show typing indicator while sending the message
-        async with message.channel.typing():
-            try:
-                if content or action.embeds or files:
-                    # Use message.reply() for contextual replies.
-                    sent_message = await message.reply(
-                        content=content,
-                        embeds=action.embeds,
-                        files=files,
-                        mention_author=True,
-                    )
-
-                    self.logger.info(
-                        f"dispatch:ok | discord_msg_id={getattr(sent_message, 'id', None)} embeds={embed_count} files={file_count}",
-                        extra={**base_extra, "event": "dispatch.send.ok"},
-                    )
-                    
-                    # Track bot response in enhanced context manager
-                    if self.enhanced_context_manager and sent_message:
-                        await self.enhanced_context_manager.append_message(sent_message, role="bot")
-            except discord.errors.HTTPException as e:
-                # If replying fails (e.g., original message deleted), send a normal message instead.
-                if e.code == 50035:  # Unknown Message
-                    self.logger.warning(
-                        "dispatch:fallback | reason=unknown_message",
-                        extra={**base_extra, "event": "dispatch.send.reply_fallback"},
-                    )
-                    sent_message = await message.channel.send(content=content, embeds=action.embeds, files=files)
-                    
-                    self.logger.info(
-                        f"dispatch:ok | discord_msg_id={getattr(sent_message, 'id', None)} embeds={embed_count} files={file_count}",
-                        extra={**base_extra, "event": "dispatch.send.ok"},
-                    )
-                    # Track bot response in enhanced context manager
-                    if self.enhanced_context_manager and sent_message:
-                        await self.enhanced_context_manager.append_message(sent_message, role="bot")
-                else:
-                    self.logger.error(
-                        f"dispatch:error | code={e.code} status={getattr(e, 'status', 'n/a')} details={str(e)}",
-                        extra={**base_extra, "event": "dispatch.send.error"},
-                        exc_info=True,
-                    )
-                    raise  # Re-raise other HTTP exceptions
-            finally:
-                self.logger.debug(
-                    f"dispatch:finalize | sent={(sent_message is not None)}",
-                    extra={**base_extra, "event": "dispatch.send.finalize"},
-                )
 
     async def load_profiles(self) -> None:
         """Load user and server memory profiles."""
