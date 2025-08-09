@@ -300,6 +300,112 @@ class Router:
             return False
         return any(d in u for d in ["twitter.com/", "x.com/", "vxtwitter.com/", "fxtwitter.com/"])
 
+    @staticmethod
+    def _is_direct_image_url(url: str) -> bool:
+        """Lightweight check for direct image URLs by extension. [IV]"""
+        try:
+            u = str(url).lower()
+        except Exception:
+            return False
+        return bool(re.search(r"\.(jpe?g|png|webp)(?:\?|#|$)", u))
+
+    async def _process_image_from_attachment_with_model(self, attachment, model_override: Optional[str] = None) -> str:
+        """Save a Discord image attachment to a temp file and run VL analysis. [RM][REH]"""
+        from .see import see_infer
+        tmp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as tmp_file:
+                tmp_path = tmp_file.name
+            await attachment.save(tmp_path)
+            self.logger.debug(f"📷 Saved image attachment to temp file: {tmp_path}")
+
+            prompt = (
+                "Describe this image in detail, focusing on key visual elements, objects, text, and context."
+            )
+            vision_response = await see_infer(
+                image_path=tmp_path,
+                prompt=prompt,
+                model_override=model_override,
+            )
+
+            if not vision_response:
+                return "❌ Vision processing returned no response"
+            if getattr(vision_response, 'error', None):
+                return f"❌ Vision processing error: {vision_response.error}"
+            content = getattr(vision_response, 'content', '') or ''
+            if not content.strip():
+                return "❌ Vision processing returned empty content"
+            filename = getattr(attachment, 'filename', 'image')
+            return f"🖼️ **Image Analysis ({filename})**\n{content.strip()}"
+        except Exception as e:
+            self.logger.error(f"❌ Attachment VL processing failed: {e}", exc_info=True)
+            return f"⚠️ Failed to analyze image attachment (error: {e})"
+        finally:
+            try:
+                if tmp_path and os.path.exists(tmp_path):
+                    os.unlink(tmp_path)
+            except Exception:
+                pass
+
+    async def _handle_image_with_model(self, item: InputItem, model_override: Optional[str] = None) -> str:
+        """Handle image item with explicit model override. [CA][IV][REH]
+        - Attachments: direct VL on file
+        - URLs: direct image URL → download+VL; otherwise screenshot→VL
+        - Embeds: try image/thumbnail URL similarly
+        """
+        try:
+            if item.source_type == "attachment":
+                attachment = item.payload
+                return await self._process_image_from_attachment_with_model(attachment, model_override)
+
+            if item.source_type == "url":
+                url = item.payload
+                if self._is_direct_image_url(url):
+                    prompt = (
+                        "Describe this image in detail, focusing on key visual elements, objects, text, and context."
+                    )
+                    desc = await self._vl_describe_image_from_url(url, prompt=prompt, model_override=model_override)
+                    return desc or "⚠️ Unable to analyze the image from the provided URL."
+                # Not a direct image URL → screenshot fallback
+                return await self._process_image_from_url(url, model_override=model_override)
+
+            if item.source_type == "embed":
+                embed = item.payload or {}
+                # Try common embed shapes
+                image_url = None
+                try:
+                    if isinstance(embed, dict):
+                        if isinstance(embed.get("image"), dict):
+                            image_url = embed.get("image", {}).get("url")
+                        if not image_url and isinstance(embed.get("thumbnail"), dict):
+                            image_url = embed.get("thumbnail", {}).get("url")
+                        if not image_url:
+                            image_url = embed.get("url")
+                except Exception:
+                    image_url = None
+
+                if image_url and self._is_direct_image_url(image_url):
+                    desc = await self._vl_describe_image_from_url(
+                        image_url,
+                        prompt=(
+                            "Describe this image in detail, focusing on key visual elements, objects, text, and context."
+                        ),
+                        model_override=model_override,
+                    )
+                    return desc or "⚠️ Unable to analyze the image from the embed."
+                if image_url and isinstance(image_url, str) and image_url.startswith("http"):
+                    return await self._process_image_from_url(image_url, model_override=model_override)
+                return "⚠️ Embed did not contain a usable image URL."
+
+            return "⚠️ Unsupported image source type."
+        except Exception as e:
+            self.logger.error(f"❌ _handle_image_with_model failed: {e}", extra={"detail": {"source_type": item.source_type}}, exc_info=True)
+            return f"⚠️ Failed to process image item (error: {e})"
+
+    async def _handle_image(self, item: InputItem) -> str:
+        """Handle image without explicit model override, using default VL model. [CA]"""
+        return await self._handle_image_with_model(item, model_override=None)
+
     def _format_x_tweet_result(self, api_data: Dict[str, Any], url: str) -> str:
         """Format X API tweet response into concise text. [PA][IV]"""
         try:
@@ -665,120 +771,9 @@ class Router:
 
         handler = handlers.get(modality, self._handle_unknown)
         return await handler(item)
-
-    # ===== NEW HANDLER METHODS FOR MULTIMODAL PROCESSING =====
     
-    async def _handle_image(self, item: InputItem) -> str:
-        """
-        Handle image input items (attachments, URLs, or embeds).
-        Returns extracted text description for further processing.
-        """
-        try:
-            if item.source_type == "attachment":
-                return await self._process_image_from_attachment(item.payload)
-            elif item.source_type == "url":
-                return await self._process_image_from_url(item.payload)
-            elif item.source_type == "embed":
-                # Prefer embed.image.url, then embed.thumbnail.url, but only if valid [IV]
-                try:
-                    img = getattr(item.payload, 'image', None)
-                    if img and getattr(img, 'url', None):
-                        return await self._process_image_from_url(img.url)
-                    thumb = getattr(item.payload, 'thumbnail', None)
-                    if thumb and getattr(thumb, 'url', None):
-                        return await self._process_image_from_url(thumb.url)
-                except Exception as _e:
-                    self.logger.debug(f"Embed URL extraction failed: {_e}")
-                return "Image embed found but no accessible image URL."
-            else:
-                return f"Unsupported image source type: {item.source_type}"
-                
-        except Exception as e:
-            self.logger.error(f"Error processing image item: {e}", exc_info=True)
-            return "Failed to process image."
-    
-    async def _process_image_from_attachment(self, attachment: discord.Attachment) -> str:
-        """Process image from Discord attachment. Pure function - never replies directly."""
-        tmp_path = None
-        try:
-            # Create temporary file for image processing
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as tmp_file:
-                tmp_path = tmp_file.name
-            
-            # Save attachment to temporary file
-            await attachment.save(tmp_path)
-            self.logger.debug(f"📷 Saved image attachment to temp file: {tmp_path}")
-            
-            # Use vision inference with default prompt
-            prompt = "Describe this image in detail, focusing on key visual elements, objects, text, and context."
-            vision_response = await see_infer(image_path=tmp_path, prompt=prompt)
-            
-            if not vision_response:
-                return "❌ Vision processing returned no response"
-            
-            if vision_response.error:
-                return f"❌ Vision processing error: {vision_response.error}"
-            
-            if not vision_response.content or not vision_response.content.strip():
-                return "❌ Vision processing returned empty content"
-            
-            return f"🖼️ **Image Analysis ({attachment.filename})**\n{vision_response.content.strip()}"
-            
-        finally:
-            if os.path.exists(tmp_path):
-                os.unlink(tmp_path)
-
-    async def _handle_image_with_model(self, item: InputItem, model_override: str | None = None) -> str:
-        """Handle image item using an explicit model override (from fallback ladder)."""
-        try:
-            if item.source_type == "attachment":
-                return await self._process_image_from_attachment_with_model(item.payload, model_override)
-            elif item.source_type == "url":
-                # TODO: implement URL image processing with model override
-                return await self._process_image_from_url(item.payload)
-            elif item.source_type == "embed":
-                # Prefer embed.image.url, then embed.thumbnail.url, but only if valid [IV]
-                try:
-                    img = getattr(item.payload, 'image', None)
-                    if img and getattr(img, 'url', None):
-                        return await self._process_image_from_url(img.url)
-                    thumb = getattr(item.payload, 'thumbnail', None)
-                    if thumb and getattr(thumb, 'url', None):
-                        return await self._process_image_from_url(thumb.url)
-                except Exception as _e:
-                    self.logger.debug(f"Embed URL extraction failed (override): {_e}")
-                return "Image embed found but no accessible image URL."
-            else:
-                return f"Unsupported image source type: {item.source_type}"
-        except Exception as e:
-            self.logger.error(f"Error processing image item with model override: {e}", exc_info=True)
-            return "Failed to process image."
-
-    async def _process_image_from_attachment_with_model(self, attachment: discord.Attachment, model_override: str | None) -> str:
-        """Process image attachment using a specific VL model override."""
-        tmp_path = None
-        try:
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as tmp_file:
-                tmp_path = tmp_file.name
-            await attachment.save(tmp_path)
-            self.logger.debug(f"📷 Saved image attachment to temp file: {tmp_path}")
-
-            prompt = "Describe this image in detail, focusing on key visual elements, objects, text, and context."
-            vision_response = await see_infer(image_path=tmp_path, prompt=prompt, model_override=model_override)
-
-            if not vision_response:
-                return "❌ Vision processing returned no response"
-            if vision_response.error:
-                return f"❌ Vision processing error: {vision_response.error}"
-            if not vision_response.content or not vision_response.content.strip():
-                return "❌ Vision processing returned empty content"
-            return f"🖼️ **Image Analysis ({attachment.filename})**\n{vision_response.content.strip()}"
-        finally:
-            if os.path.exists(tmp_path):
-                os.unlink(tmp_path)
-    
-    async def _process_image_from_url(self, url: str) -> str:
-        """Process image from URL using screenshot API + vision analysis."""
+    async def _process_image_from_url(self, url: str, model_override: Optional[str] = None) -> str:
+        """Process image from URL using screenshot API + vision analysis. Passes model_override to VL."""
         from .utils.external_api import external_screenshot
         from .see import see_infer
         
@@ -798,7 +793,7 @@ class Router:
             
             # Process the screenshot with vision model
             self.logger.info(f"👁️ Processing screenshot with vision model: {screenshot_path}")
-            vision_result = await see_infer(image_path=screenshot_path, prompt="Describe the contents of this screenshot")
+            vision_result = await see_infer(image_path=screenshot_path, prompt="Describe the contents of this screenshot", model_override=model_override)
             
             if vision_result and hasattr(vision_result, 'content') and vision_result.content:
                 analysis = vision_result.content
