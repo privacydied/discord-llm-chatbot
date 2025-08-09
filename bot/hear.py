@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 from typing import Union, Dict, Any
 from .stt import stt_manager
+from .stt_orchestrator import stt_orchestrator
 from .exceptions import InferenceError
 from .util.logging import get_logger
 
@@ -77,9 +78,9 @@ async def hear_infer(audio_path: Path) -> str:
                     error_msg += f": {stderr.decode()}"
                 raise RuntimeError(error_msg)
             
-            # Transcribe the processed audio
-            logger.debug(f"Transcribing processed audio: {temp_sped_up}")
-            return await stt_manager.transcribe_async(temp_sped_up)
+            # Transcribe the processed audio via orchestrator (falls back if disabled)
+            logger.debug(f"Transcribing processed audio (orchestrated): {temp_sped_up}")
+            return await stt_orchestrator.transcribe(temp_sped_up)
             
         finally:
             # Clean up temporary files
@@ -143,9 +144,9 @@ async def hear_infer_from_url(url: str, speedup: float = 1.5, force_refresh: boo
         # Fetch and prepare audio from URL
         processed_audio = await fetch_and_prepare_url_audio(url, speedup, force_refresh)
         
-        # Transcribe the processed audio using existing STT pipeline
-        logger.debug(f"Transcribing processed video audio: {processed_audio.audio_path}")
-        transcription = await stt_manager.transcribe_async(processed_audio.audio_path)
+        # Transcribe the processed audio using orchestrator (uses providers/modes)
+        logger.debug(f"Transcribing processed video audio (orchestrated): {processed_audio.audio_path}")
+        transcription = await stt_orchestrator.transcribe(processed_audio.audio_path)
         
         # Return transcription with rich metadata
         result = {

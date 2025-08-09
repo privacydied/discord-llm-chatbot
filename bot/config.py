@@ -368,6 +368,20 @@ def load_config():
         "STREAMING_ENABLE_SEARCH": os.getenv("STREAMING_ENABLE_SEARCH", "false").lower() == "true",
         "STREAMING_ENABLE_RAG": os.getenv("STREAMING_ENABLE_RAG", "false").lower() == "true",
         "STREAMING_ENABLE_MEDIA": os.getenv("STREAMING_ENABLE_MEDIA", "true").lower() == "true",
+
+        # ===== STT ORCHESTRATION [CA][CMV] =====
+        # Global toggle for STT orchestrator (falls back to legacy path when disabled)
+        "STT_ENABLE": os.getenv("STT_ENABLE", "true").lower() == "true",
+        # Orchestration mode: single | cascade_primary_then_fallbacks | parallel_first_acceptable | parallel_best_of | hybrid_draft_then_finalize
+        "STT_MODE": os.getenv("STT_MODE", "single"),
+        # Active providers (comma-separated). Supported now: local_whisper
+        "STT_ACTIVE_PROVIDERS": [s.strip() for s in os.getenv("STT_ACTIVE_PROVIDERS", "local_whisper").split(",") if s.strip()],
+        # Minimum confidence to accept result (providers lacking confidence are always acceptable)
+        "STT_CONFIDENCE_MIN": _safe_float(os.getenv("STT_CONFIDENCE_MIN"), "0.0", "STT_CONFIDENCE_MIN"),
+        # Cache TTL for successful transcripts (seconds)
+        "STT_CACHE_TTL": _safe_int(os.getenv("STT_CACHE_TTL"), "600", "STT_CACHE_TTL"),
+        # Local provider concurrency controls
+        "STT_LOCAL_CONCURRENCY": _safe_int(os.getenv("STT_LOCAL_CONCURRENCY"), "2", "STT_LOCAL_CONCURRENCY"),
     }
     
     # Cache the config for performance (avoid repeated env var lookups)

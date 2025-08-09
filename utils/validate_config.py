@@ -94,9 +94,19 @@ def main() -> int:
         "STREAMING_ENABLE_MEDIA": cfg.get("STREAMING_ENABLE_MEDIA"),
     }
 
+    stt = {
+        "STT_ENABLE": cfg.get("STT_ENABLE"),
+        "STT_MODE": cfg.get("STT_MODE"),
+        "STT_ACTIVE_PROVIDERS": ", ".join(cfg.get("STT_ACTIVE_PROVIDERS", []) or []),
+        "STT_CONFIDENCE_MIN": cfg.get("STT_CONFIDENCE_MIN"),
+        "STT_CACHE_TTL": cfg.get("STT_CACHE_TTL"),
+        "STT_LOCAL_CONCURRENCY": cfg.get("STT_LOCAL_CONCURRENCY"),
+    }
+
     console.print(_kv_table("Screenshot API", screenshot))
     console.print(_kv_table("Search", search))
     console.print(_kv_table("Streaming Status Cards", streaming))
+    console.print(_kv_table("STT Orchestrator", stt))
 
     return 0
 
