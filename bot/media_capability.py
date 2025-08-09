@@ -28,6 +28,7 @@ MEDIA_CAPABLE_DOMAINS = {
     "youtube.com",
     "youtu.be", 
     "tiktok.com",
+    "m.tiktok.com",
     "vm.tiktok.com",
     "vimeo.com",
     "dailymotion.com",

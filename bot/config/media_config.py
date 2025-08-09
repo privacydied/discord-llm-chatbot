@@ -35,6 +35,7 @@ class MediaIngestionConfig:
         "youtube.com",
         "youtu.be",
         "tiktok.com", 
+        "m.tiktok.com",
         "vm.tiktok.com",
         "twitter.com",
         "x.com"

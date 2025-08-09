@@ -136,6 +136,44 @@ The bot infers a plan from the message content and attachments:
 
 If no plan can be inferred, the bot falls back to generic phases labeled “Working…” with the configured step count.
 
+## Memory and Context Management
+
+This project supports configurable memory systems to balance context quality, persistence, and resource usage. See the dedicated guide at `docs/MEMORY_AND_CONTEXT.md`.
+
+### Quick Overview
+
+-  **Conversation Context (ephemeral):**
+   - `MAX_CONTEXT_MESSAGES` controls how many recent messages are kept in-model for each reply.
+   - `IN_MEMORY_CONTEXT_ONLY` forces context to be maintained only in RAM (no disk persistence of conversation logs).
+
+-  **User Memory (persistent per user):**
+   - `MAX_USER_MEMORY` limits the number of salient “memories” per user (e.g., preferences, recurring details).
+   - Saved periodically per `MEMORY_SAVE_INTERVAL`.
+
+-  **Server Memory (persistent per guild/server):**
+   - `MAX_SERVER_MEMORY` caps the number of global server-level memories.
+   - Useful for shared knowledge (channels, norms, roles).
+
+-  **Optional paths and limits:**
+   - `USER_PROFILE_DIR`, `SERVER_PROFILE_DIR`, `DM_LOGS_DIR`, `TTS_PREFS_FILE`, `MAX_CONVERSATION_LOG_SIZE`, `DEBUG`.
+
+Example `.env`:
+
+```env
+# Context & Memory
+MAX_CONTEXT_MESSAGES=30
+IN_MEMORY_CONTEXT_ONLY=false
+MAX_USER_MEMORY=5
+MAX_SERVER_MEMORY=100
+MEMORY_SAVE_INTERVAL=30
+# Optional paths and limits
+#USER_PROFILE_DIR=var/data/users
+#SERVER_PROFILE_DIR=var/data/servers
+#DM_LOGS_DIR=var/log/dm
+#TTS_PREFS_FILE=var/data/tts_prefs.json
+#MAX_CONVERSATION_LOG_SIZE=10000
+```
+
 ## 4. Troubleshooting
 
 ### Dependency Issues

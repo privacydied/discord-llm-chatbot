@@ -866,7 +866,8 @@ class Router:
                 r'https?://(?:www\.)?youtube\.com/watch\?v=[\w-]+',
                 r'https?://youtu\.be/[\w-]+',
                 r'https?://(?:www\.)?tiktok\.com/@[\w.-]+/video/\d+',
-                r'https?://(?:vm\.)?tiktok\.com/[\w-]+',
+                r'https?://(?:www\.)?tiktok\.com/t/[\w-]+',
+                r'https?://(?:m|vm)\.tiktok\.com/[\w-]+',
             ]
             
             for pattern in fallback_patterns:

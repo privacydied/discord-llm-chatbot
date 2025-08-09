@@ -21,7 +21,8 @@ YOUTUBE_PATTERNS = [
 
 TIKTOK_PATTERNS = [
     r'https?://(?:www\.)?tiktok\.com/@[\w.-]+/video/\d+',
-    r'https?://(?:vm\.)?tiktok\.com/[\w-]+',
+    r'https?://(?:www\.)?tiktok\.com/t/[\w-]+',
+    r'https?://(?:m|vm)\.tiktok\.com/[\w-]+',
 ]
 
 ALL_PATTERNS = YOUTUBE_PATTERNS + TIKTOK_PATTERNS
@@ -215,7 +216,7 @@ class VideoCommands(commands.Cog):
         embed.add_field(
             name="🌐 Supported Sites",
             value="• YouTube (youtube.com, youtu.be)\n"
-                  "• TikTok (tiktok.com, vm.tiktok.com)",
+                  "• TikTok (tiktok.com, tiktok.com/t, m.tiktok.com, vm.tiktok.com)",
             inline=False
         )
         

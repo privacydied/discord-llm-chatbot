@@ -39,7 +39,8 @@ _FALLBACK_PATTERNS = [
     re.compile(r'https?://(?:www\.)?youtube\.com/watch\?(?:.*&)?v=[\w-]+'),
     re.compile(r'https?://youtu\.be/[\w-]+'),
     re.compile(r'https?://(?:www\.)?tiktok\.com/@[\w.-]+/video/\d+'),
-    re.compile(r'https?://(?:vm\.)?tiktok\.com/[\w-]+'),
+    re.compile(r'https?://(?:www\.)?tiktok\.com/t/[\w-]+'),
+    re.compile(r'https?://(?:m|vm)\.tiktok\.com/[\w-]+'),
 ]
 
 
