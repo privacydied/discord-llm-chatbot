@@ -4,6 +4,7 @@ import asyncio
 import json
 import os
 import re
+import html
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
@@ -23,6 +24,7 @@ USER_AGENT = os.getenv(
     "(KHTML, like Gecko) Chrome/120.0 Safari/537.36",
 )
 ENABLE_TIER_B = os.getenv("WEBEX_ENABLE_TIER_B", "1").strip() not in {"0", "false", "False"}
+ACCEPT_LANGUAGE = os.getenv("WEBEX_ACCEPT_LANGUAGE", "en-US,en;q=0.9")
 
 
 @dataclass
@@ -62,7 +64,13 @@ class WebExtractionService:
     async def _get_client(self) -> httpx.AsyncClient:
         if self._client is None:
             self._client = httpx.AsyncClient(
-                headers={"User-Agent": USER_AGENT}, follow_redirects=True, timeout=TIER_A_TIMEOUT_S
+                headers={
+                    "User-Agent": USER_AGENT,
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                    "Accept-Language": ACCEPT_LANGUAGE,
+                },
+                follow_redirects=True,
+                timeout=TIER_A_TIMEOUT_S,
             )
         return self._client
 
@@ -149,6 +157,19 @@ class WebExtractionService:
 
     # --- Parsers --- [CSD]
     @staticmethod
+    def _normalize_tweet_text(text: str) -> str:
+        """Normalize common Twitter/X OG wrapping and whitespace."""
+        if not text:
+            return ""
+        # Unescape HTML entities and trim quotes/wrappers
+        t = html.unescape(text).strip()
+        # Remove leading/trailing Unicode quotes often used in OG
+        t = t.strip("\u201c\u201d\"\'")
+        # Collapse whitespace
+        t = re.sub(r"\s+", " ", t).strip()
+        return t
+
+    @staticmethod
     def _parse_html_for_text(html: str, url: str) -> Dict[str, Any]:
         soup = BeautifulSoup(html, "html.parser")
         text_candidates = []
@@ -157,39 +178,62 @@ class WebExtractionService:
 
         # Twitter/X specific heuristics [PA]
         if re.search(r"https?://(www\.)?(twitter|x)\.com/", url):
-            # Try OpenGraph and Twitter cards first
+            # Try OpenGraph and Twitter cards first (highest precision for visible text)
             og_desc = soup.find("meta", attrs={"property": "og:description"})
             tw_desc = soup.find("meta", attrs={"name": "twitter:description"})
             for m in (og_desc, tw_desc):
                 if m and m.get("content"):
-                    text_candidates.append(m["content"])  # often contains tweet text
-            og_title = soup.find("meta", attrs={"property": "og:title"})
-            if og_title and og_title.get("content"):
-                # Sometimes includes author handle
-                if not author:
-                    author = og_title["content"].strip()
+                    norm = WebExtractionService._normalize_tweet_text(m["content"])  # often contains tweet text
+                    if norm:
+                        text_candidates.append(norm)
 
-            # Look for JSON in script tags (heuristic)
+            # Author signals
+            og_title = soup.find("meta", attrs={"property": "og:title"})
+            tw_creator = soup.find("meta", attrs={"name": "twitter:creator"})
+            for m in (tw_creator, og_title):
+                if author:
+                    break
+                if m and m.get("content"):
+                    author = (m["content"] or "").strip() or author
+
+            # Detect presence of photos via OG to inform logs (no change in success semantics)
+            og_image = soup.find("meta", attrs={"property": "og:image"})
+            if og_image and og_image.get("content"):
+                logger.debug(
+                    "OG image detected for Twitter URL",
+                    extra={"event": "webex.twitter.og_image", "detail": {"url": url}},
+                )
+
+            # Look for embedded JSON in script tags (prefer ld+json / __NEXT_DATA__)
+            keys_preference = (
+                "legacy.full_text",
+                "full_text",
+                "text",
+                "articleBody",
+                "description",
+            )
             for script in soup.find_all("script"):
                 t = script.string or script.text or ""
                 if not t:
                     continue
-                if "__INITIAL_STATE__" in t or "__NEXT_DATA__" in t or "hydrate" in t:
-                    raw_json_present = True
-                    # Best-effort look for embedded text fields
+                is_ld = script.get("type") == "application/ld+json"
+                if is_ld or "__NEXT_DATA__" in t or "__INITIAL_STATE__" in t or "hydrate" in t:
                     try:
-                        # naive JSON extraction
+                        raw_json_present = True
+                        # Attempt to parse a JSON object within the script content
                         start = t.find("{")
                         end = t.rfind("}")
                         if 0 <= start < end:
                             obj = json.loads(t[start : end + 1])
-                            # attempt common fields
-                            for k in ("text", "full_text", "description"):
+                            for k in keys_preference:
                                 v = WebExtractionService._deep_get(obj, k)
-                                if isinstance(v, str) and len(v.strip()) > 0:
-                                    text_candidates.append(v.strip())
-                                    break
+                                if isinstance(v, str):
+                                    norm = WebExtractionService._normalize_tweet_text(v)
+                                    if norm:
+                                        text_candidates.append(norm)
+                                        break
                     except Exception:
+                        # best-effort only
                         pass
         else:
             # Generic site extraction via meta
@@ -207,8 +251,16 @@ class WebExtractionService:
             if paragraphs:
                 text_candidates.append(max(paragraphs, key=len))
 
+        # Deduplicate while preserving order
+        seen = set()
+        uniq_candidates = []
+        for c in text_candidates:
+            if c not in seen:
+                seen.add(c)
+                uniq_candidates.append(c)
+
         text = None
-        for cand in text_candidates:
+        for cand in uniq_candidates:
             cand = (cand or "").strip()
             if cand:
                 text = cand
