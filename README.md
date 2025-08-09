@@ -186,6 +186,22 @@ pip install psutil>=5.8.0
 | `RAG_INDEXING_BATCH_SIZE` | Number of docs per indexing batch/flush | ❌ | `32` |
 | `RAG_LAZY_LOAD_TIMEOUT` | Seconds to wait in search path for lazy load (0 = non-blocking) | ❌ | `0.0` |
 
+### X / Twitter API (API-first Routing)
+
+When enabled, the bot uses the X API to hydrate tweets and route by media type.
+
+- `X_API_ENABLED` (default: `false`) — Enable X API integration.
+- `X_API_BEARER_TOKEN` — Bearer token for v2 API.
+- `X_API_REQUIRE_API_FOR_TWITTER` (default: `false`) — If true, do not scrape/fallback on 401/403/404/410.
+- `X_API_ALLOW_FALLBACK_ON_5XX` (default: `true`) — Allow generic extraction fallback on 429/5xx.
+- `X_API_ROUTE_PHOTOS_TO_VL` (default: `false`) — If true, tweets with photos are analyzed by the Vision-Language model and aggregated into the reply with the tweet text.
+- `X_API_TIMEOUT_MS`, `X_API_RETRY_MAX_ATTEMPTS`, `X_API_BREAKER_*` — Networking/resilience knobs.
+- `X_TWEET_FIELDS`, `X_EXPANSIONS`, `X_MEDIA_FIELDS`, `X_USER_FIELDS`, `X_POLL_FIELDS` — Field hydration lists.
+
+Notes:
+- Video/animated GIF tweets are routed to STT via yt-dlp ingest. Photo-only tweets, when the flag is enabled, are described by VL and combined with tweet text. Otherwise, the bot returns formatted tweet text with a photo count.
+- This honors the sequential multi-modal pipeline (1 in → 1 out) and existing retry/error handling.
+
 ## 🤖 Commands
 
 ### User Commands

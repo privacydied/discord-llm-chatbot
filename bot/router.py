@@ -58,6 +58,7 @@ from .see import see_infer
 from .web import process_url
 from .utils.mention_utils import ensure_single_mention
 from .web_extraction_service import web_extractor
+from .utils.file_utils import download_file
 
 # Dependency availability flags
 try:
@@ -645,6 +646,47 @@ class Router:
             self.logger.error(f"❌ Error in screenshot + vision processing: {e}", exc_info=True)
             return f"⚠️ Failed to process screenshot of URL: {url} (Error: {str(e)})"
     
+    async def _vl_describe_image_from_url(self, image_url: str, *, prompt: Optional[str] = None, model_override: Optional[str] = None) -> Optional[str]:
+        """
+        Download an image from a direct URL and run VL inference. Returns text or None.
+        [IV][RM][REH]
+        """
+        if not image_url or not isinstance(image_url, str) or not re.match(r'^https?://', image_url):
+            self.logger.warning(f"⚠️ Invalid image URL for VL: {image_url}")
+            return None
+        suffix = ".jpg"
+        try:
+            # Infer extension if present
+            m = re.search(r"\.(jpg|jpeg|png|webp)(?:\?|$)", image_url, re.IGNORECASE)
+            if m:
+                ext = m.group(1).lower()
+                suffix = f".{ext if ext != 'jpeg' else 'jpg'}"
+        except Exception:
+            pass
+        tmp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp_file:
+                tmp_path = tmp_file.name
+            ok = await download_file(image_url, Path(tmp_path))
+            if not ok:
+                self.logger.error(f"❌ Failed to download image for VL: {image_url}")
+                return None
+            vl_prompt = prompt or "Describe this image in detail. Focus on salient objects, text, and context."
+            res = await see_infer(image_path=tmp_path, prompt=vl_prompt, model_override=model_override)
+            if res and getattr(res, 'content', None):
+                return str(res.content).strip()
+            self.logger.warning(f"⚠️ VL returned empty content for: {image_url}")
+            return None
+        except Exception as e:
+            self.logger.error(f"❌ VL describe failed for {image_url}: {e}", exc_info=True)
+            return None
+        finally:
+            try:
+                if tmp_path and os.path.exists(tmp_path):
+                    os.unlink(tmp_path)
+            except Exception:
+                pass
+    
     async def _handle_video_url(self, item: InputItem) -> str:
         """
         Handle video URL input items (YouTube, TikTok, etc.).
@@ -833,11 +875,75 @@ class Router:
                                 )
                                 return f"Detected media in {url} but could not process it right now."
 
-                        # Photo-only: return formatted text with media hint [PA]
+                        # Photo-only: route to VL if enabled, else format with count [PA]
                         if media_types == {"photo"} or ("photo" in media_types and len(media_types) == 1):
+                            route_photos = bool(cfg.get("X_API_ROUTE_PHOTOS_TO_VL", False))
+                            photos = [m for m in media_list if isinstance(m, dict) and m.get("type") == "photo"]
                             base = self._format_x_tweet_result(api_data, url)
-                            photo_count = sum(1 for m in media_list if m.get("type") == "photo")
-                            return f"{base}\nPhotos: {photo_count}"
+                            if not route_photos:
+                                photo_count = len(photos)
+                                self._metric_inc("x.photo_to_vl.skipped", {"enabled": "false"})
+                                return f"{base}\nPhotos: {photo_count}"
+
+                            # When enabled, extract photo URLs and run VL sequentially [sequential policy]
+                            self.logger.info(
+                                "🖼️🐦 Routing X photos to VL",
+                                extra={
+                                    "event": "x.photo_to_vl.start",
+                                    "detail": {
+                                        "url": url,
+                                        "photo_count": len(photos),
+                                    },
+                                },
+                            )
+                            self._metric_inc("x.photo_to_vl.enabled", None)
+                            photo_urls: List[str] = []
+                            for m in photos:
+                                u = m.get("url") or m.get("preview_image_url")
+                                if u:
+                                    photo_urls.append(u)
+
+                            if not photo_urls:
+                                self.logger.warning("No photo URLs present in X API media; falling back to count")
+                                self._metric_inc("x.photo_to_vl.no_urls", None)
+                                return f"{base}\nPhotos: {len(photos)}"
+
+                            descriptions: List[str] = []
+                            successes = 0
+                            failures = 0
+                            for idx, purl in enumerate(photo_urls, start=1):
+                                self.logger.info(f"🔎 VL analyzing X photo {idx}/{len(photo_urls)}: {purl}")
+                                self._metric_inc("x.photo_to_vl.attempt", {"idx": str(idx)})
+                                prompt = (
+                                    f"This is photo {idx} of {len(photo_urls)} from a tweet: {url}. "
+                                    f"Describe it clearly and succinctly, including any visible text."
+                                )
+                                desc = await self._vl_describe_image_from_url(purl, prompt=prompt)
+                                if desc:
+                                    successes += 1
+                                    self._metric_inc("x.photo_to_vl.success", {"idx": str(idx)})
+                                    descriptions.append(f"📷 Photo {idx}/{len(photo_urls)}\n{desc}")
+                                else:
+                                    failures += 1
+                                    self._metric_inc("x.photo_to_vl.failure", {"idx": str(idx)})
+                                    descriptions.append(f"📷 Photo {idx}/{len(photo_urls)} — analysis unavailable")
+
+                            self.logger.info(
+                                "🧩 X photo VL complete",
+                                extra={
+                                    "event": "x.photo_to_vl.done",
+                                    "detail": {
+                                        "url": url,
+                                        "total": len(photo_urls),
+                                        "ok": successes,
+                                        "fail": failures,
+                                    },
+                                },
+                            )
+                            # Aggregate with original tweet text
+                            agg = "\n\n".join(descriptions)
+                            header = f"{base}\nPhotos analyzed: {successes}/{len(photo_urls)}"
+                            return f"{header}\n\n{agg}"
 
                         # Default: text formatting
                         return self._format_x_tweet_result(api_data, url)

@@ -117,3 +117,44 @@ async def test_x_api_text_only_formats_default(monkeypatch):
     # Should contain the URL and text body formatted
     assert "twitter.com" in res or "x.com" in res
     assert "plain post" in res
+
+
+@pytest.mark.asyncio
+async def test_x_api_photo_only_routes_to_vl_when_enabled(monkeypatch):
+    bot = DummyBot()
+    # Enable photo->VL routing
+    bot.config["X_API_ROUTE_PHOTOS_TO_VL"] = True
+    router = Router(bot)
+
+    monkeypatch.setattr(XApiClient, "extract_tweet_id", staticmethod(lambda u: "1"))
+
+    class _DummyX:
+        async def get_tweet_by_id(self, _id):
+            return {
+                "data": {"text": "photo post", "author_id": "u1"},
+                "includes": {
+                    "users": [{"id": "u1", "username": "user"}],
+                    "media": [
+                        {"type": "photo", "media_key": "m1", "url": "https://example.com/p1.jpg"},
+                        {"type": "photo", "media_key": "m2", "url": "https://example.com/p2.jpg"},
+                    ],
+                },
+            }
+
+    async def _get_client(_self):
+        return _DummyX()
+
+    monkeypatch.setattr(Router, "_get_x_api_client", _get_client)
+
+    # Avoid real network/vision by mocking the helper
+    async def _fake_vl(self, image_url: str, *, prompt=None, model_override=None):
+        return f"desc for {image_url.split('/')[-1]}"
+
+    monkeypatch.setattr(Router, "_vl_describe_image_from_url", _fake_vl, raising=True)
+
+    item = InputItem(source_type="url", payload="https://twitter.com/user/status/1", order_index=0)
+    res = await router._handle_general_url(item)
+
+    assert "Photos analyzed: 2/2" in res
+    assert "📷 Photo 1/2" in res and "📷 Photo 2/2" in res
+    assert "desc for p1.jpg" in res and "desc for p2.jpg" in res

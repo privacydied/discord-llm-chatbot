@@ -310,6 +310,9 @@ def load_config():
         "X_API_REQUIRE_API_FOR_TWITTER": os.getenv("X_API_REQUIRE_API_FOR_TWITTER", "false").lower() == "true",
         "X_API_ALLOW_FALLBACK_ON_5XX": os.getenv("X_API_ALLOW_FALLBACK_ON_5XX", "true").lower() == "true",
 
+        # Routing: enable photo media to VL analysis path [CMV]
+        "X_API_ROUTE_PHOTOS_TO_VL": os.getenv("X_API_ROUTE_PHOTOS_TO_VL", "false").lower() == "true",
+
         # Networking and resilience knobs
         "X_API_TIMEOUT_MS": _safe_int(os.getenv("X_API_TIMEOUT_MS"), "8000", "X_API_TIMEOUT_MS"),
         "X_API_RETRY_MAX_ATTEMPTS": _safe_int(os.getenv("X_API_RETRY_MAX_ATTEMPTS"), "5", "X_API_RETRY_MAX_ATTEMPTS"),
