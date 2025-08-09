@@ -106,3 +106,4 @@ enhanced_context.json.key
 QWEN.md
 chroma_db/chroma.sqlite3
 logs/bot.jsonl
+cache/video_audio/index.json
