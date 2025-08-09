@@ -103,10 +103,20 @@ def main() -> int:
         "STT_LOCAL_CONCURRENCY": cfg.get("STT_LOCAL_CONCURRENCY"),
     }
 
+    x_twitter = {
+        "X_API_ENABLED": cfg.get("X_API_ENABLED"),
+        "X_API_REQUIRE_API_FOR_TWITTER": cfg.get("X_API_REQUIRE_API_FOR_TWITTER"),
+        "X_API_ALLOW_FALLBACK_ON_5XX": cfg.get("X_API_ALLOW_FALLBACK_ON_5XX"),
+        "X_SYNDICATION_ENABLED": cfg.get("X_SYNDICATION_ENABLED"),
+        "X_TWITTER_STT_PROBE_FIRST": cfg.get("X_TWITTER_STT_PROBE_FIRST"),
+        "X_API_ROUTE_PHOTOS_TO_VL": cfg.get("X_API_ROUTE_PHOTOS_TO_VL"),
+    }
+
     console.print(_kv_table("Screenshot API", screenshot))
     console.print(_kv_table("Search", search))
     console.print(_kv_table("Streaming Status Cards", streaming))
     console.print(_kv_table("STT Orchestrator", stt))
+    console.print(_kv_table("X / Twitter", x_twitter))
 
     return 0
 

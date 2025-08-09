@@ -201,10 +201,10 @@ VISION_RETRY_CONFIG = RetryConfig(
 )
 
 API_RETRY_CONFIG = RetryConfig(
-    max_attempts=5,
+    max_attempts=2,
     base_delay=1.0,
-    max_delay=60.0,
-    exponential_base=2.0,
+    max_delay=8.0,
+    exponential_base=1.5,
     jitter=True,
     retryable_exceptions=[APIError, ConnectionError, TimeoutError, httpx.HTTPStatusError],
     retryable_status_codes=[500, 502, 503, 504, 429]

@@ -314,6 +314,9 @@ def load_config():
         # Hardcoded default: enabled unless explicitly disabled
         "X_SYNDICATION_ENABLED": os.getenv("X_SYNDICATION_ENABLED", "true").lower() == "true",
 
+        # Fast probe: attempt STT on X URLs before API/syndication [CMV][PA]
+        "X_TWITTER_STT_PROBE_FIRST": os.getenv("X_TWITTER_STT_PROBE_FIRST", "true").lower() == "true",
+
         # Routing: enable photo media to VL analysis path [CMV]
         # Hardcoded default: enabled (route photos to VL)
         "X_API_ROUTE_PHOTOS_TO_VL": os.getenv("X_API_ROUTE_PHOTOS_TO_VL", "true").lower() == "true",

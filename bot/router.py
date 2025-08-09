@@ -1106,6 +1106,25 @@ class Router:
                 tweet_id = XApiClient.extract_tweet_id(str(url))
                 x_client = await self._get_x_api_client()
 
+                # Fast path: try STT probe first for X URLs only when API client is unavailable [PA][REH]
+                # Preserves API-first behavior when API access is configured/available.
+                if bool(cfg.get("X_TWITTER_STT_PROBE_FIRST", True)) and (x_client is None):
+                    try:
+                        stt_res = await hear_infer_from_url(url)
+                        if stt_res and stt_res.get("transcription"):
+                            transcription = stt_res["transcription"]
+                            return f"Video/audio content from {url}: {transcription}"
+                    except Exception as stt_err:
+                        err_str = str(stt_err).lower()
+                        # Only bypass to API/syndication if clearly not video/audio or unsupported URL
+                        if ("no video or audio content" in err_str) or ("unsupported url" in err_str):
+                            pass
+                        else:
+                            self.logger.info(
+                                "X STT probe failed; continuing with API/syndication path",
+                                extra={"event": "x.stt_probe.fail", "detail": {"url": url, "error": str(stt_err)}},
+                            )
+
                 # Tier 1: Syndication JSON (cache + concurrency) when allowed and preferred [PA][REH]
                 if tweet_id and syndication_enabled and not require_api and (syndication_first or x_client is None):
                     syn = await self._get_tweet_via_syndication(tweet_id)
