@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Any, Callable, Coroutine, Dict, Optional, TYPE_CHECKING, List, Awaitable
 import time
 import discord
+import httpx
 
 # Import new modality system
 from .modality import InputModality, InputItem, collect_input_items, map_item_to_modality
@@ -100,6 +101,13 @@ class Router:
         self.logger.info("✔ Router initialized.")
         # Lazy-initialized X API client
         self._x_api_client: Optional[XApiClient] = None
+        # Tweet syndication cache and locks [CA][PA]
+        self._syn_cache: Dict[str, Dict[str, Any]] = {}
+        self._syn_locks: Dict[str, asyncio.Lock] = {}
+        try:
+            self._syn_ttl_s: float = float(self.config.get("X_SYNDICATION_TTL_S", 900))
+        except Exception:
+            self._syn_ttl_s = 900.0
 
     async def _get_x_api_client(self) -> Optional[XApiClient]:
         """Create or return a cached XApiClient based on config. [CA][IV]"""
@@ -125,6 +133,84 @@ class Router:
                 self.logger.error(f"Failed to initialize XApiClient: {e}")
                 self._x_api_client = None
         return self._x_api_client
+
+    async def _get_tweet_via_syndication(self, tweet_id: str) -> Optional[Dict[str, Any]]:
+        """Fetch tweet via X/Twitter syndication CDN with TTL cache and per-ID concurrency.
+        Endpoint shape: https://cdn.syndication.twimg.com/widgets/tweet?id={id}
+        Returns parsed JSON dict on success or None on failure. [PA][REH]
+        """
+        if not tweet_id:
+            return None
+        # Check cache
+        now = time.time()
+        cached = self._syn_cache.get(tweet_id)
+        if cached and (now - float(cached.get("ts", 0))) < self._syn_ttl_s:
+            self._metric_inc("x.syndication.cache_hit", None)
+            return cached.get("data")
+
+        # Per-ID lock to avoid thundering herd
+        lock = self._syn_locks.get(tweet_id)
+        if lock is None:
+            lock = asyncio.Lock()
+            self._syn_locks[tweet_id] = lock
+        async with lock:
+            # Check cache again inside lock
+            cached = self._syn_cache.get(tweet_id)
+            if cached and (now - float(cached.get("ts", 0))) < self._syn_ttl_s:
+                self._metric_inc("x.syndication.cache_hit_locked", None)
+                return cached.get("data")
+
+            url = f"https://cdn.syndication.twimg.com/widgets/tweet?id={tweet_id}"
+            timeout_ms = int(self.config.get("X_SYNDICATION_TIMEOUT_MS", 4000))
+            headers = {
+                "User-Agent": "Mozilla/5.0 (X-Bot Syndication Fetch)",
+                "Accept": "application/json, text/javascript;q=0.9, */*;q=0.8",
+            }
+            self._metric_inc("x.syndication.fetch", None)
+            try:
+                async with httpx.AsyncClient(timeout=timeout_ms / 1000.0) as client:
+                    resp = await client.get(url, headers=headers)
+                    if resp.status_code != 200:
+                        self.logger.info(
+                            "Syndication non-200",
+                            extra={"detail": {"tweet_id": tweet_id, "status": resp.status_code}},
+                        )
+                        self._metric_inc("x.syndication.non_200", {"status": str(resp.status_code)})
+                        return None
+                    data = resp.json()
+            except Exception as e:
+                self.logger.info(
+                    "Syndication fetch failed",
+                    extra={"detail": {"tweet_id": tweet_id, "error": str(e)}},
+                )
+                self._metric_inc("x.syndication.error", None)
+                return None
+
+            # Minimal validation: require text field
+            if not isinstance(data, dict) or not (data.get("text") or data.get("full_text")):
+                self._metric_inc("x.syndication.invalid", None)
+                return None
+
+            # Cache and return
+            self._syn_cache[tweet_id] = {"data": data, "ts": time.time()}
+            self._metric_inc("x.syndication.success", None)
+            return data
+
+    def _format_syndication_result(self, syn_data: Dict[str, Any], url: str) -> str:
+        """Format Syndication JSON tweet into concise text similar to API format. [PA]"""
+        try:
+            text = (syn_data.get("text") or syn_data.get("full_text") or "").strip()
+            user = syn_data.get("user") or {}
+            username = user.get("screen_name") or user.get("name")
+            created_at = syn_data.get("created_at") or syn_data.get("date_created")
+            photos = syn_data.get("photos") or []
+            media_hint = f" • media:{len(photos)}" if photos else ""
+            prefix = f"@{username}" if username else "Tweet"
+            stamp = f" • {created_at}" if created_at else ""
+            body = text if len(text) <= 4000 else (text[:3990] + "…")
+            return f"{prefix}{stamp}{media_hint} → {url}\n{body}"
+        except Exception:
+            return f"Tweet → {url}\n{str(syn_data)[:4000]}"
 
     @staticmethod
     def _is_twitter_url(url: str) -> bool:
@@ -849,18 +935,60 @@ class Router:
                 cfg = self.config
                 require_api = bool(cfg.get("X_API_REQUIRE_API_FOR_TWITTER", False))
                 allow_fallback_5xx = bool(cfg.get("X_API_ALLOW_FALLBACK_ON_5XX", True))
+                syndication_enabled = bool(cfg.get("X_SYNDICATION_ENABLED", True))
+                # Keep API-first by default; can opt-in to syndication-first
+                syndication_first = bool(cfg.get("X_SYNDICATION_FIRST", False))
                 tweet_id = XApiClient.extract_tweet_id(str(url))
                 x_client = await self._get_x_api_client()
 
+                # Tier 1: Syndication JSON (cache + concurrency) when allowed and preferred [PA][REH]
+                if tweet_id and syndication_enabled and not require_api and (syndication_first or x_client is None):
+                    syn = await self._get_tweet_via_syndication(tweet_id)
+                    if syn and syn.get("text"):
+                        self._metric_inc("x.syndication.hit", None)
+                        # Basic media handling: photos → optional VL
+                        photos = syn.get("photos") or []
+                        base = self._format_syndication_result(syn, url)
+                        if not photos:
+                            return base
+                        # Respect photo-to-VL flag
+                        route_photos = bool(cfg.get("X_API_ROUTE_PHOTOS_TO_VL", False))
+                        if not route_photos:
+                            return f"{base}\nPhotos: {len(photos)}"
+                        descriptions: List[str] = []
+                        successes = 0
+                        failures = 0
+                        for idx, p in enumerate(photos, start=1):
+                            purl = p.get("url") or p.get("image_url") or p.get("src")
+                            if not purl:
+                                failures += 1
+                                descriptions.append(f"📷 Photo {idx}/{len(photos)} — no URL available")
+                                continue
+                            self._metric_inc("x.photo_to_vl.attempt", {"idx": str(idx)})
+                            prompt = (
+                                f"This is photo {idx} of {len(photos)} from a tweet: {url}. "
+                                f"Describe it clearly and succinctly, including any visible text."
+                            )
+                            desc = await self._vl_describe_image_from_url(purl, prompt=prompt)
+                            if desc:
+                                successes += 1
+                                self._metric_inc("x.photo_to_vl.success", {"idx": str(idx)})
+                                descriptions.append(f"📷 Photo {idx}/{len(photos)}\n{desc}")
+                            else:
+                                failures += 1
+                                self._metric_inc("x.photo_to_vl.failure", {"idx": str(idx)})
+                                descriptions.append(f"📷 Photo {idx}/{len(photos)} — analysis unavailable")
+                        header = f"{base}\nPhotos analyzed: {successes}/{len(photos)}"
+                        return f"{header}\n\n" + "\n\n".join(descriptions)
+
+                # Tier 2 (optionally before API if syndication_first): X API [SFT]
                 if tweet_id and x_client is not None:
                     try:
                         api_data = await x_client.get_tweet_by_id(tweet_id)
-                        # Family-internal routing based on media types [CA]
                         includes = api_data.get("includes") or {}
                         media_list = includes.get("media") or []
                         media_types = {m.get("type") for m in media_list if isinstance(m, dict)}
 
-                        # Route video/animated GIF to STT pipeline via yt-dlp ingest [PA]
                         if {"video", "animated_gif"} & media_types:
                             try:
                                 stt_res = await hear_infer_from_url(url)
@@ -875,7 +1003,6 @@ class Router:
                                 )
                                 return f"Detected media in {url} but could not process it right now."
 
-                        # Photo-only: route to VL if enabled, else format with count [PA]
                         if media_types == {"photo"} or ("photo" in media_types and len(media_types) == 1):
                             route_photos = bool(cfg.get("X_API_ROUTE_PHOTOS_TO_VL", False))
                             photos = [m for m in media_list if isinstance(m, dict) and m.get("type") == "photo"]
@@ -885,7 +1012,6 @@ class Router:
                                 self._metric_inc("x.photo_to_vl.skipped", {"enabled": "false"})
                                 return f"{base}\nPhotos: {photo_count}"
 
-                            # When enabled, extract photo URLs and run VL sequentially [sequential policy]
                             self.logger.info(
                                 "🖼️🐦 Routing X photos to VL",
                                 extra={
@@ -940,29 +1066,23 @@ class Router:
                                     },
                                 },
                             )
-                            # Aggregate with original tweet text
                             agg = "\n\n".join(descriptions)
                             header = f"{base}\nPhotos analyzed: {successes}/{len(photo_urls)}"
                             return f"{header}\n\n{agg}"
 
-                        # Default: text formatting
                         return self._format_x_tweet_result(api_data, url)
                     except APIError as e:
                         emsg = str(e)
-                        # Strict policy: 401/403/404/410 → do not scrape [SFT]
                         if any(tok in emsg for tok in ["access denied", "not found", "deleted (", "unexpected status: 401", "unexpected status: 403", "unexpected status: 404", "unexpected status: 410"]):
                             self.logger.info("X API denied or content missing; not scraping due to policy", extra={"detail": {"url": url, "error": emsg}})
                             return "⚠️ This X post cannot be accessed via API (private/removed). Per policy, scraping is disabled."
-                        # Rate limit or server errors → optional fallback
                         if ("429" in emsg or "server error" in emsg) and (not require_api) and allow_fallback_5xx:
                             self.logger.warning("X API transient issue, falling back to generic extractor", extra={"detail": {"url": url, "error": emsg}})
-                            # continue to generic handling below
+                            # fall through to generic handling below
                         else:
-                            # Respect require_api, or disallow fallback setting
                             self.logger.info("X API error without fallback; returning policy message", extra={"detail": {"url": url, "error": emsg}})
                             return "⚠️ Temporary issue accessing X API for this post. Please try again later."
                 else:
-                    # No client/token or no ID
                     if require_api:
                         return "⚠️ X posts require API access and cannot be scraped. Configure X_API_BEARER_TOKEN to enable."
                     # else fall through to generic handling
