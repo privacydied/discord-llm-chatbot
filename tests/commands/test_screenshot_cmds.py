@@ -43,7 +43,8 @@ async def test_ss_missing_url_prompts_usage(mock_bot, mock_ctx):
 
     # Should prompt for usage when URL missing
     assert mock_ctx.reply.await_count == 1
-    assert "Please provide a valid URL" in mock_ctx.reply.await_args.kwargs["content"]
+    # Called with positional content string
+    assert "Please provide a valid URL" in mock_ctx.reply.await_args.args[0]
 
 
 @pytest.mark.asyncio
@@ -60,8 +61,6 @@ async def test_ss_valid_url_delegates_to_router_and_edits_embed(mock_bot, mock_c
     assert getattr(arg, "payload", None) == url
 
     # Should have edited the processing message with an embed
-    processing_msg = await mock_ctx.reply.await_args.kwargs.get("return_value")
-    # We used MagicMock above; access the original return
     assert mock_ctx.reply.await_count >= 1
     mock_msg = mock_ctx.reply.return_value
     mock_msg.edit.assert_awaited()

@@ -15,7 +15,19 @@ def _normalize_url_for_screenshot(url: str) -> str:
         # Coerce to string to avoid passing non-str objects (e.g., yarl.URL) into urlparse/quote
         url_str = str(url)
         parsed_url = urlparse(url_str)
-        if parsed_url.netloc in ("x.com", "mobile.twitter.com"):
+        netloc = (parsed_url.netloc or "").lower()
+        # Normalize common mirrors and subdomains to canonical twitter.com [IV]
+        to_twitter = {
+            "x.com",
+            "www.x.com",
+            "mobile.twitter.com",
+            "m.twitter.com",
+            "vxtwitter.com",
+            "www.vxtwitter.com",
+            "fxtwitter.com",
+            "www.fxtwitter.com",
+        }
+        if netloc in to_twitter:
             normalized_parts = parsed_url._replace(netloc="twitter.com")
             normalized_url = urlunparse(normalized_parts)
             logger.debug(f"Normalized screenshot URL from {url} to {normalized_url}")
@@ -44,19 +56,6 @@ async def external_screenshot(url: str) -> str | None:
         logger.warning(f"⚠️ Skipping screenshot: unsupported URL scheme: {url}")
         return None
 
-    # Load configurable screenshot API parameters
-    api_key = os.getenv("SCREENSHOT_API_KEY")
-    if not api_key:
-        logger.error("❌ SCREENSHOT_API_KEY is not set. Cannot capture screenshot.")
-        return None
-
-    api_url_base = os.getenv("SCREENSHOT_API_URL", "https://api.screenshotmachine.com")
-    device = os.getenv("SCREENSHOT_API_DEVICE", "desktop")
-    dimension = os.getenv("SCREENSHOT_API_DIMENSION", "1024x768")
-    format_type = os.getenv("SCREENSHOT_API_FORMAT", "jpg")
-    delay = os.getenv("SCREENSHOT_API_DELAY", "2000")
-    cookies = os.getenv("SCREENSHOT_API_COOKIES", "")
-
     # Coerce to string early to prevent quote_from_bytes TypeError and handle bytes safely
     original_url_str = str(url)
     normalized_url = _normalize_url_for_screenshot(original_url_str)
@@ -74,6 +73,23 @@ async def external_screenshot(url: str) -> str | None:
     logger.debug(
         f"🧭 URL types | original={type(url).__name__} normalized={type(normalized_url).__name__} as_str={type(normalized_url_str).__name__}"
     )
+
+    # Load configurable screenshot API parameters
+    api_key = os.getenv("SCREENSHOT_API_KEY")
+    fallback_enabled = os.getenv("SCREENSHOT_FALLBACK_PLAYWRIGHT", "true").lower() == "true"
+    if not api_key:
+        logger.warning("⚠️ SCREENSHOT_API_KEY not set. Attempting Playwright fallback...")
+        if fallback_enabled:
+            return await _playwright_screenshot(normalized_url_str)
+        return None
+
+    api_url_base = os.getenv("SCREENSHOT_API_URL", "https://api.screenshotmachine.com")
+    device = os.getenv("SCREENSHOT_API_DEVICE", "desktop")
+    dimension = os.getenv("SCREENSHOT_API_DIMENSION", "1024x768")
+    # Match default format with saved filename extension [CMV]
+    format_type = os.getenv("SCREENSHOT_API_FORMAT", "png")
+    delay = os.getenv("SCREENSHOT_API_DELAY", "2000")
+    cookies = os.getenv("SCREENSHOT_API_COOKIES", "")
 
     # Construct API URL in the exact format expected by screenshotmachine.com
     # Format: ?key=X&url=Y&device=Z&dimension=W&format=V&delay=U&cookies=T
@@ -106,7 +122,17 @@ async def external_screenshot(url: str) -> str | None:
         parsed_url = urlparse(original_url_str)
         domain = parsed_url.netloc.replace(".", "_")
         path = parsed_url.path.replace("/", "_").strip("_") or "index"
-        filename = f"{domain}_{path}.png"
+        # Derive extension from configured format; default to png on unknowns [IV]
+        fmt = (format_type or "png").lower()
+        if fmt in ("jpg", "jpeg"):
+            ext = "jpg"
+        elif fmt in ("png",):
+            ext = "png"
+        elif fmt in ("webp",):
+            ext = "webp"
+        else:
+            ext = "png"
+        filename = f"{domain}_{path}.{ext}"
         filepath = SCREENSHOT_CACHE_DIR / filename
 
         with open(filepath, "wb") as f:
@@ -116,11 +142,75 @@ async def external_screenshot(url: str) -> str | None:
         return str(filepath)
 
     except httpx.HTTPStatusError as e:
-        logger.error(f"❌ Screenshot Machine API returned an error: {e.response.status_code} for URL: {original_url_str}")
+        logger.error(f"❌ Screenshot Machine API error: {e.response.status_code} for URL: {original_url_str}")
+        if fallback_enabled:
+            logger.info("Attempting Playwright fallback after API error...")
+            return await _playwright_screenshot(normalized_url_str)
         return None
     except httpx.RequestError as e:
         logger.error(f"❌ Failed to connect to Screenshot Machine API for URL: {original_url_str}. Error: {e}")
+        if fallback_enabled:
+            logger.info("Attempting Playwright fallback after request error...")
+            return await _playwright_screenshot(normalized_url_str)
         return None
     except Exception as e:
-        logger.error(f"❌ An unexpected error occurred during screenshot capture for {original_url_str}: {e}", exc_info=True)
+        logger.error(f"❌ Unexpected error during screenshot capture for {original_url_str}: {e}", exc_info=True)
+        if fallback_enabled:
+            logger.info("Attempting Playwright fallback after unexpected error...")
+            return await _playwright_screenshot(normalized_url_str)
+        return None
+
+
+async def _playwright_screenshot(url: str) -> str | None:
+    """Local fallback: use Playwright to capture a screenshot. [REH][IV]
+
+    Respects env config:
+      - SCREENSHOT_PW_VIEWPORT (e.g., 1280x1024)
+      - SCREENSHOT_PW_USER_AGENT (optional)
+      - SCREENSHOT_PW_TIMEOUT_MS (default 15000)
+    """
+    try:
+        # Lazy import to avoid heavy overhead unless needed
+        from playwright.async_api import async_playwright
+    except Exception as e:
+        logger.error(f"Playwright not available for fallback: {e}")
+        return None
+
+    vp = os.getenv("SCREENSHOT_PW_VIEWPORT", "1280x1024")
+    ua = os.getenv("SCREENSHOT_PW_USER_AGENT", "")
+    timeout_ms = int(os.getenv("SCREENSHOT_PW_TIMEOUT_MS", "15000"))
+
+    # Parse viewport
+    try:
+        width, height = [int(x) for x in vp.lower().split("x", 1)]
+    except Exception:
+        width, height = 1280, 1024
+
+    logger.info(f"🧭 Playwright fallback starting for {url} [{width}x{height}]")
+    try:
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=True)
+            context = await browser.new_context(
+                viewport={"width": width, "height": height},
+                user_agent=ua or None,
+            )
+            page = await context.new_page()
+            await page.goto(url, wait_until="networkidle", timeout=timeout_ms)
+
+            # Produce filename similar to API path building
+            parsed = urlparse(url)
+            domain = parsed.netloc.replace(".", "_")
+            path = parsed.path.replace("/", "_").strip("_") or "index"
+            filename = f"{domain}_{path}.png"
+            filepath = SCREENSHOT_CACHE_DIR / filename
+
+            await page.screenshot(path=str(filepath), full_page=True)
+            await context.close()
+            await browser.close()
+
+            logger.info(f"✅ Playwright screenshot saved to {filepath}")
+            return str(filepath)
+
+    except Exception as e:
+        logger.error(f"❌ Playwright fallback failed for {url}: {e}", exc_info=True)
         return None

@@ -29,3 +29,17 @@
 - [x] Add Change Summary to top of each modified file.
 - [x] Investigate and fix process_url/_handle_general_url return type bug.
 - [x] Update logging_config.py for improved multimodal logs and close out.
+
+## Screenshot Command (!ss)
+- [x] Implement explicit Discord command `!ss` in `bot/commands/screenshot_commands.py` that:
+  - Parses URL arg or extracts first URL in message
+  - Constructs `InputItem(source_type="url", payload=url, order_index=0)`
+  - Delegates to `Router._handle_screenshot_url()`
+  - Responds with a compact embed
+- [x] Wire cog loading in `bot/core/bot.py` (`load_extensions` includes `screenshot_commands`)
+- [x] Add import smoke test entry in `utils/import_smoke_test.py`
+- [x] Add unit tests in `tests/commands/test_screenshot_cmds.py` for:
+  - Missing URL usage prompt
+  - Delegation to router and embed response
+- [x] Verified with `uv run python -m pytest -q tests/commands/test_screenshot_cmds.py`
+- [x] Security: No hardcoded secrets; uses env vars in `external_screenshot`; screenshots are command-gated only.

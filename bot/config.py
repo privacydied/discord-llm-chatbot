@@ -300,6 +300,52 @@ def load_config():
         "SEARCH_BREAKER_OPEN_MS": _safe_int(os.getenv("SEARCH_BREAKER_OPEN_MS"), "15000", "SEARCH_BREAKER_OPEN_MS"),
         "SEARCH_BREAKER_HALFOPEN_PROB": _safe_float(os.getenv("SEARCH_BREAKER_HALFOPEN_PROB"), "0.25", "SEARCH_BREAKER_HALFOPEN_PROB"),
 
+        # X (Twitter) API Integration [CA][CMV][SFT]
+        # Feature flag and auth
+        "X_API_ENABLED": os.getenv("X_API_ENABLED", "false").lower() == "true",
+        "X_API_AUTH_MODE": os.getenv("X_API_AUTH_MODE", "oauth2_app"),
+        "X_API_BEARER_TOKEN": _clean_env_value(os.getenv("X_API_BEARER_TOKEN")),  # never log token
+
+        # Fallback rules
+        "X_API_REQUIRE_API_FOR_TWITTER": os.getenv("X_API_REQUIRE_API_FOR_TWITTER", "false").lower() == "true",
+        "X_API_ALLOW_FALLBACK_ON_5XX": os.getenv("X_API_ALLOW_FALLBACK_ON_5XX", "true").lower() == "true",
+
+        # Networking and resilience knobs
+        "X_API_TIMEOUT_MS": _safe_int(os.getenv("X_API_TIMEOUT_MS"), "8000", "X_API_TIMEOUT_MS"),
+        "X_API_RETRY_MAX_ATTEMPTS": _safe_int(os.getenv("X_API_RETRY_MAX_ATTEMPTS"), "5", "X_API_RETRY_MAX_ATTEMPTS"),
+        "X_API_BREAKER_FAILURE_WINDOW": _safe_int(os.getenv("X_API_BREAKER_FAILURE_WINDOW"), "5", "X_API_BREAKER_FAILURE_WINDOW"),
+        "X_API_BREAKER_OPEN_MS": _safe_int(os.getenv("X_API_BREAKER_OPEN_MS"), "15000", "X_API_BREAKER_OPEN_MS"),
+        "X_API_BREAKER_HALFOPEN_PROB": _safe_float(os.getenv("X_API_BREAKER_HALFOPEN_PROB"), "0.25", "X_API_BREAKER_HALFOPEN_PROB"),
+
+        # Field hydration (comma-separated lists) [CMV]
+        "X_TWEET_FIELDS": [s.strip() for s in os.getenv(
+            "X_TWEET_FIELDS",
+            "id,text,created_at,author_id,public_metrics,possibly_sensitive,lang,attachments,entities,referenced_tweets,conversation_id"
+        ).split(",") if s.strip()],
+        "X_EXPANSIONS": [s.strip() for s in os.getenv(
+            "X_EXPANSIONS",
+            "author_id,attachments.media_keys,referenced_tweets.id,referenced_tweets.id.author_id"
+        ).split(",") if s.strip()],
+        "X_MEDIA_FIELDS": [s.strip() for s in os.getenv(
+            "X_MEDIA_FIELDS",
+            "media_key,type,url,preview_image_url,variants,width,height,alt_text,public_metrics"
+        ).split(",") if s.strip()],
+        "X_USER_FIELDS": [s.strip() for s in os.getenv(
+            "X_USER_FIELDS",
+            "id,name,username,profile_image_url,verified,protected"
+        ).split(",") if s.strip()],
+        "X_POLL_FIELDS": [s.strip() for s in os.getenv(
+            "X_POLL_FIELDS",
+            "id,options,duration_minutes,end_datetime,voting_status"
+        ).split(",") if s.strip()],
+        "X_PLACE_FIELDS": [s.strip() for s in os.getenv(
+            "X_PLACE_FIELDS",
+            "full_name,id,country_code,geo,name,place_type"
+        ).split(",") if s.strip()],
+
+        # Routing defaults
+        "TWITTER_ROUTE_DEFAULT": os.getenv("TWITTER_ROUTE_DEFAULT", "api_first"),
+
         # STREAMING STATUS CARDS [CA][CMV]
         # Global enable for streaming card UX (text-only remains non-streaming)
         "STREAMING_ENABLE": os.getenv("STREAMING_ENABLE", "true").lower() == "true",
