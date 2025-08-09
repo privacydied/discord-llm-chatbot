@@ -25,8 +25,7 @@ async def hear_infer(audio_path: Path) -> str:
     
     try:
         logger.info(f"👂 STT inference started for {audio_path}")
-        if not stt_manager.is_available():
-            raise InferenceError("STT engine not available")
+        # Let orchestrator handle availability/fallback [REH]
         
         # Create temporary files
         with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_file1, \
@@ -134,9 +133,7 @@ async def hear_infer_from_url(url: str, speedup: float = 1.5, force_refresh: boo
     """
     try:
         logger.info(f"👂🎥 STT inference started for URL: {url}")
-        
-        if not stt_manager.is_available():
-            raise InferenceError("STT engine not available")
+        # Let orchestrator handle availability/fallback [REH]
         
         # Import here to avoid circular imports
         from .video_ingest import fetch_and_prepare_url_audio
