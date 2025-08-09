@@ -272,6 +272,15 @@ def load_config():
         "OWNER_IDS": [int(id.strip()) for id in os.getenv("OWNER_IDS", "").split(",") if id.strip()],
         "LOG_FILE": os.getenv("LOG_FILE", "logs/bot.jsonl"),
 
+        # ADMIN ALERT SYSTEM [CA][CMV]
+        # Keep as strings to preserve existing cog parsing semantics
+        # - ALERT_ENABLE checked via .lower() == 'true'
+        # - ALERT_SESSION_TIMEOUT_S cast to int in cog
+        # - ALERT_ADMIN_USER_IDS parsed as comma-separated ints in cog
+        "ALERT_ENABLE": _clean_env_value(os.getenv("ALERT_ENABLE", "false")),
+        "ALERT_SESSION_TIMEOUT_S": _clean_env_value(os.getenv("ALERT_SESSION_TIMEOUT_S", "1800")),
+        "ALERT_ADMIN_USER_IDS": _clean_env_value(os.getenv("ALERT_ADMIN_USER_IDS", "")),
+
         # SEARCH SUBSYSTEM [CA][CMV][IV]
         # Provider selection: 'ddg' (default) or 'custom'
         "SEARCH_PROVIDER": os.getenv("SEARCH_PROVIDER", "ddg").lower(),

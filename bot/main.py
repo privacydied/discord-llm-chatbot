@@ -10,16 +10,16 @@ from typing import NoReturn
 import aiohttp
 import discord
 
-from .config import load_config, load_system_prompts, check_venv_activation
-from .config_reload import setup_config_reload, start_file_watcher
-from .core.bot import LLMBot
-from .core.cli import parse_arguments, show_version_info, validate_configuration_only
-from .core.startup import run_pre_flight_checks, create_bot_intents, get_prefix
-from .exceptions import ConfigurationError
-from .memory import load_all_profiles
-from .tasks import spawn_background_tasks
-from .util.logging import init_logging, get_logger, shutdown_logging_and_exit
-from .shutdown import setup_signal_handlers
+from bot.config import load_config, load_system_prompts, check_venv_activation
+from bot.config_reload import setup_config_reload, start_file_watcher
+from bot.core.bot import LLMBot
+from bot.core.cli import parse_arguments, show_version_info, validate_configuration_only
+from bot.core.startup import run_pre_flight_checks, create_bot_intents, get_prefix
+from bot.exceptions import ConfigurationError
+from bot.memory import load_all_profiles
+from bot.tasks import spawn_background_tasks
+from bot.util.logging import init_logging, get_logger, shutdown_logging_and_exit
+from bot.shutdown import setup_signal_handlers
 
 
 async def main() -> NoReturn:

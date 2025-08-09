@@ -29,6 +29,7 @@ COMMAND_MAP = {
     "!rag bootstrap": Command.RAG_BOOTSTRAP,
     "!rag search": Command.RAG_SEARCH,
     "!rag status": Command.RAG_STATUS,
+    "!alert": Command.ALERT,
 }
 
 def parse_command(message: discord.Message, bot: commands.Bot) -> Optional[ParsedCommand]:

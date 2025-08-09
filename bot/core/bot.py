@@ -896,10 +896,68 @@ class LLMBot(commands.Bot):
         if (not message.content or not message.content.strip()) and not message.attachments:
             return
 
+        # Suppress normal text flow while an admin alert session is active in DMs [CA][REH]
+        try:
+            cog = self.get_cog("AdminAlertCommands")
+            if cog is not None and cog.alert_manager.is_dm_channel(message.channel):
+                active_session = cog.alert_manager.get_session(message.author.id)
+                if active_session is not None:
+                    # If the user attempts to run !alert again, gently inform them
+                    try:
+                        prefixes = await self.get_prefix(message)
+                    except Exception:
+                        prefixes = None
+
+                    is_alert_cmd = False
+                    try:
+                        if isinstance(prefixes, (list, tuple)):
+                            for p in prefixes:
+                                if p and message.content.startswith(p):
+                                    rest = (message.content[len(p):] or "").strip()
+                                    if rest.split(" ", 1)[0].lower() == "alert":
+                                        is_alert_cmd = True
+                                        break
+                        elif prefixes:
+                            p = prefixes
+                            if message.content.startswith(p):
+                                rest = (message.content[len(p):] or "").strip()
+                                if rest.split(" ", 1)[0].lower() == "alert":
+                                    is_alert_cmd = True
+                    except Exception:
+                        pass
+
+                    if is_alert_cmd:
+                        try:
+                            await message.channel.send(
+                                "⚠️ An alert session is already active. Use the composer, or react with ❌ to cancel."
+                            )
+                        except Exception:
+                            pass
+
+                    self.logger.info(
+                        f"suppress.textflow.alert | msg_id:{message.id} user:{message.author.id}",
+                        extra={"event": "alert.suppress", "msg_id": message.id, "user_id": message.author.id},
+                    )
+                    return
+        except Exception as e:
+            self.logger.debug(f"alert_suppress_check_failed | {e}")
+
         # SSOT gate: enforce "speak only when spoken to" BEFORE any heavy work or readiness waits
         try:
             if self.router is not None and not self._is_long_running_admin_command(message):
-                if not self.router._should_process_message(message):
+                # Allow command-prefixed messages to bypass the router gate so cogs always see commands [CA][REH]
+                is_command_msg = False
+                try:
+                    prefixes = await self.get_prefix(message)
+                    if isinstance(prefixes, (list, tuple)):
+                        is_command_msg = any(prefix and message.content.startswith(prefix) for prefix in prefixes)
+                    elif prefixes:
+                        is_command_msg = message.content.startswith(prefixes)
+                except Exception as e:
+                    # Prefix determination should never break message handling
+                    self.logger.debug(f"prefix_check_failed | {e}")
+
+                if (not is_command_msg) and (not self.router._should_process_message(message)):
                     guild_info = 'DM' if isinstance(message.channel, discord.DMChannel) else f"guild:{getattr(message.guild, 'id', None)}"
                     self.logger.info(
                         f"gate.block early | msg_id:{message.id} in:{guild_info}",
@@ -1019,6 +1077,8 @@ class LLMBot(commands.Bot):
             ("rag_commands", "RAGCommands"),
             ("search_commands", "SearchCommands"),
             ("screenshot_commands", "ScreenshotCommands"),
+            ("image_upgrade_commands", "ImageUpgradeCommands"),
+            ("admin_alert_commands", "AdminAlertCommands"),
         ]
         
         command_modules = []  # List of (module_name, success_status)
@@ -1073,6 +1133,163 @@ class LLMBot(commands.Bot):
             total_commands += len([cmd for cmd in cog.get_commands()])
         
         # Generate Rich visual report
+        log_commands_setup(
+            self.console,
+            command_modules,
+            command_cogs,
+            total_commands
+        )
+        
+        # Log summary at appropriate level
+        successful_modules = sum(1 for _, success in command_modules if success)
+        failed_modules = sum(1 for _, success in command_modules if not success)
+        successful_cogs = sum(1 for _, success in command_cogs if success)
+        failed_cogs = sum(1 for _, success in command_cogs if not success)
+        
+        if failed_modules > 0 or failed_cogs > 0:
+            self.logger.warning(f"⚠️ Command setup completed with failures: {failed_modules + failed_cogs} failed")
+        else:
+            self.logger.info(f"✅ Command setup completed successfully: {successful_modules + successful_cogs} loaded")
+        return
+
+    async def load_profiles(self) -> None:
+        """Load user and server memory profiles."""
+        try:
+            self.logger.info("Loading memory profiles...")
+            self.user_profiles, self.server_profiles = load_all_profiles()
+            self.logger.info(f"Loaded {len(self.user_profiles)} user and {len(self.server_profiles)} server profiles.")
+        except Exception as e:
+            self.logger.error(f"Failed to load profiles: {e}", exc_info=True)
+
+    def setup_background_tasks(self) -> None:
+        """Set up background tasks for the bot."""
+        try:
+            from bot.tasks import setup_memory_save_task
+            self.memory_save_task = setup_memory_save_task(self)
+            self.memory_save_task.start()
+        except Exception as e:
+            self.logger.error(f"Failed to set up background tasks: {e}", exc_info=True)
+
+    async def setup_tts(self) -> None:
+        """Set up TTS manager if configured."""
+        try:
+            from bot.tts.interface import TTSManager
+            self.tts_manager = TTSManager(self)
+            self.logger.info("TTS manager initialized")
+        except Exception as e:
+            self.logger.error(f"Failed to set up TTS: {e}", exc_info=True)
+
+    async def setup_router(self) -> None:
+        """Set up message router."""
+        try:
+            from bot.router import Router
+            self.router = Router(self)  # Pass bot instance, not config dict
+            self.logger.debug("✅ Message router initialized successfully")
+        except Exception as e:
+            self.logger.error(f"❌ Failed to initialize message router: {e}", exc_info=True)
+            raise
+
+    async def setup_rag(self) -> None:
+        """Set up RAG system to enable eager loading if configured."""
+        try:
+            # Check if RAG is configured and eager loading is enabled
+            rag_enabled = self.config.get('rag_enabled', True)
+            if not rag_enabled:
+                self.logger.info("⚠️  RAG system disabled via configuration")
+                return
+                
+            # Import RAG config and check eager loading setting
+            from bot.rag.config import get_rag_config
+            rag_config = get_rag_config()
+            
+            if rag_config.eager_vector_load:
+                self.logger.info("🚀 RAG eager loading enabled - initializing RAG system at startup")
+                
+                # Initialize the RAG system to trigger eager loading
+                from bot.rag.hybrid_search import get_hybrid_search
+                search_engine = await get_hybrid_search()
+                
+                self.logger.info("✅ RAG system initialized with eager vector loading")
+            else:
+                self.logger.info("⏱️  RAG lazy loading enabled - deferring initialization until first use")
+                
+        except Exception as e:
+            # RAG initialization failure should not crash the bot
+            self.logger.warning(f"⚠️  RAG system initialization failed (bot will continue without RAG): {e}")
+            if self.config.get('debug', False):
+                self.logger.debug("RAG initialization traceback:", exc_info=True)
+
+    async def load_extensions(self) -> None:
+        """Load command extensions using Rich visual reporting."""
+        import importlib
+        
+        # Define command modules and their corresponding cog classes
+        module_definitions = [
+            ("test_cmds", "TestCommands"),
+            ("memory_cmds", "MemoryCommands"),
+            ("tts_cmds", "TTSCommands"),
+            ("config_commands", "ConfigCommands"),
+            ("video_commands", "VideoCommands"),
+            ("rag_commands", "RAGCommands"),
+            ("search_commands", "SearchCommands"),
+            ("screenshot_commands", "ScreenshotCommands"),
+            ("image_upgrade_commands", "ImageUpgradeCommands"),
+            ("admin_alert_commands", "AdminAlertCommands"),
+        ]
+        
+        command_modules = []  # List of (module_name, success_status)
+        command_cogs = []     # List of (cog_name, success_status)
+        loaded_modules = {}   # Store successfully loaded modules
+        
+        # Phase 1: Import command modules
+        for module_name, cog_class_name in module_definitions:
+            try:
+                self.logger.debug(f"Importing {module_name}...")
+                module = importlib.import_module(f"bot.commands.{module_name}")
+                loaded_modules[cog_class_name] = module
+                command_modules.append((module_name, True))
+                self.logger.debug(f"✅ Successfully imported {module_name}")
+            except Exception as import_error:
+                command_modules.append((module_name, False))
+                self.logger.error(f"❌ Failed to import {module_name}: {import_error}", exc_info=True)
+        
+        # Phase 2: Load and register cogs
+        for cog_class_name, module in loaded_modules.items():
+            try:
+                # Check if cog is already loaded to avoid duplicates
+                if self.get_cog(cog_class_name):
+                    self.logger.debug(f"Skipping already loaded cog: {cog_class_name}")
+                    command_cogs.append((cog_class_name, True))
+                    continue
+                
+                self.logger.debug(f"Loading {cog_class_name} cog...")
+                
+                # Check if module has setup function
+                if hasattr(module, 'setup'):
+                    await module.setup(self)
+                    
+                    # Verify the cog was actually loaded
+                    if self.get_cog(cog_class_name):
+                        command_cogs.append((cog_class_name, True))
+                        self.logger.debug(f"✅ {cog_class_name} loaded successfully")
+                    else:
+                        command_cogs.append((cog_class_name, False))
+                        self.logger.error(f"❌ {cog_class_name} setup completed but cog not found")
+                else:
+                    command_cogs.append((cog_class_name, False))
+                    self.logger.error(f"❌ {cog_class_name} module missing setup function")
+                    
+            except Exception as cog_error:
+                command_cogs.append((cog_class_name, False))
+                self.logger.error(f"❌ Failed to load {cog_class_name}: {cog_error}", exc_info=True)
+        
+        # Count total registered commands across all cogs
+        total_commands = 0
+        for cog in self.cogs.values():
+            total_commands += len([cmd for cmd in cog.get_commands()])
+        
+        # Generate Rich visual report
+        from bot.utils.logging_helper import log_commands_setup
         log_commands_setup(
             self.console,
             command_modules,

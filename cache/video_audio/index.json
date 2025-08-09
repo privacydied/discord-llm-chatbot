@@ -119,5 +119,16 @@
     "processed_path": "cache/video_audio/0437a5186b51343f.wav",
     "cached_at": "2025-08-09T17:43:33.534264+00:00",
     "speedup_factor": 1.5
+  },
+  "7181a2cac5ea0f1a": {
+    "url": "https://x.com/ShitpostGate/status/1954092787110174743",
+    "title": "ShitpostGateway - https://t.co/O500EYJ7FV",
+    "duration_seconds": 78.367,
+    "uploader": "ShitpostGateway",
+    "upload_date": "20250809",
+    "source_type": "unknown",
+    "processed_path": "cache/video_audio/7181a2cac5ea0f1a.wav",
+    "cached_at": "2025-08-09T20:48:11.200863+00:00",
+    "speedup_factor": 1.5
   }
 }

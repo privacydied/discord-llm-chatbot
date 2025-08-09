@@ -24,6 +24,7 @@ class Command(Enum):
     RAG_BOOTSTRAP = auto() # Bootstrap RAG knowledge base
     RAG_SEARCH = auto() # Search RAG knowledge base
     RAG_STATUS = auto() # Show RAG system status
+    ALERT = auto()      # Admin DM alert system
     IGNORE = auto()     # A command to signify that the message should be ignored
 
 @dataclass
