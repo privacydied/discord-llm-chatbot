@@ -23,7 +23,7 @@ import tempfile
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from pathlib import Path
-from typing import Any, Callable, Coroutine, Dict, Optional, TYPE_CHECKING, List
+from typing import Any, Callable, Coroutine, Dict, Optional, TYPE_CHECKING, List, Awaitable
 import time
 import discord
 
@@ -31,6 +31,7 @@ import discord
 from .modality import InputModality, InputItem, collect_input_items, map_item_to_modality
 from .multimodal_retry import run_with_retries
 from .result_aggregator import ResultAggregator
+from .x_api_client import XApiClient
 from .enhanced_retry import EnhancedRetryManager, ProviderConfig, get_retry_manager
 from .brain import brain_infer
 from .contextual_brain import contextual_brain_infer
@@ -50,7 +51,7 @@ logger = get_logger(__name__)
 # Local application imports
 from .action import BotAction, ResponseMessage
 from .command_parser import Command, parse_command
-from .exceptions import DispatchEmptyError, DispatchTypeError
+from .exceptions import DispatchEmptyError, DispatchTypeError, APIError
 from .hear import hear_infer, hear_infer_from_url
 from .pdf_utils import PDFProcessor
 from .see import see_infer
@@ -96,6 +97,65 @@ class Router:
             self.pdf_processor.loop = bot.loop
 
         self.logger.info("✔ Router initialized.")
+        # Lazy-initialized X API client
+        self._x_api_client: Optional[XApiClient] = None
+
+    async def _get_x_api_client(self) -> Optional[XApiClient]:
+        """Create or return a cached XApiClient based on config. [CA][IV]"""
+        cfg = self.config
+        if not cfg.get("X_API_ENABLED", False):
+            return None
+        token = cfg.get("X_API_BEARER_TOKEN")
+        if not token:
+            return None
+        if self._x_api_client is None:
+            try:
+                self._x_api_client = XApiClient(
+                    bearer_token=token,
+                    timeout_ms=int(cfg.get("X_API_TIMEOUT_MS", 8000)),
+                    default_tweet_fields=cfg.get("X_TWEET_FIELDS", []),
+                    default_expansions=cfg.get("X_EXPANSIONS", []),
+                    default_media_fields=cfg.get("X_MEDIA_FIELDS", []),
+                    default_user_fields=cfg.get("X_USER_FIELDS", []),
+                    default_poll_fields=cfg.get("X_POLL_FIELDS", []),
+                    default_place_fields=cfg.get("X_PLACE_FIELDS", []),
+                )
+            except Exception as e:
+                self.logger.error(f"Failed to initialize XApiClient: {e}")
+                self._x_api_client = None
+        return self._x_api_client
+
+    @staticmethod
+    def _is_twitter_url(url: str) -> bool:
+        try:
+            u = str(url).lower()
+        except Exception:
+            return False
+        return any(d in u for d in ["twitter.com/", "x.com/", "vxtwitter.com/", "fxtwitter.com/"])
+
+    def _format_x_tweet_result(self, api_data: Dict[str, Any], url: str) -> str:
+        """Format X API tweet response into concise text. [PA][IV]"""
+        try:
+            data = api_data.get("data") or {}
+            text = (data.get("text") or "").strip()
+            created_at = data.get("created_at")
+            author_id = data.get("author_id")
+            username = None
+            includes = api_data.get("includes") or {}
+            for u in includes.get("users", []) or []:
+                if u.get("id") == author_id:
+                    username = u.get("username") or u.get("name")
+                    break
+            # Minimal media hint
+            media = includes.get("media") or []
+            media_hint = f" • media:{len(media)}" if media else ""
+            prefix = f"@{username}" if username else "Tweet"
+            stamp = f" • {created_at}" if created_at else ""
+            body = text if len(text) <= 4000 else (text[:3990] + "…")
+            return f"{prefix}{stamp}{media_hint} → {url}\n{body}"
+        except Exception:
+            # Fallback to raw dump if unexpected structure
+            return f"Tweet → {url}\n{str(api_data)[:4000]}"
 
     def _is_reply_to_bot(self, message: Message) -> bool:
         """Check if a message is a reply to the bot."""
@@ -306,31 +366,31 @@ class Router:
                 self.logger.warning(f"No response generated from text-only flow (msg_id: {message.id})")
                 return None
         
-        self.logger.info(f"🚀 Processing {len(items)} input items CONCURRENTLY for maximum speed (msg_id: {message.id})")
+        self.logger.info(f"🚶 Processing {len(items)} input items SEQUENTIALLY for deterministic order (msg_id: {message.id})")
         
         # Initialize result aggregator and retry manager
         aggregator = ResultAggregator()
         retry_manager = get_retry_manager()
         
-        # Per-item budgets (optimized for concurrent processing)
-        # LLM/vision tasks can be shorter; media (yt-dlp/transcribe) needs more time.
+        # Per-item budgets
+        # LLM/vision tasks can be shorter; media (yt-dlp/transcribe) needs more time. [PA]
         LLM_PER_ITEM_BUDGET = float(os.environ.get('MULTIMODAL_PER_ITEM_BUDGET', '30.0'))
         MEDIA_PER_ITEM_BUDGET = float(os.environ.get('MEDIA_PER_ITEM_BUDGET', '120.0'))
         
-        # Create all processing tasks concurrently
-        async def process_item_concurrent(i: int, item) -> tuple[int, bool, str, float, int]:
+        # Process items strictly sequentially for determinism [CA]
+        start_time = time.time()
+        for i, item in enumerate(items, start=1):
             modality = await map_item_to_modality(item)
-            
-            # Create description for logging (faster version)
+            # Create description for logging
             if item.source_type == "attachment":
                 description = f"{item.payload.filename}"
             elif item.source_type == "url":
                 description = f"URL: {item.payload[:30]}{'...' if len(item.payload) > 30 else ''}"
             else:
                 description = f"{item.source_type}"
-            
-            self.logger.info(f"📋 Starting concurrent item {i}: {modality.name} - {description}")
-            
+
+            self.logger.info(f"📋 Starting item {i}: {modality.name} - {description}")
+
             # Determine modality type for retry manager and per-item budget
             if modality in [InputModality.SINGLE_IMAGE, InputModality.MULTI_IMAGE]:
                 retry_modality = "vision"
@@ -339,64 +399,47 @@ class Router:
                 retry_modality = "media"
                 selected_budget = MEDIA_PER_ITEM_BUDGET
             elif modality in [InputModality.PDF_DOCUMENT, InputModality.PDF_OCR]:
-                # PDFs (especially OCR) can be slow; treat as media for longer timeouts/budget
                 retry_modality = "media"
                 selected_budget = MEDIA_PER_ITEM_BUDGET
             else:
                 retry_modality = "text"
                 selected_budget = LLM_PER_ITEM_BUDGET
-            
+
             # Create coroutine factory for this item
             def create_handler_coro(provider_config: ProviderConfig):
                 async def handler_coro():
                     return await self._handle_item_with_provider(item, modality, provider_config)
                 return handler_coro
-            
+
             try:
-                # Run with enhanced retry/fallback system
                 result = await retry_manager.run_with_fallback(
                     modality=retry_modality,
                     coro_factory=create_handler_coro,
-                    per_item_budget=selected_budget
+                    per_item_budget=selected_budget,
                 )
-                
+
                 if result.success:
                     self.logger.info(f"✅ Item {i} completed successfully ({result.total_time:.2f}s)")
-                    return i, True, result.result, result.total_time, result.attempts, item, modality
+                    success = True
+                    result_text = result.result
+                    duration = result.total_time
+                    attempts = result.attempts
                 else:
-                    error_msg = f"❌ Failed after {result.attempts} attempts: {result.error}"
+                    msg = f"❌ Failed after {result.attempts} attempts: {result.error}"
                     if result.fallback_occurred:
-                        error_msg += " (fallback attempted)"
+                        msg += " (fallback attempted)"
                     self.logger.warning(f"❌ Item {i} failed ({result.total_time:.2f}s)")
-                    return i, False, error_msg, result.total_time, result.attempts, item, modality
+                    success = False
+                    result_text = msg
+                    duration = result.total_time
+                    attempts = result.attempts
             except Exception as e:
                 self.logger.error(f"❌ Item {i} exception: {e}")
-                return i, False, f"❌ Exception: {e}", 0.0, 0, item, modality
-        
-        # Execute all items concurrently using asyncio.gather for maximum speed
-        self.logger.info("🚀 Launching concurrent processing tasks...")
-        start_time = time.time()
-        
-        # Create all tasks and run them concurrently
-        tasks = [
-            process_item_concurrent(i + 1, item) 
-            for i, item in enumerate(items)
-        ]
-        
-        # Wait for all tasks to complete concurrently
-        concurrent_results = await asyncio.gather(*tasks, return_exceptions=True)
-        
-        total_concurrent_time = time.time() - start_time
-        self.logger.info(f"🚀 Concurrent processing completed in {total_concurrent_time:.2f}s!")
-        
-        # Process results and add to aggregator
-        for result in concurrent_results:
-            if isinstance(result, Exception):
-                self.logger.error(f"❌ Task exception: {result}")
-                continue
-                
-            i, success, result_text, duration, attempts, item, modality = result
-            
+                success = False
+                result_text = f"❌ Exception: {e}"
+                duration = 0.0
+                attempts = 0
+
             aggregator.add_result(
                 item_index=i,
                 item=item,
@@ -404,30 +447,21 @@ class Router:
                 result_text=result_text,
                 success=success,
                 duration=duration,
-                attempts=attempts
+                attempts=attempts,
             )
-        
+
+        total_time = time.time() - start_time
         # Generate aggregated prompt and send single response
         aggregated_prompt = aggregator.get_aggregated_prompt(original_text)
-        
-        # Log summary statistics with concurrent performance metrics
+
+        # Log summary statistics
         stats = aggregator.get_summary_stats()
         successful_items = stats.get('successful_items', 0)
         total_items = stats.get('total_items', 0)
-        
-        if len(items) > 1:
-            sequential_estimate = sum(getattr(r, 'duration', 0) for r in concurrent_results if not isinstance(r, Exception))
-            speedup = sequential_estimate / total_concurrent_time if total_concurrent_time > 0 else 1
-            self.logger.info(
-                f"🚀 CONCURRENT MULTIMODAL COMPLETE: {successful_items}/{total_items} successful, "
-                f"total: {total_concurrent_time:.1f}s (est. {speedup:.1f}x speedup vs sequential)"
-            )
-        else:
-            self.logger.info(
-                f"📊 Processing complete: {successful_items}/{total_items} successful, "
-                f"duration: {total_concurrent_time:.1f}s"
-            )
-        
+        self.logger.info(
+            f"📦 SEQUENTIAL MULTIMODAL COMPLETE: {successful_items}/{total_items} successful, total: {total_time:.1f}s"
+        )
+
         # Generate single aggregated response through text flow (1 IN → 1 OUT)
         if aggregated_prompt.strip():
             response_action = await self._invoke_text_flow(aggregated_prompt, message, context_str)
@@ -767,6 +801,65 @@ class Router:
             
             url = item.payload
             self.logger.info(f"🌐 Processing general URL: {url}")
+
+            # API-first for Twitter/X posts [CA][SFT]
+            if self._is_twitter_url(url):
+                cfg = self.config
+                require_api = bool(cfg.get("X_API_REQUIRE_API_FOR_TWITTER", False))
+                allow_fallback_5xx = bool(cfg.get("X_API_ALLOW_FALLBACK_ON_5XX", True))
+                tweet_id = XApiClient.extract_tweet_id(str(url))
+                x_client = await self._get_x_api_client()
+
+                if tweet_id and x_client is not None:
+                    try:
+                        api_data = await x_client.get_tweet_by_id(tweet_id)
+                        # Family-internal routing based on media types [CA]
+                        includes = api_data.get("includes") or {}
+                        media_list = includes.get("media") or []
+                        media_types = {m.get("type") for m in media_list if isinstance(m, dict)}
+
+                        # Route video/animated GIF to STT pipeline via yt-dlp ingest [PA]
+                        if {"video", "animated_gif"} & media_types:
+                            try:
+                                stt_res = await hear_infer_from_url(url)
+                                if stt_res and stt_res.get("transcription"):
+                                    transcription = stt_res["transcription"]
+                                    return f"Video/audio content from {url}: {transcription}"
+                                return f"Detected media in {url} but transcription failed."
+                            except Exception as stt_err:
+                                self.logger.error(
+                                    f"X media STT route failed for {url}: {stt_err}",
+                                    extra={"detail": {"url": url}},
+                                )
+                                return f"Detected media in {url} but could not process it right now."
+
+                        # Photo-only: return formatted text with media hint [PA]
+                        if media_types == {"photo"} or ("photo" in media_types and len(media_types) == 1):
+                            base = self._format_x_tweet_result(api_data, url)
+                            photo_count = sum(1 for m in media_list if m.get("type") == "photo")
+                            return f"{base}\nPhotos: {photo_count}"
+
+                        # Default: text formatting
+                        return self._format_x_tweet_result(api_data, url)
+                    except APIError as e:
+                        emsg = str(e)
+                        # Strict policy: 401/403/404/410 → do not scrape [SFT]
+                        if any(tok in emsg for tok in ["access denied", "not found", "deleted (", "unexpected status: 401", "unexpected status: 403", "unexpected status: 404", "unexpected status: 410"]):
+                            self.logger.info("X API denied or content missing; not scraping due to policy", extra={"detail": {"url": url, "error": emsg}})
+                            return "⚠️ This X post cannot be accessed via API (private/removed). Per policy, scraping is disabled."
+                        # Rate limit or server errors → optional fallback
+                        if ("429" in emsg or "server error" in emsg) and (not require_api) and allow_fallback_5xx:
+                            self.logger.warning("X API transient issue, falling back to generic extractor", extra={"detail": {"url": url, "error": emsg}})
+                            # continue to generic handling below
+                        else:
+                            # Respect require_api, or disallow fallback setting
+                            self.logger.info("X API error without fallback; returning policy message", extra={"detail": {"url": url, "error": emsg}})
+                            return "⚠️ Temporary issue accessing X API for this post. Please try again later."
+                else:
+                    # No client/token or no ID
+                    if require_api:
+                        return "⚠️ X posts require API access and cannot be scraped. Configure X_API_BEARER_TOKEN to enable."
+                    # else fall through to generic handling
             
             # Use existing URL processing logic - process_url returns a dict
             url_result = await process_url(url)
@@ -781,9 +874,6 @@ class Router:
                 self.logger.info(f"🎥 Smart routing detected media in {url}, routing to yt-dlp flow")
                 
                 try:
-                    # Import video processing to handle the URL
-                    from bot.hear import hear_infer_from_url
-                    
                     # Process through yt-dlp flow
                     transcription_result = await hear_infer_from_url(url)
                     
@@ -817,7 +907,7 @@ class Router:
             self.logger.error(f"Error processing general URL: {e}", exc_info=True)
             return f"Failed to process URL: {item.payload}"
     
-    async def _handle_screenshot_url(self, item: InputItem) -> str:
+    async def _handle_screenshot_url(self, item: InputItem, progress_cb: Optional[Callable[[str, int], Awaitable[None]]] = None) -> str:
         """
         Handle URLs that need screenshot fallback.
         Returns screenshot analysis for further processing.
@@ -829,17 +919,28 @@ class Router:
             
             url = item.payload
             self.logger.info(f"📸 Taking screenshot of URL: {url}")
+            if progress_cb:
+                await progress_cb("validate", 1)
             # Lazy-import to avoid circular deps and keep import costs off hot paths
             from .utils.external_api import external_screenshot
+            # Preparation phase (network/client setup, throttling checks, etc.)
+            if progress_cb:
+                await progress_cb("prepare", 2)
             
+            if progress_cb:
+                await progress_cb("capture", 3)
             screenshot_path = await external_screenshot(url)
             if not screenshot_path:
                 self.logger.warning(f"⚠️ Screenshot API did not return an image for {url}")
                 return f"⚠️ Could not capture a screenshot for: {url}. Please try again later."
 
+            if progress_cb:
+                await progress_cb("saved", 4)
             self.logger.info(f"🖼️ Screenshot saved at: {screenshot_path}. Sending to VL.")
             try:
                 # Use VL to analyze the screenshot content
+                if progress_cb:
+                    await progress_cb("analyze", 5)
                 analysis = await see_infer(
                     image_path=screenshot_path,
                     prompt=(
@@ -848,11 +949,17 @@ class Router:
                     ),
                 )
                 if analysis:
+                    if progress_cb:
+                        await progress_cb("done", 6)
                     return f"Screenshot content from {url}: {analysis}"
                 else:
+                    if progress_cb:
+                        await progress_cb("done", 6)
                     return f"✅ Captured screenshot from {url}, but vision analysis returned no content."
             except Exception as vl_err:
                 self.logger.error(f"❌ Vision analysis failed for {screenshot_path}: {vl_err}", exc_info=True)
+                if progress_cb:
+                    await progress_cb("done", 6)
                 return f"✅ Captured screenshot from {url}, but could not analyze it right now."
             
         except Exception as e:

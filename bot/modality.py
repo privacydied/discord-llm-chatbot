@@ -203,7 +203,13 @@ async def _map_attachment_to_modality(attachment: discord.Attachment) -> InputMo
 async def _map_url_to_modality(url: str) -> InputModality:
     """Map URL to modality based on domain and pattern matching [PA]."""
     global _VIDEO_PATTERNS
-    
+
+    # Twitter/X status posts should go through API-first general URL path [SFT][CA]
+    # but allow broadcasts (Spaces/live) to be handled as video-capable URLs.
+    if re.search(r'https?://(?:www\.)?(?:twitter|x)\.com/.+/status/\d+', url):
+        logger.info(f"➡️ Routing Twitter/X status URL to GENERAL_URL for API-first: {url}")
+        return InputModality.GENERAL_URL
+
     # Load and cache video patterns once [PA]
     if _VIDEO_PATTERNS is None:
         try:
