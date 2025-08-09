@@ -56,6 +56,7 @@ from .pdf_utils import PDFProcessor
 from .see import see_infer
 from .web import process_url
 from .utils.mention_utils import ensure_single_mention
+from .web_extraction_service import web_extractor
 
 # Dependency availability flags
 try:
@@ -613,7 +614,7 @@ class Router:
     async def _handle_video_url(self, item: InputItem) -> str:
         """
         Handle video URL input items (YouTube, TikTok, etc.).
-        For Twitter/X URLs: tries yt-dlp first, falls back to screenshot + VL if no video found.
+        For Twitter/X URLs: tries yt-dlp first, routes non-video posts to the tiered WebExtractionService (no auto-screenshot).
         Returns transcribed text for further processing.
         """
         from .video_ingest import VideoIngestError
@@ -640,20 +641,18 @@ class Router:
         except VideoIngestError as ve:
             error_str = str(ve).lower()
             
-            # For Twitter URLs, if no video content found, fall back to screenshot + VL
+            # For Twitter URLs with no media, route to tiered web extractor instead of screenshot [SST]
             if is_twitter and (
                 "no video or audio content found" in error_str or
                 "no video could be found" in error_str or
                 "failed to download video" in error_str
             ):
-                self.logger.info(f"🐦 No video in Twitter URL, falling back to screenshot: {url}")
-                try:
-                    # Fall back to screenshot + vision processing
-                    screenshot_result = await self._process_image_from_url(url)
-                    return f"Twitter post screenshot analysis: {screenshot_result}"
-                except Exception as screenshot_error:
-                    self.logger.error(f"❌ Screenshot fallback failed: {screenshot_error}")
-                    return f"⚠️ No video or audio content found in this URL. This appears to be a text-only post."
+                self.logger.info(f"🐦 No video in Twitter URL; routing to tiered extractor: {url}")
+                extract_res = await web_extractor.extract(url)
+                if extract_res.success:
+                    return f"Twitter post content:\n{extract_res.to_message()}"
+                else:
+                    return "🔍 No video or audio content found in this URL, and text extraction was unsuccessful."
             
             # For non-Twitter URLs, provide user-friendly message  
             self.logger.info(f"ℹ️ Video processing: {ve}")
@@ -669,14 +668,14 @@ class Router:
             error_str = str(e).lower()
             self.logger.error(f"❌ Unexpected video processing error: {e}", exc_info=True)
             
-            # For Twitter URLs, still attempt fallback for unexpected errors
+            # For Twitter URLs, attempt tiered extractor (no screenshot fallback)
             if is_twitter:
-                self.logger.info(f"🐦 Attempting Twitter screenshot fallback due to unexpected error: {url}")
-                try:
-                    screenshot_result = await self._process_image_from_url(url)
-                    return f"Twitter post screenshot analysis: {screenshot_result}"
-                except Exception:
-                    return "⚠️ Could not process this Twitter URL as either video or image content."
+                self.logger.info(f"🐦 Attempting tiered extractor due to unexpected error: {url}")
+                extract_res = await web_extractor.extract(url)
+                if extract_res.success:
+                    return f"Twitter post content:\n{extract_res.to_message()}"
+                else:
+                    return "⚠️ Could not process this Twitter URL as video; text extraction also failed."
             
             return f"⚠️ Video processing failed: {str(e)}"
 
@@ -760,6 +759,7 @@ class Router:
         """
         Handle general URL input items.
         Returns extracted content for further processing.
+        No auto-screenshot fallback here; screenshots require explicit !ss command.
         """
         try:
             if item.source_type != "url":
@@ -800,35 +800,18 @@ class Router:
                     self.logger.error(f"yt-dlp processing failed for {url}: {e}")
                     return f"Successfully detected media in {url} but could not process it: {str(e)}"
             
-            # Check if we got a screenshot (e.g., from Twitter/X.com with no media)
-            screenshot_path = url_result.get('screenshot_path')
-            if screenshot_path:
-                self.logger.info(f"🖼️ URL returned screenshot, processing through VL flow: {screenshot_path}")
-                
-                # Import vision processing to handle the screenshot
-                from bot.see import see_infer
-                try:
-                    # Process the screenshot through the VL flow
-                    vision_response = await see_infer(
-                        image_path=screenshot_path,
-                        prompt=f"Describe what you see in this screenshot from {url}. Focus on the main content, text, and any important details."
-                    )
-                    
-                    if vision_response:
-                        return f"Screenshot content from {url}: {vision_response}"
-                    else:
-                        return f"Successfully captured screenshot from {url} but vision processing failed"
-                        
-                except Exception as e:
-                    self.logger.error(f"VL processing failed for screenshot {screenshot_path}: {e}")
-                    return f"Successfully captured screenshot from {url} but could not analyze it: {str(e)}"
-            
-            # Fallback to text content if no screenshot
+            # Prefer text from process_url when available.
             content = url_result.get('text', '')
-            if not content or not content.strip():
+            if content and content.strip():
+                return f"Web content from {url}: {content}"
+
+            # If no text was extracted (and no media route), use tiered extractor (no screenshots)
+            self.logger.info(f"🧭 Falling back to tiered extractor for {url} (no auto-screenshot)")
+            extract_res = await web_extractor.extract(url)
+            if extract_res.success:
+                return f"Web content from {extract_res.canonical_url or url}:\n{extract_res.to_message()}"
+            else:
                 return f"Could not extract content from URL: {url}"
-            
-            return f"Web content from {url}: {content}"
             
         except Exception as e:
             self.logger.error(f"Error processing general URL: {e}", exc_info=True)
@@ -838,6 +821,7 @@ class Router:
         """
         Handle URLs that need screenshot fallback.
         Returns screenshot analysis for further processing.
+        Screenshots are explicitly command-gated (e.g., !ss).
         """
         try:
             if item.source_type != "url":
@@ -845,9 +829,31 @@ class Router:
             
             url = item.payload
             self.logger.info(f"📸 Taking screenshot of URL: {url}")
+            # Lazy-import to avoid circular deps and keep import costs off hot paths
+            from .utils.external_api import external_screenshot
             
-            # For now, return placeholder - would need screenshot implementation
-            return f"Screenshot URL detected: {url}. Screenshot processing not yet implemented."
+            screenshot_path = await external_screenshot(url)
+            if not screenshot_path:
+                self.logger.warning(f"⚠️ Screenshot API did not return an image for {url}")
+                return f"⚠️ Could not capture a screenshot for: {url}. Please try again later."
+
+            self.logger.info(f"🖼️ Screenshot saved at: {screenshot_path}. Sending to VL.")
+            try:
+                # Use VL to analyze the screenshot content
+                analysis = await see_infer(
+                    image_path=screenshot_path,
+                    prompt=(
+                        f"Analyze this screenshot from {url}. Summarize the main content, visible text, "
+                        f"and any important details. Be concise."
+                    ),
+                )
+                if analysis:
+                    return f"Screenshot content from {url}: {analysis}"
+                else:
+                    return f"✅ Captured screenshot from {url}, but vision analysis returned no content."
+            except Exception as vl_err:
+                self.logger.error(f"❌ Vision analysis failed for {screenshot_path}: {vl_err}", exc_info=True)
+                return f"✅ Captured screenshot from {url}, but could not analyze it right now."
             
         except Exception as e:
             self.logger.error(f"Error taking screenshot of URL: {e}", exc_info=True)

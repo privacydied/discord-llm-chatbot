@@ -5,7 +5,6 @@ import logging
 from typing import Any, Dict, Optional, Tuple
 from urllib.parse import urlparse, urljoin
 import httpx
-from bot.utils.external_api import external_screenshot
 from bs4 import BeautifulSoup
 import discord
 import trafilatura
@@ -291,7 +290,7 @@ def strip_boilerplate(text: str) -> str:
 async def process_url(url: str) -> Dict[str, Any]:
     """Process a URL, using smart routing for Twitter/X.com URLs and falling back to text extraction."""
     domain_info = get_domain_info(url)
-    force_screenshot = domain_info.get('force_screenshot', False)
+    # Screenshot fallback removed; screenshots are command-gated via !ss
     smart_routing = domain_info.get('smart_routing', False)
     screenshot_path = None
 
@@ -311,35 +310,13 @@ async def process_url(url: str) -> Dict[str, Any]:
                 # Return special indicator that this should be routed to yt-dlp
                 return {'url': url, 'text': None, 'screenshot_path': None, 'error': None, 'route_to_ytdlp': True}
             else:
-                logging.info(f"📷 No media in Twitter URL {url}. Using screenshot API.")
-                # No media detected, use screenshot API
-                screenshot_path = await external_screenshot(url)
-                if screenshot_path:
-                    return {'url': url, 'text': None, 'screenshot_path': screenshot_path, 'error': None}
-                else:
-                    logging.warning(f"⚠️ Screenshot failed for Twitter URL {url}.")
-                    return {'url': url, 'text': None, 'screenshot_path': None, 'error': 'screenshot_failed_for_smart_routing'}
-                    
+                logging.info(f"📝 No media in Twitter URL {url}. Proceeding with text extraction (no auto-screenshot).")
+                
         except Exception as e:
-            logging.error(f"❌ Smart routing failed for {url}: {e}. Falling back to screenshot.")
-            # If smart routing fails, fall back to screenshot
-            screenshot_path = await external_screenshot(url)
-            if screenshot_path:
-                return {'url': url, 'text': None, 'screenshot_path': screenshot_path, 'error': None}
-            else:
-                return {'url': url, 'text': None, 'screenshot_path': None, 'error': 'smart_routing_failed'}
+            logging.error(f"❌ Smart routing failed for {url}: {e}. Continuing with text extraction.")
 
     # 2. Attempt screenshot if forced (legacy behavior for non-smart domains)
-    if force_screenshot:
-        logging.info(f"📷 Force screenshot enabled for {url}. Attempting external capture.")
-        screenshot_path = await external_screenshot(url)
-        if screenshot_path:
-            # If screenshot is successful, we can return it immediately.
-            return {'url': url, 'text': None, 'screenshot_path': screenshot_path, 'error': None}
-        else:
-            logging.warning(f"⚠️ External screenshot failed for forced domain {url}. Returning screenshot_failed indicator.")
-            # Return a special value to indicate screenshot failure for a forced domain.
-            return {'url': url, 'text': None, 'screenshot_path': None, 'error': 'screenshot_failed_for_forced_domain'}
+    # 'force_screenshot' is ignored; screenshots are gated by explicit command.
 
     # 2. Attempt standard text extraction (primary method for non-forced sites)
     try:
@@ -359,14 +336,9 @@ async def process_url(url: str) -> Dict[str, Any]:
                     logging.warning(f"Content from {url} is empty or requires JavaScript. Attempting screenshot fallback.")
 
     except Exception as e:
-        logging.warning(f"Initial httpx fetch failed for {url}: {e}. Attempting screenshot fallback.")
+        logging.warning(f"Initial httpx fetch failed for {url}: {e}.")
 
-    # 3. Fallback to screenshot if text extraction fails or is insufficient
-    if not screenshot_path: # Avoid re-capturing if already attempted
-        logging.info(f"Falling back to external screenshot for {url}.")
-        screenshot_path = await external_screenshot(url)
-        if screenshot_path:
-            return {'url': url, 'text': None, 'screenshot_path': screenshot_path, 'error': None}
+    # 3. No automatic screenshot fallback; allow caller to decide next steps.
 
     # 4. If all methods fail
     error_msg = f"All content extraction methods (text and screenshot) failed for {url}."

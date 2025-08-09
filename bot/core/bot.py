@@ -985,6 +985,7 @@ class LLMBot(commands.Bot):
             ("video_commands", "VideoCommands"),
             ("rag_commands", "RAGCommands"),
             ("search_commands", "SearchCommands"),
+            ("screenshot_commands", "ScreenshotCommands"),
         ]
         
         command_modules = []  # List of (module_name, success_status)
