@@ -20,6 +20,7 @@ from bot.memory import load_all_profiles
 from bot.memory.context_manager import ContextManager
 from bot.memory.enhanced_context_manager import EnhancedContextManager
 from bot.events import setup_command_error_handler
+from bot.voice import VoiceMessagePublisher
 
 if TYPE_CHECKING:
     from bot.router import Router, BotAction
@@ -673,6 +674,64 @@ class LLMBot(commands.Bot):
                 extra={**base_extra, "event": "tts.audio.not_generated"},
             )
             action.content = "I tried to send a voice message, but the audio file was missing."
+
+        # Attempt Discord native voice message flow if enabled and audio is present.
+        # Discord voice messages cannot include embeds or content; enforce constraints. [CA][REH][IV]
+        try:
+            if action.audio_path and self.config.get("VOICE_ENABLE_NATIVE", False):
+                self.logger.info(
+                    "voice:native.attempt",
+                    extra={**base_extra, "event": "voice.native.attempt"},
+                )
+
+                # Preserve originals in case we need to fallback
+                _orig_content = action.content
+                _orig_embeds = list(action.embeds) if action.embeds else []
+
+                # Strip content/embeds to comply with Discord native voice restrictions
+                if action.embeds:
+                    self.logger.debug(
+                        "voice:native.strip_embeds",
+                        extra={**base_extra, "event": "voice.native.strip_embeds"},
+                    )
+                    action.embeds = []
+                if action.content:
+                    self.logger.debug(
+                        "voice:native.strip_content",
+                        extra={**base_extra, "event": "voice.native.strip_content"},
+                    )
+                    action.content = ""
+
+                publisher = VoiceMessagePublisher(self.logger)
+                res = await publisher.publish(message=message, wav_path=action.audio_path)
+                if res and getattr(res, "ok", False):
+                    # Remove placeholder if present and stop; publisher already posted the message.
+                    if target_message:
+                        try:
+                            await target_message.delete()
+                        except Exception:
+                            pass
+                    if self.enhanced_context_manager and res.message:
+                        await self.enhanced_context_manager.append_message(res.message, role="bot")
+                    self.logger.info(
+                        "voice:native.ok",
+                        extra={**base_extra, "event": "voice.native.ok"},
+                    )
+                    return
+                else:
+                    self.logger.warning(
+                        "voice:native.fallback",
+                        extra={**base_extra, "event": "voice.native.fallback"},
+                    )
+                    # Restore original content/embeds for normal send path
+                    action.content = _orig_content
+                    action.embeds = _orig_embeds
+        except Exception as e:
+            self.logger.error(
+                f"voice:native.exception | {e}",
+                extra={**base_extra, "event": "voice.native.exception"},
+                exc_info=True,
+            )
 
         content = action.content or ""
         embed_count = len(action.embeds) if action.embeds else 0

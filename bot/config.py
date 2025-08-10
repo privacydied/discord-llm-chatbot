@@ -252,6 +252,8 @@ def load_config():
         # TTS SETTINGS
         "TTS_BACKEND": os.getenv("TTS_BACKEND", "kokoro-onnx"),
         "TTS_VOICE": os.getenv("TTS_VOICE", "af"),
+        # Native Discord voice messages toggle [CMV]
+        "VOICE_ENABLE_NATIVE": os.getenv("VOICE_ENABLE_NATIVE", "false").lower() == "true",
         
         # OPTIONAL SETTINGS
         "TTS_PREFS_FILE": os.getenv("TTS_PREFS_FILE"),
