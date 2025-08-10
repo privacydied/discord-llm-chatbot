@@ -135,15 +135,16 @@ class TTSCommands(commands.Cog):
             # Direct TTS synthesis (bypassing router for simple text)
             logging.debug(f"🔊 Direct TTS synthesis for !say command: '{text[:30]}...'")
             try:
-                # Get audio bytes from synthesizer
-                audio_bytes = await self.bot.tts_manager.synthesize(text)
-                
-                # Create in-memory file object
-                audio_stream = io.BytesIO(audio_bytes)
-                audio_stream.seek(0)
-                
-                # Send audio file to Discord
-                await ctx.send(file=discord.File(audio_stream, filename="tts_audio.wav"))
+                if hasattr(self.bot.tts_manager, 'generate_tts'):
+                    # Prefer file-path generating API when available (compat with tests)
+                    audio_path = await self.bot.tts_manager.generate_tts(text)
+                    await ctx.send(file=discord.File(audio_path))
+                else:
+                    # Fallback to bytes-based API
+                    audio_bytes = await self.bot.tts_manager.synthesize(text)
+                    audio_stream = io.BytesIO(audio_bytes)
+                    audio_stream.seek(0)
+                    await ctx.send(file=discord.File(audio_stream, filename="tts_audio.wav"))
                 logging.debug("✅ Direct TTS response sent successfully")
             except Exception as e:
                 logging.error(f"Error in say command: {e}", exc_info=True)

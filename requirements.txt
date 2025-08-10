@@ -64,6 +64,9 @@ jsonschema==4.25.0
 jsonschema-specifications==2025.4.1
 justext==3.0.2
 kokoro-onnx==0.4.9
+#     "kokoro==0.8.4",
+#     "onnx==1.17.0",
+#     "onnxruntime==1.20.1",
 kubernetes==33.1.0
 language-tags==1.2.0
 lxml==6.0.0

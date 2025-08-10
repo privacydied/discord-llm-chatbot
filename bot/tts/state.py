@@ -59,6 +59,13 @@ class TTSState:
             return True
         return False
     
+    def get_one_time_tts(self, user_id: int) -> bool:
+        """Backward-compat alias for one-time TTS check.
+        Note: This clears the flag if set, matching the semantics of
+        `get_and_clear_one_time_tts`.
+        """
+        return self.get_and_clear_one_time_tts(user_id)
+    
     def get_stats(self) -> dict:
         """Get TTS usage statistics."""
         return {
