@@ -107,3 +107,8 @@ QWEN.md
 chroma_db/chroma.sqlite3
 logs/bot.jsonl
 cache/video_audio/index.json
+tts/kokoro-v1.0.onnx
+	tts/voices-v1.0.bin
+yoroi.env
+tts/voices-v1.0.bin
+cache/video_audio/index.json

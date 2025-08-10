@@ -653,7 +653,14 @@ class LLMBot(commands.Bot):
         # If action has an audio path after processing, prepare it for sending.
         if action.audio_path:
             if os.path.exists(action.audio_path):
-                files = [discord.File(action.audio_path, filename="voice_message.ogg")]
+                try:
+                    from pathlib import Path as _Path
+                    suffix = _Path(action.audio_path).suffix or ".wav"
+                    safe_suffix = suffix if len(suffix) <= 6 else ".wav"
+                    filename = f"voice_message{safe_suffix}"
+                except Exception:
+                    filename = "voice_message.wav"
+                files = [discord.File(action.audio_path, filename=filename)]
             else:
                 self.logger.error(
                     f"tts:file_missing | path={action.audio_path}",

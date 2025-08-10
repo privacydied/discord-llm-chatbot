@@ -130,5 +130,16 @@
     "processed_path": "cache/video_audio/7181a2cac5ea0f1a.wav",
     "cached_at": "2025-08-09T20:48:11.200863+00:00",
     "speedup_factor": 1.5
+  },
+  "30c2d8e49d57ca74": {
+    "url": "https://x.com/Kaizerrev/status/1954056731950207076",
+    "title": "KaizerRev - \"If anything happens to me, finish it if I can't\"  - Nick Fuentes",
+    "duration_seconds": 50.549,
+    "uploader": "KaizerRev",
+    "upload_date": "20250809",
+    "source_type": "unknown",
+    "processed_path": "cache/video_audio/30c2d8e49d57ca74.wav",
+    "cached_at": "2025-08-09T23:01:38.033346+00:00",
+    "speedup_factor": 1.5
   }
 }

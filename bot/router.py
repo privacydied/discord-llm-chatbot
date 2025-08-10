@@ -61,6 +61,7 @@ from .web import process_url
 from .utils.mention_utils import ensure_single_mention
 from .web_extraction_service import web_extractor
 from .utils.file_utils import download_file
+from .tts.state import tts_state
 
 # Dependency availability flags
 try:
@@ -1584,6 +1585,24 @@ class Router:
         try:
             action = await self._flows['process_text'](content, context_str, message)
             if action and action.has_payload:
+                # Respect TTS state: one-time flag first, then per-user/global preference [CA][REH]
+                try:
+                    user_id = getattr(message.author, 'id', None)
+                    require_tts = False
+                    if user_id is not None:
+                        if tts_state.get_and_clear_one_time_tts(user_id):
+                            require_tts = True
+                        elif tts_state.is_user_tts_enabled(user_id):
+                            require_tts = True
+
+                    if require_tts:
+                        action.meta['requires_tts'] = True
+                        # Include transcript captions unless disabled via env/config [IV][CMV]
+                        include_transcript = os.getenv('TTS_INCLUDE_TRANSCRIPT', 'true').lower() in ('1','true','yes','on')
+                        action.meta['include_transcript'] = include_transcript
+                except Exception as e:
+                    # Never break dispatch on TTS flag evaluation
+                    self.logger.debug(f"tts.flag_eval_failed | {e}")
                 return action
             else:
                 self.logger.warning(f"Text flow returned no response. (msg_id: {message.id})")
