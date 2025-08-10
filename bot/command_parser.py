@@ -20,6 +20,7 @@ COMMAND_MAP = {
     "!chat": Command.CHAT,
     "!search": Command.SEARCH,
     "!tts": Command.TTS,
+    "!speak": Command.SPEAK,
     "!say": Command.SAY,
     "!memory-add": Command.MEMORY_ADD,
     "!memory-del": Command.MEMORY_DEL,

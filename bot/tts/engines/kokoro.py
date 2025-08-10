@@ -23,6 +23,22 @@ class KokoroONNXEngine(BaseEngine):
         
     def load(self):
         try:
+            # Patch EspeakWrapper to avoid Python 3.12 incompatibility
+            try:
+                import os as _os
+                _os.environ.setdefault("KOKORO_SKIP_TOKENIZER_PROBE", "1")
+                import kokoro_onnx.tokenizer as _tok  # type: ignore
+                _ew = getattr(_tok, "EspeakWrapper", None)
+                if _ew is not None:
+                    if not hasattr(_ew, "set_data_path"):
+                        setattr(_ew, "set_data_path", staticmethod(lambda *_, **__: None))
+                    if not hasattr(_ew, "set_library"):
+                        setattr(_ew, "set_library", staticmethod(lambda *_, **__: None))
+                    logger.debug("Patched EspeakWrapper with no-op methods")
+            except Exception:
+                # Non-fatal; continue and let Kokoro attempt init
+                logger.debug("EspeakWrapper patch not applied", exc_info=True)
+
             self.engine = Kokoro(
                 model_path=self.model_path,
                 voices_path=self.voices_path
