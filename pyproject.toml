@@ -9,6 +9,10 @@ description = "A Discord chatbot powered by large language models."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
+dependencies = [
+    "kokoro-onnx>=0.4.9",
+    "soundfile>=0.13.1",
+]
 
 [tool.setuptools.packages.find]
 where = ["."]
