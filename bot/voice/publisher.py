@@ -3,6 +3,9 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import contextlib
+import wave
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -14,10 +17,12 @@ from bot.config import load_config
 from bot.retry_utils import API_RETRY_CONFIG, retry_async
 from utils.opus import transcode_to_ogg_opus
 from utils.waveform import compute_waveform_b64
-from utils.wav_stats import wav_stats
 
 
 IS_VOICE_MESSAGE_FLAG = 8192  # Discord message flags: IS_VOICE_MESSAGE
+USER_AGENT = "DiscordVoicePublisher/1.0"
+VOICE_MSG_FORBIDDEN_CODE = 50173  # Discord API error code when voice messages are disallowed in channel
+BLOCK_TTL_SECONDS = 15 * 60  # 15 minutes [PA]
 
 
 @dataclass
@@ -35,11 +40,27 @@ class VoiceMessagePublisher:
 
     def __init__(self, logger: Optional[logging.Logger] = None):
         self.logger = logger or logging.getLogger(__name__)
+        # Channels that recently returned 50173 (Cannot send voice messages in this channel) [REH]
+        self._blocked_channels: dict[int, float] = {}
+
+    def _is_blocked(self, channel_id: int) -> bool:
+        now = time.monotonic()
+        exp = self._blocked_channels.get(channel_id)
+        if exp is None:
+            return False
+        if exp <= now:
+            # expire entry lazily
+            self._blocked_channels.pop(channel_id, None)
+            return False
+        return True
+
+    def _block(self, channel_id: int) -> None:
+        self._blocked_channels[channel_id] = time.monotonic() + BLOCK_TTL_SECONDS
 
     async def _attachments_create(self, session: aiohttp.ClientSession, channel_id: int, token: str, filename: str, file_size: int) -> dict:
         url = f"https://discord.com/api/v10/channels/{channel_id}/attachments"
         payload = {"files": [{"filename": filename, "file_size": file_size, "id": "0"}]}
-        headers = {"Authorization": f"Bot {token}", "Content-Type": "application/json"}
+        headers = {"Authorization": f"Bot {token}", "Content-Type": "application/json", "User-Agent": USER_AGENT}
 
         async def _do():
             async with session.post(url, headers=headers, json=payload, timeout=30) as resp:
@@ -51,7 +72,8 @@ class VoiceMessagePublisher:
         return await retry_async(_do, API_RETRY_CONFIG)
 
     async def _upload_file(self, session: aiohttp.ClientSession, upload_url: str, token: str, ogg_bytes: bytes) -> None:
-        headers = {"Authorization": f"Bot {token}", "Content-Type": "audio/ogg"}
+        # Do NOT send bot Authorization to the upload_url (usually a signed CDN/S3 URL). [REH]
+        headers = {"Content-Type": "audio/ogg"}
 
         async def _do():
             async with session.put(upload_url, headers=headers, data=ogg_bytes, timeout=60) as resp:
@@ -76,7 +98,7 @@ class VoiceMessagePublisher:
         payload: dict = {"flags": IS_VOICE_MESSAGE_FLAG, "attachments": attachments}
         if reply_to_id:
             payload["message_reference"] = {"message_id": str(reply_to_id), "fail_if_not_exists": False}
-        headers = {"Authorization": f"Bot {token}", "Content-Type": "application/json"}
+        headers = {"Authorization": f"Bot {token}", "Content-Type": "application/json", "User-Agent": USER_AGENT}
 
         async def _do():
             async with session.post(url, headers=headers, json=payload, timeout=30) as resp:
@@ -113,13 +135,31 @@ class VoiceMessagePublisher:
             self.logger.error("voice.native.missing_channel_id")
             return VoicePublishResult(message=None, ogg_path=None, ok=False)
 
+        # Skip early if we recently observed 50173 for this channel [REH]
+        if isinstance(channel_id, int) and self._is_blocked(channel_id):
+            self.logger.info(
+                f"voice.native.skipping_blocked | channel_id={channel_id}",
+            )
+            return VoicePublishResult(message=None, ogg_path=None, ok=False)
+
         # 1) Prepare audio: transcode WAV -> OGG Opus, compute duration + waveform
         try:
             wav_p = Path(wav_path)
-            duration = wav_stats(wav_p).duration if wav_p.exists() else 0.0
-            ogg_p = await transcode_to_ogg_opus(wav_p)
+            # Compute duration directly from WAV header [REH]
+            duration = 0.0
+            if wav_p.exists():
+                with contextlib.closing(wave.open(str(wav_p), "rb")) as wf:
+                    fr = wf.getframerate() or 0
+                    nf = wf.getnframes() or 0
+                    duration = (nf / float(fr)) if fr else 0.0
+            # Transcode close to reference script: 48kHz, libopus @ 64k
+            ogg_p = await transcode_to_ogg_opus(wav_p, bitrate="64k")
             ogg_bytes = ogg_p.read_bytes()
             waveform_b64 = compute_waveform_b64(wav_p)
+            # Prefer probing duration from OGG (matches reference behavior)
+            probed = await self._probe_duration(ogg_p)
+            if probed is not None:
+                duration = probed
         except Exception as e:
             self.logger.error(f"voice.native.audio_prep_failed | {e}", exc_info=True)
             return VoicePublishResult(message=None, ogg_path=None, ok=False)
@@ -127,7 +167,9 @@ class VoiceMessagePublisher:
         # 2) Upload flow
         try:
             async with aiohttp.ClientSession(raise_for_status=False) as session:
-                meta = await self._attachments_create(session, channel_id, token, ogg_p.name, len(ogg_bytes))
+                # Use a standard display filename per reference script
+                filename_display = "voice-message.ogg"
+                meta = await self._attachments_create(session, channel_id, token, filename_display, len(ogg_bytes))
                 attach = (meta or {}).get("attachments", [{}])[0]
                 upload_url = attach.get("upload_url")
                 # API typically returns 'upload_filename'; be tolerant if 'uploaded_filename' appears.
@@ -138,8 +180,49 @@ class VoiceMessagePublisher:
                 await self._upload_file(session, upload_url, token, ogg_bytes)
                 msg_json = await self._post_voice_message(session, channel_id, token, upload_filename, duration, waveform_b64, getattr(message, 'id', None))
         except Exception as e:
+            # Detect Discord code 50173 and block channel for a while [REH]
+            blocked = False
+            # Attempt to parse known structure from aiohttp.ClientResponseError
+            if hasattr(e, 'status') and getattr(e, 'status', None) == 400:
+                msg_text = getattr(e, 'message', '') or ''
+                try:
+                    data = json.loads(msg_text)
+                    if int(data.get('code', 0)) == VOICE_MSG_FORBIDDEN_CODE and isinstance(channel_id, int):
+                        self._block(channel_id)
+                        blocked = True
+                except Exception:
+                    # Fallback string check
+                    if str(VOICE_MSG_FORBIDDEN_CODE) in msg_text and isinstance(channel_id, int):
+                        self._block(channel_id)
+                        blocked = True
+
+            if blocked:
+                self.logger.info(
+                    f"voice.native.blocked_channel | channel_id={channel_id} ttl={BLOCK_TTL_SECONDS}s",
+                )
             self.logger.error(f"voice.native.upload_failed | {e}", exc_info=True)
             return VoicePublishResult(message=None, ogg_path=ogg_p, ok=False)
+
+    async def _probe_duration(self, path: Path) -> Optional[float]:
+        """Probe audio duration using ffprobe; return seconds (rounded to 0 decimals per reference) or None."""
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "ffprobe", "-v", "error", "-hide_banner",
+                "-select_streams", "a:0",
+                "-show_entries", "format=duration",
+                "-of", "json",
+                str(path),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, _ = await proc.communicate()
+            if proc.returncode != 0:
+                return None
+            data = json.loads(stdout.decode("utf-8", errors="ignore"))
+            dur = float(data.get("format", {}).get("duration", 0.0))
+            return float(int(round(dur)))
+        except Exception:
+            return None
 
         # 3) Fetch created message to return a discord.Message instance for context tracking
         try:

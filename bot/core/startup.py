@@ -111,5 +111,24 @@ def create_bot_intents() -> discord.Intents:
 
 def get_prefix(bot, message: discord.Message) -> list[str]:
     """Dynamically get the command prefix for the bot."""
-    base_prefixes = os.getenv('BOT_PREFIX', '!').split(',')
-    return commands.when_mentioned_or(*base_prefixes)(bot, message)
+    # Base prefixes from env (comma-separated), stripped and non-empty
+    base_prefixes = [p.strip() for p in os.getenv('BOT_PREFIX', '!').split(',') if p.strip()]
+
+    # Standard behavior: allow mention OR base prefixes
+    dynamic = commands.when_mentioned_or(*base_prefixes)
+    prefixes = list(dynamic(bot, message))
+
+    # Enhancement: also allow "mention + symbol" usage, e.g. "@Bot !say ..."
+    # We build combinations of mention forms with each base prefix, with and without a space.
+    mention_forms = commands.when_mentioned(bot, message)
+    combined = []
+    for m in mention_forms:
+        for p in base_prefixes:
+            if m.endswith(" "):
+                # Typical discord.py mention prefixes include a trailing space
+                combined.append(f"{m}{p}")  # "@Bot !"
+            else:
+                combined.append(f"{m} {p}")  # ensure a space between mention and symbol
+
+    # Prepend combined forms so they match first when present
+    return list(dict.fromkeys([*combined, *prefixes]))
