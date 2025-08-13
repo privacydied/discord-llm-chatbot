@@ -69,21 +69,45 @@ class KokoroONNXEngine(BaseEngine):
             self.load()
 
         try:
+            # Entry logging for diagnostics of dropped words like 'cavalli'
+            try:
+                logger.info(
+                    "Kokoro.synthesize start | len=%d | tokenizer=%s | voice=%s | text=%r",
+                    len(text) if isinstance(text, str) else -1,
+                    getattr(self, "tokenizer", None),
+                    getattr(self, "voice", None),
+                    text,
+                )
+            except Exception:
+                pass
             # Preferred: official example path from kokoro-onnx english.py
             try:
                 ga = getattr(self.engine, "generate_audio", None)
                 if callable(ga):
-                    logger.info("Kokoro engine using example 'generate_audio' path (voice=%s)", self.voice)
-                    try:
-                        result = ga(text, voice=self.voice)
-                    except TypeError:
-                        # Some versions may expect positional voice
-                        result = ga(text, self.voice)
-                    if inspect.isawaitable(result):
-                        result = await result
-                    wav_bytes = self._normalize_audio_to_wav_bytes(result)
-                    if wav_bytes is not None:
-                        return wav_bytes
+                    logger.info("Kokoro engine trying 'generate_audio' variants (voice=%s)", self.voice)
+                    attempts = [
+                        lambda: ga(text, voice=self.voice),
+                        lambda: ga(text, self.voice),
+                        lambda: ga(text=text, voice=self.voice),
+                        lambda: ga(text=text, voice_name=self.voice),
+                        lambda: ga(self.voice, text),
+                        lambda: ga(voice=self.voice, text=text),
+                        lambda: ga(speaker=self.voice, text=text),
+                        lambda: ga(text),  # engine default voice
+                    ]
+                    for inv in attempts:
+                        try:
+                            result = inv()
+                        except TypeError:
+                            continue
+                        except Exception:
+                            continue
+                        if inspect.isawaitable(result):
+                            result = await result
+                        wav_bytes = self._normalize_audio_to_wav_bytes(result)
+                        if wav_bytes is not None:
+                            return wav_bytes
+                    logger.debug("generate_audio variants did not yield recognizable audio; continuing to fallbacks")
             except Exception:
                 # Fall through to Misaki/probing
                 logger.debug("generate_audio path failed; falling back", exc_info=True)
@@ -109,21 +133,45 @@ class KokoroONNXEngine(BaseEngine):
             # If Misaki is available, try phoneme path first
             if self._g2p is not None:
                 try:
+                    logger.debug("Invoking Misaki G2P on input text")
                     phon = self._g2p(text)
                     # Misaki may return (phonemes, meta) or just phonemes
                     if isinstance(phon, tuple) and len(phon) >= 1:
                         phonemes = phon[0]
                     else:
                         phonemes = phon
-                    create = getattr(self.engine, "create", None)
-                    if callable(create):
-                        logger.info("Kokoro engine using 'create' with phonemes via Misaki")
-                        result = create(phonemes, self.voice, is_phonemes=True)
-                        if inspect.isawaitable(result):
-                            result = await result
-                        wav_bytes = self._normalize_audio_to_wav_bytes(result)
-                        if wav_bytes is not None:
-                            return wav_bytes
+                    try:
+                        prev = str(phonemes)
+                        logger.info("Misaki phoneme result | empty=%s | preview=%r", not bool(prev and str(prev).strip()), prev[:120])
+                    except Exception:
+                        pass
+                    # Guard against empty phoneme outputs (suspected root of dropped words)
+                    invalid_marker = False
+                    try:
+                        s = str(phonemes)
+                        # Treat presence of obvious unknown markers as invalid phonemes
+                        if any(ch in s for ch in ("?", "❓", "�")):
+                            invalid_marker = True
+                    except Exception:
+                        pass
+
+                    if (not phonemes or (isinstance(phonemes, str) and not phonemes.strip())) or invalid_marker:
+                        if invalid_marker:
+                            logger.warning("Misaki phonemes contain unknown markers; skipping phoneme path and using text methods")
+                        else:
+                            logger.warning("Misaki produced empty phonemes; skipping phoneme path and falling back to text methods")
+                    else:
+                        create = getattr(self.engine, "create", None)
+                        if callable(create):
+                            logger.info("Kokoro engine using 'create' with phonemes via Misaki")
+                            result = create(phonemes, self.voice, is_phonemes=True)
+                            if inspect.isawaitable(result):
+                                result = await result
+                            wav_bytes = self._normalize_audio_to_wav_bytes(result)
+                            if wav_bytes is not None:
+                                return wav_bytes
+                            else:
+                                logger.debug("create(is_phonemes=True) returned unrecognized audio format; continuing to probing methods")
                 except Exception:
                     # Fall through to generic probing
                     logger.warning("Phoneme path failed; falling back to generic probing", exc_info=True)
@@ -173,11 +221,21 @@ class KokoroONNXEngine(BaseEngine):
 
                     if name in ("create", "_create_audio", "create_audio"):
                         # Text-mode create (phoneme path already tried above)
+                        # Cover both text-first and voice-first signatures across versions
                         patterns.extend([
+                            # text-first
                             lambda: meth(text, self.voice, is_phonemes=False),
                             lambda: meth(text, self.voice),
                             lambda: meth(text=text, voice=self.voice, is_phonemes=False),
                             lambda: meth(text=text, voice=self.voice),
+                            # voice-first positional
+                            lambda: meth(self.voice, text, False),
+                            lambda: meth(self.voice, text),
+                            # voice-first kwargs
+                            lambda: meth(voice=self.voice, text=text, is_phonemes=False),
+                            lambda: meth(voice=self.voice, text=text),
+                            lambda: meth(speaker=self.voice, text=text, is_phonemes=False),
+                            lambda: meth(speaker=self.voice, text=text),
                             # text-only (engine may use default voice)
                             lambda: meth(text),
                         ])
@@ -239,6 +297,8 @@ class KokoroONNXEngine(BaseEngine):
                     wav_bytes = self._normalize_audio_to_wav_bytes(result)
                     if wav_bytes is not None:
                         return wav_bytes
+                    else:
+                        logger.debug("Method '%s' returned unrecognized audio format; trying next pattern", name)
 
             # Log available callable attributes to aid debugging
             try:
@@ -246,6 +306,28 @@ class KokoroONNXEngine(BaseEngine):
                 logger.debug(f"Kokoro engine callable methods: {callables}")
             except Exception:
                 pass
+
+            # Final fallback: use our direct integration wrapper if available
+            try:
+                logger.info("Attempting KokoroDirect fallback path")
+                from bot.kokoro_direct_fixed import KokoroDirect  # local helper wrapper
+                kd = KokoroDirect(model_path=self.model_path, voices_path=self.voices_path)
+                out_path = kd.create(text, self.voice)
+                try:
+                    from pathlib import Path as _P
+                    if isinstance(out_path, _P) and out_path.exists():
+                        with open(out_path, 'rb') as _f:
+                            data = _f.read()
+                        try:
+                            out_path.unlink(missing_ok=True)  # py3.8+: ok on this runtime
+                        except Exception:
+                            pass
+                        return data
+                except Exception:
+                    logger.debug("KokoroDirect returned non-path or read failed; continuing", exc_info=True)
+            except Exception:
+                logger.debug("KokoroDirect fallback unavailable or failed", exc_info=True)
+
             raise TTSError("No compatible synthesis method found on Kokoro engine")
 
         except Exception as e:
