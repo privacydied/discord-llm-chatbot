@@ -383,9 +383,47 @@ def load_config():
         "STREAMING_ENABLE_RAG": os.getenv("STREAMING_ENABLE_RAG", "false").lower() == "true",
         "STREAMING_ENABLE_MEDIA": os.getenv("STREAMING_ENABLE_MEDIA", "true").lower() == "true",
 
-        # ===== STT ORCHESTRATION [CA][CMV] =====
+        # STT ORCHESTRATION [CA][CMV] =====
         # Global toggle for STT orchestrator (falls back to legacy path when disabled)
         "STT_ENABLE": os.getenv("STT_ENABLE", "true").lower() == "true",
+
+        # ===== VISION GENERATION SYSTEM [CA][CMV][SFT][REH] =====
+        # Master toggle for entire Vision generation feature set
+        "VISION_ENABLED": os.getenv("VISION_ENABLED", "false").lower() == "true",
+        # Single credential for Vision Gateway (provider secrets handled behind gateway)
+        "VISION_API_KEY": _clean_env_value(os.getenv("VISION_API_KEY")),
+        # Provider configuration
+        "VISION_ALLOWED_PROVIDERS": [s.strip() for s in os.getenv("VISION_ALLOWED_PROVIDERS", "together,novita").split(",") if s.strip()],
+        "VISION_DEFAULT_PROVIDER": os.getenv("VISION_DEFAULT_PROVIDER", "together"),
+        # Policy and data paths
+        "VISION_POLICY_PATH": os.getenv("VISION_POLICY_PATH", "configs/vision_policy.json"),
+        "VISION_DATA_DIR": Path(os.getenv("VISION_DATA_DIR", "vision_data")),
+        "VISION_ARTIFACTS_DIR": Path(os.getenv("VISION_ARTIFACTS_DIR", "vision_data/artifacts")),
+        "VISION_JOBS_DIR": Path(os.getenv("VISION_JOBS_DIR", "vision_data/jobs")),
+        "VISION_LEDGER_PATH": os.getenv("VISION_LEDGER_PATH", "vision_data/ledger.jsonl"),
+        # Intent routing thresholds
+        "VISION_INTENT_THRESHOLD": _safe_float(os.getenv("VISION_INTENT_THRESHOLD"), "0.7", "VISION_INTENT_THRESHOLD"),
+        "VISION_FORCE_OPENROUTER_THRESHOLD": _safe_float(os.getenv("VISION_FORCE_OPENROUTER_THRESHOLD"), "0.3", "VISION_FORCE_OPENROUTER_THRESHOLD"),
+        # Concurrency and performance limits
+        "VISION_MAX_CONCURRENT_JOBS": _safe_int(os.getenv("VISION_MAX_CONCURRENT_JOBS"), "3", "VISION_MAX_CONCURRENT_JOBS"),
+        "VISION_MAX_USER_CONCURRENT_JOBS": _safe_int(os.getenv("VISION_MAX_USER_CONCURRENT_JOBS"), "1", "VISION_MAX_USER_CONCURRENT_JOBS"),
+        "VISION_JOB_TIMEOUT_SECONDS": _safe_int(os.getenv("VISION_JOB_TIMEOUT_SECONDS"), "300", "VISION_JOB_TIMEOUT_SECONDS"),
+        # Artifact management
+        "VISION_ARTIFACT_TTL_DAYS": _safe_int(os.getenv("VISION_ARTIFACT_TTL_DAYS"), "7", "VISION_ARTIFACT_TTL_DAYS"),
+        "VISION_MAX_ARTIFACT_SIZE_MB": _safe_int(os.getenv("VISION_MAX_ARTIFACT_SIZE_MB"), "50", "VISION_MAX_ARTIFACT_SIZE_MB"),
+        "VISION_MAX_TOTAL_ARTIFACTS_GB": _safe_int(os.getenv("VISION_MAX_TOTAL_ARTIFACTS_GB"), "10", "VISION_MAX_TOTAL_ARTIFACTS_GB"),
+        # Logging and observability
+        "VISION_LOG_LEVEL": os.getenv("VISION_LOG_LEVEL", "INFO"),
+        "VISION_AUDIT_ENABLED": os.getenv("VISION_AUDIT_ENABLED", "true").lower() == "true",
+        # Provider-specific timeouts and retries
+        "VISION_PROVIDER_TIMEOUT_MS": _safe_int(os.getenv("VISION_PROVIDER_TIMEOUT_MS"), "30000", "VISION_PROVIDER_TIMEOUT_MS"),
+        "VISION_PROVIDER_MAX_RETRIES": _safe_int(os.getenv("VISION_PROVIDER_MAX_RETRIES"), "3", "VISION_PROVIDER_MAX_RETRIES"),
+        "VISION_PROVIDER_RETRY_DELAY_MS": _safe_int(os.getenv("VISION_PROVIDER_RETRY_DELAY_MS"), "1000", "VISION_PROVIDER_RETRY_DELAY_MS"),
+        # Discord integration
+        "VISION_PROGRESS_UPDATE_INTERVAL_S": _safe_int(os.getenv("VISION_PROGRESS_UPDATE_INTERVAL_S"), "10", "VISION_PROGRESS_UPDATE_INTERVAL_S"),
+        "VISION_EPHEMERAL_RESPONSES": os.getenv("VISION_EPHEMERAL_RESPONSES", "true").lower() == "true",
+        # Dry run mode for testing routing and cost decisions
+        "VISION_DRY_RUN_MODE": os.getenv("VISION_DRY_RUN_MODE", "false").lower() == "true",
         # Orchestration mode: single | cascade_primary_then_fallbacks | parallel_first_acceptable | parallel_best_of | hybrid_draft_then_finalize
         "STT_MODE": os.getenv("STT_MODE", "single"),
         # Active providers (comma-separated). Supported now: local_whisper

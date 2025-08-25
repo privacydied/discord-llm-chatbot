@@ -17,22 +17,17 @@ from __future__ import annotations
 import asyncio
 import io
 from .util.logging import get_logger
+import logging
 import os
 import re
 import tempfile
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from pathlib import Path
-from typing import Any, Callable, Coroutine, Dict, Optional, TYPE_CHECKING, List, Awaitable
-import time
+from typing import Any, Callable, Coroutine, Dict, Optional, TYPE_CHECKING, List, Awaitable, Tuple, Union
+
 import discord
 import httpx
-from html import unescape
-
-# Import new modality system
-from .modality import InputModality, InputItem, collect_input_items, map_item_to_modality
-from .multimodal_retry import run_with_retries
-from .result_aggregator import ResultAggregator
 from .x_api_client import XApiClient
 from .enhanced_retry import EnhancedRetryManager, ProviderConfig, get_retry_manager
 from .brain import brain_infer
@@ -62,6 +57,13 @@ from .utils.mention_utils import ensure_single_mention
 from .web_extraction_service import web_extractor
 from .utils.file_utils import download_file
 from .tts.state import tts_state
+
+# Vision generation system
+try:
+    from .vision import VisionIntentRouter, VisionOrchestrator
+    VISION_ENABLED = True
+except ImportError:
+    VISION_ENABLED = False
 
 # Dependency availability flags
 try:
@@ -112,6 +114,19 @@ class Router:
             self._syn_ttl_s: float = float(self.config.get("X_SYNDICATION_TTL_S", 900))
         except Exception:
             self._syn_ttl_s = 900.0
+        
+        # Vision generation system [CA][SFT]
+        self._vision_intent_router: Optional[VisionIntentRouter] = None
+        self._vision_orchestrator: Optional[VisionOrchestrator] = None
+        if VISION_ENABLED and self.config.get("VISION_ENABLED", False):
+            try:
+                self._vision_intent_router = VisionIntentRouter(self.config)
+                self._vision_orchestrator = VisionOrchestrator(self.config)
+                self.logger.info("✔ Vision generation system initialized.")
+            except Exception as e:
+                self.logger.error(f"❌ Failed to initialize Vision system: {e}")
+                self._vision_intent_router = None
+                self._vision_orchestrator = None
 
     async def _get_x_api_client(self) -> Optional[XApiClient]:
         """Create or return a cached XApiClient based on config. [CA][IV]"""
@@ -1582,6 +1597,26 @@ class Router:
     async def _invoke_text_flow(self, content: str, message: Message, context_str: str) -> BotAction:
         """Invoke the text processing flow, formatting history into a context string."""
         self.logger.info(f"Routing to text flow. (msg_id: {message.id})")
+        
+        # Check if this should be routed to Vision generation [CA][SFT]
+        if self._vision_intent_router and content.strip():
+            try:
+                intent_result = await self._vision_intent_router.determine_intent(
+                    user_message=content,
+                    context=context_str,
+                    user_id=str(message.author.id),
+                    guild_id=str(message.guild.id) if message.guild else None
+                )
+                
+                if intent_result.decision.use_vision:
+                    self.logger.info(
+                        f"🎨 Vision intent detected (confidence: {intent_result.confidence:.2f}), routing to Vision system (msg_id: {message.id})"
+                    )
+                    return await self._handle_vision_generation(intent_result, message, context_str)
+            except Exception as e:
+                self.logger.error(f"❌ Vision intent routing failed: {e} (msg_id: {message.id})", exc_info=True)
+                # Continue to regular text flow on error
+        
         try:
             action = await self._flows['process_text'](content, context_str, message)
             if action and action.has_payload:
@@ -2181,6 +2216,260 @@ class Router:
         except Exception as e:
             self.logger.error(f"TTS generation failed: {e}", exc_info=True)
             return None
+
+    async def _handle_vision_generation(self, intent_result, message: Message, context_str: str) -> BotAction:
+        """
+        Handle Vision generation request through orchestrator with comprehensive error handling [REH][SFT]
+        
+        Args:
+            intent_result: VisionIntentResult from intent router
+            message: Discord message for context
+            context_str: Conversation context
+            
+        Returns:
+            BotAction with generation result or error message
+        """
+        if not self._vision_orchestrator:
+            return BotAction(
+                content="🚫 Vision generation is not available right now. Please try again later.",
+                error=True
+            )
+        
+        try:
+            # Convert intent result to VisionRequest
+            from .vision.types import VisionRequest
+            
+            vision_request = VisionRequest(
+                task=intent_result.extracted_params.task,
+                prompt=intent_result.extracted_params.prompt,
+                negative_prompt=intent_result.extracted_params.negative_prompt,
+                user_id=str(message.author.id),
+                guild_id=str(message.guild.id) if message.guild else None,
+                discord_interaction_id=str(message.id),
+                preferred_provider=intent_result.extracted_params.preferred_provider,
+                width=intent_result.extracted_params.width,
+                height=intent_result.extracted_params.height,
+                steps=intent_result.extracted_params.steps,
+                guidance_scale=intent_result.extracted_params.guidance_scale,
+                seed=intent_result.extracted_params.seed,
+                input_image_url=intent_result.extracted_params.input_image_url,
+                input_image_data=intent_result.extracted_params.input_image_data
+            )
+            
+            # Submit job to orchestrator
+            self.logger.info(
+                f"🎨 Submitting Vision job: {vision_request.task.value} (msg_id: {message.id})"
+            )
+            
+            job = await self._vision_orchestrator.submit_job(vision_request)
+            
+            # Send initial progress message
+            progress_msg = await message.channel.send(
+                f"🎨 **Vision Generation Started**\n"
+                f"Task: {vision_request.task.value.replace('_', ' ').title()}\n"
+                f"Job ID: `{job.job_id[:8]}`\n"
+                f"Status: {job.state.value.title()}\n"
+                f"⏳ *Processing...*"
+            )
+            
+            # Monitor job progress and update message
+            return await self._monitor_vision_job(job, progress_msg, message)
+            
+        except Exception as e:
+            self.logger.error(f"❌ Vision generation failed: {e} (msg_id: {message.id})", exc_info=True)
+            
+            # Provide user-friendly error messages based on error type
+            error_str = str(e).lower()
+            
+            if "content filtered" in error_str or "safety" in error_str:
+                return BotAction(
+                    content="🚫 **Content Safety Issue**\n"
+                           "Your request contains content that violates our usage policies. "
+                           "Please modify your prompt to remove prohibited content and try again.",
+                    error=True
+                )
+            elif "budget" in error_str or "quota" in error_str:
+                return BotAction(
+                    content="💰 **Budget Limit Reached**\n"
+                           "You've reached your vision generation budget limit. "
+                           "Please wait for your quota to reset or contact an admin for assistance.",
+                    error=True
+                )
+            elif "provider" in error_str or "service" in error_str:
+                return BotAction(
+                    content="🔄 **Service Temporarily Unavailable**\n"
+                           "The vision generation service is experiencing issues. "
+                           "Please try again in a few moments.",
+                    error=True
+                )
+            else:
+                return BotAction(
+                    content="❌ **Generation Failed**\n"
+                           "An error occurred during vision generation. "
+                           "Please check your parameters and try again.",
+                    error=True
+                )
+
+    async def _monitor_vision_job(self, job, progress_msg, original_msg: Message) -> BotAction:
+        """
+        Monitor Vision job progress and update Discord message with results [REH][PA]
+        
+        Args:
+            job: VisionJob instance
+            progress_msg: Discord message to update with progress
+            original_msg: Original user message for context
+            
+        Returns:
+            BotAction with final result
+        """
+        try:
+            import asyncio
+            
+            # Poll job status with timeout
+            timeout_seconds = self.config.get("VISION_JOB_TIMEOUT_SECONDS", 300)
+            poll_interval = self.config.get("VISION_PROGRESS_UPDATE_INTERVAL_S", 10)
+            
+            start_time = asyncio.get_event_loop().time()
+            
+            while True:
+                # Check timeout
+                if asyncio.get_event_loop().time() - start_time > timeout_seconds:
+                    await progress_msg.edit(
+                        content=f"⏰ **Job Timeout**\n"
+                               f"Job ID: `{job.job_id[:8]}`\n"
+                               f"The generation took too long and was cancelled. Please try again."
+                    )
+                    return BotAction(content="Job timed out", error=True)
+                
+                # Get updated job status
+                updated_job = await self._vision_orchestrator.get_job_status(job.job_id)
+                if not updated_job:
+                    break
+                
+                # Update progress message
+                if updated_job.progress_percent > 0:
+                    progress_bar = self._create_progress_bar(updated_job.progress_percent)
+                    await progress_msg.edit(
+                        content=f"🎨 **Vision Generation**\n"
+                               f"Job ID: `{updated_job.job_id[:8]}`\n"
+                               f"Status: {updated_job.state.value.title()}\n"
+                               f"{progress_bar} {updated_job.progress_percent}%\n"
+                               f"💭 *{updated_job.progress_message}*"
+                    )
+                
+                # Check if job is complete
+                if updated_job.is_terminal_state():
+                    if updated_job.state.value == "completed" and updated_job.response:
+                        # Job completed successfully
+                        return await self._handle_vision_success(updated_job, progress_msg, original_msg)
+                    else:
+                        # Job failed or was cancelled
+                        return await self._handle_vision_failure(updated_job, progress_msg)
+                
+                # Wait before next poll
+                await asyncio.sleep(poll_interval)
+                
+        except Exception as e:
+            self.logger.error(f"❌ Vision job monitoring failed: {e}", exc_info=True)
+            await progress_msg.edit(
+                content=f"❌ **Monitoring Error**\n"
+                       f"Job ID: `{job.job_id[:8]}`\n"
+                       f"Lost connection to job status. Please check back later."
+            )
+            return BotAction(content="Job monitoring failed", error=True)
+
+    async def _handle_vision_success(self, job, progress_msg, original_msg: Message) -> BotAction:
+        """Handle successful Vision generation with file uploads [PA]"""
+        try:
+            response = job.response
+            
+            # Download and prepare files for Discord upload
+            files_to_upload = []
+            result_descriptions = []
+            
+            for i, result_url in enumerate(response.result_urls, 1):
+                try:
+                    # Download generated content
+                    async with httpx.AsyncClient() as client:
+                        file_response = await client.get(result_url)
+                        file_response.raise_for_status()
+                        
+                        # Determine file format and name
+                        content_type = file_response.headers.get('content-type', '')
+                        if content_type.startswith('image/'):
+                            ext = content_type.split('/')[-1]
+                            filename = f"generated_{job.job_id[:8]}_{i}.{ext}"
+                        elif content_type.startswith('video/'):
+                            ext = content_type.split('/')[-1]
+                            filename = f"generated_{job.job_id[:8]}_{i}.{ext}"
+                        else:
+                            filename = f"generated_{job.job_id[:8]}_{i}.bin"
+                        
+                        # Create Discord file
+                        discord_file = discord.File(
+                            io.BytesIO(file_response.content),
+                            filename=filename
+                        )
+                        files_to_upload.append(discord_file)
+                        result_descriptions.append(f"📎 {filename}")
+                        
+                except Exception as e:
+                    self.logger.warning(f"Failed to download result {i}: {e}")
+                    result_descriptions.append(f"❌ Result {i} download failed")
+            
+            # Create final success message
+            success_content = (
+                f"✅ **Vision Generation Complete**\n"
+                f"Task: {job.request.task.value.replace('_', ' ').title()}\n"
+                f"Provider: {response.provider.value.title()}\n"
+                f"Processing Time: {response.processing_time_seconds:.1f}s\n"
+                f"Cost: ${response.actual_cost:.3f}\n\n"
+                f"**Results:**\n" + "\n".join(result_descriptions)
+            )
+            
+            if job.request.prompt:
+                success_content += f"\n\n**Prompt:** {job.request.prompt[:100]}{'...' if len(job.request.prompt) > 100 else ''}"
+            
+            # Update progress message and upload files
+            await progress_msg.edit(content=success_content)
+            
+            if files_to_upload:
+                await original_msg.channel.send(files=files_to_upload)
+            
+            return BotAction(content="Vision generation completed successfully")
+            
+        except Exception as e:
+            self.logger.error(f"❌ Vision success handling failed: {e}", exc_info=True)
+            await progress_msg.edit(
+                content=f"✅ **Generation Complete**\n"
+                       f"Job ID: `{job.job_id[:8]}`\n"
+                       f"⚠️ Results are ready but file upload failed. Please try the job ID with an admin command."
+            )
+            return BotAction(content="Generation completed with upload issues", error=True)
+
+    async def _handle_vision_failure(self, job, progress_msg) -> BotAction:
+        """Handle failed Vision generation with user guidance [REH]"""
+        error_msg = job.error.user_message if job.error else "Unknown error occurred"
+        
+        failure_content = (
+            f"❌ **Generation Failed**\n"
+            f"Job ID: `{job.job_id[:8]}`\n"
+            f"Status: {job.state.value.title()}\n\n"
+            f"**Issue:** {error_msg}\n\n"
+            f"💡 **Suggestions:**\n"
+            f"• Try a different prompt or parameters\n"
+            f"• Check if your request follows content guidelines\n"
+            f"• Contact support if the issue persists"
+        )
+        
+        await progress_msg.edit(content=failure_content)
+        return BotAction(content="Vision generation failed", error=True)
+
+    def _create_progress_bar(self, percent: int, length: int = 10) -> str:
+        """Create ASCII progress bar [CMV]"""
+        filled = int(length * percent / 100)
+        bar = "█" * filled + "░" * (length - filled)
+        return f"[{bar}]"
 
     def _metric_inc(self, metric_name: str, labels: Optional[Dict[str, str]] = None):
         """Increment a metric, if metrics are enabled."""
