@@ -17,6 +17,12 @@ import sys
 import asyncio
 from pathlib import Path
 
+# Ensure project root is on sys.path so absolute imports like `utils.opus` work
+# when running this script from the utils/ directory.
+PROJECT_ROOT = str(Path(__file__).resolve().parents[1])
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
 
 def _get_env_path(name: str, default: str) -> str:
     p = os.environ.get(name, default)
