@@ -537,22 +537,59 @@ class KokoroDirect:
                 inputs['speed'] = np.array([speed], dtype=np.float32)
                 logger.debug(f"Added speed: {speed} [subsys: tts, event: create_audio.speed]")
             
-            # Add speaker embedding if available
+            # Add speaker/style embedding if available
+            def _to_style_vector(arr: np.ndarray) -> np.ndarray:
+                """Convert a variety of embedding shapes to a 2D style vector (1, 256)."""
+                try:
+                    vec = arr
+                    # Squeeze singletons
+                    if vec.ndim == 3 and vec.shape[1] == 1 and vec.shape[2] == 256:
+                        # (512,1,256) -> (512,256)
+                        vec = vec.squeeze(1)
+                    # Reduce sequence dimension if present
+                    if vec.ndim == 2 and vec.shape[0] in (510, 511, 512) and vec.shape[1] == 256:
+                        # Mean across time/sequence -> (256,)
+                        vec = vec.mean(axis=0)
+                    # Ensure 1D of length 256
+                    if vec.ndim == 2 and vec.shape[0] == 1 and vec.shape[1] == 256:
+                        pass  # already (1,256) after reshape below
+                    elif vec.ndim == 1 and vec.shape[0] == 256:
+                        pass
+                    else:
+                        # Last resort: flatten and take first 256
+                        vec = vec.reshape(-1)
+                    # Coerce to float32 and (1,256)
+                    vec = vec.astype(np.float32, copy=False)
+                    if vec.ndim == 1:
+                        vec = vec[:256]
+                        if vec.shape[0] < 256:
+                            # pad if shorter
+                            pad = np.zeros(256 - vec.shape[0], dtype=np.float32)
+                            vec = np.concatenate([vec, pad], axis=0)
+                        vec = vec.reshape(1, 256)
+                    elif vec.ndim == 2 and (vec.shape[0], vec.shape[1]) != (1, 256):
+                        vec = vec.reshape(1, 256)
+                    return vec
+                except Exception as ex:
+                    logger.warning(f"Failed to normalize voice embedding: {ex}; using zeros [subsys: tts, event: create_audio.warning.embed_normalize]")
+                    return np.zeros((1, 256), dtype=np.float32)
+
             speaker_embedding_added = False
             
             # First try standard speaker embedding input names
             for speaker_name in ['speaker', 'speaker_embedding', 'spk_emb']:
                 if speaker_name in input_names:
-                    inputs[speaker_name] = voice_embedding
-                    logger.debug(f"Added {speaker_name} with shape {voice_embedding.shape} [subsys: tts, event: create_audio.speaker]")
+                    spk_vec = _to_style_vector(voice_embedding)
+                    inputs[speaker_name] = spk_vec
+                    logger.debug(f"Added {speaker_name} with shape {spk_vec.shape} [subsys: tts, event: create_audio.speaker]")
                     speaker_embedding_added = True
                     break
             
             # If no speaker input found but 'style' is available, route voice vector there
             if not speaker_embedding_added and 'style' in input_names:
                 logger.warning(f"No speaker input found, routing voice embedding to 'style' input [subsys: tts, event: create_audio.warning.style]")
-                # Style input already added with zeros, replace with voice embedding
-                inputs['style'] = voice_embedding
+                style_vec = _to_style_vector(voice_embedding)
+                inputs['style'] = style_vec
                 speaker_embedding_added = True
             
             if not speaker_embedding_added:

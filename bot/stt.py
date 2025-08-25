@@ -8,6 +8,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 from functools import lru_cache
+import threading
 
 import torch
 from faster_whisper import WhisperModel
@@ -19,17 +20,54 @@ logger = get_logger(__name__)
 # Get environment variables
 _ENGINE = os.getenv("STT_ENGINE", "faster-whisper")
 _FALLBACK = os.getenv("STT_FALLBACK", "whispercpp")
-_SIZE = os.getenv("WHISPER_MODEL_SIZE", "base-int8")
+_SIZE = os.getenv("WHISPER_MODEL_SIZE", "base")
+# Optional performance/network controls
+_FW_CACHE_DIR = os.getenv("STT_CACHE_DIR", "stt/cache")
+_FW_LOCAL_ONLY = os.getenv("STT_LOCAL_ONLY", "0").lower() in ("1", "true", "yes", "y")
+_FW_COMPUTE_TYPE = os.getenv("STT_COMPUTE_TYPE", "int8")
+_FW_INIT_TIMEOUT = float(os.getenv("STT_INIT_TIMEOUT", "8"))
+
+# Accept common patterns like "base-int8" -> (size=base, compute_type=int8)
+_ALLOWED_CT = {
+    "int8", "int8_float16", "int8_float32",
+    "int16", "float16", "float32"
+}
+
+def _resolve_size_and_ct(size_str: str, default_ct: str) -> tuple[str, str]:
+    s = (size_str or "").strip()
+    ct = default_ct
+    if "-" in s:
+        cand_size, cand_ct = s.split("-", 1)
+        if cand_ct in _ALLOWED_CT:
+            s = cand_size
+            ct = cand_ct
+    return s, ct
 
 @lru_cache
 def _load_fw():
     """Load faster-whisper model with caching"""
-    logger.info(f"Loading faster-whisper {_SIZE}")
-    return WhisperModel(
-        _SIZE,
-        device="cuda" if torch.cuda.is_available() else "cpu",
-        compute_type="int8"
+    model_name, compute_type = _resolve_size_and_ct(_SIZE, _FW_COMPUTE_TYPE)
+    logger.info(
+        f"Loading faster-whisper model={model_name} compute_type={compute_type} "
+        f"local_only={_FW_LOCAL_ONLY} cache={_FW_CACHE_DIR}"
     )
+    # Prefer local CPU/GPU auto-detect but keep compute type configurable
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    try:
+        return WhisperModel(
+            model_name,
+            device=device,
+            compute_type=compute_type,
+            download_root=_FW_CACHE_DIR,
+            local_files_only=_FW_LOCAL_ONLY,
+        )
+    except Exception:
+        # Fallback without download options to preserve legacy behavior
+        return WhisperModel(
+            model_name,
+            device=device,
+            compute_type=compute_type,
+        )
 
 
 class STTManager:
@@ -39,21 +77,37 @@ class STTManager:
         self.available = False
         self.engine = _ENGINE
         self.model = None
+        # Background init thread/event to avoid blocking startup [REH]
+        self._init_thread: threading.Thread | None = None
+        self._ready_event = threading.Event()
         self._init_model()
     
     def _init_model(self):
         """Initialize the STT model."""
         try:
             if self.engine == "faster-whisper":
-                self.model = _load_fw()
-                self.available = True
-                logger.info("✅ Initialized faster-whisper STT model")
+                # Initialize in a background thread to prevent startup hangs
+                def _bg_init():
+                    try:
+                        mdl = _load_fw()
+                        self.model = mdl
+                        self.available = True
+                        logger.info("✅ Initialized faster-whisper STT model")
+                    except Exception as e:
+                        logger.error(f"Failed to initialize STT: {str(e)}")
+                        self.available = False
+                    finally:
+                        self._ready_event.set()
+                self._init_thread = threading.Thread(target=_bg_init, name="stt-fw-init", daemon=True)
+                self._init_thread.start()
             else:
                 logger.warning(f"Unsupported STT engine: {self.engine}")
                 self.available = False
+                self._ready_event.set()
         except Exception as e:
             logger.error(f"Failed to initialize STT: {str(e)}")
             self.available = False
+            self._ready_event.set()
     
     def is_available(self) -> bool:
         """Check if STT is available."""
@@ -61,11 +115,16 @@ class STTManager:
     
     async def transcribe_async(self, audio_path: Path) -> str:
         """Transcribe audio file asynchronously."""
-        if not self.available:
-            raise RuntimeError("STT engine not available")
+        # Wait briefly for background init if needed to avoid false negatives [REH]
+        if self.engine == "faster-whisper" and not self.available:
+            logger.info("ℹ [STT] Waiting up to %.1fs for faster-whisper to initialize", _FW_INIT_TIMEOUT)
+            loop = asyncio.get_running_loop()
+            ready = await loop.run_in_executor(None, self._ready_event.wait, _FW_INIT_TIMEOUT)
+            if not ready or not self.available:
+                raise RuntimeError("STT engine not ready after init timeout")
         
         try:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             return await loop.run_in_executor(
                 None,  # Use default executor
                 self._transcribe_sync,
@@ -101,15 +160,22 @@ stt_manager = STTManager()
 async def transcribe_wav(path: Path) -> str:
     """Transcribe WAV file using configured STT engine"""
     loop = asyncio.get_running_loop()
-    
+
     if _ENGINE == "faster-whisper":
         try:
-            model = _load_fw()
-            segments, _ = await loop.run_in_executor(
-                None, 
-                lambda: model.transcribe(str(path), vad_filter=True)
-            )
-            return " ".join(seg.text for seg in segments)
+            # Prefer the manager's background-initialized model to avoid blocking here
+            if not stt_manager.available:
+                await loop.run_in_executor(None, stt_manager._ready_event.wait, _FW_INIT_TIMEOUT)
+            if stt_manager.available and stt_manager.model:
+                segments, _ = await loop.run_in_executor(
+                    None,
+                    lambda: stt_manager.model.transcribe(str(path), vad_filter=True)
+                )
+                return " ".join(seg.text for seg in segments)
+            else:
+                logger.error("✖ [STT] faster-whisper not ready after init timeout")
+                if _FALLBACK == "none":
+                    raise RuntimeError("faster-whisper not ready and no fallback enabled")
         except Exception as e:
             logger.error(f"faster-whisper failed: {e}")
             if _FALLBACK == "none":

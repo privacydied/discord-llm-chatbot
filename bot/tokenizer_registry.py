@@ -12,7 +12,7 @@ import importlib.util
 import shutil
 import subprocess
 
-from .tts_errors import MissingTokeniserError
+from .tts.errors import MissingTokeniserError
 
 logger = logging.getLogger(__name__)
 
