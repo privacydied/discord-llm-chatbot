@@ -1,0 +1,335 @@
+{
+  "version": "1.0",
+  "last_updated": "2025-01-25T16:00:00Z",
+  "description": "Vision Generation Policy Configuration for Discord Bot",
+  
+  "defaults": {
+    "image_generation": {
+      "width": 1024,
+      "height": 1024,
+      "steps": 30,
+      "guidance_scale": 7.0,
+      "batch_size": 1,
+      "seed": null,
+      "negative_prompt": "",
+      "safety_checker": true
+    },
+    "image_editing": {
+      "strength": 0.8,
+      "steps": 30,
+      "guidance_scale": 7.0,
+      "seed": null,
+      "negative_prompt": "",
+      "safety_checker": true
+    },
+    "video_generation": {
+      "duration_seconds": 3,
+      "fps": 24,
+      "width": 1280,
+      "height": 720,
+      "seed": null,
+      "style": "natural",
+      "safety_checker": true
+    },
+    "image_to_video": {
+      "duration_seconds": 3,
+      "fps": 24,
+      "width": 1280,
+      "height": 720,
+      "mode": "image2video",
+      "seed": null,
+      "safety_checker": true
+    }
+  },
+  
+  "limits": {
+    "image_generation": {
+      "max_width": 2048,
+      "max_height": 2048,
+      "min_width": 256,
+      "min_height": 256,
+      "max_steps": 50,
+      "min_steps": 10,
+      "max_guidance": 20.0,
+      "min_guidance": 1.0,
+      "max_batch_size": 4,
+      "max_negative_prompt_length": 500
+    },
+    "image_editing": {
+      "max_width": 2048,
+      "max_height": 2048,
+      "max_strength": 1.0,
+      "min_strength": 0.1,
+      "max_steps": 50,
+      "min_steps": 10,
+      "max_file_size_mb": 25
+    },
+    "video_generation": {
+      "max_duration_seconds": 10,
+      "min_duration_seconds": 1,
+      "max_fps": 30,
+      "min_fps": 12,
+      "max_width": 1920,
+      "max_height": 1080,
+      "min_width": 512,
+      "min_height": 288
+    },
+    "image_to_video": {
+      "max_duration_seconds": 8,
+      "min_duration_seconds": 1,
+      "max_fps": 30,
+      "min_fps": 12,
+      "max_width": 1920,
+      "max_height": 1080,
+      "max_input_file_size_mb": 25
+    }
+  },
+  
+  "budgets": {
+    "per_user_monthly_usd": 50.0,
+    "per_guild_monthly_usd": 200.0,
+    "emergency_stop_threshold_usd": 500.0,
+    "cost_estimate_buffer": 1.2
+  },
+  
+  "providers": {
+    "together": {
+      "enabled": true,
+      "priority": 1,
+      "capabilities": {
+        "text_to_image": {
+          "models": [
+            {
+              "name": "stabilityai/stable-diffusion-xl-base-1.0",
+              "display_name": "Stable Diffusion XL",
+              "max_width": 1024,
+              "max_height": 1024,
+              "supports_negative_prompt": true,
+              "supports_batch": true,
+              "estimated_cost_per_image": 0.04
+            },
+            {
+              "name": "runwayml/stable-diffusion-v1-5",
+              "display_name": "Stable Diffusion 1.5",
+              "max_width": 768,
+              "max_height": 768,
+              "supports_negative_prompt": true,
+              "supports_batch": true,
+              "estimated_cost_per_image": 0.02
+            }
+          ]
+        },
+        "image_to_image": {
+          "models": [
+            {
+              "name": "stabilityai/stable-diffusion-xl-base-1.0",
+              "display_name": "SDXL Image Edit",
+              "max_width": 1024,
+              "max_height": 1024,
+              "supports_inpainting": true,
+              "supports_outpainting": false,
+              "estimated_cost_per_edit": 0.06
+            }
+          ]
+        }
+      }
+    },
+    "novita": {
+      "enabled": true,
+      "priority": 2,
+      "capabilities": {
+        "text_to_image": {
+          "models": [
+            {
+              "name": "dreamshaper_8_93211.safetensors",
+              "display_name": "DreamShaper v8",
+              "max_width": 1024,
+              "max_height": 1024,
+              "supports_negative_prompt": true,
+              "supports_batch": true,
+              "estimated_cost_per_image": 0.03
+            }
+          ]
+        },
+        "text_to_video": {
+          "models": [
+            {
+              "name": "kling-v1.6",
+              "display_name": "Kling V1.6",
+              "max_duration": 10,
+              "supported_resolutions": ["720p", "1080p"],
+              "supported_fps": [24, 30],
+              "estimated_cost_per_second": 0.50
+            },
+            {
+              "name": "vidu-q1",
+              "display_name": "Vidu Q1",
+              "max_duration": 5,
+              "supported_resolutions": ["1080p"],
+              "supported_fps": [24],
+              "estimated_cost_per_second": 0.60
+            }
+          ]
+        },
+        "image_to_video": {
+          "models": [
+            {
+              "name": "kling-v1.6-img2vid",
+              "display_name": "Kling I2V",
+              "max_duration": 5,
+              "supported_modes": ["image2video", "start_end"],
+              "supported_resolutions": ["720p", "1080p"],
+              "estimated_cost_per_second": 0.70
+            }
+          ]
+        }
+      }
+    }
+  },
+  
+  "safety": {
+    "content_filter": {
+      "enabled": true,
+      "blocked_keywords": [
+        "explicit", "nsfw", "nude", "naked", "sexual", "porn", "xxx",
+        "violence", "gore", "death", "suicide", "harmful",
+        "illegal", "drugs", "weapons", "terrorist"
+      ],
+      "blocked_artist_styles": [
+        "in the style of living artist",
+        "copyrighted character",
+        "trademarked logo"
+      ],
+      "max_violation_count": 3,
+      "violation_cooldown_hours": 24
+    },
+    "nsfw_detection": {
+      "enabled": true,
+      "default_allowed": false,
+      "guild_override_required": true
+    }
+  },
+  
+  "intent_patterns": {
+    "image_generation": {
+      "trigger_phrases": [
+        "create an image", "generate an image", "draw", "make a picture",
+        "paint", "sketch", "illustration", "artwork", "render"
+      ],
+      "parameter_patterns": {
+        "size": {
+          "portrait": {"width": 768, "height": 1024},
+          "landscape": {"width": 1024, "height": 768},
+          "square": {"width": 1024, "height": 1024},
+          "4k": {"width": 2048, "height": 2048}
+        },
+        "negative": {
+          "keywords": ["without", "exclude", "avoid", "not", "no"]
+        },
+        "seed": {
+          "pattern": "seed\\s+(\\d+)"
+        },
+        "batch": {
+          "pattern": "(\\d+)\\s*images?|batch\\s*of\\s*(\\d+)"
+        }
+      }
+    },
+    "image_editing": {
+      "trigger_phrases": [
+        "edit", "modify", "change", "alter", "fix", "improve",
+        "erase", "remove", "inpaint", "outpaint", "extend",
+        "variation", "variations", "upscale", "enhance"
+      ],
+      "attachment_required": true
+    },
+    "video_generation": {
+      "trigger_phrases": [
+        "generate a video", "create a video", "make a video",
+        "animate", "motion", "clip", "movie", "cinematic"
+      ],
+      "parameter_patterns": {
+        "duration": {
+          "pattern": "(\\d+)\\s*(?:seconds?|s)|(\\d+)\\s*(?:second|sec)"
+        },
+        "resolution": {
+          "720p": {"width": 1280, "height": 720},
+          "1080p": {"width": 1920, "height": 1080},
+          "4k": {"width": 3840, "height": 2160}
+        },
+        "fps": {
+          "pattern": "(\\d+)\\s*fps|at\\s*(\\d+)\\s*frames"
+        }
+      }
+    },
+    "image_to_video": {
+      "trigger_phrases": [
+        "animate this", "turn into video", "make this move",
+        "video from image", "motion from photo", "start end"
+      ],
+      "attachment_required": true,
+      "modes": {
+        "image2video": "single reference image",
+        "start_end": "two images for interpolation"
+      }
+    }
+  },
+  
+  "routing": {
+    "confidence_thresholds": {
+      "high_confidence": 0.8,
+      "medium_confidence": 0.6,
+      "low_confidence": 0.4,
+      "fallback_to_openrouter": 0.3
+    },
+    "deterministic_rules": [
+      {
+        "condition": "slash_command",
+        "action": "vision",
+        "priority": 1
+      },
+      {
+        "condition": "attachment_with_edit_verbs",
+        "action": "vision",
+        "priority": 2
+      },
+      {
+        "condition": "force_prefix_vision",
+        "action": "vision",
+        "priority": 3
+      },
+      {
+        "condition": "force_prefix_text",
+        "action": "openrouter",
+        "priority": 4
+      }
+    ]
+  },
+  
+  "timeouts": {
+    "image_generation_seconds": 120,
+    "image_editing_seconds": 150,
+    "video_generation_seconds": 300,
+    "image_to_video_seconds": 240,
+    "provider_polling_interval_seconds": 5,
+    "max_polling_attempts": 60
+  },
+  
+  "artifact_management": {
+    "supported_formats": {
+      "image": ["png", "jpg", "jpeg", "webp"],
+      "video": ["mp4", "mov", "avi"]
+    },
+    "discord_size_limits": {
+      "free_tier_mb": 8,
+      "nitro_tier_mb": 100
+    },
+    "compression": {
+      "auto_compress_above_mb": 8,
+      "quality_levels": {
+        "high": 0.95,
+        "medium": 0.85,
+        "low": 0.70
+      }
+    }
+  }
+}
