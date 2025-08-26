@@ -277,7 +277,7 @@ class TogetherPlugin(ProviderPlugin):
         if job_id not in results:
             return UnifiedJobStatus(
                 status=UnifiedStatus.FAILED,
-                progress_percent=0,
+                progress_percentage=0,
                 phase="Job not found"
             )
         
@@ -286,14 +286,14 @@ class TogetherPlugin(ProviderPlugin):
         if job_data["status"] == "completed":
             return UnifiedJobStatus(
                 status=UnifiedStatus.COMPLETED,
-                progress_percent=100,
+                progress_percentage=100,
                 phase="Generation complete",
                 actual_cost=job_data["cost"]
             )
         else:
             return UnifiedJobStatus(
                 status=UnifiedStatus.FAILED,
-                progress_percent=0,
+                progress_percentage=0,
                 phase="Generation failed"
             )
     
@@ -521,8 +521,9 @@ class NovitaPlugin(ProviderPlugin):
                     "status": "running",
                     "progress": 0,
                     "start_time": time.time(),
-                    "cost": self._calculate_cost(request),
-                    "result": None
+                    "cost": self._calculate_cost(request, endpoint),
+                    "result": None,
+                    "endpoint": endpoint
                 }
                 
                 return job_id
@@ -537,55 +538,146 @@ class NovitaPlugin(ProviderPlugin):
             )
     
     async def poll(self, job_id: str) -> UnifiedJobStatus:
-        """Poll Novita.ai job status (mock implementation)"""
-        jobs = getattr(self, '_jobs', {})
-        
-        if job_id not in jobs:
-            return UnifiedJobStatus(
-                status=UnifiedStatus.FAILED,
-                progress_percent=0,
-                phase="Job not found"
-            )
-        
-        job_data = jobs[job_id]
-        elapsed = time.time() - job_data["start_time"]
-        
-        # Simulate progress
-        if elapsed < 10:
-            progress = min(int(elapsed * 10), 90)
+        """Poll Novita.ai job status via async task-result endpoint [PA][REH]"""
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+        try:
+            async with self.session.get(
+                f"{self.base_url}/v3/async/task-result",
+                params={"task_id": job_id},
+                headers=headers
+            ) as response:
+                # Return unified errors on HTTP failure
+                if response.status == 404:
+                    return UnifiedJobStatus(
+                        status=UnifiedStatus.FAILED,
+                        progress_percentage=0,
+                        phase="Job not found (404)"
+                    )
+                if response.status >= 500:
+                    return UnifiedJobStatus(
+                        status=UnifiedStatus.RUNNING,
+                        progress_percentage=0,
+                        phase=f"Provider error {response.status}")
+                if response.status != 200:
+                    text = await response.text()
+                    return UnifiedJobStatus(
+                        status=UnifiedStatus.RUNNING,
+                        progress_percentage=0,
+                        phase=f"Polling error {response.status}: {text[:120]}"
+                    )
+                data = await response.json()
+                task = data.get("task", {})
+                status = task.get("status", "TASK_STATUS_PENDING")
+                progress = int(task.get("progress", 0) or 0)
+                
+                # Map provider status → unified
+                if status == "TASK_STATUS_SUCCEED":
+                    unified = UnifiedStatus.COMPLETED
+                elif status in ("TASK_STATUS_FAILED", "TASK_STATUS_CANCELED"):
+                    unified = UnifiedStatus.FAILED if status == "TASK_STATUS_FAILED" else UnifiedStatus.CANCELLED
+                elif status in ("TASK_STATUS_PROCESSING", "TASK_STATUS_QUEUED", "TASK_STATUS_RUNNING", "TASK_STATUS_PENDING"):
+                    unified = UnifiedStatus.RUNNING
+                else:
+                    unified = UnifiedStatus.RUNNING
+                
+                # Update local cache if present
+                jobs = getattr(self, '_jobs', {})
+                if job_id in jobs:
+                    jobs[job_id]["status"] = status
+                    jobs[job_id]["progress"] = progress
+                    if unified in (UnifiedStatus.COMPLETED, UnifiedStatus.FAILED, UnifiedStatus.CANCELLED):
+                        jobs[job_id]["result"] = data
+                
+                return UnifiedJobStatus(
+                    status=unified,
+                    progress_percentage=progress,
+                    phase=f"Novita: {status.replace('TASK_STATUS_', '').lower()}",
+                    provider_raw=data
+                )
+        except Exception as e:
             return UnifiedJobStatus(
                 status=UnifiedStatus.RUNNING,
-                progress_percentage=progress,
-                phase="Generating image",
-                estimated_cost=job_data["cost"]
-            )
-        else:
-            job_data["status"] = "completed"
-            return UnifiedJobStatus(
-                status=UnifiedStatus.COMPLETED,
-                progress_percent=100,
-                phase="Generation complete",
-                actual_cost=job_data["cost"]
+                progress_percentage=0,
+                phase=f"Polling exception: {e}"
             )
     
     async def fetch_result(self, job_id: str) -> UnifiedResult:
-        """Fetch result from Novita.ai (mock implementation)"""
-        jobs = getattr(self, '_jobs', {})
-        job_data = jobs.get(job_id, {})
-        
-        # Mock result
-        return UnifiedResult(
-            assets=["https://example.com/generated_image.png"],
-            final_cost=job_data.get("cost", 0.0),
-            provider_used="novita",
-            metadata={"model": "SDXL"}
-        )
+        """Fetch final result from Novita.ai async task-result API [REH]"""
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+        async with self.session.get(
+            f"{self.base_url}/v3/async/task-result",
+            params={"task_id": job_id},
+            headers=headers
+        ) as response:
+            text = await response.text()
+            if response.status != 200:
+                raise VisionError(
+                    message=f"Novita result fetch failed ({response.status}): {text}",
+                    error_type=VisionErrorType.PROVIDER_ERROR,
+                    user_message="Failed to retrieve generated image. Please try again."
+                )
+            data = json.loads(text)
+            task = data.get("task", {})
+            status = task.get("status")
+            if status != "TASK_STATUS_SUCCEED":
+                # If not yet complete, surface as retryable via caller's loop
+                raise VisionError(
+                    message=f"Result not ready: {status}",
+                    error_type=VisionErrorType.TIMEOUT_ERROR,
+                    user_message="The image is still being generated."
+                )
+            # Extract asset URLs
+            assets: List[str] = []
+            images = data.get("images", []) or data.get("data", [])
+            for item in images:
+                url = item.get("image_url") or item.get("url") or item.get("download_url")
+                if url:
+                    assets.append(url)
+            if not assets:
+                raise VisionError(
+                    message="No assets found in Novita response",
+                    error_type=VisionErrorType.PROVIDER_ERROR,
+                    user_message="No images were returned by the provider."
+                )
+            # Cost from local cache if available
+            jobs = getattr(self, '_jobs', {})
+            cost = jobs.get(job_id, {}).get("cost", self._calculate_cost(NormalizedRequest(
+                task=VisionTask.TEXT_TO_IMAGE,
+                prompt="",
+            ), jobs.get(job_id, {}).get("endpoint", "qwen-image-txt2img")))
+            # Augment cache with final data
+            if job_id in jobs:
+                jobs[job_id]["result"] = data
+                jobs[job_id]["status"] = status
+                jobs[job_id]["progress"] = 100
+            return UnifiedResult(
+                assets=assets,
+                final_cost=cost,
+                provider_used="novita",
+                metadata={"task": task}
+            )
     
-    def _calculate_cost(self, request: NormalizedRequest) -> float:
-        """Calculate estimated cost for Novita.ai"""
-        base_cost = 0.018  # per image
-        pixel_cost = (request.width * request.height) / (1024 * 1024) * 0.004
-        return base_cost + pixel_cost
+    def _calculate_cost(self, request: NormalizedRequest, endpoint: str = "qwen-image-txt2img") -> float:
+        """Calculate estimated cost for Novita.ai using endpoint-specific pricing [PA][CMV]"""
+        # Defaults if config missing
+        base_cost = 0.018
+        per_px = 0.000004
+        # Provider config may have per-endpoint pricing
+        provider_cfg = self.config or {}
+        endpoints_cfg = provider_cfg.get("endpoints", {})
+        # Map unified endpoint key used in code to config alias
+        cfg_key = "qwen-image" if endpoint == "qwen-image-txt2img" else "txt2img"
+        pricing = endpoints_cfg.get(cfg_key, {}).get("price", {})
+        base_cost = pricing.get("image_base", base_cost)
+        per_px = pricing.get("image_per_px", per_px)
+        pixels = max(1, request.width * request.height)
+        return float(base_cost + (pixels * per_px))
 
 
 class UnifiedVisionAdapter:
@@ -949,7 +1041,7 @@ class UnifiedVisionAdapter:
                     
                 except VisionError as e:
                     last_error = e
-                    if e.error_type in [VisionErrorType.RATE_LIMIT, VisionErrorType.PROVIDER_ERROR]:
+                    if e.error_type in [VisionErrorType.RATE_LIMITED, VisionErrorType.PROVIDER_ERROR]:
                         # Exponential backoff for retryable errors
                         wait_time = (2 ** attempt) * 1.0  # 1s, 2s, 4s...
                         self.logger.warning(f"Retryable error from {provider_name} (attempt {attempt + 1}): {e.message}, retrying in {wait_time}s")
@@ -985,7 +1077,7 @@ class UnifiedVisionAdapter:
             if not provider:
                 return UnifiedJobStatus(
                     status=UnifiedStatus.FAILED,
-                    progress_percent=0,
+                    progress_percentage=0,
                     phase=f"Provider {provider_name} not available"
                 )
             
@@ -994,14 +1086,14 @@ class UnifiedVisionAdapter:
         except ValueError:
             return UnifiedJobStatus(
                 status=UnifiedStatus.FAILED,
-                progress_percent=0,
+                progress_percentage=0,
                 phase="Invalid job ID format"
             )
         except Exception as e:
             self.logger.error(f"Failed to poll job {full_job_id}: {e}")
             return UnifiedJobStatus(
                 status=UnifiedStatus.FAILED,
-                progress_percent=0,
+                progress_percentage=0,
                 phase=f"Polling error: {e}"
             )
     
@@ -1017,7 +1109,7 @@ class UnifiedVisionAdapter:
             return await provider.fetch_result(job_id)
             
         except ValueError:
-            raise VisionError("Invalid job ID format", VisionErrorType.INVALID_REQUEST)
+            raise VisionError("Invalid job ID format", VisionErrorType.VALIDATION_ERROR)
         except Exception as e:
             self.logger.error(f"Failed to fetch result for {full_job_id}: {e}")
             raise VisionError(f"Result fetch failed: {e}", VisionErrorType.PROVIDER_ERROR)
@@ -1053,7 +1145,7 @@ class UnifiedVisionAdapter:
             if task in capabilities.get("modes", []):
                 # Convert provider name to VisionProvider enum
                 try:
-                    providers.append(VisionProvider(provider_name.upper()))
+                    providers.append(VisionProvider(provider_name.lower()))
                 except ValueError:
                     self.logger.warning(f"Unknown provider enum for {provider_name}")
         return providers

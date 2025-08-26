@@ -55,7 +55,6 @@ async def test_unified_adapter():
         
         # Test request normalization
         request = VisionRequest(
-            request_id="test_123",
             user_id="user_456", 
             guild_id="guild_789",
             task=VisionTask.TEXT_TO_IMAGE,

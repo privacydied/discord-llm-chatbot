@@ -46,9 +46,13 @@ class VisionJobState(Enum):
 class VisionErrorType(Enum):
     """Categorized error types for proper handling"""
     VALIDATION_ERROR = "validation_error"
+    INVALID_REQUEST = "invalid_request"
+    UNSUPPORTED_TASK = "unsupported_task"
     QUOTA_EXCEEDED = "quota_exceeded"
     CONTENT_FILTERED = "content_filtered"
     PROVIDER_ERROR = "provider_error"
+    SERVER_ERROR = "server_error"
+    AUTHENTICATION_ERROR = "authentication_error"
     CONNECTION_ERROR = "connection_error"  # For HTTP/network connection failures [REH]
     RATE_LIMITED = "rate_limited"  # For rate limiting responses [REH]
     TIMEOUT_ERROR = "timeout_error"
@@ -108,12 +112,29 @@ class VisionRequest:
     # Provider preferences
     preferred_provider: Optional[VisionProvider] = None
     preferred_model: Optional[str] = None
+    # Legacy aliases for compatibility (deprecated) [CSD]
+    provider: Optional[VisionProvider] = None
+    model: Optional[str] = None
+    num_images: Optional[int] = None
     
     # System metadata
     safety_check: bool = True
     estimated_cost: float = 0.0
     timeout_seconds: int = 300
     idempotency_key: str = field(default_factory=lambda: str(uuid.uuid4()))
+    
+    def __post_init__(self) -> None:
+        """Map legacy aliases to preferred fields for backward compatibility [REH][CA]"""
+        # Provider/model aliases
+        if self.preferred_provider is None and self.provider is not None:
+            self.preferred_provider = self.provider
+        if self.preferred_model is None and self.model is not None:
+            self.preferred_model = self.model
+        # Batch size alias
+        if self.num_images is not None and isinstance(self.num_images, int):
+            # Only override if batch_size is default or unset
+            if not isinstance(self.batch_size, int) or self.batch_size == 1:
+                self.batch_size = int(self.num_images)
     
     def to_dict(self) -> Dict[str, Any]:
         """Serialize request for JSON storage [CMV]"""
@@ -164,9 +185,17 @@ class VisionRequest:
         if "end_image" in data and data["end_image"]:
             data["end_image"] = Path(data["end_image"])
         
-        # Convert provider string back to enum
-        if "preferred_provider" in data and data["preferred_provider"]:
+        # Convert provider string back to enum (support aliases)
+        if data.get("preferred_provider"):
             data["preferred_provider"] = VisionProvider(data["preferred_provider"])
+        elif data.get("provider"):
+            data["provider"] = VisionProvider(data["provider"])
+        
+        # Map legacy aliases prior to construction
+        if "model" in data and "preferred_model" not in data:
+            data["preferred_model"] = data["model"]
+        if "num_images" in data and "batch_size" not in data:
+            data["batch_size"] = int(data["num_images"]) if data["num_images"] is not None else 1
         
         # Convert task string back to enum    
         data["task"] = VisionTask(data["task"])
@@ -437,3 +466,30 @@ class RoutingDecision:
     estimated_cost: float = 0.0
     reasoning: str = ""
     fallback_reason: Optional[str] = None
+
+
+@dataclass
+class IntentDecision:
+    """Thin wrapper decision used by higher-level router/tests.
+    Mirrors key fields from RoutingDecision, but exposes `use_vision` for clarity.
+    """
+    use_vision: bool
+    task: Optional[Union[VisionTask, str]] = None
+    confidence: float = 0.0
+    provider: Optional[VisionProvider] = None
+    model: Optional[str] = None
+    estimated_cost: float = 0.0
+    reasoning: str = ""
+    fallback_reason: Optional[str] = None
+
+
+@dataclass
+class IntentResult:
+    """Result returned by VisionIntentRouter.determine_intent().
+    - decision: IntentDecision with routing choice
+    - extracted_params: attribute-style params for downstream VisionRequest construction
+    - confidence: convenience copy of decision.confidence
+    """
+    decision: IntentDecision
+    extracted_params: Any
+    confidence: float

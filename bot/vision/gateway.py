@@ -8,12 +8,17 @@ retry logic, and cost estimation following REH and CA principles.
 from __future__ import annotations
 import asyncio
 import json
+import os
+from urllib.parse import urlparse, unquote
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
+import aiohttp
 
 from bot.util.logging import get_logger
 from bot.config import load_config
+from bot.retry_utils import with_retry, API_RETRY_CONFIG
+from bot.exceptions import APIError
 from .types import (
     VisionRequest, VisionResponse, VisionTask, VisionProvider, 
     VisionError, VisionErrorType
@@ -173,7 +178,7 @@ class VisionGateway:
             # Timeout
             await self.cancel_job(job_id)
             raise VisionError(
-                error_type=VisionErrorType.TIMEOUT,
+                error_type=VisionErrorType.TIMEOUT_ERROR,
                 message=f"Generation timed out after {max_wait_seconds} seconds",
                 user_message="Image generation is taking too long. Please try again."
             )
@@ -253,21 +258,79 @@ class VisionGateway:
             result = await self.adapter.fetch_result(job_id)
             job_meta = self.active_jobs[job_id]
             
-            # Convert unified result to VisionResponse
+            # Download and save assets locally with retries [REH][RM]
+            assets_urls: List[str] = result.assets or []
+            saved_artifacts: List[Path] = []
+            warnings: List[str] = []
+            total_size = 0
+            artifacts_dir = Path(self.config.get("VISION_ARTIFACTS_DIR", "vision_artifacts")) / job_id
+            artifacts_dir.mkdir(parents=True, exist_ok=True)
+
+            timeout = aiohttp.ClientTimeout(total=30)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                @with_retry(API_RETRY_CONFIG)
+                async def _download(url: str, tmp_path: Path, final_path: Path) -> Path:
+                    try:
+                        async with session.get(url) as resp:
+                            if resp.status != 200:
+                                raise APIError(f"HTTP {resp.status} while downloading {url}")
+                            tmp_path.parent.mkdir(parents=True, exist_ok=True)
+                            with open(tmp_path, "wb") as f:
+                                async for chunk in resp.content.iter_chunked(8192):
+                                    if chunk:
+                                        f.write(chunk)
+                        # Atomic move into place
+                        os.replace(tmp_path, final_path)
+                        return final_path
+                    except Exception as e:
+                        # Normalize to APIError to trigger retries consistently
+                        raise APIError(str(e))
+
+                for idx, url in enumerate(assets_urls):
+                    try:
+                        parsed = urlparse(url)
+                        name = unquote(os.path.basename(parsed.path)) or f"asset_{idx}"
+                        # Fallback extension if missing
+                        if "." not in name:
+                            name = f"{name}.bin"
+                        tmp_path = artifacts_dir / f".{name}.part"
+                        final_path = artifacts_dir / name
+                        if final_path.exists():
+                            file_size = final_path.stat().st_size
+                            saved_artifacts.append(final_path)
+                            total_size += file_size
+                            self.logger.debug(f"Reusing existing artifact for job {job_id}: {final_path} ({file_size} bytes)")
+                            continue
+                        saved = await _download(url, tmp_path, final_path)
+                        file_size = saved.stat().st_size if saved.exists() else 0
+                        saved_artifacts.append(saved)
+                        total_size += file_size
+                        self.logger.info(f"Artifact saved for job {job_id}: {saved} ({file_size} bytes)")
+                    except Exception as e:
+                        warn_msg = f"Asset download failed: {e}"
+                        warnings.append(warn_msg)
+                        self.logger.warning(f"{warn_msg} (job_id={job_id}, url={url})")
+
+            # Build VisionResponse with local paths
             response = VisionResponse(
                 success=True,
                 job_id=job_id,
                 provider=VisionProvider(result.provider_used.lower()) if result.provider_used else VisionProvider.NOVITA,
                 model_used=result.metadata.get('model', 'unknown'),
-                artifacts=[Path(url) for url in result.assets] if result.assets else [],
+                artifacts=saved_artifacts,
                 processing_time_seconds=asyncio.get_event_loop().time() - job_meta["start_time"],
-                actual_cost=result.final_cost
+                actual_cost=result.final_cost,
+                file_size_bytes=total_size,
+                warnings=warnings,
             )
             
             # Clean up completed job
             del self.active_jobs[job_id]
             
-            self.logger.info(f"Job {job_id} completed successfully")
+            self.logger.info(
+                f"Job {job_id} completed successfully; assets_saved={len(saved_artifacts)}/" 
+                f"{len(assets_urls)} dir={artifacts_dir}"
+            )
             return response
             
         except Exception as e:

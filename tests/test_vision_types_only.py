@@ -139,7 +139,7 @@ def test_vision_job():
         
         # Test progress update
         job.update_progress(50, "Processing...")
-        assert job.progress_percent == 50
+        assert job.progress_percentage == 50
         assert job.progress_message == "Processing..."
         
         print("✅ VisionJob creation and state management works correctly")

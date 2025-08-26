@@ -10,7 +10,7 @@ from typing import Dict, Any, Optional
 from pathlib import Path
 
 from bot.util.logging import get_logger
-from ..types import VisionRequest, VisionResponse, VisionProvider, VisionError
+from ..types import VisionRequest, VisionResponse, VisionProvider, VisionError, VisionErrorType
 
 
 class BaseVisionProvider(ABC):
@@ -24,9 +24,7 @@ class BaseVisionProvider(ABC):
     def __init__(self, config: Dict[str, Any], policy: Dict[str, Any]):
         self.config = config
         self.policy = policy
-        self.logger = get_logger(__name__).bind(
-            component=f"vision_provider_{self.get_provider_name().value}"
-        )
+        self.logger = get_logger(__name__)
         
         # Validate required configuration
         self._validate_config()
@@ -113,48 +111,66 @@ class BaseVisionProvider(ABC):
         """Log request initiation with structured data [REH]"""
         self.logger.info(
             "Starting generation request",
-            task=request.task.value,
-            model=model,
-            user_id=request.user_id,
-            guild_id=request.guild_id,
-            dimensions=f"{request.width}x{request.height}" if request.task.name.endswith("IMAGE") else None,
-            duration=f"{request.duration_seconds}s" if "VIDEO" in request.task.name else None,
-            batch_size=request.batch_size,
-            estimated_cost=request.estimated_cost
+            extra={
+                "event": "vision.provider.request.start",
+                "detail": {
+                    "provider": self.get_provider_name().value,
+                    "task": request.task.value,
+                    "model": model,
+                    "user_id": request.user_id,
+                    "guild_id": request.guild_id,
+                    "dimensions": f"{request.width}x{request.height}" if request.task.name.endswith("IMAGE") else None,
+                    "duration": f"{request.duration_seconds}s" if "VIDEO" in request.task.name else None,
+                    "batch_size": request.batch_size,
+                    "estimated_cost": request.estimated_cost,
+                },
+            },
         )
     
     def _log_request_complete(
-        self, 
-        request: VisionRequest, 
+        self,
+        request: VisionRequest,
         response: VisionResponse,
-        processing_time: float
+        processing_time: float,
     ) -> None:
         """Log successful request completion [REH]"""
         self.logger.info(
             "Generation request completed successfully",
-            task=request.task.value,
-            model=response.model_used,
-            processing_time_seconds=processing_time,
-            actual_cost=response.actual_cost,
-            artifacts_count=len(response.artifacts),
-            file_size_mb=round(response.file_size_bytes / (1024 * 1024), 2) if response.file_size_bytes else 0
+            extra={
+                "event": "vision.provider.request.complete",
+                "detail": {
+                    "provider": self.get_provider_name().value,
+                    "task": request.task.value,
+                    "model": response.model_used,
+                    "processing_time_seconds": processing_time,
+                    "actual_cost": response.actual_cost,
+                    "artifacts_count": len(response.artifacts),
+                    "file_size_mb": round(response.file_size_bytes / (1024 * 1024), 2) if response.file_size_bytes else 0,
+                },
+            },
         )
     
     def _log_request_error(
-        self, 
-        request: VisionRequest, 
+        self,
+        request: VisionRequest,
         error: VisionError,
-        processing_time: float
+        processing_time: float,
     ) -> None:
         """Log request failure with error details [REH]"""
         self.logger.error(
             "Generation request failed",
-            task=request.task.value,
-            error_type=error.error_type.value,
-            error_message=error.message,
-            user_message=error.user_message,
-            processing_time_seconds=processing_time,
-            retry_after=error.retry_after_seconds
+            extra={
+                "event": "vision.provider.request.error",
+                "detail": {
+                    "provider": self.get_provider_name().value,
+                    "task": request.task.value,
+                    "error_type": error.error_type.value,
+                    "error_message": error.message,
+                    "user_message": error.user_message,
+                    "processing_time_seconds": processing_time,
+                    "retry_after": error.retry_after_seconds,
+                },
+            },
         )
     
     def _validate_file_size(self, file_path: Path, max_size_mb: int) -> None:

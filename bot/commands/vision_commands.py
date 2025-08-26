@@ -33,7 +33,7 @@ class VisionCommands(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.config = load_config()
-        self.logger = logger.bind(component="vision_commands")
+        self.logger = logger
         
         # Initialize orchestrator lazily
         self._orchestrator = None
@@ -143,9 +143,14 @@ class VisionCommands(commands.Cog):
         except VisionError as e:
             self.logger.error(
                 "Vision generation failed",
-                error_type=e.error_type.value,
-                message=e.message,
-                user_message=e.user_message
+                extra={
+                    "event": "vision.image.error",
+                    "detail": {
+                        "error_type": e.error_type.value,
+                        "message": e.message,
+                        "user_message": e.user_message
+                    }
+                }
             )
             
             embed = discord.Embed(
@@ -157,7 +162,14 @@ class VisionCommands(commands.Cog):
             await interaction.response.send_message(embed=embed, ephemeral=True)
         
         except Exception as e:
-            self.logger.error("Unexpected error in image command", error=str(e), exc_info=True)
+            self.logger.error(
+                "Unexpected error in image command",
+                exc_info=True,
+                extra={
+                    "event": "vision.image.exception",
+                    "detail": {"error": str(e), "error_type": type(e).__name__}
+                }
+            )
             
             await interaction.response.send_message(
                 "❌ An unexpected error occurred. Please try again.", 
@@ -265,7 +277,11 @@ class VisionCommands(commands.Cog):
             asyncio.create_task(self._monitor_job_progress(interaction, job))
             
         except Exception as e:
-            self.logger.error("Error in imgedit command", error=str(e), exc_info=True)
+            self.logger.error(
+                "Error in imgedit command",
+                exc_info=True,
+                extra={"event": "vision.imgedit.exception", "detail": {"error": str(e), "error_type": type(e).__name__}}
+            )
             await interaction.response.send_message(
                 "❌ Failed to process image editing request. Please try again.",
                 ephemeral=True
@@ -357,7 +373,7 @@ class VisionCommands(commands.Cog):
             asyncio.create_task(self._monitor_job_progress(interaction, job, long_running=True))
             
         except Exception as e:
-            self.logger.error("Error in video command", error=str(e), exc_info=True)
+            self.logger.error("Error in video command", exc_info=True, extra={"event": "vision.video.exception", "detail": {"error": str(e), "error_type": type(e).__name__}})
             await interaction.response.send_message(
                 "❌ Failed to start video generation. Please try again.",
                 ephemeral=True
@@ -461,7 +477,7 @@ class VisionCommands(commands.Cog):
             asyncio.create_task(self._monitor_job_progress(interaction, job, long_running=True))
             
         except Exception as e:
-            self.logger.error("Error in vidref command", error=str(e), exc_info=True)
+            self.logger.error("Error in vidref command", exc_info=True, extra={"event": "vision.vidref.exception", "detail": {"error": str(e), "error_type": type(e).__name__}})
             await interaction.response.send_message(
                 "❌ Failed to start image-to-video generation. Please try again.",
                 ephemeral=True
@@ -514,7 +530,7 @@ class VisionCommands(commands.Cog):
                     await self._send_progress_update(interaction, current_job)
         
         except Exception as e:
-            self.logger.error("Error monitoring job progress", error=str(e), exc_info=True)
+            self.logger.error("Error monitoring job progress", exc_info=True, extra={"event": "vision.progress.exception", "detail": {"error": str(e), "error_type": type(e).__name__}})
     
     async def _send_progress_update(self, interaction: discord.Interaction, job):
         """Send progress update embed [UX]"""
@@ -598,7 +614,7 @@ class VisionCommands(commands.Cog):
                 await interaction.edit_original_response(embed=embed)
         
         except Exception as e:
-            self.logger.error("Error sending completion message", error=str(e), exc_info=True)
+            self.logger.error("Error sending completion message", exc_info=True, extra={"event": "vision.completion.exception", "detail": {"error": str(e), "error_type": type(e).__name__}})
     
     async def _send_error_message(self, interaction: discord.Interaction, job):
         """Send error message for failed jobs [REH]"""
@@ -623,7 +639,7 @@ class VisionCommands(commands.Cog):
             await interaction.edit_original_response(embed=embed)
             
         except Exception as e:
-            self.logger.error("Error sending error message", error=str(e), exc_info=True)
+            self.logger.error("Error sending error message", exc_info=True, extra={"event": "vision.error_msg.exception", "detail": {"error": str(e), "error_type": type(e).__name__}})
     
     def _format_elapsed_time(self, job) -> str:
         """Format elapsed time since job started [CMV]"""
