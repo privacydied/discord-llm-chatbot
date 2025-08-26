@@ -1,0 +1,15 @@
+{
+  "user_id": "254254168234131456",
+  "daily_limit": 5.0,
+  "weekly_limit": 25.0,
+  "monthly_limit": 50.0,
+  "daily_spent": 0.0,
+  "weekly_spent": 0.088,
+  "monthly_spent": 0.088,
+  "last_daily_reset": "2025-08-26T00:00:55.690808+00:00",
+  "last_weekly_reset": "2025-08-25T23:33:43.021402+00:00",
+  "last_monthly_reset": "2025-08-25T23:33:43.021403+00:00",
+  "total_spent": 0.088,
+  "total_jobs": 4,
+  "reserved_amount": 0.0
+}

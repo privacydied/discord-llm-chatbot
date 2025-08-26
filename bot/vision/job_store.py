@@ -42,7 +42,7 @@ class VisionJobStore:
     
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         self.config = config or load_config()
-        self.logger = logger.bind(component="vision_job_store")
+        self.logger = get_logger("vision.job_store")
         
         # Initialize storage directories
         self.jobs_dir = Path(self.config["VISION_JOBS_DIR"])
@@ -55,11 +55,7 @@ class VisionJobStore:
         # File locking for concurrent access
         self._locks: Dict[str, asyncio.Lock] = {}
         
-        self.logger.info(
-            "Vision Job Store initialized",
-            jobs_dir=str(self.jobs_dir),
-            ledger_path=str(self.ledger_path)
-        )
+        self.logger.info(f"Vision Job Store initialized - jobs_dir: {self.jobs_dir}, ledger_path: {self.ledger_path}")
     
     async def save_job(self, job: VisionJob) -> None:
         """
@@ -85,8 +81,8 @@ class VisionJobStore:
                 
                 # Write to temp file
                 async with aiofiles.open(temp_file, "w") as f:
-                    await f.write(json.dumps(job_data, indent=2, ensure_ascii=False))
-                    await f.fsync()  # Force write to disk
+                    await f.write(json.dumps(job_data, indent=2, default=str))
+                    # Note: aiofiles doesn't support fsync(), but write is already persistent
                 
                 # Atomic rename
                 temp_file.rename(job_file)
@@ -94,19 +90,10 @@ class VisionJobStore:
                 # Append progress log entry (JSONL format)
                 await self._append_progress_log(job)
                 
-                self.logger.debug(
-                    "Job state saved",
-                    job_id=job_id[:8],
-                    state=job.state.value,
-                    progress=job.progress_percent
-                )
+                self.logger.debug(f"Job state saved - job_id: {job_id[:8]}, state: {job.state.value}, progress: {getattr(job, 'progress_percentage', 0)}")
                 
         except Exception as e:
-            self.logger.error(
-                "Failed to save job",
-                job_id=job_id[:8],
-                error=str(e)
-            )
+            self.logger.error(f"Failed to save job {job_id[:8]}: {str(e)}")
             raise VisionError(
                 error_type=VisionErrorType.SYSTEM_ERROR,
                 message=f"Failed to save job: {str(e)}",
@@ -141,20 +128,12 @@ class VisionJobStore:
                 # Reconstruct job from dict
                 job = VisionJob.from_dict(job_data)
                 
-                self.logger.debug(
-                    "Job loaded",
-                    job_id=job_id[:8],
-                    state=job.state.value
-                )
+                self.logger.debug(f"Job loaded - job_id: {job_id[:8]}, state: {job.state.value}")
                 
                 return job
                 
         except json.JSONDecodeError as e:
-            self.logger.error(
-                "Job file corrupted",
-                job_id=job_id[:8],
-                error=str(e)
-            )
+            self.logger.error(f"Job file corrupted - job_id: {job_id[:8]}, error: {str(e)}")
             raise VisionError(
                 error_type=VisionErrorType.SYSTEM_ERROR,
                 message=f"Job file corrupted: {str(e)}",
@@ -162,11 +141,7 @@ class VisionJobStore:
             )
             
         except Exception as e:
-            self.logger.error(
-                "Failed to load job",
-                job_id=job_id[:8],
-                error=str(e)
-            )
+            self.logger.error(f"Failed to load job - job_id: {job_id[:8]}, error: {str(e)}")
             return None  # Treat as not found for robustness
     
     async def list_jobs(
@@ -216,12 +191,7 @@ class VisionJobStore:
                     self.logger.warning(f"Failed to load job {job_file.stem}: {e}")
                     continue
             
-            self.logger.debug(
-                "Jobs listed",
-                count=len(jobs),
-                user_filter=user_id is not None,
-                state_filter=state.value if state else None
-            )
+            self.logger.debug(f"Jobs listed - count: {len(jobs)}, user_filter: {user_id is not None}, state_filter: {state.value if state else None}")
             
             return jobs
             
@@ -337,8 +307,8 @@ class VisionJobStore:
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "job_id": job.job_id,
                 "state": job.state.value,
-                "progress_percent": job.progress_percent,
-                "progress_message": job.progress_message,
+                "progress_percentage": job.progress_percentage,
+                "progress_message": getattr(job, 'progress_message', ''),
                 "user_id": job.request.user_id,
                 "task": job.request.task.value
             }

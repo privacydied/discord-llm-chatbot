@@ -100,7 +100,7 @@ class VisionBudgetManager:
     
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         self.config = config or load_config()
-        self.logger = logger.bind(component="vision_budget_manager")
+        self.logger = get_logger("vision.budget_manager")
         
         # Budget storage paths
         self.budget_dir = Path(self.config["VISION_DATA_DIR"]) / "budgets"
@@ -121,13 +121,7 @@ class VisionBudgetManager:
         # Concurrency control
         self._locks: Dict[str, asyncio.Lock] = {}
         
-        self.logger.info(
-            "Vision Budget Manager initialized",
-            budget_dir=str(self.budget_dir),
-            spend_ledger=str(self.spend_ledger),
-            daily_limit=self.policy.get("default_daily_limit", 10.0),
-            monthly_limit=self.policy.get("default_monthly_limit", 100.0)
-        )
+        self.logger.info(f"Vision Budget Manager initialized - budget_dir: {self.budget_dir}, spend_ledger: {self.spend_ledger}, daily_limit: {self.policy.get('default_daily_limit', 10.0)}, monthly_limit: {self.policy.get('default_monthly_limit', 100.0)}")
     
     async def check_budget(self, request: VisionRequest) -> BudgetResult:
         """
@@ -189,24 +183,12 @@ class VisionBudgetManager:
                 
                 # Log result
                 if not approved:
-                    self.logger.warning(
-                        "Budget limit exceeded",
-                        user_id=user_id,
-                        estimated_cost=estimated_cost,
-                        remaining=min_remaining,
-                        daily_spent=budget.daily_spent,
-                        monthly_spent=budget.monthly_spent
-                    )
+                    self.logger.warning(f"Budget limit exceeded - user_id: {user_id}, estimated_cost: {estimated_cost}, remaining: {min_remaining}, daily_spent: {budget.daily_spent}, monthly_spent: {budget.monthly_spent}")
                 
                 return result
                 
         except Exception as e:
-            self.logger.error(
-                "Budget check error",
-                user_id=user_id,
-                error=str(e),
-                exc_info=True
-            )
+            self.logger.error(f"Budget check error - user_id: {user_id}, error: {str(e)}", exc_info=True)
             # Fail safe - allow small requests, block large ones
             if estimated_cost <= 0.50:
                 return BudgetResult(
@@ -234,12 +216,7 @@ class VisionBudgetManager:
             budget.reserved_amount += amount
             await self._save_user_budget(budget)
             
-            self.logger.debug(
-                "Budget reserved",
-                user_id=user_id,
-                amount=amount,
-                total_reserved=budget.reserved_amount
-            )
+            self.logger.debug(f"Budget reserved - user_id: {user_id}, amount: {amount}, total_reserved: {budget.reserved_amount}")
     
     async def release_reservation(self, user_id: str, amount: float) -> None:
         """Release reserved budget amount (job cancelled/failed) [CMV]"""
@@ -249,12 +226,7 @@ class VisionBudgetManager:
             budget.reserved_amount = max(0.0, budget.reserved_amount - amount)
             await self._save_user_budget(budget)
             
-            self.logger.debug(
-                "Budget reservation released",
-                user_id=user_id,
-                amount=amount,
-                remaining_reserved=budget.reserved_amount
-            )
+            self.logger.debug(f"Budget reservation released - user_id: {user_id}, amount: {amount}, new_reserved: {budget.reserved_amount}")
     
     async def record_actual_cost(self, user_id: str, reserved_amount: float, actual_cost: float) -> None:
         """Record actual job cost and adjust budget [CMV]"""
@@ -284,14 +256,8 @@ class VisionBudgetManager:
                 "monthly_total": budget.monthly_spent
             })
             
-            self.logger.info(
-                "Actual cost recorded",
-                user_id=user_id,
-                actual_cost=actual_cost,
-                reserved_amount=reserved_amount,
-                daily_total=budget.daily_spent
-            )
-    
+            self.logger.info(f"Actual cost recorded - user_id: {user_id}, actual_cost: {actual_cost}, reserved_amount: {reserved_amount}, daily_total: {budget.daily_spent}, monthly_total: {budget.monthly_spent}")
+
     async def get_user_budget_status(self, user_id: str) -> Dict[str, Any]:
         """Get detailed budget status for user [CMV]"""
         async with self._get_user_lock(user_id):
@@ -341,12 +307,7 @@ class VisionBudgetManager:
             
             await self._save_user_budget(budget)
             
-            self.logger.info(
-                "User budget adjusted",
-                user_id=user_id,
-                daily_limit=budget.daily_limit,
-                monthly_limit=budget.monthly_limit
-            )
+            self.logger.info(f"User budget adjusted - user_id: {user_id}, daily_limit: {budget.daily_limit}, monthly_limit: {budget.monthly_limit}")
     
     async def get_spend_analytics(self, days: int = 30) -> Dict[str, Any]:
         """Get spending analytics across all users [CMV]"""
@@ -512,7 +473,7 @@ class VisionBudgetManager:
             # Atomic write
             async with aiofiles.open(temp_file, "w") as f:
                 await f.write(json.dumps(data, indent=2))
-                await f.fsync()
+                await f.flush()
             
             temp_file.rename(budget_file)
             
@@ -531,7 +492,7 @@ class VisionBudgetManager:
             async with aiofiles.open(self.spend_ledger, "a") as f:
                 line = json.dumps(record, ensure_ascii=False) + "\n"
                 await f.write(line)
-                await f.fsync()
+                await f.flush()
         except Exception as e:
             self.logger.debug(f"Failed to append spend record: {e}")
     

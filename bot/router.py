@@ -48,6 +48,7 @@ logger = get_logger(__name__)
 # Local application imports
 from .action import BotAction, ResponseMessage
 from .command_parser import Command, parse_command
+from .modality import collect_input_items
 from .exceptions import DispatchEmptyError, DispatchTypeError, APIError
 from .hear import hear_infer, hear_infer_from_url
 from .pdf_utils import PDFProcessor
@@ -118,15 +119,24 @@ class Router:
         # Vision generation system [CA][SFT]
         self._vision_intent_router: Optional[VisionIntentRouter] = None
         self._vision_orchestrator: Optional[VisionOrchestrator] = None
+        
+        # Debug logging for vision initialization
+        self.logger.info(f"🔍 Vision initialization debug: VISION_ENABLED={VISION_ENABLED}, config_enabled={self.config.get('VISION_ENABLED', 'NOT_SET')}")
+        
         if VISION_ENABLED and self.config.get("VISION_ENABLED", False):
+            self.logger.info("🚀 Starting vision system initialization...")
             try:
+                self.logger.info("🔧 Creating VisionIntentRouter...")
                 self._vision_intent_router = VisionIntentRouter(self.config)
+                self.logger.info("🔧 Creating VisionOrchestrator...")
                 self._vision_orchestrator = VisionOrchestrator(self.config)
-                self.logger.info("✔ Vision generation system initialized.")
+                self.logger.info("✔ Vision generation system initialized successfully!")
             except Exception as e:
-                self.logger.error(f"❌ Failed to initialize Vision system: {e}")
+                self.logger.error(f"❌ Failed to initialize Vision system: {e}", exc_info=True)
                 self._vision_intent_router = None
                 self._vision_orchestrator = None
+        else:
+            self.logger.warning(f"⚠️ Vision system NOT initialized - VISION_ENABLED={VISION_ENABLED}, config={self.config.get('VISION_ENABLED', 'NOT_SET')}")
 
     async def _get_x_api_client(self) -> Optional[XApiClient]:
         """Create or return a cached XApiClient based on config. [CA][IV]"""
@@ -1598,6 +1608,28 @@ class Router:
         """Invoke the text processing flow, formatting history into a context string."""
         self.logger.info(f"Routing to text flow. (msg_id: {message.id})")
         
+        # Check for direct vision triggers first (bypasses rate-limited intent detection)
+        if content.strip():
+            direct_vision = self._detect_direct_vision_triggers(content)
+            if direct_vision:
+                self.logger.info(
+                    f"🎨 Direct vision bypass triggered (reason: {direct_vision['bypass_reason']}) (msg_id: {message.id})"
+                )
+                # Create a mock intent result for the vision handler
+                from types import SimpleNamespace
+                intent_result = SimpleNamespace()
+                intent_result.decision = SimpleNamespace()
+                intent_result.decision.use_vision = True
+                intent_result.extracted_params = SimpleNamespace()
+                intent_result.extracted_params.task = direct_vision["task"]
+                intent_result.extracted_params.prompt = direct_vision["prompt"]
+                intent_result.extracted_params.width = 1024
+                intent_result.extracted_params.height = 1024
+                intent_result.extracted_params.batch_size = 1
+                intent_result.confidence = direct_vision["confidence"]
+                
+                return await self._handle_vision_generation(intent_result, message, context_str)
+        
         # Check if this should be routed to Vision generation [CA][SFT]
         if self._vision_intent_router and content.strip():
             try:
@@ -2237,28 +2269,30 @@ class Router:
         
         try:
             # Convert intent result to VisionRequest
-            from .vision.types import VisionRequest
+            from .vision.types import VisionRequest, VisionTask, VisionProvider
+            
+            # Convert string task to enum
+            task_str = intent_result.extracted_params.task
+            task_enum = VisionTask(task_str) if isinstance(task_str, str) else task_str
             
             vision_request = VisionRequest(
-                task=intent_result.extracted_params.task,
+                task=task_enum,
                 prompt=intent_result.extracted_params.prompt,
-                negative_prompt=intent_result.extracted_params.negative_prompt,
                 user_id=str(message.author.id),
                 guild_id=str(message.guild.id) if message.guild else None,
-                discord_interaction_id=str(message.id),
-                preferred_provider=intent_result.extracted_params.preferred_provider,
-                width=intent_result.extracted_params.width,
-                height=intent_result.extracted_params.height,
-                steps=intent_result.extracted_params.steps,
-                guidance_scale=intent_result.extracted_params.guidance_scale,
-                seed=intent_result.extracted_params.seed,
-                input_image_url=intent_result.extracted_params.input_image_url,
-                input_image_data=intent_result.extracted_params.input_image_data
+                channel_id=str(message.channel.id),
+                negative_prompt=getattr(intent_result.extracted_params, 'negative_prompt', ""),
+                width=getattr(intent_result.extracted_params, 'width', 1024),
+                height=getattr(intent_result.extracted_params, 'height', 1024),
+                steps=getattr(intent_result.extracted_params, 'steps', 30),
+                guidance_scale=getattr(intent_result.extracted_params, 'guidance_scale', 7.0),
+                seed=getattr(intent_result.extracted_params, 'seed', None),
+                preferred_provider=getattr(intent_result.extracted_params, 'preferred_provider', None)
             )
             
             # Submit job to orchestrator
             self.logger.info(
-                f"🎨 Submitting Vision job: {vision_request.task.value} (msg_id: {message.id})"
+                f"🎨 Submitting Vision job: {task_enum.value} (msg_id: {message.id})"
             )
             
             job = await self._vision_orchestrator.submit_job(vision_request)
@@ -2343,27 +2377,34 @@ class Router:
                 
                 # Get updated job status
                 updated_job = await self._vision_orchestrator.get_job_status(job.job_id)
+                self.logger.debug(f"🔍 Vision job status check - job_id: {job.job_id[:8]}, state: {updated_job.state.value if updated_job else 'None'}, terminal: {updated_job.is_terminal_state() if updated_job else 'N/A'}")
+                
                 if not updated_job:
+                    self.logger.warning(f"⚠️ Vision job not found during monitoring - job_id: {job.job_id[:8]}")
                     break
                 
                 # Update progress message
-                if updated_job.progress_percent > 0:
-                    progress_bar = self._create_progress_bar(updated_job.progress_percent)
+                if updated_job.progress_percentage > 0:
+                    progress_bar = self._create_progress_bar(updated_job.progress_percentage)
                     await progress_msg.edit(
                         content=f"🎨 **Vision Generation**\n"
                                f"Job ID: `{updated_job.job_id[:8]}`\n"
                                f"Status: {updated_job.state.value.title()}\n"
-                               f"{progress_bar} {updated_job.progress_percent}%\n"
-                               f"💭 *{updated_job.progress_message}*"
+                               f"{progress_bar} {updated_job.progress_percentage}%\n"
+                               f"💭 *{getattr(updated_job, 'progress_message', 'Processing...')}*"
                     )
                 
                 # Check if job is complete
                 if updated_job.is_terminal_state():
+                    self.logger.info(f"🏁 Vision job terminal state reached - job_id: {updated_job.job_id[:8]}, state: {updated_job.state.value}, has_response: {updated_job.response is not None}")
+                    
                     if updated_job.state.value == "completed" and updated_job.response:
                         # Job completed successfully
+                        self.logger.info(f"✅ Calling vision success handler - job_id: {updated_job.job_id[:8]}")
                         return await self._handle_vision_success(updated_job, progress_msg, original_msg)
                     else:
                         # Job failed or was cancelled
+                        self.logger.warning(f"❌ Job failed or cancelled - job_id: {updated_job.job_id[:8]}, state: {updated_job.state.value}")
                         return await self._handle_vision_failure(updated_job, progress_msg)
                 
                 # Wait before next poll
@@ -2387,31 +2428,24 @@ class Router:
             files_to_upload = []
             result_descriptions = []
             
-            for i, result_url in enumerate(response.result_urls, 1):
+            for i, artifact_path in enumerate(response.artifacts, 1):
                 try:
-                    # Download generated content
-                    async with httpx.AsyncClient() as client:
-                        file_response = await client.get(result_url)
-                        file_response.raise_for_status()
+                    # Read generated content from local file
+                    if not artifact_path.exists():
+                        result_descriptions.append(f"❌ Result {i} file not found")
+                        continue
                         
-                        # Determine file format and name
-                        content_type = file_response.headers.get('content-type', '')
-                        if content_type.startswith('image/'):
-                            ext = content_type.split('/')[-1]
-                            filename = f"generated_{job.job_id[:8]}_{i}.{ext}"
-                        elif content_type.startswith('video/'):
-                            ext = content_type.split('/')[-1]
-                            filename = f"generated_{job.job_id[:8]}_{i}.{ext}"
-                        else:
-                            filename = f"generated_{job.job_id[:8]}_{i}.bin"
-                        
-                        # Create Discord file
-                        discord_file = discord.File(
-                            io.BytesIO(file_response.content),
-                            filename=filename
-                        )
-                        files_to_upload.append(discord_file)
-                        result_descriptions.append(f"📎 {filename}")
+                    # Determine file format and name from path
+                    ext = artifact_path.suffix.lower().lstrip('.')
+                    filename = f"generated_{job.job_id[:8]}_{i}.{ext}"
+                    
+                    # Create Discord file from local path
+                    discord_file = discord.File(
+                        artifact_path,
+                        filename=filename
+                    )
+                    files_to_upload.append(discord_file)
+                    result_descriptions.append(f"📎 {filename}")
                         
                 except Exception as e:
                     self.logger.warning(f"Failed to download result {i}: {e}")
@@ -2486,6 +2520,50 @@ class Router:
             except Exception as e:
                 # Never let metrics failures break the application
                 self.logger.debug(f"Metrics increment failed for {metric_name}: {e}")
+
+    def _detect_direct_vision_triggers(self, content: str) -> Optional[Dict[str, Any]]:
+        """
+        Direct pattern matching for obvious vision requests to bypass rate-limited intent detection.
+        Returns extracted vision parameters if triggers found, None otherwise.
+        [RAT: REH, PA] - Robust Error Handling, Performance Awareness
+        """
+        content_lower = content.lower().strip()
+        
+        # Direct trigger phrases from vision_policy.json
+        image_triggers = [
+            "create an image", "generate an image", "draw", "make a picture", 
+            "make a photo", "create a photo", "create a picture", "paint", 
+            "sketch", "illustration", "artwork", "render"
+        ]
+        
+        # Check for direct triggers
+        for trigger in image_triggers:
+            if trigger in content_lower:
+                # Extract prompt by removing the trigger phrase
+                prompt = content
+                for t in image_triggers:
+                    if t in content_lower:
+                        # Find the trigger and extract what comes after it
+                        idx = content_lower.find(t)
+                        if idx >= 0:
+                            prompt = content[idx + len(t):].strip()
+                            # Remove common prefixes like "of", "a", "an"
+                            for prefix in [" of ", " a ", " an "]:
+                                if prompt.lower().startswith(prefix):
+                                    prompt = prompt[len(prefix):].strip()
+                            break
+                
+                if prompt and len(prompt.strip()) > 2:  # Ensure we have a meaningful prompt
+                    self.logger.info(f"🎨 Direct vision trigger detected: '{trigger}' -> prompt: '{prompt[:50]}...'")
+                    return {
+                        "use_vision": True,
+                        "task": "text_to_image",
+                        "prompt": prompt,
+                        "confidence": 0.95,  # High confidence for direct triggers
+                        "bypass_reason": f"Direct trigger: '{trigger}'"
+                    }
+        
+        return None
 
 # Backward compatibility
 MessageRouter = Router

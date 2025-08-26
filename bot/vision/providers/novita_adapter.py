@@ -125,27 +125,20 @@ class NovitaAdapter(BaseVisionProvider):
             return self._create_error_response(request.idempotency_key, error, processing_time)
     
     async def _text_to_image(self, request: VisionRequest, model: str) -> VisionResponse:
-        """Generate image from text using Novita.ai"""
+        """Generate image from text using Novita.ai Qwen Image API"""
         session = await self._get_session()
         
+        # Format size for Qwen Image API
+        size = f"{request.width}*{request.height}"
+        
+        # Simple payload for Qwen Image API
         payload = {
-            "model_name": model,
             "prompt": request.prompt,
-            "width": request.width,
-            "height": request.height,
-            "image_num": request.batch_size,
-            "steps": request.steps,
-            "seed": request.seed or -1,
-            "guidance_scale": request.guidance_scale,
-            "sampler_name": "Euler a",
-            "save_extension": "png"
+            "size": size
         }
         
-        if request.negative_prompt:
-            payload["negative_prompt"] = request.negative_prompt
-        
         try:
-            async with session.post(f"{self.base_url}/async/txt2img", json=payload) as resp:
+            async with session.post(f"{self.base_url}/async/qwen-image-txt2img", json=payload) as resp:
                 if resp.status == 200:
                     data = await resp.json()
                     task_id = data.get("task_id")
@@ -346,7 +339,7 @@ class NovitaAdapter(BaseVisionProvider):
         
         for attempt in range(max_attempts):
             try:
-                async with session.get(f"{self.base_url}/async/task-result/{task_id}") as resp:
+                async with session.get(f"{self.base_url}/async/task-result?task_id={task_id}") as resp:
                     if resp.status == 200:
                         result = await resp.json()
                         
@@ -363,10 +356,15 @@ class NovitaAdapter(BaseVisionProvider):
                                 user_message="Generation failed. Please try again with different parameters.",
                                 provider=VisionProvider.NOVITA
                             )
-                        else:
+                        elif status in ["TASK_STATUS_PROCESSING", "TASK_STATUS_QUEUED", "TASK_STATUS_RUNNING", "TASK_STATUS_PENDING"]:
                             # Still processing, wait and retry
                             progress = result.get("task", {}).get("progress", 0)
-                            self.logger.debug(f"Task {task_id} progress: {progress}%")
+                            self.logger.debug(f"Task {task_id} status: {status}, progress: {progress}%")
+                            await asyncio.sleep(self.polling_interval)
+                            continue
+                        else:
+                            # Unknown status - log for debugging and treat as processing
+                            self.logger.warning(f"Unknown Novita status '{status}' for task {task_id}, treating as processing")
                             await asyncio.sleep(self.polling_interval)
                             continue
                     
@@ -597,7 +595,7 @@ class NovitaAdapter(BaseVisionProvider):
         session = await self._get_session()
         
         try:
-            async with session.get(f"{self.base_url}/async/task-result/{provider_job_id}") as resp:
+            async with session.get(f"{self.base_url}/async/task-result?task_id={provider_job_id}") as resp:
                 if resp.status == 200:
                     result = await resp.json()
                     task = result.get("task", {})
@@ -629,6 +627,38 @@ class NovitaAdapter(BaseVisionProvider):
                 "failed": True,
                 "error": str(e)
             }
+    
+    async def poll(self, provider_job_id: str):
+        """Poll job status and return UnifiedJobStatus (required by unified adapter)"""
+        from ..unified_adapter import UnifiedJobStatus, UnifiedStatus
+        
+        try:
+            status_data = await self.get_job_status(provider_job_id)
+            status = status_data.get("status", "UNKNOWN")
+            progress = status_data.get("progress", 0)
+            
+            # Map Novita status to unified status
+            if status == "TASK_STATUS_SUCCEED":
+                unified_status = UnifiedStatus.DONE
+            elif status in ["TASK_STATUS_FAILED", "TASK_STATUS_CANCELED"]:
+                unified_status = UnifiedStatus.FAILED
+            elif status in ["TASK_STATUS_PROCESSING", "TASK_STATUS_QUEUED", "TASK_STATUS_RUNNING", "TASK_STATUS_PENDING"]:
+                unified_status = UnifiedStatus.RUNNING
+            else:
+                unified_status = UnifiedStatus.RUNNING  # Default for unknown states
+            
+            return UnifiedJobStatus(
+                status=unified_status,
+                progress_percentage=progress,
+                phase=f"Novita: {status.replace('TASK_STATUS_', '').lower()}"
+            )
+            
+        except Exception as e:
+            return UnifiedJobStatus(
+                status=UnifiedStatus.FAILED,
+                progress_percentage=0,
+                phase=f"Polling error: {e}"
+            )
     
     async def cancel_job(self, provider_job_id: str) -> bool:
         """Cancel Novita.ai job if possible"""

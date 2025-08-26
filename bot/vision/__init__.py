@@ -31,7 +31,7 @@ from .artifact_cache import VisionArtifactCache, ArtifactMetadata, CacheStats
 from .types import (
     VisionRequest, VisionResponse, VisionJob,
     VisionTask, VisionProvider, VisionJobState,
-    VisionError, VisionErrorType, IntentDecision, IntentResult
+    VisionError, VisionErrorType, RoutingDecision
 )
 
 __all__ = [
@@ -50,8 +50,7 @@ __all__ = [
     'VisionJobState',
     'VisionError',
     'VisionErrorType',
-    'IntentDecision',
-    'IntentResult',
+    'RoutingDecision',
     'SafetyResult',
     'BudgetResult',
     'ArtifactMetadata',

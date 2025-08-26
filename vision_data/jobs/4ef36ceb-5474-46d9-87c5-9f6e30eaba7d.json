@@ -1,0 +1,76 @@
+{
+  "job_id": "4ef36ceb-5474-46d9-87c5-9f6e30eaba7d",
+  "request": {
+    "task": "text_to_image",
+    "prompt": "of a magical forest with glowing mushrooms",
+    "user_id": "254254168234131456",
+    "guild_id": null,
+    "channel_id": "1393753694377480324",
+    "width": 1024,
+    "height": 1024,
+    "steps": 30,
+    "guidance_scale": 7.0,
+    "negative_prompt": "",
+    "seed": null,
+    "batch_size": 1,
+    "strength": 0.8,
+    "duration_seconds": 3,
+    "fps": 24,
+    "style": "natural",
+    "mode": "image2video",
+    "preferred_provider": null,
+    "preferred_model": null,
+    "safety_check": true,
+    "estimated_cost": 0.1,
+    "timeout_seconds": 300,
+    "idempotency_key": "86495e7a-94f1-4c07-89d6-c95c57b56c11"
+  },
+  "state": "failed",
+  "created_at": "2025-08-25T22:54:49.659874+00:00",
+  "started_at": "2025-08-25T22:54:49.682833+00:00",
+  "completed_at": "2025-08-25T22:54:49.970367+00:00",
+  "last_updated": "2025-08-25T22:54:49.975540+00:00",
+  "provider_assigned": null,
+  "model_assigned": null,
+  "retry_count": 0,
+  "max_retries": 3,
+  "progress_percentage": 10,
+  "response": null,
+  "error": {
+    "error_type": "VisionErrorType.PROVIDER_ERROR",
+    "message": "Submission failed: cannot unpack non-iterable VisionResponse object",
+    "user_message": "Failed to start vision generation. Please try again.",
+    "provider": null,
+    "retry_after_seconds": null,
+    "details": {}
+  },
+  "discord_interaction_id": null,
+  "discord_message_id": null,
+  "progress_message_id": null,
+  "log_entries": [
+    {
+      "timestamp": "2025-08-25T22:54:49.671973+00:00",
+      "level": "info",
+      "message": "State transition: created \u2192 queued (Job queued for execution)",
+      "state": "queued"
+    },
+    {
+      "timestamp": "2025-08-25T22:54:49.682841+00:00",
+      "level": "info",
+      "message": "State transition: queued \u2192 running (Starting generation)",
+      "state": "running"
+    },
+    {
+      "timestamp": "2025-08-25T22:54:49.686314+00:00",
+      "level": "info",
+      "message": "Progress 10%: Contacting provider",
+      "state": "running"
+    },
+    {
+      "timestamp": "2025-08-25T22:54:49.970374+00:00",
+      "level": "info",
+      "message": "State transition: running \u2192 failed (Error: Submission failed: cannot unpack non-iterable VisionResponse object)",
+      "state": "failed"
+    }
+  ]
+}
