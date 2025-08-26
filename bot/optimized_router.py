@@ -23,7 +23,7 @@ from __future__ import annotations
 import asyncio
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Set, Tuple, Callable, Awaitable, TypeVar
+from typing import Any, Dict, List, Optional, Set, Tuple, Callable, Awaitable, TypeVar, TYPE_CHECKING
 from discord import Message, DMChannel
 import re
 

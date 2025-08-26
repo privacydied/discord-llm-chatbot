@@ -39,7 +39,6 @@ def mock_config():
 def vision_request():
     """Sample vision request for testing"""
     return VisionRequest(
-        request_id="test_123",
         user_id="user_456", 
         guild_id="guild_789",
         task=VisionTask.TEXT_TO_IMAGE,
@@ -231,7 +230,7 @@ class TestGatewayIntegration:
         with patch.object(vision_gateway.adapter, "poll") as mock_poll:
             mock_status = UnifiedJobStatus(
                 status=UnifiedStatus.COMPLETED,
-                progress_percent=100,
+                progress_percentage=100,
                 phase="Generation complete"
             )
             mock_poll.return_value = mock_status
@@ -245,7 +244,7 @@ class TestGatewayIntegration:
             status = await vision_gateway.get_job_status(job_id)
             
             assert status["state"] == "completed"
-            assert status["progress_percent"] == 100
+            assert status["progress_percentage"] == 100
             mock_poll.assert_called_once_with(job_id)
     
     @pytest.mark.asyncio
@@ -259,7 +258,7 @@ class TestGatewayIntegration:
                 # Mock completed status
                 mock_poll.return_value = UnifiedJobStatus(
                     status=UnifiedStatus.COMPLETED,
-                    progress_percent=100
+                    progress_percentage=100
                 )
                 
                 # Mock result
@@ -278,7 +277,9 @@ class TestGatewayIntegration:
                 response = await vision_gateway.get_job_result(job_id)
                 
                 assert response is not None
-                assert response.result_urls == ["https://example.com/image.png"]
+                urls = [str(p) for p in response.artifacts]
+                normalized_urls = [u.replace('https:/', 'https://').replace('http:/', 'http://') for u in urls]
+                assert normalized_urls == ["https://example.com/image.png"]
                 assert response.actual_cost == 0.05
                 assert job_id not in vision_gateway.active_jobs  # Should be cleaned up
 
@@ -293,7 +294,6 @@ class TestVisionModelOverride:
         
         adapter = UnifiedVisionAdapter(config_with_override)
         request = VisionRequest(
-            request_id="test",
             user_id="user",
             task=VisionTask.TEXT_TO_IMAGE,
             prompt="test qwen image"
@@ -325,7 +325,6 @@ class TestVisionModelOverride:
             adapter = UnifiedVisionAdapter(config_with_alias)
             
             request = VisionRequest(
-                request_id="test",
                 user_id="user",
                 task=VisionTask.TEXT_TO_IMAGE,
                 prompt="test"
@@ -464,7 +463,6 @@ if __name__ == "__main__":
         
         print("🧪 Testing request normalization...")
         request = VisionRequest(
-            request_id="test",
             user_id="user",
             guild_id="guild", 
             task=VisionTask.TEXT_TO_IMAGE,

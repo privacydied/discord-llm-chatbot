@@ -114,11 +114,9 @@ class VisionArtifactCache:
         self._start_cleanup_task()
         
         self.logger.info(
-            "Vision Artifact Cache initialized",
-            cache_dir=str(self.cache_dir),
-            max_file_size_mb=self.max_file_size_mb,
-            max_total_gb=self.max_total_size_gb,
-            ttl_days=self.ttl_days
+            f"Vision Artifact Cache initialized (cache_dir={self.cache_dir}, "
+            f"max_file_size_mb={self.max_file_size_mb}, max_total_gb={self.max_total_size_gb}, "
+            f"ttl_days={self.ttl_days})"
         )
     
     async def store_artifact(self, content: bytes, filename: str, 
@@ -442,7 +440,19 @@ class VisionArtifactCache:
     
     def _start_cleanup_task(self) -> None:
         """Start background cleanup task [RM]"""
-        self._cleanup_task = asyncio.create_task(self._background_cleanup())
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            # No running event loop; defer task startup until an async context exists
+            self.logger.debug("Deferring artifact cache cleanup task start (no running event loop)")
+            self._cleanup_task = None
+            return
+        try:
+            self._cleanup_task = loop.create_task(self._background_cleanup())
+        except RuntimeError as e:
+            # Loop not running or other scheduling issue; defer startup
+            self.logger.debug(f"Could not start cleanup task: {e}")
+            self._cleanup_task = None
     
     async def _background_cleanup(self) -> None:
         """Background cleanup task [RM]"""

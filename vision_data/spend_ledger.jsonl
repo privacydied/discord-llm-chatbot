@@ -6,3 +6,5 @@
 {"timestamp": "2025-08-25T23:45:56.392137+00:00", "user_id": "254254168234131456", "reserved_amount": 0.1, "actual_cost": 0.022, "savings": 0.07800000000000001, "daily_total": 0.044, "monthly_total": 0.044}
 {"timestamp": "2025-08-25T23:50:43.105597+00:00", "user_id": "254254168234131456", "reserved_amount": 0.1, "actual_cost": 0.022, "savings": 0.07800000000000001, "daily_total": 0.066, "monthly_total": 0.066}
 {"timestamp": "2025-08-25T23:55:06.556249+00:00", "user_id": "254254168234131456", "reserved_amount": 0.1, "actual_cost": 0.022, "savings": 0.07800000000000001, "daily_total": 0.088, "monthly_total": 0.088}
+{"timestamp": "2025-08-26T15:33:18.482616+00:00", "user_id": "254254168234131456", "reserved_amount": 0.04, "actual_cost": 4.212304, "savings": -4.172304, "daily_total": 4.212304, "monthly_total": 4.300304}
+{"timestamp": "2025-08-26T15:58:01.214553+00:00", "user_id": "254254168234131456", "reserved_amount": 0.04, "actual_cost": 4.212304, "savings": -4.172304, "daily_total": 8.424608, "monthly_total": 8.512608}

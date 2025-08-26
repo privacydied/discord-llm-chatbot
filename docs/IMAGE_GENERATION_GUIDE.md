@@ -11,7 +11,7 @@ Your bot is **ready for image generation** with these settings in `yoroi.env`:
 ```bash
 # Vision Generation System
 VISION_ENABLED=true
-VISION_API_KEY=sk_fVL1mAIms-9qH2VidKA_rr0L9vjSIUsmr0hpidYAgSE
+VISION_API_KEY=
 VISION_ALLOWED_PROVIDERS=together,novita
 VISION_DEFAULT_PROVIDER=novita
 VISION_MODEL=qwen-image-txt2img

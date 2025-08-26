@@ -12,6 +12,7 @@ from __future__ import annotations
 import re
 import asyncio
 from typing import Dict, List, Optional, Any, Tuple
+from types import SimpleNamespace
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -20,7 +21,7 @@ from bot.util.logging import get_logger
 from bot.config import load_config
 from .types import (
     VisionTask, VisionProvider, IntentScore, RoutingDecision,
-    VisionRequest, VisionError, VisionErrorType
+    VisionRequest, VisionError, VisionErrorType, IntentDecision, IntentResult
 )
 
 logger = get_logger(__name__)
@@ -126,6 +127,143 @@ class VisionIntentRouter:
         
         # Select best intent and make routing decision
         return self._make_routing_decision(context, intent_scores)
+    
+    async def determine_intent(
+        self,
+        user_message: str,
+        context: str = "",
+        user_id: str = "",
+        guild_id: Optional[str] = None,
+    ) -> IntentResult:
+        """Determine whether to use Vision and extract parameters.
+        
+        Returns an IntentResult compatible with router expectations:
+        - decision.use_vision (bool)
+        - extracted_params.prompt, .task, optional width/height/batch_size/negative_prompt/etc.
+        - confidence (float)
+        """
+        content = (user_message or "").strip()
+        
+        # Detect force prefixes similar to _extract_message_context
+        force_vision = content.startswith("!!image") or content.startswith("!!video") or content.startswith("!!vision")
+        force_openrouter = content.startswith("!!text") or content.startswith("!!chat")
+        if force_vision or force_openrouter:
+            content = re.sub(r'^!!(image|video|vision|text|chat)\s*', '', content).strip()
+        
+        # Build lightweight MessageContext
+        msg_ctx = MessageContext(
+            content=content,
+            has_attachments=False,
+            attachment_types=[],
+            is_slash_command=False,
+            command_name=None,
+            user_id=str(user_id) if user_id is not None else "",
+            guild_id=str(guild_id) if guild_id is not None else None,
+            channel_id="",
+            force_vision=force_vision,
+            force_openrouter=force_openrouter,
+        )
+        
+        # Vision globally disabled
+        if not self.config.get("VISION_ENABLED", False):
+            decision = IntentDecision(
+                use_vision=False,
+                confidence=1.0,
+                reasoning="Vision generation is disabled globally",
+                fallback_reason="VISION_DISABLED",
+            )
+            extracted = SimpleNamespace(prompt=content, task=None)
+            return IntentResult(decision=decision, extracted_params=extracted, confidence=decision.confidence)
+        
+        # Deterministic rules first
+        det = self._apply_deterministic_rules(msg_ctx)
+        if det:
+            decision = IntentDecision(
+                use_vision=det.route_to_vision,
+                task=det.task,
+                confidence=det.confidence,
+                provider=det.provider,
+                model=det.model,
+                estimated_cost=det.estimated_cost,
+                reasoning=det.reasoning,
+                fallback_reason=det.fallback_reason,
+            )
+            extracted_map: Dict[str, Any] = {"prompt": content}
+            if det.task is not None:
+                extracted_map["task"] = det.task
+            extracted = SimpleNamespace(**extracted_map)
+            return IntentResult(decision=decision, extracted_params=extracted, confidence=decision.confidence)
+        
+        # Pattern analysis
+        intent_scores = await self._analyze_intent(msg_ctx)
+        decision_rd = self._make_routing_decision(msg_ctx, intent_scores)
+        
+        # Best intent parameters (if any)
+        best = intent_scores[0] if intent_scores else None
+        params: Dict[str, Any] = dict(best.extracted_parameters) if best and best.extracted_parameters else {}
+        
+        # Normalize common parameters to what router expects
+        # Size → width/height
+        size = params.get("size")
+        if isinstance(size, dict):
+            if "width" in size:
+                try:
+                    params["width"] = int(size["width"])  # type: ignore[arg-type]
+                except Exception:
+                    pass
+            if "height" in size:
+                try:
+                    params["height"] = int(size["height"])  # type: ignore[arg-type]
+                except Exception:
+                    pass
+        elif isinstance(size, str):
+            m = re.search(r"(\d+)\s*[x×]\s*(\d+)", size)
+            if m:
+                try:
+                    params["width"] = int(m.group(1))
+                    params["height"] = int(m.group(2))
+                except Exception:
+                    pass
+        
+        # batch → batch_size
+        if "batch" in params and "batch_size" not in params:
+            try:
+                params["batch_size"] = int(params["batch"])  # type: ignore[arg-type]
+            except Exception:
+                pass
+        
+        # negative → negative_prompt
+        if "negative" in params and "negative_prompt" not in params:
+            params["negative_prompt"] = str(params["negative"])  # type: ignore[arg-type]
+        
+        # provider → preferred_provider (enum if valid)
+        provider_val = params.get("provider")
+        if provider_val is not None and "preferred_provider" not in params:
+            try:
+                params["preferred_provider"] = VisionProvider(provider_val)
+            except Exception:
+                # Leave unset if not a valid provider
+                pass
+        
+        # Always include prompt and inferred task
+        params["prompt"] = content
+        if decision_rd.task is not None:
+            params["task"] = decision_rd.task
+        elif best and best.task is not None:
+            params["task"] = best.task
+        
+        decision = IntentDecision(
+            use_vision=decision_rd.route_to_vision,
+            task=decision_rd.task,
+            confidence=decision_rd.confidence,
+            provider=decision_rd.provider,
+            model=decision_rd.model,
+            estimated_cost=decision_rd.estimated_cost,
+            reasoning=decision_rd.reasoning,
+            fallback_reason=decision_rd.fallback_reason,
+        )
+        extracted = SimpleNamespace(**params)
+        return IntentResult(decision=decision, extracted_params=extracted, confidence=decision.confidence)
     
     def _extract_message_context(
         self, 
