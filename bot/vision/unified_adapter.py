@@ -12,7 +12,7 @@ import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Any, Optional, List, Union, Tuple
+from typing import Dict, Any, Optional, List, Union, Tuple, NamedTuple
 import base64
 import io
 from enum import Enum
@@ -24,6 +24,14 @@ from .types import (
 )
 
 logger = get_logger(__name__)
+
+
+class ModelSelection(NamedTuple):
+    """Model selection result from VISION_MODEL resolution [CMV]"""
+    provider: str
+    endpoint: str
+    model_hint: str
+    supports_advanced: bool  # steps, guidance, etc.
 
 
 # Unified status mapping for all providers
@@ -62,7 +70,7 @@ class NormalizedRequest:
 class UnifiedJobStatus:
     """Unified job status across all providers"""
     status: UnifiedStatus
-    progress_percent: int = 0
+    progress_percentage: int = 0
     phase: str = ""
     estimated_cost: Optional[float] = None
     actual_cost: Optional[float] = None
@@ -315,7 +323,7 @@ class TogetherPlugin(ProviderPlugin):
 
 
 class NovitaPlugin(ProviderPlugin):
-    """Novita.ai provider plugin"""
+    """Novita.ai provider plugin with Qwen-Image and SDXL support"""
     
     def __init__(self, name: str, config: Dict[str, Any], api_key: str):
         super().__init__(name, config, api_key)
@@ -324,6 +332,22 @@ class NovitaPlugin(ProviderPlugin):
             VisionTask.TEXT_TO_IMAGE: "sd_xl_base_1.0.safetensors",
             VisionTask.IMAGE_TO_IMAGE: "sd_xl_base_1.0.safetensors",
             VisionTask.VIDEO_GENERATION: "stable-video-diffusion-img2vid-xt"
+        }
+        
+        # Endpoint-specific configurations [CMV]
+        self.endpoints = {
+            "qwen-image-txt2img": {
+                "path": "/v3/async/qwen-image-txt2img",
+                "supports_advanced": False,
+                "max_size": (1536, 1536),
+                "size_format": "WxH"  # "1024*1024" format
+            },
+            "txt2img": {
+                "path": "/v3/async/txt2img", 
+                "supports_advanced": True,
+                "max_size": (2048, 2048),
+                "size_format": "separate"  # width/height fields
+            }
         }
     
     def capabilities(self) -> Dict[str, Any]:
@@ -337,37 +361,98 @@ class NovitaPlugin(ProviderPlugin):
             "video_max_seconds": 6
         }
     
-    async def submit(self, request: NormalizedRequest) -> str:
-        """Submit to Novita.ai API with unified error handling [REH]"""
-        model = self.model_map.get(request.task)
-        if not model:
-            raise VisionError(
-                message=f"Task {request.task.value} not supported by Novita.ai", 
-                error_type=VisionErrorType.UNSUPPORTED_TASK,
-                user_message=f"Sorry, {request.task.value} is not supported by this provider."
-            )
+    def normalize_size_for_endpoint(self, endpoint: str, width: int, height: int) -> Tuple[Dict[str, Any], List[str]]:
+        """Normalize size parameters for specific endpoint [IV]"""
+        endpoint_config = self.endpoints[endpoint]
+        max_w, max_h = endpoint_config["max_size"]
+        warnings = []
         
-        # Build request payload for Novita.ai format
+        # Clamp to endpoint limits
+        original_w, original_h = width, height
+        if width > max_w or height > max_h:
+            # Proportional downscale
+            scale = min(max_w / width, max_h / height)
+            width = int(width * scale)
+            height = int(height * scale)
+            warnings.append(f"Size downscaled from {original_w}x{original_h} to {width}x{height} for {endpoint} limits")
+        
+        # Ensure minimum sizes
+        width = max(256, width)
+        height = max(256, height)
+        
+        # Format according to endpoint requirements
+        if endpoint_config["size_format"] == "WxH":
+            return {"size": f"{width}*{height}"}, warnings
+        else:
+            return {"width": width, "height": height}, warnings
+    
+    def build_payload_for_endpoint(self, endpoint: str, request: NormalizedRequest) -> Tuple[Dict[str, Any], List[str]]:
+        """Build request payload for specific Novita endpoint [CA]"""
+        endpoint_config = self.endpoints[endpoint]
+        warnings = []
+        
+        # Base payload with prompt
         payload = {
-            "model_name": model,
-            "prompt": request.prompt,
-            "width": min(request.width, 2048),
-            "height": min(request.height, 2048),
-            "steps": min(request.steps, 60),
-            "guidance_scale": request.guidance_scale,
-            "batch_size": 1
+            "prompt": request.prompt.strip() if request.prompt else ""
         }
         
-        if request.negative_prompt:
-            payload["negative_prompt"] = request.negative_prompt
+        # Add size parameters
+        size_params, size_warnings = self.normalize_size_for_endpoint(endpoint, request.width, request.height)
+        payload.update(size_params)
+        warnings.extend(size_warnings)
         
-        if request.seed:
-            payload["seed"] = request.seed
+        if endpoint == "qwen-image-txt2img":
+            # Qwen endpoint: minimal parameters [CMV]
+            if request.negative_prompt:
+                warnings.append("Negative prompt not supported by Qwen-Image endpoint, ignoring")
+            if request.steps != 20:
+                warnings.append("Custom steps not supported by Qwen-Image endpoint, using default")
+            if request.guidance_scale != 7.5:
+                warnings.append("Custom guidance scale not supported by Qwen-Image endpoint, using default")
+            if request.seed:
+                warnings.append("Custom seed not supported by Qwen-Image endpoint, ignoring")
+                
+        elif endpoint == "txt2img":
+            # SDXL endpoint: full parameter support [REH]
+            payload.update({
+                "model_name": request.preferred_model or "sd_xl_base_1.0.safetensors",
+                "steps": max(1, min(100, request.steps)),
+                "guidance_scale": max(1.0, min(30.0, request.guidance_scale)),
+                "batch_size": 1
+            })
             
-        if request.input_image_data and request.task == VisionTask.IMAGE_TO_IMAGE:
-            # Novita.ai expects base64 encoded images
-            b64_image = base64.b64encode(request.input_image_data).decode()
-            payload["init_image"] = b64_image
+            if request.negative_prompt:
+                payload["negative_prompt"] = request.negative_prompt
+                
+            if request.seed:
+                payload["seed"] = request.seed
+                
+            # NSFW detection (optional, billable)
+            if request.safety_mode == "detect":
+                payload["extra"] = {
+                    "enable_nsfw_detection": True,
+                    "nsfw_detection_level": 2
+                }
+                
+            if request.input_image_data:
+                b64_image = base64.b64encode(request.input_image_data).decode()
+                payload["init_image"] = b64_image
+        
+        return payload, warnings
+
+    async def submit(self, request: NormalizedRequest, endpoint: str = "qwen-image-txt2img") -> str:
+        """Submit to Novita.ai API with endpoint selection and unified error handling [REH]"""
+        if endpoint not in self.endpoints:
+            raise VisionError(
+                message=f"Endpoint {endpoint} not supported by Novita.ai",
+                error_type=VisionErrorType.UNSUPPORTED_TASK,
+                user_message=f"Sorry, the requested model is not supported."
+            )
+        
+        endpoint_config = self.endpoints[endpoint]
+        
+        # Build payload for specific endpoint
+        payload, warnings = self.build_payload_for_endpoint(endpoint, request)
         
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -376,7 +461,7 @@ class NovitaPlugin(ProviderPlugin):
         
         try:
             async with self.session.post(
-                f"{self.base_url}/v3/async/txt2img",  # Novita.ai async endpoint
+                f"{self.base_url}{endpoint_config['path']}",
                 json=payload,
                 headers=headers
             ) as response:
@@ -470,7 +555,7 @@ class NovitaPlugin(ProviderPlugin):
             progress = min(int(elapsed * 10), 90)
             return UnifiedJobStatus(
                 status=UnifiedStatus.RUNNING,
-                progress_percent=progress,
+                progress_percentage=progress,
                 phase="Generating image",
                 estimated_cost=job_data["cost"]
             )
@@ -521,9 +606,17 @@ class UnifiedVisionAdapter:
         self.providers: Dict[str, ProviderPlugin] = {}
         self.provider_config = {}
         
+        # Model override from environment [CMV]
+        self.vision_model_override = config.get("VISION_MODEL", "").strip()
+        if self.vision_model_override:
+            self.logger.info(f"🎯 VISION_MODEL override active: {self.vision_model_override}")
+        
         # Load provider configuration
         self._load_provider_config()
         self._initialize_providers()
+        
+        # Initialize model resolver
+        self._model_aliases = self._build_model_aliases()
     
     def _load_provider_config(self):
         """Load provider configuration from JSON or defaults [IV]"""
@@ -545,9 +638,9 @@ class UnifiedVisionAdapter:
         return {
             "vision": {
                 "default_policy": {
-                    "provider_order": ["together", "novita"],
+                    "provider_order": ["novita:qwen-image", "novita:txt2img", "together"],
                     "budget_per_job_usd": 0.25,
-                    "prefer_model": {"image": "flux.1-pro", "video": "svd-xt"},
+                    "prefer_model": {"image": "qwen-image", "video": "svd-xt"},
                     "nsfw_mode": "block",
                     "auto_fallback": True,
                     "max_retries_per_provider": 2
@@ -569,7 +662,19 @@ class UnifiedVisionAdapter:
                         "enabled": True,
                         "priority": 2,
                         "price": {"image_base": 0.018, "image_per_px": 0.000004, "video_per_s": 0.05},
-                        "limits": {"max_size": "2048x2048", "max_steps": 60}
+                        "limits": {"max_size": "2048x2048", "max_steps": 60},
+                        "models": {
+                            "qwen-image": {
+                                "endpoint": "qwen-image-txt2img",
+                                "price": {"image_base": 0.015, "image_per_px": 0.000003},
+                                "limits": {"max_size": "1536x1536", "supports_advanced": False}
+                            },
+                            "txt2img": {
+                                "endpoint": "txt2img", 
+                                "price": {"image_base": 0.018, "image_per_px": 0.000004},
+                                "limits": {"max_size": "2048x2048", "supports_advanced": True}
+                            }
+                        }
                     }
                 ]
             }
@@ -607,6 +712,75 @@ class UnifiedVisionAdapter:
                 
             except Exception as e:
                 self.logger.error(f"Failed to initialize provider {name}: {e}")
+    
+    def _build_model_aliases(self) -> Dict[str, ModelSelection]:
+        """Build model alias mapping for VISION_MODEL resolution [CMV]"""
+        aliases = {}
+        
+        # Novita Qwen-Image aliases
+        for alias in ["novita:qwen-image", "qwen-image", "novita-qwen-image", "qwen_image"]:
+            aliases[alias] = ModelSelection(
+                provider="novita",
+                endpoint="qwen-image-txt2img", 
+                model_hint="qwen-image",
+                supports_advanced=False
+            )
+        
+        # Novita SDXL aliases  
+        for alias in ["novita:txt2img:sdxl", "novita:sdxl", "sdxl"]:
+            aliases[alias] = ModelSelection(
+                provider="novita",
+                endpoint="txt2img",
+                model_hint="sd_xl_base_1.0.safetensors", 
+                supports_advanced=True
+            )
+        
+        # Together.ai aliases
+        for alias in ["together:flux.1-pro", "flux.1-pro", "together"]:
+            aliases[alias] = ModelSelection(
+                provider="together",
+                endpoint="images/generations",
+                model_hint="black-forest-labs/FLUX.1-schnell-Free",
+                supports_advanced=True
+            )
+        
+        return aliases
+    
+    def resolve_model_selection(self, request: NormalizedRequest) -> Optional[ModelSelection]:
+        """Resolve VISION_MODEL override to specific provider/endpoint [CA]"""
+        if not self.vision_model_override:
+            return None
+            
+        # Direct alias lookup
+        selection = self._model_aliases.get(self.vision_model_override.lower())
+        if selection:
+            self.logger.info(f"🎯 Resolved VISION_MODEL '{self.vision_model_override}' → {selection.provider}:{selection.endpoint}")
+            return selection
+            
+        # Parse provider:model format
+        if ":" in self.vision_model_override:
+            parts = self.vision_model_override.split(":", 1)
+            provider_name = parts[0].lower()
+            
+            if provider_name in self.providers:
+                # Default to provider's primary endpoint
+                if provider_name == "novita":
+                    return ModelSelection(
+                        provider="novita",
+                        endpoint="qwen-image-txt2img",  # Default to Qwen
+                        model_hint="qwen-image", 
+                        supports_advanced=False
+                    )
+                elif provider_name == "together":
+                    return ModelSelection(
+                        provider="together",
+                        endpoint="images/generations",
+                        model_hint="black-forest-labs/FLUX.1-schnell-Free",
+                        supports_advanced=True
+                    )
+        
+        self.logger.warning(f"⚠️ Unrecognized VISION_MODEL '{self.vision_model_override}', falling back to policy")
+        return None
     
     async def startup(self):
         """Initialize all provider connections [REH]"""
@@ -703,97 +877,104 @@ class UnifiedVisionAdapter:
             pixels = request.width * request.height
             return base_cost + (pixels * pixel_cost)
     
-    async def submit(self, request: VisionRequest) -> Tuple[str, str]:
-        """
-        Submit job to best available provider with automatic fallback [REH]
+    async def submit(self, request: VisionRequest) -> VisionResponse:
+        """Submit vision request with VISION_MODEL override and automatic provider selection [REH]"""
+        policy = self.provider_config.get("vision", {}).get("default_policy", {})
+        normalized_request = self.normalize_request(request)
         
-        Returns:
-            Tuple of (job_id, provider_name)
-        """
-        normalized = self.normalize_request(request)
-        policy = self.provider_config["vision"]["default_policy"]
-        provider_order = policy.get("provider_order", ["together", "novita"])
-        max_retries = policy.get("max_retries_per_provider", 2)
+        # Check for VISION_MODEL override
+        model_selection = self.resolve_model_selection(normalized_request)
+        
+        if model_selection:
+            # Use pinned model/provider/endpoint
+            provider_order = [model_selection.provider]
+            forced_endpoint = model_selection.endpoint
+            self.logger.info(f"🎯 Using VISION_MODEL override: {model_selection.provider}:{model_selection.endpoint}")
+        else:
+            # Use policy-driven selection
+            provider_order = policy.get("provider_order", ["novita:qwen-image", "novita:txt2img", "together"])
+            forced_endpoint = None
+            
+            # Parse provider:endpoint format in policy
+            resolved_order = []
+            for entry in provider_order:
+                if ":" in entry:
+                    provider_name = entry.split(":")[0]
+                    resolved_order.append(provider_name)
+                else:
+                    resolved_order.append(entry)
+            provider_order = resolved_order
         
         last_error = None
         
-        # Try each provider in order with fallback
         for provider_name in provider_order:
-            provider = self.providers.get(provider_name)
-            if not provider:
+            if provider_name not in self.providers:
                 continue
                 
+            provider = self.providers[provider_name]
+            
             # Check if provider supports the task
             capabilities = provider.capabilities()
-            if normalized.task not in capabilities.get("modes", []):
-                self.logger.debug(f"Provider {provider_name} doesn't support {normalized.task}")
+            if normalized_request.task not in capabilities.get("modes", []):
                 continue
             
-            # Check size constraints
-            max_w, max_h = capabilities.get("max_size", (1024, 1024))
-            if normalized.width > max_w or normalized.height > max_h:
-                self.logger.debug(f"Provider {provider_name} size limit exceeded")
-                continue
+            # Determine endpoint for this provider
+            endpoint = None
+            if forced_endpoint and model_selection and provider_name == model_selection.provider:
+                endpoint = forced_endpoint
+            elif provider_name == "novita":
+                # Default endpoint selection for Novita based on policy order
+                original_entry = next((e for e in policy.get("provider_order", []) if e.startswith("novita")), "novita:qwen-image")
+                if "qwen-image" in original_entry:
+                    endpoint = "qwen-image-txt2img"
+                else:
+                    endpoint = "txt2img"
             
-            # Try with retries for transient errors
-            for attempt in range(max_retries + 1):
+            # Attempt submission with retries
+            for attempt in range(policy.get("max_retries_per_provider", 2)):
                 try:
-                    job_id = await provider.submit(normalized)
-                    # Prefix with provider name for routing  
-                    full_job_id = f"{provider.name}:{job_id}"
+                    # Submit with endpoint if supported (Novita), otherwise default
+                    if hasattr(provider, 'submit') and endpoint and provider_name == "novita":
+                        task_id = await provider.submit(normalized_request, endpoint)
+                    else:
+                        task_id = await provider.submit(normalized_request)
                     
-                    self.logger.info(f"✅ Submitted job {full_job_id} to provider {provider.name}")
-                    return full_job_id, provider.name
+                    return VisionResponse(
+                        success=True,
+                        job_id=f"{provider_name}:{task_id}",
+                        provider=VisionProvider(provider_name.lower()),
+                        model_used=getattr(provider, 'model_map', {}).get(normalized_request.task, 'unknown'),
+                        provider_job_id=task_id
+                    )
                     
                 except VisionError as e:
                     last_error = e
-                    
-                    # Don't retry certain error types
-                    if e.error_type in [
-                        VisionErrorType.CONTENT_FILTERED,
-                        VisionErrorType.QUOTA_EXCEEDED,
-                        VisionErrorType.AUTHENTICATION_ERROR,
-                        VisionErrorType.VALIDATION_ERROR,
-                        VisionErrorType.UNSUPPORTED_TASK
-                    ]:
-                        self.logger.warning(f"❌ Non-retryable error from {provider_name}: {e.error_type.value}")
-                        break  # Try next provider
-                    
-                    # Retry transient errors
-                    if attempt < max_retries:
-                        delay = 1.0 * (2 ** attempt)  # Exponential backoff
-                        self.logger.warning(
-                            f"⚠️ Provider {provider_name} attempt {attempt + 1} failed, retrying in {delay}s: {e.message}"
-                        )
-                        await asyncio.sleep(delay)
+                    if e.error_type in [VisionErrorType.RATE_LIMIT, VisionErrorType.PROVIDER_ERROR]:
+                        # Exponential backoff for retryable errors
+                        wait_time = (2 ** attempt) * 1.0  # 1s, 2s, 4s...
+                        self.logger.warning(f"Retryable error from {provider_name} (attempt {attempt + 1}): {e.message}, retrying in {wait_time}s")
+                        await asyncio.sleep(wait_time)
+                        continue
                     else:
-                        self.logger.error(f"❌ Provider {provider_name} failed after {max_retries + 1} attempts")
-                        break  # Try next provider
+                        # Non-retryable error, try next provider
+                        self.logger.warning(f"Non-retryable error from {provider_name}: {e.message}")
+                        break
                         
                 except Exception as e:
                     last_error = VisionError(
                         message=f"Unexpected error from {provider_name}: {str(e)}",
                         error_type=VisionErrorType.PROVIDER_ERROR,
-                        user_message="Vision generation failed. Please try again."
+                        user_message="An unexpected error occurred during image generation."
                     )
-                    
-                    if attempt < max_retries:
-                        delay = 1.0 * (2 ** attempt)
-                        self.logger.warning(f"⚠️ Unexpected error from {provider_name}, retrying in {delay}s")
-                        await asyncio.sleep(delay)
-                    else:
-                        self.logger.error(f"❌ Provider {provider_name} failed with unexpected error")
-                        break
+                    self.logger.error(f"Unexpected error from {provider_name}: {e}", exc_info=True)
+                    break
         
-        # All providers exhausted
-        if last_error:
-            raise last_error
-        else:
-            raise VisionError(
-                message="No suitable provider available for request",
-                error_type=VisionErrorType.NO_PROVIDER_AVAILABLE,
-                user_message="Vision generation is currently unavailable. Please try again later."
-            )
+        # All providers failed
+        raise last_error or VisionError(
+            message="All vision providers exhausted",
+            error_type=VisionErrorType.PROVIDER_ERROR,
+            user_message="Image generation is temporarily unavailable. Please try again later."
+        )
     
     async def poll(self, full_job_id: str) -> UnifiedJobStatus:
         """Poll job status across providers"""

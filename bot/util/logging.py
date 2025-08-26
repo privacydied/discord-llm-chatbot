@@ -33,6 +33,26 @@ MAX_FIELD_LENGTH = 80
 TRUNCATION_SUFFIX = "…"
 
 
+class NoiseSuppressionFilter(logging.Filter):
+    """Filter to suppress noisy debug tracebacks for expected transient errors.
+    
+    Suppresses OpenAI client debug tracebacks for expected rate limit (429) errors
+    that are handled by our retry system. These create log noise without value.
+    
+    [RAT: CSD, REH] - Code Smell Detection, Robust Error Handling
+    """
+    
+    def filter(self, record: logging.LogRecord) -> bool:
+        # Suppress noisy OpenAI debug tracebacks for expected 429 errors
+        if (record.levelname == "DEBUG" and 
+            record.name.startswith("openai") and
+            "Encountered httpx.HTTPStatusError" in str(record.msg) and
+            ("429 Too Many Requests" in str(record.getMessage()) or
+             "HTTPStatusError: Client error '429'" in str(record.getMessage()))):
+            return False
+        return True
+
+
 class EnhancedIconPrefixFilter(logging.Filter):
     """Enhanced icon prefix filter with field truncation and alignment.
     
@@ -176,6 +196,7 @@ def init_logging() -> None:
         omit_repeated_times=False,  # Always show timestamps for alignment
         log_time_format="[%H:%M:%S.%f]",  # Millisecond precision format
     )
+    pretty.addFilter(NoiseSuppressionFilter())  # Suppress noisy debug tracebacks first
     pretty.addFilter(EnhancedIconPrefixFilter())
 
     # Enhanced Structured JSONL Sink with frozen keys

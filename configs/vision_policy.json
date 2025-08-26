@@ -213,8 +213,7 @@
   "intent_patterns": {
     "image_generation": {
       "trigger_phrases": [
-        "create an image", "generate an image", "draw", "make a picture",
-        "paint", "sketch", "illustration", "artwork", "render"
+        "create an image", "generate an image", "draw", "make a picture", "make a photo", "create a photo", "create a picture", "paint", "sketch", "illustration", "artwork", "render"
       ],
       "parameter_patterns": {
         "size": {

@@ -57,7 +57,7 @@ class VisionIntentRouter:
     
     def __init__(self, config: Optional[Dict[str, Any]] = None, policy: Optional[Dict[str, Any]] = None):
         self.config = config or load_config()
-        self.logger = logger.bind(component="vision_intent_router")
+        self.logger = get_logger("vision.intent_router")
         
         # Load vision policy if not provided
         if policy is None:

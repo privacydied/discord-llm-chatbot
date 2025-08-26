@@ -283,6 +283,145 @@ class TestGatewayIntegration:
                 assert job_id not in vision_gateway.active_jobs  # Should be cleaned up
 
 
+class TestVisionModelOverride:
+    """Test VISION_MODEL environment variable override functionality"""
+    
+    def test_vision_model_qwen_override(self, mock_config):
+        """Test VISION_MODEL override for Qwen endpoint"""
+        config_with_override = mock_config.copy()
+        config_with_override["VISION_MODEL"] = "novita:qwen-image"
+        
+        adapter = UnifiedVisionAdapter(config_with_override)
+        request = VisionRequest(
+            request_id="test",
+            user_id="user",
+            task=VisionTask.TEXT_TO_IMAGE,
+            prompt="test qwen image"
+        )
+        
+        normalized = adapter.normalize_request(request)
+        selection = adapter.resolve_model_selection(normalized)
+        
+        assert selection is not None
+        assert selection.provider == "novita"
+        assert selection.endpoint == "qwen-image-txt2img"
+        assert selection.model_hint == "qwen-image"
+        assert not selection.supports_advanced
+    
+    def test_vision_model_aliases(self, mock_config):
+        """Test various VISION_MODEL alias formats"""
+        test_cases = [
+            ("qwen-image", "novita", "qwen-image-txt2img"),
+            ("novita:qwen-image", "novita", "qwen-image-txt2img"),
+            ("novita:sdxl", "novita", "txt2img"),
+            ("together:flux.1-pro", "together", "images/generations"),
+            ("flux.1-pro", "together", "images/generations")
+        ]
+        
+        for alias, expected_provider, expected_endpoint in test_cases:
+            config_with_alias = mock_config.copy()
+            config_with_alias["VISION_MODEL"] = alias
+            
+            adapter = UnifiedVisionAdapter(config_with_alias)
+            
+            request = VisionRequest(
+                request_id="test",
+                user_id="user",
+                task=VisionTask.TEXT_TO_IMAGE,
+                prompt="test"
+            )
+            
+            normalized = adapter.normalize_request(request)
+            selection = adapter.resolve_model_selection(normalized)
+            
+            assert selection is not None, f"Failed to resolve alias: {alias}"
+            assert selection.provider == expected_provider
+            assert selection.endpoint == expected_endpoint
+
+
+class TestQwenEndpointParameterNormalization:
+    """Test parameter normalization and warnings for Qwen endpoint"""
+    
+    def test_qwen_parameter_warnings(self, mock_config):
+        """Test parameter normalization and warnings for Qwen endpoint"""
+        adapter = UnifiedVisionAdapter(mock_config)
+        
+        if "novita" not in adapter.providers:
+            pytest.skip("Novita provider not available")
+            
+        novita_plugin = adapter.providers["novita"]
+        
+        request = NormalizedRequest(
+            task=VisionTask.TEXT_TO_IMAGE,
+            prompt="test prompt",
+            negative_prompt="bad things",
+            width=2048,
+            height=2048,
+            steps=50,
+            guidance_scale=15.0,
+            seed=42,
+            batch_size=1,
+            safety_mode="strict"
+        )
+        
+        payload, warnings = novita_plugin.build_payload_for_endpoint("qwen-image-txt2img", request)
+        
+        # Check payload format
+        assert "size" in payload
+        assert payload["size"] == "1536*1536"  # Clamped to max
+        assert payload["prompt"] == "test prompt"
+        
+        # Check warnings for ignored parameters
+        assert len(warnings) > 0
+        warning_text = " ".join(warnings)
+        assert "Negative prompt not supported" in warning_text
+        assert "Custom steps not supported" in warning_text
+        assert "Custom guidance scale not supported" in warning_text
+        assert "Custom seed not supported" in warning_text
+
+    def test_sdxl_parameter_support(self, mock_config):
+        """Test full parameter support for SDXL endpoint"""
+        adapter = UnifiedVisionAdapter(mock_config)
+        
+        if "novita" not in adapter.providers:
+            pytest.skip("Novita provider not available")
+            
+        novita_plugin = adapter.providers["novita"]
+        
+        request = NormalizedRequest(
+            task=VisionTask.TEXT_TO_IMAGE,
+            prompt="beautiful landscape",
+            negative_prompt="ugly, distorted",
+            width=1024,
+            height=1024,
+            steps=30,
+            guidance_scale=7.5,
+            seed=12345,
+            batch_size=1,
+            safety_mode="detect"  # Enable NSFW detection
+        )
+        
+        payload, warnings = novita_plugin.build_payload_for_endpoint("txt2img", request)
+        
+        # Check full parameter support
+        assert payload["width"] == 1024
+        assert payload["height"] == 1024
+        assert payload["prompt"] == "beautiful landscape"
+        assert payload["negative_prompt"] == "ugly, distorted"
+        assert payload["steps"] == 30
+        assert payload["guidance_scale"] == 7.5
+        assert payload["seed"] == 12345
+        assert payload["model_name"] == "sd_xl_base_1.0.safetensors"
+        
+        # Check NSFW detection enabled
+        assert "extra" in payload
+        assert payload["extra"]["enable_nsfw_detection"] is True
+        assert payload["extra"]["nsfw_detection_level"] == 2
+        
+        # Should have minimal warnings (none for valid parameters)
+        assert len(warnings) == 0
+
+
 class TestConfigurationHandling:
     """Test configuration management and defaults [IV]"""
     

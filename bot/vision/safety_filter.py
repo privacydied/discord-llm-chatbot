@@ -57,7 +57,7 @@ class VisionSafetyFilter:
     
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         self.config = config or load_config()
-        self.logger = logger.bind(component="vision_safety_filter")
+        self.logger = get_logger("vision.safety_filter")
         
         # Load safety policies
         self.policy = self._load_safety_policy()
@@ -76,12 +76,7 @@ class VisionSafetyFilter:
         self.blocked_keywords = {kw.lower() for kw in self.policy.get("blocked_keywords", [])}
         self.warning_keywords = {kw.lower() for kw in self.policy.get("warning_keywords", [])}
         
-        self.logger.info(
-            "Vision Safety Filter initialized",
-            blocked_patterns=len(self.blocked_patterns),
-            warning_patterns=len(self.warning_patterns),
-            blocked_keywords=len(self.blocked_keywords)
-        )
+        self.logger.info(f"Vision Safety Filter initialized - blocked_patterns: {len(self.blocked_patterns)}, warning_patterns: {len(self.warning_patterns)}, blocked_keywords: {len(self.blocked_keywords)}")
     
     async def validate_request(self, request: VisionRequest) -> SafetyResult:
         """
@@ -138,29 +133,14 @@ class VisionSafetyFilter:
             
             # Log result
             if not approved:
-                self.logger.warning(
-                    "Content blocked by safety filter",
-                    user_id=request.user_id,
-                    task=request.task.value,
-                    level=max_level.value,
-                    issues=len(detected_issues)
-                )
+                self.logger.warning(f"Content blocked by safety filter - user_id: {request.user_id}, task: {request.task.value}, level: {max_level.value}, issues: {len(detected_issues)}")
             elif max_level == SafetyLevel.WARNING:
-                self.logger.info(
-                    "Content generated safety warning",
-                    user_id=request.user_id,
-                    task=request.task.value,
-                    issues=len(detected_issues)
-                )
+                self.logger.info(f"Content generated safety warning - user_id: {request.user_id}, task: {request.task.value}, issues: {len(detected_issues)}")
             
             return result
             
         except Exception as e:
-            self.logger.error(
-                "Safety validation error",
-                error=str(e),
-                user_id=request.user_id
-            )
+            self.logger.error(f"Safety validation error - error: {str(e)}, user_id: {request.user_id}")
             # Fail safe - block on error
             return SafetyResult(
                 approved=False,

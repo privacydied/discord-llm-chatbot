@@ -37,6 +37,13 @@ from .modality import InputModality, InputItem, collect_input_items
 from .action import BotAction, ResponseMessage
 from .result_aggregator import ResultAggregator
 
+# Vision generation system
+try:
+    from .vision import VisionIntentRouter, VisionOrchestrator
+    VISION_ENABLED = True
+except ImportError:
+    VISION_ENABLED = False
+
 if TYPE_CHECKING:
     from bot.core.bot import LLMBot as DiscordBot
 
@@ -111,6 +118,28 @@ class OptimizedRouter:
         # Edit coalescing state
         self.last_edit_time: Dict[int, float] = {}  # channel_id -> last_edit_timestamp
         self.pending_edits: Dict[int, asyncio.Task] = {}  # channel_id -> pending_edit_task
+        
+        # Vision generation system [CA][SFT]
+        self._vision_intent_router: Optional[VisionIntentRouter] = None
+        self._vision_orchestrator: Optional[VisionOrchestrator] = None
+        
+        # Debug logging for vision initialization
+        self.logger.info(f"🔍 Vision initialization debug: VISION_ENABLED={VISION_ENABLED}, config_enabled={self.config.get('VISION_ENABLED', 'NOT_SET')}")
+        
+        if VISION_ENABLED and self.config.get("VISION_ENABLED", False):
+            self.logger.info("🚀 Starting vision system initialization...")
+            try:
+                self.logger.info("🔧 Creating VisionIntentRouter...")
+                self._vision_intent_router = VisionIntentRouter(self.config)
+                self.logger.info("🔧 Creating VisionOrchestrator...")
+                self._vision_orchestrator = VisionOrchestrator(self.config)
+                self.logger.info("✔ Vision generation system initialized successfully!")
+            except Exception as e:
+                self.logger.error(f"❌ Failed to initialize Vision system: {e}", exc_info=True)
+                self._vision_intent_router = None
+                self._vision_orchestrator = None
+        else:
+            self.logger.warning(f"⚠️ Vision system NOT initialized - VISION_ENABLED={VISION_ENABLED}, config={self.config.get('VISION_ENABLED', 'NOT_SET')}")
         
         self.logger.info("⚡ OptimizedRouter initialized with all speed optimizations")
     

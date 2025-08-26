@@ -50,7 +50,7 @@ class VisionOrchestrator:
     
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         self.config = config or load_config()
-        self.logger = logger.bind(component="vision_orchestrator")
+        self.logger = get_logger("vision.orchestrator")
         
         # Initialize core components
         self.gateway = VisionGateway(self.config)
@@ -68,13 +68,9 @@ class VisionOrchestrator:
         
         # Background task for cleanup and monitoring
         self._cleanup_task: Optional[asyncio.Task] = None
-        self._start_background_tasks()
+        self._background_tasks_started = False
         
-        self.logger.info(
-            "Vision Orchestrator initialized",
-            max_concurrent=self.max_concurrent_jobs,
-            max_per_user=self.max_user_concurrent_jobs
-        )
+        self.logger.info(f"Vision Orchestrator initialized - max_concurrent: {self.max_concurrent_jobs}, max_per_user: {self.max_user_concurrent_jobs}")
     
     async def submit_job(self, request: VisionRequest) -> VisionJob:
         """
@@ -89,12 +85,7 @@ class VisionOrchestrator:
         Raises:
             VisionError: On validation, safety, or quota failures
         """
-        self.logger.info(
-            "Submitting vision job",
-            task=request.task.value,
-            user_id=request.user_id,
-            estimated_cost=request.estimated_cost
-        )
+        self.logger.info(f"Submitting vision job - task: {request.task.value}, user_id: {request.user_id}, estimated_cost: {request.estimated_cost}")
         
         # Generate unique job ID
         job_id = str(uuid.uuid4())
@@ -151,32 +142,18 @@ class VisionOrchestrator:
             # Update user concurrency tracking
             self.user_job_counts[request.user_id] = self.user_job_counts.get(request.user_id, 0) + 1
             
-            self.logger.info(
-                "Vision job queued successfully",
-                job_id=job_id[:8],
-                user_id=request.user_id,
-                estimated_cost=estimated_cost
-            )
+            self.logger.info(f"Vision job queued successfully - job_id: {job_id[:8]}, user_id: {request.user_id}, estimated_cost: {estimated_cost}")
             
             return job
             
         except VisionError as e:
             # Log and re-raise vision errors
-            self.logger.warning(
-                "Vision job submission failed",
-                error_type=e.error_type.value,
-                message=e.message,
-                user_message=e.user_message
-            )
+            self.logger.warning(f"Vision job submission failed - error_type: {e.error_type.value}, message: {e.message}, user_message: {e.user_message}")
             raise e
             
         except Exception as e:
             # Wrap unexpected errors
-            self.logger.error(
-                "Unexpected error submitting vision job",
-                error=str(e),
-                exc_info=True
-            )
+            self.logger.error(f"Unexpected error submitting vision job: {str(e)}", exc_info=True)
             raise VisionError(
                 error_type=VisionErrorType.SYSTEM_ERROR,
                 message=f"Unexpected error: {str(e)}",
@@ -237,24 +214,17 @@ class VisionOrchestrator:
             )
     
     async def _estimate_job_cost(self, request: VisionRequest) -> float:
-        """Estimate job cost using gateway capability data [CMV]"""
+        """Estimate job cost using simple fallback logic [CMV]"""
         try:
-            # Use gateway's estimation logic
-            from .gateway import VisionGateway
-            temp_gateway = VisionGateway(self.config)
-            capability = temp_gateway._select_capability(request)
-            
-            if capability:
-                return temp_gateway._estimate_cost(request, capability)
-            else:
-                # Fallback estimates
-                fallback_costs = {
-                    request.task.TEXT_TO_IMAGE: 0.04,
-                    request.task.IMAGE_TO_IMAGE: 0.06,
-                    request.task.TEXT_TO_VIDEO: 1.50,
-                    request.task.IMAGE_TO_VIDEO: 2.00
-                }
-                return fallback_costs.get(request.task, 0.10)
+            # Simple fallback estimates based on task type
+            from .types import VisionTask
+            fallback_costs = {
+                VisionTask.TEXT_TO_IMAGE: 0.04,
+                VisionTask.IMAGE_TO_IMAGE: 0.06,
+                VisionTask.TEXT_TO_VIDEO: 1.50,
+                VisionTask.IMAGE_TO_VIDEO: 2.00
+            }
+            return fallback_costs.get(request.task, 0.10)
                 
         except Exception as e:
             self.logger.warning(f"Cost estimation failed: {e}")
@@ -266,6 +236,11 @@ class VisionOrchestrator:
         
         try:
             self.logger.debug(f"Starting job execution: {job_id[:8]}")
+            
+            # Ensure gateway is initialized before first use [RM]
+            if not hasattr(self.gateway, '_startup_complete'):
+                await self.gateway.startup()
+                self.gateway._startup_complete = True
             
             # Transition to running state
             job.transition_to(VisionJobState.RUNNING, "Starting generation")
@@ -281,6 +256,13 @@ class VisionOrchestrator:
             if response.success:
                 # Success path
                 job.response = response
+                
+                # CRITICAL FIX: Update job ID if provider returned different ID
+                if response.job_id and response.job_id != job_id:
+                    self.logger.info(f"🔄 Updating job ID mapping - original: {job_id[:8]}, provider: {response.job_id}")
+                    # Update job store with provider job ID for Router to find
+                    job.provider_job_id = response.job_id
+                
                 job.transition_to(VisionJobState.COMPLETED, "Generation completed successfully")
                 job.update_progress(100, "Complete")
                 
@@ -291,13 +273,7 @@ class VisionOrchestrator:
                     response.actual_cost  # Record actual cost
                 )
                 
-                self.logger.info(
-                    "Job completed successfully",
-                    job_id=job_id[:8],
-                    provider=response.provider.value,
-                    actual_cost=response.actual_cost,
-                    processing_time=response.processing_time_seconds
-                )
+                self.logger.info(f"Job completed successfully - job_id: {job_id[:8]}, provider: {response.provider.value}, actual_cost: {response.actual_cost}, processing_time: {response.processing_time_seconds}s")
             else:
                 # Provider returned failure
                 job.error = response.error
@@ -307,11 +283,7 @@ class VisionOrchestrator:
                 # Release reserved budget on failure
                 await self.budget_manager.release_reservation(job.request.user_id, job.request.estimated_cost)
                 
-                self.logger.error(
-                    "Job failed at provider",
-                    job_id=job_id[:8],
-                    error=response.error.message if response.error else "Unknown error"
-                )
+                self.logger.error(f"Job failed at provider - job_id: {job_id[:8]}, error: {response.error.message if response.error else 'Unknown error'}")
         
         except asyncio.CancelledError:
             # Job was cancelled
@@ -326,12 +298,7 @@ class VisionOrchestrator:
             
             await self.budget_manager.release_reservation(job.request.user_id, job.request.estimated_cost)
             
-            self.logger.error(
-                "Job failed with VisionError",
-                job_id=job_id[:8],
-                error_type=e.error_type.value,
-                message=e.message
-            )
+            self.logger.error(f"Job failed with VisionError - job_id: {job_id[:8]}, error_type: {e.error_type.value}, message: {e.message}")
             
         except Exception as e:
             # Handle unexpected errors
@@ -345,12 +312,7 @@ class VisionOrchestrator:
             
             await self.budget_manager.release_reservation(job.request.user_id, job.request.estimated_cost)
             
-            self.logger.error(
-                "Job failed with unexpected error",
-                job_id=job_id[:8],
-                error=str(e),
-                exc_info=True
-            )
+            self.logger.error(f"Job failed with unexpected error - job_id: {job_id[:8]}, error: {str(e)}", exc_info=True)
         
         finally:
             # Always persist final state and cleanup
@@ -369,7 +331,15 @@ class VisionOrchestrator:
     
     def _start_background_tasks(self) -> None:
         """Start background monitoring and cleanup tasks [PA]"""
-        self._cleanup_task = asyncio.create_task(self._background_cleanup())
+        try:
+            # Only start if we're in an async context with a running event loop
+            loop = asyncio.get_running_loop()
+            if not self._background_tasks_started:
+                self._cleanup_task = asyncio.create_task(self._background_cleanup())
+                self._background_tasks_started = True
+        except RuntimeError:
+            # No running event loop - tasks will be started lazily when needed
+            pass
     
     async def _background_cleanup(self) -> None:
         """Background task for cleanup and monitoring [RM]"""

@@ -21,6 +21,7 @@ class VisionTask(Enum):
     IMAGE_TO_IMAGE = "image_to_image"
     TEXT_TO_VIDEO = "text_to_video" 
     IMAGE_TO_VIDEO = "image_to_video"
+    VIDEO_GENERATION = "video_generation"
 
 
 class VisionProvider(Enum):
@@ -48,6 +49,8 @@ class VisionErrorType(Enum):
     QUOTA_EXCEEDED = "quota_exceeded"
     CONTENT_FILTERED = "content_filtered"
     PROVIDER_ERROR = "provider_error"
+    CONNECTION_ERROR = "connection_error"  # For HTTP/network connection failures [REH]
+    RATE_LIMITED = "rate_limited"  # For rate limiting responses [REH]
     TIMEOUT_ERROR = "timeout_error"
     NETWORK_ERROR = "network_error"
     SYSTEM_ERROR = "system_error"
@@ -88,6 +91,8 @@ class VisionRequest:
     
     # Image editing parameters  
     input_image: Optional[Path] = None
+    input_image_data: Optional[bytes] = None  # Raw image bytes [CA]
+    input_image_url: Optional[str] = None     # Image URL [CA]
     mask_image: Optional[Path] = None
     strength: float = 0.8
     
@@ -230,6 +235,7 @@ class VisionJob:
     
     # Execution tracking
     provider_assigned: Optional[VisionProvider] = None
+    provider_job_id: Optional[str] = None  # Job ID returned by provider (may differ from orchestrator job_id)
     model_assigned: Optional[str] = None
     retry_count: int = 0
     max_retries: int = 3
@@ -354,7 +360,18 @@ class VisionJob:
         error = None
         if data.get("error"):
             error_data = data["error"]
-            error_data["error_type"] = VisionErrorType(error_data["error_type"])
+            # Handle enum deserialization safely [REH]
+            error_type_value = error_data["error_type"]
+            if isinstance(error_type_value, VisionErrorType):
+                # Already an enum
+                pass
+            elif isinstance(error_type_value, str):
+                # Handle both "SYSTEM_ERROR" and "VisionErrorType.SYSTEM_ERROR" formats
+                if "." in error_type_value:
+                    error_type_value = error_type_value.split(".")[-1]  # Get just the enum name
+                error_data["error_type"] = VisionErrorType[error_type_value]
+            else:
+                error_data["error_type"] = VisionErrorType(error_type_value)
             if "provider" in error_data and error_data["provider"]:
                 error_data["provider"] = VisionProvider(error_data["provider"])
             error = VisionError(**error_data)

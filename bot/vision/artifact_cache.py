@@ -81,7 +81,7 @@ class VisionArtifactCache:
     
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         self.config = config or load_config()
-        self.logger = logger.bind(component="vision_artifact_cache")
+        self.logger = get_logger("vision.artifact_cache")
         
         # Cache configuration
         self.cache_dir = Path(self.config["VISION_ARTIFACTS_DIR"])
@@ -212,14 +212,7 @@ class VisionArtifactCache:
                 # Check cache size limits and evict if needed
                 await self._enforce_size_limits()
                 
-                self.logger.info(
-                    "Artifact cached",
-                    hash=content_hash[:8],
-                    original_size=len(content),
-                    compressed_size=len(processed_content),
-                    format=file_format.value,
-                    discord_optimized=discord_optimized
-                )
+                self.logger.info(f"Artifact cached - hash: {content_hash[:8]}, original_size: {len(content)}, compressed_size: {len(processed_content)}, format: {file_format.value}, discord_optimized: {discord_optimized}")
                 
                 return content_hash
                 
@@ -364,9 +357,7 @@ class VisionArtifactCache:
         
         # TODO: Implement actual optimization with PIL/ffmpeg
         # For now, just return original content
-        self.logger.debug(
-            f"File optimization skipped (no image processing libs): {original_size} bytes"
-        )
+        self.logger.debug(f"File optimization skipped (no image processing libs): {original_size} bytes")
         
         return content, False
     
@@ -466,13 +457,7 @@ class VisionArtifactCache:
                 await self._enforce_size_limits()
                 
                 # Log stats
-                self.logger.debug(
-                    "Cache cleanup completed",
-                    total_files=self._stats.total_files,
-                    total_size_mb=round(self._stats.total_size_bytes / 1024 / 1024, 1),
-                    hit_rate=self._stats.hit_count / max(self._stats.hit_count + self._stats.miss_count, 1),
-                    expired_cleaned=expired_count
-                )
+                self.logger.debug(f"Cache cleanup completed - total_files: {self._stats.total_files}, total_size_mb: {round(self._stats.total_size_bytes / 1024 / 1024, 1)}, hit_rate: {self._stats.hit_count / max(self._stats.hit_count + self._stats.miss_count, 1):.2f}, expired_cleaned: {expired_count}")
                 
             except asyncio.CancelledError:
                 break

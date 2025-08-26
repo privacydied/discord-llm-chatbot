@@ -37,7 +37,7 @@ class VisionGateway:
     
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         self.config = config or load_config()
-        self.logger = logger.bind(component="vision_gateway")
+        self.logger = get_logger("vision.gateway")
         
         # Initialize unified adapter
         self.adapter = UnifiedVisionAdapter(self.config)
@@ -85,7 +85,11 @@ class VisionGateway:
             )
             
             # Submit through unified adapter
-            job_id, provider_name = await self.adapter.submit(request)
+            response = await self.adapter.submit(request)
+            
+            # Extract job details from VisionResponse
+            job_id = response.job_id
+            provider_name = response.provider.value
             
             # Track job metadata
             self.active_jobs[job_id] = {
@@ -108,6 +112,81 @@ class VisionGateway:
                     message=f"Submission failed: {e}",
                     user_message="Failed to start vision generation. Please try again."
                 )
+    
+    async def generate(self, request: VisionRequest) -> VisionResponse:
+        """
+        Direct generation method - submit job and wait for completion [CA]
+        
+        Args:
+            request: Vision generation request
+            
+        Returns:
+            VisionResponse with generated content
+            
+        Raises:
+            VisionError: On generation failure
+        """
+        try:
+            # Submit job
+            job_id = await self.submit_job(request)
+            
+            # Poll until completion
+            max_wait_seconds = 300  # 5 minutes timeout
+            poll_interval = 2.0  # Start with 2 second intervals
+            elapsed = 0
+            
+            while elapsed < max_wait_seconds:
+                status = await self.get_job_status(job_id)
+                if not status:
+                    raise VisionError(
+                        error_type=VisionErrorType.SYSTEM_ERROR,
+                        message="Lost track of job status",
+                        user_message="Generation tracking failed. Please try again."
+                    )
+                
+                if status.get("is_terminal", False):
+                    if status.get("state") == "completed":
+                        # Get final result
+                        result = await self.get_job_result(job_id)
+                        if result:
+                            return result
+                        else:
+                            raise VisionError(
+                                error_type=VisionErrorType.PROVIDER_ERROR,
+                                message="Job completed but no result available",
+                                user_message="Generation completed but result could not be retrieved."
+                            )
+                    else:
+                        # Job failed
+                        error_msg = status.get("progress_message", "Generation failed")
+                        raise VisionError(
+                            error_type=VisionErrorType.PROVIDER_ERROR,
+                            message=f"Generation failed: {error_msg}",
+                            user_message="Image generation failed. Please try again."
+                        )
+                
+                # Wait before next poll (exponential backoff)
+                await asyncio.sleep(poll_interval)
+                elapsed += poll_interval
+                poll_interval = min(poll_interval * 1.2, 10.0)  # Cap at 10 seconds
+            
+            # Timeout
+            await self.cancel_job(job_id)
+            raise VisionError(
+                error_type=VisionErrorType.TIMEOUT,
+                message=f"Generation timed out after {max_wait_seconds} seconds",
+                user_message="Image generation is taking too long. Please try again."
+            )
+            
+        except VisionError:
+            raise
+        except Exception as e:
+            self.logger.error(f"Unexpected error in generate(): {e}")
+            raise VisionError(
+                error_type=VisionErrorType.SYSTEM_ERROR,
+                message=f"Unexpected error: {e}",
+                user_message="An unexpected error occurred during generation."
+            )
     
     async def get_job_status(self, job_id: str) -> Optional[Dict[str, Any]]:
         """
@@ -133,7 +212,7 @@ class VisionGateway:
             return {
                 "job_id": job_id,
                 "state": self._map_status_to_state(status.status),
-                "progress_percent": status.progress_percent,
+                "progress_percentage": status.progress_percentage,
                 "progress_message": status.phase,
                 "estimated_cost": status.estimated_cost,
                 "actual_cost": status.actual_cost,
@@ -146,7 +225,7 @@ class VisionGateway:
             return {
                 "job_id": job_id,
                 "state": "failed", 
-                "progress_percent": 0,
+                "progress_percentage": 0,
                 "progress_message": f"Status check failed: {e}",
                 "is_terminal": True
             }
@@ -176,12 +255,13 @@ class VisionGateway:
             
             # Convert unified result to VisionResponse
             response = VisionResponse(
-                request_id=job_meta["request"].request_id,
-                provider=VisionProvider(result.provider_used.upper()) if result.provider_used else VisionProvider.TOGETHER,
-                result_urls=result.assets,
+                success=True,
+                job_id=job_id,
+                provider=VisionProvider(result.provider_used.lower()) if result.provider_used else VisionProvider.NOVITA,
+                model_used=result.metadata.get('model', 'unknown'),
+                artifacts=[Path(url) for url in result.assets] if result.assets else [],
                 processing_time_seconds=asyncio.get_event_loop().time() - job_meta["start_time"],
-                actual_cost=result.final_cost,
-                metadata=result.metadata
+                actual_cost=result.final_cost
             )
             
             # Clean up completed job
