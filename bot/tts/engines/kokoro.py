@@ -313,7 +313,15 @@ class KokoroONNXEngine(BaseEngine):
                 logger.info("Attempting KokoroDirect fallback path")
                 from bot.kokoro_direct_fixed import KokoroDirect  # local helper wrapper
                 kd = KokoroDirect(model_path=self.model_path, voices_path=self.voices_path)
-                out_path = kd.create(text, self.voice)
+                # We already applied lexicon above; pass text and disable autodiscovery to avoid duplicate tokenizer logs
+                out_path = kd.create(
+                    text=text,
+                    voice=self.voice,
+                    lang=self.language,
+                    speed=1.0,
+                    logger=logger,
+                    disable_autodiscovery=True,
+                )
                 try:
                     from pathlib import Path as _P
                     if isinstance(out_path, _P) and out_path.exists():
