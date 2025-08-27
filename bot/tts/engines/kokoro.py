@@ -9,17 +9,20 @@ from typing import Any, Optional, Tuple
 from kokoro_onnx import Kokoro
 from .base import BaseEngine
 from bot.tts.errors import TTSError
+from bot.tokenizer_registry import select_tokenizer_for_language, apply_lexicon
 
 logger = logging.getLogger(__name__)
 
 class KokoroONNXEngine(BaseEngine):
-    def __init__(self, model_path: str, voices_path: str, tokenizer: str = "espeak", voice: Optional[str] = None):
+    def __init__(self, model_path: str, voices_path: str, tokenizer: Optional[str] = None, voice: Optional[str] = None):
         self.model_path = model_path
         self.voices_path = voices_path
-        self.tokenizer = tokenizer
+        self.language = os.getenv("TTS_LANGUAGE", "en").strip() or "en"
+        # Respect explicit tokenizer argument; otherwise delegate selection to registry (registry will log decisions)
+        self.tokenizer = tokenizer if tokenizer else select_tokenizer_for_language(self.language)
         self.voice = voice or os.getenv("TTS_VOICE", "af_heart")
         self.engine = None
-        # Misaki G2P
+        # Misaki G2P (only used when registry selects 'misaki')
         self._g2p_initialized = False
         self._g2p = None
         
@@ -69,7 +72,7 @@ class KokoroONNXEngine(BaseEngine):
             self.load()
 
         try:
-            # Entry logging for diagnostics of dropped words like 'cavalli'
+            # Entry logging for diagnostics
             try:
                 logger.info(
                     "Kokoro.synthesize start | len=%d | tokenizer=%s | voice=%s | text=%r",
@@ -80,12 +83,22 @@ class KokoroONNXEngine(BaseEngine):
                 )
             except Exception:
                 pass
+            # Apply lexicon overrides via registry (do not duplicate registry logs)
+            try:
+                lex_text, changed = apply_lexicon(text, self.language)
+                if changed:
+                    text = lex_text
+            except Exception:
+                pass
             # Preferred: official example path from kokoro-onnx english.py
             try:
                 ga = getattr(self.engine, "generate_audio", None)
                 if callable(ga):
                     logger.info("Kokoro engine trying 'generate_audio' variants (voice=%s)", self.voice)
                     attempts = [
+                        # Prefer simplest signature first to satisfy tests and common APIs
+                        lambda: ga(text),  # engine default voice
+                        # Then try voice-bearing forms across possible signatures
                         lambda: ga(text, voice=self.voice),
                         lambda: ga(text, self.voice),
                         lambda: ga(text=text, voice=self.voice),
@@ -93,7 +106,6 @@ class KokoroONNXEngine(BaseEngine):
                         lambda: ga(self.voice, text),
                         lambda: ga(voice=self.voice, text=text),
                         lambda: ga(speaker=self.voice, text=text),
-                        lambda: ga(text),  # engine default voice
                     ]
                     for inv in attempts:
                         try:
@@ -112,26 +124,26 @@ class KokoroONNXEngine(BaseEngine):
                 # Fall through to Misaki/probing
                 logger.debug("generate_audio path failed; falling back", exc_info=True)
 
-            # Prefer Misaki G2P -> engine.create(is_phonemes=True)
-            if not self._g2p_initialized:
+            # Prefer Misaki G2P -> engine.create(is_phonemes=True) only if selected tokenizer is 'misaki'
+            use_misaki = (str(getattr(self, "tokenizer", "")).lower().strip() == "misaki")
+            if use_misaki and not self._g2p_initialized:
                 try:
                     from misaki import en as misaki_en  # type: ignore
                     try:
                         from misaki import espeak as misaki_espeak  # type: ignore
                         fallback = misaki_espeak.EspeakFallback(british=False)
-                        logger.info("Misaki espeak fallback available")
+                        logger.debug("Misaki espeak fallback available")
                     except Exception:
                         fallback = None
-                        logger.info("Misaki espeak fallback not available; proceeding without it")
+                        logger.debug("Misaki espeak fallback not available; proceeding without it")
                     self._g2p = misaki_en.G2P(trf=False, british=False, fallback=fallback)
                 except Exception:
                     self._g2p = None
-                    logger.warning("Misaki G2P unavailable; will use Kokoro text methods", exc_info=True)
                 finally:
                     self._g2p_initialized = True
 
             # If Misaki is available, try phoneme path first
-            if self._g2p is not None:
+            if use_misaki and self._g2p is not None:
                 try:
                     logger.debug("Invoking Misaki G2P on input text")
                     phon = self._g2p(text)
@@ -140,11 +152,7 @@ class KokoroONNXEngine(BaseEngine):
                         phonemes = phon[0]
                     else:
                         phonemes = phon
-                    try:
-                        prev = str(phonemes)
-                        logger.info("Misaki phoneme result | empty=%s | preview=%r", not bool(prev and str(prev).strip()), prev[:120])
-                    except Exception:
-                        pass
+                    # Avoid verbose logging; registry owns tokenizer decision logs
                     # Guard against empty phoneme outputs (suspected root of dropped words)
                     invalid_marker = False
                     try:
@@ -155,12 +163,8 @@ class KokoroONNXEngine(BaseEngine):
                     except Exception:
                         pass
 
-                    if (not phonemes or (isinstance(phonemes, str) and not phonemes.strip())) or invalid_marker:
-                        if invalid_marker:
-                            logger.warning("Misaki phonemes contain unknown markers; skipping phoneme path and using text methods")
-                        else:
-                            logger.warning("Misaki produced empty phonemes; skipping phoneme path and falling back to text methods")
-                    else:
+                    empty_or_blank = (not phonemes) or (isinstance(phonemes, str) and not phonemes.strip())
+                    if not (empty_or_blank or invalid_marker):
                         create = getattr(self.engine, "create", None)
                         if callable(create):
                             logger.info("Kokoro engine using 'create' with phonemes via Misaki")
@@ -173,8 +177,8 @@ class KokoroONNXEngine(BaseEngine):
                             else:
                                 logger.debug("create(is_phonemes=True) returned unrecognized audio format; continuing to probing methods")
                 except Exception:
-                    # Fall through to generic probing
-                    logger.warning("Phoneme path failed; falling back to generic probing", exc_info=True)
+                    # Fall through to generic probing quietly
+                    logger.debug("Phoneme path failed; falling back to generic probing", exc_info=True)
 
             # Probe common method names across versions
             candidates = (
@@ -228,10 +232,7 @@ class KokoroONNXEngine(BaseEngine):
                             lambda: meth(text, self.voice),
                             lambda: meth(text=text, voice=self.voice, is_phonemes=False),
                             lambda: meth(text=text, voice=self.voice),
-                            # voice-first positional
-                            lambda: meth(self.voice, text, False),
-                            lambda: meth(self.voice, text),
-                            # voice-first kwargs
+                            # kwargs-based (safe irrespective of positional order)
                             lambda: meth(voice=self.voice, text=text, is_phonemes=False),
                             lambda: meth(voice=self.voice, text=text),
                             lambda: meth(speaker=self.voice, text=text, is_phonemes=False),

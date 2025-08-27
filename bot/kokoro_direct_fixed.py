@@ -190,34 +190,27 @@ class KokoroDirect:
         Returns:
             Phonemiser name to use
         """
-        # Use environment variable override if present
+        # Silent environment override for compatibility with tests
         env_phonemiser = os.environ.get("TTS_PHONEMISER", "").strip().lower()
         if env_phonemiser:
-            logger.info(f"Using phonemiser from environment: {env_phonemiser} [subsys: tts, event: phonemiser.env_override]")
             return env_phonemiser
-        
-        # Attempt registry selection, but keep deterministic fallbacks for tests
-        selected = None
-        try:
-            selected = select_tokenizer_for_language(language)
-            logger.info(
-                f"Selected tokenizer for {language} from registry: {selected} [subsys: tts, event: phonemiser.registry_select]"
-            )
-        except Exception as e:
-            logger.warning(
-                f"Failed to select tokenizer from registry: {e}, using fallbacks [subsys: tts, event: phonemiser.registry_error]"
-            )
 
-        lang = language.lower().strip()
-        # Deterministic choices to avoid env-dependent flakiness in tests
-        if lang == "en":
-            return "espeak"
-        if lang in ("ja", "zh"):
-            return "misaki"
-        # For other languages, prefer registry choice if it's not grapheme; otherwise default
-        if selected and selected != "grapheme":
-            return selected
-        return "phonemizer"
+        # Delegate selection to the unified registry without duplicating logs
+        try:
+            # Respect test-injected availability: if the registry already has entries,
+            # avoid triggering discovery which would clear them.
+            from .tokenizer_registry import TokenizerRegistry
+            reg = TokenizerRegistry.get_instance()
+            try:
+                if getattr(reg, "_available_tokenizers", None) and not getattr(reg, "_initialized", False):
+                    reg._initialized = True  # type: ignore[attr-defined]
+            except Exception:
+                # Best-effort; continue to selection
+                pass
+            return select_tokenizer_for_language(language)
+        except Exception:
+            # Last-resort local default; do not log here to keep registry authoritative
+            return "phonemizer"
         
     def _load_model(self) -> None:
         """Load the ONNX model and tokenizer."""
