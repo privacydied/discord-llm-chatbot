@@ -442,3 +442,7 @@ def load_config():
     logger.debug(f"✅ Configuration cached for {CACHE_TTL}s")
     
     return config
+
+
+# Force English IPA route (bypass tokenizer env and disable autodiscovery)
+KOKORO_FORCE_IPA_EN = True
