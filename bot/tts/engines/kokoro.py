@@ -13,6 +13,12 @@ from bot.tokenizer_registry import select_tokenizer_for_language, apply_lexicon
 
 logger = logging.getLogger(__name__)
 
+def _looks_like_ipa(s: str) -> bool:
+    """Detect if input text appears to be IPA phonemes rather than plain text."""
+    # Minimal heuristic: any "obvious IPA" characters trigger phoneme mode
+    ipa_markers = set("ɑɒəɜɪʊθðʃʒŋˈˌːɾʔɹɱ̃")
+    return any(ch in ipa_markers for ch in s)
+
 class KokoroONNXEngine(BaseEngine):
     def __init__(self, model_path: str, voices_path: str, tokenizer: Optional[str] = None, voice: Optional[str] = None):
         self.model_path = model_path
@@ -308,20 +314,37 @@ class KokoroONNXEngine(BaseEngine):
             except Exception:
                 pass
 
-            # Final fallback: use our direct integration wrapper if available
+            # Final fallback: use our direct integration wrapper with registry decisions
             try:
-                logger.info("Attempting KokoroDirect fallback path")
+                logger.debug("Attempting KokoroDirect fallback with registry decisions")
                 from bot.kokoro_direct_fixed import KokoroDirect  # local helper wrapper
+                from bot.tokenizer_registry import select_for_language
                 kd = KokoroDirect(model_path=self.model_path, voices_path=self.voices_path)
-                # We already applied lexicon above; pass text and disable autodiscovery to avoid duplicate tokenizer logs
-                out_path = kd.create(
-                    text=text,
-                    voice=self.voice,
-                    lang=self.language,
-                    speed=1.0,
-                    logger=logger,
-                    disable_autodiscovery=True,
-                )
+                
+                # Get registry decision for this text and language
+                decision = select_for_language(self.language, text)
+                
+                if decision.mode == "phonemes":
+                    # PHONEME PATH — use registry phonemes directly
+                    logger.debug(f"Using registry phonemes from {decision.alphabet} tokenizer")
+                    out_path = kd.create(
+                        phonemes=decision.payload,
+                        voice=self.voice,
+                        lang=self.language,
+                        disable_autodiscovery=True,
+                        logger=logger,
+                    )
+                else:
+                    # GRAPHEME PATH — use quiet grapheme tokenization
+                    logger.debug(f"Using grapheme path with {decision.alphabet} text")
+                    out_path = kd.create(
+                        text=decision.payload,
+                        voice=self.voice,
+                        lang=self.language,
+                        disable_autodiscovery=True,
+                        logger=logger,
+                    )
+                
                 try:
                     from pathlib import Path as _P
                     if isinstance(out_path, _P) and out_path.exists():
@@ -344,22 +367,34 @@ class KokoroONNXEngine(BaseEngine):
             raise TTSError(f"Synthesis failed: {e}") from e
 
     def _normalize_audio_to_wav_bytes(self, data: Any) -> bytes | None:
-        """Attempt to convert various audio outputs to WAV bytes.
-        Supports bytes, bytearray, numpy arrays, and (audio, sr) or (sr, audio) tuples.
-        Returns None if the format is unrecognized.
+        """Ensure 16-bit PCM WAV regardless of input format.
+        
+        Converts various audio formats to standardized 16-bit PCM WAV
+        with proper peak normalization for clean, consistent output.
         """
+        import io
+        import soundfile as sf
+        import numpy as np
+
+        # Handle different input types
         if isinstance(data, (bytes, bytearray)):
-            return bytes(data)
-
-        # Direct BytesIO
-        if isinstance(data, io.BytesIO):
+            # Already bytes, try to read as WAV
             try:
-                return data.getvalue()
+                y, sr = sf.read(io.BytesIO(data), always_2d=False, dtype="float32")
             except Exception:
-                pass
+                return bytes(data)  # Return as-is if we can't read it
 
-        # Dict outputs e.g., {audio: ..., sr: 24000}
-        if isinstance(data, dict):
+        elif isinstance(data, io.BytesIO):
+            try:
+                y, sr = sf.read(data, always_2d=False, dtype="float32")
+            except Exception:
+                try:
+                    return data.getvalue()
+                except Exception:
+                    return None
+
+        elif isinstance(data, dict):
+            # Dict outputs e.g., {audio: ..., sr: 24000}
             audio = None
             sr = None
             for k in ("audio", "samples", "pcm", "wav", "waveform"):
@@ -370,127 +405,107 @@ class KokoroONNXEngine(BaseEngine):
                 if k in data:
                     sr = data[k]
                     break
-            if audio is not None:
-                # Recurse normalize with tuple so below logic can handle
-                return self._normalize_audio_to_wav_bytes((audio, sr) if sr is not None else audio)
+            if audio is None:
+                return None
+            y, sr = audio, sr or 24000
 
-        # Lazy import numpy to avoid hard dependency if not present
-        try:
-            import numpy as np  # type: ignore
-        except Exception:
-            np = None  # type: ignore
-
-        sr = getattr(self.engine, "sample_rate", None)
-        audio = None
-
-        # Tuple formats: (audio, sr) or (sr, audio)
-        if isinstance(data, tuple) and len(data) == 2:
+        elif isinstance(data, tuple) and len(data) == 2:
+            # Tuple formats: (audio, sr) or (sr, audio)
             a, b = data
             if isinstance(a, (int, float)):
-                sr, audio = a, b
+                sr, audio = int(a), b
             else:
-                audio, sr = a, b
+                audio, sr = a, b or 24000
+            y, sr = audio, sr
 
-        # Numpy array directly
-        if audio is None:
-            audio = data
-
-        # array.array("h") case
-        if isinstance(audio, pyarray.array) and audio.typecode == 'h':
-            sr_eff = int(sr) if sr else 24000
-            with io.BytesIO() as buf:
-                with wave.open(buf, 'wb') as wf:
-                    wf.setnchannels(1)
-                    wf.setsampwidth(2)
-                    wf.setframerate(sr_eff)
-                    wf.writeframes(audio.tobytes())
-                return buf.getvalue()
-
-        if np is not None and isinstance(audio, np.ndarray):  # type: ignore
-            # Handle float arrays correctly by scaling to int16 PCM range
+        elif isinstance(data, (str, Path)):
+            # File path
             try:
-                arr = audio
-                if np.issubdtype(arr.dtype, np.floating):  # type: ignore
-                    arr = np.clip(arr, -1.0, 1.0)
-                    arr = (arr * 32767.0).astype(np.int16, copy=False)
-                else:
-                    # For integer arrays, clip to int16 range if needed
-                    if arr.dtype != np.int16:  # type: ignore
-                        arr = np.clip(arr, -32768, 32767).astype(np.int16, copy=False)
-                    else:
-                        arr = arr.astype(np.int16, copy=False)
-            except Exception:
-                # Fallback scaling path
-                try:
-                    arr = (audio.clip(-1.0, 1.0) * 32767.0).astype(np.int16)  # type: ignore
-                except Exception:
-                    try:
-                        arr = audio.astype(np.int16)  # type: ignore
-                    except Exception:
-                        return None
-
-            # If multi-channel, mix down to mono safely
-            if getattr(arr, 'ndim', 1) > 1:
-                try:
-                    arr = arr.astype(np.int32, copy=False).mean(axis=-1).astype(np.int16)
-                except Exception:
-                    arr = arr[:, 0].astype(np.int16, copy=False)
-
-            sr_eff = int(sr) if sr else 24000
-            with io.BytesIO() as buf:
-                with wave.open(buf, 'wb') as wf:
-                    wf.setnchannels(1)
-                    wf.setsampwidth(2)
-                    wf.setframerate(sr_eff)
-                    wf.writeframes(arr.tobytes())
-                return buf.getvalue()
-
-        # Pydub AudioSegment
-        try:
-            from pydub import AudioSegment  # type: ignore
-            if isinstance(audio, AudioSegment):
-                with io.BytesIO() as buf:
-                    audio.export(buf, format='wav')
-                    return buf.getvalue()
-        except Exception:
-            pass
-
-        # Fallback: handle list/tuple of numbers when numpy is unavailable
-        if isinstance(audio, (list, tuple)) and audio and isinstance(audio[0], (int, float)):
-            # Convert to int16 PCM
-            def _to_int16(x: float | int) -> int:
-                if isinstance(x, float):
-                    x = max(-1.0, min(1.0, x))
-                    return int(x * 32767.0)
-                # assume already in int range
-                return int(x)
-
-            pcm = bytes()
-            try:
-                pcm = b"".join(int(_to_int16(v)).to_bytes(2, byteorder="little", signed=True) for v in audio)  # type: ignore
+                y, sr = sf.read(str(data), always_2d=False, dtype="float32")
             except Exception:
                 return None
 
-            sr_eff = int(sr) if sr else 24000
-            with io.BytesIO() as buf:
-                with wave.open(buf, 'wb') as wf:
-                    wf.setnchannels(1)
-                    wf.setsampwidth(2)
-                    wf.setframerate(sr_eff)
-                    wf.writeframes(pcm)
-                return buf.getvalue()
+        else:
+            # Assume it's already audio data
+            y = data
+            sr = getattr(self.engine, "sample_rate", None) or 24000
 
-        # If data is a file path to wav/pcm, read it
-        if isinstance(data, (str, Path)):
+        # Convert to numpy array if needed
+        if not isinstance(y, np.ndarray):
             try:
-                p = Path(data)
-                if p.exists() and p.is_file():
-                    with p.open('rb') as f:
-                        return f.read()
+                y = np.array(y, dtype=np.float32)
             except Exception:
-                pass
+                return None
 
-        return None
+        # Ensure we have valid audio data
+        if y.size == 0:
+            return None
+
+        # Light peak normalization to -1 dBFS (avoids clipping while maximizing loudness)
+        peak = float(np.max(np.abs(y)))
+        if peak > 0:
+            y = y * (0.8912509381337456 / peak)  # 10 ** (-1/20)
+
+        # Convert to int16 PCM
+        y_int16 = (np.clip(y, -1.0, 1.0) * 32767.0).astype(np.int16)
+
+        # Mix down to mono if multi-channel
+        if y_int16.ndim > 1:
+            y_int16 = y_int16.mean(axis=-1).astype(np.int16)
+
+        # Create WAV
+        buf = io.BytesIO()
+        sf.write(buf, y_int16, int(sr), format="WAV", subtype="PCM_16")
+        return buf.getvalue()
+
+    def _resample_for_discord_voice(self, wav_bytes: bytes) -> bytes:
+        """Resample WAV audio to 48kHz int16 PCM for Discord voice streaming.
+        
+        Discord voice channels expect 48kHz sample rate. This method
+        resamples any WAV audio to 48kHz with proper peak normalization.
+        """
+        import io
+        import soundfile as sf
+        import numpy as np
+        from scipy.signal import resample_poly
+
+        try:
+            # Read the WAV data
+            y, sr = sf.read(io.BytesIO(wav_bytes), always_2d=False, dtype="float32")
+            
+            if sr == 48000:
+                # Already at correct sample rate
+                return wav_bytes
+            
+            # Resample to 48kHz
+            if sr != 48000:
+                # Calculate resampling ratio
+                up, down = 48000, sr
+                # Simplify the fraction
+                from math import gcd
+                g = gcd(up, down)
+                up //= g
+                down //= g
+                
+                # Resample using polyphase filter
+                y = resample_poly(y, up, down)
+            
+            # Light peak normalization to -1 dBFS
+            peak = float(np.max(np.abs(y)))
+            if peak > 0:
+                y = y * (0.8912509381337456 / peak)
+            
+            # Convert to int16 PCM
+            y_int16 = (np.clip(y, -1.0, 1.0) * 32767.0).astype(np.int16)
+            
+            # Create new WAV at 48kHz
+            buf = io.BytesIO()
+            sf.write(buf, y_int16, 48000, format="WAV", subtype="PCM_16")
+            return buf.getvalue()
+            
+        except Exception as e:
+            logger.warning(f"Failed to resample audio for Discord voice: {e}")
+            return wav_bytes  # Return original if resampling fails
 
 # Backward-compatible alias for legacy imports/tests
 # Some tests/modules import KokoroEngine; maintain that name.
