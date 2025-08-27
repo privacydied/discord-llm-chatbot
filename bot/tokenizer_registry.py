@@ -616,6 +616,32 @@ class TokenizerRegistry:
         else:
             raise Exception(f"Unsupported tokenizer: {tokenizer}")
 
+# Minimal ARPAbet -> IPA (covers core English; extend as needed)
+ARPABET_TO_IPA = {
+    "AA":"ɑ", "AE":"æ", "AH":"ʌ", "AO":"ɔ", "AW":"aʊ", "AY":"aɪ",
+    "B":"b", "CH":"t͡ʃ", "D":"d", "DH":"ð",
+    "EH":"ɛ", "ER":"ɝ", "EY":"eɪ", "F":"f", "G":"ɡ", "HH":"h",
+    "IH":"ɪ", "IY":"i", "JH":"d͡ʒ", "K":"k", "L":"l", "M":"m",
+    "N":"n", "NG":"ŋ", "OW":"oʊ", "OY":"ɔɪ", "P":"p", "R":"ɹ",
+    "S":"s", "SH":"ʃ", "T":"t", "TH":"θ", "UH":"ʊ", "UW":"u",
+    "V":"v", "W":"w", "Y":"j", "Z":"z", "ZH":"ʒ"
+}
+
+def arpabet_to_ipa(seq):
+    """
+    Convert a sequence of ARPAbet tokens (possibly with stress digits, e.g. 'IH1')
+    into an IPA string separated by spaces.
+    Example input: ['K', 'AW1', 'N', 'T', 'IH1', 'NG']
+    Output: 'k aʊ n t ɪ ŋ'
+    """
+    out = []
+    for s in seq:
+        if not s or s.isspace():
+            continue
+        base = ''.join(ch for ch in s if not ch.isdigit()).upper()
+        out.append(ARPABET_TO_IPA.get(base, base.lower()))
+    return " ".join(out)
+
 def discover_tokenizers(force: bool = False) -> Dict[str, bool]:
     """
     Discover available tokenizers using the registry singleton.
