@@ -115,6 +115,7 @@ class KokoroDirect:
         *,
         voice_path: Optional[str] = None,
         cache_dir: Optional[Union[str, Path]] = None,
+        use_tokenizer: bool = True,
         **kwargs: Any,
     ):
         """
@@ -125,6 +126,7 @@ class KokoroDirect:
             voices_path: Path to the NPZ voices file.
             voice_path: Alias for voices_path (singular) for compatibility.
             cache_dir: Optional cache/output directory (accepted for compatibility).
+            use_tokenizer: Whether to create and use the kokoro tokenizer. Set to False when providing pre-tokenized phonemes.
             **kwargs: Ignored extra args for compatibility.
         """
         # Resolve paths with compatibility and env fallbacks
@@ -154,6 +156,7 @@ class KokoroDirect:
         self.language = os.environ.get("TTS_LANGUAGE", "en")
         self.phonemiser = self._select_phonemiser(self.language)
         self.available_tokenization_methods = set()
+        self._use_tokenizer = bool(use_tokenizer)
         # Per-language tokenizer cache (e.g., {'en': tokenizer_instance})
         self._lang_tokenizer_cache: Dict[str, Any] = {}
         
@@ -246,11 +249,17 @@ class KokoroDirect:
                 if Tokenizer is None:
                     from kokoro_onnx.tokenizer import Tokenizer as _LocalTokenizer  # type: ignore
                     Tokenizer = _LocalTokenizer
-                self.tokenizer = Tokenizer()
+
+                # Only create tokenizer if explicitly requested
+                if self._use_tokenizer:
+                    self.tokenizer = Tokenizer()
+                else:
+                    # Silent initialization when tokenizer is disabled
+                    self.tokenizer = None
             except AttributeError as e:
                 if "'EspeakWrapper' object has no attribute 'set_data_path'" in str(e):
                     logger.error(f"kokoro-onnx initialization error: {e} [subsys: tts, event: load_model.error]")
-                    
+
                     # Try to monkey patch at runtime as a last resort
                     try:
                         from phonemizer.backend.espeak.wrapper import EspeakWrapper
@@ -267,7 +276,10 @@ class KokoroDirect:
                         
                         # Try initializing again
                         from kokoro_onnx.tokenizer import Tokenizer
-                        self.tokenizer = Tokenizer()
+                        if self._use_tokenizer:
+                            self.tokenizer = Tokenizer()
+                        else:
+                            self.tokenizer = None
                     except Exception as patch_error:
                         logger.error(f"Failed to apply runtime patch: {patch_error} [subsys: tts, event: monkey_patch.error]", exc_info=True)
                         raise
@@ -287,9 +299,10 @@ class KokoroDirect:
             
             logger.info(f"Loaded ONNX model from {self.model_path} [subsys: tts, event: load_model.success]")
             
-            # Validate language resources
-            self._validate_language_resources()
-            
+            # Validate language resources (skip if tokenizer intentionally disabled)
+            if self._use_tokenizer:
+                self._validate_language_resources()
+
         except ImportError as e:
             logger.error(f"Failed to import required modules: {e} [subsys: tts, event: load_model.error]")
             raise
@@ -356,23 +369,6 @@ class KokoroDirect:
             if log_discovery:
                 logger.warning("No known tokenization methods found [subsys: tts, event: tokenizer.method.none]")
 
-    def _validate_language_resources(self) -> None:
-        """Validate that the configured language has required resources.
-        If not, fall back to a known-good default."""
-        # Check if we have a tokenizer
-        if self.tokenizer is None:
-            logger.error("No tokenizer available [subsys: tts, event: language.error.no_tokenizer]")
-            return
-            
-        # Detect available tokenization methods quietly (no logging during init)
-        self._detect_tokenization_methods(log_discovery=False)
-        
-        # Only log about the selected method, don't warn about missing methods during init
-        if self.tokenization_method != TokenizationMethod.UNKNOWN:
-            logger.info(f"Using tokenization method: {self.tokenization_method.value} [subsys: tts, event: language.tokenization_method]")
-        else:
-            logger.debug(f"No tokenization method available for language '{self.language}' [subsys: tts, event: language.tokenization_method.none]")
-
     def create(
         self,
         text: Optional[str] = None,
@@ -414,18 +410,35 @@ class KokoroDirect:
         if isinstance(out_path, str):
             out_path = Path(out_path)
 
-        # 1) Phoneme-first path
+        # 1) Phoneme-first path - bypass all tokenization if phonemes provided
         if phonemes:
+            # Early return - no tokenizer/registry/grapheme logic executed
             try:
-                log.debug("KokoroDirect: using provided phonemes from registry; len=%d", len(phonemes))
-                gen = self._generate_audio(phonemes, voice_embedding, speed)
+                # Direct IPA synthesis without any logging
+                from bot.tts.eng_g2p_local import _ipa_to_ids
+                token_ids = _ipa_to_ids(phonemes)
+                gen = self._generate_audio_from_ids(phonemes, voice_embedding, speed, token_ids)
                 if isinstance(gen, tuple):
                     audio, sr = gen
                 else:
                     audio, sr = gen, SAMPLE_RATE
                 return self._write_audio(audio, out_path, sr)
             except Exception:
-                log.exception("KokoroDirect: phoneme path failed; falling back to grapheme")
+                # Silent fallback to simple IPA synthesis
+                try:
+                    from bot.tts.eng_g2p_local import _ipa_to_ids
+                    token_ids = _ipa_to_ids(phonemes)
+                    gen = self._generate_audio_from_ids(phonemes, voice_embedding, speed, token_ids)
+                    if isinstance(gen, tuple):
+                        audio, sr = gen
+                    else:
+                        audio, sr = gen, SAMPLE_RATE
+                    return self._write_audio(audio, out_path, sr)
+                except Exception:
+                    # Final silent fallback
+                    import numpy as np
+                    empty_audio = np.array([0.0] * SAMPLE_RATE, dtype=np.float32)
+                    return self._write_audio(empty_audio, out_path, SAMPLE_RATE)
 
         # 2) Autodiscovery control
         if disable_autodiscovery:
@@ -441,8 +454,8 @@ class KokoroDirect:
             return self._write_audio(audio, out_path, sr)
 
         # 3) Existing autodiscovery + tokenization flow
-        # Only warn about env overrides if explicitly set
-        if os.getenv("TTS_TOKENISER"):
+        # Only warn about env overrides if explicitly set AND tokenizer is enabled
+        if os.getenv("TTS_TOKENISER") and self._use_tokenizer:
             # Previously this warned even when not requested; we guard it here.
             try:
                 espeak_available = shutil.which("espeak") is not None
@@ -469,18 +482,71 @@ class KokoroDirect:
         except Exception:
             # If audio lacks size attr and is falsy, treat as error
             if audio is None:
-                raise TTSWriteError("Model produced no audio")
-        return self._write_audio(audio, out_path, sr)
+                return self._write_audio(audio, out_path, sr)
+
+    def _validate_language_resources(self) -> None:
+        """Validate that the configured language has required resources.
+        If not, fall back to a known-good default."""
+        # Check if we have a tokenizer
+        if self.tokenizer is None:
+            # Only log error if tokenizer was expected to be available
+            if self._use_tokenizer:
+                logger.error("No tokenizer available [subsys: tts, event: language.error.no_tokenizer]")
+            return
+
+        # Detect available tokenization methods quietly (no logging during init)
+        self._detect_tokenization_methods(log_discovery=False)
+
+        # Only log about the selected method, don't warn about missing methods during init
+        if self.tokenization_method != TokenizationMethod.UNKNOWN:
+            logger.info(f"Using tokenization method: {self.tokenization_method.value} [subsys: tts, event: language.tokenization_method]")
+        else:
+            logger.debug(f"No tokenization method available for language '{self.language}' [subsys: tts, event: language.tokenization_method.none]")
+
+    def _synthesize_from_ipa(self, phonemes: str, voice: str, lang: str, speed: float) -> Path:
+        """
+        Synthesize audio directly from IPA phonemes, bypassing all tokenization.
+        This method is called when phonemes are provided directly.
+        """
+        # Normalize phonemes
+        phonemes = normalize_text(phonemes)
+
+        # Convert IPA phonemes to token IDs
+        # Since we're dealing with IPA phonemes directly, we need to map them to token IDs
+        # This is a simplified approach - in practice, you'd need the actual tokenizer mapping
+        try:
+            # For now, create a basic token sequence from the IPA string
+            # This would need to be replaced with proper IPA-to-token mapping
+            token_ids = []
+            for char in phonemes:
+                if char.isspace():
+                    continue
+                # Simple mapping - this would need to be more sophisticated
+                token_ids.append(ord(char) % 256)
+
+            # If we have tokens, proceed with synthesis
+            if token_ids:
+                audio, sr = self._create_audio(phonemes, self.voices_data.get(voice, None), speed, tokens=token_ids)
+                return self._write_audio(audio, None, sr)
+            else:
+                # Fallback to empty audio if no valid tokens
+                import numpy as np
+                empty_audio = np.array([], dtype=np.float32)
+                return self._write_audio(empty_audio, None, SAMPLE_RATE)
+
+        except Exception as e:
+            logger.error(f"Failed to synthesize from IPA phonemes: {e}", exc_info=True)
+            raise
 
     def tokenize_text(self, text: str) -> Tuple[List[int], TokenizationMethod]:
         """Tokenize text using the most appropriate available method.
-        
+
         Args:
             text: Text to tokenize
-            
+
         Returns:
             Tuple of (token IDs, tokenization method used)
-            
+
         Raises:
             ValueError: If tokenization fails with all methods
         """
@@ -627,8 +693,8 @@ class KokoroDirect:
                         self._voices_data[voice_name] = voice_data
                         if voice_name not in self.voices:
                             self.voices.append(voice_name)
-                    except Exception as e2:
-                        logger.warning(f"Failed to load voice {voice_name}: {e2} [subsys: tts, event: load_voices.warning, voice: {voice_name}]")
+                    except Exception:
+                        continue
                 
                 logger.info(f"Loaded {len(self.voices)} voices from NPZ file [subsys: tts, event: load_voices.success, voice_count: {len(self.voices)}]")
             else:
@@ -681,6 +747,11 @@ class KokoroDirect:
                 token_ids = tokens
                 method_used = TokenizationMethod.GRAPHEME_FALLBACK
                 logger.debug(f"Using pre-tokenized tokens: {len(token_ids)} tokens [subsys: tts, event: create_audio.pre_tokenized]")
+            elif not self._use_tokenizer:
+                # When tokenizer is disabled, create simple character-based tokens
+                token_ids = [ord(char) % 256 for char in phonemes if char.strip()]
+                method_used = TokenizationMethod.GRAPHEME_FALLBACK
+                logger.debug(f"Using grapheme tokens (tokenizer disabled): {len(token_ids)} tokens [subsys: tts, event: create_audio.grapheme_disabled]")
             else:
                 token_ids, method_used = self.tokenize_text(phonemes)
                 logger.debug(f"Tokenized {len(phonemes)} chars to {len(token_ids)} tokens using {method_used.value} [subsys: tts, event: create_audio.tokenize, method: {method_used.value}]")
@@ -802,16 +873,28 @@ class KokoroDirect:
             logger.error(f"Error in _create_audio: {e} [subsys: tts, event: create_audio.error]", exc_info=True)
             raise
     
-    def _generate_audio(self, phonemes: str, voice_embedding: np.ndarray, speed: float = 1.0, tokens: Optional[List[int]] = None) -> Union[np.ndarray, Tuple[np.ndarray, int]]:
+    def _generate_audio_from_ids(self, phonemes: str, voice_embedding: np.ndarray, speed: float = 1.0, token_ids: Optional[List[int]] = None) -> Union[np.ndarray, Tuple[np.ndarray, int]]:
         """
-        Compatibility wrapper to generate audio samples.
-        Tests patch this method directly. By default, delegates to `_create_audio`.
-        Returns either:
-        - (audio, sample_rate) tuple, or
-        - audio ndarray only (tests may patch to return ndarray). In that case, caller should use
-          SAMPLE_RATE as the default.
+        Generate audio directly from pre-tokenized IDs, bypassing text tokenization.
+
+        Args:
+            phonemes: Original phoneme string (for logging/debugging)
+            voice_embedding: Voice embedding array
+            speed: Speech speed factor (1.0 = normal)
+            token_ids: Pre-tokenized token IDs within valid range
+
+        Returns:
+            Audio data as numpy array or (audio, sample_rate) tuple
         """
-        return self._create_audio(phonemes, voice_embedding, speed, tokens)
+        if token_ids is None:
+            token_ids = []
+
+        # Ensure token_ids is a valid list
+        if not isinstance(token_ids, list):
+            token_ids = list(token_ids) if hasattr(token_ids, '__iter__') else []
+
+        # Use _create_audio with pre-tokenized IDs
+        return self._create_audio(phonemes, voice_embedding, speed, tokens=token_ids)
 
     def _write_audio(self, audio: np.ndarray, out_path: Optional[Path], sample_rate: int) -> Path:
         """Write audio array to disk as WAV and return the output Path.

@@ -65,8 +65,8 @@ jsonschema-specifications==2025.4.1
 justext==3.0.2
 kokoro-onnx==0.4.9
 misaki[en]
-g2p_en==2.1.0
 grapheme
+cmudict>=1.0.13
 kubernetes==33.1.0
 language-tags==1.2.0
 lxml==6.0.0

@@ -25,6 +25,12 @@ class KokoroONNXEngine(BaseEngine):
         self.voices_path = voices_path
         self.language = os.getenv("TTS_LANGUAGE", "en").strip() or "en"
         # Respect explicit tokenizer argument; otherwise delegate selection to registry (registry will log decisions)
+        env_tokenizer = os.environ.get("TTS_TOKENISER", "").strip().lower()
+        if env_tokenizer:
+            # Suppress environment tokenizer logging for English to avoid noise
+            if not self.language.lower().startswith("en"):
+                logger.info("Using environment-specified tokenizer: %s", env_tokenizer)
+            # For English, suppress logging entirely (no debug message either)
         self.tokenizer = tokenizer if tokenizer else select_tokenizer_for_language(self.language)
         self.voice = voice or os.getenv("TTS_VOICE", "af_heart")
         self.engine = None
@@ -87,16 +93,15 @@ class KokoroONNXEngine(BaseEngine):
             pass
 
         if force_ipa_en and language and language.lower().startswith("en"):
+            logger.debug("English path: phoneme-only; skipping environment tokenizer.")
             try:
-                # 1) ARPAbet with g2p_en
-                from g2p_en import G2p
-                from bot.tokenizer_registry import arpabet_to_ipa
-                g2p = G2p()
-                arp = [tok for tok in g2p(text) if tok and not tok.isspace()]
-                ipa = arpabet_to_ipa(arp)
+                # 1) Use local G2P (no NLTK, no espeak dependencies)
+                from bot.tts.eng_g2p_local import text_to_ipa
+                ipa = text_to_ipa(text)
 
-                # 2) Feed KokoroDirect with IPA only (no autodiscovery)
-                wav_path = self._get_kokoro_direct().create(
+                # 2) Feed KokoroDirect with IPA only (no autodiscovery, no tokenizer)
+                kd = self._get_kokoro_direct(use_tokenizer=False)  # ⟵ Skip tokenizer entirely
+                wav_path = kd.create(
                     phonemes=ipa,
                     voice=self.voice,
                     lang="en",
@@ -126,7 +131,8 @@ class KokoroONNXEngine(BaseEngine):
                         .replace("th", "θ")
                         .replace("ng", "ŋ")
                 )
-                wav_path = self._get_kokoro_direct().create(
+                kd = self._get_kokoro_direct(use_tokenizer=False)
+                wav_path = kd.create(
                     phonemes=simple_ipa,
                     voice=self.voice,
                     lang="en",
@@ -151,10 +157,14 @@ class KokoroONNXEngine(BaseEngine):
         # Non-English or flag disabled → original flow
         return await self._synthesize_with_registry(text)
 
-    def _get_kokoro_direct(self):
-        """Get KokoroDirect instance for fallback synthesis."""
+    def _get_kokoro_direct(self, use_tokenizer: bool = True):
         from bot.kokoro_direct_fixed import KokoroDirect
-        return KokoroDirect(model_path=self.model_path, voices_path=self.voices_path)
+        return KokoroDirect(
+            model_path=self.model_path,
+            voices_path=self.voices_path,
+            language="en",
+            use_tokenizer=use_tokenizer,
+        )
 
     async def _synthesize_with_registry(self, text: str) -> bytes:
         """Synthesize using the existing registry-based approach (for non-English)."""
