@@ -31,7 +31,7 @@ from bot.metrics import metrics, is_degraded_mode, METRIC_STARTUP_TOTAL_DURATION
 
 # Integration with existing bot components
 try:
-    from bot.memory import setup_memory_save_task
+    from bot.tasks import setup_memory_save_task
     from bot.tts import TTSManager
     from bot.router import Router
     from bot.rag.hybrid_search import HybridRAGSearch

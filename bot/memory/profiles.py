@@ -2,6 +2,7 @@
 User and server profile management with persistence.
 """
 import json
+import os
 import logging
 import shutil
 from datetime import datetime
@@ -15,6 +16,9 @@ server_lock = threading.Lock()
 # Initialize caches
 user_cache: Dict[str, Dict] = {}
 server_cache: Dict[str, Dict] = {}
+# Legacy/test aliases
+user_profiles = user_cache
+server_profiles = server_cache
 modified_servers = set()
 
 # Track last save times
@@ -38,6 +42,7 @@ def default_profile(user_id=None, username=None):
     """Create a new user profile with default values."""
     return {
         "discord_id": user_id if user_id else "",
+        "user_id": user_id if user_id else "",  # alias for legacy tests
         "username": username if username else "",
         "memories": [],
         "history": [],
@@ -59,7 +64,7 @@ def ensure_profile_schema(profile: dict, user_id: Optional[str] = None, username
         profile = {}
     
     # Get user ID from profile or parameters
-    profile_user_id = profile.get('discord_id', user_id)
+    profile_user_id = profile.get('discord_id') or profile.get('user_id') or user_id
     if not profile_user_id and user_id:
         profile_user_id = user_id
     
@@ -76,8 +81,11 @@ def ensure_profile_schema(profile: dict, user_id: Optional[str] = None, username
         default['username'] = username
     
     # Ensure discord_id is set correctly
-    if profile_user_id and default['discord_id'] != profile_user_id:
+    if profile_user_id and default.get('discord_id') != profile_user_id:
         default['discord_id'] = profile_user_id
+    # Keep alias in sync for legacy tests
+    if profile_user_id and default.get('user_id') != profile_user_id:
+        default['user_id'] = profile_user_id
     
     # Ensure required lists exist
     for field in ['memories', 'history']:
@@ -130,7 +138,7 @@ def get_profile(user_id: str, username: Optional[str] = None) -> dict:
 def save_profile(profile: dict, force: bool = False) -> bool:
     """Save a user profile to disk."""
     try:
-        user_id = str(profile.get('discord_id'))
+        user_id = str(profile.get('discord_id') or profile.get('user_id') or "")
         if not user_id:
             logging.error("Cannot save profile: missing user_id")
             return False
@@ -141,6 +149,20 @@ def save_profile(profile: dict, force: bool = False) -> bool:
             
             # Update last updated timestamp
             profile['last_updated'] = datetime.now().isoformat()
+
+            # Enforce user memory limit (prefer fresh env to avoid cached config)
+            try:
+                env_val = os.getenv('MAX_USER_MEMORY')
+                if env_val is not None:
+                    max_memories = int(str(env_val).split('#')[0].strip() or '20')
+                else:
+                    from bot.config import load_config
+                    max_memories = int(load_config().get('MAX_USER_MEMORY', 20))
+            except Exception:
+                max_memories = 20
+
+            if isinstance(profile.get('memories'), list) and len(profile['memories']) > max_memories:
+                profile['memories'] = profile['memories'][-max_memories:]
             
             # Save to disk
             from bot.config import load_config
@@ -178,6 +200,7 @@ def default_server_profile(guild_id: Optional[str] = None) -> dict:
     """Create a new server profile with default values."""
     return {
         "guild_id": guild_id if guild_id else "",
+        "server_id": guild_id if guild_id else "",  # alias for legacy tests
         "memories": [],
         "history": [],
         "preferences": {},
@@ -202,8 +225,11 @@ def ensure_server_profile_schema(profile: dict, guild_id: Optional[str] = None) 
             default[key] = profile[key]
     
     # Ensure guild_id is set correctly
-    if guild_id and default['guild_id'] != guild_id:
+    if guild_id and default.get('guild_id') != guild_id:
         default['guild_id'] = guild_id
+    # Keep alias in sync for legacy tests
+    if guild_id and default.get('server_id') != guild_id:
+        default['server_id'] = guild_id
     
     # Ensure required lists exist
     for field in ['memories', 'history']:
@@ -227,7 +253,7 @@ def get_server_profile(guild_id: str, force_reload: bool = False) -> dict:
     with server_lock:
         # Check cache first
         if guild_id in server_cache and not force_reload:
-            return server_cache[guild_id].copy()
+            return server_cache[guild_id]
         
         # Try to load from disk
         from bot.config import load_config
@@ -241,7 +267,7 @@ def get_server_profile(guild_id: str, force_reload: bool = False) -> dict:
                 # Ensure the profile has all required fields
                 profile = ensure_server_profile_schema(profile, guild_id)
                 server_cache[guild_id] = profile
-                return profile.copy()
+                return profile
             except (json.JSONDecodeError, IOError) as e:
                 logging.error(f"Error loading server profile for guild {guild_id}: {e}")
                 # Fall through to create new profile
@@ -249,22 +275,51 @@ def get_server_profile(guild_id: str, force_reload: bool = False) -> dict:
         # Create new profile if it doesn't exist or couldn't be loaded
         profile = default_server_profile(guild_id)
         server_cache[guild_id] = profile
-        return profile.copy()
+        return profile
 
-def save_server_profile(guild_id: str, force: bool = False) -> bool:
-    """Save a server profile to disk."""
+def save_server_profile(guild_id, force: bool = False) -> bool:
+    """Save a server profile to disk.
+
+    Accepts either a guild_id/server_id string, or a full profile dict.
+    """
     try:
         with server_lock:
-            if guild_id not in server_cache:
-                logging.error(f"Cannot save server profile: guild {guild_id} not in cache")
-                return False
-                
-            profile = server_cache[guild_id]
+            # Support being passed a full profile dict (legacy tests)
+            if isinstance(guild_id, dict):
+                profile = guild_id
+                gid = str(profile.get('guild_id') or profile.get('server_id') or "")
+                if not gid:
+                    logging.error("Cannot save server profile: missing guild_id/server_id in profile")
+                    return False
+                # Ensure schema and cache are updated
+                profile = ensure_server_profile_schema(profile, gid)
+                server_cache[gid] = profile
+            else:
+                gid = str(guild_id)
+                if gid not in server_cache:
+                    logging.error(f"Cannot save server profile: guild {gid} not in cache")
+                    return False
+                profile = server_cache[gid]
+
             profile['last_updated'] = datetime.now().isoformat()
             
             from bot.config import load_config
             config = load_config()
-            profile_path = config["SERVER_PROFILE_DIR"] / f"{guild_id}.json"
+            profile_path = config["SERVER_PROFILE_DIR"] / f"{gid}.json"
+            
+            # Enforce server memory limit (prefer fresh env to avoid cached config)
+            try:
+                env_val = os.getenv('MAX_SERVER_MEMORY')
+                if env_val is not None:
+                    max_memories = int(str(env_val).split('#')[0].strip() or '100')
+                else:
+                    from bot.config import load_config
+                    max_memories = int(load_config().get('MAX_SERVER_MEMORY', 100))
+            except Exception:
+                max_memories = 100
+
+            if isinstance(profile.get('memories'), list) and len(profile['memories']) > max_memories:
+                profile['memories'] = profile['memories'][-max_memories:]
             
             # Create directory if it doesn't exist
             profile_path.parent.mkdir(parents=True, exist_ok=True)
@@ -533,5 +588,4 @@ def add_memory(user_id: str, memory_text: str, guild_id: Optional[str] = None, u
     return success
 
 
-# Initialize required directories when module is imported
-ensure_dirs()
+# Directories are ensured by callers/tests; avoid early config caching here.

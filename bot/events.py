@@ -14,6 +14,46 @@ from .hear import hear_infer
 
 logger = get_logger(__name__)
 
+# --- Minimal image attachment utilities for tests and multimodal routing ---
+IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tif", ".tiff"}
+
+def _attachment_is_image(att) -> bool:
+    """Return True if a Discord attachment looks like an image.
+
+    Duck-typed to work with unittest mocks in tests.
+    """
+    try:
+        ctype = getattr(att, "content_type", None)
+        if isinstance(ctype, str) and ctype.lower().startswith("image/"):
+            return True
+        name = getattr(att, "filename", "") or ""
+        import os
+        _, ext = os.path.splitext(name.lower())
+        return ext in IMAGE_EXTS
+    except Exception:
+        return False
+
+def has_image_attachments(message) -> bool:
+    """Whether the message has at least one image attachment.
+
+    Accepts a mock with an `attachments` list (as used in tests).
+    """
+    atts = getattr(message, "attachments", None) or []
+    return any(_attachment_is_image(att) for att in atts)
+
+def get_image_urls(message) -> list:
+    """Return URLs for image attachments on the message.
+
+    Only includes attachments detected as images.
+    """
+    urls = []
+    for att in getattr(message, "attachments", None) or []:
+        if _attachment_is_image(att):
+            url = getattr(att, "url", None)
+            if url:
+                urls.append(url)
+    return urls
+
 class BotEventHandler(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot

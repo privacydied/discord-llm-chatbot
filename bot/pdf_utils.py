@@ -175,3 +175,6 @@ class PDFProcessor:
             file_path,
             extract_images
         )
+
+# Legacy-compatible singleton instance expected by some tests
+pdf_processor = PDFProcessor()

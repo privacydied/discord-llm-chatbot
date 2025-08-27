@@ -54,7 +54,7 @@ class TestTokenizerDiscovery(unittest.TestCase):
         
         # Directly mock the functions that detect_available_tokenizers calls
         with patch('bot.tts_validation.dump_environment_diagnostics') as mock_dump, \
-             patch('subprocess.run', side_effect=FileNotFoundError), \
+             patch('subprocess.run') as mock_run, \
              patch('importlib.util.find_spec', return_value=None):
             
             # Mock environment diagnostics to return no available tokenizers
@@ -68,9 +68,9 @@ class TestTokenizerDiscovery(unittest.TestCase):
                 'site_packages': []
             }
             
-            # Mock subprocess.run to fail for any binary check
+            # Mock subprocess.run to fail for any binary check (non-zero return code)
             mock_process = MagicMock()
-            mock_process.returncode = 1  # Non-zero return code means failure
+            mock_process.returncode = 1
             mock_run.return_value = mock_process
             
             # Should still return a dict with grapheme available
@@ -82,8 +82,9 @@ class TestTokenizerDiscovery(unittest.TestCase):
             self.assertFalse(available[TokenizerType.G2P_EN.value])
             self.assertFalse(available[TokenizerType.MISAKI.value])
             
-            # Force update the global AVAILABLE_TOKENIZERS set
-            bot.tts_validation.AVAILABLE_TOKENIZERS = {TokenizerType.GRAPHEME.value}
+            # Force update the global AVAILABLE_TOKENIZERS set (mutate in place)
+            bot.tts_validation.AVAILABLE_TOKENIZERS.clear()
+            bot.tts_validation.AVAILABLE_TOKENIZERS.update({TokenizerType.GRAPHEME.value})
             
             # Verify that only grapheme is in the global set
             self.assertEqual(AVAILABLE_TOKENIZERS, {TokenizerType.GRAPHEME.value})
@@ -126,8 +127,9 @@ class TestTokenizerDiscovery(unittest.TestCase):
             self.assertTrue(available[TokenizerType.GRAPHEME.value])
             self.assertFalse(available[TokenizerType.ESPEAK_NG.value])
             
-            # Force update the global AVAILABLE_TOKENIZERS set
-            bot.tts_validation.AVAILABLE_TOKENIZERS = {TokenizerType.ESPEAK.value, TokenizerType.GRAPHEME.value}
+            # Force update the global AVAILABLE_TOKENIZERS set (mutate in place)
+            bot.tts_validation.AVAILABLE_TOKENIZERS.clear()
+            bot.tts_validation.AVAILABLE_TOKENIZERS.update({TokenizerType.ESPEAK.value, TokenizerType.GRAPHEME.value})
             
             # Verify that espeak and grapheme are in the global set
             self.assertEqual(AVAILABLE_TOKENIZERS, {TokenizerType.ESPEAK.value, TokenizerType.GRAPHEME.value})
@@ -172,8 +174,9 @@ class TestTokenizerDiscovery(unittest.TestCase):
             self.assertTrue(available[TokenizerType.GRAPHEME.value])
             self.assertFalse(available[TokenizerType.ESPEAK.value])
             
-            # Force update the global AVAILABLE_TOKENIZERS set
-            bot.tts_validation.AVAILABLE_TOKENIZERS = {TokenizerType.PHONEMIZER.value, TokenizerType.GRAPHEME.value}
+            # Force update the global AVAILABLE_TOKENIZERS set (mutate in place)
+            bot.tts_validation.AVAILABLE_TOKENIZERS.clear()
+            bot.tts_validation.AVAILABLE_TOKENIZERS.update({TokenizerType.PHONEMIZER.value, TokenizerType.GRAPHEME.value})
             
             # Verify that phonemizer and grapheme are in the global set
             self.assertEqual(AVAILABLE_TOKENIZERS, {TokenizerType.PHONEMIZER.value, TokenizerType.GRAPHEME.value})
@@ -222,8 +225,10 @@ class TestTokenizerDiscovery(unittest.TestCase):
             TokenizerType.GRAPHEME.value: True,
         }
         
-        # Should select misaki for Japanese
-        tokenizer = select_tokenizer_for_language('ja', available)
+        # Ensure env override does not affect this test
+        with patch.dict(os.environ, {"TTS_TOKENISER": ""}, clear=False):
+            # Should select misaki for Japanese
+            tokenizer = select_tokenizer_for_language('ja', available)
         self.assertEqual(tokenizer, TokenizerType.MISAKI.value)
 
     def test_select_tokenizer_for_language_env_override(self):

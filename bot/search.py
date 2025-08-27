@@ -45,20 +45,20 @@ class SearchResult:
         embed.set_footer(text=f"Source: {self.source} • {self.timestamp.strftime('%Y-%m-%d %H:%M')}")
         return embed
 
-async def web_search(query: str, max_results: int = 5) -> List[SearchResult]:
+async def web_search(query: str, max_results: int | None = None) -> List[SearchResult]:
     """
     Perform a web search and return results.
     
     Args:
         query: Search query
-        max_results: Maximum number of results to return
+        max_results: Optional maximum number of results to return. If None, return all parsed results.
         
     Returns:
         List of SearchResult objects
     """
-    # Check cache first
-    cache_key = f"web:{query}:{max_results}"
-    if cache_key in search_cache:
+    # Check cache first only when a specific max_results is requested
+    cache_key = f"web:{query}:{max_results if max_results is not None else 'all'}"
+    if max_results is not None and cache_key in search_cache:
         cached = search_cache[cache_key]
         if datetime.utcnow() - cached['timestamp'] < CACHE_EXPIRY:
             return cached['results']
@@ -91,8 +91,10 @@ async def web_search(query: str, max_results: int = 5) -> List[SearchResult]:
         
         # Extract search results (this depends on the search engine's HTML structure)
         result_elements = soup.select('.result')
+        # Apply limit only if provided
+        limited = result_elements if max_results is None else result_elements[:max_results]
         
-        for i, result in enumerate(result_elements[:max_results]):
+        for i, result in enumerate(limited):
             try:
                 title_elem = result.select_one('.result__a')
                 if not title_elem:
@@ -117,11 +119,12 @@ async def web_search(query: str, max_results: int = 5) -> List[SearchResult]:
                 logging.error(f"Error parsing search result {i}: {e}")
                 continue
         
-        # Cache the results
-        search_cache[cache_key] = {
-            'results': results,
-            'timestamp': datetime.utcnow()
-        }
+        # Cache the results only when a specific max_results is requested
+        if max_results is not None:
+            search_cache[cache_key] = {
+                'results': results,
+                'timestamp': datetime.utcnow()
+            }
         
         return results
     

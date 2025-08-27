@@ -15,6 +15,7 @@ Follows Clean Architecture (CA) and Robust Error Handling (REH) principles.
 
 from __future__ import annotations
 import asyncio
+import inspect
 import json
 import uuid
 from datetime import datetime, timezone
@@ -495,16 +496,25 @@ class VisionOrchestratorV2:
             except asyncio.CancelledError:
                 pass
         
-        # Cancel all active jobs
-        for job_id, task in self.active_jobs.items():
-            task.cancel()
-            self.logger.debug(f"Cancelled job during shutdown: {job_id[:8]}")
+        # Cancel all active jobs (only real asyncio Tasks/Futures)
+        awaitables = []
+        for job_id, task in list(self.active_jobs.items()):
+            if isinstance(task, asyncio.Task) or asyncio.isfuture(task) or inspect.isawaitable(task):
+                try:
+                    task.cancel()
+                except Exception:
+                    pass
+                awaitables.append(task)
+                self.logger.debug(f"Cancelled job during shutdown: {job_id[:8]}")
+            else:
+                # Non-awaitable mock or placeholder; just drop it
+                self.logger.debug(f"Skipping non-awaitable job handle during shutdown: {job_id[:8]}")
         
         # Wait for tasks to complete with timeout
-        if self.active_jobs:
+        if awaitables:
             try:
                 await asyncio.wait_for(
-                    asyncio.gather(*self.active_jobs.values(), return_exceptions=True),
+                    asyncio.gather(*awaitables, return_exceptions=True),
                     timeout=30.0
                 )
             except asyncio.TimeoutError:

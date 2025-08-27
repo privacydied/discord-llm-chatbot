@@ -3,6 +3,10 @@ from enum import Enum, auto
 from pathlib import Path
 from typing import Optional, TYPE_CHECKING
 
+# Re-export InputModality from the dedicated modality module to maintain
+# backward compatibility for legacy imports (e.g., tests importing from bot.types)
+from .modality import InputModality
+
 if TYPE_CHECKING:
     pass
 
@@ -38,3 +42,25 @@ class ResponseMessage:
     """Data class to hold response content."""
     text: Optional[str] = None
     audio_path: Optional[Path] = None
+
+
+class OutputModality(Enum):
+    """Defines the type of output the bot should produce.
+
+    This is a lightweight shim for legacy imports (tests and older code paths)
+    that expect `OutputModality` to be importable from `bot.types`.
+    It mirrors the enum defined in `bot.router` without importing it directly,
+    to avoid circular imports during module initialization.
+    """
+    TEXT = auto()
+    TTS = auto()
+
+
+# Explicit export list for clarity and legacy compatibility
+__all__ = [
+    "Command",
+    "ParsedCommand",
+    "ResponseMessage",
+    "InputModality",
+    "OutputModality",
+]
