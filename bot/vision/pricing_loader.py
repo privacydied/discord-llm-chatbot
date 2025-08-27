@@ -44,9 +44,10 @@ class PricingTable:
         try:
             with open(self.pricing_file, 'r') as f:
                 self.pricing_data = json.load(f)
+            providers = list(self.pricing_data.get("providers", {}).keys())
             logger.info(
                 f"Loaded pricing table v{self.pricing_data.get('version', 'unknown')}",
-                providers=list(self.pricing_data.get("providers", {}).keys())
+                extra={'subsys': 'vision', 'event': 'pricing.loaded', 'detail': f"providers={','.join(providers)}"}
             )
         except FileNotFoundError:
             logger.error(f"Pricing file not found: {self.pricing_file}")
@@ -153,12 +154,7 @@ class PricingTable:
         
         logger.debug(
             f"Estimated cost for {provider_name}/{task_name}",
-            cost=str(cost),
-            width=width,
-            height=height,
-            num_images=num_images,
-            duration_seconds=duration_seconds,
-            model=model
+            extra={'subsys': 'vision', 'event': 'pricing.estimate', 'detail': f"cost={str(cost)}, width={width}, height={height}, num_images={num_images}, duration_seconds={duration_seconds}, model={model}"}
         )
         
         return cost
@@ -280,7 +276,7 @@ class PricingTable:
         # Log warning and return zero
         logger.warning(
             f"Could not normalize usage data for {provider_name}",
-            usage_data=usage_data
+            extra={'subsys': 'vision', 'event': 'pricing.normalize.warning', 'detail': str(usage_data)}
         )
         return Money.zero()
     

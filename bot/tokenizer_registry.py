@@ -7,10 +7,13 @@ to ensure consistent state across imports and prevent reset issues.
 
 import logging
 import os
-from typing import Dict, Set, Optional, Any
+from typing import Dict, Set, Optional, Any, Tuple
 import importlib.util
 import shutil
 import subprocess
+import json
+import re
+from pathlib import Path
 
 from .tts.errors import MissingTokeniserError
 
@@ -61,6 +64,8 @@ class TokenizerRegistry:
         self._available_tokenizers: Set[str] = set()
         self._initialized = False
         self._size_at_init = 0
+        # Per-language lexicon cache (lower-cased keys)
+        self._lexicons: Dict[str, Dict[str, str]] = {}
     
     def discover_tokenizers(self, force: bool = False) -> Dict[str, bool]:
         """
@@ -248,6 +253,74 @@ class TokenizerRegistry:
                    extra={'subsys': 'tts', 'event': 'registry.no_tokenizer'})
         raise MissingTokeniserError(f"No tokenizer available for language '{language}'")
     
+    def _load_lexicon(self, language: str) -> Dict[str, str]:
+        """Load lexicon for a language from env or default path. Cached per language.
+        Looks for env TTS_LEXICON or TTS_LEXICON_PATH. Defaults to `bot/tts/lexicon_<lang>.json`.
+        Returns a dict mapping lowercased words to phoneme strings.
+        """
+        lang = self._canonicalize_language(language or os.environ.get('TTS_LANGUAGE', 'en'))
+        if lang in self._lexicons:
+            return self._lexicons[lang]
+        lex: Dict[str, str] = {}
+        try:
+            env_path = os.environ.get('TTS_LEXICON') or os.environ.get('TTS_LEXICON_PATH')
+            if env_path:
+                p = Path(env_path)
+                if p.exists():
+                    with p.open('r', encoding='utf-8') as f:
+                        data = json.load(f)
+                    if isinstance(data, dict):
+                        lex = {str(k).lower(): str(v) for k, v in data.items()}
+                else:
+                    logger.warning(
+                        f"TTS lexicon path not found: {p}",
+                        extra={'subsys': 'tts', 'event': 'registry.lexicon.missing_path'}
+                    )
+            else:
+                default = Path(__file__).resolve().parent / 'tts' / f'lexicon_{lang}.json'
+                if default.exists():
+                    with default.open('r', encoding='utf-8') as f:
+                        data = json.load(f)
+                    if isinstance(data, dict):
+                        lex = {str(k).lower(): str(v) for k, v in data.items()}
+        except Exception as e:
+            logger.error(
+                f"Failed to load lexicon: {e}",
+                extra={'subsys': 'tts', 'event': 'registry.lexicon.error'},
+                exc_info=True,
+            )
+        self._lexicons[lang] = lex
+        if lex:
+            logger.info(
+                f"Loaded lexicon for {lang} with {len(lex)} entries",
+                extra={'subsys': 'tts', 'event': 'registry.lexicon.loaded'}
+            )
+        return lex
+    
+    def apply_lexicon(self, text: str, language: str) -> Tuple[str, bool]:
+        """Apply lexicon replacements to text for a given language.
+        Returns (new_text, changed).
+        """
+        if not text:
+            return text, False
+        lang = self._canonicalize_language(language or os.environ.get('TTS_LANGUAGE', 'en'))
+        lex = self._load_lexicon(lang)
+        if not lex:
+            return text, False
+        # Replace word tokens (simple Latin word pattern) case-insensitively
+        pattern = re.compile(r"[A-Za-z]+(?:'[A-Za-z]+)?")
+        def repl(match: re.Match) -> str:
+            w = match.group(0)
+            return lex.get(w.lower(), w)
+        new_text = pattern.sub(repl, text)
+        changed = new_text != text
+        if changed:
+            logger.debug(
+                f"Applied lexicon replacements for {lang}",
+                extra={'subsys': 'tts', 'event': 'registry.lexicon_applied'}
+            )
+        return new_text, changed
+    
     def _canonicalize_language(self, language: str) -> str:
         """
         Canonicalize language code.
@@ -427,3 +500,9 @@ def get_available_tokenizers() -> Set[str]:
     """Get the set of available tokenizers using the registry singleton."""
     registry = TokenizerRegistry.get_instance()
     return registry.get_available_tokenizers()
+
+
+def apply_lexicon(text: str, language: str) -> Tuple[str, bool]:
+    """Apply lexicon replacements using the registry singleton."""
+    registry = TokenizerRegistry.get_instance()
+    return registry.apply_lexicon(text, language)

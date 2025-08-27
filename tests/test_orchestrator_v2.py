@@ -10,6 +10,7 @@ Tests the orchestrator's integration with:
 """
 
 import pytest
+from decimal import Decimal
 import asyncio
 from unittest.mock import Mock, AsyncMock, patch
 from datetime import datetime, timezone

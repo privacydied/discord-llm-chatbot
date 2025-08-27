@@ -22,7 +22,7 @@ from numpy.typing import NDArray
 from .tts.errors import TTSWriteError
 
 # Import tokenizer registry
-from .tokenizer_registry import select_tokenizer_for_language
+from .tokenizer_registry import select_tokenizer_for_language, apply_lexicon
 
 # Expose a module-level Tokenizer symbol so tests can patch `bot.kokoro_direct_fixed.Tokenizer`.
 # If kokoro_onnx is unavailable at import time, keep a placeholder; _load_model will handle it.
@@ -375,8 +375,46 @@ class KokoroDirect:
         Raises:
             ValueError: If tokenization fails with all methods
         """
-        # Try each tokenization method in order of preference
+        # Normalize first
+        text = normalize_text(text)
+        
+        # Apply lexicon replacements (if configured); used to override OOV word pronunciations
         errors = []
+        lex_changed = False
+        try:
+            lang = self.language or os.environ.get("TTS_LANGUAGE", "en")
+            lex_text, lex_changed = apply_lexicon(text, lang)
+            if lex_changed:
+                logger.debug(
+                    f"Applied lexicon overrides for language '{lang}' [subsys: tts, event: tokenize.lexicon]"
+                )
+                text = lex_text
+        except Exception as ex:
+            # Non-fatal; continue without lexicon
+            logger.warning(
+                f"Lexicon application failed: {ex} [subsys: tts, event: tokenize.lexicon.error]"
+            )
+        
+        # Try each tokenization method in order of preference
+        # If lexicon yielded explicit phoneme overrides, prefer PHONEME_TO_ID first
+        if lex_changed and TokenizationMethod.PHONEME_TO_ID in self.available_tokenization_methods:
+            try:
+                token_ids: List[int] = []
+                pieces = [t for t in re.split(r"\s+", text.strip()) if t]
+                for piece in pieces:
+                    try:
+                        token_ids.append(self.tokenizer.phoneme_to_id(piece))
+                    except Exception:
+                        token_ids.extend([self.tokenizer.phoneme_to_id(ch) for ch in piece])
+                if token_ids and all(isinstance(i, (int, np.integer)) for i in token_ids):
+                    return token_ids, TokenizationMethod.PHONEME_TO_ID
+                else:
+                    raise ValueError("phoneme_to_id produced invalid or empty sequence")
+            except Exception as e:
+                errors.append(f"phoneme_to_id: {e}")
+                logger.warning(
+                    f"Failed to tokenize with phoneme_to_id (lexicon-first): {e} [subsys: tts, event: tokenize.error.phoneme_to_id]"
+                )
         
         # Method 1: phoneme_encode (original method)
         if TokenizationMethod.PHONEME_ENCODE in self.available_tokenization_methods:
@@ -389,11 +427,26 @@ class KokoroDirect:
                 logger.warning(f"Failed to tokenize with phoneme_encode: {e} [subsys: tts, event: tokenize.error.phoneme_encode]")
         
         # Method 2: phoneme_to_id
-        if TokenizationMethod.PHONEME_TO_ID in self.available_tokenization_methods:
+        if (not lex_changed) and TokenizationMethod.PHONEME_TO_ID in self.available_tokenization_methods:
             try:
-                token_ids = [self.tokenizer.phoneme_to_id(p) for p in text]
-                if token_ids and len(token_ids) > 0:
+                token_ids: List[int] = []
+                if lex_changed:
+                    # Treat text as phoneme sequence; split on whitespace first, with guarded fallback to per-char
+                    pieces = [t for t in re.split(r"\s+", text.strip()) if t]
+                    for piece in pieces:
+                        try:
+                            token_ids.append(self.tokenizer.phoneme_to_id(piece))
+                        except Exception:
+                            # Fallback: map characters within the piece
+                            token_ids.extend([self.tokenizer.phoneme_to_id(ch) for ch in piece])
+                else:
+                    # Default behavior: per-character mapping
+                    token_ids = [self.tokenizer.phoneme_to_id(p) for p in text]
+                # Guard: ensure we have a non-empty list of integers
+                if token_ids and all(isinstance(i, (int, np.integer)) for i in token_ids):
                     return token_ids, TokenizationMethod.PHONEME_TO_ID
+                else:
+                    raise ValueError("phoneme_to_id produced invalid or empty sequence")
             except Exception as e:
                 errors.append(f"phoneme_to_id: {e}")
                 logger.warning(f"Failed to tokenize with phoneme_to_id: {e} [subsys: tts, event: tokenize.error.phoneme_to_id]")
@@ -731,132 +784,132 @@ class KokoroDirect:
 
         return out_path
 
-def create(self, text: str, voice_id_or_embedding: Union[str, NDArray[np.float32]], 
-           phonemes: Optional[str] = None, speed: float = 1.0, *, out_path: Optional[Path] = None) -> Path:
-    """
-    Create audio from text or phonemes using specified voice and write to WAV file.
-    
-    Args:
-        text: Text to synthesize (used if phonemes not provided)
-        voice_id_or_embedding: Voice ID string or embedding array
-        phonemes: Optional phoneme string (if None, text is used)
-        speed: Speed factor (1.0 is normal)
-        out_path: Optional output path for the WAV file
+    def create(self, text: str, voice_id_or_embedding: Union[str, NDArray[np.float32]], 
+               phonemes: Optional[str] = None, speed: float = 1.0, *, out_path: Optional[Path] = None) -> Path:
+        """
+        Create audio from text or phonemes using specified voice and write to WAV file.
         
-    Returns:
-        Path to the generated audio file
-        
-    Raises:
-        TTSWriteError: If audio generation or file writing fails
-    """
-    # Resolve voice embedding from id or accept direct embedding
-    voice_embedding: Optional[np.ndarray]
-    voice_id: Optional[str] = None
-    if isinstance(voice_id_or_embedding, str):
-        voice_id = voice_id_or_embedding
-        if self.voices_data and voice_id in self.voices_data:
-            voice_embedding = self.voices_data[voice_id]
-            logger.debug(f"Using voice: {voice_id} [subsys: tts, event: create.voice_id]")
-        elif self.voices_data and self.voices:
-            # Deterministic substitute to first available
-            chosen = self.voices[0]
-            voice_embedding = self.voices_data.get(chosen)
-            logger.warning(
-                f"Requested voice '{voice_id}' not found; using '{chosen}'",
-                extra={'subsys': 'tts', 'event': 'create.voice_substitute'}
-            )
-        else:
-            # No voice data available; use neutral style vector
-            voice_embedding = np.zeros((1, 256), dtype=np.float32)
-            logger.info(
-                "No voice data available; using neutral style vector",
-                extra={'subsys': 'tts', 'event': 'create.voice_neutral'}
-            )
-    else:
-        voice_embedding = voice_id_or_embedding
-        logger.debug(
-            f"Using direct voice embedding with shape {voice_embedding.shape} [subsys: tts, event: create.direct_embedding]"
-        )
-
-    # Use text directly if no phonemes provided
-    if phonemes is None:
-        phonemes = text
-        logger.debug(
-            f"No phonemes provided, using text directly: {text[:50]}... [subsys: tts, event: create.text_as_phonemes]"
-        )
-
-    # Ensure language cache is populated
-    if self.tokenizer is not None and self.language:
-        self._lang_tokenizer_cache[self.language] = self.tokenizer
-
-    # Log phonemiser and language
-    logger.debug(
-        f"Kokoro: voice={voice_id or 'custom'} lang={self.language} phonemiser={self.phonemiser} [subsys: tts, event: create.params]"
-    )
-    
-    # Create audio
-    try:
-        # Generate audio via compatibility wrapper (tests patch this)
-        gen_result = self._generate_audio(phonemes, voice_embedding, speed)
-        if isinstance(gen_result, tuple):
-            audio, sample_rate = gen_result
-        else:
-            audio = gen_result
-            sample_rate = SAMPLE_RATE
-        
-        # Normalize audio to be within float32 range for WAV files (-1.0 to 1.0)
-        if audio.size > 0:
-            if np.max(np.abs(audio)) > 0:
-                audio = audio / np.max(np.abs(audio))
-                audio = audio.astype(np.float32)
-                logger.debug(
-                    f"Audio samples: shape={audio.shape}, dtype={audio.dtype}, min={np.min(audio):.2f}, max={np.max(audio):.2f}, sr={sample_rate} [subsys: tts, event: create.audio_stats]"
+        Args:
+            text: Text to synthesize (used if phonemes not provided)
+            voice_id_or_embedding: Voice ID string or embedding array
+            phonemes: Optional phoneme string (if None, text is used)
+            speed: Speed factor (1.0 is normal)
+            out_path: Optional output path for the WAV file
+            
+        Returns:
+            Path to the generated audio file
+            
+        Raises:
+            TTSWriteError: If audio generation or file writing fails
+        """
+        # Resolve voice embedding from id or accept direct embedding
+        voice_embedding: Optional[np.ndarray]
+        voice_id: Optional[str] = None
+        if isinstance(voice_id_or_embedding, str):
+            voice_id = voice_id_or_embedding
+            if self.voices_data and voice_id in self.voices_data:
+                voice_embedding = self.voices_data[voice_id]
+                logger.debug(f"Using voice: {voice_id} [subsys: tts, event: create.voice_id]")
+            elif self.voices_data and self.voices:
+                # Deterministic substitute to first available
+                chosen = self.voices[0]
+                voice_embedding = self.voices_data.get(chosen)
+                logger.warning(
+                    f"Requested voice '{voice_id}' not found; using '{chosen}'",
+                    extra={'subsys': 'tts', 'event': 'create.voice_substitute'}
                 )
             else:
-                audio = np.zeros(len(audio), dtype=np.float32)
-                logger.error("Generated audio contains all zeros [subsys: tts, event: create.error.zeros]")
+                # No voice data available; use neutral style vector
+                voice_embedding = np.zeros((1, 256), dtype=np.float32)
+                logger.info(
+                    "No voice data available; using neutral style vector",
+                    extra={'subsys': 'tts', 'event': 'create.voice_neutral'}
+                )
         else:
-            logger.error("Generated empty audio (zero length) [subsys: tts, event: create.error.empty]")
-            audio = np.zeros(sample_rate, dtype=np.float32)  # 1 second of silence
-        
-        # Ensure audio is 1D
-        if len(audio.shape) > 1:
-            audio = audio.reshape(-1)
-            logger.debug(f"Reshaped audio to 1D: {audio.shape} [subsys: tts, event: create.reshape]")
-        
-        # Ensure minimum duration of 1s
-        min_duration_samples = sample_rate
-        if len(audio) < min_duration_samples and len(audio) > 0:
-            repeats_needed = int(np.ceil(min_duration_samples / len(audio)))
+            voice_embedding = voice_id_or_embedding
             logger.debug(
-                f"Audio too short ({len(audio)/sample_rate:.2f}s), repeating {repeats_needed} times to reach minimum duration [subsys: tts, event: create.extend_duration]"
+                f"Using direct voice embedding with shape {voice_embedding.shape} [subsys: tts, event: create.direct_embedding]"
             )
-            extended_audio = np.zeros(min_duration_samples, dtype=np.float32)
-            for i in range(repeats_needed):
-                start_idx = i * len(audio)
-                end_idx = min(start_idx + len(audio), min_duration_samples)
-                copy_len = end_idx - start_idx
-                if copy_len > 0:
-                    extended_audio[start_idx:end_idx] = audio[:copy_len]
-            audio = extended_audio
+
+        # Use text directly if no phonemes provided
+        if phonemes is None:
+            phonemes = text
             logger.debug(
-                f"Extended audio to {len(audio)/sample_rate:.2f}s ({len(audio)} samples)",
-                extra={'subsys': 'tts', 'event': 'create.extended_duration'}
+                f"No phonemes provided, using text directly: {text[:50]}... [subsys: tts, event: create.text_as_phonemes]"
             )
-        
-        # Write WAV and return path
-        out_path = self._write_audio(audio, out_path, sample_rate)
+
+        # Ensure language cache is populated
+        if self.tokenizer is not None and self.language:
+            self._lang_tokenizer_cache[self.language] = self.tokenizer
+
+        # Log phonemiser and language
         logger.debug(
-            f"Returning Path object: {out_path}, type: {type(out_path)}, audio length: {len(audio)}",
-            extra={'subsys': 'tts', 'event': 'create.return_path', 'audio_length': len(audio), 'sample_rate': sample_rate}
+            f"Kokoro: voice={voice_id or 'custom'} lang={self.language} phonemiser={self.phonemiser} [subsys: tts, event: create.params]"
         )
-        return out_path
-    except TTSWriteError:
-        raise
-    except Exception as e:
-        logger.error(
-            f"Failed to generate speech: {e}",
-            extra={'subsys': 'tts', 'event': 'create.error'},
-            exc_info=True,
-        )
-        raise TTSWriteError(f"Failed to generate speech: {e}")
+        
+        # Create audio
+        try:
+            # Generate audio via compatibility wrapper (tests patch this)
+            gen_result = self._generate_audio(phonemes, voice_embedding, speed)
+            if isinstance(gen_result, tuple):
+                audio, sample_rate = gen_result
+            else:
+                audio = gen_result
+                sample_rate = SAMPLE_RATE
+            
+            # Normalize audio to be within float32 range for WAV files (-1.0 to 1.0)
+            if audio.size > 0:
+                if np.max(np.abs(audio)) > 0:
+                    audio = audio / np.max(np.abs(audio))
+                    audio = audio.astype(np.float32)
+                    logger.debug(
+                        f"Audio samples: shape={audio.shape}, dtype={audio.dtype}, min={np.min(audio):.2f}, max={np.max(audio):.2f}, sr={sample_rate} [subsys: tts, event: create.audio_stats]"
+                    )
+                else:
+                    audio = np.zeros(len(audio), dtype=np.float32)
+                    logger.error("Generated audio contains all zeros [subsys: tts, event: create.error.zeros]")
+            else:
+                logger.error("Generated empty audio (zero length) [subsys: tts, event: create.error.empty]")
+                raise TTSWriteError("Generated empty audio")
+            
+            # Ensure audio is 1D
+            if len(audio.shape) > 1:
+                audio = audio.reshape(-1)
+                logger.debug(f"Reshaped audio to 1D: {audio.shape} [subsys: tts, event: create.reshape]")
+            
+            # Ensure minimum duration of 1s
+            min_duration_samples = sample_rate
+            if len(audio) < min_duration_samples and len(audio) > 0:
+                repeats_needed = int(np.ceil(min_duration_samples / len(audio)))
+                logger.debug(
+                    f"Audio too short ({len(audio)/sample_rate:.2f}s), repeating {repeats_needed} times to reach minimum duration [subsys: tts, event: create.extend_duration]"
+                )
+                extended_audio = np.zeros(min_duration_samples, dtype=np.float32)
+                for i in range(repeats_needed):
+                    start_idx = i * len(audio)
+                    end_idx = min(start_idx + len(audio), min_duration_samples)
+                    copy_len = end_idx - start_idx
+                    if copy_len > 0:
+                        extended_audio[start_idx:end_idx] = audio[:copy_len]
+                audio = extended_audio
+                logger.debug(
+                    f"Extended audio to {len(audio)/sample_rate:.2f}s ({len(audio)} samples)",
+                    extra={'subsys': 'tts', 'event': 'create.extended_duration'}
+                )
+            
+            # Write WAV and return path
+            out_path = self._write_audio(audio, out_path, sample_rate)
+            logger.debug(
+                f"Returning Path object: {out_path}, type: {type(out_path)}, audio length: {len(audio)}",
+                extra={'subsys': 'tts', 'event': 'create.return_path', 'audio_length': len(audio), 'sample_rate': sample_rate}
+            )
+            return out_path
+        except TTSWriteError:
+            raise
+        except Exception as e:
+            logger.error(
+                f"Failed to generate speech: {e}",
+                extra={'subsys': 'tts', 'event': 'create.error'},
+                exc_info=True,
+            )
+            raise TTSWriteError(f"Failed to generate speech: {e}")

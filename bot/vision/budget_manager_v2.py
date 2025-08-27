@@ -105,8 +105,8 @@ class BudgetResult:
     approved: bool
     reason: str
     user_message: str
-    remaining_budget: Money
-    estimated_cost: Money
+    remaining_budget: Money = Money("0.00")
+    estimated_cost: Money = Money("0.00")
     reset_time: Optional[datetime] = None
     # Legacy/extended optional fields for compatibility with older tests/DTOs
     daily_remaining: Optional[Money] = None

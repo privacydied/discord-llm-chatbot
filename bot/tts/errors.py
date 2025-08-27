@@ -1,4 +1,5 @@
 """Custom exceptions for TTS system."""
+from typing import Optional
 
 class TTSError(Exception):
     """Base class for TTS errors"""
@@ -20,9 +21,17 @@ class TTSWriteError(Exception):
     """Exception raised when TTS fails to write output file."""
     pass
 
-class MissingTokeniserError(Exception):
-    """Exception raised when no suitable tokeniser is found for a language."""
-    pass
+class TTSGibberishError(Exception):
+    """Raised when synthesized audio is detected as gibberish or invalid.
+
+    Optionally carries a metrics payload with diagnostic information
+    (e.g., average amplitude, RMS, ZCR) collected during detection.
+    """
+
+    def __init__(self, message: str, metrics: Optional[dict] = None):  # type: ignore[name-defined]
+        super().__init__(message)
+        # Avoid strict typing import here to keep this a lean errors module
+        self.metrics = metrics or {}
 
 class TTSSynthesisError(Exception):
     """Exception raised when TTS synthesis fails (e.g., silent audio, model error)."""
