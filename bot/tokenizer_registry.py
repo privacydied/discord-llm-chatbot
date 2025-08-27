@@ -7,7 +7,8 @@ to ensure consistent state across imports and prevent reset issues.
 
 import logging
 import os
-from typing import Dict, Set, Optional, Any, Tuple
+from typing import Dict, Set, Optional, Any, Tuple, Literal
+from dataclasses import dataclass
 import importlib.util
 import shutil
 import subprocess
@@ -18,6 +19,13 @@ from pathlib import Path
 from .tts.errors import MissingTokeniserError
 
 logger = logging.getLogger(__name__)
+
+@dataclass
+class Decision:
+    """Typed tokenizer decision for language processing."""
+    mode: Literal["phonemes", "grapheme"]
+    payload: str  # phoneme string for mode=="phonemes", normalized text for "grapheme"
+    alphabet: Literal["IPA", "ARPABET", "GRAPHEME"]  # hint; use "GRAPHEME" for grapheme
 
 # Tokenizer types
 TOKENIZER_TYPES = {
@@ -224,9 +232,7 @@ class TokenizerRegistry:
                 logger.info(f"Using environment-specified tokenizer: {env_tokenizer}",
                           extra={'subsys': 'tts', 'event': 'registry.env_override'})
                 return env_tokenizer
-            else:
-                logger.warning(f"TTS_TOKENISER environment variable '{env_tokenizer}' is not available",
-                             extra={'subsys': 'tts', 'event': 'registry.env_override_invalid'})
+            # Removed warning here - only warn in autodiscovery branch when actually used
         
         # Get tokenizer preferences for the language
         preferences = TOKENISER_MAP.get(language, TOKENISER_MAP.get('*', []))
@@ -433,9 +439,182 @@ class TokenizerRegistry:
             self.discover_tokenizers()
         
         return self._available_tokenizers.copy()
-
-
-# Convenience functions that use the registry singleton
+    
+    def select_for_language(self, language: str, text: str) -> Decision:
+        """
+        Select the best tokenizer for the given language and return a typed Decision.
+        
+        This method handles the complete tokenization decision process:
+        1. Applies lexicon overrides if available
+        2. Selects appropriate tokenizer based on language and availability
+        3. Handles misaki fallback for English with proper logging
+        4. Tokenizes the text and returns a Decision object
+        
+        Args:
+            language: Language code (e.g., 'en', 'ja', 'en-US')
+            text: Input text to tokenize
+            
+        Returns:
+            Decision object with mode, payload, and alphabet information
+            
+        Raises:
+            MissingTokeniserError: If no suitable tokenizer is found for the language
+        """
+        # Ensure discovery has been performed
+        if not self._initialized:
+            self.discover_tokenizers()
+            
+        # Canonicalize language
+        language = self._canonicalize_language(language)
+        
+        # Apply lexicon first
+        text, lex_changed = self.apply_lexicon(text, language)
+        
+        # Get tokenizer selection
+        tokenizer = self._select_tokenizer_with_fallback(language)
+        
+        # Handle tokenization based on tokenizer type
+        if tokenizer in ("phonemizer", "espeak", "espeak-ng", "g2p_en"):
+            # These produce phonemes - try to tokenize
+            try:
+                phonemes = self._tokenize_to_phonemes(text, tokenizer, language)
+                if phonemes:
+                    return Decision(
+                        mode="phonemes",
+                        payload=phonemes,
+                        alphabet="IPA"  # Most of these produce IPA-like output
+                    )
+            except Exception as e:
+                logger.debug(f"Phoneme tokenization failed with {tokenizer}: {e}", 
+                           extra={'subsys': 'tts', 'event': 'registry.phoneme_failed'})
+                
+        elif tokenizer == "misaki":
+            # Misaki produces phonemes for Japanese/Chinese
+            try:
+                phonemes = self._tokenize_to_phonemes(text, tokenizer, language)
+                if phonemes:
+                    return Decision(
+                        mode="phonemes", 
+                        payload=phonemes,
+                        alphabet="IPA"
+                    )
+            except Exception as e:
+                logger.debug(f"Misaki tokenization failed: {e}",
+                           extra={'subsys': 'tts', 'event': 'registry.misaki_failed'})
+                
+        # Fallback to grapheme for any failures or grapheme tokenizer
+        logger.debug(f"Using grapheme tokenization for {language}",
+                   extra={'subsys': 'tts', 'event': 'registry.grapheme_fallback'})
+        return Decision(
+            mode="grapheme",
+            payload=text,
+            alphabet="GRAPHEME"
+        )
+    
+    def _select_tokenizer_with_fallback(self, language: str) -> str:
+        """
+        Select tokenizer for language with proper English misaki handling.
+        
+        For English, if misaki is specified via env but not ideal, 
+        fall back to phonemizer with a debug log.
+        """
+        # Check for environment override
+        env_tokenizer = os.environ.get('TTS_TOKENISER', '').strip().lower()
+        if env_tokenizer:
+            if env_tokenizer in self._available_tokenizers:
+                # Special handling for English + misaki
+                if language == 'en' and env_tokenizer == 'misaki':
+                    # Misaki is JP/CN only, fall back to phonemizer for English
+                    if 'phonemizer' in self._available_tokenizers:
+                        logger.debug("misaki is JP-only; falling back to phonemizer for en",
+                                   extra={'subsys': 'tts', 'event': 'registry.misaki_fallback'})
+                        return 'phonemizer'
+                    elif 'g2p_en' in self._available_tokenizers:
+                        logger.debug("misaki is JP-only; falling back to g2p_en for en",
+                                   extra={'subsys': 'tts', 'event': 'registry.misaki_fallback'})
+                        return 'g2p_en'
+                    elif 'espeak' in self._available_tokenizers:
+                        logger.debug("misaki is JP-only; falling back to espeak for en",
+                                   extra={'subsys': 'tts', 'event': 'registry.misaki_fallback'})
+                        return 'espeak'
+                
+                logger.debug(f"Using environment-specified tokenizer: {env_tokenizer}",
+                           extra={'subsys': 'tts', 'event': 'registry.env_override'})
+                return env_tokenizer
+        
+        # Get tokenizer preferences for the language
+        preferences = TOKENISER_MAP.get(language, TOKENISER_MAP.get('*', []))
+        
+        # Find the first available tokenizer in the preference list
+        for tokenizer in preferences:
+            if tokenizer in self._available_tokenizers:
+                return tokenizer
+        
+        # If no preferred tokenizer is available, use grapheme for non-English
+        if language != 'en' and DEFAULT_TOKENIZER in self._available_tokenizers:
+            return DEFAULT_TOKENIZER
+        
+        # For English, we need a phonetic tokenizer
+        if language == 'en':
+            logger.error(f"No English phonetic tokenizer found. Required: {preferences}, Available: {sorted(self._available_tokenizers)}",
+                       extra={'subsys': 'tts', 'event': 'registry.missing_english_tokenizer'})
+            raise MissingTokeniserError("No English phonetic tokenizer found")
+        
+        # For other languages, if even grapheme is not available, raise error
+        logger.error(f"No tokenizer available for language '{language}'",
+                   extra={'subsys': 'tts', 'event': 'registry.no_tokenizer'})
+        raise MissingTokeniserError(f"No tokenizer available for language '{language}'")
+    
+    def _tokenize_to_phonemes(self, text: str, tokenizer: str, language: str) -> str:
+        """Tokenize text to phonemes using the specified tokenizer."""
+        if tokenizer == "phonemizer":
+            try:
+                from phonemizer import phonemize
+                return phonemize(text, language='en-us', backend='espeak', strip=True)
+            except ImportError:
+                raise Exception("phonemizer not available")
+                
+        elif tokenizer in ("espeak", "espeak-ng"):
+            try:
+                # Use subprocess to get phonemes from espeak
+                cmd = [tokenizer, "--ipa", "-q", "--stdin"]
+                result = subprocess.run(
+                    cmd, 
+                    input=text, 
+                    text=True, 
+                    capture_output=True, 
+                    timeout=10
+                )
+                if result.returncode == 0:
+                    return result.stdout.strip()
+                else:
+                    raise Exception(f"espeak failed: {result.stderr}")
+            except (subprocess.SubprocessError, FileNotFoundError):
+                raise Exception(f"{tokenizer} not available")
+                
+        elif tokenizer == "g2p_en":
+            try:
+                from g2p_en import G2p
+                g2p = G2p()
+                phonemes = g2p(text)
+                return ' '.join(phonemes)
+            except ImportError:
+                raise Exception("g2p_en not available")
+                
+        elif tokenizer == "misaki":
+            try:
+                from misaki import en as misaki_en
+                g2p = misaki_en.G2P()
+                result = g2p(text)
+                # Handle tuple return
+                if isinstance(result, tuple):
+                    return result[0]
+                return result
+            except ImportError:
+                raise Exception("misaki not available")
+                
+        else:
+            raise Exception(f"Unsupported tokenizer: {tokenizer}")
 
 def discover_tokenizers(force: bool = False) -> Dict[str, bool]:
     """
@@ -506,3 +685,9 @@ def apply_lexicon(text: str, language: str) -> Tuple[str, bool]:
     """Apply lexicon replacements using the registry singleton."""
     registry = TokenizerRegistry.get_instance()
     return registry.apply_lexicon(text, language)
+
+
+def select_for_language(language: str, text: str) -> Decision:
+    """Select tokenizer and tokenize text using the registry singleton."""
+    registry = TokenizerRegistry.get_instance()
+    return registry.select_for_language(language, text)

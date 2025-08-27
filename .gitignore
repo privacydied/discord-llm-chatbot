@@ -112,3 +112,5 @@ tts/kokoro-v1.0.onnx
 yoroi.env
 tts/voices-v1.0.bin
 cache/video_audio/index.json
+tts/cache/*
+

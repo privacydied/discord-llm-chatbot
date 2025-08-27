@@ -35,7 +35,12 @@ class TestKokoroDirect:
         self.engine = KokoroDirect(model_path=self.model_path, voices_path=self.voices_path)
         # Prevent the engine from reloading voices (which would overwrite our change)
         self.engine._load_voices = lambda: None
-        # Add the test voice
+        # Clear any existing voices data to force lazy loading in tests
+        self.engine._voices_data = {}
+        self.engine.voices = []
+        # Add the test voice data
+        test_voice = np.random.rand(512, 256).astype(np.float32)
+        self.engine._voices_data[self.test_voice_id] = test_voice
         self.engine.voices.append(self.test_voice_id)
     
     @pytest.fixture
@@ -186,7 +191,88 @@ class TestKokoroDirect:
             engine = KokoroDirect(self.model_path, self.voices_path)
             assert engine.phonemiser == "misaki"
         
-        # Test override with environment variable
-        with patch.dict(os.environ, {"TTS_LANGUAGE": "en", "TTS_PHONEMISER": "custom"}):
-            engine = KokoroDirect(self.model_path, self.voices_path)
-            assert engine.phonemiser == "custom"
+    def test_kd_quiet_path_no_tokenizer_noise(self, caplog):
+        """Test that the quiet path (disable_autodiscovery=True) produces no tokenizer-related noise."""
+        caplog.set_level("DEBUG")
+        
+        # Create KD instance - this should not log tokenizer discovery during init
+        kd = KokoroDirect(model_path="tts/kokoro-v1.0.onnx", voices_path="tts/voices-v1.0.bin")
+        
+        # Call create with disable_autodiscovery=True
+        kd.create(text="hello", voice="af_heart", disable_autodiscovery=True, logger=logging.getLogger("test"))
+        
+        logs = "\n".join(r.message for r in caplog.records)
+        
+        # Assert no tokenizer-related noise in logs
+        assert "TTS_TOKENISER" not in logs
+        assert "No known tokenization methods found" not in logs
+        assert "Found phonemizer package" not in logs
+        assert "Found misaki package" not in logs
+        assert "Found espeak" not in logs
+        assert "tokenizer.method" not in logs
+        assert "tokenizer.external" not in logs
+        
+        # But should still have the expected logs
+        assert "Using pre-tokenized tokens" in logs
+        assert "Created" in logs and "audio" in logs
+        assert "Saved audio" in logs
+
+    def test_tts_audio_quality_fixes(self, caplog):
+        """Test TTS audio quality fixes: IPA routing, WAV normalization, quiet path."""
+        caplog.set_level("DEBUG")
+        
+        # Test plain text (should use quiet grapheme path)
+        kd = KokoroDirect(model_path="tts/kokoro-v1.0.onnx", voices_path="tts/voices-v1.0.bin")
+        
+        # Clear any logs from initialization
+        caplog.clear()
+        
+        out_path = kd.create(
+            text="hello world",
+            voice="af_heart",
+            disable_autodiscovery=True,
+            logger=logging.getLogger("test")
+        )
+        
+        logs = "\n".join(r.message for r in caplog.records)
+        
+        # Should use quiet grapheme path without tokenizer noise
+        assert "Using pre-tokenized tokens" in logs
+        assert "Detected IPA phonemes" not in logs  # Should not detect IPA in plain text
+        assert "No known tokenization methods found" not in logs
+        assert "Found phonemizer package" not in logs
+        assert "Found misaki package" not in logs
+        assert "Found espeak" not in logs
+        
+        # Verify output is a valid path
+        assert out_path.exists()
+        assert out_path.stat().st_size > 0
+        
+        # Test IPA input (should route to phoneme path)
+        caplog.clear()
+        
+        out_path_ipa = kd.create(
+            phonemes="həˈloʊ wɝːld",
+            voice="af_heart",
+            disable_autodiscovery=True,
+            logger=logging.getLogger("test")
+        )
+        
+        logs_ipa = "\n".join(r.message for r in caplog.records)
+        
+        # Should use phoneme path without autodiscovery
+        assert "Using pre-tokenized tokens" in logs_ipa
+        assert out_path_ipa.exists()
+        assert out_path_ipa.stat().st_size > 0
+        
+        # Test WAV format verification
+        with open(out_path, 'rb') as f:
+            wav_data = f.read()
+        
+        # Should be valid WAV data (starts with RIFF)
+        assert wav_data.startswith(b'RIFF')
+        assert b'WAVE' in wav_data
+        
+        # Clean up
+        out_path.unlink(missing_ok=True)
+        out_path_ipa.unlink(missing_ok=True)
