@@ -143,29 +143,21 @@ class TestKokoroDirect:
         assert result_path.suffix == ".wav"
         mock_soundfile.assert_called_once()
     
-    def test_create_soundfile_error_scipy_fallback(self, mock_soundfile):
-        """Test fallback to scipy when soundfile fails."""
+    def test_create_soundfile_error_raises(self, mock_soundfile):
+        """soundfile failure should raise TTSWriteError (no scipy fallback)."""
         # Make soundfile.write raise an exception
         mock_soundfile.side_effect = Exception("Soundfile error")
         
-        # Mock scipy.io.wavfile
-        with patch('scipy.io.wavfile.write') as mock_scipy:
-            result_path = self.engine.create("This is a test.", self.test_voice_id)
-            
-            assert result_path is not None
-            assert result_path.suffix == ".wav"
-            mock_soundfile.assert_called_once()
-            mock_scipy.assert_called_once()
+        with pytest.raises(TTSWriteError):
+            self.engine.create("This is a test.", self.test_voice_id)
     
-    def test_create_both_writers_fail(self, mock_soundfile):
-        """Test TTSWriteError when both soundfile and scipy fail."""
+    def test_create_soundfile_error_raises_ttswriteerror(self, mock_soundfile):
+        """Ensure no fallback and raise on writer error."""
         # Make soundfile.write raise an exception
         mock_soundfile.side_effect = Exception("Soundfile error")
         
-        # Mock scipy.io.wavfile to also fail
-        with patch('scipy.io.wavfile.write', side_effect=Exception("Scipy error")):
-            with pytest.raises(TTSWriteError):
-                self.engine.create("This is a test.", self.test_voice_id)
+        with pytest.raises(TTSWriteError):
+            self.engine.create("This is a test.", self.test_voice_id)
     
     def test_create_empty_audio(self, mock_ort):
         """Test handling of empty audio."""
