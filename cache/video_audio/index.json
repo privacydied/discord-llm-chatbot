@@ -944,5 +944,16 @@
     "processed_path": "cache/video_audio/a0dbeb6766fe9ea1.wav",
     "cached_at": "2025-08-28T01:50:10.908006+00:00",
     "speedup_factor": 1.5
+  },
+  "7c0a991209828a0b": {
+    "url": "https://x.com/10NewsQLD/status/1960874198274080923",
+    "title": "10 News Queensland - A Katter\u2019s Australian Party press conference was derailed this mornin...",
+    "duration_seconds": 93.6,
+    "uploader": "10 News Queensland",
+    "upload_date": "20250828",
+    "source_type": "unknown",
+    "processed_path": "cache/video_audio/7c0a991209828a0b.wav",
+    "cached_at": "2025-08-28T15:33:35.577500+00:00",
+    "speedup_factor": 1.5
   }
 }

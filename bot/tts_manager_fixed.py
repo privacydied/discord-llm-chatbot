@@ -17,6 +17,10 @@ from .kokoro_direct_fixed import KokoroDirect
 
 logger = logging.getLogger(__name__)
 
+# Defaults aligned with asset manager [CMV]
+DEFAULT_MODEL_PATH = "tts/kokoro-v1.0.onnx"
+DEFAULT_VOICES_PATH = "tts/voices-v1.0.bin"
+
 
 class TTSManager:
     """
@@ -83,10 +87,13 @@ class TTSManager:
         voices_path = os.getenv("TTS_VOICES_PATH")
 
         # 2) Old env (fallback)
-        if not model_path:
-            model_path = os.getenv("TTS_MODEL_FILE")
-        if not voices_path:
-            voices_path = os.getenv("TTS_VOICE_FILE")
+        # If new env vars are not set OR equal to our known defaults, prefer old env if provided.
+        old_model_env = os.getenv("TTS_MODEL_FILE")
+        old_voices_env = os.getenv("TTS_VOICE_FILE")
+        if (not model_path or model_path == DEFAULT_MODEL_PATH) and old_model_env:
+            model_path = old_model_env
+        if (not voices_path or voices_path == DEFAULT_VOICES_PATH) and old_voices_env:
+            voices_path = old_voices_env
 
         # 3) Config nested
         tts_cfg = self.config.get("tts") or {}
@@ -108,8 +115,8 @@ class TTSManager:
             )
 
         # 5) Defaults
-        model_path = str(model_path or "tts/kokoro-v1.0.onnx")
-        voices_path = str(voices_path or "tts/voices.npz")
+        model_path = str(model_path or DEFAULT_MODEL_PATH)
+        voices_path = str(voices_path or DEFAULT_VOICES_PATH)
 
         logger.debug(
             f"Resolved model_path={model_path}, voices_path={voices_path}",

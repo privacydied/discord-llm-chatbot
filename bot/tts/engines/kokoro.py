@@ -119,38 +119,52 @@ class KokoroONNXEngine(BaseEngine):
         # English: IPA-only path (no tokenizer discovery, no grapheme fallback)
         if lang == "en":
             logger.debug("English path: phoneme-only; using model IPA vocabulary.")
-            # If local ONNX assets are missing (common in unit tests), fall back to engine.generate_audio
-            have_assets = bool(self.model_path and self.voices_path and Path(self.model_path).exists() and Path(self.voices_path).exists())
-            if not have_assets:
-                async def _compat_generate_via_engine():
-                    # Ensure underlying engine exists (unit tests patch Kokoro)
-                    if getattr(self, "engine", None) is None:
-                        try:
-                            self.load()
-                        except Exception as e:
-                            raise TTSError(f"Failed to init Kokoro engine for test-compat: {e}") from e
-                    ga = getattr(self.engine, "generate_audio", None)
-                    if not callable(ga):
-                        raise TTSError("Underlying Kokoro engine has no 'generate_audio' method")
-                    try:
-                        result = ga(text)
-                        if inspect.isawaitable(result):
-                            result = await result
-                        wav_bytes = self._normalize_audio_to_wav_bytes(result)
-                        return wav_bytes if wav_bytes is not None else (result if isinstance(result, (bytes, bytearray)) else b"")
-                    except Exception as e:
-                        raise TTSError(f"Kokoro synthesis failed: {e}") from e
-                # Return coroutine so tests can 'await engine.synthesize(...)'
-                return _compat_generate_via_engine()
-
             try:
                 # 1) Normalize text and convert to IPA using offline G2P
                 from bot.tts.eng_g2p_local import text_to_ipa
                 ipa = text_to_ipa(text)
                 logger.debug(f"Normalized text to IPA: '{ipa[:50]}{'...' if len(ipa) > 50 else ''}'", extra={'subsys': 'tts'})
 
-                # 2) Use KokoroDirect with IPA only (no autodiscovery, no tokenizer)
-                kd = getattr(self, "kd", None) or self._get_kokoro_direct(use_tokenizer=False, force_ipa=True)
+                # 2) If a kd override is present (common in tests), use it unconditionally
+                kd_override = getattr(self, "kd", None)
+                if kd_override is not None and hasattr(kd_override, "create"):
+                    return kd_override.create(
+                        phonemes=ipa,
+                        voice=self.voice,
+                        lang="en",
+                        speed=kwargs.get("speed", 1.0),
+                        use_tokenizer=False,
+                        force_ipa=True,
+                        disable_autodiscovery=True,
+                    )
+
+                # 3) If local ONNX assets are missing (common in unit tests) and no kd override,
+                #    fall back to engine.generate_audio while keeping synthesize awaitable.
+                have_assets = bool(self.model_path and self.voices_path and Path(self.model_path).exists() and Path(self.voices_path).exists())
+                if not have_assets:
+                    async def _compat_generate_via_engine():
+                        # Ensure underlying engine exists (unit tests patch Kokoro)
+                        if getattr(self, "engine", None) is None:
+                            try:
+                                self.load()
+                            except Exception as e:
+                                raise TTSError(f"Failed to init Kokoro engine for test-compat: {e}") from e
+                        ga = getattr(self.engine, "generate_audio", None)
+                        if not callable(ga):
+                            raise TTSError("Underlying Kokoro engine has no 'generate_audio' method")
+                        try:
+                            result = ga(text)
+                            if inspect.isawaitable(result):
+                                result = await result
+                            wav_bytes = self._normalize_audio_to_wav_bytes(result)
+                            return wav_bytes if wav_bytes is not None else (result if isinstance(result, (bytes, bytearray)) else b"")
+                        except Exception as e:
+                            raise TTSError(f"Kokoro synthesis failed: {e}") from e
+                    # Return coroutine so tests can 'await engine.synthesize(...)'
+                    return _compat_generate_via_engine()
+
+                # 4) Otherwise, use KokoroDirect with IPA only (no autodiscovery, no tokenizer)
+                kd = self._get_kokoro_direct(use_tokenizer=False, force_ipa=True)
                 wav_path = kd.create(
                     phonemes=ipa,
                     voice=self.voice,
@@ -158,12 +172,12 @@ class KokoroONNXEngine(BaseEngine):
                     speed=kwargs.get("speed", 1.0),
                     use_tokenizer=False,
                     force_ipa=True,
-                    disable_autodiscovery=True
+                    disable_autodiscovery=True,
                 )
-                
+
                 # Read and return WAV bytes via helper (tests may monkeypatch this)
                 audio_bytes = self._wav_to_bytes(wav_path)
-                
+
                 # Clean up temp file
                 try:
                     from pathlib import Path as _P
@@ -172,7 +186,7 @@ class KokoroONNXEngine(BaseEngine):
                         _p.unlink()
                 except:
                     pass
-                    
+
                 return audio_bytes
 
             except Exception as e:
