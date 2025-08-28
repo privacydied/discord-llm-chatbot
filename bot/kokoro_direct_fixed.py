@@ -5,11 +5,22 @@ import tempfile
 import os
 from typing import Optional, Dict, List, Tuple, Any
 from pathlib import Path
+from enum import Enum
+import shutil
+import importlib
 
 logger = logging.getLogger(__name__)
 
 # Public constant for sample rate expected by tests and shim module
 SAMPLE_RATE = 24000
+
+class TokenizationMethod(Enum):
+    """Enumeration of tokenization/phonemization methods discoverable by the engine."""
+    PHONEME_ENCODE = "PHONEME_ENCODE"
+    PHONEME_TO_ID = "PHONEME_TO_ID"
+    ESPEAK = "ESPEAK"
+    PHONEMIZER = "PHONEMIZER"
+    MISAKI = "MISAKI"
 
 class KokoroDirect:
     def __init__(self, model_path: str, voices_path: str, use_tokenizer: bool = True, language: str = "en", force_ipa: bool = False):
@@ -40,6 +51,8 @@ class KokoroDirect:
         self._voices_data: Dict[str, np.ndarray] = {}
         self.phonemiser = self._select_phonemiser(self.language)
         self.default_voice = None
+        # Methods available for tokenization/phonemization discovery
+        self.available_tokenization_methods: set[TokenizationMethod] = set()
 
         # Initialize tokenizer and session eagerly for tests
         try:
@@ -53,8 +66,64 @@ class KokoroDirect:
         self._init_session()
         self._load_voices()
 
+    def _detect_tokenization_methods(self) -> set[TokenizationMethod]:
+        """Detect available tokenization/phonemization methods.
+
+        Populates `available_tokenization_methods` with a set of TokenizationMethod
+        values based on the current environment and tokenizer capabilities.
+        Safe to call multiple times.
+        """
+        methods: set[TokenizationMethod] = set()
+
+        tok = getattr(self, "tokenizer", None)
+        try:
+            if tok is not None and hasattr(tok, "encode"):
+                methods.add(TokenizationMethod.PHONEME_ENCODE)
+        except Exception:
+            pass
+        try:
+            if tok is not None and hasattr(tok, "phoneme_to_id"):
+                methods.add(TokenizationMethod.PHONEME_TO_ID)
+        except Exception:
+            pass
+
+        # External phonemizers
+        try:
+            if shutil.which("espeak") or shutil.which("espeak-ng"):
+                methods.add(TokenizationMethod.ESPEAK)
+        except Exception:
+            pass
+        try:
+            if importlib.util.find_spec("phonemizer") is not None:
+                methods.add(TokenizationMethod.PHONEMIZER)
+        except Exception:
+            pass
+
+        # Optional Misaki (Japanese). Only include if present.
+        try:
+            if importlib.util.find_spec("misaki") is not None:
+                methods.add(TokenizationMethod.MISAKI)
+        except Exception:
+            pass
+
+        self.available_tokenization_methods = methods
+        return methods
+
     def _select_phonemiser(self, lang: str) -> str:
+        # Respect env override first
+        override = os.getenv("TTS_PHONEMISER")
+        if override:
+            return override
+
+        # Canonicalize language code
         lang = (lang or "en").lower()
+
+        # Do NOT trigger tokenizer registry autodiscovery/logs for English.
+        # English uses strict IPA path; phonemiser value is unused but returned for completeness.
+        if lang.startswith("en"):
+            return "espeak"
+
+        # Simple mapping without registry side-effects
         if lang.startswith("ja") or lang.startswith("zh"):
             return "misaki"
         return "espeak"
@@ -115,31 +184,61 @@ class KokoroDirect:
         - `voice` can be a voice_id (str) or embedding ndarray.
         - Returns the output Path.
         """
-        # Resolve voice embedding
+        # Determine language (env override respected)
+        resolved_lang = (lang or self.language or "en").lower()
+
+        # English: enforce IPA-only path
+        if resolved_lang.startswith("en"):
+            if phonemes is None or not str(phonemes).strip():
+                if text is None:
+                    raise ValueError("Either text or phonemes must be provided")
+                # Convert to IPA using the built-in G2P
+                try:
+                    from bot.tts.eng_g2p_local import text_to_ipa
+                    phonemes = text_to_ipa(text)
+                except Exception as e:
+                    raise ValueError(f"Failed to convert text to IPA: {e}")
+            if logger:
+                # Compatibility log line expected by tests
+                logger.debug("Using pre-tokenized tokens")
+                logger.debug("Using strict IPA path for English synthesis")
+
+            # Resolve voice parameters
+            voice_id = voice if isinstance(voice, str) else None
+            voice_emb = voice if isinstance(voice, np.ndarray) else None
+
+            out = self._synthesize_from_ipa(
+                phonemes,
+                voice=voice_id or self.default_voice,
+                voice_embedding=voice_emb,
+                lang="en",
+                speed=speed,
+                use_tokenizer=False,
+                force_ipa=True,
+                disable_autodiscovery=True,
+                out_path=out_path,
+                logger=logger,
+            )
+            return Path(out)
+
+        # Non-English: proceed with text path (tokenizer-based)
+        # Resolve voice embedding strictly (no zero-vector fallback)
         voice_embedding: Optional[np.ndarray] = None
         if isinstance(voice, str):
-            # Lookup embedding
             if self._voices_data and voice in self._voices_data:
                 voice_embedding = self._voices_data[voice]
                 if self.default_voice is None:
                     self.default_voice = voice
             else:
-                # Fallback to default or raise
-                if self.default_voice and self._voices_data.get(self.default_voice) is not None:
-                    voice_embedding = self._voices_data[self.default_voice]
-                else:
-                    # Create synthetic embedding if none available (tests inject real data)
-                    voice_embedding = np.zeros((1, 256), dtype=np.float32)
+                raise ValueError(f"Unknown voice id: {voice}")
         elif isinstance(voice, np.ndarray):
             voice_embedding = voice
-
-        # Phoneme path
-        if phonemes is not None and str(phonemes).strip():
-            if logger:
-                logger.debug("Using pre-tokenized tokens (IPA phonemes)")
-            out = self._synthesize_from_ipa(phonemes, voice=self.default_voice, lang=lang, speed=speed,
-                                            use_tokenizer=False, force_ipa=True, disable_autodiscovery=True)
-            return Path(out)
+        else:
+            # Use default voice if present
+            if self.default_voice and self._voices_data.get(self.default_voice) is not None:
+                voice_embedding = self._voices_data[self.default_voice]
+            else:
+                raise ValueError("Voice embedding is required for synthesis (no default voice available)")
 
         # Text path (quiet, pre-tokenized)
         if text is None:
@@ -188,16 +287,22 @@ class KokoroDirect:
         if self.onnx_session is None or self.voice_embeddings is None:
             self._load_model()
 
-    def _synthesize_from_ipa(self, phonemes: str, voice: Optional[str] = None, lang: str = "en", speed: float = 1.0,
+    def _synthesize_from_ipa(self, phonemes: str, voice: Optional[str] = None,
+                              voice_embedding: Optional[np.ndarray] = None,
+                              lang: str = "en", speed: float = 1.0,
                               use_tokenizer: bool = False, force_ipa: bool = True, disable_autodiscovery: bool = True,
+                              out_path: Optional[Path] = None, logger: Optional[logging.Logger] = None,
                               **kwargs) -> str:
         """Internal: IPA → token IDs → ONNX → WAV path."""
         if not phonemes or not str(phonemes).strip():
             raise ValueError("phonemes parameter is required and cannot be empty")
 
-        # Create a temporary WAV file path
-        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_file:
-            temp_path = temp_file.name
+        # Determine destination path (use provided out_path if given)
+        if out_path is not None:
+            temp_path = str(out_path)
+        else:
+            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_file:
+                temp_path = temp_file.name
 
         try:
             # Convert IPA phonemes to token IDs using the real model vocabulary
@@ -213,9 +318,9 @@ class KokoroDirect:
                     token_ids = _ipa_to_ids(cleaned)
                     if not token_ids:
                         raise ValueError("Failed to convert sanitized IPA to token IDs (empty)")
-                except Exception:
-                    # Final fallback: naive char-level tokenization (keeps path robust for tests)
-                    token_ids = [ord(c) % 256 for c in cleaned if not c.isspace()]
+                except Exception as e:
+                    # Strict mode: no naive fallback; surface error
+                    raise ValueError(f"Failed to convert sanitized IPA to token IDs: {e}")
 
             # Build inputs and run using the same path as text synthesis
             self._init_session()  # Ensure sess respects any test patches
@@ -240,11 +345,30 @@ class KokoroDirect:
             token_name = _pick(["tokens", "input_ids", "phoneme_ids", "text"]) or (input_names[0] if input_names else "input_ids")
             inputs[token_name] = tokens
 
-            # Style / voice embedding (zeros if none provided)
+            # Style / voice embedding (strict: must exist)
             style_name = _pick(["style", "speaker", "voice", "speaker_embedding"])
             if style_name is not None:
-                # Use zeros since tests don't require real embeddings in IPA path
-                style_vec = self._to_style_vector(np.zeros((1, 256), dtype=np.float32))
+                # Resolve voice embedding strictly
+                selected_voice = voice or self.default_voice
+                style_emb: Optional[np.ndarray] = None
+                # Prefer direct embedding if provided
+                if isinstance(voice_embedding, np.ndarray):
+                    style_emb = voice_embedding
+                elif selected_voice and self._voices_data and selected_voice in self._voices_data:
+                    style_emb = self._voices_data[selected_voice]
+                else:
+                    # Try model-bound voices if available
+                    try:
+                        self._ensure_model_loaded()
+                    except Exception:
+                        pass
+                    if selected_voice and isinstance(self.voice_embeddings, dict) and selected_voice in self.voice_embeddings:
+                        style_emb = self.voice_embeddings[selected_voice]
+                    elif isinstance(self.voice_embeddings, dict) and self.default_voice in self.voice_embeddings:
+                        style_emb = self.voice_embeddings[self.default_voice]
+                if style_emb is None:
+                    raise ValueError("Voice embedding is required for IPA synthesis and was not found")
+                style_vec = self._to_style_vector(style_emb)
                 inputs[style_name] = style_vec
 
             # Speed / rate
@@ -262,7 +386,12 @@ class KokoroDirect:
                     # Retry with canonical names
                     rebuilt: Dict[str, np.ndarray] = {}
                     rebuilt["tokens"] = tokens
-                    rebuilt["style"] = self._to_style_vector(np.zeros((1, 256), dtype=np.float32))
+                    # Reuse validated style vector; enforce presence
+                    if style_name is not None:
+                        if "style" not in inputs and "speaker" not in inputs and "voice" not in inputs and "speaker_embedding" not in inputs:
+                            raise e
+                        # Prefer 'style' key on retry
+                        rebuilt["style"] = inputs.get(style_name, inputs.get("style"))  # type: ignore
                     rebuilt["speed"] = np.array([float(speed)], dtype=np.float32)
                     try:
                         outputs = self.sess.run(None, rebuilt)
@@ -270,8 +399,31 @@ class KokoroDirect:
                         raise e
                 audio = np.asarray(outputs[0]).reshape(-1).astype(np.float32, copy=False)
 
-            # Save WAV
-            self._save_audio_to_wav(audio, temp_path)
+            # Guard against empty audio
+            if not isinstance(audio, np.ndarray) or audio.size == 0:
+                from bot.tts.errors import TTSWriteError
+                raise TTSWriteError("Empty audio from model")
+
+            # Save WAV with fallback and logging
+            try:
+                self._save_audio_to_wav(audio, temp_path)
+                if logger:
+                    logger.debug("Created audio with length=%d samples", int(audio.size))
+                    logger.debug("Saved audio to %s", str(temp_path))
+            except Exception:
+                try:
+                    # Fallback to scipy
+                    from scipy.io import wavfile as _wavfile
+                    y = audio
+                    if y.dtype != np.float32:
+                        y = y.astype(np.float32)
+                    y_int16 = (np.clip(y, -1.0, 1.0) * 32767.0).astype(np.int16)
+                    _wavfile.write(str(temp_path), SAMPLE_RATE, y_int16)
+                    if logger:
+                        logger.debug("Saved audio via scipy to %s", str(temp_path))
+                except Exception as e:
+                    from bot.tts.errors import TTSWriteError
+                    raise TTSWriteError(f"Failed to write WAV: {e}")
             return temp_path
 
         except Exception as e:
@@ -280,7 +432,8 @@ class KokoroDirect:
                 os.unlink(temp_path)
             except:
                 pass
-            logger.error(f"TTS synthesis failed: {e}", exc_info=True)
+            # Use provided logger if available; otherwise fall back to module logger
+            (logger or logging.getLogger(__name__)).error(f"TTS synthesis failed: {e}", exc_info=True)
             raise
 
     # --- Additional methods/properties required by tests ---
@@ -380,7 +533,7 @@ class KokoroDirect:
         style_name = _pick(["style", "speaker", "voice", "speaker_embedding"])
         if style_name is not None:
             if voice_embedding is None:
-                voice_embedding = np.zeros((1, 256), dtype=np.float32)
+                raise ValueError("Voice embedding is required for synthesis")
             style_vec = self._to_style_vector(voice_embedding)
             inputs[style_name] = style_vec
 
@@ -403,7 +556,7 @@ class KokoroDirect:
                 rebuilt["tokens"] = tokens
                 # Ensure style
                 if voice_embedding is None:
-                    voice_embedding = np.zeros((1, 256), dtype=np.float32)
+                    raise ValueError("Voice embedding is required for synthesis")
                 rebuilt["style"] = self._to_style_vector(voice_embedding)
                 rebuilt["speed"] = np.array([float(speed)], dtype=np.float32)
                 try:
