@@ -39,7 +39,7 @@ TOKENIZER_TYPES = {
 
 # Language-to-tokenizer mapping
 TOKENISER_MAP = {
-    "en": ["espeak", "espeak-ng", "phonemizer", "g2p_en"],
+    "en": [],  # English uses IPA-only path, no external tokenizers
     "ja": ["misaki"],
     "zh": ["misaki"],
     # Default for other languages
@@ -248,11 +248,11 @@ class TokenizerRegistry:
                          extra={'subsys': 'tts', 'event': 'registry.fallback_grapheme'})
             return DEFAULT_TOKENIZER
         
-        # For English, we need a phonetic tokenizer
+        # For English, use built-in IPA path (no external tokenizers needed)
         if language == 'en':
-            logger.error(f"No English phonetic tokenizer found. Required: {preferences}, Available: {sorted(self._available_tokenizers)}",
-                       extra={'subsys': 'tts', 'event': 'registry.missing_english_tokenizer'})
-            raise MissingTokeniserError(f"No English phonetic tokenizer found")
+            logger.debug("English uses built-in IPA path, no external tokenizers required",
+                       extra={'subsys': 'tts', 'event': 'registry.english_builtin'})
+            return "builtin_ipa"  # Special marker for English IPA path
         
         # For other languages, if even grapheme is not available, raise error
         logger.error(f"No tokenizer available for language '{language}'",
@@ -378,13 +378,11 @@ class TokenizerRegistry:
         # Canonicalize the language
         language = self._canonicalize_language(language)
         
-        # For English, we need a phonetic tokenizer
+        # For English, use built-in IPA path (no warnings needed)
         if language == 'en':
-            english_tokenizers = set(TOKENISER_MAP['en']).intersection(self._available_tokenizers)
-            if not english_tokenizers:
-                logger.warning("No English phonetic tokenizer found. Speech quality will be poor.",
-                             extra={'subsys': 'tts', 'event': 'registry.warning.english'})
-                return True
+            logger.debug("English uses built-in IPA path, no external tokenizers required",
+                       extra={'subsys': 'tts', 'event': 'registry.english_builtin'})
+            return False  # No warning needed for English
         
         # For Japanese/Chinese, we need misaki
         if language in ('ja', 'zh'):
@@ -554,11 +552,11 @@ class TokenizerRegistry:
         if language != 'en' and DEFAULT_TOKENIZER in self._available_tokenizers:
             return DEFAULT_TOKENIZER
         
-        # For English, we need a phonetic tokenizer
+        # For English, use built-in IPA path (no external tokenizers needed)
         if language == 'en':
-            logger.error(f"No English phonetic tokenizer found. Required: {preferences}, Available: {sorted(self._available_tokenizers)}",
-                       extra={'subsys': 'tts', 'event': 'registry.missing_english_tokenizer'})
-            raise MissingTokeniserError("No English phonetic tokenizer found")
+            logger.debug("English uses built-in IPA path, no external tokenizers required",
+                       extra={'subsys': 'tts', 'event': 'registry.english_builtin'})
+            return "builtin_ipa"  # Special marker for English IPA path
         
         # For other languages, if even grapheme is not available, raise error
         logger.error(f"No tokenizer available for language '{language}'",

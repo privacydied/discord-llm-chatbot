@@ -56,18 +56,20 @@ def test_english_ipa_fix():
 
         try:
             # This should trigger the English IPA path
-            result = engine.synthesize(test_text)
+            import asyncio
+            result = asyncio.run(engine.synthesize(test_text))
 
-            print("✅ Synthesis completed successfully!"            print(f"📊 Generated {len(result)} bytes of audio data")
+            print("✅ Synthesis completed successfully!")
+            print(f"📊 Generated {len(result)} bytes of audio data")
 
             # Check log messages for expected behavior
             log_text = "\n".join(log_messages)
 
             # Expected behaviors:
             success_indicators = [
-                "English IPA conversion:",  # Our IPA conversion debug message
-                "using provided phonemes",  # KokoroDirect phoneme path
-                "disable_autodiscovery=True",  # No autodiscovery
+                "English path: phoneme-only; using model IPA vocabulary.",  # Our IPA path message
+                "TTS synthesis successful:",  # KokoroDirect success message
+                "Normalized text to IPA:",  # G2P conversion message
             ]
 
             # Problem indicators (should NOT appear):
@@ -94,12 +96,12 @@ def test_english_ipa_fix():
                     print(f"✅ No problem: '{indicator}'")
 
             # Check if IPA path was taken
-            if "English IPA conversion:" in log_text:
+            if "English path: phoneme-only; using model IPA vocabulary." in log_text:
                 print("\n🎉 SUCCESS: English IPA path is working correctly!")
                 print("   English text is being converted to IPA phonemes as expected.")
             else:
                 print("\n⚠️  WARNING: English IPA path may not be working.")
-                print("   Check if g2p_en is properly installed.")
+                print("   Check if the IPA path is properly configured.")
 
             # Check if grapheme fallback occurred
             if any(indicator in log_text for indicator in problem_indicators):
