@@ -259,27 +259,15 @@ class KokoroDirect:
             with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp:
                 out_path = Path(tmp.name)
 
-        # Write WAV with fallback
+        # Write WAV (fail-fast; no fallback to scipy)
         try:
             self._save_audio_to_wav(audio, str(out_path))
             if logger:
                 logger.debug("Created audio with length=%d samples", int(audio.size))
                 logger.debug("Saved audio to %s", str(out_path))
-        except Exception:
-            try:
-                # Fallback to scipy
-                from scipy.io import wavfile as _wavfile
-                # Convert to int16 PCM
-                y = audio
-                if y.dtype != np.float32:
-                    y = y.astype(np.float32)
-                y_int16 = (np.clip(y, -1.0, 1.0) * 32767.0).astype(np.int16)
-                _wavfile.write(str(out_path), SAMPLE_RATE, y_int16)
-                if logger:
-                    logger.debug("Saved audio via scipy to %s", str(out_path))
-            except Exception as e:
-                from bot.tts.errors import TTSWriteError
-                raise TTSWriteError(f"Failed to write WAV: {e}")
+        except Exception as e:
+            from bot.tts.errors import TTSWriteError
+            raise TTSWriteError(f"Failed to write WAV: {e}")
 
         return out_path
 
@@ -305,22 +293,70 @@ class KokoroDirect:
                 temp_path = temp_file.name
 
         try:
-            # Convert IPA phonemes to token IDs using the real model vocabulary
-            from bot.tts.eng_g2p_local import _ipa_to_ids
-            try:
-                token_ids = _ipa_to_ids(phonemes)
-                if not token_ids:
-                    raise ValueError("Failed to convert IPA to token IDs (empty)")
-            except ValueError:
-                # Sanitize/normalize unsupported IPA and retry
-                cleaned = self._sanitize_ipa(str(phonemes))
+            # Convert IPA phonemes to token IDs using the OFFICIAL Kokoro vocabulary (strict)
+            from bot.tts.ipa_vocab_loader import (
+                load_official_vocab,
+                UnsupportedIPASymbolError,
+            )
+
+            def _encode_official(ipa_text: str) -> List[int]:
+                """Greedy longest-match encoding against official IPA vocab.
+
+                Splits on spaces (word boundaries) and scans each word left-to-right,
+                matching the longest symbol available in the vocabulary.
+                Raises UnsupportedIPASymbolError if any character cannot be matched.
+                """
+                vocab = load_official_vocab()
+                p2i = vocab.phoneme_to_id
+                # Precompute max token length to bound search (handles digraphs like oʊ, tʃ, dʒ, etc.)
                 try:
-                    token_ids = _ipa_to_ids(cleaned)
-                    if not token_ids:
-                        raise ValueError("Failed to convert sanitized IPA to token IDs (empty)")
-                except Exception as e:
-                    # Strict mode: no naive fallback; surface error
-                    raise ValueError(f"Failed to convert sanitized IPA to token IDs: {e}")
+                    max_tok_len = max((len(s) for s in p2i.keys()))
+                except ValueError:
+                    max_tok_len = 4
+
+                # Normalize whitespace to single spaces and split into words
+                words = " ".join(str(ipa_text).split()).split(" ")
+                ids: List[int] = []
+
+                # Optional: insert space token between words if supported
+                space_id = None
+                for sp in ("<sp>", "_", " "):
+                    if sp in p2i:
+                        space_id = p2i[sp]
+                        break
+
+                for wi, w in enumerate(words):
+                    if not w:
+                        continue
+                    if wi > 0 and space_id is not None:
+                        ids.append(space_id)
+
+                    i = 0
+                    n = len(w)
+                    while i < n:
+                        matched = False
+                        for L in range(min(max_tok_len, n - i), 0, -1):
+                            cand = w[i:i+L]
+                            if cand in p2i:
+                                ids.append(p2i[cand])
+                                i += L
+                                matched = True
+                                break
+                        if not matched:
+                            # Unknown symbol at this position; raise strict error
+                            raise UnsupportedIPASymbolError([w[i]])
+                return ids
+
+            try:
+                token_ids = _encode_official(str(phonemes))
+                if not token_ids:
+                    raise ValueError("Failed to encode IPA to token IDs (empty)")
+            except UnsupportedIPASymbolError:
+                # Sanitize/normalize unsupported IPA and retry strictly
+                cleaned = self._sanitize_ipa(str(phonemes))
+                token_ids = _encode_official(cleaned)
+                if not token_ids:
+                    raise ValueError("Failed to encode sanitized IPA to token IDs (empty)")
 
             # Build inputs and run using the same path as text synthesis
             self._init_session()  # Ensure sess respects any test patches
@@ -404,26 +440,15 @@ class KokoroDirect:
                 from bot.tts.errors import TTSWriteError
                 raise TTSWriteError("Empty audio from model")
 
-            # Save WAV with fallback and logging
+            # Save WAV (fail-fast; no scipy fallback) with logging
             try:
                 self._save_audio_to_wav(audio, temp_path)
                 if logger:
                     logger.debug("Created audio with length=%d samples", int(audio.size))
                     logger.debug("Saved audio to %s", str(temp_path))
-            except Exception:
-                try:
-                    # Fallback to scipy
-                    from scipy.io import wavfile as _wavfile
-                    y = audio
-                    if y.dtype != np.float32:
-                        y = y.astype(np.float32)
-                    y_int16 = (np.clip(y, -1.0, 1.0) * 32767.0).astype(np.int16)
-                    _wavfile.write(str(temp_path), SAMPLE_RATE, y_int16)
-                    if logger:
-                        logger.debug("Saved audio via scipy to %s", str(temp_path))
-                except Exception as e:
-                    from bot.tts.errors import TTSWriteError
-                    raise TTSWriteError(f"Failed to write WAV: {e}")
+            except Exception as e:
+                from bot.tts.errors import TTSWriteError
+                raise TTSWriteError(f"Failed to write WAV: {e}")
             return temp_path
 
         except Exception as e:

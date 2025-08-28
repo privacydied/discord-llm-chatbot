@@ -178,7 +178,29 @@ class VoiceMessagePublisher:
                     raise RuntimeError(f"attachments.create missing fields: {attach}")
 
                 await self._upload_file(session, upload_url, token, ogg_bytes)
-                msg_json = await self._post_voice_message(session, channel_id, token, upload_filename, duration, waveform_b64, getattr(message, 'id', None))
+                msg_json = await self._post_voice_message(
+                    session,
+                    channel_id,
+                    token,
+                    upload_filename,
+                    duration,
+                    waveform_b64,
+                    getattr(message, 'id', None),
+                )
+
+            # 3) Fetch created message (optional) and return success
+            try:
+                created_id = int(msg_json.get('id')) if isinstance(msg_json.get('id'), (str, int)) else None
+                created_msg: Optional[discord.Message] = None
+                if created_id:
+                    created_msg = await message.channel.fetch_message(created_id)
+                self.logger.info("voice.native.ok", extra={"subsys": "voice", "event": "native_voice_ok", "channel_id": channel_id})
+                return VoicePublishResult(message=created_msg, ogg_path=ogg_p, ok=True)
+            except Exception:
+                # If we cannot fetch, still consider it success if we got a valid JSON back
+                self.logger.info("voice.native.ok.fetch_failed", extra={"subsys": "voice", "event": "native_voice_ok_nofetch", "channel_id": channel_id})
+                return VoicePublishResult(message=None, ogg_path=ogg_p, ok=True)
+
         except Exception as e:
             # Detect Discord code 50173 and block channel for a while [REH]
             blocked = False
@@ -223,14 +245,3 @@ class VoiceMessagePublisher:
             return float(int(round(dur)))
         except Exception:
             return None
-
-        # 3) Fetch created message to return a discord.Message instance for context tracking
-        try:
-            created_id = int(msg_json.get('id')) if isinstance(msg_json.get('id'), (str, int)) else None
-            created_msg: Optional[discord.Message] = None
-            if created_id:
-                created_msg = await message.channel.fetch_message(created_id)
-            return VoicePublishResult(message=created_msg, ogg_path=ogg_p, ok=True)
-        except Exception:
-            # If we cannot fetch, still consider it success if we got a valid JSON back
-            return VoicePublishResult(message=None, ogg_path=ogg_p, ok=True)

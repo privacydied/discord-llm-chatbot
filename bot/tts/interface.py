@@ -99,7 +99,7 @@ class TTSManager:
         """Checks if the primary TTS engine is loaded (and not the stub)."""
         return self.engine is not None and not isinstance(self.engine, StubEngine)
 
-    async def synthesize(self, text: str, timeout: float = 10.0) -> bytes:
+    async def synthesize(self, text: str, timeout: float = 25.0) -> bytes:
         """Generates audio from text using the loaded TTS engine.
         Supports both async and sync engine implementations.
         """
@@ -249,9 +249,9 @@ class TTSManager:
             except Exception:
                 max_chars = 800
             try:
-                timeout_s = float(action.meta.get('tts_timeout_s', os.getenv('TTS_TIMEOUT_S', '15.0')))
+                timeout_s = float(action.meta.get('tts_timeout_s', os.getenv('TTS_TIMEOUT_S', '25.0')))
             except Exception:
-                timeout_s = 15.0
+                timeout_s = 25.0
 
             # Select text
             raw_text = action.meta.get('tts_text') or (action.content or '')
