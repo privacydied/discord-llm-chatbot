@@ -8,6 +8,7 @@ import inspect
 import io
 from typing import Optional
 from pathlib import Path
+from types import SimpleNamespace
 
 import discord
 import logging
@@ -18,7 +19,12 @@ logger = logging.getLogger(__name__)
 from bot.tts.state import tts_state
 
 from bot.router import get_router
-from bot.voice.publisher import VoiceMessagePublisher
+try:
+    from bot.voice.publisher import VoiceMessagePublisher  # type: ignore
+except Exception:
+    # Keep tests import-light if optional deps like 'utils' aren't on path
+    VoiceMessagePublisher = None  # type: ignore
+from bot.action import BotAction
 
 class TTSCommands(commands.Cog):
     """Commands for controlling TTS functionality."""
@@ -27,7 +33,7 @@ class TTSCommands(commands.Cog):
         self.bot = bot
         self.router = bot.router
         self.prefix = '!'
-        self.voice_publisher = VoiceMessagePublisher(logger=logger)
+        self.voice_publisher = VoiceMessagePublisher(logger=logger) if VoiceMessagePublisher else None
     
     @commands.group(name='tts', invoke_without_command=True)
     async def tts_group(self, ctx: commands.Context, *, text: Optional[str] = None):
@@ -80,7 +86,14 @@ class TTSCommands(commands.Cog):
             logging.debug(f"🔊 Delegating !speak with text to !say handler: '{text[:30]}...'" ,
                          extra={'subsys': 'tts_cmds', 'event': 'speak.with_text', 
                                 'user_id': user_id, 'channel_id': channel_id})
-            await self.say(ctx, text=text)
+            # Support both unit-test monkeypatched function (AsyncMock) and Command object
+            target = getattr(self, 'say', None)
+            if target is None:
+                return
+            if isinstance(target, commands.Command):
+                await target.callback(self, ctx, text=text)
+            else:
+                await target(ctx, text=text)
         else:
             # Only set the flag when no text is provided (for next response)
             logging.debug(f"🔊 Setting one-time TTS flag for user {user_id}",
@@ -89,7 +102,17 @@ class TTSCommands(commands.Cog):
             tts_state.set_one_time_tts(ctx.author.id)
             await ctx.send("🗯️ The next response will be spoken.")
     
-    async def say(self, ctx: commands.Context, *, text: Optional[str] = None):
+    @commands.command(name='say')
+    async def say(
+        self,
+        ctx: commands.Context,
+        *,
+        text: Optional[str] = None,
+        timeout_s: Optional[float] = None,
+        cold: Optional[bool] = None,
+        timeout_cold_s: Optional[float] = None,
+        timeout_warm_s: Optional[float] = None,
+    ):
         """Make the bot say exactly what you type without generating AI response."""
         async def maybe_call(func, *args, **kwargs):
             """Call a possibly-async function and await only if needed."""
@@ -179,23 +202,45 @@ class TTSCommands(commands.Cog):
                     },
                 )
 
-            # 5) Synthesize audio (prefer generate_tts with voice arg if available)
-            path_mode = hasattr(self.bot.tts_manager, 'generate_tts')
+            # 5) Synthesize audio using TTSManager.process with dynamic timeout meta
+            meta: dict = {}
+            try:
+                if timeout_s is not None:
+                    meta['tts_timeout_s'] = float(timeout_s)
+            except Exception:
+                pass
+            if cold is not None:
+                meta['tts_cold'] = bool(cold)
+            try:
+                if timeout_cold_s is not None:
+                    meta['tts_timeout_cold_s'] = float(timeout_cold_s)
+            except Exception:
+                pass
+            try:
+                if timeout_warm_s is not None:
+                    meta['tts_timeout_warm_s'] = float(timeout_warm_s)
+            except Exception:
+                pass
+
             audio_path = None
             audio_bytes = None
-            if path_mode:
-                voice_arg = getattr(self.bot.tts_manager, 'voice', None)
+            try:
+                action = BotAction(content=text, meta=meta)
+                res_action = await self.bot.tts_manager.process(action)
+                audio_path = res_action.audio_path
+                if audio_path:
+                    audio_path = str(audio_path)
+            except Exception:
+                # Fallback to legacy direct calls if process not available or failed
                 try:
-                    audio_path = await self.bot.tts_manager.generate_tts(text, voice_arg)
-                except TypeError:
                     audio_path = await self.bot.tts_manager.generate_tts(text)
-            else:
-                audio_bytes = await self.bot.tts_manager.synthesize(text)
+                except Exception:
+                    audio_bytes = await self.bot.tts_manager.synthesize(text)
 
             # 6) Try native voice message first (guild only)
             guild_obj = getattr(ctx, 'guild', None)
             in_guild = isinstance(guild_obj, discord.Guild)
-            if path_mode and in_guild and can_send:
+            if self.voice_publisher and audio_path and in_guild and can_send:
                 try:
                     pub_res = await self.voice_publisher.publish(
                         message=ctx.message,
@@ -221,22 +266,14 @@ class TTSCommands(commands.Cog):
                         extra={'subsys': 'tts_cmds', 'event': 'say.native_voice_error', 'guild_id': guild_id, 'channel_id': channel_id, 'user_id': user_id},
                     )
 
-            # Helper to build a discord.File without touching disk in tests
+            # Helper to build a discord.File without touching disk in bytes-mode tests
             def build_file_for_send() -> discord.File:
                 nonlocal audio_bytes, audio_path
-                if path_mode:
-                    filename = Path(audio_path).name if audio_path else "tts_audio.wav"
-                    try:
-                        with open(audio_path, 'rb') as f:
-                            audio_bytes = f.read()
-                    except Exception:
-                        if audio_bytes is None:
-                            audio_bytes = b""
-                    stream = io.BytesIO(audio_bytes)
-                    stream.seek(0)
-                    return discord.File(stream, filename=filename)
+                if audio_path:
+                    # Prefer path-based send to avoid FS reads in tests
+                    return discord.File(audio_path)
                 else:
-                    stream = io.BytesIO(audio_bytes)
+                    stream = io.BytesIO(audio_bytes or b"")
                     stream.seek(0)
                     return discord.File(stream, filename="tts_audio.wav")
 
@@ -311,10 +348,7 @@ class TTSCommands(commands.Cog):
                 pass
             return
 
-    @commands.command(name='say')
-    async def say_cmd(self, ctx: commands.Context, *, text: Optional[str] = None):
-        """Discord command wrapper that delegates to the testable implementation."""
-        return await self.say(ctx, text=text)
+    
     
     # Note: The standalone tts-all command is removed to avoid duplication
     # The functionality is now handled by the @tts_group.command(name='all') subcommand

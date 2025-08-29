@@ -1,5 +1,6 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock
+from types import SimpleNamespace
 
 from bot.commands.tts_cmds import TTSCommands
 from bot.tts.state import tts_state
@@ -117,23 +118,54 @@ async def test_speak_command_with_text(tts_cog, mock_ctx):
 
 @pytest.mark.asyncio
 async def test_say_command_with_text(tts_cog, mock_ctx, mock_bot, monkeypatch):
-    """Verify that '!say <text>' generates a TTS response directly."""
+    """Verify that '!say <text>' generates a TTS response directly via TTSManager.process."""
     # Mock discord.File to prevent FileNotFoundError in a test environment
     mock_discord_file = MagicMock()
     monkeypatch.setattr('discord.File', mock_discord_file)
 
     mock_bot.tts_manager.is_available.return_value = True
-    mock_bot.tts_manager.generate_tts = AsyncMock(return_value="/fake/path/audio.wav")
+    # TTSManager.process should return an object with audio_path
+    mock_bot.tts_manager.process = AsyncMock(return_value=SimpleNamespace(audio_path="/fake/path/audio.wav"))
     text_to_say = "This is a direct command."
 
     await tts_cog.say.callback(tts_cog, mock_ctx, text=text_to_say)
 
-    mock_bot.tts_manager.generate_tts.assert_called_once()
+    mock_bot.tts_manager.process.assert_called_once()
     mock_ctx.send.assert_called_once()
     # Check that discord.File was called with the correct path
     mock_discord_file.assert_called_once_with("/fake/path/audio.wav")
     # Check that the file object was sent
     assert 'file' in mock_ctx.send.call_args.kwargs
+
+@pytest.mark.asyncio
+async def test_say_command_timeout_meta_forwarding(tts_cog, mock_ctx, mock_bot, monkeypatch):
+    """Verify that '!say' forwards timeout meta to TTSManager.process."""
+    mock_discord_file = MagicMock()
+    monkeypatch.setattr('discord.File', mock_discord_file)
+
+    mock_bot.tts_manager.is_available.return_value = True
+    mock_bot.tts_manager.process = AsyncMock(return_value=SimpleNamespace(audio_path="/fake/path/audio.wav"))
+
+    await tts_cog.say.callback(
+        tts_cog,
+        mock_ctx,
+        text="hello",
+        timeout_s=3.3,
+        cold=True,
+        timeout_cold_s=9.9,
+        timeout_warm_s=1.1,
+    )
+
+    # Inspect BotAction passed to process
+    assert mock_bot.tts_manager.process.call_count == 1
+    call_args, call_kwargs = mock_bot.tts_manager.process.call_args
+    assert len(call_args) == 1
+    action = call_args[0]
+    meta = getattr(action, 'meta', {})
+    assert pytest.approx(meta.get('tts_timeout_s'), rel=1e-6) == 3.3
+    assert meta.get('tts_cold') is True
+    assert pytest.approx(meta.get('tts_timeout_cold_s'), rel=1e-6) == 9.9
+    assert pytest.approx(meta.get('tts_timeout_warm_s'), rel=1e-6) == 1.1
 
 
 @pytest.mark.asyncio
