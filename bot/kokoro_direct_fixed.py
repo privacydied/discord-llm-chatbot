@@ -52,6 +52,7 @@ class KokoroDirect:
         self._voices_data: Dict[str, np.ndarray] = {}
         self.phonemiser = self._select_phonemiser(self.language)
         self.default_voice = None
+        self.official_vocab = None  # Cache for loaded official vocabulary
         # Methods available for tokenization/phonemization discovery
         self.available_tokenization_methods: set[TokenizationMethod] = set()
 
@@ -129,67 +130,79 @@ class KokoroDirect:
             return "misaki"
         return "espeak"
         
-    def _init_session(self) -> None:
-        """Initialize ONNX inference session."""
-        if not self.model_path or not Path(self.model_path).exists():
-            logger.warning(f"ONNX model not found at {self.model_path}")
-            self.sess = None
-            self.onnx_session = None
-            return
-            
-        try:
-            self.sess = ort.InferenceSession(
-                self.model_path,
-                providers=["CPUExecutionProvider"]
-            )
-            self.onnx_session = self.sess
-            logger.debug(f"ONNX session initialized: {self.model_path}")
-        except Exception as e:
-            logger.warning(f"Failed to initialize ONNX session: {e}")
-            self.sess = None
-            self.onnx_session = None
-            
-    def _init_official_vocab(self) -> None:
-        """Initialize official Kokoro IPA vocabulary with ONNX validation."""
-        if self.onnx_session is None:
-            logger.warning("No ONNX session available for vocab validation")
-            self.official_vocab = None
-            return
-            
-        try:
-            from bot.tts.ipa_vocab_loader import load_official_vocab
-            self.official_vocab = load_official_vocab(self.onnx_session)
-            logger.info(f"Official IPA vocab loaded: {self.official_vocab.size} symbols")
-        except Exception as e:
-            logger.error(f"Failed to load official vocabulary: {e}")
-            self.official_vocab = None
-            raise RuntimeError(f"Cannot proceed without official Kokoro vocabulary: {e}")
+    def _init_session(self):
+        """Initialize ONNX session once with providers and options."""
+        if not Path(self.model_path).exists():
+            raise FileNotFoundError(f"ONNX model not found: {self.model_path}")
 
-    def _load_model(self) -> None:
-        """Load the ONNX model and voice embeddings."""
-        # ONNX session already initialized in _init_session
-        if self.onnx_session is None:
-            raise RuntimeError("ONNX session not available")
+        # Configure session options for optimal performance
+        session_options = ort.SessionOptions()
+        session_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_EXTENDED
+        session_options.enable_cpu_mem_arena = True
 
-        # Load voice embeddings
+        # Configure providers (prefer CUDA if available)
+        providers = []
+        if ort.get_device() == 'GPU':
+            providers.append(('CUDAExecutionProvider', {}))
+        providers.append(('CPUExecutionProvider', {}))
+
         try:
-            self.voices = np.load(self.voices_path)
-            if isinstance(self.voices, np.lib.npyio.NpzFile):
-                # Handle .npz format
-                self.voice_embeddings = {key: self.voices[key] for key in self.voices.files}
-            else:
-                # Handle .npy format - assume it's a dict-like structure
-                self.voice_embeddings = self.voices.item() if self.voices.ndim == 0 else self.voices
-            
-            # Set default voice (first available)
-            if self.voice_embeddings:
-                self.default_voice = list(self.voice_embeddings.keys())[0]
-                logger.debug(f"Loaded {len(self.voice_embeddings)} voices, default: {self.default_voice}")
-            else:
-                raise ValueError("No voice embeddings found")
+            self.sess = ort.InferenceSession(self.model_path, session_options, providers=providers)
+            self.onnx_session = self.sess  # Alias for compatibility
+            logger.debug(f"Initialized ONNX session with providers: {[p[0] for p in providers]}")
         except Exception as e:
-            logger.error(f"Failed to load voices: {e}", exc_info=True)
-            raise
+            raise RuntimeError(f"Failed to initialize ONNX session: {e}")
+
+    def _init_official_vocab(self):
+        """Load and validate official IPA vocabulary against ONNX model."""
+        try:
+            from bot.tts.ipa_vocab_loader import load_vocab
+            self.official_vocab = load_vocab(self.onnx_session)
+            logger.debug(f"Loaded official IPA vocab: {self.official_vocab.rows} entries")
+        except Exception as e:
+            raise RuntimeError(f"Failed to load official vocabulary: {e}")
+
+    def _encode_ipa_official(self, ipa: str) -> List[int]:
+        """Encode IPA using official vocabulary with validation."""
+        try:
+            from bot.tts.ipa_vocab_loader import encode_ipa
+            return encode_ipa(ipa, self.onnx_session)
+        except Exception as e:
+            raise ValueError(f"Failed to encode IPA '{ipa}': {e}")
+
+    def _load_voices(self):
+        """Load voice embeddings from voices file."""
+        if not Path(self.voices_path).exists():
+            raise FileNotFoundError(f"Voices file not found: {self.voices_path}")
+
+        try:
+            # Load voice embeddings (assuming .bin format)
+            self.voice_embeddings = np.fromfile(self.voices_path, dtype=np.float32)
+            
+            # Reshape based on expected embedding size
+            # Kokoro typically uses 256-dimensional embeddings
+            embedding_size = 256
+            num_voices = len(self.voice_embeddings) // embedding_size
+            
+            if len(self.voice_embeddings) % embedding_size != 0:
+                logger.warning(f"Voice file size ({len(self.voice_embeddings)}) not divisible by embedding size ({embedding_size})")
+                # Truncate to nearest complete embedding
+                truncate_size = num_voices * embedding_size
+                self.voice_embeddings = self.voice_embeddings[:truncate_size]
+            
+            self.voice_embeddings = self.voice_embeddings.reshape(num_voices, embedding_size)
+            
+            # Create voice ID list
+            self.voices = [f"voice_{i:03d}" for i in range(num_voices)]
+            self._voices_data = {voice_id: self.voice_embeddings[i] for i, voice_id in enumerate(self.voices)}
+            
+            if self.voices:
+                self.default_voice = self.voices[0]
+                
+            logger.debug(f"Loaded {len(self.voices)} voice embeddings with {embedding_size}D")
+            
+        except Exception as e:
+            raise RuntimeError(f"Failed to load voice embeddings: {e}")
 
     def create(
         self,
@@ -322,7 +335,7 @@ class KokoroDirect:
         try:
             # Convert IPA phonemes to token IDs using the OFFICIAL Kokoro vocabulary (strict)
             from bot.tts.ipa_vocab_loader import (
-                load_official_vocab,
+                load_vocab,
                 UnsupportedIPASymbolError,
             )
 
@@ -334,8 +347,8 @@ class KokoroDirect:
                 Raises UnsupportedIPASymbolError if any character cannot be matched.
                 """
                 if self.official_vocab is None:
-                    from bot.tts.ipa_vocab_loader import load_official_vocab
-                    vocab = load_official_vocab(self.onnx_session)
+                    from bot.tts.ipa_vocab_loader import load_vocab
+                    vocab = load_vocab(self.onnx_session)
                 else:
                     vocab = self.official_vocab
                 p2i = vocab.phoneme_to_id
@@ -630,6 +643,41 @@ class KokoroDirect:
                     raise e
             audio = np.asarray(outputs[0]).reshape(-1).astype(np.float32, copy=False)
         return audio, SAMPLE_RATE
+
+    def _run_onnx_inference(self, token_ids: List[int], voice_embedding: np.ndarray, speed: float) -> Tuple[np.ndarray, int]:
+        """Run ONNX inference with proper input/output handling."""
+        if self.sess is None:
+            raise RuntimeError("ONNX session not initialized")
+
+        # Prepare inputs with correct names and shapes
+        inputs = {}
+        
+        # Discover input names from session
+        input_info = self.sess.get_inputs()
+        for inp in input_info:
+            name = inp.name.lower()
+            if "token" in name or "text" in name or "input" in name:
+                inputs[inp.name] = np.array([token_ids], dtype=np.int64)
+            elif "style" in name or "speaker" in name or "voice" in name or "embedding" in name:
+                # Ensure voice embedding has correct shape
+                emb = self._to_style_vector(voice_embedding)
+                inputs[inp.name] = emb
+            elif "speed" in name or "rate" in name or "duration" in name:
+                inputs[inp.name] = np.array([[speed]], dtype=np.float32)
+
+        # Run inference
+        try:
+            outputs = self.sess.run(None, inputs)
+            audio = outputs[0]  # Assume first output is audio
+            
+            # Convert to 1D array if needed
+            if audio.ndim > 1:
+                audio = audio.flatten()
+                
+            return audio.astype(np.float32), SAMPLE_RATE
+            
+        except Exception as e:
+            raise RuntimeError(f"ONNX inference failed: {e}")
 
     def _sanitize_ipa(self, ipa: str) -> str:
         """Lightweight IPA sanitizer to improve compatibility with model vocab.

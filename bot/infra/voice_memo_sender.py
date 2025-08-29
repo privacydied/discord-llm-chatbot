@@ -201,7 +201,7 @@ def send_tts_voice_memo(channel_id: int, wav_bytes: bytes, bot_token: str = None
     Args:
         channel_id: Discord channel ID
         wav_bytes: WAV audio from TTS engine
-        bot_token: Discord bot token (uses DISCORD_BOT_TOKEN env if not provided)
+        bot_token: Discord bot token (uses DISCORD_TOKEN env if not provided)
         
     Returns:
         Discord message response
@@ -210,10 +210,10 @@ def send_tts_voice_memo(channel_id: int, wav_bytes: bytes, bot_token: str = None
         VoiceMemoError: If sending fails
     """
     if bot_token is None:
-        bot_token = os.getenv("DISCORD_BOT_TOKEN")
+        bot_token = os.getenv("DISCORD_TOKEN")
         if not bot_token:
             raise VoiceMemoError(
-                "Bot token required. Provide via bot_token parameter or DISCORD_BOT_TOKEN environment variable."
+                "Bot token required. Provide via bot_token parameter or DISCORD_TOKEN environment variable."
             )
     
     return wav_bytes_to_voice_memo(channel_id, wav_bytes, bot_token)

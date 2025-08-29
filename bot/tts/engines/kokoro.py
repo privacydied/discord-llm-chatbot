@@ -163,9 +163,9 @@ class KokoroONNXEngine(BaseEngine):
                 kd = self._get_kokoro_direct(use_tokenizer=False, force_ipa=True)
                 
                 # Log detailed synthesis info for debugging
-                from bot.tts.ipa_vocab_loader import load_official_vocab
-                vocab = load_official_vocab(kd.onnx_session) if kd.onnx_session else None
-                vocab_size = vocab.size if vocab else "unknown"
+                from bot.tts.ipa_vocab_loader import load_vocab
+                vocab = load_vocab(kd.onnx_session) if kd.onnx_session else None
+                vocab_size = vocab.rows if vocab else "unknown"
                 
                 logger.debug(
                     f"English path: phoneme-only; using official model IPA vocabulary. "
@@ -189,6 +189,7 @@ class KokoroONNXEngine(BaseEngine):
                             speed=kwargs.get("speed", 1.0),
                             use_tokenizer=False,
                             force_ipa=True,
+                            use_official_vocab=True,  # Enforce official vocabulary
                             disable_autodiscovery=True,
                         )
                         result_container[0] = wav_path
