@@ -43,6 +43,9 @@ class TTSManager:
             self._cache_max = int(os.getenv('TTS_CACHE_MAX_ITEMS', '100'))
         except Exception:
             self._cache_max = 100
+        # Track whether the primary (non-stub) engine has successfully synthesized at least once
+        # Used to decide cold vs warm timeout selection. [CMV][PA]
+        self._warmed_up: bool = False
         self.load()
 
     def load(self):
@@ -156,6 +159,9 @@ class TTSManager:
                 f"TTS synthesis successful (engine: {self.engine.__class__.__name__})",
                 extra={"subsys": "tts", "event": "synthesis_complete", "text_length": len(text)}
             )
+            # Mark engine as warmed only if we're not using the stub. [CMV]
+            if not isinstance(self.engine, StubEngine):
+                self._warmed_up = True
             return audio_bytes
 
         except concurrent.futures.TimeoutError:
@@ -217,8 +223,28 @@ class TTSManager:
         cleaned = self._clean_text(text)
         if not cleaned:
             raise ValueError("text must not be empty after cleaning")
+        # Select dynamic timeout when not explicitly provided. [CMV]
         if timeout is None:
-            audio_bytes = await self.synthesize(cleaned)
+            try:
+                base = float(os.getenv('TTS_TIMEOUT_S', '25.0'))
+            except Exception:
+                base = 25.0
+            try:
+                cold = float(os.getenv('TTS_TIMEOUT_COLD_S', str(base)))
+            except Exception:
+                cold = base
+            try:
+                warm = float(os.getenv('TTS_TIMEOUT_WARM_S', str(base)))
+            except Exception:
+                warm = base
+            # Heuristic: cold until a successful non-stub synthesis, or if kokoro-onnx is configured but engine is stub. [PA]
+            is_cold = (not self._warmed_up) or (self._engine_name == 'kokoro-onnx' and isinstance(self.engine, StubEngine))
+            selected_timeout = cold if is_cold else warm
+            logger.debug(
+                "tts.timeout.selected",
+                extra={"subsys": "tts", "event": "timeout_selected", "phase": "cold" if is_cold else "warm", "timeout_s": selected_timeout},
+            )
+            audio_bytes = await self.synthesize(cleaned, timeout=selected_timeout)
         else:
             audio_bytes = await self.synthesize(cleaned, timeout=timeout)
         if out_path is None:
@@ -238,7 +264,9 @@ class TTSManager:
         Respects meta keys:
           - include_transcript: bool (default True)
           - tts_text: optional override text to synthesize
-          - tts_timeout_s: float timeout override
+          - tts_timeout_s: float timeout override (takes precedence)
+          - tts_cold: bool flag to force cold/warm timeout selection
+          - tts_timeout_cold_s / tts_timeout_warm_s: per-call overrides
         Applies a simple in-memory cache keyed by cleaned text hash. [PA]
         """
         try:
@@ -248,10 +276,45 @@ class TTSManager:
                 max_chars = int(os.getenv('TTS_MAX_CHARS', '800'))
             except Exception:
                 max_chars = 800
-            try:
-                timeout_s = float(action.meta.get('tts_timeout_s', os.getenv('TTS_TIMEOUT_S', '25.0')))
-            except Exception:
-                timeout_s = 25.0
+            # Timeout selection with overrides and cold/warm split. [CMV]
+            timeout_s: float
+            if 'tts_timeout_s' in action.meta:
+                try:
+                    timeout_s = float(action.meta.get('tts_timeout_s'))
+                except Exception:
+                    timeout_s = 25.0
+            else:
+                # Per-call overrides first, then env, then base
+                def _get_float(key: str, default: float) -> float:
+                    try:
+                        v = action.meta.get(key)
+                        return float(v) if v is not None else default
+                    except Exception:
+                        return default
+                try:
+                    base = float(os.getenv('TTS_TIMEOUT_S', '25.0'))
+                except Exception:
+                    base = 25.0
+                try:
+                    env_cold = float(os.getenv('TTS_TIMEOUT_COLD_S', str(base)))
+                except Exception:
+                    env_cold = base
+                try:
+                    env_warm = float(os.getenv('TTS_TIMEOUT_WARM_S', str(base)))
+                except Exception:
+                    env_warm = base
+                cold_override = _get_float('tts_timeout_cold_s', env_cold)
+                warm_override = _get_float('tts_timeout_warm_s', env_warm)
+                # Determine phase: explicit meta wins; else heuristic
+                if 'tts_cold' in action.meta:
+                    is_cold = bool(action.meta.get('tts_cold'))
+                else:
+                    is_cold = (not self._warmed_up) or (self._engine_name == 'kokoro-onnx' and isinstance(self.engine, StubEngine))
+                timeout_s = cold_override if is_cold else warm_override
+                logger.debug(
+                    "tts.timeout.selected",
+                    extra={"subsys": "tts", "event": "timeout_selected", "phase": "cold" if is_cold else "warm", "timeout_s": timeout_s},
+                )
 
             # Select text
             raw_text = action.meta.get('tts_text') or (action.content or '')

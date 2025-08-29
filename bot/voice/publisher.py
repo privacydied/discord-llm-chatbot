@@ -42,6 +42,10 @@ class VoiceMessagePublisher:
         self.logger = logger or logging.getLogger(__name__)
         # Channels that recently returned 50173 (Cannot send voice messages in this channel) [REH]
         self._blocked_channels: dict[int, float] = {}
+        # HTTP timeouts (seconds); defaults preserve legacy behavior
+        self._attachments_timeout_s: float = 30.0
+        self._upload_timeout_s: float = 60.0
+        self._message_post_timeout_s: float = 30.0
 
     def _is_blocked(self, channel_id: int) -> bool:
         now = time.monotonic()
@@ -63,7 +67,7 @@ class VoiceMessagePublisher:
         headers = {"Authorization": f"Bot {token}", "Content-Type": "application/json", "User-Agent": USER_AGENT}
 
         async def _do():
-            async with session.post(url, headers=headers, json=payload, timeout=30) as resp:
+            async with session.post(url, headers=headers, json=payload, timeout=self._attachments_timeout_s) as resp:
                 if resp.status >= 400:
                     text = await resp.text()
                     raise aiohttp.ClientResponseError(request_info=resp.request_info, history=resp.history, status=resp.status, message=text)
@@ -76,7 +80,7 @@ class VoiceMessagePublisher:
         headers = {"Content-Type": "audio/ogg"}
 
         async def _do():
-            async with session.put(upload_url, headers=headers, data=ogg_bytes, timeout=60) as resp:
+            async with session.put(upload_url, headers=headers, data=ogg_bytes, timeout=self._upload_timeout_s) as resp:
                 if resp.status >= 400:
                     text = await resp.text()
                     raise aiohttp.ClientResponseError(request_info=resp.request_info, history=resp.history, status=resp.status, message=text)
@@ -101,7 +105,7 @@ class VoiceMessagePublisher:
         headers = {"Authorization": f"Bot {token}", "Content-Type": "application/json", "User-Agent": USER_AGENT}
 
         async def _do():
-            async with session.post(url, headers=headers, json=payload, timeout=30) as resp:
+            async with session.post(url, headers=headers, json=payload, timeout=self._message_post_timeout_s) as resp:
                 if resp.status >= 400:
                     text = await resp.text()
                     raise aiohttp.ClientResponseError(request_info=resp.request_info, history=resp.history, status=resp.status, message=text)
@@ -121,6 +125,24 @@ class VoiceMessagePublisher:
         On failure, returns (None, ogg_path or None) and logs errors for fallback.
         """
         cfg = load_config()
+        # Refresh HTTP timeouts from configuration/env [IV]
+        try:
+            # Global fallback (0.0 or missing -> ignore)
+            global_to = float(cfg.get("VOICE_PUBLISHER_TIMEOUT_S", 0.0) or 0.0)
+            att_to = float(cfg.get("VOICE_PUBLISHER_ATTACHMENTS_CREATE_TIMEOUT_S", 30.0))
+            upl_to = float(cfg.get("VOICE_PUBLISHER_UPLOAD_TIMEOUT_S", 60.0))
+            msg_to = float(cfg.get("VOICE_PUBLISHER_MESSAGE_POST_TIMEOUT_S", 30.0))
+            if global_to > 0:
+                self._attachments_timeout_s = global_to
+                self._upload_timeout_s = global_to
+                self._message_post_timeout_s = global_to
+            else:
+                self._attachments_timeout_s = att_to
+                self._upload_timeout_s = upl_to
+                self._message_post_timeout_s = msg_to
+        except Exception:
+            # Keep defaults on parse errors
+            pass
         if not cfg.get("VOICE_ENABLE_NATIVE", False):
             self.logger.debug("voice.native.disabled")
             return VoicePublishResult(message=None, ogg_path=None, ok=False)

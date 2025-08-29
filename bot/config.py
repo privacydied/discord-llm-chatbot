@@ -252,8 +252,19 @@ def load_config():
         # TTS SETTINGS
         "TTS_BACKEND": os.getenv("TTS_BACKEND", "kokoro-onnx"),
         "TTS_VOICE": os.getenv("TTS_VOICE", "af"),
+        # Timeouts for TTS synthesis [CMV][IV]
+        # Defaults preserve legacy behavior; cold/warm may be overridden via env.
+        "TTS_TIMEOUT_S": _safe_float(os.getenv("TTS_TIMEOUT_S"), "25.0", "TTS_TIMEOUT_S"),
+        "TTS_TIMEOUT_COLD_S": _safe_float(os.getenv("TTS_TIMEOUT_COLD_S") or os.getenv("TTS_TIMEOUT_S"), "25.0", "TTS_TIMEOUT_COLD_S"),
+        "TTS_TIMEOUT_WARM_S": _safe_float(os.getenv("TTS_TIMEOUT_WARM_S") or os.getenv("TTS_TIMEOUT_S"), "25.0", "TTS_TIMEOUT_WARM_S"),
         # Native Discord voice messages toggle [CMV]
         "VOICE_ENABLE_NATIVE": os.getenv("VOICE_ENABLE_NATIVE", "false").lower() == "true",
+        # Voice Publisher HTTP timeouts (aiohttp) [CMV][IV]
+        # Global fallback if specific values are unset
+        "VOICE_PUBLISHER_TIMEOUT_S": _safe_float(os.getenv("VOICE_PUBLISHER_TIMEOUT_S"), "0.0", "VOICE_PUBLISHER_TIMEOUT_S"),
+        "VOICE_PUBLISHER_ATTACHMENTS_CREATE_TIMEOUT_S": _safe_float(os.getenv("VOICE_PUBLISHER_ATTACHMENTS_CREATE_TIMEOUT_S"), "30.0", "VOICE_PUBLISHER_ATTACHMENTS_CREATE_TIMEOUT_S"),
+        "VOICE_PUBLISHER_UPLOAD_TIMEOUT_S": _safe_float(os.getenv("VOICE_PUBLISHER_UPLOAD_TIMEOUT_S"), "60.0", "VOICE_PUBLISHER_UPLOAD_TIMEOUT_S"),
+        "VOICE_PUBLISHER_MESSAGE_POST_TIMEOUT_S": _safe_float(os.getenv("VOICE_PUBLISHER_MESSAGE_POST_TIMEOUT_S"), "30.0", "VOICE_PUBLISHER_MESSAGE_POST_TIMEOUT_S"),
         
         # OPTIONAL SETTINGS
         "TTS_PREFS_FILE": os.getenv("TTS_PREFS_FILE"),
