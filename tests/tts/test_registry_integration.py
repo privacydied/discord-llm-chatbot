@@ -179,11 +179,11 @@ class TestEngineIntegration:
             # Create engine instance
             engine = KokoroONNXEngine("test.onnx", "test.npz")
 
-            # Mock file reading
+            # Mock file reading and force non-English branch to use registry path
             with patch('builtins.open', mocker.mock_open(read_data=b'test wav data')):
                 with patch('pathlib.Path.exists', return_value=True):
                     with patch('pathlib.Path.unlink'):
-                        result = engine.synthesize("hello world")
+                        result = engine.synthesize("hello world", language="es")
 
             # Verify registry was consulted
             mock_select.assert_called_once_with('en', 'hello world')
@@ -211,10 +211,11 @@ class TestEngineIntegration:
 
             engine = KokoroONNXEngine("test.onnx", "test.npz")
 
+            # Force non-English branch to use registry path
             with patch('builtins.open', mocker.mock_open(read_data=b'test wav data')):
                 with patch('pathlib.Path.exists', return_value=True):
                     with patch('pathlib.Path.unlink'):
-                        result = engine.synthesize("hello world")
+                        result = engine.synthesize("hello world", language="es")
 
             # Verify KokoroDirect was called with text
             mock_kd.create.assert_called_once()

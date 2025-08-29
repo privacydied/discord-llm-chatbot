@@ -9,6 +9,7 @@ from typing import Any, Callable, List, Type, Union, Optional
 from functools import wraps
 from .exceptions import APIError, InferenceError
 import httpx
+import aiohttp
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +57,11 @@ def is_retryable_error(error: Exception, config: RetryConfig) -> bool:
 
     # 2) HTTP status codes present in message (e.g., '429 Too Many Requests')
     if any(str(code) in error_str for code in config.retryable_status_codes):
+        return True
+
+    # 2b) AIOHTTP/HTTPX style exceptions with explicit status attribute
+    status = getattr(error, "status", None)
+    if isinstance(status, int) and status in config.retryable_status_codes:
         return True
 
     # 3) Common transient error patterns
@@ -196,7 +202,7 @@ VISION_RETRY_CONFIG = RetryConfig(
     max_delay=30.0,
     exponential_base=2.0,
     jitter=True,
-    retryable_exceptions=[APIError, InferenceError, ConnectionError, TimeoutError, httpx.HTTPStatusError],
+    retryable_exceptions=[APIError, InferenceError, ConnectionError, TimeoutError, httpx.HTTPStatusError, aiohttp.ClientResponseError],
     retryable_status_codes=[500, 502, 503, 504, 429]
 )
 
@@ -206,7 +212,7 @@ API_RETRY_CONFIG = RetryConfig(
     max_delay=8.0,
     exponential_base=1.5,
     jitter=True,
-    retryable_exceptions=[APIError, ConnectionError, TimeoutError, httpx.HTTPStatusError],
+    retryable_exceptions=[APIError, ConnectionError, TimeoutError, httpx.HTTPStatusError, aiohttp.ClientResponseError],
     retryable_status_codes=[500, 502, 503, 504, 429]
 )
 
@@ -216,6 +222,6 @@ QUICK_RETRY_CONFIG = RetryConfig(
     max_delay=5.0,
     exponential_base=2.0,
     jitter=True,
-    retryable_exceptions=[APIError, ConnectionError, TimeoutError, httpx.HTTPStatusError],
+    retryable_exceptions=[APIError, ConnectionError, TimeoutError, httpx.HTTPStatusError, aiohttp.ClientResponseError],
     retryable_status_codes=[500, 502, 503, 504, 429]
 )

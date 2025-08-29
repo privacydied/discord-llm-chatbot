@@ -48,8 +48,8 @@ class TestKokoroEngine(unittest.IsolatedAsyncioTestCase):
         mock_kokoro.return_value = mock_instance
         self.engine.engine = None  # Force load
         
-        # Execute
-        result = await self.engine.synthesize("test text")
+        # Execute (use non-English to route through registry path)
+        result = await self.engine.synthesize("test text", language="es")
         
         # Verify
         self.assertEqual(result, b"audio_data")

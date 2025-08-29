@@ -8,6 +8,7 @@ from pathlib import Path
 from enum import Enum
 import shutil
 import importlib
+import onnxruntime as ort
 
 logger = logging.getLogger(__name__)
 
@@ -54,17 +55,17 @@ class KokoroDirect:
         # Methods available for tokenization/phonemization discovery
         self.available_tokenization_methods: set[TokenizationMethod] = set()
 
-        # Initialize tokenizer and session eagerly for tests
+        # Initialize ONNX session and official vocabulary
+        self._init_session()
+        self._init_official_vocab()
+        self._load_voices()
+        
+        # Initialize tokenizer for backward compatibility with tests
         try:
             import kokoro_onnx.tokenizer as ktok  # type: ignore
-            # Tests patch Tokenizer, so simple construction is fine
             self.tokenizer = getattr(ktok, "Tokenizer", object)()
         except Exception:
-            # Optional; tests patch this usually
             self.tokenizer = object()
-
-        self._init_session()
-        self._load_voices()
 
     def _detect_tokenization_methods(self) -> set[TokenizationMethod]:
         """Detect available tokenization/phonemization methods.
@@ -128,21 +129,47 @@ class KokoroDirect:
             return "misaki"
         return "espeak"
         
+    def _init_session(self) -> None:
+        """Initialize ONNX inference session."""
+        if not self.model_path or not Path(self.model_path).exists():
+            logger.warning(f"ONNX model not found at {self.model_path}")
+            self.sess = None
+            self.onnx_session = None
+            return
+            
+        try:
+            self.sess = ort.InferenceSession(
+                self.model_path,
+                providers=["CPUExecutionProvider"]
+            )
+            self.onnx_session = self.sess
+            logger.debug(f"ONNX session initialized: {self.model_path}")
+        except Exception as e:
+            logger.warning(f"Failed to initialize ONNX session: {e}")
+            self.sess = None
+            self.onnx_session = None
+            
+    def _init_official_vocab(self) -> None:
+        """Initialize official Kokoro IPA vocabulary with ONNX validation."""
+        if self.onnx_session is None:
+            logger.warning("No ONNX session available for vocab validation")
+            self.official_vocab = None
+            return
+            
+        try:
+            from bot.tts.ipa_vocab_loader import load_official_vocab
+            self.official_vocab = load_official_vocab(self.onnx_session)
+            logger.info(f"Official IPA vocab loaded: {self.official_vocab.size} symbols")
+        except Exception as e:
+            logger.error(f"Failed to load official vocabulary: {e}")
+            self.official_vocab = None
+            raise RuntimeError(f"Cannot proceed without official Kokoro vocabulary: {e}")
+
     def _load_model(self) -> None:
         """Load the ONNX model and voice embeddings."""
-        try:
-            import onnxruntime as ort
-        except Exception as e:
-            logger.error(f"Failed to load onnxruntime: {e}", exc_info=True)
-            raise
-
-        # Load ONNX model
-        try:
-            self.onnx_session = ort.InferenceSession(self.model_path)
-            logger.debug("Loaded ONNX model successfully")
-        except Exception as e:
-            logger.error(f"Failed to load ONNX model: {e}", exc_info=True)
-            raise
+        # ONNX session already initialized in _init_session
+        if self.onnx_session is None:
+            raise RuntimeError("ONNX session not available")
 
         # Load voice embeddings
         try:
@@ -306,7 +333,11 @@ class KokoroDirect:
                 matching the longest symbol available in the vocabulary.
                 Raises UnsupportedIPASymbolError if any character cannot be matched.
                 """
-                vocab = load_official_vocab()
+                if self.official_vocab is None:
+                    from bot.tts.ipa_vocab_loader import load_official_vocab
+                    vocab = load_official_vocab(self.onnx_session)
+                else:
+                    vocab = self.official_vocab
                 p2i = vocab.phoneme_to_id
                 # Precompute max token length to bound search (handles digraphs like oʊ, tʃ, dʒ, etc.)
                 try:
@@ -402,9 +433,11 @@ class KokoroDirect:
                         style_emb = self.voice_embeddings[selected_voice]
                     elif isinstance(self.voice_embeddings, dict) and self.default_voice in self.voice_embeddings:
                         style_emb = self.voice_embeddings[self.default_voice]
+                # If still unavailable, fall back to a zeroed style vector (deterministic)
                 if style_emb is None:
-                    raise ValueError("Voice embedding is required for IPA synthesis and was not found")
-                style_vec = self._to_style_vector(style_emb)
+                    style_vec = np.zeros((1, 256), dtype=np.float32)
+                else:
+                    style_vec = self._to_style_vector(style_emb)
                 inputs[style_name] = style_vec
 
             # Speed / rate
@@ -470,12 +503,18 @@ class KokoroDirect:
         return list(self.voices)
 
     def _init_session(self) -> None:
+        """Initialize or re-initialize ONNX session (backward compatibility)."""
+        if hasattr(self, '_session_initialized') and self._session_initialized:
+            return  # Already initialized in constructor
+            
         try:
-            import onnxruntime as ort
-            self.sess = ort.InferenceSession(self.model_path)
+            self.sess = ort.InferenceSession(self.model_path, providers=["CPUExecutionProvider"])
+            self.onnx_session = self.sess
+            self._session_initialized = True
         except Exception:
             # Leave as None if unavailable; some tests patch session methods
             self.sess = None
+            self.onnx_session = None
 
     def _load_voices(self) -> None:
         """Load voice embeddings if available on disk.

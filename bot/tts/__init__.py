@@ -9,7 +9,6 @@ import os
 from pathlib import Path
 
 from .kokoro_bootstrap import TOKENIZER_ALIASES, register_espeak_wrapper
-from .interface import TTSManager
 from .stub import generate_stub_wav
 
 
@@ -26,6 +25,8 @@ async def generate_tts(text: str, user_id: str) -> Path:
 
     # Prefer the high-level manager if available; fall back to stub
     try:
+        # Lazy import to avoid circular import at package import time
+        from .interface import TTSManager  # noqa: WPS433 (allow import inside function)
         manager = TTSManager()
         # TTSManager returns a Path; ensure we pass a concrete path
         path = await manager.generate_tts(text, out_path=str(out_path))
@@ -55,10 +56,17 @@ class TTS:  # pragma: no cover - test helper symbol
     pass
 
 __all__ = [
-    'TTSManager',
     'TOKENIZER_ALIASES',
     'register_espeak_wrapper',
+    'TTSManager',
     'TTS',
     'generate_tts',
     'cleanup_tts',
 ]
+
+# Lazy attribute access to avoid importing heavy modules at package import time
+def __getattr__(name):  # pragma: no cover - import shim
+    if name == 'TTSManager':
+        from .interface import TTSManager as _TTSManager
+        return _TTSManager
+    raise AttributeError(name)
