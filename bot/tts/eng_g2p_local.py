@@ -11,30 +11,8 @@ from typing import Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
-# Basic IPA to ID mapping as fallback (covers common English IPA symbols)
-IPA_TO_ID = {
-    # Vowels
-    'a': 1, 'ɑ': 2, 'æ': 3, 'ʌ': 4, 'ə': 5, 'ɚ': 6, 'ɛ': 7, 'ɜ': 8, 'ɪ': 9, 'i': 10,
-    'ɔ': 11, 'o': 12, 'ʊ': 13, 'u': 14, 'ɑː': 15, 'ɒ': 16, 'ɔː': 17, 'əʊ': 18, 'aʊ': 19,
-    'aɪ': 20, 'ɛə': 21, 'ɪə': 22, 'ɔɪ': 23, 'ʊə': 24, 'eɪ': 25,
-
-    # Consonants
-    'b': 26, 'd': 27, 'f': 28, 'g': 29, 'h': 30, 'j': 31, 'k': 32, 'l': 33, 'm': 34, 'n': 35,
-    'ŋ': 36, 'p': 37, 'r': 38, 's': 39, 'ʃ': 40, 't': 41, 'tʃ': 42, 'θ': 43, 'ð': 44,
-    'v': 45, 'w': 46, 'z': 47, 'ʒ': 48, 'dʒ': 49, 'ʔ': 50,
-
-    # Diphthongs and special
-    'iː': 51, 'uː': 52, 'ɔː': 53, 'ɑː': 54, 'ɜː': 55, 'ɛː': 56,
-
-    # Stress and length marks (treat as modifiers, not separate tokens)
-    'ˈ': 57, 'ˌ': 58, 'ː': 59,
-
-    # Pause/silence and punctuation
-    '_': 60, '<sp>': 61, 'sil': 62, '.': 63, ',': 64,
-
-    # Numbers and special characters
-    '0': 65, '1': 66, '2': 67, '3': 68, '4': 69, '5': 70, '6': 71, '7': 72, '8': 73, '9': 74,
-}
+# REMOVED: No fallback vocabulary allowed for English IPA synthesis.
+# All vocabulary loading must go through official sources via ipa_vocab_loader.py
 BUILTIN_LEXICON = {
     # Numbers 0-10
     "zero": ["Z", "IY1", "R", "OW"],
@@ -626,26 +604,14 @@ ARPABET_TO_IPA = {
     "K": "k", "L": "l", "M": "m", "N": "n",
     "NG": "ŋ", "OW": "oʊ", "OW0": "oʊ", "OW1": "oʊ", "OW2": "oʊ",
     "OY": "ɔɪ", "OY0": "ɔɪ", "OY1": "ɔɪ", "OY2": "ɔɪ",
-    "P": "p", "R": "r", "S": "s", "SH": "ʃ",
+    "P": "p", "R": "ɹ", "S": "s", "SH": "ʃ",
     "T": "t", "TH": "θ", "UH": "ʊ", "UH0": "ʊ", "UH1": "ʊ", "UH2": "ʊ",
     "UW": "u", "UW0": "u", "UW1": "u", "UW2": "u",
     "V": "v", "W": "w", "Y": "j", "Z": "z", "ZH": "ʒ"
 }
 
-# Fallback IPA symbol rewrite table for unsupported symbols
-IPA_REWRITE_TABLE = {
-    # Nasalization - drop tilde for models that don't support it
-    "ɑ̃": "ɑ", "ɛ̃": "ɛ", "ɔ̃": "ɔ", "œ̃": "œ",
-    # Length marks - drop for models that don't support them
-    "ɑː": "ɑ", "iː": "i", "uː": "u", "ɔː": "ɔ",
-    # Secondary stress - convert to primary or drop
-    "ˌ": "", "ˈ": "",
-    # Tie bars - replace with base chars for models that don't support them
-    "t͡ʃ": "tʃ", "d͡ʒ": "dʒ", "d͡z": "dz",
-    # Unknown symbols map to schwa
-    "ɡ": "g", "ɹ": "r", "ɫ": "l", "ɚ": "ər", "ɝ": "ɜr",
-    "ʔ": "",  # glottal stop - drop it
-}
+# REMOVED: No IPA rewrite fallbacks allowed for English.
+# All IPA symbols must be handled by the official vocab loader.
 
 def _normalize_text(text: str) -> str:
     """Apply deterministic text normalization for English."""
@@ -757,11 +723,11 @@ def _heuristic_arpabet(word: str) -> list[str]:
 
     # Single character mappings
     char_map = {
-        "a": " AH ", "b": " B ", "c": " K ", "d": " D ", "e": " EH ",
+        "a": " AE ", "b": " B ", "c": " K ", "d": " D ", "e": " EH ",
         "f": " F ", "g": " G ", "h": " HH ", "i": " IH ", "j": " JH ",
         "k": " K ", "l": " L ", "m": " M ", "n": " N ", "o": " AO ",
         "p": " P ", "q": " K ", "r": " R ", "s": " S ", "t": " T ",
-        "u": " AH ", "v": " V ", "w": " W ", "x": " K S ", "y": " Y ", "z": " Z "
+        "u": " UH ", "v": " V ", "w": " W ", "x": " K S ", "y": " Y ", "z": " Z "
     }
 
     result = []
@@ -917,9 +883,7 @@ def _load_real_vocab() -> Tuple[Dict[str, int], int]:
                 pass
 
         if vocab_data is None:
-            # Use our fallback vocabulary
-            logger.debug("Using fallback IPA vocabulary")
-            vocab_data = IPA_TO_ID
+            raise RuntimeError("No official Kokoro IPA vocabulary found. Use ipa_vocab_loader.py to load official vocabulary.")
 
         # Handle different vocabulary formats
         if isinstance(vocab_data, dict):
@@ -937,11 +901,7 @@ def _load_real_vocab() -> Tuple[Dict[str, int], int]:
         return _REAL_VOCAB, _VOCAB_SIZE
 
     except Exception as e:
-        logger.warning(f"Failed to load real vocabulary, using fallback: {e}")
-        # Fallback to our basic mapping (not ideal but prevents crashes)
-        _REAL_VOCAB = IPA_TO_ID.copy()
-        _VOCAB_SIZE = len(_REAL_VOCAB)
-        return _REAL_VOCAB, _VOCAB_SIZE
+        raise RuntimeError(f"Failed to load official Kokoro IPA vocabulary: {e}. No fallbacks allowed for English.")
 
 def _ipa_to_ids(phonemes: str) -> List[int]:
     """

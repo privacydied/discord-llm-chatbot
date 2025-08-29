@@ -6,6 +6,7 @@ import logging
 import contextlib
 import wave
 import time
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -46,6 +47,27 @@ class VoiceMessagePublisher:
         self._attachments_timeout_s: float = 30.0
         self._upload_timeout_s: float = 60.0
         self._message_post_timeout_s: float = 30.0
+        # Preflight tool availability cache
+        self._tools_checked: bool = False
+        self._tools_ok: bool = False
+
+    def _check_tools(self) -> bool:
+        """Preflight check for ffmpeg and ffprobe. Cache the result and log once. [REH]"""
+        if self._tools_checked:
+            return self._tools_ok
+        self._tools_checked = True
+        ffmpeg_path = shutil.which("ffmpeg")
+        ffprobe_path = shutil.which("ffprobe")
+        self._tools_ok = bool(ffmpeg_path) and bool(ffprobe_path)
+        if not self._tools_ok:
+            self.logger.warning(
+                "voice.native.tools_missing | ffmpeg/ffprobe not found; disabling native voice for this run"
+            )
+        else:
+            self.logger.debug(
+                f"voice.native.tools_ok | ffmpeg={ffmpeg_path} ffprobe={ffprobe_path}"
+            )
+        return self._tools_ok
 
     def _is_blocked(self, channel_id: int) -> bool:
         now = time.monotonic()
@@ -70,7 +92,20 @@ class VoiceMessagePublisher:
             async with session.post(url, headers=headers, json=payload, timeout=self._attachments_timeout_s) as resp:
                 if resp.status >= 400:
                     text = await resp.text()
-                    raise aiohttp.ClientResponseError(request_info=resp.request_info, history=resp.history, status=resp.status, message=text)
+                    err = aiohttp.ClientResponseError(
+                        request_info=resp.request_info,
+                        history=resp.history,
+                        status=resp.status,
+                        message=text,
+                    )
+                    # Respect Retry-After if provided by Discord [REH]
+                    try:
+                        ra = resp.headers.get("Retry-After")
+                        if ra is not None:
+                            err.retry_after_seconds = float(ra)
+                    except Exception:
+                        pass
+                    raise err
                 return await resp.json()
 
         return await retry_async(_do, API_RETRY_CONFIG)
@@ -83,7 +118,19 @@ class VoiceMessagePublisher:
             async with session.put(upload_url, headers=headers, data=ogg_bytes, timeout=self._upload_timeout_s) as resp:
                 if resp.status >= 400:
                     text = await resp.text()
-                    raise aiohttp.ClientResponseError(request_info=resp.request_info, history=resp.history, status=resp.status, message=text)
+                    err = aiohttp.ClientResponseError(
+                        request_info=resp.request_info,
+                        history=resp.history,
+                        status=resp.status,
+                        message=text,
+                    )
+                    try:
+                        ra = resp.headers.get("Retry-After")
+                        if ra is not None:
+                            err.retry_after_seconds = float(ra)
+                    except Exception:
+                        pass
+                    raise err
                 return None
 
         return await retry_async(_do, API_RETRY_CONFIG)
@@ -108,7 +155,19 @@ class VoiceMessagePublisher:
             async with session.post(url, headers=headers, json=payload, timeout=self._message_post_timeout_s) as resp:
                 if resp.status >= 400:
                     text = await resp.text()
-                    raise aiohttp.ClientResponseError(request_info=resp.request_info, history=resp.history, status=resp.status, message=text)
+                    err = aiohttp.ClientResponseError(
+                        request_info=resp.request_info,
+                        history=resp.history,
+                        status=resp.status,
+                        message=text,
+                    )
+                    try:
+                        ra = resp.headers.get("Retry-After")
+                        if ra is not None:
+                            err.retry_after_seconds = float(ra)
+                    except Exception:
+                        pass
+                    raise err
                 return await resp.json()
 
         return await retry_async(_do, API_RETRY_CONFIG)
@@ -166,6 +225,8 @@ class VoiceMessagePublisher:
 
         # 1) Prepare audio: transcode WAV -> OGG Opus, compute duration + waveform
         try:
+            if not self._check_tools():
+                return VoicePublishResult(message=None, ogg_path=None, ok=False)
             wav_p = Path(wav_path)
             # Compute duration directly from WAV header [REH]
             duration = 0.0
@@ -175,7 +236,10 @@ class VoiceMessagePublisher:
                     nf = wf.getnframes() or 0
                     duration = (nf / float(fr)) if fr else 0.0
             # Transcode close to reference script: 48kHz, libopus @ 64k
-            ogg_p = await transcode_to_ogg_opus(wav_p, bitrate="64k")
+            bitrate = str(cfg.get("VOICE_PUBLISHER_OPUS_BITRATE", "64k") or "64k")
+            vbr = str(cfg.get("VOICE_PUBLISHER_OPUS_VBR", "on") or "on")
+            comp = int(cfg.get("VOICE_PUBLISHER_OPUS_COMP_LEVEL", 10) or 10)
+            ogg_p = await transcode_to_ogg_opus(wav_p, bitrate=bitrate, vbr=vbr, compression_level=comp)
             ogg_bytes = ogg_p.read_bytes()
             waveform_b64 = compute_waveform_b64(wav_p)
             # Prefer probing duration from OGG (matches reference behavior)

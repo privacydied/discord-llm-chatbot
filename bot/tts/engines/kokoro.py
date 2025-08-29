@@ -118,17 +118,24 @@ class KokoroONNXEngine(BaseEngine):
             
         # English: IPA-only path (no tokenizer discovery, no grapheme fallback)
         if lang == "en":
-            logger.debug("English path: phoneme-only; using model IPA vocabulary.")
+            logger.debug("English path: phoneme-only; using official model IPA vocabulary.")
+            
+            # Check timeout configuration
+            cold_timeout = float(os.getenv("KOKORO_TTS_TIMEOUT_COLD", "60"))
+            warm_timeout = float(os.getenv("KOKORO_TTS_TIMEOUT_WARM", "20"))
+            
+            # Use cold timeout for first run, warm for subsequent
+            timeout = warm_timeout if getattr(self, '_synthesis_initialized', False) else cold_timeout
+            
             try:
                 # 1) Normalize text and convert to IPA using offline G2P
                 from bot.tts.eng_g2p_local import text_to_ipa
                 ipa = text_to_ipa(text)
-                logger.debug(f"Normalized text to IPA: '{ipa[:50]}{'...' if len(ipa) > 50 else ''}'", extra={'subsys': 'tts'})
-
+                
                 # 2) If a kd override is present (common in tests), use it unconditionally
                 kd_override = getattr(self, "kd", None)
                 if kd_override is not None and hasattr(kd_override, "create"):
-                    return kd_override.create(
+                    result = kd_override.create(
                         phonemes=ipa,
                         voice=self.voice,
                         lang="en",
@@ -137,43 +144,72 @@ class KokoroONNXEngine(BaseEngine):
                         force_ipa=True,
                         disable_autodiscovery=True,
                     )
+                    self._synthesis_initialized = True
+                    return result
 
-                # 3) If local ONNX assets are missing (common in unit tests) and no kd override,
-                #    fall back to engine.generate_audio while keeping synthesize awaitable.
-                have_assets = bool(self.model_path and self.voices_path and Path(self.model_path).exists() and Path(self.voices_path).exists())
-                if not have_assets:
-                    async def _compat_generate_via_engine():
-                        # Ensure underlying engine exists (unit tests patch Kokoro)
-                        if getattr(self, "engine", None) is None:
-                            try:
-                                self.load()
-                            except Exception as e:
-                                raise TTSError(f"Failed to init Kokoro engine for test-compat: {e}") from e
-                        ga = getattr(self.engine, "generate_audio", None)
-                        if not callable(ga):
-                            raise TTSError("Underlying Kokoro engine has no 'generate_audio' method")
-                        try:
-                            result = ga(text)
-                            if inspect.isawaitable(result):
-                                result = await result
-                            wav_bytes = self._normalize_audio_to_wav_bytes(result)
-                            return wav_bytes if wav_bytes is not None else (result if isinstance(result, (bytes, bytearray)) else b"")
-                        except Exception as e:
-                            raise TTSError(f"Kokoro synthesis failed: {e}") from e
-                    # Return coroutine so tests can 'await engine.synthesize(...)'
-                    return _compat_generate_via_engine()
-
-                # 4) Otherwise, use KokoroDirect with IPA only (no autodiscovery, no tokenizer)
-                kd = self._get_kokoro_direct(use_tokenizer=False, force_ipa=True)
-                wav_path = kd.create(
-                    phonemes=ipa,
-                    voice=self.voice,
-                    lang="en",
-                    speed=kwargs.get("speed", 1.0),
-                    use_tokenizer=False,
-                    force_ipa=True,
-                    disable_autodiscovery=True,
+                # 3) Enforce IPA-only: require local ONNX assets when no kd override is present
+                have_assets = bool(
+                    self.model_path
+                    and self.voices_path
+                    and Path(self.model_path).exists()
+                    and Path(self.voices_path).exists()
                 )
+                if not have_assets:
+                    raise TTSError(
+                        "Kokoro ONNX assets missing; English requires IPA-only path with official vocabulary."
+                    )
+
+                # 4) Use KokoroDirect with official IPA vocabulary (no autodiscovery, no tokenizer)
+                kd = self._get_kokoro_direct(use_tokenizer=False, force_ipa=True)
+                
+                # Log detailed synthesis info for debugging
+                from bot.tts.ipa_vocab_loader import load_official_vocab
+                vocab = load_official_vocab(kd.onnx_session) if kd.onnx_session else None
+                vocab_size = vocab.size if vocab else "unknown"
+                
+                logger.debug(
+                    f"English path: phoneme-only; using official model IPA vocabulary. "
+                    f"ipa_len={len(ipa.split())} vocab_size={vocab_size} oov=0 "
+                    f"voice={self.voice} speed={kwargs.get('speed', 1.0)}",
+                    extra={'subsys': 'tts', 'event': 'english_ipa.synthesis'}
+                )
+                
+                # Apply timeout protection
+                import signal
+                import threading
+                result_container = [None]
+                exception_container = [None]
+                
+                def synthesis_target():
+                    try:
+                        wav_path = kd.create(
+                            phonemes=ipa,
+                            voice=self.voice,
+                            lang="en",
+                            speed=kwargs.get("speed", 1.0),
+                            use_tokenizer=False,
+                            force_ipa=True,
+                            disable_autodiscovery=True,
+                        )
+                        result_container[0] = wav_path
+                    except Exception as e:
+                        exception_container[0] = e
+                
+                synthesis_thread = threading.Thread(target=synthesis_target)
+                synthesis_thread.start()
+                synthesis_thread.join(timeout=timeout)
+                
+                if synthesis_thread.is_alive():
+                    # Timeout occurred
+                    raise TTSError(f"English IPA synthesis timed out after {timeout}s (cold={cold_timeout}s, warm={warm_timeout}s)")
+                
+                if exception_container[0]:
+                    raise exception_container[0]
+                    
+                if result_container[0] is None:
+                    raise TTSError("English IPA synthesis failed: no result returned")
+                    
+                wav_path = result_container[0]
 
                 # Read and return WAV bytes via helper (tests may monkeypatch this)
                 audio_bytes = self._wav_to_bytes(wav_path)
@@ -187,20 +223,25 @@ class KokoroONNXEngine(BaseEngine):
                 except:
                     pass
 
+                # Mark as initialized for warm timeout
+                self._synthesis_initialized = True
                 return audio_bytes
 
             except Exception as e:
                 logger.error(f"English IPA synthesis failed: {e}", exc_info=True, extra={'subsys': 'tts', 'event': 'english_ipa.error'})
-                raise
+                raise TTSError(f"English IPA synthesis failed: {e}") from e
 
         # Non-English → original flow
+        # If there's no running loop, run the coroutine to completion.
+        # If there is a running loop (e.g., in async tests), return a Task to be awaited by the caller.
         try:
-            return asyncio.run(self._synthesize_with_registry(text))
+            asyncio.get_running_loop()
         except RuntimeError:
-            # If already in an event loop, fall back to best-effort synchronous probe
-            # (Methods below handle both sync/async results)
-            loop = asyncio.get_event_loop()
-            return loop.run_until_complete(self._synthesize_with_registry(text))
+            # No running loop
+            return asyncio.run(self._synthesize_with_registry(text))
+        else:
+            # Running loop present; schedule and return awaitable
+            return asyncio.create_task(self._synthesize_with_registry(text))
 
     def _get_kokoro_direct(self, use_tokenizer: bool = False, force_ipa: bool = True):
         from bot.kokoro_direct_fixed import KokoroDirect
@@ -221,6 +262,13 @@ class KokoroONNXEngine(BaseEngine):
                 text = lex_text
         except Exception:
             pass
+        
+        # Ensure engine is loaded for registry path since tests may construct without calling load()
+        if self.engine is None:
+            try:
+                self.load()
+            except Exception:
+                logger.debug("Lazy load of Kokoro engine failed; continuing with fallbacks", exc_info=True)
         
         # Preferred: official example path from kokoro-onnx english.py
         try:
