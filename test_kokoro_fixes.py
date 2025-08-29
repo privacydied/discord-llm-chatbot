@@ -17,7 +17,7 @@ def test_vocab_sanity():
     print("🔍 Testing vocabulary sanity...")
     
     try:
-        from bot.tts.ipa_vocab_loader import load_official_vocab, UnsupportedIPASymbolError
+        from bot.tts.ipa_vocab_loader import load_vocab, UnsupportedIPASymbolError
         
         # Mock ONNX session for testing
         class MockONNXSession:
@@ -29,8 +29,8 @@ def test_vocab_sanity():
         
         # Try to load - this should work with vendored vocab if available
         try:
-            vocab = load_official_vocab(mock_session)
-            print(f"  ✅ Loaded vocabulary with {vocab.size} symbols")
+            vocab = load_vocab(mock_session)
+            print(f"  ✅ Loaded vocabulary with {vocab.rows} symbols")
             
             # Check essential symbols
             essential = {"k", "g", "t", "d", "p", "b", "f", "v", "s", "z", 
@@ -55,11 +55,11 @@ def test_vocab_sanity():
         return False
 
 def test_longest_match_encoding():
-    """Test longest-match encoding with common IPA sequences."""
-    print("🔍 Testing longest-match encoding...")
+    """Test that IPA encoding uses longest-match greedy algorithm."""
+    print("\n🔍 Testing longest-match encoding...")
     
     try:
-        from bot.tts.ipa_vocab_loader import load_official_vocab, encode_ipa
+        from bot.tts.ipa_vocab_loader import load_vocab, encode_ipa, UnsupportedIPASymbolError
         
         # Mock session
         class MockONNXSession:
@@ -70,26 +70,35 @@ def test_longest_match_encoding():
         os.environ['KOKORO_ALLOW_VENDORED_VOCAB'] = 'true'
         
         try:
-            vocab = load_official_vocab(MockONNXSession())
+            vocab = load_vocab(MockONNXSession())
+            print(f"  ✅ Loaded vocabulary with {len(vocab.phoneme_to_id)} symbols")
             
-            # Test sequences that should work with longest-match
+            # Test longest-match: "tʃ" should be encoded as one token, not "t" + "ʃ"
             test_cases = [
-                ("k æ t", "simple consonant-vowel-consonant"),
-                ("h ɛ l oʊ", "hello with diphthong"),
-                ("ð ɪ s", "this with dental fricative"),
+                ("tʃ æ t", ["tʃ", "æ", "t"]),  # Expected: single token for "tʃ"
+                ("aɪ", ["aɪ"]),                # Expected: single token for diphthong
+                ("k æ t", ["k", "æ", "t"]),    # Expected: individual consonants
             ]
             
-            for ipa, description in test_cases:
+            all_good = True
+            for ipa, expected_tokens in test_cases:
                 try:
-                    token_ids = encode_ipa(ipa, vocab)
-                    if token_ids:
-                        print(f"  ✅ {description}: '{ipa}' → {len(token_ids)} tokens")
+                    token_ids = encode_ipa(ipa, MockONNXSession())
+                    # Convert back to check if tokens match expected
+                    actual_tokens = [vocab.id_to_phoneme[tid] for tid in token_ids if tid < len(vocab.id_to_phoneme)]
+                    actual_clean = [t for t in actual_tokens if t.strip()]
+                    
+                    if actual_clean == expected_tokens:
+                        print(f"  ✅ '{ipa}' → {actual_clean}")
                     else:
-                        print(f"  ⚠️  {description}: '{ipa}' → empty result")
-                except Exception as e:
-                    print(f"  ❌ {description}: '{ipa}' → {e}")
-            
-            return True
+                        print(f"  ⚠️  '{ipa}' → {actual_clean} (expected {expected_tokens})")
+                        all_good = False
+                        
+                except UnsupportedIPASymbolError as e:
+                    print(f"  ⚠️  '{ipa}' → Unsupported symbols: {e.unsupported_symbols}")
+                    all_good = False
+                    
+            return all_good
             
         except Exception as e:
             print(f"  ⚠️  Encoding test failed: {e}")
@@ -210,6 +219,10 @@ def main():
     
     if passed == len(tests):
         print("✅ All fixes validated successfully!")
+        print()
+        print("📋 Setup reminder:")
+        print("   export KOKORO_ALLOW_VENDORED_VOCAB=true  # for development")
+        print("   export DISCORD_TOKEN=your_bot_token      # for voice memos")
     else:
         print("⚠️  Some issues remain - check output above")
     

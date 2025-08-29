@@ -79,7 +79,7 @@ async def on_message(message):
 
 if __name__ == '__main__':
     if not TOKEN:
-        print('Error: DISCORD_BOT_TOKEN not found in .env file')
+        print('Error: DISCORD_TOKEN not found in .env file')
     else:
         print('Starting test bot...')
         bot.run(TOKEN)

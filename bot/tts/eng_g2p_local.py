@@ -824,84 +824,28 @@ def text_to_ipa(text: str) -> str:
 _REAL_VOCAB = None
 _VOCAB_SIZE = None
 
-def _load_real_vocab() -> Tuple[Dict[str, int], int]:
-    """Load the actual IPA vocabulary from kokoro_onnx package."""
+def _load_real_vocab():
+    """
+    Load the official hardcoded Kokoro IPA vocabulary.
+    No external files or fallbacks - uses the embedded mapping.
+    """
     global _REAL_VOCAB, _VOCAB_SIZE
 
-    if _REAL_VOCAB is not None:
+    if _REAL_VOCAB is not None and _VOCAB_SIZE is not None:
         return _REAL_VOCAB, _VOCAB_SIZE
 
-    # Try to load from kokoro_onnx assets
     try:
-        import kokoro_onnx
-        import os
-        import json
-
-        package_dir = os.path.dirname(kokoro_onnx.__file__)
-
-        # Try different possible vocabulary file names
-        vocab_files = [
-            'assets/phoneme_to_id.json',
-            'assets/ipa_vocab.json', 
-            'assets/vocab.json',
-            'phoneme_to_id.json',
-            'ipa_vocab.json',
-            'vocab.json',
-            'assets/vocab.txt'
-        ]
-
-        vocab_data = None
-        for vocab_file in vocab_files:
-            full_path = os.path.join(package_dir, vocab_file)
-            if os.path.exists(full_path):
-                if vocab_file.endswith('.txt'):
-                    # Handle vocab.txt format
-                    with open(full_path, 'r', encoding='utf-8') as f:
-                        lines = [line.strip() for line in f if line.strip()]
-                    vocab_data = {phoneme: i for i, phoneme in enumerate(lines)}
-                else:
-                    # Handle JSON format
-                    with open(full_path, 'r', encoding='utf-8') as f:
-                        vocab_data = json.load(f)
-                logger.debug(f"Loaded vocabulary from {vocab_file}")
-                break
-
-        if vocab_data is None:
-            # Try to extract from the Kokoro model itself
-            try:
-                import kokoro_onnx.tokenizer as kt
-                if hasattr(kt, 'PHONEME_TO_ID'):
-                    vocab_data = kt.PHONEME_TO_ID
-                    logger.debug("Extracted PHONEME_TO_ID from kokoro_onnx.tokenizer")
-                elif hasattr(kt, 'PhonemeCodec'):
-                    # Try to get vocab from PhonemeCodec
-                    codec = kt.PhonemeCodec()
-                    if hasattr(codec, 'vocab'):
-                        vocab_data = codec.vocab
-                        logger.debug("Extracted vocabulary from PhonemeCodec")
-            except Exception:
-                pass
-
-        if vocab_data is None:
-            raise RuntimeError("No official Kokoro IPA vocabulary found. Use ipa_vocab_loader.py to load official vocabulary.")
-
-        # Handle different vocabulary formats
-        if isinstance(vocab_data, dict):
-            # phoneme -> ID format
-            _REAL_VOCAB = vocab_data
-            _VOCAB_SIZE = len(vocab_data)
-        elif isinstance(vocab_data, list):
-            # List format - assume index = ID
-            _REAL_VOCAB = {phoneme: i for i, phoneme in enumerate(vocab_data)}
-            _VOCAB_SIZE = len(vocab_data)
-        else:
-            raise ValueError(f"Unsupported vocabulary format: {type(vocab_data)}")
-
-        logger.debug(f"Loaded vocabulary with {_VOCAB_SIZE} entries")
+        # Import from the hardcoded vocabulary
+        from bot.tts.ipa_vocab_kokoro_v1 import PHONEME_TO_ID
+        
+        _REAL_VOCAB = dict(PHONEME_TO_ID)
+        _VOCAB_SIZE = len(_REAL_VOCAB)
+        
+        logger.debug(f"Loaded hardcoded vocabulary with {_VOCAB_SIZE} entries")
         return _REAL_VOCAB, _VOCAB_SIZE
 
     except Exception as e:
-        raise RuntimeError(f"Failed to load official Kokoro IPA vocabulary: {e}. No fallbacks allowed for English.")
+        raise RuntimeError(f"Failed to load hardcoded Kokoro IPA vocabulary: {e}. No fallbacks allowed for English.")
 
 def _ipa_to_ids(phonemes: str) -> List[int]:
     """

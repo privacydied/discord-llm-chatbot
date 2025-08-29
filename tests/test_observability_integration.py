@@ -443,7 +443,7 @@ class TestConfigValidationIntegration:
 def sample_config():
     """Sample configuration for testing."""
     return {
-        "DISCORD_BOT_TOKEN": "test_token",
+        "DISCORD_TOKEN": "test_token",
         "OPENAI_API_KEY": "test_key",
         "LOG_LEVEL": "INFO",
         "PROMETHEUS_ENABLED": "true",
