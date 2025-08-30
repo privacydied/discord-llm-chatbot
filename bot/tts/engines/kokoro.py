@@ -11,6 +11,7 @@ from kokoro_onnx import Kokoro
 from .base import BaseEngine
 from bot.tts.errors import TTSError
 from bot.tokenizer_registry import select_tokenizer_for_language, apply_lexicon
+from bot.tts.helpers import maybe_onnx_session
 
 logger = logging.getLogger(__name__)
 
@@ -164,7 +165,8 @@ class KokoroONNXEngine(BaseEngine):
                 
                 # Log detailed synthesis info for debugging
                 from bot.tts.ipa_vocab_loader import load_vocab
-                vocab = load_vocab(kd.onnx_session) if kd.onnx_session else None
+                sess = maybe_onnx_session(kd)
+                vocab = load_vocab(sess) if sess is not None else None
                 vocab_size = vocab.rows if vocab else "unknown"
                 
                 logger.debug(
