@@ -1960,13 +1960,28 @@ class Router:
 
     async def _flow_process_attachments(self, message: Message, attachment) -> BotAction:
         """Process image/document attachments."""
+        # Accept either a Discord Attachment object or a placeholder (e.g., "" from compat path)
+        if not hasattr(attachment, "filename"):
+            try:
+                attachments = getattr(message, "attachments", None)
+                if attachments and len(attachments) > 0:
+                    attachment = attachments[0]
+                else:
+                    self.logger.warning(f"No attachments available to process (msg_id: {message.id})")
+                    return BotAction(content="I didn't receive a file to process.")
+            except Exception:
+                self.logger.warning(f"Attachment placeholder received but unable to access message.attachments (msg_id: {message.id})")
+                return BotAction(content="I didn't receive a file to process.")
+
         self.logger.info(f"Processing attachment: {attachment.filename} (msg_id: {message.id})")
 
-        content_type = attachment.content_type
-        filename = attachment.filename.lower()
+        content_type = getattr(attachment, "content_type", None)
+        filename = (getattr(attachment, "filename", "") or "").lower()
 
         # Process image attachments
-        if content_type and content_type.startswith("image/"):
+        if (content_type and content_type.startswith("image/")) or any(
+            filename.endswith(ext) for ext in (".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp")
+        ):
             return await self._process_image_attachment(message, attachment)
 
         # Process document attachments
