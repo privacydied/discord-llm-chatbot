@@ -8,7 +8,7 @@ from __future__ import annotations
 import re
 import unicodedata
 import numpy as np
-from typing import NamedTuple
+from typing import NamedTuple, Optional
 import logging
 
 try:
@@ -36,10 +36,10 @@ class Vocab(NamedTuple):
     rows: int
 
 
-def _get_embedding_rows(session: InferenceSession) -> int:
+def _get_embedding_rows(session: Optional[InferenceSession]) -> int:
     """Get embedding rows from ONNX session metadata or inputs."""
     # Try to find vocab size in model metadata first
-    if hasattr(session, 'get_modelmeta'):
+    if session is not None and hasattr(session, 'get_modelmeta'):
         try:
             meta = session.get_modelmeta()
             if meta and hasattr(meta, 'custom_metadata_map'):
@@ -56,12 +56,13 @@ def _get_embedding_rows(session: InferenceSession) -> int:
     return len(PHONEME_TO_ID)
 
 
-def load_vocab(session: InferenceSession) -> Vocab:
+def load_vocab(session: Optional[InferenceSession]) -> Vocab:
     """
     Load hardcoded official Kokoro IPA vocabulary with ONNX validation.
     
     Args:
-        session: ONNX inference session for validation
+        session: Optional ONNX inference session for validation. If None,
+                 uses embedded mapping size.
         
     Returns:
         Vocab: Official vocabulary with validation
@@ -155,7 +156,7 @@ def encode_ipa(ipa: str, session: InferenceSession) -> list[int]:
         UnsupportedIPASymbolError: If any symbol cannot be encoded
     """
     vocab = load_vocab(session)
-    s = normalize_ipa(ipa, vocab)
+    s = normalize_ipa(ipa)
     
     # Precompute longest-first symbol list for greedy matching
     symbols = sorted(vocab.phoneme_to_id.keys(), key=len, reverse=True)

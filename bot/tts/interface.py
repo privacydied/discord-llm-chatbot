@@ -62,8 +62,9 @@ class TTSManager:
 
             if engine_name == "kokoro-onnx":
                 # Best-effort prepare assets at startup if we're not already inside a running event loop
-                model_path = os.getenv('TTS_MODEL_PATH')
-                voices_path = os.getenv('TTS_VOICES_PATH')
+                # Accept both legacy and new env var names for compatibility
+                model_path = os.getenv('TTS_MODEL_PATH') or os.getenv('KOKORO_MODEL_PATH')
+                voices_path = os.getenv('TTS_VOICES_PATH') or os.getenv('KOKORO_VOICES_PATH')
                 model_exists = Path(model_path).exists() if model_path else False
                 voices_exist = Path(voices_path).exists() if voices_path else False
                 if not (model_path and voices_path and model_exists and voices_exist):
@@ -77,8 +78,11 @@ class TTSManager:
                         try:
                             mp, vp = asyncio.run(ensure_kokoro_assets(Path('tts')))
                             model_path, voices_path = str(mp), str(vp)
+                            # Set both env variants to keep all components in sync
                             os.environ['TTS_MODEL_PATH'] = model_path
                             os.environ['TTS_VOICES_PATH'] = voices_path
+                            os.environ['KOKORO_MODEL_PATH'] = model_path
+                            os.environ['KOKORO_VOICES_PATH'] = voices_path
                             model_exists, voices_exist = True, True
                             logger.info("Prepared Kokoro assets at startup", extra={"subsys": "tts", "event": "assets_ready"})
                         except Exception:
@@ -115,16 +119,20 @@ class TTSManager:
         try:
             # On-demand asset preparation and engine upgrade if configured for kokoro-onnx
             if self._engine_name == 'kokoro-onnx':
-                model_path = os.getenv('TTS_MODEL_PATH')
-                voices_path = os.getenv('TTS_VOICES_PATH')
+                # Accept both legacy and new env var names for compatibility
+                model_path = os.getenv('TTS_MODEL_PATH') or os.getenv('KOKORO_MODEL_PATH')
+                voices_path = os.getenv('TTS_VOICES_PATH') or os.getenv('KOKORO_VOICES_PATH')
                 model_exists = Path(model_path).exists() if model_path else False
                 voices_exist = Path(voices_path).exists() if voices_path else False
                 if not (model_path and voices_path and model_exists and voices_exist):
                     try:
                         mp, vp = await ensure_kokoro_assets(Path('tts'))
                         model_path, voices_path = str(mp), str(vp)
+                        # Set both env variants to keep all components in sync
                         os.environ['TTS_MODEL_PATH'] = model_path
                         os.environ['TTS_VOICES_PATH'] = voices_path
+                        os.environ['KOKORO_MODEL_PATH'] = model_path
+                        os.environ['KOKORO_VOICES_PATH'] = voices_path
                         model_exists, voices_exist = True, True
                         logger.info("Assets ensured on-demand", extra={"subsys": "tts", "event": "assets_ready"})
                     except Exception:
