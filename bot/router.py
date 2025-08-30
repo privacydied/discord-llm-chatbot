@@ -21,11 +21,12 @@ import logging
 import os
 import re
 import tempfile
+import time
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from pathlib import Path
 from typing import Any, Callable, Coroutine, Dict, Optional, TYPE_CHECKING, List, Awaitable, Tuple, Union
-
+from html import unescape
 import discord
 import httpx
 from .x_api_client import XApiClient
@@ -48,7 +49,8 @@ logger = get_logger(__name__)
 # Local application imports
 from .action import BotAction, ResponseMessage
 from .command_parser import Command, parse_command
-from .modality import collect_input_items, InputModality, InputItem
+from .modality import collect_input_items, InputModality, InputItem, map_item_to_modality
+from .result_aggregator import ResultAggregator
 from .exceptions import DispatchEmptyError, DispatchTypeError, APIError
 from .hear import hear_infer, hear_infer_from_url
 from .pdf_utils import PDFProcessor
@@ -1313,31 +1315,10 @@ class Router:
                         route_photos = bool(cfg.get("X_API_ROUTE_PHOTOS_TO_VL", False))
                         if not route_photos:
                             return f"{base}\nPhotos: {len(photos)}"
-                        descriptions: List[str] = []
-                        successes = 0
-                        failures = 0
-                        for idx, p in enumerate(photos, start=1):
-                            purl = p.get("url") or p.get("image_url") or p.get("src")
-                            if not purl:
-                                failures += 1
-                                descriptions.append(f"📷 Photo {idx}/{len(photos)} — no URL available")
-                                continue
-                            self._metric_inc("x.photo_to_vl.attempt", {"idx": str(idx)})
-                            prompt = (
-                                f"This is photo {idx} of {len(photos)} from a tweet: {url}. "
-                                f"Describe it clearly and succinctly, including any visible text."
-                            )
-                            desc = await self._vl_describe_image_from_url(purl, prompt=prompt)
-                            if desc:
-                                successes += 1
-                                self._metric_inc("x.photo_to_vl.success", {"idx": str(idx)})
-                                descriptions.append(f"📷 Photo {idx}/{len(photos)}\n{desc}")
-                            else:
-                                failures += 1
-                                self._metric_inc("x.photo_to_vl.failure", {"idx": str(idx)})
-                                descriptions.append(f"📷 Photo {idx}/{len(photos)} — analysis unavailable")
-                        header = f"{base}\nPhotos analyzed: {successes}/{len(photos)}"
-                        return f"{header}\n\n" + "\n\n".join(descriptions)
+                        
+                        # Use new syndication handler for full-res images [CA][PA]
+                        from ..syndication.handler import handle_twitter_syndication_to_vl
+                        return await handle_twitter_syndication_to_vl(syn, url, self._vl_describe_image_from_url)
 
                 # Tier 2 (optionally before API if syndication_first): X API [SFT]
                 if tweet_id and x_client is not None:
@@ -1404,7 +1385,7 @@ class Router:
                                 return f"{base}\nPhotos: {photo_count}"
 
                             self.logger.info(
-                                "🖼️🐦 Routing X photos to VL",
+                                "🖼️🐦 Routing X photos to VL via API data",
                                 extra={
                                     "event": "x.photo_to_vl.start",
                                     "detail": {
@@ -1414,52 +1395,18 @@ class Router:
                                 },
                             )
                             self._metric_inc("x.photo_to_vl.enabled", None)
-                            photo_urls: List[str] = []
-                            for m in photos:
-                                u = m.get("url") or m.get("preview_image_url")
-                                if u:
-                                    photo_urls.append(u)
-
-                            if not photo_urls:
-                                self.logger.warning("No photo URLs present in X API media; falling back to count")
-                                self._metric_inc("x.photo_to_vl.no_urls", None)
-                                return f"{base}\nPhotos: {len(photos)}"
-
-                            descriptions: List[str] = []
-                            successes = 0
-                            failures = 0
-                            for idx, purl in enumerate(photo_urls, start=1):
-                                self.logger.info(f"🔎 VL analyzing X photo {idx}/{len(photo_urls)}: {purl}")
-                                self._metric_inc("x.photo_to_vl.attempt", {"idx": str(idx)})
-                                prompt = (
-                                    f"This is photo {idx} of {len(photo_urls)} from a tweet: {url}. "
-                                    f"Describe it clearly and succinctly, including any visible text."
-                                )
-                                desc = await self._vl_describe_image_from_url(purl, prompt=prompt)
-                                if desc:
-                                    successes += 1
-                                    self._metric_inc("x.photo_to_vl.success", {"idx": str(idx)})
-                                    descriptions.append(f"📷 Photo {idx}/{len(photo_urls)}\n{desc}")
-                                else:
-                                    failures += 1
-                                    self._metric_inc("x.photo_to_vl.failure", {"idx": str(idx)})
-                                    descriptions.append(f"📷 Photo {idx}/{len(photo_urls)} — analysis unavailable")
-
-                            self.logger.info(
-                                "🧩 X photo VL complete",
-                                extra={
-                                    "event": "x.photo_to_vl.done",
-                                    "detail": {
-                                        "url": url,
-                                        "total": len(photo_urls),
-                                        "ok": successes,
-                                        "fail": failures,
-                                    },
-                                },
-                            )
-                            agg = "\n\n".join(descriptions)
-                            header = f"{base}\nPhotos analyzed: {successes}/{len(photo_urls)}"
-                            return f"{header}\n\n{agg}"
+                            
+                            # Convert API data to syndication-like format for unified handling [CA][PA]
+                            api_as_syn = {
+                                "text": (tweet_data.get("text") or "").strip(),
+                                "photos": [{"url": p.get("url")} for p in photos if p.get("url")],
+                                "user": {"screen_name": "unknown"},
+                                "created_at": tweet_data.get("created_at")
+                            }
+                            
+                            # Use new syndication handler for full-res images [CA][PA] 
+                            from ..syndication.handler import handle_twitter_syndication_to_vl
+                            return await handle_twitter_syndication_to_vl(api_as_syn, url, self._vl_describe_image_from_url)
 
                         return self._format_x_tweet_result(api_data, url)
                     except APIError as e:

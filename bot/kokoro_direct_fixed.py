@@ -216,13 +216,13 @@ class KokoroDirect:
         disable_autodiscovery: bool = True,
         logger: Optional[logging.Logger] = None,
         **kwargs: Any,
-    ) -> Path:
-        """Create TTS output and write a WAV file.
+    ) -> tuple[np.ndarray, int]:
+        """Create TTS output and return processed audio data.
 
         - If `phonemes` is given, uses IPA phoneme path.
         - Otherwise uses quiet grapheme path with pre-tokenized tokens from tokenizer.
         - `voice` can be a voice_id (str) or embedding ndarray.
-        - Returns the output Path.
+        - Returns tuple of (pcm_data, sample_rate).
         """
         # Determine language (env override respected)
         resolved_lang = (lang or self.language or "en").lower()
@@ -294,22 +294,18 @@ class KokoroDirect:
             from bot.tts.errors import TTSWriteError
             raise TTSWriteError("Empty audio from model")
 
-        # Determine output path
-        if out_path is None:
-            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp:
-                out_path = Path(tmp.name)
+        # Apply audio hygiene: highpass, limiter, fade, resample to 48kHz
+        pcm = self._highpass(audio, sr=sr, cutoff_hz=20.0)
+        pcm = self._soft_limiter(pcm, ceiling_db=-1.0)
+        pcm = self._fade(pcm, sr=sr, ms=5)
+        if sr != 48000:
+            pcm = self._resample(pcm, from_sr=sr, to_sr=48000)
+            sr = 48000
 
-        # Write WAV (fail-fast; no fallback to scipy)
-        try:
-            self._save_audio_to_wav(audio, str(out_path))
-            if logger:
-                logger.debug("Created audio with length=%d samples", int(audio.size))
-                logger.debug("Saved audio to %s", str(out_path))
-        except Exception as e:
-            from bot.tts.errors import TTSWriteError
-            raise TTSWriteError(f"Failed to write WAV: {e}")
+        if logger:
+            logger.debug("Created audio with length=%d samples", int(pcm.size))
 
-        return out_path
+        return pcm, sr
 
     def _ensure_model_loaded(self) -> None:
         if self.onnx_session is None or self.voice_embeddings is None:
@@ -642,7 +638,120 @@ class KokoroDirect:
                     # Give up and re-raise original error
                     raise e
             audio = np.asarray(outputs[0]).reshape(-1).astype(np.float32, copy=False)
-        return audio, SAMPLE_RATE
+        # Apply audio processing hygiene
+        audio = self._apply_audio_processing(audio, SAMPLE_RATE)
+        return audio, 48000  # Always output at 48kHz for Opus
+
+    def _apply_audio_processing(self, audio: np.ndarray, sample_rate: int) -> np.ndarray:
+        """Apply audio processing: highpass, limiter, fade, resample to 48kHz."""
+        try:
+            # High-pass filter to remove DC/rumble (~20Hz cutoff)
+            audio = self._highpass_filter(audio, sample_rate, cutoff_hz=20.0)
+            
+            # Soft limiter to prevent clipping (-1 dBFS ceiling)
+            audio = self._soft_limiter(audio, ceiling_db=-1.0)
+            
+            # Apply fade-in/out (5ms)
+            audio = self._apply_fade(audio, sample_rate, fade_ms=5)
+            
+            # Resample to 48kHz if needed
+            if sample_rate != 48000:
+                audio = self._resample_audio(audio, sample_rate, 48000)
+                
+            return audio
+        except Exception as e:
+            logger.warning(f"Audio processing failed, using original: {e}")
+            return audio
+
+    def _highpass_filter(self, audio: np.ndarray, sr: int, cutoff_hz: float = 20.0) -> np.ndarray:
+        """Simple highpass filter using scipy if available."""
+        try:
+            from scipy import signal
+            nyquist = sr / 2
+            normalized_cutoff = cutoff_hz / nyquist
+            b, a = signal.butter(2, normalized_cutoff, btype='high')
+            return signal.filtfilt(b, a, audio).astype(np.float32)
+        except ImportError:
+            logger.debug("scipy not available, skipping highpass filter")
+            return audio
+
+    def _soft_limiter(self, audio: np.ndarray, ceiling_db: float = -1.0) -> np.ndarray:
+        """Apply soft limiting to prevent clipping."""
+        ceiling_linear = 10 ** (ceiling_db / 20.0)
+        peak = np.abs(audio).max()
+        if peak > ceiling_linear:
+            audio = audio * (ceiling_linear / peak)
+        return audio
+
+    def _apply_fade(self, audio: np.ndarray, sr: int, fade_ms: int = 5) -> np.ndarray:
+        """Apply fade-in and fade-out."""
+        fade_samples = int(fade_ms * sr / 1000)
+        if fade_samples >= len(audio) // 2:
+            return audio
+            
+        # Fade-in
+        fade_in = np.linspace(0, 1, fade_samples)
+        audio[:fade_samples] *= fade_in
+        
+        # Fade-out  
+        fade_out = np.linspace(1, 0, fade_samples)
+        audio[-fade_samples:] *= fade_out
+        
+        return audio
+
+    def _highpass(self, audio: np.ndarray, sr: int, cutoff_hz: float = 20.0) -> np.ndarray:
+        """Simple highpass filter using scipy if available."""
+        try:
+            from scipy import signal
+            nyquist = sr / 2
+            normalized_cutoff = cutoff_hz / nyquist
+            b, a = signal.butter(2, normalized_cutoff, btype='high')
+            return signal.filtfilt(b, a, audio).astype(np.float32)
+        except ImportError:
+            logger.debug("scipy not available, skipping highpass filter")
+            return audio
+
+    def _soft_limiter(self, audio: np.ndarray, ceiling_db: float = -1.0) -> np.ndarray:
+        """Apply soft limiting to prevent clipping."""
+        ceiling_linear = 10 ** (ceiling_db / 20.0)
+        peak = np.abs(audio).max()
+        if peak > ceiling_linear:
+            audio = audio * (ceiling_linear / peak)
+        return audio
+
+    def _fade(self, audio: np.ndarray, sr: int, ms: int = 5) -> np.ndarray:
+        """Apply fade-in and fade-out."""
+        fade_samples = int(ms * sr / 1000)
+        if fade_samples >= len(audio) // 2:
+            return audio
+            
+        # Fade-in
+        fade_in = np.linspace(0, 1, fade_samples)
+        audio[:fade_samples] *= fade_in
+        
+        # Fade-out  
+        fade_out = np.linspace(1, 0, fade_samples)
+        audio[-fade_samples:] *= fade_out
+        
+        return audio
+
+    def _resample(self, audio: np.ndarray, from_sr: int, to_sr: int) -> np.ndarray:
+        """Resample audio using available library."""
+        if from_sr == to_sr:
+            return audio
+            
+        try:
+            # Try librosa first
+            import librosa
+            return librosa.resample(audio, orig_sr=from_sr, target_sr=to_sr).astype(np.float32)
+        except ImportError:
+            try:
+                # Try scipy
+                from scipy import signal
+                return signal.resample(audio, int(len(audio) * to_sr / from_sr)).astype(np.float32)
+            except ImportError:
+                logger.warning(f"No resampling library available, keeping original sample rate {from_sr}")
+                return audio
 
     def _run_onnx_inference(self, token_ids: List[int], voice_embedding: np.ndarray, speed: float) -> Tuple[np.ndarray, int]:
         """Run ONNX inference with proper input/output handling."""

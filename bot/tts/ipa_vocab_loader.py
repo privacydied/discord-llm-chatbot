@@ -100,8 +100,44 @@ def load_vocab(session: InferenceSession) -> Vocab:
 GUARDED_REWRITES = (
     ("ɡ", "g"),   # Alternative g symbol  
     ("r", "ɹ"),   # English rhotic
+    ("ɚ", "ɝ"),   # Unify rhotics to ɝ
     ("a", "ɑ"),   # Fix 'a' OOV: only if 'ɑ' exists and 'a' not in table
 )
+
+
+def normalize_ipa(ipa: str) -> str:
+    """
+    Normalize IPA string to match model vocabulary.
+    
+    Args:
+        ipa: Input IPA string
+        
+    Returns:
+        str: Normalized IPA string
+    """
+    from .ipa_vocab_kokoro_v1 import PHONEME_TO_ID
+    ipa = ipa.replace("ː", "").replace("ɚ", "ɝ").replace("r", "ɹ").replace("ɡ", "g")
+    ipa = _strip_unknowns(ipa, allowed=set(PHONEME_TO_ID.keys()))
+    return ipa
+
+def _strip_unknowns(ipa: str, allowed: set) -> str:
+    """Strip symbols not in allowed vocabulary."""
+    filtered_chars = []
+    i = 0
+    while i < len(ipa):
+        # Try longest match first
+        found = False
+        for length in range(min(3, len(ipa) - i), 0, -1):
+            substr = ipa[i:i+length]
+            if substr in allowed or substr.isspace():
+                filtered_chars.append(substr)
+                i += length
+                found = True
+                break
+        if not found:
+            # Skip unknown symbol
+            i += 1
+    return "".join(filtered_chars)
 
 
 def encode_ipa(ipa: str, session: InferenceSession) -> list[int]:
@@ -119,12 +155,7 @@ def encode_ipa(ipa: str, session: InferenceSession) -> list[int]:
         UnsupportedIPASymbolError: If any symbol cannot be encoded
     """
     vocab = load_vocab(session)
-    s = unicodedata.normalize("NFC", ipa)
-    
-    # Apply guarded rewrites
-    for src, dst in GUARDED_REWRITES:
-        if src in s and src not in vocab.phoneme_to_id and dst in vocab.phoneme_to_id:
-            s = s.replace(src, dst)
+    s = normalize_ipa(ipa, vocab)
     
     # Precompute longest-first symbol list for greedy matching
     symbols = sorted(vocab.phoneme_to_id.keys(), key=len, reverse=True)

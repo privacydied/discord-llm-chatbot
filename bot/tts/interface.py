@@ -3,10 +3,12 @@ import logging
 import os
 import re
 import tempfile
+import shutil
 from pathlib import Path
 import inspect
 import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor
+import ffmpeg
 
 from .engines.base import BaseEngine
 from .engines.stub import StubEngine
@@ -215,7 +217,29 @@ class TTSManager:
         text = re.sub(r"\s+", " ", text).strip()
         return text
 
-    async def generate_tts(self, text: str, out_path: str | Path | None = None, timeout: Optional[float] = None) -> Path:
+    def _to_ogg_opus_ffmpegpy(self, wav_path: Path, ogg_path: Path) -> None:
+        """Convert WAV to OGG/Opus using ffmpeg-python library."""
+        try:
+            (
+                ffmpeg
+                .input(str(wav_path))
+                .output(
+                    str(ogg_path),
+                    acodec='libopus',
+                    audio_bitrate=os.getenv('OPUS_BITRATE', '64k'),
+                    ar=48000,
+                    ac=1,
+                    format='ogg'
+                )
+                .overwrite_output()
+                .run(quiet=True)
+            )
+            logger.debug(f"Converted WAV to OGG/Opus: {ogg_path}")
+        except ffmpeg.Error as e:
+            logger.error(f"ffmpeg conversion failed: {e}")
+            raise SynthesisError(f"Failed to convert to OGG/Opus: {e}")
+
+    async def generate_tts(self, text: str, out_path: str | Path | None = None, output_format: str = "ogg", timeout: Optional[float] = None) -> tuple[Path, str]:
         """Generate TTS to a file and return its Path.
         - If out_path is None, create a temporary .wav file.
         - Cleans text similarly to tests expectations.
@@ -247,16 +271,28 @@ class TTSManager:
             audio_bytes = await self.synthesize(cleaned, timeout=selected_timeout)
         else:
             audio_bytes = await self.synthesize(cleaned, timeout=timeout)
-        if out_path is None:
-            fd, tmp_name = tempfile.mkstemp(prefix="tts_", suffix=".wav")
-            os.close(fd)
-            out_path = Path(tmp_name)
-        else:
-            out_path = Path(out_path)
-            if out_path.parent:
-                out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_bytes(audio_bytes)
-        return out_path
+            
+        # Always write to intermediate WAV first
+        fd, wav_tmp_name = tempfile.mkstemp(prefix="tts_", suffix=".wav")
+        os.close(fd)
+        wav_path = Path(wav_tmp_name)
+        wav_path.write_bytes(audio_bytes)
+        
+        if output_format == "wav":
+            final_path = out_path or wav_path
+            if out_path and out_path != wav_path:
+                if Path(out_path).parent:
+                    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(wav_path), str(final_path))
+            return final_path, "audio/wav"
+        
+        # OGG/Opus (48k mono) using ffmpeg-python
+        ogg_out = out_path or Path(tempfile.mktemp(prefix="tts_", suffix=".ogg"))
+        if ogg_out.parent and not ogg_out.parent.exists():
+            ogg_out.parent.mkdir(parents=True, exist_ok=True)
+        self._to_ogg_opus_ffmpegpy(wav_path, ogg_out)
+        wav_path.unlink()  # Clean up intermediate WAV
+        return ogg_out, "audio/ogg"
 
     # --- High-level processing helper used by bot._execute_action() ---
     async def process(self, action: BotAction) -> BotAction:
@@ -338,7 +374,7 @@ class TTSManager:
                 action.audio_path = str(cached_path)
             else:
                 # Generate new file
-                audio_path = await self.generate_tts(synth_text, timeout=timeout_s)
+                audio_path, mime_type = await self.generate_tts(synth_text, timeout=timeout_s)
                 action.audio_path = str(audio_path)
                 # Insert into cache
                 self._file_cache[key] = audio_path

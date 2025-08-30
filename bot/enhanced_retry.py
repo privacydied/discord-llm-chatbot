@@ -214,16 +214,17 @@ class EnhancedRetryManager:
         """
         start_time = time.time()
         providers = self.provider_configs.get(modality, [])
-        
+
         if not providers:
             return RetryResult(
                 success=False,
                 error=ValueError(f"No providers configured for modality: {modality}"),
                 total_time=time.time() - start_time
             )
-        
+
         total_attempts = 0
         fallback_occurred = False
+        last_exception: Optional[Exception] = None
         
         for provider_idx, provider_config in enumerate(providers):
             provider_key = f"{provider_config.name}:{provider_config.model}"
@@ -280,7 +281,9 @@ class EnhancedRetryManager:
                 
                 except Exception as e:
                     logger.warning(f"⚠️ Attempt {attempt + 1} failed with {provider_key}: {type(e).__name__}: {e}")
-                    
+                    # Keep track of the last exception so callers can inspect specifics (e.g., Retry-After)
+                    last_exception = e
+
                     if not self._is_retryable_error(e):
                         logger.error(f"❌ Non-retryable error, skipping remaining attempts for {provider_key}: {type(e).__name__}: {e}")
                         break
@@ -315,7 +318,7 @@ class EnhancedRetryManager:
         total_time = time.time() - start_time
         return RetryResult(
             success=False,
-            error=Exception("All providers exhausted"),
+            error=last_exception or Exception("All providers exhausted"),
             attempts=total_attempts,
             total_time=total_time,
             fallback_occurred=fallback_occurred
