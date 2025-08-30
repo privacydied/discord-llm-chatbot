@@ -10,6 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
 dependencies = [
+    "ffmpeg-python>=0.2.0",
     "kokoro-onnx>=0.4.9",
     "soundfile>=0.13.1",
 ]

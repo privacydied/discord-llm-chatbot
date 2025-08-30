@@ -7,9 +7,78 @@ IPA-focused for Kokoro TTS model compatibility.
 import logging
 import re
 import unicodedata
+import json
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
+
+# Load lexicon from external JSON file
+_LEXICON_CACHE = None
+
+def _load_lexicon() -> Dict[str, str]:
+    """Load lexicon from lexicon_en.json file."""
+    global _LEXICON_CACHE
+    if _LEXICON_CACHE is not None:
+        return _LEXICON_CACHE
+        
+    try:
+        lexicon_path = Path(__file__).parent / "lexicon_en.json"
+        if lexicon_path.exists():
+            with open(lexicon_path, 'r', encoding='utf-8') as f:
+                _LEXICON_CACHE = json.load(f)
+                logger.debug("Loaded English lexicon: %d entries", len(_LEXICON_CACHE))
+                return _LEXICON_CACHE
+    except Exception as e:
+        logger.warning("Failed to load lexicon_en.json: %s", e)
+    
+    _LEXICON_CACHE = {}
+    return _LEXICON_CACHE
+
+def apply_lexicon(text: str) -> str:
+    """Apply lexicon replacements to text."""
+    lexicon = _load_lexicon()
+    if not lexicon:
+        return text
+        
+    words = text.split()
+    out = []
+    for w in words:
+        key = w.lower().strip(":;,.!?")
+        if key in lexicon:
+            out.append(lexicon[key])
+        else:
+            out.append(w)
+    return " ".join(out)
+
+def normalize_text(text: str) -> str:
+    """Normalize text for TTS processing."""
+    t = unicodedata.normalize("NFKC", text)
+    t = t.replace(":", " ")
+    t = re.sub(r"[^A-Za-z0-9'.,?!\-\s]", " ", t)
+    t = re.sub(r"\s+", " ", t).strip()
+    t = t.replace("what's", "whats")
+    t = number_to_words(t)  # no-op if already words
+    return t
+
+def number_to_words(text: str) -> str:
+    """Convert basic numbers to words."""
+    number_map = {
+        "0": "zero", "1": "one", "2": "two", "3": "three", "4": "four",
+        "5": "five", "6": "six", "7": "seven", "8": "eight", "9": "nine", 
+        "10": "ten", "11": "eleven", "12": "twelve", "13": "thirteen",
+        "14": "fourteen", "15": "fifteen", "16": "sixteen", "17": "seventeen",
+        "18": "eighteen", "19": "nineteen", "20": "twenty"
+    }
+    
+    words = text.split()
+    out = []
+    for word in words:
+        if word.isdigit() and word in number_map:
+            out.append(number_map[word])
+        else:
+            out.append(word)
+    return " ".join(out)
 
 # REMOVED: No fallback vocabulary allowed for English IPA synthesis.
 # All vocabulary loading must go through official sources via ipa_vocab_loader.py
@@ -787,11 +856,9 @@ def text_to_ipa(text: str) -> str:
     except Exception:
         cmudict_dict = None
 
-    # 1. Normalize text
-    text = _normalize_text(text)
-
-    # 2. Expand numbers
-    text = _expand_numbers(text)
+    # 1. Normalize text and apply lexicon
+    text = normalize_text(text)
+    text = apply_lexicon(text)
 
     # 3. Tokenize (words and punctuation)
     tokens = re.findall(r"[A-Za-z']+|[0-9]+|[^\sA-Za-z0-9]", text)

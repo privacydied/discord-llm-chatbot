@@ -14,6 +14,8 @@ try:
     from .exceptions import APIError
     from .util.logging import get_logger
     from .retry_utils import with_retry, VISION_RETRY_CONFIG, API_RETRY_CONFIG
+    # Optional: provider/model fallback for OpenRouter
+    from .enhanced_retry import get_retry_manager
 except Exception:
     # Standalone import fallback for smoke tests: define minimal shims
     import logging as _logging
@@ -44,6 +46,13 @@ except Exception:
 
     VISION_RETRY_CONFIG = {}
     API_RETRY_CONFIG = {}
+
+    # Minimal stub so references don't break in smoke tests
+    def get_retry_manager():
+        class _Dummy:
+            async def run_with_fallback(self, *args, **kwargs):
+                raise NotImplementedError("Fallback manager not available in smoke mode")
+        return _Dummy()
 
 logger = get_logger(__name__)
 
@@ -146,20 +155,45 @@ Server Context: {server_context}"""
         logger.info(f"Generating OpenAI response with model: {model}")
         logger.debug(f"[OpenAI] Request params: temp={temperature}, max_tokens={max_tokens}, stream={stream}")
         
-        # Generate the response
-        logger.debug("[OpenAI] 🔄 Sending request to API...")
-        response = await client.chat.completions.create(
-            model=model,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            stream=stream,
-            **kwargs
-        )
-        logger.debug("[OpenAI] ✅ Received response from API")
-        
+        # Helper to normalize a completion response into our result dict
+        def _normalize_nonstream_response(response_obj, used_model: str) -> Dict[str, Any]:
+            if not response_obj.choices:
+                logger.warning("[OpenAI] ⚠️ No choices in response - empty choices array (transient)")
+                logger.debug(f"[OpenAI] Response object: {response_obj}")
+                raise APIError("No choices returned in OpenAI response")
+            if not response_obj.choices[0].message:
+                logger.error("[OpenAI] ❌ No message in first choice")
+                logger.debug(f"[OpenAI] First choice: {response_obj.choices[0]}")
+                raise APIError("No message in OpenAI response choice")
+            if not response_obj.choices[0].message.content:
+                logger.warning("[OpenAI] ⚠️ Empty message content returned")
+                response_text_local = ""
+            else:
+                response_text_local = response_obj.choices[0].message.content
+            usage_info_local = {
+                'prompt_tokens': response_obj.usage.prompt_tokens if response_obj.usage else 0,
+                'completion_tokens': response_obj.usage.completion_tokens if response_obj.usage else 0,
+                'total_tokens': response_obj.usage.total_tokens if response_obj.usage else 0
+            }
+            return {
+                'text': response_text_local,
+                'model': used_model,
+                'usage': usage_info_local,
+                'backend': 'openai'
+            }
+
+        # If streaming, do a single attempt with standard retry; fallback ladder is not supported for streams
         if stream:
-            # Handle streaming response
+            logger.debug("[OpenAI] 🔄 Sending request to API (streaming)...")
+            response = await client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                stream=True,
+                **kwargs
+            )
+            logger.debug("[OpenAI] ✅ Received response from API (streaming)")
             logger.debug("[OpenAI] 🌊 Processing streaming response...")
             async def stream_generator():
                 chunk_count = 0
@@ -172,66 +206,126 @@ Server Context: {server_context}"""
                         }
                 logger.debug(f"[OpenAI] ✅ Streaming complete, processed {chunk_count} chunks")
                 yield {'text': '', 'finished': True}
-            
             return stream_generator()
-        else:
-            # Handle non-streaming response
-            logger.debug("[OpenAI] 📝 Processing non-streaming response...")
-            logger.debug(f"[OpenAI] Response object type: {type(response)}")
-            
-            if not response.choices:
-                # Treat as transient; let retry handle it. Reduce log severity to WARNING.
-                logger.warning("[OpenAI] ⚠️ No choices in response - empty choices array (transient)")
-                logger.debug(f"[OpenAI] Response object: {response}")
-                raise APIError("No choices returned in OpenAI response")
-            
-            if not response.choices[0].message:
-                logger.error("[OpenAI] ❌ No message in first choice")
-                logger.debug(f"[OpenAI] First choice: {response.choices[0]}")
-                raise APIError("No message in OpenAI response choice")
-                
-            if not response.choices[0].message.content:
-                logger.warning("[OpenAI] ⚠️ Empty message content returned")
-                logger.debug(f"[OpenAI] Message object: {response.choices[0].message}")
-                # Don't raise error for empty content, return empty string
-                response_text = ""
-            else:
-                response_text = response.choices[0].message.content
-            
-            logger.debug(f"[OpenAI] 📄 Extracted response text length: {len(response_text) if response_text else 0}")
-            
-            usage_info = {
-                'prompt_tokens': response.usage.prompt_tokens if response.usage else 0,
-                'completion_tokens': response.usage.completion_tokens if response.usage else 0,
-                'total_tokens': response.usage.total_tokens if response.usage else 0
-            }
-            logger.debug(f"[OpenAI] 📊 Usage info: {usage_info}")
-            
-            result = {
-                'text': response_text,
-                'model': model,
-                'usage': usage_info,
-                'backend': 'openai'
-            }
-            logger.debug("[OpenAI] ✅ Response processing complete")
-            return result
+
+        # Non-streaming: if using OpenRouter base, engage provider/model fallback ladder
+        base_url = str(config.get('OPENAI_API_BASE', 'https://api.openai.com/v1') or '')
+        use_openrouter_fallback = 'openrouter' in base_url.lower()
+
+        if use_openrouter_fallback:
+            logger.info("[OpenAI] Using EnhancedRetryManager text fallback ladder (OpenRouter)")
+            retry_mgr = get_retry_manager()
+
+            def _coro_factory(provider_config):
+                selected_model = provider_config.model
+                async def _run():
+                    try:
+                        logger.debug(f"[OpenAI] 🔄 Sending request to API with model: {selected_model}")
+                        resp = await client.chat.completions.create(
+                            model=selected_model,
+                            messages=messages,
+                            temperature=temperature,
+                            max_tokens=max_tokens,
+                            stream=False,
+                            **kwargs
+                        )
+                        logger.debug("[OpenAI] ✅ Received response from API")
+                        return _normalize_nonstream_response(resp, selected_model)
+                    except httpx.HTTPStatusError as he:
+                        status_code = he.response.status_code if getattr(he, 'response', None) is not None else 'unknown'
+                        retry_after = None
+                        try:
+                            if getattr(he, 'response', None) is not None:
+                                ra = he.response.headers.get('retry-after') or he.response.headers.get('Retry-After')
+                                if ra is not None:
+                                    retry_after = float(ra)
+                        except Exception:
+                            retry_after = None
+                        extra = f" (retry-after={retry_after}s)" if retry_after is not None else ""
+                        logger.warning(f"OpenAI HTTP error during fallback attempt: {status_code} {he}{extra}")
+                        err = APIError(f"HTTP {status_code}: {str(he)}{extra}")
+                        # Propagate Retry-After to outer retry harness
+                        try:
+                            if retry_after is not None:
+                                setattr(err, 'retry_after_seconds', retry_after)
+                        except Exception:
+                            pass
+                        raise err
+                return _run
+
+            per_item_budget = float(config.get('TEXT_PER_ITEM_BUDGET', 45.0))
+            rr = await retry_mgr.run_with_fallback('text', _coro_factory, per_item_budget=per_item_budget)
+            if not rr.success:
+                # Re-raise last error (if present) to flow into with_retry() logic
+                if rr.error:
+                    raise rr.error
+                raise APIError("All text providers exhausted")
+            return rr.result
+
+        # Non-streaming single-provider path (OpenAI base or when ladder disabled)
+        logger.debug("[OpenAI] 🔄 Sending request to API...")
+        response = await client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            stream=False,
+            **kwargs
+        )
+        logger.debug("[OpenAI] ✅ Received response from API")
+        
+        # Handle non-streaming response
+        logger.debug("[OpenAI] 📝 Processing non-streaming response...")
+        logger.debug(f"[OpenAI] Response object type: {type(response)}")
+        result = _normalize_nonstream_response(response, model)
+        logger.debug("[OpenAI] ✅ Response processing complete")
+        return result
     
     except openai.AuthenticationError as e:
         logger.error(f"OpenAI authentication failed: {e}")
         raise APIError(f"OpenAI authentication failed - check API key: {str(e)}")
     except openai.RateLimitError as e:
         logger.warning(f"OpenAI rate limit exceeded: {e}")
-        raise APIError(f"OpenAI rate limit exceeded: {str(e)}")
+        retry_after = None
+        try:
+            # Try common headers if available on the error
+            resp = getattr(e, 'response', None)
+            if resp is not None and getattr(resp, 'headers', None) is not None:
+                ra = resp.headers.get('retry-after') or resp.headers.get('Retry-After')
+                if ra is not None:
+                    retry_after = float(ra)
+        except Exception:
+            retry_after = None
+        err = APIError(f"OpenAI rate limit exceeded: {str(e)}" + (f" (retry-after={retry_after}s)" if retry_after is not None else ""))
+        try:
+            if retry_after is not None:
+                setattr(err, 'retry_after_seconds', retry_after)
+        except Exception:
+            pass
+        raise err
     except openai.APIError as e:
         logger.error(f"OpenAI API error: {e}")
         raise APIError(f"OpenAI API error: {str(e)}")
     except httpx.HTTPStatusError as e:
         # Surface HTTP errors (e.g., 429 Too Many Requests from OpenRouter) as retriable APIError
         status = e.response.status_code if e.response is not None else 'unknown'
-        retry_after = e.response.headers.get('retry-after') if getattr(e, 'response', None) else None
-        extra = f" (retry-after={retry_after}s)" if retry_after else ""
+        retry_after = None
+        try:
+            if getattr(e, 'response', None) is not None:
+                ra = e.response.headers.get('retry-after') or e.response.headers.get('Retry-After')
+                if ra is not None:
+                    retry_after = float(ra)
+        except Exception:
+            retry_after = None
+        extra = f" (retry-after={retry_after}s)" if retry_after is not None else ""
         logger.warning(f"OpenAI HTTP error: {status} {e}{extra}")
-        raise APIError(f"HTTP {status}: {str(e)}{extra}")
+        err = APIError(f"HTTP {status}: {str(e)}{extra}")
+        try:
+            if retry_after is not None:
+                setattr(err, 'retry_after_seconds', retry_after)
+        except Exception:
+            pass
+        raise err
     except APIError as e:
         # Already normalized, don't double-wrap or spam error-level logs
         logger.warning(f"[OpenAI] Retriable APIError: {e}")

@@ -37,16 +37,23 @@ TOKENIZER_TYPES = {
     "grapheme": "grapheme"
 }
 
+# Environment controls for tokenizer behavior
+ALLOW_GRAPHEME = os.getenv("KOKORO_GRAPHEME_FALLBACK", "0") == "1"
+FORCE_IPA = os.getenv("KOKORO_FORCE_IPA", "1") == "1"
+
+# Deterministic order for English (phoneme-first)
+DEFAULT_ORDER_EN = ["eng_g2p_local", "g2p_en", "misaki"]
+
 # Language-to-tokenizer mapping
 TOKENISER_MAP = {
-    "en": [],  # English uses IPA-only path, no external tokenizers
+    "en": DEFAULT_ORDER_EN + (["grapheme"] if ALLOW_GRAPHEME else []),
     "ja": ["misaki"],
     "zh": ["misaki"],
     # Default for other languages
     "*": ["phonemizer", "espeak", "espeak-ng"]
 }
 
-# Default to grapheme for all languages
+# Default to grapheme for all languages except English
 DEFAULT_TOKENIZER = "grapheme"
 
 # Singleton registry pattern
@@ -237,7 +244,21 @@ class TokenizerRegistry:
         # Get tokenizer preferences for the language
         preferences = TOKENISER_MAP.get(language, TOKENISER_MAP.get('*', []))
         
-        # Find the first available tokenizer in the preference list
+        # Special handling for English with FORCE_IPA
+        if language == "en":
+            for tokenizer in preferences:
+                if tokenizer in self._available_tokenizers:
+                    return tokenizer
+            # No phoneme tokenizers available for English
+            if FORCE_IPA:
+                from .tts.errors import UnsupportedIPASymbolError
+                raise UnsupportedIPASymbolError("IPA required: no phoneme tokenizers available and grapheme fallback disabled")
+            if not ALLOW_GRAPHEME:
+                logger.warning("No phoneme tokenizers available for English, but grapheme fallback disabled")
+                raise MissingTokeniserError(f"No suitable phoneme tokenizer found for {language}")
+            return "grapheme"
+        
+        # Find the first available tokenizer in the preference list for non-English
         for tokenizer in preferences:
             if tokenizer in self._available_tokenizers:
                 return tokenizer
@@ -247,12 +268,6 @@ class TokenizerRegistry:
             logger.warning(f"No preferred tokenizer available for language '{language}', using grapheme fallback",
                          extra={'subsys': 'tts', 'event': 'registry.fallback_grapheme'})
             return DEFAULT_TOKENIZER
-        
-        # For English, use built-in IPA path (no external tokenizers needed)
-        if language == 'en':
-            logger.debug("English uses built-in IPA path, no external tokenizers required",
-                       extra={'subsys': 'tts', 'event': 'registry.english_builtin'})
-            return "builtin_ipa"  # Special marker for English IPA path
         
         # For other languages, if even grapheme is not available, raise error
         logger.error(f"No tokenizer available for language '{language}'",

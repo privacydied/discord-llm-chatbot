@@ -224,18 +224,25 @@ class TTSCommands(commands.Cog):
 
             audio_path = None
             audio_bytes = None
+            mime_type = "audio/ogg"  # Default to OGG format
             try:
                 action = BotAction(content=text, meta=meta)
                 res_action = await self.bot.tts_manager.process(action)
                 audio_path = res_action.audio_path
                 if audio_path:
                     audio_path = str(audio_path)
+                    # Determine MIME type from file extension
+                    if audio_path.endswith('.ogg'):
+                        mime_type = "audio/ogg"
+                    elif audio_path.endswith('.wav'):
+                        mime_type = "audio/wav"
             except Exception:
                 # Fallback to legacy direct calls if process not available or failed
                 try:
-                    audio_path = await self.bot.tts_manager.generate_tts(text)
+                    audio_path, mime_type = await self.bot.tts_manager.generate_tts(text, output_format="ogg")
                 except Exception:
                     audio_bytes = await self.bot.tts_manager.synthesize(text)
+                    mime_type = "audio/wav"
 
             # 6) Try native voice message first (guild only)
             guild_obj = getattr(ctx, 'guild', None)
@@ -266,16 +273,20 @@ class TTSCommands(commands.Cog):
                         extra={'subsys': 'tts_cmds', 'event': 'say.native_voice_error', 'guild_id': guild_id, 'channel_id': channel_id, 'user_id': user_id},
                     )
 
-            # Helper to build a discord.File without touching disk in bytes-mode tests
+            # Helper to build a discord.File with correct filename and MIME handling
             def build_file_for_send() -> discord.File:
-                nonlocal audio_bytes, audio_path
+                nonlocal audio_bytes, audio_path, mime_type
                 if audio_path:
-                    # Prefer path-based send to avoid FS reads in tests
-                    return discord.File(audio_path)
+                    # Determine filename based on MIME type  
+                    path_obj = Path(audio_path)
+                    ext = ".ogg" if mime_type == "audio/ogg" else ".wav"
+                    filename = path_obj.name if path_obj.suffix == ext else f"{path_obj.stem}{ext}"
+                    return discord.File(audio_path, filename=filename)
                 else:
                     stream = io.BytesIO(audio_bytes or b"")
                     stream.seek(0)
-                    return discord.File(stream, filename="tts_audio.wav")
+                    filename = "tts_audio.ogg" if mime_type == "audio/ogg" else "tts_audio.wav"
+                    return discord.File(stream, filename=filename)
 
             async def send_in_channel() -> bool:
                 try:
