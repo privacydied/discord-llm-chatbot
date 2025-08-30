@@ -8,6 +8,7 @@ import shutil
 from datetime import datetime
 from typing import Dict, Optional
 import threading
+from pathlib import Path
 
 # Initialize locks for thread safety
 user_cache_lock = threading.Lock()
@@ -24,6 +25,31 @@ modified_servers = set()
 # Track last save times
 user_profiles_last_saved: Dict[str, float] = {}
 server_profiles_last_saved: Dict[str, float] = {}
+
+def _safe_backup_file(src: Path, dst: Path) -> None:
+    """Create a safe backup of src at dst.
+
+    Handles the case where an existing dst file is read-only by removing it
+    first. Falls back to chmod before unlink on permission errors. Errors are
+    logged but not raised to avoid blocking primary save operation.
+    """
+    try:
+        if dst.exists():
+            try:
+                # Prefer unlink to avoid overwriting a read-only file
+                dst.unlink()
+            except PermissionError:
+                try:
+                    # Make writable then remove
+                    os.chmod(dst, 0o600)
+                    dst.unlink()
+                except Exception as e:
+                    logging.error(f"Failed to remove existing backup {dst}: {e}")
+                    # If we cannot remove it, attempting to overwrite would likely fail
+                    return
+        shutil.copy2(src, dst)
+    except Exception as e:
+        logging.error(f"Failed to create backup for {src}: {e}")
 
 def ensure_dirs():
     """Ensure all required directories exist."""
@@ -172,10 +198,7 @@ def save_profile(profile: dict, force: bool = False) -> bool:
             # Create backup of existing file if it exists
             if profile_path.exists():
                 backup_path = profile_path.with_suffix('.json.bak')
-                try:
-                    shutil.copy2(profile_path, backup_path)
-                except IOError as e:
-                    logging.error(f"Failed to create backup for {profile_path}: {e}")
+                _safe_backup_file(profile_path, backup_path)
                     
             # Save the profile
             try:
@@ -327,10 +350,7 @@ def save_server_profile(guild_id, force: bool = False) -> bool:
             # Create backup of existing file if it exists
             if profile_path.exists():
                 backup_path = profile_path.with_suffix('.json.bak')
-                try:
-                    shutil.copy2(profile_path, backup_path)
-                except IOError as e:
-                    logging.error(f"Failed to create backup for {profile_path}: {e}")
+                _safe_backup_file(profile_path, backup_path)
             
             # Save the profile
             try:

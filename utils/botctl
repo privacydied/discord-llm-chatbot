@@ -10,10 +10,42 @@ is_running() {
   [[ -f "$PIDFILE" ]] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null
 }
 
+clean() {
+  echo "Cleaning caches …"
+
+  # 1) Python bytecode & common tooling caches in repo
+  # Remove __pycache__ dirs fast and safe
+  find . -type d -name __pycache__ -prune -exec rm -rf {} + 2>/dev/null || true
+  # Remove loose .pyc/.pyo just in case
+  find . -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete 2>/dev/null || true
+  # Common tool caches
+  rm -rf .pytest_cache .mypy_cache .ruff_cache .ipynb_checkpoints .cache 2>/dev/null || true
+  # Build metadata
+  find . -maxdepth 3 -type d -name '*.egg-info' -exec rm -rf {} + 2>/dev/null || true
+
+  # 2) uv resolver/wheel/http caches (best-effort)
+  if command -v uv >/dev/null 2>&1; then
+    uv cache prune >/dev/null 2>&1 || uv cache clean >/dev/null 2>&1 || true
+  fi
+  rm -rf "${XDG_CACHE_HOME:-$HOME/.cache}/uv" 2>/dev/null || true
+
+  # 3) pip cache (sometimes uv interoperates with pip; harmless to nuke)
+  rm -rf "${XDG_CACHE_HOME:-$HOME/.cache}/pip" 2>/dev/null || true
+
+  echo "Caches cleaned."
+}
+
 start() {
   if is_running; then
     echo "Already running as PID $(cat "$PIDFILE")"
     exit 0
+  fi
+
+  # Optional: skip cleaning if you really want to
+  if [[ "${SKIP_CLEAN:-0}" != "1" ]]; then
+    clean
+  else
+    echo "SKIP_CLEAN=1 — skipping cache cleanup."
   fi
 
   # If you actually want your venv instead of uv’s resolver, uncomment:
@@ -65,10 +97,15 @@ status() {
 }
 
 case "${1:-}" in
-  start)   start ;;
-  stop)    stop ;;
-  restart) stop; start ;;
-  status)  status ;;
-  *) echo "Usage: $0 {start|stop|restart|status}"; exit 1 ;;
+  start)        start ;;
+  start-clean)  SKIP_CLEAN=0 start ;;
+  stop)         stop ;;
+  restart)      stop; start ;;
+  clean)        clean ;;
+  status)       status ;;
+  *)
+    echo "Usage: $0 {start|start-clean|stop|restart|status|clean}"
+    exit 1
+    ;;
 esac
 
