@@ -28,9 +28,13 @@ async def generate_tts(text: str, user_id: str) -> Path:
         # Lazy import to avoid circular import at package import time
         from .interface import TTSManager  # noqa: WPS433 (allow import inside function)
         manager = TTSManager()
-        # TTSManager returns a Path; ensure we pass a concrete path
-        path = await manager.generate_tts(text, out_path=str(out_path))
-        return Path(path)
+        # Ensure WAV output and handle (Path, mime) return
+        result = await manager.generate_tts(text, out_path=str(out_path), output_format="wav")
+        if isinstance(result, tuple):
+            final_path, _mime = result
+        else:
+            final_path = result
+        return Path(final_path)
     except Exception:
         # Robust fallback in constrained test environments
         generate_stub_wav(str(out_path))

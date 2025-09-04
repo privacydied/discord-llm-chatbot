@@ -1,19 +1,24 @@
 """
 Discord Voice-Memo Sender using 3-step REST API.
 
-Converts WAV bytes to OGG (Opus 48kHz mono) and sends as Discord voice message
-with proper flags and metadata for voice bubble UI.
+Now fully async and non-blocking to avoid event loop stalls that can cause
+Discord heartbeat delays. Provides async APIs and guarded sync wrappers.
 """
+
+from __future__ import annotations
 
 import os
 import json
-import base64
-import subprocess
+import asyncio
 import tempfile
 import logging
-from typing import Dict, Any
+from pathlib import Path
+from typing import Dict, Any, Optional
 
-import requests
+import aiohttp
+
+from utils.opus import transcode_to_ogg_opus
+from utils.waveform import compute_waveform_b64
 
 logger = logging.getLogger(__name__)
 
@@ -23,20 +28,132 @@ class VoiceMemoError(Exception):
     pass
 
 
-def _ffprobe_duration(audio_path: str) -> int:
-    """Get audio duration in seconds using ffprobe."""
-    cmd = [
-        "ffprobe", "-v", "error", "-hide_banner", "-select_streams", "a:0",
-        "-show_entries", "format=duration", "-of", "json", audio_path
-    ]
+async def _probe_duration_async(path: Path) -> Optional[float]:
+    """Probe audio duration using ffprobe asynchronously. Returns seconds or None."""
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        data = json.loads(result.stdout)
-        duration = float(data["format"]["duration"])
-        return round(duration)
-    except (subprocess.CalledProcessError, json.JSONDecodeError, KeyError, ValueError) as e:
-        logger.warning(f"Failed to get audio duration: {e}")
-        return 1  # Default to 1 second
+        proc = await asyncio.create_subprocess_exec(
+            "ffprobe", "-v", "error", "-hide_banner",
+            "-select_streams", "a:0",
+            "-show_entries", "format=duration",
+            "-of", "json",
+            str(path),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, _ = await proc.communicate()
+        if proc.returncode != 0:
+            return None
+        data = json.loads(stdout.decode("utf-8", errors="ignore"))
+        dur = float(data.get("format", {}).get("duration", 0.0))
+        # Match reference rounding behavior
+        return float(int(round(dur)))
+    except Exception:
+        return None
+
+
+async def wav_bytes_to_voice_memo_async(
+    channel_id: int,
+    wav_bytes: bytes,
+    bot_token: str,
+    *,
+    bitrate: str = "64k",
+    vbr: str = "on",
+    compression_level: int = 10,
+    attachments_timeout_s: float = 30.0,
+    upload_timeout_s: float = 60.0,
+    message_post_timeout_s: float = 30.0,
+) -> Dict[str, Any]:
+    """
+    Convert WAV bytes to Discord voice memo and send (fully async, non-blocking).
+
+    Returns Discord message response JSON.
+    """
+    if not wav_bytes:
+        raise VoiceMemoError("Empty WAV bytes provided")
+    if not bot_token:
+        raise VoiceMemoError("Bot token required")
+
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            wav_path = Path(temp_dir) / "audio.wav"
+            ogg_path = Path(temp_dir) / "voice-message.ogg"
+
+            # Write WAV data
+            wav_path.write_bytes(wav_bytes)
+
+            # Convert WAV to OGG (Opus @ 48kHz mono) asynchronously
+            ogg_path = await transcode_to_ogg_opus(wav_path, out_path=ogg_path, bitrate=bitrate, vbr=vbr, compression_level=compression_level)
+
+            # Compute duration (prefer probing from OGG), file size, and waveform (from WAV header)
+            duration_secs = await _probe_duration_async(ogg_path)
+            if duration_secs is None:
+                duration_secs = 1.0
+            file_size = ogg_path.stat().st_size
+            waveform_b64 = compute_waveform_b64(wav_path)
+
+            # Step 1: Request upload URL
+            attachments_url = f"https://discord.com/api/v10/channels/{channel_id}/attachments"
+            headers_json = {
+                "Authorization": f"Bot {bot_token}",
+                "Content-Type": "application/json",
+                "User-Agent": "DiscordVoiceMemoAsync/1.0",
+            }
+            attachment_payload = {
+                "files": [{
+                    "filename": "voice-message.ogg",
+                    "file_size": file_size,
+                    "id": "0"
+                }]
+            }
+
+            async with aiohttp.ClientSession(raise_for_status=False) as session:
+                async with session.post(attachments_url, headers=headers_json, json=attachment_payload, timeout=attachments_timeout_s) as resp:
+                    if resp.status >= 400:
+                        text = await resp.text()
+                        raise VoiceMemoError(f"Failed to request upload URL: HTTP {resp.status} {text[:200]}" )
+                    upload_data = await resp.json()
+                try:
+                    upload_info = upload_data["attachments"][0]
+                    upload_url = upload_info["upload_url"]
+                    uploaded_filename = upload_info.get("upload_filename") or upload_info.get("uploaded_filename")
+                except Exception as e:
+                    raise VoiceMemoError(f"Invalid upload response format: {e}")
+
+                # Step 2: Upload file to provided URL (no bot Authorization header)
+                ogg_bytes = ogg_path.read_bytes()
+                headers_upload = {"Content-Type": "audio/ogg"}
+                async with session.put(upload_url, headers=headers_upload, data=ogg_bytes, timeout=upload_timeout_s) as resp:
+                    if resp.status >= 400:
+                        text = await resp.text()
+                        raise VoiceMemoError(f"Failed to upload file: HTTP {resp.status} {text[:200]}")
+
+                # Step 3: Send message with voice memo flags
+                message_url = f"https://discord.com/api/v10/channels/{channel_id}/messages"
+                message_payload = {
+                    "flags": 8192,  # Voice message flag
+                    "attachments": [{
+                        "id": "0",
+                        "filename": "voice-message.ogg",
+                        "uploaded_filename": uploaded_filename,
+                        "duration_secs": float(duration_secs),
+                        "waveform": waveform_b64,
+                    }]
+                }
+                async with session.post(message_url, headers=headers_json, json=message_payload, timeout=message_post_timeout_s) as resp:
+                    if resp.status >= 400:
+                        text = await resp.text()
+                        raise VoiceMemoError(f"Failed to send message: HTTP {resp.status} {text[:200]}")
+                    result = await resp.json()
+
+            logger.info(
+                f"voice_memo.sent | duration={duration_secs}s size={file_size}B",
+                extra={'subsys': 'discord', 'event': 'voice_memo.sent'}
+            )
+            return result
+    except Exception as e:
+        if isinstance(e, VoiceMemoError):
+            raise
+        raise VoiceMemoError(f"Unexpected error: {e}")
 
 
 def wav_bytes_to_voice_memo(
@@ -48,166 +165,33 @@ def wav_bytes_to_voice_memo(
     compression_level: int = 10
 ) -> Dict[str, Any]:
     """
-    Convert WAV bytes to Discord voice memo and send.
-
-    Args:
-        channel_id: Discord channel ID to send to
-        wav_bytes: WAV audio data
-        bot_token: Discord bot token
-        bitrate: Opus bitrate (default "64k")
-        vbr: Variable bitrate setting (default "on")
-        compression_level: Opus compression level 0-10 (default 10)
-
-    Returns:
-        Discord message response JSON
-
-    Raises:
-        VoiceMemoError: If conversion or sending fails
+    Synchronous wrapper kept for compatibility. Do NOT call from within an async context.
+    Prefer `wav_bytes_to_voice_memo_async` to avoid blocking the event loop.
     """
-    if not wav_bytes:
-        raise VoiceMemoError("Empty WAV bytes provided")
-
-    if not bot_token:
-        raise VoiceMemoError("Bot token required")
-
+    # Disallow running this in an active event loop to prevent blocking
     try:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            wav_path = os.path.join(temp_dir, "audio.wav")
-            ogg_path = os.path.join(temp_dir, "voice-message.ogg")
+        loop = asyncio.get_running_loop()
+        if loop.is_running():
+            raise VoiceMemoError("wav_bytes_to_voice_memo must not be called in an async context; use wav_bytes_to_voice_memo_async")
+    except RuntimeError:
+        # No running loop, safe to proceed
+        pass
 
-            # Write WAV data
-            with open(wav_path, "wb") as f:
-                f.write(wav_bytes)
-
-            # Convert WAV to OGG (Opus @ 48kHz mono)
-            ffmpeg_cmd = [
-                "ffmpeg", "-hide_banner", "-y", "-i", wav_path,
-                "-ac", "1",  # Mono
-                "-ar", "48000",  # 48kHz sample rate
-                "-c:a", "libopus",  # Opus codec
-                "-b:a", bitrate,  # Bitrate
-                "-vbr", vbr,  # Variable bitrate
-                "-compression_level", str(compression_level),
-                ogg_path
-            ]
-
-            try:
-                subprocess.run(
-                    ffmpeg_cmd,
-                    check=True,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    timeout=30
-                )
-            except subprocess.CalledProcessError as e:
-                raise VoiceMemoError(f"FFmpeg conversion failed: {e}")
-            except subprocess.TimeoutExpired:
-                raise VoiceMemoError("FFmpeg conversion timed out")
-
-            # Get duration and file size
-            duration_secs = _ffprobe_duration(ogg_path)
-            file_size = os.path.getsize(ogg_path)
-
-            # Generate random waveform data (256 bytes base64)
-            waveform = base64.b64encode(os.urandom(256)).decode("utf-8")
-
-            # Step 1: Request upload URL
-            attachments_url = f"https://discord.com/api/v10/channels/{channel_id}/attachments"
-            headers = {
-                "Authorization": f"Bot {bot_token}",
-                "Content-Type": "application/json"
-            }
-            
-            attachment_payload = {
-                "files": [{
-                    "filename": "voice-message.ogg",
-                    "file_size": file_size,
-                    "id": 0
-                }]
-            }
-
-            try:
-                upload_response = requests.post(
-                    attachments_url,
-                    headers=headers,
-                    json=attachment_payload,
-                    timeout=10
-                )
-                upload_response.raise_for_status()
-                upload_data = upload_response.json()
-                upload_info = upload_data["attachments"][0]
-            except requests.RequestException as e:
-                raise VoiceMemoError(f"Failed to request upload URL: {e}")
-            except (KeyError, IndexError) as e:
-                raise VoiceMemoError(f"Invalid upload response format: {e}")
-
-            # Step 2: Upload file to provided URL
-            try:
-                with open(ogg_path, "rb") as audio_file:
-                    upload_file_response = requests.put(
-                        upload_info["upload_url"],
-                        headers={"Content-Type": "audio/ogg"},
-                        data=audio_file,
-                        timeout=30
-                    )
-                    upload_file_response.raise_for_status()
-            except requests.RequestException as e:
-                raise VoiceMemoError(f"Failed to upload file: {e}")
-
-            # Step 3: Send message with voice memo flags
-            message_url = f"https://discord.com/api/v10/channels/{channel_id}/messages"
-            
-            message_payload = {
-                "flags": 8192,  # Voice message flag
-                "attachments": [{
-                    "id": "0",
-                    "filename": "voice-message.ogg",
-                    "uploaded_filename": upload_info["upload_filename"],
-                    "duration_secs": duration_secs,
-                    "waveform": waveform
-                }]
-            }
-
-            try:
-                message_response = requests.post(
-                    message_url,
-                    headers=headers,
-                    json=message_payload,
-                    timeout=10
-                )
-                message_response.raise_for_status()
-                result = message_response.json()
-                
-                logger.info(
-                    f"Voice memo sent: {duration_secs}s, {file_size} bytes",
-                    extra={'subsys': 'discord', 'event': 'voice_memo.sent'}
-                )
-                
-                return result
-                
-            except requests.RequestException as e:
-                raise VoiceMemoError(f"Failed to send message: {e}")
-
-    except Exception as e:
-        if isinstance(e, VoiceMemoError):
-            raise
-        raise VoiceMemoError(f"Unexpected error: {e}")
+    return asyncio.run(
+        wav_bytes_to_voice_memo_async(
+            channel_id,
+            wav_bytes,
+            bot_token,
+            bitrate=bitrate,
+            vbr=vbr,
+            compression_level=compression_level,
+        )
+    )
 
 
-def send_tts_voice_memo(channel_id: int, wav_bytes: bytes, bot_token: str = None) -> Dict[str, Any]:
+async def send_tts_voice_memo_async(channel_id: int, wav_bytes: bytes, bot_token: Optional[str] = None) -> Dict[str, Any]:
     """
-    Convenience function to send TTS output as Discord voice memo.
-    
-    Args:
-        channel_id: Discord channel ID
-        wav_bytes: WAV audio from TTS engine
-        bot_token: Discord bot token (uses DISCORD_TOKEN env if not provided)
-        
-    Returns:
-        Discord message response
-        
-    Raises:
-        VoiceMemoError: If sending fails
+    Async convenience to send TTS output as a Discord voice memo.
     """
     if bot_token is None:
         bot_token = os.getenv("DISCORD_TOKEN")
@@ -215,5 +199,24 @@ def send_tts_voice_memo(channel_id: int, wav_bytes: bytes, bot_token: str = None
             raise VoiceMemoError(
                 "Bot token required. Provide via bot_token parameter or DISCORD_TOKEN environment variable."
             )
-    
-    return wav_bytes_to_voice_memo(channel_id, wav_bytes, bot_token)
+    return await wav_bytes_to_voice_memo_async(channel_id, wav_bytes, bot_token)
+
+
+def send_tts_voice_memo(channel_id: int, wav_bytes: bytes, bot_token: str | None = None) -> Dict[str, Any]:
+    """
+    Synchronous convenience kept for compatibility. Avoid in async contexts.
+    """
+    if bot_token is None:
+        bot_token = os.getenv("DISCORD_TOKEN")
+        if not bot_token:
+            raise VoiceMemoError(
+                "Bot token required. Provide via bot_token parameter or DISCORD_TOKEN environment variable."
+            )
+    # Guard against blocking the event loop
+    try:
+        loop = asyncio.get_running_loop()
+        if loop.is_running():
+            raise VoiceMemoError("send_tts_voice_memo must not be called in an async context; use send_tts_voice_memo_async")
+    except RuntimeError:
+        pass
+    return asyncio.run(wav_bytes_to_voice_memo_async(channel_id, wav_bytes, bot_token))

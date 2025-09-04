@@ -102,23 +102,21 @@ class BotEventHandler(commands.Cog):
                     await ctx.send(text_response)
             else:
                 try:
-                    # Create temporary audio file
-                    import tempfile
-                    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmpfile:
-                        audio_path = Path(tmpfile.name)
-                    
-                    # Synthesize audio asynchronously
-                    audio_path = await self.bot.tts_manager.synthesize_async(text_response, audio_path)
-                    
-                    if audio_path and audio_path.exists():
+                    # Generate OGG/Opus asynchronously via TTSManager
+                    audio_path, mime_type = await self.bot.tts_manager.generate_tts(
+                        text_response,
+                        output_format="ogg",
+                    )
+
+                    if audio_path and Path(audio_path).exists():
                         # Send only voice response when TTS is active
                         await ctx.send(file=discord.File(str(audio_path), filename="tts.ogg"))
                     else:
-                        logger.error(f"TTS synthesis failed for: {text_response}")
+                        logger.error(f"TTS synthesis produced no file for: {text_response}")
                         # Fall back to text on TTS failure
                         await ctx.send(text_response)
                 except Exception as e:
-                    logger.error(f"TTS synthesis error: {e}")
+                    logger.error(f"TTS synthesis error: {e}", exc_info=True)
                     await ctx.send("⚠️ TTS synthesis failed")
                     # Fall back to text on error
                     await ctx.send(text_response)

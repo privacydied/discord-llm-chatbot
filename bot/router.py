@@ -693,6 +693,15 @@ class Router:
                 context_str = await self.bot.context_manager.get_context_string(message)
                 self.logger.info(f"📚 Gathered context. (msg_id: {message.id})")
 
+                # 5b. Prioritized vision routing pre-check (explicit triggers/intent)
+                try:
+                    prechecked = await self._prioritized_vision_route(message, context_str)
+                except Exception as e:
+                    prechecked = None
+                    self.logger.debug(f"vision.precheck_exception | {e}")
+                if prechecked is not None:
+                    return prechecked
+
                 # 6. Sequential multimodal processing
                 result_action = await self._process_multimodal_message_internal(message, context_str)
                 return result_action  # Return the actual processing result
@@ -815,6 +824,18 @@ class Router:
         except Exception as e:
             self.logger.error(f"Inline search resolution failed: {e} (msg_id: {message.id})", exc_info=True)
         
+        # --- Routing precedence gates (feature-flagged) ---
+        # 0) Safety: re-run prioritized vision precheck here to catch any triggers/intents that
+        #    may have been missed earlier. This is a no-op if none are detected. [CA][REH]
+        try:
+            prechecked = await self._prioritized_vision_route(message, context_str)
+            if prechecked is not None:
+                self._metric_inc("routing.vision.precedence", {"stage": "in_multimodal"})
+                return prechecked
+        except Exception as e:
+            # Never break dispatch because of a precheck failure
+            self.logger.debug(f"routing.precedence.vision_check_failed | {e}")
+        
         # If no items found, process as text-only
         if not items:
             # No actionable items found, treat as text-only
@@ -826,7 +847,69 @@ class Router:
                 self.logger.warning(f"No response generated from text-only flow (msg_id: {message.id})")
                 return None
         
-        self.logger.info(f"🚶 Processing {len(items)} input items SEQUENTIALLY for deterministic order (msg_id: {message.id})")
+        # 1) Web link precedence (if enabled): when URLs are present and vision intent wasn't selected,
+        #    prioritize URL processing over other modalities. This preserves 1 IN → 1 OUT by limiting the
+        #    item set to URLs only. [Feature-flag: ROUTING_WEB_LINK_PRECEDENCE]
+        try:
+            web_link_precedence = bool(self.config.get("ROUTING_WEB_LINK_PRECEDENCE", False))
+        except Exception:
+            web_link_precedence = False
+        try:
+            url_items = [it for it in items if getattr(it, 'source_type', None) == "url"]
+        except Exception:
+            url_items = []
+
+        # Helper: check if text is meaningful (letters/digits after stripping whitespace/punct)
+        def _has_meaningful_text(s: str) -> bool:
+            try:
+                s = (s or "").strip()
+                if not s:
+                    return False
+                # Remove non-alphanumeric characters (keep unicode letters/digits)
+                cleaned = re.sub(r"[^\w]+", "", s, flags=re.UNICODE)
+                return len(cleaned) >= 3
+            except Exception:
+                return bool(s and s.strip())
+
+        # 2) Bare image default VL (if enabled): when only images are provided with no meaningful text,
+        #    run VL description using the default prompt. We keep the sequential pipeline but scope items
+        #    to image attachments to minimize disruption. [Feature-flag: VL_DEFAULT_PROMPT_FOR_BARE_IMAGE]
+        try:
+            vl_default_for_bare_image = bool(self.config.get("VL_DEFAULT_PROMPT_FOR_BARE_IMAGE", True))
+        except Exception:
+            vl_default_for_bare_image = True
+        try:
+            image_attachment_items = [
+                it for it in items
+                if getattr(it, 'source_type', None) == "attachment"
+                and hasattr(getattr(it, 'payload', None), 'content_type')
+                and isinstance(getattr(it, 'payload').content_type, str)
+                and 'image' in (getattr(it, 'payload').content_type or '').lower()
+            ]
+        except Exception:
+            image_attachment_items = []
+
+        precedence_applied = False
+        if web_link_precedence and url_items:
+            self.logger.info(
+                f"🔗 Web link precedence enabled; routing to URL-only processing (urls={len(url_items)}) (msg_id: {message.id})"
+            )
+            self._metric_inc("routing.url.precedence.selected", {"count": str(len(url_items))})
+            items = url_items
+            precedence_applied = True
+        elif vl_default_for_bare_image and image_attachment_items and (not _has_meaningful_text(original_text)):
+            # Backward-compat: legacy attachment-only messages with truly empty content remain supported by
+            # the earlier fast-path. This branch handles minimal/implicit prompts too. [REH]
+            self.logger.info(
+                f"🖼️ Bare image attachments detected with no meaningful text; prioritizing VL analysis (msg_id: {message.id})"
+            )
+            self._metric_inc("routing.vl.default_bare_image.selected", {"count": str(len(image_attachment_items))})
+            items = image_attachment_items
+            precedence_applied = True
+
+        self.logger.info(
+            f"🚶 Processing {len(items)} input items SEQUENTIALLY for deterministic order (precedence={precedence_applied}) (msg_id: {message.id})"
+        )
         
         # Initialize result aggregator and retry manager
         aggregator = ResultAggregator()
@@ -1588,6 +1671,104 @@ class Router:
         # Future: check for TTS commands or channel/user settings
         return OutputModality.TEXT
 
+    async def _prioritized_vision_route(self, message: Message, context_str: str) -> Optional[BotAction]:
+        """Early, prioritized vision routing based on direct triggers or intent.
+        Respects feature flags and supports dry-run mode. Returns a BotAction if
+        vision generation should be taken over immediately; otherwise None to continue
+        with normal multimodal processing. [CA][SFT][REH]
+        """
+        try:
+            content = (message.content or "").strip()
+            if not content:
+                return None
+            
+            # Clean mention prefix for more accurate intent detection
+            try:
+                mention_pattern = fr'^<@!?{self.bot.user.id}>\s*'
+                content_clean = re.sub(mention_pattern, '', content)
+            except Exception:
+                content_clean = content
+            
+            # Respect vision feature flags
+            cfg_enabled = bool(self.config.get("VISION_ENABLED", False))
+            dry_run = bool(self.config.get("VISION_DRY_RUN_MODE", False))
+            orchestrator_ready = bool(self._vision_orchestrator)
+            
+            # If vision is not enabled at all, skip
+            if not cfg_enabled:
+                self._metric_inc("vision.route.skipped", {"reason": "cfg_disabled"})
+                return None
+            
+            # 1) Direct trigger bypass (highest priority)
+            direct_vision = self._detect_direct_vision_triggers(content_clean)
+            if direct_vision:
+                self.logger.info(
+                    f"🎨 Precheck: Direct vision bypass (reason: {direct_vision['bypass_reason']}) (msg_id: {message.id})"
+                )
+                self._metric_inc("vision.route.direct", {"stage": "precheck"})
+                
+                # Create a mock intent result for the vision handler
+                from types import SimpleNamespace
+                intent_result = SimpleNamespace()
+                intent_result.decision = SimpleNamespace()
+                intent_result.decision.use_vision = True
+                intent_result.extracted_params = SimpleNamespace()
+                intent_result.extracted_params.task = direct_vision["task"]
+                intent_result.extracted_params.prompt = direct_vision["prompt"]
+                intent_result.extracted_params.width = 1024
+                intent_result.extracted_params.height = 1024
+                intent_result.extracted_params.batch_size = 1
+                intent_result.confidence = direct_vision["confidence"]
+                
+                if dry_run:
+                    self._metric_inc("vision.route.dry_run", {"path": "direct"})
+                    return BotAction(content=(
+                        "[DRY RUN] Vision generation would be triggered via direct trigger "
+                        f"(task={intent_result.extracted_params.task}, prompt='{intent_result.extracted_params.prompt[:80]}...')."
+                    ))
+                
+                if not orchestrator_ready:
+                    self._metric_inc("vision.route.blocked", {"reason": "orchestrator_unavailable", "path": "direct"})
+                    return BotAction(content="🚫 Vision generation is not available right now. Please try again later.")
+                
+                return await self._handle_vision_generation(intent_result, message, context_str)
+            
+            # 2) Intent router decision (lower priority than direct bypass)
+            if self._vision_intent_router:
+                try:
+                    intent_result = await self._vision_intent_router.determine_intent(
+                        user_message=content_clean,
+                        context=context_str,
+                        user_id=str(message.author.id),
+                        guild_id=str(message.guild.id) if message.guild else None
+                    )
+                    if intent_result and getattr(intent_result.decision, 'use_vision', False):
+                        conf = float(getattr(intent_result, 'confidence', 0.0) or 0.0)
+                        self.logger.info(
+                            f"🎨 Precheck: Vision intent detected (confidence: {conf:.2f}), routing to Vision system (msg_id: {message.id})"
+                        )
+                        self._metric_inc("vision.route.intent", {"stage": "precheck"})
+                        if dry_run:
+                            self._metric_inc("vision.route.dry_run", {"path": "intent"})
+                            return BotAction(content=(
+                                "[DRY RUN] Vision generation would be triggered via intent detection "
+                                f"(confidence={conf:.2f})."
+                            ))
+                        if not orchestrator_ready:
+                            self._metric_inc("vision.route.blocked", {"reason": "orchestrator_unavailable", "path": "intent"})
+                            return BotAction(content="🚫 Vision generation is not available right now. Please try again later.")
+                        return await self._handle_vision_generation(intent_result, message, context_str)
+                except Exception as e:
+                    self.logger.error(f"❌ Vision intent precheck failed: {e} (msg_id: {message.id})", exc_info=True)
+                    self._metric_inc("vision.intent.error", None)
+                    # Fall through to normal multimodal flow on errors
+            
+            return None
+        except Exception as e:
+            # Fail-safe: never break dispatch on precheck
+            self.logger.debug(f"vision.precheck_failed | {e}")
+            return None
+
     async def _invoke_text_flow(self, content: str, message: Message, context_str: str) -> BotAction:
         """Invoke the text processing flow, formatting history into a context string."""
         self.logger.info(f"Routing to text flow. (msg_id: {message.id})")
@@ -1599,6 +1780,7 @@ class Router:
                 self.logger.info(
                     f"🎨 Direct vision bypass triggered (reason: {direct_vision['bypass_reason']}) (msg_id: {message.id})"
                 )
+                self._metric_inc("vision.route.direct", {"stage": "text_flow"})
                 # Create a mock intent result for the vision handler
                 from types import SimpleNamespace
                 intent_result = SimpleNamespace()
@@ -1628,9 +1810,11 @@ class Router:
                     self.logger.info(
                         f"🎨 Vision intent detected (confidence: {intent_result.confidence:.2f}), routing to Vision system (msg_id: {message.id})"
                     )
+                    self._metric_inc("vision.route.intent", {"stage": "text_flow"})
                     return await self._handle_vision_generation(intent_result, message, context_str)
             except Exception as e:
                 self.logger.error(f"❌ Vision intent routing failed: {e} (msg_id: {message.id})", exc_info=True)
+                self._metric_inc("vision.intent.error", None)
                 # Continue to regular text flow on error
         
         try:
