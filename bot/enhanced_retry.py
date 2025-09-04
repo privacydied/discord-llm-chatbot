@@ -300,14 +300,25 @@ class EnhancedRetryManager:
                         
                         if provider_config.jitter:
                             delay *= (0.8 + random.random() * 0.4)  # Reduced jitter for speed
-                        
+                        # Respect server-provided Retry-After hint if present on the exception [REH]
+                        extra_note = ""
+                        try:
+                            retry_after_hint = getattr(e, "retry_after_seconds", None)
+                            if retry_after_hint is not None:
+                                ra = float(retry_after_hint)
+                                if ra > 0:
+                                    delay = max(delay, min(ra, provider_config.max_delay))
+                                    extra_note = f" (respecting Retry-After={min(ra, provider_config.max_delay):.2f}s)"
+                        except Exception:
+                            pass
+
                         # Check if we have budget for the delay
                         elapsed = time.time() - start_time
                         if elapsed + delay >= per_item_budget:
                             logger.warning(f"⏱️ No budget for {delay:.1f}s delay, skipping to next provider")
                             break
                         
-                        logger.info(f"⏳ Retrying in {delay:.2f}s...")
+                        logger.info(f"⏳ Retrying in {delay:.2f}s...{extra_note}")
                         await asyncio.sleep(delay)
             
             # If we get here, all attempts for this provider failed

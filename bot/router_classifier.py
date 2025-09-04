@@ -87,8 +87,8 @@ def _compile_patterns() -> None:
         # Command patterns
         'command_prefix': re.compile(r'^!(\w+)', re.IGNORECASE),
         
-        # Inline search directives
-        'inline_search': re.compile(r'\[search\s+([^\]]+)\]', re.IGNORECASE),
+        # Inline search directives: capture parenthesized content, allow whitespace, multiline
+        'inline_search': re.compile(r'\[search\s*\((.*?)\)\]', re.IGNORECASE | re.DOTALL),
         
         # Bot mention pattern (will be dynamically compiled)
         'bot_mention': None,  # Set dynamically in Router.__init__

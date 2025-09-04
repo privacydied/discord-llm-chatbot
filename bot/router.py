@@ -37,7 +37,7 @@ import re
 from . import web
 from discord import Message, DMChannel, Embed, File
 from .search.factory import get_search_provider
-from .search.types import SearchQueryParams, SafeSearch, SearchResult
+from .search.types import SearchQueryParams, SafeSearch, SearchResult, SearchCategory
 
 if TYPE_CHECKING:
     from bot.core.bot import LLMBot as DiscordBot
@@ -1740,19 +1740,54 @@ class Router:
         return await brain_infer(content, context=enhanced_context)
 
     # ===== Inline [search(...)] directive handling =====
-    def _extract_inline_search_queries(self, text: str) -> list[tuple[tuple[int, int], str]]:
+    def _extract_inline_search_queries(self, text: str) -> list[tuple[tuple[int, int], str, Optional[SearchCategory]]]:
         """
-        Extract inline search directives of the form [search(<query>)] from text.
-        Returns list of ((start, end), query) for replacement.
+        Extract inline search directives of the form [search(<query>)] or
+        [search(<query>, <category>)] from text.
+
+        Returns list of ((start, end), query, category) for replacement.
+        The category is optional and will be None if not provided. When
+        present, it is parsed case-insensitively and mapped to SearchCategory.
         """
         if not text:
             return []
         pattern = re.compile(r"\[search\s*\((.*?)\)\]", re.IGNORECASE | re.DOTALL)
-        matches = []
+        matches: list[tuple[tuple[int, int], str, Optional[SearchCategory]]] = []
+
+        def _parse_category(arg_tail: str) -> Optional[SearchCategory]:
+            # Normalize and strip quotes
+            token = (arg_tail or "").strip().strip("'\"")
+            if not token:
+                return None
+            # Accept common synonyms (image, images, video, videos)
+            token_l = token.lower()
+            if token_l in ("text",):
+                return SearchCategory.TEXT
+            if token_l in ("news",):
+                return SearchCategory.NEWS
+            if token_l in ("image", "images"):  # allow singular
+                return SearchCategory.IMAGES
+            if token_l in ("video", "videos"):  # allow singular
+                return SearchCategory.VIDEOS
+            # Unrecognized -> None to preserve backward compatibility
+            return None
+
         for m in pattern.finditer(text):
-            query = (m.group(1) or '').strip()
+            inner = (m.group(1) or '').strip()
+            if not inner:
+                continue
+            # Try to parse optional category by splitting on the last comma
+            # This preserves commas inside the query.
+            query: str = inner
+            category: Optional[SearchCategory] = None
+            if "," in inner:
+                q_part, cat_part = inner.rsplit(",", 1)
+                cat = _parse_category(cat_part)
+                if cat is not None:
+                    query = q_part.strip()
+                    category = cat
             if query:
-                matches.append(((m.start(), m.end()), query))
+                matches.append(((m.start(), m.end()), query, category))
         return matches
 
     async def _resolve_inline_searches(self, text: str, message: Message) -> str:
@@ -1782,7 +1817,7 @@ class Router:
 
         # Execute searches with bounded concurrency [PA]
         sem = asyncio.Semaphore(max(1, max_concurrency))
-        async def run_search(q: str):
+        async def run_search(q: str, cat: Optional[SearchCategory]):
             async with sem:
                 params = SearchQueryParams(
                     query=q,
@@ -1790,21 +1825,26 @@ class Router:
                     safesearch=safesearch,
                     locale=locale,
                     timeout_ms=timeout_ms,
+                    category=cat or SearchCategory.TEXT,
                 )
                 try:
-                    self.logger.debug(f"[InlineSearch] Executing: '{q[:80]}'")
+                    cat_label = (cat.value if isinstance(cat, SearchCategory) else "text")
+                    self._metric_inc("inline_search.start", {"category": cat_label, "provider": provider_name})
+                    self.logger.debug(f"[InlineSearch] Executing: '{q[:80]}' (category={cat_label})")
                     return await provider.search(params)
                 except Exception as e:
                     self.logger.error(f"[InlineSearch] provider error for '{q}': {e}", exc_info=True)
+                    cat_label = (cat.value if isinstance(cat, SearchCategory) else "text")
+                    self._metric_inc("inline_search.error", {"category": cat_label, "provider": provider_name})
                     return e
 
-        tasks = [run_search(q) for _, q in directives]
+        tasks = [run_search(q, cat) for (_, _), q, cat in directives]
         results_list = await asyncio.gather(*tasks, return_exceptions=False)
 
         # Build replacements
         pieces: list[str] = []
         cursor = 0
-        for ((start, end), query), results in zip(directives, results_list):
+        for ((start, end), query, category), results in zip(directives, results_list):
             # Append text before directive
             if cursor < start:
                 pieces.append(text[cursor:start])
@@ -1814,6 +1854,8 @@ class Router:
                 replacement = f"❌ Search failed for '{query}': please try again later."
             else:
                 replacement = self._format_inline_search_block(query, results, provider_name, safesearch)
+                cat_label = (category.value if isinstance(category, SearchCategory) else "text")
+                self._metric_inc("inline_search.success", {"category": cat_label, "provider": provider_name})
 
             pieces.append(replacement)
             cursor = end

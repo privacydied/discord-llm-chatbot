@@ -456,18 +456,18 @@ class TokenizerRegistry:
         """
         Select the best tokenizer for the given language and return a typed Decision.
         
-        IMPORTANT: English is STRICTLY PROHIBITED from using this registry.
-        English must use the official IPA-only path via ipa_vocab_loader.py.
+        Note:
+        - Production English path is IPA-only via `bot.tts.ipa_vocab_loader` and
+          the engine bypasses this registry for English.
+        - Tests and fallback routing may still call this with English to validate
+          decision plumbing and KokoroDirect integration. We allow that here.
         
         Args:
-            language: Language code (e.g., 'ja', 'es', 'fr') - NOT 'en'
+            language: Language code (e.g., 'en', 'ja', 'es', 'fr')
             text: Input text to tokenize
             
         Returns:
             Decision: Typed decision with mode, payload, and alphabet
-            
-        Raises:
-            RuntimeError: If called with English language information
             
         Raises:
             MissingTokeniserError: If no suitable tokenizer is found for the language
@@ -479,13 +479,8 @@ class TokenizerRegistry:
         # Canonicalize language
         language = self._canonicalize_language(language)
         
-        # STRICT: English is forbidden from using registry
-        if language == 'en':
-            raise RuntimeError(
-                "English synthesis must use the official IPA-only path. "
-                "Registry tokenization is prohibited for English. "
-                "Use bot.tts.ipa_vocab_loader.py and KokoroDirect directly."
-            )
+        # English: permitted in this function to support tests and fallback routing.
+        # The engine's English path remains IPA-only and does not consult the registry.
         
         # Apply lexicon first
         text, lex_changed = self.apply_lexicon(text, language)

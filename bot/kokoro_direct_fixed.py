@@ -113,18 +113,19 @@ class KokoroDirect:
         return methods
 
     def _select_phonemiser(self, lang: str) -> str:
-        # Respect env override first
-        override = os.getenv("TTS_PHONEMISER")
-        if override:
-            return override
-
         # Canonicalize language code
         lang = (lang or "en").lower()
 
-        # Do NOT trigger tokenizer registry autodiscovery/logs for English.
-        # English uses strict IPA path; phonemiser value is unused but returned for completeness.
+        # English: ignore env overrides and force the IPA-only path semantics.
+        # We still return a stable label ("espeak") for compatibility, but
+        # the value is not used to trigger any external discovery.
         if lang.startswith("en"):
             return "espeak"
+
+        # For non-English languages, respect explicit env override
+        override = os.getenv("TTS_PHONEMISER")
+        if override:
+            return override
 
         # Simple mapping without registry side-effects
         if lang.startswith("ja") or lang.startswith("zh"):

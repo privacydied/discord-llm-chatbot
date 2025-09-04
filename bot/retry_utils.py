@@ -207,9 +207,9 @@ VISION_RETRY_CONFIG = RetryConfig(
 )
 
 API_RETRY_CONFIG = RetryConfig(
-    max_attempts=2,
+    max_attempts=3,
     base_delay=1.0,
-    max_delay=8.0,
+    max_delay=60.0,
     exponential_base=1.5,
     jitter=True,
     retryable_exceptions=[APIError, ConnectionError, TimeoutError, httpx.HTTPStatusError, aiohttp.ClientResponseError],

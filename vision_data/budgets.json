@@ -1,0 +1,36 @@
+{
+  "199347457073610752": {
+    "user_id": "199347457073610752",
+    "daily_limit": "5.0",
+    "daily_spent": "0.00",
+    "daily_reset_time": null,
+    "weekly_limit": "20.0",
+    "weekly_spent": "0.00",
+    "weekly_reset_time": null,
+    "monthly_limit": "50.0",
+    "monthly_spent": "0.00",
+    "monthly_reset_time": null,
+    "reserved_amount": "0.1600",
+    "total_spent": "0.00",
+    "total_jobs": 0,
+    "created_at": "2025-08-30T21:30:08.399740+00:00",
+    "updated_at": "2025-09-01T00:34:52.390728+00:00"
+  },
+  "254254168234131456": {
+    "user_id": "254254168234131456",
+    "daily_limit": "5.0",
+    "daily_spent": "0.00",
+    "daily_reset_time": null,
+    "weekly_limit": "20.0",
+    "weekly_spent": "0.00",
+    "weekly_reset_time": null,
+    "monthly_limit": "50.0",
+    "monthly_spent": "0.00",
+    "monthly_reset_time": null,
+    "reserved_amount": "1.5000",
+    "total_spent": "0.00",
+    "total_jobs": 0,
+    "created_at": "2025-09-03T18:08:03.082449+00:00",
+    "updated_at": "2025-09-03T18:08:04.382403+00:00"
+  }
+}
