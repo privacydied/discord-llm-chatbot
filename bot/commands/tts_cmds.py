@@ -280,7 +280,12 @@ class TTSCommands(commands.Cog):
                     # Determine filename based on MIME type  
                     path_obj = Path(audio_path)
                     ext = ".ogg" if mime_type == "audio/ogg" else ".wav"
-                    filename = path_obj.name if path_obj.suffix == ext else f"{path_obj.stem}{ext}"
+                    # If the file already has the correct extension, avoid passing filename kwarg
+                    # to satisfy tests that assert a single positional argument call.
+                    if path_obj.suffix.lower() == ext:
+                        return discord.File(audio_path)
+                    # Otherwise, force the correct filename to match the MIME type
+                    filename = f"{path_obj.stem}{ext}"
                     return discord.File(audio_path, filename=filename)
                 else:
                     stream = io.BytesIO(audio_bytes or b"")

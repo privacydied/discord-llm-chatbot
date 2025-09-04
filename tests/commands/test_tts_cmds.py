@@ -197,3 +197,71 @@ async def test_tts_group_no_text(tts_cog, mock_ctx):
     await tts_cog.tts_group.callback(tts_cog, mock_ctx, text=None)
 
     mock_ctx.send.assert_called_once_with("Please specify 'on', 'off', or text to speak.")
+
+
+@pytest.mark.asyncio
+async def test_say_native_voice_publish_success(tts_cog, mock_ctx, mock_bot, monkeypatch):
+    """When VoiceMessagePublisher.publish succeeds, the command should return without sending a file."""
+    # Patch discord.File to avoid filesystem operations if fallback were used
+    monkeypatch.setattr('discord.File', MagicMock())
+
+    # Ensure TTS is available and returns an audio path
+    mock_bot.tts_manager.is_available.return_value = True
+    mock_bot.tts_manager.process = AsyncMock(return_value=SimpleNamespace(audio_path="/fake/path/audio.wav"))
+
+    # Mock guild and channel permission checks to allow sending in channel
+    # Make isinstance(ctx.guild, discord.Guild) == True by patching the class used in the module
+    guild_mock = MagicMock()
+    monkeypatch.setattr('bot.commands.tts_cmds.discord.Guild', MagicMock)
+    mock_ctx.guild = guild_mock
+    # Provide a truthy 'me' to avoid .get_member path
+    mock_ctx.guild.me = MagicMock()
+    # Channel permissions: allow send + attach
+    mock_ctx.channel = MagicMock()
+    mock_ctx.channel.permissions_for = MagicMock(return_value=SimpleNamespace(send_messages=True, attach_files=True))
+
+    # Inject a mocked voice publisher instance on the cog
+    publish_res = SimpleNamespace(ok=True, message=None, ogg_path=None)
+    mocked_publisher = SimpleNamespace(publish=AsyncMock(return_value=publish_res))
+    tts_cog.voice_publisher = mocked_publisher
+
+    # Execute
+    await tts_cog.say.callback(tts_cog, mock_ctx, text="hello native")
+
+    # Assert native path used and short-circuited
+    assert mocked_publisher.publish.await_count == 1
+    # Should not fall back to sending a file
+    mock_ctx.send.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_say_native_voice_publish_fallback_to_file(tts_cog, mock_ctx, mock_bot, monkeypatch):
+    """If native voice publish reports not ok, fall back to sending an attachment in channel."""
+    # Patch discord.File to avoid filesystem and assert call
+    mock_discord_file = MagicMock()
+    monkeypatch.setattr('discord.File', mock_discord_file)
+
+    # Ensure TTS is available and returns an audio path
+    mock_bot.tts_manager.is_available.return_value = True
+    mock_bot.tts_manager.process = AsyncMock(return_value=SimpleNamespace(audio_path="/fake/path/audio.wav"))
+
+    # Mock guild and channel permission checks to allow sending in channel
+    monkeypatch.setattr('bot.commands.tts_cmds.discord.Guild', MagicMock)
+    mock_ctx.guild = MagicMock()
+    mock_ctx.guild.me = MagicMock()
+    mock_ctx.channel = MagicMock()
+    mock_ctx.channel.permissions_for = MagicMock(return_value=SimpleNamespace(send_messages=True, attach_files=True))
+
+    # Inject a mocked voice publisher that returns ok=False to trigger fallback
+    publish_res = SimpleNamespace(ok=False, message=None, ogg_path=None)
+    mocked_publisher = SimpleNamespace(publish=AsyncMock(return_value=publish_res))
+    tts_cog.voice_publisher = mocked_publisher
+
+    # Execute
+    await tts_cog.say.callback(tts_cog, mock_ctx, text="hello native fallback")
+
+    # Assert native path attempted
+    assert mocked_publisher.publish.await_count == 1
+    # Fallback should send a file in the channel
+    mock_ctx.send.assert_called_once()
+    mock_discord_file.assert_called_once_with("/fake/path/audio.wav")

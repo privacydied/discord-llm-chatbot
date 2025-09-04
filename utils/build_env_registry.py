@@ -87,7 +87,7 @@ SENSITIVE_HINTS = ("TOKEN", "SECRET", "KEY", "PASSWORD", "BEARER", "API_KEY", "A
 REQUIRED_SET = {"DISCORD_TOKEN", "PROMPT_FILE", "VL_PROMPT_FILE"}
 
 GROUP_PREFIXES = [
-    "PROMETHEUS_", "X_API_", "X_", "RAG_", "STT_", "TTS_", "WEBEX_", "MEDIA_", "VIDEO_",
+    "PROMETHEUS_", "X_API_", "X_", "RAG_", "STT_", "TTS_", "KOKORO_", "WEBEX_", "MEDIA_", "VIDEO_",
     "STREAMING_", "SEARCH_", "CACHE_", "OCR_", "PDF_", "SCREENSHOT_",
 ]
 
@@ -137,12 +137,25 @@ def build_registry(inv: Dict[str, Any], logger: logging.Logger) -> Dict[str, Lis
         defaults_raw = [d for d in meta.get("defaults", [])]
         coercions = [c for c in meta.get("coercions", []) if c]
         cdefault, conflicts = choose_default(defaults_raw)
-        typ = ",".join(sorted(set(coercions))) if coercions else "unknown"
+        # Prefer curated type when provided, else infer from coercions
+        curated_type = meta.get("type") if isinstance(meta, dict) else None
+        typ = str(curated_type) if curated_type else (",".join(sorted(set(coercions))) if coercions else "unknown")
 
-        desc = ""  # CDiP: to be curated later
-        group = classify_group(key)
-        sensitive = classify_sensitivity(key) == "sensitive"
-        required = key in REQUIRED_SET
+        # Prefer curated description/group/sensitivity/required when provided
+        desc = str(meta.get("description") or "") if isinstance(meta, dict) else ""
+        group_override = meta.get("group") if isinstance(meta, dict) else None
+        group = str(group_override) if group_override else classify_group(key)
+
+        sens_override = (meta.get("sensitivity") or "").lower() if isinstance(meta, dict) else ""
+        if sens_override in ("sensitive", "secret"):
+            sensitive = True
+        elif sens_override in ("normal", "public"):
+            sensitive = False
+        else:
+            sensitive = classify_sensitivity(key) == "sensitive"
+
+        req_override = meta.get("required") if isinstance(meta, dict) else None
+        required = bool(req_override) if req_override is not None else (key in REQUIRED_SET)
 
         item = RegistryItem(
             key=key,
@@ -153,7 +166,7 @@ def build_registry(inv: Dict[str, Any], logger: logging.Logger) -> Dict[str, Lis
             type=typ,
             default=cdefault,
             all_defaults=[d for d in defaults_raw if d is not None],
-            valid_values=None,
+            valid_values=(meta.get("valid_values") if isinstance(meta, dict) else None),
         )
         groups.setdefault(group, []).append(item)
 

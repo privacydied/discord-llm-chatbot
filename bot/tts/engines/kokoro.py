@@ -7,7 +7,7 @@ from pathlib import Path
 import array as pyarray
 import asyncio
 from typing import Any, Optional, Tuple
-from kokoro_onnx import Kokoro
+from bot.tts.kokoro_adapter import Kokoro, import_kokoro_submodule, get_direct_wrapper
 from .base import BaseEngine
 from bot.tts.errors import TTSError
 from bot.tokenizer_registry import select_tokenizer_for_language, apply_lexicon
@@ -72,7 +72,7 @@ class KokoroONNXEngine(BaseEngine):
             try:
                 import os as _os
                 _os.environ.setdefault("KOKORO_SKIP_TOKENIZER_PROBE", "1")
-                import kokoro_onnx.tokenizer as _tok  # type: ignore
+                _tok = import_kokoro_submodule('tokenizer')  # type: ignore
                 _ew = getattr(_tok, "EspeakWrapper", None)
                 if _ew is not None:
                     if not hasattr(_ew, "set_data_path"):
@@ -247,8 +247,8 @@ class KokoroONNXEngine(BaseEngine):
             return asyncio.create_task(self._synthesize_with_registry(text))
 
     def _get_kokoro_direct(self, use_tokenizer: bool = False, force_ipa: bool = True):
-        from bot.kokoro_direct_fixed import KokoroDirect
-        return KokoroDirect(
+        kd_cls = get_direct_wrapper()
+        return kd_cls(
             model_path=self.model_path,
             voices_path=self.voices_path,
             language="en",
@@ -494,9 +494,9 @@ class KokoroONNXEngine(BaseEngine):
         # Final fallback: use our direct integration wrapper with registry decisions
         try:
             logger.debug("Attempting KokoroDirect fallback with registry decisions")
-            from bot.kokoro_direct_fixed import KokoroDirect  # local helper wrapper
             from bot.tokenizer_registry import select_for_language
-            kd = KokoroDirect(model_path=self.model_path, voices_path=self.voices_path)
+            kd_cls = get_direct_wrapper()
+            kd = kd_cls(model_path=self.model_path, voices_path=self.voices_path)
             
             # Get registry decision for this text and language
             decision = select_for_language(self.language, text)

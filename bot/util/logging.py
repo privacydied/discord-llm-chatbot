@@ -43,13 +43,22 @@ class NoiseSuppressionFilter(logging.Filter):
     """
     
     def filter(self, record: logging.LogRecord) -> bool:
-        # Suppress noisy OpenAI debug tracebacks for expected 429 errors
-        if (record.levelname == "DEBUG" and 
-            record.name.startswith("openai") and
-            "Encountered httpx.HTTPStatusError" in str(record.msg) and
-            ("429 Too Many Requests" in str(record.getMessage()) or
-             "HTTPStatusError: Client error '429'" in str(record.getMessage()))):
-            return False
+        # Suppress noisy OpenAI debug tracebacks for expected httpx status errors (esp. 429)
+        # These are retried upstream and do not warrant a full traceback at DEBUG level.
+        try:
+            if record.levelname == "DEBUG" and record.name.startswith("openai"):
+                base_msg = str(record.msg)
+                full_msg = str(record.getMessage())
+                low = full_msg.lower()
+                # The OpenAI client logs this exact prefix when raising for status
+                if "Encountered httpx.HTTPStatusError" in base_msg:
+                    return False
+                # Also suppress generic httpx HTTPStatusError debug lines when it's clearly a 429/Too Many Requests
+                if ("httpstatuserror" in low) and ("429" in low or "too many requests" in low):
+                    return False
+        except Exception:
+            # Never let logging filters raise
+            pass
         return True
 
 

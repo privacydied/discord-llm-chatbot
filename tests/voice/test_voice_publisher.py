@@ -116,6 +116,8 @@ async def test_publish_success_flow(monkeypatch, tmp_path: Path):
     )
 
     pub = VoiceMessagePublisher()
+    # Ensure tests do not depend on local ffmpeg/ffprobe presence
+    monkeypatch.setattr(pub, "_check_tools", lambda: True)
     monkeypatch.setattr(pub, "_probe_duration", AsyncMock(return_value=1.0))
     monkeypatch.setattr(
         pub,
@@ -165,6 +167,8 @@ async def test_publish_blocks_on_50173(monkeypatch, tmp_path: Path):
     )
 
     pub = VoiceMessagePublisher()
+    # Ensure tests do not depend on local ffmpeg/ffprobe presence
+    monkeypatch.setattr(pub, "_check_tools", lambda: True)
     monkeypatch.setattr(pub, "_probe_duration", AsyncMock(return_value=1.0))
 
     # attachments.create returns 50173 error -> should block channel
