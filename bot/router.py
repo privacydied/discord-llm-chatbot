@@ -124,6 +124,19 @@ class Router:
         
         # Debug logging for vision initialization
         self.logger.info(f"🔍 Vision initialization debug: VISION_ENABLED={VISION_ENABLED}, config_enabled={self.config.get('VISION_ENABLED', 'NOT_SET')}")
+
+        # Load centralized VL prompt guidelines if available [CA]
+        self._vl_prompt_guidelines: Optional[str] = None
+        try:
+            prompts_dir = Path(__file__).resolve().parents[1] / "prompts" / "vl-prompt.txt"
+            if prompts_dir.exists():
+                content = prompts_dir.read_text(encoding="utf-8").strip()
+                if content:
+                    self._vl_prompt_guidelines = content
+                    self.logger.debug("Loaded VL prompt guidelines from prompts/vl-prompt.txt")
+        except Exception:
+            # Non-fatal; handler has built-in defaults
+            self._vl_prompt_guidelines = None
         
         if VISION_ENABLED and self.config.get("VISION_ENABLED", False):
             self.logger.info("🚀 Starting vision system initialization...")
@@ -1401,7 +1414,12 @@ class Router:
                         
                         # Use new syndication handler for full-res images [CA][PA]
                         from ..syndication.handler import handle_twitter_syndication_to_vl
-                        return await handle_twitter_syndication_to_vl(syn, url, self._vl_describe_image_from_url)
+                        return await handle_twitter_syndication_to_vl(
+                            syn,
+                            url,
+                            self._vl_describe_image_from_url,
+                            self._vl_prompt_guidelines,
+                        )
 
                 # Tier 2 (optionally before API if syndication_first): X API [SFT]
                 if tweet_id and x_client is not None:
@@ -1489,7 +1507,12 @@ class Router:
                             
                             # Use new syndication handler for full-res images [CA][PA] 
                             from ..syndication.handler import handle_twitter_syndication_to_vl
-                            return await handle_twitter_syndication_to_vl(api_as_syn, url, self._vl_describe_image_from_url)
+                            return await handle_twitter_syndication_to_vl(
+                                api_as_syn,
+                                url,
+                                self._vl_describe_image_from_url,
+                                self._vl_prompt_guidelines,
+                            )
 
                         return self._format_x_tweet_result(api_data, url)
                     except APIError as e:
