@@ -48,8 +48,29 @@ async def handle_twitter_syndication_to_vl(
     """
     data = extract_text_and_images_from_syndication(tweet_json)
     
-    text = data["text"].strip()
-    image_urls = data["image_urls"]
+    text = data.get("text", "").strip()
+    image_urls = data.get("image_urls", [])
+    source = data.get("source", "unknown")
+    had_card = bool(data.get("had_card", False))
+    # Optional debug instrumentation
+    try:
+        debug_pick = os.getenv("SYND_DEBUG_MEDIA_PICK", "0").lower() in ("1", "true", "yes", "on")
+    except Exception:
+        debug_pick = False
+    if debug_pick:
+        try:
+            preview = ", ".join((image_urls[:2])) if image_urls else "(none)"
+            log.info(
+                "SYND_MEDIA_PICK | source=%s count=%d preview=%s card_present=%s",
+                source,
+                len(image_urls),
+                preview[:360],
+                str(had_card).lower(),
+            )
+            if had_card and source != "card":
+                log.info("SYND_MEDIA_PICK | ignored_card_due_to_native=true")
+        except Exception:
+            pass
     
     if not image_urls:
         # Keep existing behavior: return text-only or handle as needed
@@ -66,10 +87,22 @@ async def handle_twitter_syndication_to_vl(
 
         metrics = METRICS
     except Exception:
-        metrics = None
+        descriptions = []
     
-    # Concurrency with order preservation
-    total = len(image_urls)
+    # SYND_DEBUG_MEDIA_PICK env-gated debug logging [IV]
+    debug_media_pick = os.getenv("SYND_DEBUG_MEDIA_PICK", "0").lower() in ("1", "true", "yes", "on")
+    if debug_media_pick:
+        preview_urls = image_urls[:2] if len(image_urls) >= 2 else image_urls
+        card_ignored = data.get("had_card", False) and data.get("source") != "card"
+        log.info(
+            f"SYND_DEBUG_MEDIA_PICK | source={data.get('source', 'unknown')} "
+            f"count={len(image_urls)} "
+            f"preview={preview_urls} "
+            f"card_ignored_due_to_native={card_ignored}"
+        )
+    
+    # Log which image we're analyzing for debug purposes
+    debug = log.isEnabledFor(logging.DEBUG)
     # Determine effective timeout
     if timeout_s is None:
         try:
@@ -132,7 +165,7 @@ async def handle_twitter_syndication_to_vl(
                         metrics.counter("x.syndication.vl_failure").inc(1)
                     except Exception:
                         pass
-                return {"idx": idx, "text": f"📷 Photo {idx}/{total} — analysis unavailable", "ok": False}
+                return {"idx": idx, "text": f"📷 Photo {idx}/{total} — skipped (fetch failed)", "ok": False}
         except Exception as e:
             log.warning(f"VL analysis failed for image {idx}: {e}")
             if metrics:
@@ -140,7 +173,7 @@ async def handle_twitter_syndication_to_vl(
                     metrics.counter("x.syndication.vl_failure").inc(1)
                 except Exception:
                     pass
-            return {"idx": idx, "text": f"📷 Photo {idx}/{total} — analysis failed", "ok": False}
+            return {"idx": idx, "text": f"📷 Photo {idx}/{total} — skipped (fetch failed)", "ok": False}
 
     tasks = [_process(idx, image_url) for idx, image_url in enumerate(image_urls, start=1)]
     results: List[Dict[str, Any]] = await asyncio.gather(*tasks)

@@ -1142,10 +1142,19 @@ class Router:
                         self.logger.warning(f"⚠️ High-res download failed, retrying with 'name=large': {fallback_url}")
                         ok = await download_file(fallback_url, Path(tmp_path))
                         if not ok:
-                            self.logger.error(f"❌ Failed to download Twitter image even with fallback: {fallback_url}")
-                            return None
-                        # Update for logging clarity
-                        image_url = fallback_url
+                            # Third tier: try 'name=medium' to stay under budget [PA]
+                            qs["name"] = "medium"
+                            fallback_medium = urlunparse((p.scheme, p.netloc, p.path, p.params, urlencode(qs, doseq=True), p.fragment))
+                            self.logger.warning(f"⚠️ Large download failed, retrying with 'name=medium': {fallback_medium}")
+                            ok = await download_file(fallback_medium, Path(tmp_path))
+                            if not ok:
+                                self.logger.error(f"❌ Failed to download Twitter image even with fallbacks: {fallback_medium}")
+                                return None
+                            # Update for logging clarity
+                            image_url = fallback_medium
+                        else:
+                            # Update for logging clarity
+                            image_url = fallback_url
                     else:
                         self.logger.error(f"❌ Failed to download image for VL: {image_url}")
                         return None
@@ -1221,18 +1230,15 @@ class Router:
         except VideoIngestError as ve:
             error_str = str(ve).lower()
             
-            # For Twitter URLs with no media, route to tiered web extractor instead of screenshot [SST]
+            # For Twitter URLs with no media, use syndication/API path instead of web extractor [CA][REH]
             if is_twitter and (
                 "no video or audio content found" in error_str or
                 "no video could be found" in error_str or
                 "failed to download video" in error_str
             ):
-                self.logger.info(f"🐦 No video in Twitter URL; routing to tiered extractor: {url}")
-                extract_res = await web_extractor.extract(url)
-                if extract_res.success:
-                    return f"Twitter post content:\n{extract_res.to_message()}"
-                else:
-                    return "🔍 No video or audio content found in this URL, and text extraction was unsuccessful."
+                self.logger.info(f"🐦 No video in Twitter URL; routing to syndication/API path: {url}")
+                # Force to general URL handler which has proper X syndication logic
+                return await self._handle_general_url(InputItem(source_type="url", payload=url))
             
             # For non-Twitter URLs, provide user-friendly message  
             self.logger.info(f"ℹ️ Video processing: {ve}")
@@ -1427,10 +1433,8 @@ class Router:
                                         extra={"event": "x.syndication.stt.warn", "detail": {"url": url, "error": str(stt_err)}},
                                     )
                             return base
-                        # Respect photo-to-VL flag
-                        route_photos = bool(cfg.get("X_API_ROUTE_PHOTOS_TO_VL", False))
-                        if not route_photos:
-                            return f"{base}\nPhotos: {len(photos)}"
+                        # SURGICAL FIX: Always route photos to VL for X URLs (ignore the flag) [CA][REH]
+                        # This ensures native photos are analyzed instead of just counting them
                         
                         # Use new syndication handler for full-res images [CA][PA]
                         from ..syndication.handler import handle_twitter_syndication_to_vl
@@ -1506,12 +1510,9 @@ class Router:
                                 }
                                 return await self._handle_image_only_tweet(url, api_as_syn, source="api")
                             
-                            route_photos = bool(cfg.get("X_API_ROUTE_PHOTOS_TO_VL", False))
+                            # SURGICAL FIX: Always route photos to VL for X URLs (ignore the flag) [CA][REH]
+                            # This ensures native photos are analyzed instead of just counting them
                             base = self._format_x_tweet_result(api_data, url)
-                            if not route_photos:
-                                photo_count = len(photos)
-                                self._metric_inc("x.photo_to_vl.skipped", {"enabled": "false"})
-                                return f"{base}\nPhotos: {photo_count}"
 
                             self.logger.info(
                                 "🖼️🐦 Routing X photos to VL via API data",
@@ -1761,6 +1762,10 @@ class Router:
                 self.logger.info(
                     f"route.guard: perception_beats_generation | route={route} (msg_id: {message.id})"
                 )
+                try:
+                    self._metric_inc("vision.route.vl_only_bypass_t2i", {"route": route})
+                except Exception:
+                    pass
                 # Never trigger image generation if images or Twitter URLs are present
                 return None
             
@@ -1864,6 +1869,11 @@ class Router:
             has_twitter_url = False
         if has_img_attachments or has_twitter_url:
             perception_guard = True
+            try:
+                route = 'attachments' if has_img_attachments else 'x_syndication'
+                self._metric_inc("vision.route.vl_only_bypass_t2i", {"route": route})
+            except Exception:
+                pass
 
         # Check for direct vision triggers first (bypasses rate-limited intent detection)
         if content.strip() and not perception_guard:
@@ -2772,13 +2782,36 @@ class Router:
                     self.logger.warning(f"Failed to download result {i}: {e}")
                     result_descriptions.append(f"❌ Result {i} download failed")
             
+            # Cost formatting: avoid numeric format on Money [REH][IV]
+            cost_str = "N/A"
+            try:
+                ac = getattr(response, 'actual_cost', None)
+                if ac is not None:
+                    # Money-aware display if available
+                    if hasattr(ac, 'to_display_string'):
+                        cost_str = ac.to_display_string()
+                    else:
+                        # Legacy numeric fallback
+                        cost_str = f"${float(ac):.2f}"
+            except Exception as e:
+                self.logger.debug(f"money.format_fallback | {e}")
+                cost_str = "N/A"
+
+            # Instrumentation before message assembly [PA]
+            try:
+                self.logger.info(
+                    f"🧾 Vision success summary | job={job.job_id[:8]} cost={cost_str} artifacts={len(response.artifacts) if response and response.artifacts else 0}"
+                )
+            except Exception:
+                pass
+
             # Create final success message
             success_content = (
                 f"✅ **Vision Generation Complete**\n"
                 f"Task: {job.request.task.value.replace('_', ' ').title()}\n"
                 f"Provider: {response.provider.value.title()}\n"
                 f"Processing Time: {response.processing_time_seconds:.1f}s\n"
-                f"Cost: ${response.actual_cost:.3f}\n\n"
+                f"Cost: {cost_str}\n\n"
                 f"**Results:**\n" + "\n".join(result_descriptions)
             )
             
@@ -2789,6 +2822,30 @@ class Router:
             await progress_msg.edit(content=success_content)
             
             if files_to_upload:
+                # Log filenames and sizes before upload [PA]
+                try:
+                    upload_meta = []
+                    for f in files_to_upload:
+                        try:
+                            # discord.File has .fp or .path; we derive size from path when available
+                            path = getattr(f, 'fp', None)
+                            size = None
+                            if hasattr(f, 'fp') and hasattr(f.fp, 'name'):
+                                pth = getattr(f.fp, 'name', None)
+                                if pth and os.path.exists(pth):
+                                    size = os.path.getsize(pth)
+                                    upload_meta.append((f.filename, size))
+                            else:
+                                upload_meta.append((f.filename, None))
+                        except Exception:
+                            upload_meta.append((getattr(f, 'filename', 'unknown'), None))
+                    self.logger.info(
+                        "📤 Upload starting | files=" + ", ".join(
+                            [f"{name} ({size} bytes)" if size is not None else name for name, size in upload_meta]
+                        )
+                    )
+                except Exception:
+                    pass
                 await original_msg.channel.send(files=files_to_upload)
             
             return BotAction(content="Vision generation completed successfully")
