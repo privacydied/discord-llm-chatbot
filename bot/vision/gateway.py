@@ -24,6 +24,7 @@ from .types import (
     VisionError, VisionErrorType
 )
 from .unified_adapter import UnifiedVisionAdapter, UnifiedStatus, UnifiedResult
+from .money import Money
 
 logger = get_logger(__name__)
 
@@ -319,7 +320,7 @@ class VisionGateway:
                 model_used=result.metadata.get('model', 'unknown'),
                 artifacts=saved_artifacts,
                 processing_time_seconds=asyncio.get_event_loop().time() - job_meta["start_time"],
-                actual_cost=result.final_cost,
+                actual_cost=Money(result.final_cost) if result.final_cost is not None else None,
                 file_size_bytes=total_size,
                 warnings=warnings,
             )

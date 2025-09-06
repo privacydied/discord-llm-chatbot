@@ -32,6 +32,8 @@ from .gateway import VisionGateway
 from .job_store import VisionJobStore
 from .safety_filter import VisionSafetyFilter
 from .budget_manager_v2 import VisionBudgetManager
+from .money import Money
+from .pricing_loader import get_pricing_table
 
 logger = get_logger(__name__)
 
@@ -120,8 +122,10 @@ class VisionOrchestrator:
                 discord_interaction_id=getattr(request, 'discord_interaction_id', None)
             )
             
-            # Estimate cost and reserve budget
+            # Estimate cost and reserve budget (Money-typed) [REH][CMV]
             estimated_cost = await self._estimate_job_cost(request)
+            estimated_cost = self._ensure_money(estimated_cost)
+            # Persist on request and job for downstream usage
             request.estimated_cost = estimated_cost
             job.request.estimated_cost = estimated_cost
             
@@ -213,22 +217,42 @@ class VisionOrchestrator:
                 user_message=f"You can only run {self.max_user_concurrent_jobs} job(s) at a time. Please wait for your current job to complete."
             )
     
-    async def _estimate_job_cost(self, request: VisionRequest) -> float:
-        """Estimate job cost using simple fallback logic [CMV]"""
+    async def _estimate_job_cost(self, request: VisionRequest) -> Money:
+        """Estimate job cost using PricingTable (Money-typed) with safe fallback [CMV][REH]"""
         try:
-            # Simple fallback estimates based on task type
-            from .types import VisionTask
-            fallback_costs = {
-                VisionTask.TEXT_TO_IMAGE: 0.04,
-                VisionTask.IMAGE_TO_IMAGE: 0.06,
-                VisionTask.TEXT_TO_VIDEO: 1.50,
-                VisionTask.IMAGE_TO_VIDEO: 2.00
-            }
-            return fallback_costs.get(request.task, 0.10)
-                
+            table = get_pricing_table()
+            provider = request.preferred_provider or VisionProvider.TOGETHER
+            # Width/height/batch/duration already normalized on request
+            cost = table.estimate_cost(
+                provider=provider,
+                task=request.task,
+                width=request.width,
+                height=request.height,
+                num_images=getattr(request, 'batch_size', 1) or 1,
+                duration_seconds=getattr(request, 'duration_seconds', 4.0) or 4.0,
+                model=request.preferred_model or request.model
+            )
+            return self._ensure_money(cost)
         except Exception as e:
-            self.logger.warning(f"Cost estimation failed: {e}")
-            return 0.10  # Conservative fallback
+            # Default tiny estimate when pricing is unknown/unavailable
+            self.logger.warning(f"Cost estimation failed (fallback to minimum): {e}")
+            return Money("0.02")
+
+    # --- Helpers -----------------------------------------------------------------
+    def _ensure_money(self, x: Any) -> Money:
+        """Guardrail: ensure Money instance for budgeting [REH]
+        - If x is Money, return as-is
+        - If x is None, return default minimum estimate ($0.02)
+        - Otherwise, wrap via Money(x)
+        """
+        try:
+            if isinstance(x, Money):
+                return x
+            if x is None:
+                return Money("0.02")
+            return Money(x)
+        except Exception:
+            return Money("0.02")
     
     async def _execute_job(self, job: VisionJob) -> None:
         """Execute vision generation job asynchronously [CA][REH]"""
@@ -269,8 +293,8 @@ class VisionOrchestrator:
                 # Update budget with actual cost
                 await self.budget_manager.record_actual_cost(
                     job.request.user_id, 
-                    job.request.estimated_cost,  # Release reserved amount
-                    response.actual_cost  # Record actual cost
+                    self._ensure_money(job.request.estimated_cost),  # Release reserved amount
+                    self._ensure_money(response.actual_cost)  # Record actual cost
                 )
                 
                 self.logger.info(f"Job completed successfully - job_id: {job_id[:8]}, provider: {response.provider.value}, actual_cost: {response.actual_cost}, processing_time: {response.processing_time_seconds}s")
@@ -281,14 +305,17 @@ class VisionOrchestrator:
                 job.transition_to(VisionJobState.FAILED, f"Generation failed: {response.error.message if response.error else 'Unknown error'}")
                 
                 # Release reserved budget on failure
-                await self.budget_manager.release_reservation(job.request.user_id, job.request.estimated_cost)
+                await self.budget_manager.release_reservation(job.request.user_id, self._ensure_money(job.request.estimated_cost))
                 
                 self.logger.error(f"Job failed at provider - job_id: {job_id[:8]}, error: {response.error.message if response.error else 'Unknown error'}")
         
         except asyncio.CancelledError:
             # Job was cancelled
             job.transition_to(VisionJobState.CANCELLED, "Job cancelled")
-            await self.budget_manager.release_reservation(job.request.user_id, job.request.estimated_cost)
+            await self.budget_manager.release_reservation(
+                job.request.user_id,
+                self._ensure_money(job.request.estimated_cost)
+            )
             self.logger.info(f"Job cancelled: {job_id[:8]}")
             
         except VisionError as e:
@@ -296,7 +323,10 @@ class VisionOrchestrator:
             job.error = e
             job.transition_to(VisionJobState.FAILED, f"Error: {e.message}")
             
-            await self.budget_manager.release_reservation(job.request.user_id, job.request.estimated_cost)
+            await self.budget_manager.release_reservation(
+                job.request.user_id,
+                self._ensure_money(job.request.estimated_cost)
+            )
             
             self.logger.error(f"Job failed with VisionError - job_id: {job_id[:8]}, error_type: {e.error_type.value}, message: {e.message}")
             
@@ -310,7 +340,10 @@ class VisionOrchestrator:
             job.error = error
             job.transition_to(VisionJobState.FAILED, f"Unexpected error: {str(e)}")
             
-            await self.budget_manager.release_reservation(job.request.user_id, job.request.estimated_cost)
+            await self.budget_manager.release_reservation(
+                job.request.user_id,
+                self._ensure_money(job.request.estimated_cost)
+            )
             
             self.logger.error(f"Job failed with unexpected error - job_id: {job_id[:8]}, error: {str(e)}", exc_info=True)
         
@@ -385,7 +418,10 @@ class VisionOrchestrator:
                     await self.job_store.save_job(job)
                     
                     # Release budget reservation
-                    await self.budget_manager.release_reservation(job.request.user_id, job.request.estimated_cost)
+                    await self.budget_manager.release_reservation(
+                        job.request.user_id,
+                        self._ensure_money(job.request.estimated_cost)
+                    )
                     
                     self.logger.warning(f"Job expired: {job_id[:8]}")
                     
