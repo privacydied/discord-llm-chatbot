@@ -638,6 +638,9 @@ class Router:
         """Process a message and ensure exactly one response is generated (1 IN > 1 OUT rule)."""
         self.logger.info(f"🔄 === ROUTER DISPATCH STARTED: MSG {message.id} ====")
 
+        # ROUTER_DEBUG=1 diagnostics for path selection [IV]
+        router_debug = os.getenv("ROUTER_DEBUG", "0").lower() in ("1", "true", "yes", "on")
+
         try:
             # 1. Quick pre-filter: Only parse commands for messages that start with '!' to avoid unnecessary parsing
             content = message.content.strip()
@@ -703,26 +706,37 @@ class Router:
                             # Wrap plain string result into BotAction for compatibility
                             return BotAction(content=str(res))
 
-                # 5. Gather conversation history for context
-                context_str = await self.bot.context_manager.get_context_string(message)
-                self.logger.info(f"📚 Gathered context. (msg_id: {message.id})")
+                # Continue with normal flow processing
+                context_str = ""  # Simple fix: no conversation context for now
 
-                # 5b. Prioritized vision routing pre-check (explicit triggers/intent)
+                # 5. Check for vision generation intent early (before multi-modal)
                 try:
                     prechecked = await self._prioritized_vision_route(message, context_str)
                 except Exception as e:
                     prechecked = None
                     self.logger.debug(f"vision.precheck_exception | {e}")
                 if prechecked is not None:
+                    if router_debug:
+                        self.logger.info(f"ROUTER_DEBUG | path=t2i reason=vision_intent_detected msg_id={message.id}")
                     return prechecked
 
                 # 6. Sequential multimodal processing
                 result_action = await self._process_multimodal_message_internal(message, context_str)
+                if router_debug:
+                    # Determine what path was taken based on message content
+                    has_x_urls = any(self._is_twitter_url(url) for url in re.findall(r'https?://\S+', content))
+                    has_attachments = bool(getattr(message, 'attachments', None))
+                    if has_x_urls:
+                        self.logger.info(f"ROUTER_DEBUG | path=x_syndication_vl reason=twitter_url_detected msg_id={message.id}")
+                    elif has_attachments:
+                        self.logger.info(f"ROUTER_DEBUG | path=attachment_vl reason=image_attachments msg_id={message.id}")
+                    else:
+                        self.logger.info(f"ROUTER_DEBUG | path=multimodal reason=default_flow msg_id={message.id}")
                 return result_action  # Return the actual processing result
 
         except Exception as e:
             self.logger.error(f"❌ Error in router dispatch: {e} (msg_id: {message.id})", exc_info=True)
-            return BotAction(content="I encountered an error while processing your message.", error=True)
+            return BotAction(content="⚠️ An unexpected error occurred while processing your message.", error=True)
 
     def compute_streaming_eligibility(self, message: Message) -> Dict[str, Any]:
         """Preflight: determine if streaming status cards should be enabled for this message.
