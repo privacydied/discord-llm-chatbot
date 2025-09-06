@@ -501,7 +501,11 @@ class VisionBudgetManager:
         async with self._get_user_lock(user_id):
             budget = await self._load_user_budget(user_id)
             current_reserved = budget.get_reserved_amount()
-            new_reserved = (current_reserved - amount).clamp_minimum(0)
+            # Avoid constructing negative Money to prevent noisy warnings [REH]
+            if amount >= current_reserved:
+                new_reserved = Money.zero()
+            else:
+                new_reserved = current_reserved - amount
             budget.set_reserved_amount(new_reserved)
             await self._save_user_budget(budget)
             
@@ -570,7 +574,11 @@ class VisionBudgetManager:
             
             # Release reservation and add actual spend
             current_reserved = budget.get_reserved_amount()
-            new_reserved = (current_reserved - reserved_amount).clamp_minimum(0)
+            # Prevent negative intermediate results [REH]
+            if reserved_amount >= current_reserved:
+                new_reserved = Money.zero()
+            else:
+                new_reserved = current_reserved - reserved_amount
             budget.set_reserved_amount(new_reserved)
             
             # Update spent amounts
@@ -609,6 +617,12 @@ class VisionBudgetManager:
             ))
             
             # Also log to spend ledger for compatibility
+            # Compute non-negative savings without creating negative Money [REH]
+            if reserved_amount > capped_cost:
+                savings = reserved_amount - capped_cost
+            else:
+                savings = Money.zero()
+
             self._append_jsonl(self.spend_ledger_file, {
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "user_id": user_id,
@@ -616,7 +630,7 @@ class VisionBudgetManager:
                 "actual_cost": actual_cost.to_json_value(),
                 "capped_cost": capped_cost.to_json_value(),
                 "discrepancy_ratio": float(discrepancy_ratio),
-                "savings": (reserved_amount - capped_cost).to_json_value(),
+                "savings": savings.to_json_value(),
                 "daily_total": daily_spent.to_json_value(),
                 "monthly_total": monthly_spent.to_json_value(),
                 "provider": provider,
