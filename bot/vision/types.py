@@ -14,6 +14,9 @@ import uuid
 from datetime import datetime, timezone
 import json
 
+# Money type for budgeting [CMV]
+from .money import Money
+
 
 class VisionTask(Enum):
     """Supported vision generation tasks"""
@@ -119,7 +122,8 @@ class VisionRequest:
     
     # System metadata
     safety_check: bool = True
-    estimated_cost: float = 0.0
+    # Money-typed estimate; may be None until computed [CMV]
+    estimated_cost: Optional[Money] = None
     timeout_seconds: int = 300
     idempotency_key: str = field(default_factory=lambda: str(uuid.uuid4()))
     
@@ -159,7 +163,11 @@ class VisionRequest:
             "preferred_provider": self.preferred_provider.value if self.preferred_provider else None,
             "preferred_model": self.preferred_model,
             "safety_check": self.safety_check,
-            "estimated_cost": self.estimated_cost,
+            # Persist Money as json-safe string for compatibility [REH]
+            "estimated_cost": (
+                self.estimated_cost.to_json_value() if isinstance(self.estimated_cost, Money)
+                else (Money(self.estimated_cost).to_json_value() if self.estimated_cost is not None else None)
+            ),
             "timeout_seconds": self.timeout_seconds,
             "idempotency_key": self.idempotency_key
         }
@@ -197,6 +205,22 @@ class VisionRequest:
         if "num_images" in data and "batch_size" not in data:
             data["batch_size"] = int(data["num_images"]) if data["num_images"] is not None else 1
         
+        # Estimated cost: accept Money JSON string, dict, or legacy numeric [REH]
+        try:
+            if "estimated_cost" in data:
+                ec = data.get("estimated_cost")
+                if isinstance(ec, dict):
+                    # Accept {currency, amount} shape
+                    amt = ec.get("amount")
+                    data["estimated_cost"] = Money(amt) if amt is not None else None
+                elif ec is None:
+                    data["estimated_cost"] = None
+                else:
+                    data["estimated_cost"] = Money(ec)
+        except Exception:
+            # Tolerant: drop on parse failure
+            data["estimated_cost"] = None
+
         # Convert task string back to enum    
         data["task"] = VisionTask(data["task"])
         
@@ -217,7 +241,8 @@ class VisionResponse:
     
     # Execution metadata
     processing_time_seconds: float = 0.0
-    actual_cost: float = 0.0
+    # Money-typed actual cost [CMV]
+    actual_cost: Optional[Money] = None
     provider_job_id: Optional[str] = None
     
     # Quality metrics
@@ -239,7 +264,11 @@ class VisionResponse:
             "artifacts": [str(p) for p in self.artifacts],
             "thumbnails": [str(p) for p in self.thumbnails],
             "processing_time_seconds": self.processing_time_seconds,
-            "actual_cost": self.actual_cost,
+            # Persist Money as json-safe string for compatibility [REH]
+            "actual_cost": (
+                self.actual_cost.to_json_value() if isinstance(self.actual_cost, Money)
+                else (Money(self.actual_cost).to_json_value() if self.actual_cost is not None else None)
+            ),
             "provider_job_id": self.provider_job_id,
             "dimensions": self.dimensions,
             "duration_seconds": self.duration_seconds,
@@ -383,6 +412,19 @@ class VisionJob:
                 error_data = response_data["error"]
                 error_data["error_type"] = VisionErrorType(error_data["error_type"])
                 response_data["error"] = VisionError(**error_data)
+            # Actual cost tolerant parsing [REH]
+            try:
+                if "actual_cost" in response_data:
+                    ac = response_data.get("actual_cost")
+                    if isinstance(ac, dict):
+                        amt = ac.get("amount")
+                        response_data["actual_cost"] = Money(amt) if amt is not None else None
+                    elif ac is None:
+                        response_data["actual_cost"] = None
+                    else:
+                        response_data["actual_cost"] = Money(ac)
+            except Exception:
+                response_data["actual_cost"] = None
             response = VisionResponse(**response_data)
         
         # Parse error

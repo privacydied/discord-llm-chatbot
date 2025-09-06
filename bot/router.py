@@ -27,6 +27,7 @@ from enum import Enum, auto
 from pathlib import Path
 from typing import Any, Callable, Coroutine, Dict, Optional, TYPE_CHECKING, List, Awaitable, Tuple, Union
 from html import unescape
+from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
 import discord
 import httpx
 from .x_api_client import XApiClient
@@ -914,7 +915,7 @@ class Router:
             # Backward-compat: legacy attachment-only messages with truly empty content remain supported by
             # the earlier fast-path. This branch handles minimal/implicit prompts too. [REH]
             self.logger.info(
-                f"🖼️ Bare image attachments detected with no meaningful text; prioritizing VL analysis (msg_id: {message.id})"
+                f"route=attachments | 🖼️ Bare image attachments detected with no meaningful text; prioritizing VL analysis (msg_id: {message.id})"
             )
             self._metric_inc("routing.vl.default_bare_image.selected", {"count": str(len(image_attachment_items))})
             items = image_attachment_items
@@ -1130,8 +1131,27 @@ class Router:
                 tmp_path = tmp_file.name
             ok = await download_file(image_url, Path(tmp_path))
             if not ok:
-                self.logger.error(f"❌ Failed to download image for VL: {image_url}")
-                return None
+                # Special-case: pbs.twimg.com sometimes rejects name=orig; fall back to name=large [REH]
+                try:
+                    p = urlparse(image_url)
+                    host = (p.netloc or "").split(":")[0]
+                    if host == "pbs.twimg.com":
+                        qs = dict(parse_qsl(p.query, keep_blank_values=True))
+                        qs["name"] = "large"
+                        fallback_url = urlunparse((p.scheme, p.netloc, p.path, p.params, urlencode(qs, doseq=True), p.fragment))
+                        self.logger.warning(f"⚠️ High-res download failed, retrying with 'name=large': {fallback_url}")
+                        ok = await download_file(fallback_url, Path(tmp_path))
+                        if not ok:
+                            self.logger.error(f"❌ Failed to download Twitter image even with fallback: {fallback_url}")
+                            return None
+                        # Update for logging clarity
+                        image_url = fallback_url
+                    else:
+                        self.logger.error(f"❌ Failed to download image for VL: {image_url}")
+                        return None
+                except Exception as _e:
+                    self.logger.error(f"❌ Image download failed (no fallback applied): {image_url} err={_e}")
+                    return None
             vl_prompt = prompt or "Describe this image in detail. Focus on salient objects, text, and context."
             res = await see_infer(image_path=tmp_path, prompt=vl_prompt, model_override=model_override)
             if res and getattr(res, 'content', None):
@@ -1414,6 +1434,14 @@ class Router:
                         
                         # Use new syndication handler for full-res images [CA][PA]
                         from ..syndication.handler import handle_twitter_syndication_to_vl
+                        # Minimal route log for observability [CMV]
+                        try:
+                            self.logger.info(
+                                "route=x_syndication | sending photos to VL with high-res upgrade",
+                                extra={"detail": {"url": url}},
+                            )
+                        except Exception:
+                            pass
                         return await handle_twitter_syndication_to_vl(
                             syn,
                             url,
@@ -1818,7 +1846,7 @@ class Router:
 
     async def _invoke_text_flow(self, content: str, message: Message, context_str: str) -> BotAction:
         """Invoke the text processing flow, formatting history into a context string."""
-        self.logger.info(f"Routing to text flow. (msg_id: {message.id})")
+        self.logger.info(f"route=text | Routing to text flow. (msg_id: {message.id})")
         
         # Perception beats generation: suppress gen triggers if images/Twitter present
         perception_guard = False
@@ -1842,7 +1870,7 @@ class Router:
             direct_vision = self._detect_direct_vision_triggers(content)
             if direct_vision:
                 self.logger.info(
-                    f"🎨 Direct vision bypass triggered (reason: {direct_vision['bypass_reason']}) (msg_id: {message.id})"
+                    f"route=gen | 🎨 Direct vision bypass triggered (reason: {direct_vision['bypass_reason']}) (msg_id: {message.id})"
                 )
                 self._metric_inc("vision.route.direct", {"stage": "text_flow"})
                 # Create a mock intent result for the vision handler

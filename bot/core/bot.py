@@ -102,9 +102,19 @@ def log_commands_setup(
 class LLMBot(commands.Bot):
     """Main bot class that extends the base Bot class with LLM capabilities."""
 
-    def __init__(self, *args, config: dict, **kwargs):
+    def __init__(self, *args, config: dict | None = None, **kwargs):
+        # Provide sensible defaults for tests if not supplied
+        if "command_prefix" not in kwargs:
+            kwargs["command_prefix"] = os.getenv("COMMAND_PREFIX", "!")
+        if "intents" not in kwargs:
+            try:
+                intents = discord.Intents.none()
+            except Exception:
+                intents = None
+            kwargs["intents"] = intents
+
         super().__init__(*args, **kwargs)
-        self.config = config
+        self.config = config or {}
         self.logger = get_logger(__name__)
         self.metrics = NullMetrics()
         self.user_profiles = {}

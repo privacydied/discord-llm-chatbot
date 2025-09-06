@@ -24,6 +24,7 @@ from contextlib import asynccontextmanager
 from bot.util.logging import get_logger
 from bot.config import load_config
 from .types import VisionJob, VisionJobState, VisionError, VisionErrorType
+from .money import Money
 
 logger = get_logger(__name__)
 
@@ -320,8 +321,16 @@ class VisionJobStore:
             if job.response:
                 log_entry["provider"] = job.response.provider.value
                 log_entry["success"] = job.response.success
-                if job.response.actual_cost:
-                    log_entry["actual_cost"] = job.response.actual_cost
+                # Persist Money as JSON-safe string; accept legacy numerics [REH]
+                try:
+                    ac = job.response.actual_cost
+                    if isinstance(ac, Money):
+                        log_entry["actual_cost"] = ac.to_json_value()
+                    elif ac is not None:
+                        log_entry["actual_cost"] = Money(ac).to_json_value()
+                except Exception:
+                    # Skip actual_cost if it cannot be normalized
+                    pass
             
             await self._append_ledger_entry(log_entry)
             
