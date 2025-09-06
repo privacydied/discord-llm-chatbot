@@ -99,11 +99,23 @@ def validate_prompt_files() -> None:
 
 
 def load_system_prompts() -> dict[str, str]:
-    """Loads system prompts from files specified in .env and returns them as a dictionary."""
+    """Loads system prompts from files specified in .env and returns them as a dictionary.
+    
+    Supports non-breaking synonyms:
+    - TEXT_PROMPT_PATH ≙ PROMPT_FILE
+    - VL_PROMPT_PATH   ≙ VL_PROMPT_FILE
+    """
     prompts = {}
     try:
-        prompt_file = os.getenv("PROMPT_FILE", "prompts/prompt-yoroi-super-chill.txt")
-        vl_prompt_file = os.getenv("VL_PROMPT_FILE", "prompts/vl-prompt.txt")
+        # Prefer new PATH-style keys if present; fall back to existing FILE keys, then defaults
+        prompt_file = (
+            os.getenv("TEXT_PROMPT_PATH")
+            or os.getenv("PROMPT_FILE", "prompts/prompt-yoroi-super-chill.txt")
+        )
+        vl_prompt_file = (
+            os.getenv("VL_PROMPT_PATH")
+            or os.getenv("VL_PROMPT_FILE", "prompts/vl-prompt.txt")
+        )
 
         prompts["text_prompt"] = Path(prompt_file).read_text()
         prompts["vl_prompt"] = Path(vl_prompt_file).read_text()

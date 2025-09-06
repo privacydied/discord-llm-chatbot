@@ -1,4 +1,4 @@
-import asyncio
+source /volume1/py/discord-llm-chatbot/.venv/bin/activateimport asyncio
 import types
 import builtins
 import pytest

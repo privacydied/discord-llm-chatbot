@@ -1418,7 +1418,7 @@ class Router:
                             syn,
                             url,
                             self._vl_describe_image_from_url,
-                            self._vl_prompt_guidelines,
+                            self.bot.system_prompts.get("vl_prompt"),
                         )
 
                 # Tier 2 (optionally before API if syndication_first): X API [SFT]
@@ -1511,7 +1511,7 @@ class Router:
                                 api_as_syn,
                                 url,
                                 self._vl_describe_image_from_url,
-                                self._vl_prompt_guidelines,
+                                self.bot.system_prompts.get("vl_prompt"),
                             )
 
                         return self._format_x_tweet_result(api_data, url)
@@ -1711,6 +1711,30 @@ class Router:
                 content_clean = re.sub(mention_pattern, '', content)
             except Exception:
                 content_clean = content
+
+            # Perception beats generation: if images or Twitter URLs are present, skip gen path
+            try:
+                has_img_attachments = any(
+                    (getattr(a, 'content_type', '') or '').startswith('image/')
+                    for a in (getattr(message, 'attachments', None) or [])
+                )
+            except Exception:
+                has_img_attachments = False
+
+            has_twitter_url = False
+            try:
+                url_candidates = re.findall(r'https?://\S+', content)
+                has_twitter_url = any(self._is_twitter_url(u) for u in url_candidates)
+            except Exception:
+                has_twitter_url = False
+
+            if has_img_attachments or has_twitter_url:
+                route = 'attachments' if has_img_attachments else 'x_syndication'
+                self.logger.info(
+                    f"route.guard: perception_beats_generation | route={route} (msg_id: {message.id})"
+                )
+                # Never trigger image generation if images or Twitter URLs are present
+                return None
             
             # Respect vision feature flags
             cfg_enabled = bool(self.config.get("VISION_ENABLED", False))
@@ -1796,8 +1820,25 @@ class Router:
         """Invoke the text processing flow, formatting history into a context string."""
         self.logger.info(f"Routing to text flow. (msg_id: {message.id})")
         
+        # Perception beats generation: suppress gen triggers if images/Twitter present
+        perception_guard = False
+        try:
+            has_img_attachments = any(
+                (getattr(a, 'content_type', '') or '').startswith('image/')
+                for a in (getattr(message, 'attachments', None) or [])
+            )
+        except Exception:
+            has_img_attachments = False
+        try:
+            url_candidates = re.findall(r'https?://\S+', content or '')
+            has_twitter_url = any(self._is_twitter_url(u) for u in url_candidates)
+        except Exception:
+            has_twitter_url = False
+        if has_img_attachments or has_twitter_url:
+            perception_guard = True
+
         # Check for direct vision triggers first (bypasses rate-limited intent detection)
-        if content.strip():
+        if content.strip() and not perception_guard:
             direct_vision = self._detect_direct_vision_triggers(content)
             if direct_vision:
                 self.logger.info(
@@ -2251,8 +2292,10 @@ class Router:
             await attachment.save(tmp_path)
             self.logger.debug(f"Saved image to temp file: {tmp_path} (msg_id: {message.id})")
 
-            prompt = message.content.strip() or (self.bot.system_prompts.get("VL_PROMPT_FILE") or "Describe this image.")
-            vision_response = await see_infer(image_path=tmp_path, prompt=prompt)
+            # Use cached VL prompt instructions for vision; user text handled separately
+            vl_instructions = (self.bot.system_prompts.get("vl_prompt")
+                               or "Describe this image in detail, focusing on key visual elements, objects, text, and context.")
+            vision_response = await see_infer(image_path=tmp_path, prompt=vl_instructions)
 
             if not vision_response or vision_response.error:
                 self.logger.warning(f"Vision model returned no/error response (msg_id: {message.id})")
@@ -2264,7 +2307,9 @@ class Router:
                 self.logger.info(f"VL response is too long ({len(vl_content)} chars), truncating for text fallback.")
                 vl_content = vl_content[:1999].rsplit('\n', 1)[0]
 
-            final_prompt = f"User uploaded an image with the prompt: '{prompt}'. The image contains: {vl_content}"
+            # Synthesize user intent for empty messages: "Thoughts?" (not shown directly to user)
+            user_text = (message.content or '').strip() or "Thoughts?"
+            final_prompt = f"{user_text}\n\nImage analysis:\n{vl_content}"
             return await brain_infer(final_prompt)
 
         except Exception as e:
