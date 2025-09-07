@@ -32,6 +32,7 @@ async def handle_twitter_syndication_to_vl(
     vl_handler_func,
     prompt_guidelines: Optional[str] = None,
     timeout_s: Optional[float] = None,
+    reply_style: str = "ack+thoughts",
 ) -> str:
     """
     Handle Twitter/X link to VL flow using syndication data and full-resolution images.
@@ -42,6 +43,7 @@ async def handle_twitter_syndication_to_vl(
         vl_handler_func: Function to handle individual image VL analysis (e.g., _vl_describe_image_from_url)
         prompt_guidelines: Optional override for VL prompt guidelines; if None, uses default VL_PROMPT_GUIDELINES.
         timeout_s: Optional per-image timeout (seconds). If None, uses env `VL_IMAGE_TIMEOUT_S` or defaults to 12s.
+        reply_style: Reply formatting style - "ack+thoughts", "summarize", or "verbatim+thoughts"
         
     Returns:
         Formatted string with tweet text and all image descriptions
@@ -183,9 +185,7 @@ async def handle_twitter_syndication_to_vl(
     successes = sum(1 for r in results if r.get("ok"))
     timeouts = sum(1 for r in results if isinstance(r, dict) and ("timeout" in r.get("text", "")))
     
-    # Format response with tweet text and all image analyses
-    base_text = text if text else f"Tweet from {url}"
-    header = f"{base_text}\nPhotos analyzed: {successes}/{len(image_urls)}"
+    # Format response based on reply_style
     try:
         log.info(
             "Syndication VL summary",
@@ -197,13 +197,31 @@ async def handle_twitter_syndication_to_vl(
                     "timeouts": timeouts,
                     "concurrency": VL_CONCURRENCY_LIMIT,
                     "timeout_s": eff_timeout,
+                    "reply_style": reply_style,
                 }
             },
         )
     except Exception:
         pass
     
-    if descriptions:
+    if not descriptions:
+        return f"Got the tweet but no images could be processed."
+        
+    # Format based on reply style
+    if reply_style == "ack+thoughts":
+        # Concise acknowledgment + insights, minimal source text
+        tweet_gist = text[:100] + "..." if text and len(text) > 100 else text
+        if tweet_gist:
+            return f"Got the tweet (\"{tweet_gist}\") — here's what the images show:\n\n" + "\n\n".join(descriptions)
+        else:
+            return f"Got the tweet — here's what the images show:\n\n" + "\n\n".join(descriptions)
+    elif reply_style == "summarize":
+        # Brief summary + key insights
+        base_text = text if text else f"Tweet from {url}"
+        summary_line = f"Summary: {successes}/{len(image_urls)} images analyzed"
+        return f"{base_text}\n{summary_line}\n\n" + "\n\n".join(descriptions)
+    else:  # verbatim+thoughts (legacy default)
+        # Full text + detailed analysis
+        base_text = text if text else f"Tweet from {url}"
+        header = f"{base_text}\nPhotos analyzed: {successes}/{len(image_urls)}"
         return f"{header}\n\n" + "\n\n".join(descriptions)
-    else:
-        return f"{base_text}\nNo images could be processed."

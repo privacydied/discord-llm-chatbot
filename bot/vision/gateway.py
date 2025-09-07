@@ -297,26 +297,61 @@ class VisionGateway:
                         # Normalize to APIError to trigger retries consistently
                         raise APIError(str(e))
 
+                def _detect_image_type_from_bytes(data: bytes) -> str:
+                    """Detect image MIME type from byte signature."""
+                    if data.startswith(b'\x89PNG\r\n\x1a\n'):
+                        return 'image/png'
+                    elif data.startswith(b'\xff\xd8\xff'):
+                        return 'image/jpeg'
+                    elif data.startswith(b'RIFF') and b'WEBP' in data[:12]:
+                        return 'image/webp'
+                    elif data.startswith((b'GIF87a', b'GIF89a')):
+                        return 'image/gif'
+                    return 'image/png'  # default fallback
+
+                def _get_extension_from_mime(mime_type: str) -> str:
+                    """Map MIME type to file extension."""
+                    mime_map = {
+                        'image/png': '.png',
+                        'image/jpeg': '.jpg',
+                        'image/webp': '.webp', 
+                        'image/gif': '.gif'
+                    }
+                    return mime_map.get(mime_type, '.png')
+
                 for idx, url in enumerate(assets_urls):
                     try:
                         parsed = urlparse(url)
-                        name = unquote(os.path.basename(parsed.path)) or f"asset_{idx}"
-                        # Fallback extension if missing - sniff content type for proper extension
-                        if "." not in name:
-                            name = f"{name}.png"  # Default to .png instead of .bin
-                        tmp_path = artifacts_dir / f".{name}.part"
-                        final_path = artifacts_dir / name
-                        if final_path.exists():
-                            file_size = final_path.stat().st_size
-                            saved_artifacts.append(final_path)
-                            total_size += file_size
-                            self.logger.debug(f"Reusing existing artifact for job {job_id}: {final_path} ({file_size} bytes)")
-                            continue
+                        base_name = unquote(os.path.basename(parsed.path)) or f"generated_{job_id}_{idx}"
+                        # Remove any existing extension for clean detection
+                        if "." in base_name:
+                            base_name = base_name.rsplit(".", 1)[0]
+                        
+                        tmp_path = artifacts_dir / f".{base_name}.part"
+                        final_path = artifacts_dir / f"{base_name}.tmp"  # temp name for detection
+                        # Download to temp file first
                         saved = await _download(url, tmp_path, final_path)
-                        file_size = saved.stat().st_size if saved.exists() else 0
-                        saved_artifacts.append(saved)
-                        total_size += file_size
-                        self.logger.info(f"Artifact saved for job {job_id}: {saved} ({file_size} bytes)")
+                        if saved and saved.exists():
+                            # Read first few bytes to detect image type
+                            with open(saved, 'rb') as f:
+                                header_bytes = f.read(32)
+                            
+                            # Detect MIME type and get proper extension
+                            detected_mime = _detect_image_type_from_bytes(header_bytes)
+                            proper_extension = _get_extension_from_mime(detected_mime)
+                            
+                            # Rename file with proper extension
+                            proper_final_path = artifacts_dir / f"{base_name}{proper_extension}"
+                            if saved != proper_final_path:
+                                os.replace(saved, proper_final_path)
+                                saved = proper_final_path
+                            
+                            file_size = saved.stat().st_size
+                            saved_artifacts.append(saved)
+                            total_size += file_size
+                            self.logger.info(f"Artifact saved with MIME detection for job {job_id}: {saved} ({file_size} bytes, {detected_mime})")
+                        else:
+                            self.logger.warning(f"Failed to download artifact {idx} for job {job_id}: {url}")
                     except Exception as e:
                         warn_msg = f"Asset download failed: {e}"
                         warnings.append(warn_msg)
