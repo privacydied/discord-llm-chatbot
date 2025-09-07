@@ -417,8 +417,10 @@ class VisionOrchestratorV2:
                 # Log system health
                 self.logger.debug(
                     "Orchestrator health check",
-                    active_jobs=len(self.active_jobs),
-                    user_counts=len(self.user_job_counts)
+                    extra={
+                        "active_jobs": len(self.active_jobs),
+                        "user_counts": len(self.user_job_counts)
+                    }
                 )
                 
             except asyncio.CancelledError:

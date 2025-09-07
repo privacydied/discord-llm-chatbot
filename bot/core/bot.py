@@ -221,6 +221,7 @@ class LLMBot(commands.Bot):
                     # Vision routing counters [CMV][REH]
                     self.metrics.define_counter("vision.route.vl_only_bypass_t2i", "VL-only bypass of text-to-image", labels=["route"])
                     self.metrics.define_counter("vision.route.direct", "Direct vision route triggers", labels=["stage"])
+                    self.metrics.define_counter("vision.route.intent", "Vision route intent processing", labels=["route"])
                     self.metrics.define_counter("vision.route.blocked", "Vision route blocked", labels=["reason", "path"])
                     self.logger.debug(
                         "📈 Registered gate counters",

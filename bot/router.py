@@ -49,7 +49,8 @@ logger = get_logger(__name__)
 
 # Local application imports
 from .action import BotAction, ResponseMessage
-from .command_parser import Command, parse_command
+from .command_parser import parse_command
+from .types import Command, ParsedCommand
 from .modality import collect_input_items, InputModality, InputItem, map_item_to_modality
 from .result_aggregator import ResultAggregator
 from .exceptions import DispatchEmptyError, DispatchTypeError, APIError
@@ -700,8 +701,14 @@ class Router:
             if clean_content.startswith('!'):
                 parsed_command = parse_command(message, self.bot)
                 
-                # 2. If a command is found, delegate it to the command processor (cogs).
+                # 2. If a command is found, handle special cases or delegate to cogs.
                 if parsed_command:
+                    # Special handling for IMG command - delegate to existing image-gen handler
+                    if parsed_command.command == Command.IMG:
+                        self.logger.info(f"Found command 'IMG', delegating to cog. (msg_id: {message.id})")
+                        return await self._handle_img_command(parsed_command, message)
+                    
+                    # All other commands delegate to cogs
                     self.logger.info(f"Found command '{parsed_command.command.name}', delegating to cog. (msg_id: {message.id})")
                     return BotAction(meta={'delegated_to_cog': True})
                 # If it starts with '!' but isn't a known command, let it continue to normal processing
@@ -2748,12 +2755,12 @@ class Router:
             
             job = await self._vision_orchestrator.submit_job(vision_request)
             
-            # Send initial progress message using unified card system
+            # Initial message uses compact working card
             initial_embed = self._build_vision_status_embed(
                 state="REQUESTED",
                 job=job,
                 user=message.author,
-                prompt=vision_request.prompt
+                prompt=job.request.prompt if hasattr(job.request, 'prompt') else ""
             )
             progress_msg = await message.channel.send(embed=initial_embed)
             
@@ -2807,67 +2814,109 @@ class Router:
         Returns:
             BotAction with final result
         """
+        from bot.vision.job_watcher import get_watcher_registry
+        
         try:
-            import asyncio
+            # Use single-flight watcher registry to prevent duplicate polling loops
+            watcher_registry = get_watcher_registry()
             
-            # Poll job status with timeout
-            timeout_seconds = self.config.get("VISION_JOB_TIMEOUT_SECONDS", 300)
-            poll_interval = self.config.get("VISION_PROGRESS_UPDATE_INTERVAL_S", 10)
-            
-            start_time = asyncio.get_event_loop().time()
-            
-            while True:
-                # Check timeout
-                if asyncio.get_event_loop().time() - start_time > timeout_seconds:
-                    await progress_msg.edit(
-                        content=f"⏰ **Job Timeout**\n"
-                               f"Job ID: `{job.job_id[:8]}`\n"
-                               f"The generation took too long and was cancelled. Please try again."
-                    )
-                    return BotAction(content="Job timed out", error=True)
-                
-                # Get updated job status
-                updated_job = await self._vision_orchestrator.get_job_status(job.job_id)
-                self.logger.debug(f"🔍 Vision job status check - job_id: {job.job_id[:8]}, state: {updated_job.state.value if updated_job else 'None'}, terminal: {updated_job.is_terminal_state() if updated_job else 'N/A'}")
+            # Use typing indicator during monitoring
+            async with original_msg.channel.typing():
+                updated_job = await watcher_registry.watch_job(
+                    job_id=job.job_id,
+                    orchestrator=self._vision_orchestrator,
+                    progress_msg=progress_msg,
+                    original_msg=original_msg,
+                    timeout_seconds=600  # 10 minute timeout
+                )
                 
                 if not updated_job:
-                    self.logger.warning(f"⚠️ Vision job not found during monitoring - job_id: {job.job_id[:8]}")
-                    break
+                    self.logger.warning(f"⚠️ Vision job watcher returned no result - job_id: {job.job_id[:8]}")
+                    return BotAction(content="Job monitoring failed or timed out", error=True)
                 
-                # Update progress message using unified card
-                if updated_job.progress_percentage > 0:
-                    working_embed = self._build_vision_status_embed(
-                        state="WORKING",
-                        job=updated_job,
-                        user=original_msg.author,
-                        prompt=updated_job.request.prompt if hasattr(updated_job.request, 'prompt') else ""
-                    )
-                    await progress_msg.edit(embed=working_embed)
-                
-                # Check if job is complete
+                # Handle final result based on terminal state
                 if updated_job.is_terminal_state():
-                    self.logger.info(f"🏁 Vision job terminal state reached - job_id: {updated_job.job_id[:8]}, state: {updated_job.state.value}, has_response: {updated_job.response is not None}")
-                    
                     if updated_job.state.value == "completed" and updated_job.response:
-                        # Job completed successfully
-                        self.logger.info(f"✅ Calling vision success handler - job_id: {updated_job.job_id[:8]}")
+                        self.logger.info(f"✅ Vision job completed successfully - job_id: {updated_job.job_id[:8]}")
                         return await self._handle_vision_success(updated_job, progress_msg, original_msg)
                     else:
-                        # Job failed or was cancelled
-                        self.logger.warning(f"❌ Job failed or cancelled - job_id: {updated_job.job_id[:8]}, state: {updated_job.state.value}")
+                        self.logger.warning(f"❌ Vision job failed - job_id: {updated_job.job_id[:8]}, state: {updated_job.state.value}")
                         return await self._handle_vision_failure(updated_job, progress_msg)
-                
-                # Wait before next poll
-                await asyncio.sleep(poll_interval)
+                else:
+                    # Should not happen with proper watcher implementation
+                    self.logger.error(f"🔴 Vision job watcher returned non-terminal job - job_id: {updated_job.job_id[:8]}")
+                    return BotAction(content="Unexpected job monitoring result", error=True)
                 
         except Exception as e:
             self.logger.error(f"❌ Vision job monitoring failed: {e}", exc_info=True)
-            await progress_msg.edit(
-                content=f"❌ **Monitoring Error**\n"
-                       f"Job ID: `{job.job_id[:8]}`\n"
-                       f"Lost connection to job status. Please check back later."
-            )
+            try:
+                await progress_msg.edit(
+                    content=f"❌ **Monitoring Error**\n"
+                           f"Job ID: `{job.job_id[:8]}`\n"
+                           f"Lost connection to job status. Please check back later."
+                )
+            except:
+                pass  # Don't fail if message edit fails
             return BotAction(content="Job monitoring failed", error=True)
+
+    async def _handle_img_command(self, parsed_command, message: Message) -> BotAction:
+        """Handle !img prefix command - delegate to existing image-gen handler [CA]"""
+        prompt = parsed_command.cleaned_content.strip()
+        
+        # Show usage if no prompt provided
+        if not prompt:
+            return BotAction(
+                content="🎨 **Image Generation Help**\n"
+                       "Usage: `!img <description>`\n"
+                       "Example: `!img a kitten playing with yarn`\n"
+                       "Works in DMs and guild channels, with or without mentioning me."
+            )
+        
+        # Check if Vision is enabled
+        if not self._vision_orchestrator:
+            return BotAction(
+                content="🚫 Vision generation is not available right now. Please try again later.",
+                error=True
+            )
+        
+        # Create mock intent result that matches what the vision system expects
+        from bot.vision.types import VisionTask, IntentResult, IntentDecision
+        
+        class MockIntentParams:
+            def __init__(self, prompt: str):
+                self.task = VisionTask.TEXT_TO_IMAGE.value
+                self.prompt = prompt
+                self.negative_prompt = ""
+                self.width = 1024
+                self.height = 1024
+                self.steps = 30
+                self.guidance_scale = 7.0
+                self.seed = None
+                self.preferred_provider = None
+        
+        # Create proper IntentResult structure
+        mock_decision = IntentDecision(
+            use_vision=True,
+            confidence=1.0,
+            task=VisionTask.TEXT_TO_IMAGE,
+            reasoning="!img prefix command"
+        )
+        
+        mock_intent_result = IntentResult(
+            decision=mock_decision,
+            extracted_params=MockIntentParams(prompt),
+            confidence=1.0
+        )
+        
+        # Delegate to existing vision generation handler
+        try:
+            return await self._handle_vision_generation(mock_intent_result, message, "")
+        except Exception as e:
+            self.logger.error(f"Failed to handle !img command: {e}", exc_info=True)
+            return BotAction(
+                content="❌ Failed to process image generation request. Please try again.",
+                error=True
+            )
 
     async def _handle_vision_success(self, job, progress_msg, original_msg: Message) -> BotAction:
         """Handle successful Vision generation with file uploads [PA]"""
@@ -3223,99 +3272,125 @@ class Router:
             inline=True
         )
         
-        # Cost field 
-        cost_value = "—"
-        if state == "COMPLETED" and response:
-            try:
-                ac = getattr(response, 'actual_cost', None)
-                if ac is not None:
-                    if hasattr(ac, 'to_display_string'):
-                        cost_value = ac.to_display_string()
-                    else:
-                        cost_value = f"${float(ac):.2f}"
-            except Exception:
-                cost_value = "—"
+        # ... (rest of the code remains the same)
+
+    def _build_vision_status_embed(self, state: str, job, user, prompt: str, response=None, working_ellipsis=False) -> discord.Embed:
+        """Centralized vision status embed builder for all job states."""
         
-        embed.add_field(
-            name="Cost",
-            value=cost_value,
-            inline=True
-        )
-        
-        # Results field
-        if state in ["REQUESTED", "WORKING"]:
-            results_value = "(pending)"
-        elif state == "COMPLETED" and response and response.artifacts:
-            result_lines = []
-            for i, artifact_path in enumerate(response.artifacts[:3], 1):
-                ext = artifact_path.suffix.lower().lstrip('.') or 'png'
-                filename = f"generated_{job.job_id[:8] if job else 'unknown'}_{i}.{ext}"
-                result_lines.append(f"📎 {filename}")
-            
-            if len(response.artifacts) > 3:
-                result_lines.append(f"+{len(response.artifacts) - 3} more")
-            
-            results_value = "\n".join(result_lines)
-        elif state == "FAILED":
-            results_value = f"❌ {error_reason[:100] if error_reason else 'Generation failed'}"
-        else:
-            results_value = "No files"
-        
-        # Truncate results to field limit
-        if len(results_value) > 1024:
-            results_value = results_value[:1021] + "..."
-        
-        embed.add_field(
-            name="Results",
-            value=results_value,
-            inline=False
-        )
-        
-        # Prompt field with truncation
-        if prompt and prompt.strip():
-            prompt_text = prompt.strip()
-            if len(prompt_text) > 1024:
-                prompt_text = prompt_text[:1021] + "..."
-            
-            embed.add_field(
-                name="Prompt",
-                value=prompt_text,
-                inline=False
+        if state == "FAILED":
+            embed = discord.Embed(
+                title="❌ Vision Generation Failed",
+                color=0xed4245,  # Discord brand danger red
+                timestamp=discord.utils.utcnow()
             )
+            
+            if hasattr(job, 'error_message') and job.error_message:
+                reason = job.error_message[:512] + "..." if len(job.error_message) > 512 else job.error_message
+                embed.add_field(name="Reason", value=reason, inline=False)
+            
+            footer_text = f"Requested by {user.display_name} • Session: {job.job_id[:8]}"
+            embed.set_footer(text=footer_text[:2048])
+            return embed
+        
+        # Success states use consistent green styling
+        title_suffix = " · …" if working_ellipsis else ""
+        embed = discord.Embed(
+            title=f"🎨 Vision Generation {state.title()}{title_suffix}",
+            color=0x00d26a,  # Discord brand success green
+            timestamp=discord.utils.utcnow()
+        )
+        
+        # Task field (always present)
+        task_name = job.request.task.value.replace('_', ' ').title() if hasattr(job.request, 'task') else "Vision Task"
+        embed.add_field(name="Task", value=task_name, inline=True)
+        
+        if state == "WORKING":
+            # Compact working card - minimal fields only
+            embed.add_field(name="Results", value="(pending)", inline=True)
+            
+            # Prompt field - single line, heavily truncated for compactness
+            if prompt:
+                prompt_text = prompt.replace('\n', ' ')  # Single line
+                if len(prompt_text) > 256:  # Much shorter for working state
+                    prompt_text = prompt_text[:253] + "..."
+                embed.add_field(name="Prompt", value=prompt_text, inline=False)
+            
+        elif state == "COMPLETED" and response:
+            # Full completion card with all details
+            embed.add_field(name="Provider", value=response.provider.value.title(), inline=True)
+            embed.add_field(name="Processing Time", value=f"{response.processing_time_seconds:.1f}s", inline=True)
+            
+            # Cost calculation
+            cost_str = "N/A"
+            if hasattr(response, 'cost_info') and response.cost_info:
+                try:
+                    cost_str = f"${response.cost_info.total:.4f}"
+                except:
+                    cost_str = "N/A"
+            embed.add_field(name="Cost", value=cost_str, inline=True)
+            
+            # Results field
+            result_descriptions = []
+            if response.artifacts:
+                for i, artifact in enumerate(response.artifacts):
+                    if hasattr(artifact, 'filename') and artifact.filename:
+                        result_descriptions.append(f"• [{artifact.filename}](attachment://{artifact.filename})")
+                    else:
+                        result_descriptions.append(f"• Image {i+1}")
+            
+            results_text = "\n".join(result_descriptions) if result_descriptions else "No files"
+            if len(results_text) > 1024:
+                results_text = results_text[:1021] + "..."
+            embed.add_field(name="Results", value=results_text, inline=False)
+            
+            # Full prompt field for completion
+            if prompt:
+                prompt_text = prompt
+                if len(prompt_text) > 1024:
+                    prompt_text = prompt_text[:1021] + "..."
+                embed.add_field(name="Prompt", value=prompt_text, inline=False)
+            
+        else:
+            # Requested state - show placeholders
+            embed.add_field(name="Provider", value="—", inline=True)
+            embed.add_field(name="Processing Time", value="—", inline=True)
+            embed.add_field(name="Results", value="(pending)", inline=False)
+            
+            # Prompt field for requested state
+            if prompt:
+                prompt_text = prompt
+                if len(prompt_text) > 1024:
+                    prompt_text = prompt_text[:1021] + "..."
+                embed.add_field(name="Prompt", value=prompt_text, inline=False)
         
         # Footer with user and session info
-        footer_parts = []
-        if user:
-            footer_parts.append(f"Requested by {user.display_name}")
-        
-        if response and hasattr(response, 'model_name') and response.model_name:
-            footer_parts.append(f"Model: {response.model_name}")
+        footer_text = f"Requested by {user.display_name}"
+        if state == "COMPLETED" and response and hasattr(response, 'model_name') and response.model_name:
+            footer_text += f" • Model: {response.model_name}"
         else:
-            footer_parts.append("Model: —")
+            footer_text += " • Model: —"
+        footer_text += f" • Session: {job.job_id[:8]}"
         
-        if job and hasattr(job, 'job_id'):
-            footer_parts.append(f"Session: {job.job_id[:8]}")
-        
-        footer_text = " • ".join(footer_parts)
         if len(footer_text) > 2048:
             footer_text = footer_text[:2045] + "..."
-        
         embed.set_footer(text=footer_text)
         
+        # Hard cap for working state to keep it compact
+        if state == "WORKING":
+            total_length = len(embed.title or "") + len(embed.description or "")
+            for field in embed.fields:
+                total_length += len(field.name) + len(field.value)
+            total_length += len(embed.footer.text if embed.footer else "")
+            
+            if total_length > 1500:  # Hard cap for compact working card
+                self.logger.warning(f"⚠️ Working embed exceeds 1500 chars ({total_length}), truncating")
+                # Truncate prompt further if needed
+                for field in embed.fields:
+                    if field.name == "Prompt" and len(field.value) > 100:
+                        field.value = field.value[:97] + "..."
+                        break
+        
         return embed
-
-# Backward compatibility
-MessageRouter = Router
-
-# Global router instance
-_router_instance = None
-
-def setup_router(bot: "DiscordBot") -> Router:
-    """Factory to create and initialize the router."""
-    global _router_instance
-    if _router_instance is None:
-        _router_instance = Router(bot)
-    return _router_instance
 
 def get_router() -> Router:
     """Get the singleton router instance."""

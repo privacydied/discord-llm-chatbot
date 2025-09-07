@@ -157,6 +157,10 @@ class VisionGateway:
         Raises:
             VisionError: On generation failure
         """
+        # Exception-safe scoping - initialize at top level
+        job_id = None
+        reservation = None
+        
         try:
             # Submit job
             job_id = await self.submit_job(request)
@@ -202,7 +206,8 @@ class VisionGateway:
                 poll_interval = min(poll_interval * 1.2, 10.0)  # Cap at 10 seconds
             
             # Timeout
-            await self.cancel_job(job_id)
+            if job_id is not None:
+                await self.cancel_job(job_id)
             raise VisionError(
                 error_type=VisionErrorType.TIMEOUT_ERROR,
                 message=f"Generation timed out after {max_wait_seconds} seconds",
@@ -218,6 +223,11 @@ class VisionGateway:
                 message=f"Unexpected error: {e}",
                 user_message="An unexpected error occurred during generation."
             )
+        finally:
+            # Clean up in finally block - safe to reference job_id here
+            if reservation is not None:
+                # Release reservation if it existed (future budget integration)
+                pass
     
     async def get_job_status(self, job_id: str) -> Optional[Dict[str, Any]]:
         """

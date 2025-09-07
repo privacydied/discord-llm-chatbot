@@ -102,7 +102,8 @@ async def setup_commands(bot):
             'tts_cmds': 'TTSCommands',
             'config_commands': 'ConfigCommands',
             'video_commands': 'VideoCommands',
-            'rag_commands': 'RAGCommands'
+            'rag_commands': 'RAGCommands',
+            'img_commands': 'ImgCommands'
         }
         
         for module_name, cog_name in module_imports.items():
