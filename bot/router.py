@@ -1465,6 +1465,7 @@ class Router:
                             url,
                             self._vl_describe_image_from_url,
                             self.bot.system_prompts.get("vl_prompt"),
+                            reply_style="ack+thoughts",
                         )
 
                 # Tier 2 (optionally before API if syndication_first): X API [SFT]
@@ -1555,6 +1556,7 @@ class Router:
                                 url,
                                 self._vl_describe_image_from_url,
                                 self.bot.system_prompts.get("vl_prompt"),
+                                reply_style="ack+thoughts",
                             )
 
                         return self._format_x_tweet_result(api_data, url)
@@ -2359,11 +2361,20 @@ class Router:
                 self.logger.info(f"VL response is too long ({len(vl_content)} chars), truncating for text fallback.")
                 vl_content = vl_content[:1999].rsplit('\n', 1)[0]
 
-            # Synthesize user intent for empty messages: configurable default query (not shown directly to user)
-            default_query = os.getenv("IMAGE_NO_CONTEXT_QUERY", "Thoughts?")
-            user_text = (message.content or '').strip() or default_query
-            final_prompt = f"{user_text}\n\nImage analysis:\n{vl_content}"
-            return await brain_infer(final_prompt)
+            # Check for naked image attachment (implicit "Thoughts?" request)
+            # Strip bot mentions to check for empty content
+            mention_pattern = fr'^<@!?{self.bot.user.id}>\s*'
+            clean_content = re.sub(mention_pattern, '', (message.content or '').strip())
+            
+            if not clean_content:
+                # Naked image - format as "ack+thoughts" style reply
+                self.logger.debug(f"Naked image attachment detected, using ack+thoughts format (msg_id: {message.id})")
+                return BotAction(content=f"Got your image — here's what I see:\n\n{vl_content}")
+            else:
+                # Image with text - use existing flow
+                user_text = clean_content
+                final_prompt = f"{user_text}\n\nImage analysis:\n{vl_content}"
+                return await brain_infer(final_prompt)
 
         except Exception as e:
             self.logger.error(f"❌ Image processing failed: {e} (msg_id: {message.id})", exc_info=True)
@@ -2770,6 +2781,31 @@ class Router:
         try:
             response = job.response
             
+            # Pre-check Discord permissions before attempting upload
+            channel = original_msg.channel
+            can_attach_files = False
+            permission_error = None
+            
+            try:
+                if hasattr(channel, 'permissions_for') and hasattr(original_msg.guild, 'me'):
+                    # Guild channel - check bot permissions
+                    perms = channel.permissions_for(original_msg.guild.me)
+                    can_attach_files = perms.attach_files and perms.send_messages
+                    if not can_attach_files:
+                        missing_perms = []
+                        if not perms.attach_files:
+                            missing_perms.append("Attach Files")
+                        if not perms.send_messages:
+                            missing_perms.append("Send Messages")
+                        permission_error = f"Missing permissions: {', '.join(missing_perms)}"
+                else:
+                    # DM channel - assume we can attach files
+                    can_attach_files = True
+            except Exception as e:
+                self.logger.warning(f"Permission check failed, assuming no upload capability: {e}")
+                can_attach_files = False
+                permission_error = f"Permission check failed: {e}"
+            
             # Download and prepare files for Discord upload
             files_to_upload = []
             result_descriptions = []
@@ -2781,21 +2817,41 @@ class Router:
                         result_descriptions.append(f"❌ Result {i} file not found")
                         continue
                         
-                    # Determine file format and name from path
-                    ext = artifact_path.suffix.lower().lstrip('.')
+                    # Determine file format and name from path with proper MIME type detection
+                    ext = artifact_path.suffix.lower().lstrip('.') or 'png'  # fallback to png
                     filename = f"generated_{job.job_id[:8]}_{i}.{ext}"
                     
-                    # Create Discord file from local path
-                    discord_file = discord.File(
-                        artifact_path,
-                        filename=filename
-                    )
-                    files_to_upload.append(discord_file)
-                    result_descriptions.append(f"📎 {filename}")
+                    if can_attach_files:
+                        # Detect MIME type from file content
+                        with open(artifact_path, 'rb') as f:
+                            header_bytes = f.read(32)
+                        
+                        # Map detected MIME to content type
+                        if header_bytes.startswith(b'\x89PNG\r\n\x1a\n'):
+                            content_type = 'image/png'
+                        elif header_bytes.startswith(b'\xff\xd8\xff'):
+                            content_type = 'image/jpeg'
+                        elif header_bytes.startswith(b'RIFF') and b'WEBP' in header_bytes[:12]:
+                            content_type = 'image/webp'
+                        elif header_bytes.startswith((b'GIF87a', b'GIF89a')):
+                            content_type = 'image/gif'
+                        else:
+                            content_type = 'image/png'  # safe default
+                        
+                        # Create Discord file from local path with proper content type
+                        discord_file = discord.File(
+                            artifact_path,
+                            filename=filename
+                        )
+                        files_to_upload.append(discord_file)
+                        result_descriptions.append(f"📎 {filename} ({content_type})")
+                    else:
+                        # Can't upload, just note the file path for fallback message
+                        result_descriptions.append(f"🗂️ {filename} (saved locally)")
                         
                 except Exception as e:
-                    self.logger.warning(f"Failed to download result {i}: {e}")
-                    result_descriptions.append(f"❌ Result {i} download failed")
+                    self.logger.warning(f"Failed to prepare result {i}: {e}")
+                    result_descriptions.append(f"❌ Result {i} preparation failed")
             
             # Cost formatting: avoid numeric format on Money [REH][IV]
             cost_str = "N/A"
@@ -2861,26 +2917,31 @@ class Router:
                     )
                 except Exception:
                     pass
-                # Check bot permissions before uploading files
                 try:
-                    me = original_msg.guild.me if original_msg.guild else self.bot.user
-                    perms = original_msg.channel.permissions_for(me)
-                    can_attach = bool(getattr(perms, 'attach_files', False))
-                    
-                    if can_attach and files_to_upload:
-                        await original_msg.channel.send(files=files_to_upload)
-                    elif files_to_upload:
-                        # Missing attach files permission - send clean fallback message
-                        file_paths = [str(f.fp.name) if hasattr(f.fp, 'name') else f"artifact_{i}" 
-                                     for i, f in enumerate(files_to_upload)]
-                        fallback_content = (f"✅ **Generation Complete**\n"
-                                          f"Job ID: `{job.job_id[:8]}`\n"
-                                          f"Files saved at: {', '.join(file_paths)}\n"
-                                          f"(missing Attach Files permission)")
-                        await original_msg.channel.send(content=fallback_content)
-                    else:
-                        # No files to upload
-                        await original_msg.channel.send(content="✅ Generation completed successfully")
+                    await original_msg.channel.send(files=files_to_upload)
+                    self.logger.info(f"📤 Successfully uploaded {len(files_to_upload)} files for job {job.job_id[:8]}")
+                except discord.Forbidden as e:
+                    # 403 Forbidden - likely missing Attach Files permission
+                    self.logger.warning(f"Upload failed due to permissions (403): {e}")
+                    file_paths = [str(response.artifacts[i]) for i in range(len(files_to_upload))]
+                    fallback_content = (
+                        f"✅ **Generation Complete**\n"
+                        f"Job ID: `{job.job_id[:8]}`\n"
+                        f"⚠️ **Upload Issue:** Missing 'Attach Files' permission\n"
+                        f"Files saved locally. Contact admin or try in a channel where I can attach files.\n\n"
+                        f"**Generated Files:** {len(files_to_upload)} image(s)"
+                    )
+                    await original_msg.channel.send(content=fallback_content)
+                except Exception as e:
+                    # Other upload errors
+                    self.logger.error(f"File upload failed: {e}")
+                    fallback_content = (
+                        f"✅ **Generation Complete**\n"
+                        f"Job ID: `{job.job_id[:8]}`\n"
+                        f"⚠️ **Upload Issue:** {str(e)[:100]}...\n"
+                        f"Files generated but upload failed. Please try again."
+                    )
+                    await original_msg.channel.send(content=fallback_content)
                 except Exception as perm_e:
                     self.logger.warning(f"Permission check failed, attempting upload anyway: {perm_e}")
                     await original_msg.channel.send(files=files_to_upload)
@@ -2942,41 +3003,60 @@ class Router:
         Returns extracted vision parameters if triggers found, None otherwise.
         [RAT: REH, PA] - Robust Error Handling, Performance Awareness
         """
-        content_lower = content.lower().strip()
+        import re
         
-        # Direct trigger phrases from vision_policy.json
-        image_triggers = [
-            "create an image", "generate an image", "draw", "make a picture", 
-            "make a photo", "create a photo", "create a picture", "paint", 
-            "sketch", "illustration", "artwork", "render"
+        # Normalize content: lowercase, strip mentions/whitespace, collapse punctuation
+        content_clean = content.lower().strip()
+        content_clean = re.sub(r'[!.?]+', '.', content_clean)  # Collapse punctuation
+        
+        # Comprehensive trigger patterns (case-insensitive, punctuation tolerant)
+        trigger_patterns = [
+            # generate variants
+            r'generate\s+(an?\s+)?(image|picture|pic|photo|art|drawing|render)',
+            r'create\s+(an?\s+)?(image|picture|pic|photo|art|drawing|render)', 
+            r'make\s+(an?\s+)?(image|picture|pic|photo|art|drawing|render)',
+            r'draw\s+(me\s+)?(an?\s+)?',  # "draw me a..." or just "draw"
+            r'imagine\s+(an?\s+)?',       # "imagine a..."
+            r'render\s+(an?\s+)?',        # "render something"
+            r'paint\s+(an?\s+)?',         # "paint a..."
         ]
         
-        # Check for direct triggers
-        for trigger in image_triggers:
-            if trigger in content_lower:
-                # Extract prompt by removing the trigger phrase
-                prompt = content
-                for t in image_triggers:
-                    if t in content_lower:
-                        # Find the trigger and extract what comes after it
-                        idx = content_lower.find(t)
-                        if idx >= 0:
-                            prompt = content[idx + len(t):].strip()
-                            # Remove common prefixes like "of", "a", "an"
-                            for prefix in [" of ", " a ", " an "]:
-                                if prompt.lower().startswith(prefix):
-                                    prompt = prompt[len(prefix):].strip()
-                            break
+        # Debug logging for trigger detection
+        debug_triggers = os.getenv("VISION_TRIGGER_DEBUG", "0").lower() in ("1", "true", "yes", "on")
+        
+        for pattern in trigger_patterns:
+            match = re.search(pattern, content_clean)
+            if match:
+                # Extract everything after the trigger as the prompt
+                trigger_end = match.end()
+                prompt_part = content[trigger_end:].strip()
                 
-                if prompt and len(prompt.strip()) > 2:  # Ensure we have a meaningful prompt
-                    self.logger.info(f"🎨 Direct vision trigger detected: '{trigger}' -> prompt: '{prompt[:50]}...'")
-                    return {
-                        "use_vision": True,
-                        "task": "text_to_image",
-                        "prompt": prompt,
-                        "confidence": 0.95,  # High confidence for direct triggers
-                        "bypass_reason": f"Direct trigger: '{trigger}'"
-                    }
+                # Clean up common prefixes
+                for prefix in ["of", "a", "an", "some", "the"]:
+                    if prompt_part.lower().startswith(prefix + " "):
+                        prompt_part = prompt_part[len(prefix)+1:].strip()
+                
+                # Use original content case for the prompt, fall back to trigger if empty
+                final_prompt = prompt_part if prompt_part and len(prompt_part) > 2 else content.strip()
+                
+                if debug_triggers:
+                    self.logger.info(
+                        f"VISION_TRIGGER_DEBUG | matched_pattern='{pattern}' "
+                        f"extracted_prompt='{final_prompt[:50]}...' "
+                        f"original_content='{content[:100]}...'"
+                    )
+                
+                self.logger.info(f"🎨 Direct vision trigger detected: pattern '{pattern}' -> prompt: '{final_prompt[:50]}...'")
+                return {
+                    "use_vision": True,
+                    "task": "text_to_image", 
+                    "prompt": final_prompt,
+                    "confidence": 0.95,  # High confidence for direct triggers
+                    "bypass_reason": f"Direct trigger pattern: '{pattern}'"
+                }
+        
+        if debug_triggers:
+            self.logger.info(f"VISION_TRIGGER_DEBUG | no_pattern_matched content='{content[:100]}...'")
         
         return None
 

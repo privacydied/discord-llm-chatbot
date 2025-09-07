@@ -2,19 +2,19 @@
   "199347457073610752": {
     "user_id": "199347457073610752",
     "daily_limit": "5.0",
-    "daily_spent": "0.00",
-    "daily_reset_time": null,
+    "daily_spent": "0.1660",
+    "daily_reset_time": "2025-09-08T00:00:00+00:00",
     "weekly_limit": "20.0",
-    "weekly_spent": "0.00",
-    "weekly_reset_time": null,
+    "weekly_spent": "0.1660",
+    "weekly_reset_time": "2025-09-08T00:00:00+00:00",
     "monthly_limit": "50.0",
-    "monthly_spent": "0.00",
-    "monthly_reset_time": null,
+    "monthly_spent": "0.1660",
+    "monthly_reset_time": "2025-10-01T00:00:00+00:00",
     "reserved_amount": "0.2000",
-    "total_spent": "0.00",
-    "total_jobs": 0,
+    "total_spent": "0.1660",
+    "total_jobs": 1,
     "created_at": "2025-08-30T21:30:08.399740+00:00",
-    "updated_at": "2025-09-05T19:33:31.512088+00:00"
+    "updated_at": "2025-09-07T01:35:10.880583+00:00"
   },
   "254254168234131456": {
     "user_id": "254254168234131456",
