@@ -19,7 +19,10 @@ async def contextual_brain_infer(
     prompt: str,
     bot: Optional['LLMBot'] = None,
     include_cross_user: bool = True,
-    return_json_envelope: bool = False
+    return_json_envelope: bool = False,
+    *,
+    perception_notes: Optional[str] = None,
+    extra_context: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Enhanced brain inference with contextual conversation awareness.
@@ -66,13 +69,40 @@ async def contextual_brain_infer(
             include_cross_user=include_cross_user
         )
         
-        # Build contextual prompt
+        # Build contextual prompt with optional perception notes and extra context
         contextual_prompt = prompt
-        if context_entries:
-            context_str = bot.enhanced_context_manager.format_context_string(context_entries)
-            if context_str:
-                contextual_prompt = f"Conversation history:\n{context_str}\n\nCurrent message: {prompt}"
-                logger.debug(f"✔ Context added to prompt [entries={len(context_entries)}, tokens≈{len(context_str)//4}]")
+        history_block = None
+        try:
+            if context_entries:
+                context_str = bot.enhanced_context_manager.format_context_string(context_entries)
+                if context_str:
+                    history_block = f"Conversation history:\n{context_str}"
+                    logger.debug(f"✔ Context added to prompt [entries={len(context_entries)}, tokens≈{len(context_str)//4}]")
+        except Exception as _e:
+            logger.debug(f"Context history build failed: {_e}")
+
+        perception_block = None
+        if perception_notes:
+            perception_block = (
+                "Perception (from the image the user replied to):\n" + perception_notes.strip()
+            )
+            # Breadcrumb: show that we are injecting, but do not log full notes
+            try:
+                logger.info(f"🧩 Injecting perception into text prompt | chars={len(perception_notes)}")
+                logger.info("Prompt preview includes: 'Perception (from the image...' section")
+            except Exception:
+                pass
+
+        blocks = []
+        if history_block:
+            blocks.append(history_block)
+        if extra_context:
+            blocks.append(extra_context.strip())
+        if perception_block:
+            blocks.append(perception_block)
+
+        if blocks:
+            contextual_prompt = "\n\n".join(blocks) + f"\n\nCurrent message: {prompt}"
         
         # Generate AI response
         ai_response = await brain_infer(contextual_prompt)
@@ -117,7 +147,10 @@ async def contextual_brain_infer(
 async def contextual_brain_infer_simple(
     message: discord.Message,
     prompt: str,
-    bot: Optional['LLMBot'] = None
+    bot: Optional['LLMBot'] = None,
+    *,
+    perception_notes: Optional[str] = None,
+    extra_context: Optional[str] = None,
 ) -> str:
     """
     Simplified contextual brain inference that returns just the response text.
@@ -131,7 +164,14 @@ async def contextual_brain_infer_simple(
     Returns:
         Response text string
     """
-    result = await contextual_brain_infer(message, prompt, bot, return_json_envelope=False)
+    result = await contextual_brain_infer(
+        message,
+        prompt,
+        bot,
+        return_json_envelope=False,
+        perception_notes=perception_notes,
+        extra_context=extra_context,
+    )
     return result["response_text"]
 
 

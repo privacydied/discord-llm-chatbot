@@ -114,3 +114,101 @@ def has_reasoning_content(text: str) -> bool:
     
     text_lower = text.lower()
     return any(indicator in text_lower for indicator in rule_indicators)
+
+
+def sanitize_vl_reply_text(text: str, max_chars: Optional[int] = None, strip_reasoning: Optional[bool] = None) -> str:
+    """
+    Sanitize VL text for reply-image flow to a concise, natural message.
+    - Optionally strip chain-of-thought / planning text (default: on)
+    - Keep first 3–5 descriptive lines (bullets or sentences)
+    - Hard truncate to max_chars at sentence/space boundary with ellipsis
+    
+    Args:
+        text: Raw VL model output
+        max_chars: Character cap for final output (default 420 if unset)
+        strip_reasoning: Whether to remove reasoning/plan text (default True if unset)
+    
+    Returns:
+        Clean, concise text suitable for inline Discord replies.
+    """
+    if text is None:
+        return ""
+
+    # Defaults from env when not provided
+    if max_chars is None:
+        try:
+            max_chars_env = os.getenv("VL_REPLY_MAX_CHARS", "420")
+            max_chars = int(max_chars_env.strip())
+        except Exception:
+            max_chars = 420
+    if strip_reasoning is None:
+        strip_reasoning = os.getenv("VL_STRIP_REASONING", "1").lower() in ("1", "true", "yes", "on")
+
+    cleaned = text.strip()
+
+    if strip_reasoning:
+        # Remove <think>...</think> and <reasoning>...</reasoning> blocks
+        cleaned = re.sub(r"<(think|reasoning)>.*?</\\1>", "", cleaned, flags=re.IGNORECASE | re.DOTALL)
+
+        # Drop common planning/reasoning lead-ins and boilerplate lines
+        drop_line_patterns = [
+            r"^\s*Thoughts?\s*:.*$",
+            r"^\s*Thinking\s*:.*$",
+            r"^\s*Reasoning\s*:.*$",
+            r"^\s*I\s+should\s*:.*$",
+            r"^\s*Steps?\s*:.*$",
+            r"^\s*Plan\s*:.*$",
+            r"^\s*Let's\s+think.*$",
+            r"^\s*Let us\s+think.*$",
+            # Numbered plans like "1. Do X" / "2) Do Y" at the start
+            r"^\s*\d+\s*[\.)]\s+.*$",
+        ]
+        lines = cleaned.splitlines()
+        kept_lines = []
+        for line in lines:
+            drop = False
+            for pat in drop_line_patterns:
+                if re.match(pat, line, flags=re.IGNORECASE):
+                    drop = True
+                    break
+            if not drop:
+                kept_lines.append(line)
+        cleaned = "\n".join(kept_lines)
+
+    # Normalize whitespace: collapse excessive blank lines
+    cleaned = re.sub(r"\n\s*\n\s*\n+", "\n\n", cleaned).strip()
+
+    # Prefer descriptive bullets/sentences: keep first up to 5 lines that look like content
+    lines = [ln.strip() for ln in cleaned.splitlines() if ln.strip()]
+    if lines:
+        def _is_content_line(s: str) -> bool:
+            if not s:
+                return False
+            if s.startswith(("- ", "• ", "* ")):
+                return True
+            # Plain sentences ending with punctuation
+            return s[-1:] in ".!?" or len(s.split()) >= 6
+
+        filtered = [ln for ln in lines if _is_content_line(ln)]
+        # If filtering removed everything, fall back to first few original lines
+        chosen = filtered if filtered else lines
+        # Keep between 3 and 5 lines when available
+        take_n = 5 if len(chosen) >= 5 else (3 if len(chosen) >= 3 else len(chosen))
+        cleaned = "\n".join(chosen[:take_n]).strip()
+
+    # Final hard truncate by characters with sentence/space boundary preference
+    if max_chars > 0 and len(cleaned) > max_chars:
+        cut = max_chars
+        # Try to cut at last sentence boundary before limit
+        boundary = -1
+        for i in range(min(len(cleaned), max_chars), max(0, max_chars - 200), -1):
+            if cleaned[i-1] in ".!?":
+                boundary = i
+                break
+        if boundary == -1:
+            # Fallback: last space before limit
+            space_idx = cleaned.rfind(" ", 0, max_chars)
+            boundary = space_idx if space_idx != -1 else max_chars
+        cleaned = cleaned[:boundary].rstrip() + "…"
+
+    return cleaned.strip()

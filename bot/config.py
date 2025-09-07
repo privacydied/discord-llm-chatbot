@@ -439,6 +439,17 @@ def load_config():
         # Master toggles (parsed via robust tokens; default ON when unset)
         "VISION_ENABLED": _ve,
         "VISION_T2I_ENABLED": _t2i,
+        # Reply-image VL toggles
+        "VISION_REPLY_IMAGE_FORCE_VL": _parse_bool_str(_clean_env_value(os.getenv("VISION_REPLY_IMAGE_FORCE_VL")), True),
+        "VISION_REPLY_IMAGE_SILENT": _parse_bool_str(_clean_env_value(os.getenv("VISION_REPLY_IMAGE_SILENT")), True),
+        # Hybrid perception routing: VL feeds notes to TEXT
+        "HYBRID_FORCE_PERCEPTION_ON_REPLY": _parse_bool_str(_clean_env_value(os.getenv("HYBRID_FORCE_PERCEPTION_ON_REPLY")), True),
+        # VL concise output knobs
+        "VL_REPLY_MAX_CHARS": _safe_int(os.getenv("VL_REPLY_MAX_CHARS"), "420", "VL_REPLY_MAX_CHARS"),
+        "VL_STRIP_REASONING": _parse_bool_str(_clean_env_value(os.getenv("VL_STRIP_REASONING")), True),
+        # Perception notes and final text caps
+        "VL_NOTES_MAX_CHARS": _safe_int(os.getenv("VL_NOTES_MAX_CHARS"), "600", "VL_NOTES_MAX_CHARS"),
+        "TEXT_FINAL_MAX_CHARS": _safe_int(os.getenv("TEXT_FINAL_MAX_CHARS"), "420", "TEXT_FINAL_MAX_CHARS"),
         # Single credential for Vision Gateway (provider secrets handled behind gateway)
         "VISION_API_KEY": _clean_env_value(os.getenv("VISION_API_KEY")),
         # Provider configuration

@@ -27,6 +27,7 @@ from enum import Enum, auto
 from pathlib import Path
 from typing import Any, Callable, Coroutine, Dict, Optional, TYPE_CHECKING, List, Awaitable, Tuple, Union
 from html import unescape
+import json
 from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
 import discord
 import httpx
@@ -58,7 +59,7 @@ from .hear import hear_infer, hear_infer_from_url
 from .pdf_utils import PDFProcessor
 from .see import see_infer
 from .web import process_url
-from .vl.postprocess import sanitize_model_output
+from .vl.postprocess import sanitize_model_output, sanitize_vl_reply_text
 from .utils.mention_utils import ensure_single_mention
 from .web_extraction_service import web_extractor
 from .utils.file_utils import download_file
@@ -892,10 +893,10 @@ class Router:
                             order_index=len(items) + idx
                         ))
                     
-                    # Updated logging format for silent mode
+                    # Logging per acceptance: use 📎 and count/kept/truncated fields
                     kept_count = len(reply_images)
                     truncated = False  # No truncation at harvest time
-                    self.logger.debug(f"Reply-image capture | from_msg={ref_message.id} images={len(reply_images)} (kept={kept_count}, truncated={truncated})")
+                    self.logger.info(f"📎 Reply image capture | from_msg={ref_message.id} count={len(reply_images)} kept={kept_count} truncated={truncated}")
                     
             except Exception as e:
                 # Non-fatal: continue without reply images if fetch fails
@@ -928,33 +929,64 @@ class Router:
             # Never break dispatch because of a precheck failure
             self.logger.debug(f"routing.precedence.vision_check_failed | {e}")
         
-        # Check for reply-image → VL routing condition
+        # Check for reply-image → VL routing condition (forced by config)
         is_dm = isinstance(message.channel, discord.DMChannel)
         mentioned_me = self.bot.user in message.mentions
-        
-        # Count images in current items (from current message + reply context)
-        image_items = []
-        for item in items:
-            if item.source_type == "attachment":
-                if hasattr(item.payload, 'content_type') and item.payload.content_type and item.payload.content_type.startswith('image/'):
-                    image_items.append(item)
-            elif item.source_type == "url":
-                # Simple heuristic for image URLs
-                url_lower = str(item.payload).lower()
-                if any(ext in url_lower for ext in ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp']):
-                    image_items.append(item)
-        
-        # Route to VL analysis if conditions met
-        if (is_dm or mentioned_me) and image_items:
-            self.logger.info(f"🎯 Route: VL (reply-image) | images={len(image_items)} | msg_id={message.id}")
-            
-            # Dispatch to existing VL analysis path using reply text as instruction
+
+        # Robust harvest count from referenced and current messages
+        forced_vl = bool(self.config.get("VISION_REPLY_IMAGE_FORCE_VL", True))
+        combined_count = 0
+        heuristic_image_items: List[InputItem] = []
+        try:
+            # Prefer direct harvest for reliability over extension heuristics
+            ref_count = 0
+            if message.reference:
+                try:
+                    ref_message = await message.channel.fetch_message(message.reference.message_id)
+                    ref_imgs = collect_image_urls_from_message(ref_message)
+                    ref_count = len(ref_imgs or [])
+                except Exception:
+                    ref_count = 0
+            cur_imgs = collect_image_urls_from_message(message) or []
+            combined_count = ref_count + len(cur_imgs)
+        except Exception:
+            # Fallback to heuristic count from collected items
+            for item in items:
+                if item.source_type == "attachment":
+                    if hasattr(item.payload, 'content_type') and item.payload.content_type and item.payload.content_type.startswith('image/'):
+                        heuristic_image_items.append(item)
+                elif item.source_type == "url":
+                    url_lower = str(item.payload).lower()
+                    if any(ext in url_lower for ext in ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp']):
+                        heuristic_image_items.append(item)
+            combined_count = len(heuristic_image_items)
+
+        # Route to perception (VL notes) → TEXT when conditions met
+        if (is_dm or mentioned_me) and combined_count >= 1 and bool(self.config.get("HYBRID_FORCE_PERCEPTION_ON_REPLY", True)):
+            self.logger.info(f"🎯 Route: text (with perception) | images={combined_count} | msg_id={message.id}")
             try:
-                return await self._handle_reply_image_analysis(image_items, original_text, message, context_str)
+                # Run silent perception step to obtain VL notes (sanitized & capped)
+                notes, reason = await self._run_perception_notes(message, original_text)
+                perception_injection = notes
+                if not perception_injection:
+                    # Per acceptance: still run text flow with a small hint
+                    perception_injection = "The user replied to an image, but I couldn’t fetch it."
+                    self.logger.info(f"❌ perception unavailable | reason={reason or 'unknown'}")
+
+                # Invoke TEXT flow with injected perception notes (context unchanged here)
+                action = await self._invoke_text_flow(original_text, message, context_str, perception_notes=perception_injection)
+                # Final visible truncation by sentence boundary
+                try:
+                    max_final = int(self.config.get("TEXT_FINAL_MAX_CHARS", 420))
+                except Exception:
+                    max_final = 420
+                if action and getattr(action, 'content', None):
+                    action.content = self._truncate_final_text(action.content, max_final)
+                return action
             except Exception as e:
-                self.logger.error(f"Reply-image VL analysis failed: {e}", exc_info=True)
-                # Continue to normal flow on error
-        
+                self.logger.error(f"Perception→TEXT routing failed: {e}", exc_info=True)
+                # Fall back to normal text flow on error
+
         # If no items found, process as text-only
         if not items:
             # No actionable items found, treat as text-only
@@ -1974,8 +2006,10 @@ class Router:
             self.logger.debug(f"vision.precheck_failed | {e}")
             return None
 
-    async def _invoke_text_flow(self, content: str, message: Message, context_str: str) -> BotAction:
-        """Invoke the text processing flow, formatting history into a context string."""
+    async def _invoke_text_flow(self, content: str, message: Message, context_str: str, perception_notes: Optional[str] = None) -> BotAction:
+        """Invoke the text processing flow, formatting history into a context string.
+        Optionally inject perception notes into the prompt via contextual brain path.
+        """
         self.logger.info(f"route=text | Routing to text flow. (msg_id: {message.id})")
         
         # Perception beats generation: suppress gen triggers if images/Twitter present
@@ -1999,6 +2033,10 @@ class Router:
                 self._metric_inc("vision.route.vl_only_bypass_t2i", {"route": route})
             except Exception:
                 pass
+
+        # If perception notes are present (reply-image perception path), always suppress generation triggers
+        if perception_notes:
+            perception_guard = True
 
         # Check for direct vision triggers first (bypasses rate-limited intent detection)
         if content.strip() and not perception_guard:
@@ -2045,7 +2083,7 @@ class Router:
                 # Continue to regular text flow on error
         
         try:
-            action = await self._flows['process_text'](content, context_str, message)
+            action = await self._flows['process_text'](content, context_str, message, perception_notes=perception_notes)
             if action and action.has_payload:
                 # Respect TTS state: one-time flag first, then per-user/global preference [CA][REH]
                 try:
@@ -2073,7 +2111,116 @@ class Router:
             self.logger.error(f"Text processing flow failed: {e} (msg_id: {message.id})", exc_info=True)
             return BotAction(content="I had trouble processing that text.", error=True)
 
-    async def _flow_process_text(self, content: str, context: str = "", message: Optional[Message] = None) -> BotAction:
+    def _truncate_final_text(self, text: str, max_chars: int) -> str:
+        """Cleanly truncate final visible text at sentence/space boundary with ellipsis."""
+        try:
+            if max_chars <= 0 or len(text) <= max_chars:
+                return text.strip()
+            s = text.strip()
+            # Prefer last sentence boundary within max range
+            boundary = -1
+            for i in range(min(len(s), max_chars), max(0, max_chars - 300), -1):
+                if s[i-1] in ".!?":
+                    boundary = i
+                    break
+            if boundary == -1:
+                space_idx = s.rfind(" ", 0, max_chars)
+                boundary = space_idx if space_idx != -1 else max_chars
+            return s[:boundary].rstrip() + "…"
+        except Exception:
+            # Fallback hard cut
+            return (text or "")[:max_chars].rstrip() + ("…" if len(text or "") > max_chars else "")
+
+    async def _run_perception_notes(self, message: Message, text_instruction: str) -> Tuple[Optional[str], Optional[str]]:
+        """
+        Run silent perception on reply-image context and return sanitized/capped VL notes.
+        Returns (notes, reason) where reason is set on failure paths.
+        """
+        try:
+            from .modality import collect_image_urls_from_message
+            from .utils.file_utils import download_robust_image
+            import tempfile
+            
+            # Harvest from referenced then current message
+            image_refs = []
+            ref_id = None
+            if message.reference:
+                try:
+                    ref_message = await message.channel.fetch_message(message.reference.message_id)
+                    ref_id = getattr(ref_message, 'id', None)
+                    refs = collect_image_urls_from_message(ref_message) or []
+                    image_refs.extend(refs)
+                except Exception as e:
+                    self.logger.debug(f"perception: harvest(ref) failed | {e}")
+            cur_refs = collect_image_urls_from_message(message) or []
+            image_refs.extend(cur_refs)
+
+            self.logger.info(f"📎 Perception capture | ref_msg={ref_id if ref_id else 'none'} total={len(image_refs)}")
+
+            if not image_refs:
+                return None, "no_images"
+
+            # Provider limit: 1 image
+            image_refs = image_refs[:1]
+
+            # Download the single image with robust fallback
+            downloaded_path = None
+            tmp_path = None
+            try:
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as tmp_file:
+                    tmp_path = tmp_file.name
+                ok = await download_robust_image(image_refs[0], tmp_path)
+                if not ok:
+                    # Cleanup temp file on failure
+                    try:
+                        if tmp_path:
+                            os.unlink(tmp_path)
+                    except Exception:
+                        pass
+                    return None, "all_downloads_failed"
+                downloaded_path = tmp_path
+            except Exception as e:
+                self.logger.debug(f"perception: download failed | {e}")
+                try:
+                    if tmp_path:
+                        os.unlink(tmp_path)
+                except Exception:
+                    pass
+                return None, "download_exception"
+
+            # Run VL adapter to get raw notes
+            prompt = (text_instruction or "").strip() or "Analyze this image briefly and provide concise notes."
+            try:
+                vision_result = await see_infer(image_path=downloaded_path, prompt=prompt)
+                raw_text = ""
+                if vision_result and hasattr(vision_result, 'content') and vision_result.content:
+                    raw_text = str(vision_result.content).strip()
+                else:
+                    return None, "provider_empty"
+
+                # Sanitize and cap notes
+                try:
+                    notes_max = int(self.config.get("VL_NOTES_MAX_CHARS", 600))
+                except Exception:
+                    notes_max = 600
+                strip_reason = bool(self.config.get("VL_STRIP_REASONING", True))
+                notes = sanitize_vl_reply_text(raw_text, max_chars=notes_max, strip_reasoning=strip_reason)
+                return (notes or ""), None
+            except Exception as e:
+                self.logger.debug(f"perception: see_infer failed | {e}", exc_info=True)
+                return None, "provider_error"
+            finally:
+                # Cleanup temp file
+                try:
+                    if downloaded_path:
+                        os.unlink(downloaded_path)
+                except Exception:
+                    pass
+        except Exception as e:
+            self.logger.debug(f"perception: unexpected failure | {e}")
+            return None, "unexpected"
+
+    async def _flow_process_text(self, content: str, context: str = "", message: Optional[Message] = None, *, perception_notes: Optional[str] = None) -> BotAction:
         """Process text input through the AI model with RAG integration and conversation context."""
         self.logger.info("Processing text with AI model and RAG integration.")
         
@@ -2142,12 +2289,31 @@ class Router:
             try:
                 from bot.contextual_brain import contextual_brain_infer_simple
                 self.logger.debug(f"🧠 Using contextual brain inference [msg_id={message.id}]")
-                response_text = await contextual_brain_infer_simple(message, content, self.bot)
+                if perception_notes:
+                    # Breadcrumb for injection [INFO]
+                    try:
+                        self.logger.info(f"🧩 Injecting perception into text prompt | chars={len(perception_notes)}")
+                    except Exception:
+                        pass
+                response_text = await contextual_brain_infer_simple(
+                    message,
+                    content,
+                    self.bot,
+                    perception_notes=perception_notes,
+                    extra_context=enhanced_context,
+                )
                 return BotAction(content=response_text)
             except Exception as e:
                 self.logger.warning(f"Contextual brain inference failed, falling back to basic: {e}")
         
-        # 4. Fallback to basic brain inference with enhanced context (including RAG)
+        # 4. Fallback to basic brain inference with enhanced context (including RAG).
+        # Ensure perception notes are not lost in fallback path by appending as a context block.
+        if perception_notes:
+            try:
+                perception_block = f"Perception (from the image the user replied to):\n{perception_notes.strip()}"
+                enhanced_context = f"{enhanced_context}\n\n{perception_block}" if enhanced_context else perception_block
+            except Exception:
+                pass
         return await brain_infer(content, context=enhanced_context)
 
     # ===== Inline [search(...)] directive handling =====
@@ -2379,8 +2545,10 @@ class Router:
                         'timestamp': metadata['timestamp']
                     }
                     
+                    # Serialize metadata into a compact extra context block
+                    meta_str = json.dumps(video_metadata_context, ensure_ascii=False)
                     response_text = await contextual_brain_infer_simple(
-                        message, video_context, self.bot, additional_context=video_metadata_context
+                        message, video_context, self.bot, extra_context=f"Video metadata:\n{meta_str}"
                     )
                     return BotAction(content=response_text)
                     
@@ -2918,7 +3086,7 @@ class Router:
         """Handle reply-image → VL analysis with silent mode (no cards) [CA][REH]"""
         if not image_items:
             self.logger.info("Reply-image VL failed | reason=no_images")
-            return BotAction(content="Vision analysis failed. Please try again or re-upload the image.")
+            return BotAction(content="I couldn’t fetch the image you replied to. Please re-upload it or try again.")
         
         # Check silent mode config (default on)
         silent_mode = self.config.get("VISION_REPLY_IMAGE_SILENT", True)
@@ -2934,21 +3102,19 @@ class Router:
             from .utils.file_utils import download_robust_image
             import tempfile
             
-            # Get the referenced message to extract ImageRef objects
-            if not message.reference:
-                self.logger.info("Reply-image VL failed | reason=no_reference")
-                return BotAction(content="Vision analysis failed. Please try again or re-upload the image.")
-            
-            ref_message = await message.channel.fetch_message(message.reference.message_id)
-            image_refs = collect_image_urls_from_message(ref_message)
-            
-            # Add current message images too
-            current_image_refs = collect_image_urls_from_message(message)
-            image_refs.extend(current_image_refs)
+            # Harvest image refs from referenced and current messages (no dependency on reference only)
+            image_refs = []
+            if message.reference:
+                try:
+                    ref_message = await message.channel.fetch_message(message.reference.message_id)
+                    image_refs.extend(collect_image_urls_from_message(ref_message) or [])
+                except Exception:
+                    pass
+            image_refs.extend(collect_image_urls_from_message(message) or [])
             
             if not image_refs:
                 self.logger.info("Reply-image VL failed | reason=no_images")
-                return BotAction(content="Vision analysis failed. Please try again or re-upload the image.")
+                return BotAction(content="I couldn’t fetch the image you replied to. Please re-upload it or try again.")
             
             # Cap at provider limit (assume 1 for simplicity, could be configurable)
             provider_limit = 1  # Most VL providers handle 1 image well
@@ -2982,7 +3148,7 @@ class Router:
             
             if not downloaded_paths:
                 self.logger.info("Reply-image VL failed | reason=all_downloads_failed")
-                return BotAction(content="Vision analysis failed. Please try again or re-upload the image.")
+                return BotAction(content="I couldn’t fetch the image you replied to. Please re-upload it or try again.")
             
             # Use existing VL analysis pipeline
             prompt = text_instruction.strip() or "Analyze this image in detail. Describe what you see, including objects, text, and context."
@@ -2991,14 +3157,31 @@ class Router:
                 vision_result = await see_infer(image_path=downloaded_paths[0], prompt=prompt)
                 
                 if vision_result and hasattr(vision_result, 'content') and vision_result.content:
-                    # Success - return plain text response
-                    result_content = str(vision_result.content).strip()
+                    raw_text = str(vision_result.content).strip()
                     
-                    # Add note about multiple images if applicable
-                    if truncated:
-                        result_content += f"\n\n*(Analyzed first image of {len(image_refs) + (len(image_refs) - provider_limit)} total)*"
+                    # Optional expand path: if user asked to "expand", return full text (still no files)
+                    instr_lc = (text_instruction or "").strip().lower()
+                    expand_tokens = {"expand", "more details", "more detail", "more", "expand please"}
+                    if instr_lc in expand_tokens:
+                        final_text = raw_text
+                        # Soft guard: Discord 2000 char limit
+                        if len(final_text) > 1900:
+                            final_text = final_text[:1900].rstrip() + "…"
+                        return BotAction(content=final_text)
                     
-                    return BotAction(content=result_content)
+                    # Concise path: sanitize and truncate per config
+                    max_chars = 0
+                    try:
+                        max_chars = int(self.config.get("VL_REPLY_MAX_CHARS", 420))
+                    except Exception:
+                        max_chars = 420
+                    strip_reasoning = bool(self.config.get("VL_STRIP_REASONING", True))
+                    final_text = sanitize_vl_reply_text(raw_text, max_chars=max_chars, strip_reasoning=strip_reasoning)
+                    
+                    if not final_text:
+                        final_text = "I can’t produce a concise description. Say ‘expand’ if you want the long version."
+                    
+                    return BotAction(content=final_text)
                 else:
                     raise Exception("Vision analysis returned no results")
                     
