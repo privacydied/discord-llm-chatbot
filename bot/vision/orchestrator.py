@@ -236,7 +236,7 @@ class VisionOrchestrator:
         except Exception as e:
             # Default tiny estimate when pricing is unknown/unavailable
             self.logger.warning(f"Cost estimation failed (fallback to minimum): {e}")
-            return Money("0.02")
+            return Money("0.006")
 
     # --- Helpers -----------------------------------------------------------------
     def _ensure_money(self, x: Any) -> Money:
@@ -249,10 +249,10 @@ class VisionOrchestrator:
             if isinstance(x, Money):
                 return x
             if x is None:
-                return Money("0.02")
+                return Money("0.006")
             return Money(x)
         except Exception:
-            return Money("0.02")
+            return Money("0.006")
     
     async def _execute_job(self, job: VisionJob) -> None:
         """Execute vision generation job asynchronously [CA][REH]"""
