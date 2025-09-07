@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Dict, Any, Optional, Tuple
 from decimal import Decimal
 import json
+import logging
+import os
 
 from bot.vision.money import Money
 from bot.vision.types import VisionTask, VisionProvider

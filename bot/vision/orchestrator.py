@@ -54,6 +54,11 @@ class VisionOrchestrator:
         self.config = config or load_config()
         self.logger = get_logger("vision.orchestrator")
         
+        # Lifecycle management [CA][REH]
+        self.ready = False
+        self._started = False
+        self.reason: str = "unstarted"
+        
         # Initialize core components
         self.gateway = VisionGateway(self.config)
         self.job_store = VisionJobStore(self.config)
@@ -73,6 +78,62 @@ class VisionOrchestrator:
         self._background_tasks_started = False
         
         self.logger.info(f"Vision Orchestrator initialized - max_concurrent: {self.max_concurrent_jobs}, max_per_user: {self.max_user_concurrent_jobs}")
+    
+    async def start(self) -> None:
+        """Start the orchestrator and verify providers are available [CA][REH]"""
+        if self._started:
+            return
+        
+        try:
+            # Initialize gateway and verify providers
+            await self.gateway.startup()
+            
+            # Check if at least one T2I provider is available via Unified adapter
+            available_providers = []
+            adapter = getattr(self.gateway, 'adapter', None)
+            try:
+                from .types import VisionTask  # local import to avoid cycles
+            except Exception:
+                VisionTask = None
+            if adapter and getattr(adapter, 'providers', None):
+                for provider_name, plugin in adapter.providers.items():
+                    try:
+                        caps = plugin.capabilities()
+                        modes = caps.get('modes', []) if isinstance(caps, dict) else []
+                        if VisionTask and hasattr(VisionTask, 'TEXT_TO_IMAGE') and (VisionTask.TEXT_TO_IMAGE in modes):
+                            available_providers.append(provider_name)
+                    except Exception:
+                        continue
+            
+            # Determine readiness reason
+            if not available_providers:
+                # If API key missing, surface clearer reason
+                api_key = self.config.get("VISION_API_KEY")
+                if not api_key:
+                    self.reason = "creds_missing"
+                else:
+                    self.reason = "no_providers"
+                self.logger.error("VisionOrchestrator: no T2I providers configured (VISION_API_KEY missing)" if not api_key else "VisionOrchestrator: no T2I providers configured")
+                self.ready = False
+            else:
+                self.reason = "ok"
+                self.logger.info(f"VisionOrchestrator: providers=[{', '.join(available_providers)}] ready")
+                self.ready = True
+                
+            # Start background tasks
+            self._start_background_tasks()
+            self._started = True
+            
+        except Exception as e:
+            self.logger.error(f"❌ Failed to start Vision Orchestrator: {e}", exc_info=True)
+            self.ready = False
+            self.reason = "init_error"
+            raise
+    
+    async def ensure_started(self) -> None:
+        """Lazy start helper - start if not already started [CA]"""
+        if not self._started:
+            await self.start()
     
     async def submit_job(self, request: VisionRequest) -> VisionJob:
         """
@@ -486,6 +547,6 @@ class VisionOrchestrator:
                 self.logger.warning("Some jobs did not complete during shutdown")
         
         # Close gateway
-        await self.gateway.close()
+        await self.gateway.shutdown()
         
         self.logger.info("Vision Orchestrator shutdown complete")

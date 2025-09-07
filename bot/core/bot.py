@@ -221,6 +221,7 @@ class LLMBot(commands.Bot):
                     # Vision routing counters [CMV][REH]
                     self.metrics.define_counter("vision.route.vl_only_bypass_t2i", "VL-only bypass of text-to-image", labels=["route"])
                     self.metrics.define_counter("vision.route.direct", "Direct vision route triggers", labels=["stage"])
+                    self.metrics.define_counter("vision.route.blocked", "Vision route blocked", labels=["reason", "path"])
                     self.logger.debug(
                         "📈 Registered gate counters",
                         extra={"event": "metrics.define", "counters": ["gate.allowed", "gate.blocked"]},
@@ -1103,8 +1104,28 @@ class LLMBot(commands.Bot):
             self.logger.error(f"Failed to set up TTS: {e}", exc_info=True)
 
     async def setup_router(self) -> None:
-        """Set up message router."""
+        """Set up message router and vision orchestrator."""
         try:
+            # Create single VisionOrchestrator instance first [CA]
+            vision_enabled = bool(self.config.get("VISION_ENABLED", True))
+            if vision_enabled:
+                try:
+                    from bot.vision import VisionOrchestrator
+                    self.vision_orchestrator = VisionOrchestrator(self.config)
+                    self.logger.info("VisionOrchestrator: created")
+                    
+                    # Start orchestrator eagerly at boot
+                    await self.vision_orchestrator.start()
+                except ImportError:
+                    self.logger.warning("Vision module not available")
+                    self.vision_orchestrator = None
+                except Exception as e:
+                    self.logger.error(f"Failed to start VisionOrchestrator: {e}")
+                    self.vision_orchestrator = None
+            else:
+                self.vision_orchestrator = None
+            
+            # Now create router which will use bot.vision_orchestrator
             from bot.router import Router
             self.router = Router(self)  # Pass bot instance, not config dict
             self.logger.debug("✅ Message router initialized successfully")
@@ -1259,8 +1280,39 @@ class LLMBot(commands.Bot):
             self.logger.error(f"Failed to set up TTS: {e}", exc_info=True)
 
     async def setup_router(self) -> None:
-        """Set up message router."""
+        """Set up message router and vision orchestrator."""
         try:
+            # Create single VisionOrchestrator instance first (idempotent) [CA]
+            vision_enabled = bool(self.config.get("VISION_ENABLED", True))
+            if vision_enabled:
+                try:
+                    from bot.vision import VisionOrchestrator
+                    if not getattr(self, "vision_orchestrator", None):
+                        self.vision_orchestrator = VisionOrchestrator(self.config)
+                        self.logger.info("VisionOrchestrator: created")
+                    # Queue non-blocking start at boot; lazy start remains as safety net
+                    try:
+                        import asyncio
+                        loop = asyncio.get_running_loop()
+                        if loop and loop.is_running() and not getattr(self.vision_orchestrator, "_started", False):
+                            asyncio.create_task(self.vision_orchestrator.start())
+                            self.logger.info("VisionOrchestrator: start queued")
+                    except RuntimeError:
+                        # No running loop; fall back to direct start
+                        try:
+                            await self.vision_orchestrator.start()
+                        except Exception as e:
+                            self.logger.error(f"Failed to start VisionOrchestrator: {e}")
+                except ImportError:
+                    self.logger.warning("Vision module not available")
+                    self.vision_orchestrator = None
+                except Exception as e:
+                    self.logger.error(f"Failed to initialize VisionOrchestrator: {e}")
+                    self.vision_orchestrator = None
+            else:
+                self.vision_orchestrator = None
+
+            # Initialize router (will adopt bot.vision_orchestrator or create fallback)
             from bot.router import Router
             self.router = Router(self)  # Pass bot instance, not config dict
             self.logger.debug("✅ Message router initialized successfully")

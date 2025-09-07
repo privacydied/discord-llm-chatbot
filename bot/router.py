@@ -63,12 +63,12 @@ from .web_extraction_service import web_extractor
 from .utils.file_utils import download_file
 from .tts.state import tts_state
 
-# Vision generation system
+# Vision generation system (import only, no flag constant)
 try:
     from .vision import VisionIntentRouter, VisionOrchestrator
-    VISION_ENABLED = True
 except ImportError:
-    VISION_ENABLED = False
+    VisionIntentRouter = None
+    VisionOrchestrator = None
 
 # Dependency availability flags
 try:
@@ -122,10 +122,37 @@ class Router:
         
         # Vision generation system [CA][SFT]
         self._vision_intent_router: Optional[VisionIntentRouter] = None
-        self._vision_orchestrator: Optional[VisionOrchestrator] = None
-        
-        # Debug logging for vision initialization
-        self.logger.info(f"🔍 Vision initialization debug: VISION_ENABLED={VISION_ENABLED}, config_enabled={self.config.get('VISION_ENABLED', 'NOT_SET')}")
+        # Single source of truth: orchestrator is owned by the bot
+        self._vision_orchestrator: Optional[VisionOrchestrator] = getattr(bot, "vision_orchestrator", None)
+
+        # Router fallback: if bot didn't provide an orchestrator, create and attach one [REH]
+        if self._vision_orchestrator is None and VisionOrchestrator is not None and self.config.get("VISION_ENABLED", True):
+            try:
+                self._vision_orchestrator = VisionOrchestrator(self.config)
+                setattr(self.bot, "vision_orchestrator", self._vision_orchestrator)
+                self.logger.info("VisionOrchestrator: created (router fallback)")
+            except Exception as e:
+                self.logger.error(f"Failed to create VisionOrchestrator (router fallback): {e}", exc_info=True)
+                self._vision_orchestrator = None
+
+        # Queue non-blocking eager start to reduce first-check false negatives [PA]
+        try:
+            import asyncio
+            loop = asyncio.get_running_loop()
+            if (
+                loop and loop.is_running() and self._vision_orchestrator 
+                and not getattr(self._vision_orchestrator, "_started", False)
+            ):
+                asyncio.create_task(self._vision_orchestrator.start())
+                self.logger.debug("🚀 Vision Orchestrator start queued (router init)")
+        except RuntimeError:
+            # No running loop at construction time; lazy start path will cover this
+            pass
+
+        # Feature flags summary (treat missing as enabled) [CMV]
+        ve = bool(self.config.get("VISION_ENABLED", True))
+        vti = bool(self.config.get("VISION_T2I_ENABLED", True))
+        self.logger.info(f"Vision flags | VISION_ENABLED={'on' if ve else 'off'} VISION_T2I_ENABLED={'on' if vti else 'off'}")
 
         # Load centralized VL prompt guidelines if available [CA]
         self._vl_prompt_guidelines: Optional[str] = None
@@ -140,20 +167,21 @@ class Router:
             # Non-fatal; handler has built-in defaults
             self._vl_prompt_guidelines = None
         
-        if VISION_ENABLED and self.config.get("VISION_ENABLED", False):
-            self.logger.info("🚀 Starting vision system initialization...")
+        if VisionIntentRouter is not None and self.config.get("VISION_ENABLED", True):
             try:
                 self.logger.info("🔧 Creating VisionIntentRouter...")
                 self._vision_intent_router = VisionIntentRouter(self.config)
-                self.logger.info("🔧 Creating VisionOrchestrator...")
-                self._vision_orchestrator = VisionOrchestrator(self.config)
-                self.logger.info("✔ Vision generation system initialized successfully!")
+                if self._vision_orchestrator:
+                    self.logger.info("✔ Vision system initialized (using orchestrator)")
+                else:
+                    self.logger.warning("⚠️ VisionOrchestrator missing; availability will be gated")
             except Exception as e:
-                self.logger.error(f"❌ Failed to initialize Vision system: {e}", exc_info=True)
+                self.logger.error(f"❌ Failed to initialize Vision intent router: {e}", exc_info=True)
                 self._vision_intent_router = None
-                self._vision_orchestrator = None
         else:
-            self.logger.warning(f"⚠️ Vision system NOT initialized - VISION_ENABLED={VISION_ENABLED}, config={self.config.get('VISION_ENABLED', 'NOT_SET')}")
+            # Use centralized parsed booleans instead of raw reads [CA]
+            ve_parsed = self.config.get("VISION_ENABLED", True)
+            self.logger.warning(f"⚠️ Vision system NOT initialized - vision_enabled={ve_parsed}, reason=module_unavailable_or_disabled")
 
     async def _get_x_api_client(self) -> Optional[XApiClient]:
         """Create or return a cached XApiClient based on config. [CA][IV]"""
@@ -1788,10 +1816,10 @@ class Router:
                 # Never trigger image generation if images or Twitter URLs are present
                 return None
             
-            # Respect vision feature flags
-            cfg_enabled = bool(self.config.get("VISION_ENABLED", False))
+            # Check vision availability using centralized helper [CA][REH]
+            cfg_enabled = self.config.get("VISION_ENABLED", True)  # Use centralized parsed boolean
             dry_run = bool(self.config.get("VISION_DRY_RUN_MODE", False))
-            orchestrator_ready = bool(self._vision_orchestrator)
+            vision_available = self._vision_available()
             
             # If vision is not enabled at all, skip
             if not cfg_enabled:
@@ -1826,7 +1854,15 @@ class Router:
                         f"(task={intent_result.extracted_params.task}, prompt='{intent_result.extracted_params.prompt[:80]}...')."
                     ))
                 
-                if not orchestrator_ready:
+                # Lazy start orchestrator if not started [CA]
+                if self._vision_orchestrator and not getattr(self._vision_orchestrator, '_started', False):
+                    try:
+                        await self._vision_orchestrator.ensure_started()
+                        vision_available = self._vision_available()  # Re-check after lazy start
+                    except Exception as e:
+                        self.logger.warning(f"Lazy orchestrator start failed: {e}")
+                
+                if not vision_available:
                     self._metric_inc("vision.route.blocked", {"reason": "orchestrator_unavailable", "path": "direct"})
                     return BotAction(content="🚫 Vision generation is not available right now. Please try again later.")
                 
@@ -1853,7 +1889,15 @@ class Router:
                                 "[DRY RUN] Vision generation would be triggered via intent detection "
                                 f"(confidence={conf:.2f})."
                             ))
-                        if not orchestrator_ready:
+                        # Lazy start orchestrator if not started [CA]
+                        if self._vision_orchestrator and not getattr(self._vision_orchestrator, '_started', False):
+                            try:
+                                await self._vision_orchestrator.ensure_started()
+                                vision_available = self._vision_available()  # Re-check after lazy start
+                            except Exception as e:
+                                self.logger.warning(f"Lazy orchestrator start failed: {e}")
+                        
+                        if not vision_available:
                             self._metric_inc("vision.route.blocked", {"reason": "orchestrator_unavailable", "path": "intent"})
                             return BotAction(content="🚫 Vision generation is not available right now. Please try again later.")
                         return await self._handle_vision_generation(intent_result, message, context_str)
@@ -3106,8 +3150,34 @@ class Router:
         
         if debug_triggers:
             self.logger.info(f"VISION_TRIGGER_DEBUG | no_pattern_matched content='{content[:100]}...'")
-        
+
         return None
+
+    def _vision_available(self) -> bool:
+        """
+        Centralized availability check for vision generation [CA][REH]
+        Returns True only if:
+        - Feature flag enabled (VISION_ENABLED/VISION_T2I_ENABLED) 
+        - Orchestrator exists and is ready
+        """
+        # Check feature flags (use centralized parsed booleans) [CA]
+        vision_enabled = self.config.get("VISION_ENABLED", True)
+        t2i_enabled = self.config.get("VISION_T2I_ENABLED", True)
+        
+        # Check orchestrator state
+        orchestrator_exists = self._vision_orchestrator is not None
+        orchestrator_ready = orchestrator_exists and getattr(self._vision_orchestrator, 'ready', False)
+        
+        # Debug logging (controlled by env var) [PA]
+        vision_debug = os.getenv("VISION_ORCH_DEBUG", "0").lower() in ("1", "true", "yes", "on")
+        if vision_debug and not (vision_enabled and t2i_enabled and orchestrator_ready):
+            self.logger.debug(
+                f"VISION_UNAVAILABLE | reason=orchestrator_unavailable | "
+                f"feature={'on' if (vision_enabled and t2i_enabled) else 'off'} | "
+                f"orch={'none' if not orchestrator_exists else ('not_ready' if not orchestrator_ready else 'ready')}"
+            )
+        
+        return vision_enabled and t2i_enabled and orchestrator_ready
 
 # Backward compatibility
 MessageRouter = Router

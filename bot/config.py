@@ -172,6 +172,21 @@ def _clean_env_value(value: str) -> str:
     return value.split('#')[0].strip()
 
 
+# Robust boolean parsing to avoid bool("off") traps [IV][CMV]
+def _parse_bool_str(raw: Optional[str], default: bool) -> bool:
+    """Parse truthy/falsey strings with explicit tokens. ENV > default."""
+    if raw is None:
+        return default
+    s = str(raw).strip().lower()
+    true_tokens = {"1", "true", "yes", "on", "enabled", "enable"}
+    false_tokens = {"0", "false", "no", "off", "disabled", "disable"}
+    if s in true_tokens:
+        return True
+    if s in false_tokens:
+        return False
+    return default
+
+
 # Global config cache for performance optimization
 _config_cache: Optional[Dict[str, Any]] = None
 _cache_timestamp: float = 0
@@ -197,6 +212,12 @@ def load_config():
         except (ValueError, AttributeError):
             print(f"Warning: Invalid {var_name} value '{value}', using default {default}")
             return int(default)
+
+    # Centralized VISION flags with robust parsing and defaults [CA]
+    _ve_raw = _clean_env_value(os.getenv("VISION_ENABLED"))
+    _t2i_raw = _clean_env_value(os.getenv("VISION_T2I_ENABLED"))
+    _ve = _parse_bool_str(_ve_raw, True)  # default ON when unset
+    _t2i = _parse_bool_str(_t2i_raw, True)  # default ON when unset
 
     config = {
         # DISCORD BOT SETTINGS
@@ -415,8 +436,9 @@ def load_config():
         "STT_ENABLE": os.getenv("STT_ENABLE", "true").lower() == "true",
 
         # ===== VISION GENERATION SYSTEM [CA][CMV][SFT][REH] =====
-        # Master toggle for entire Vision generation feature set
-        "VISION_ENABLED": os.getenv("VISION_ENABLED", "false").lower() == "true",
+        # Master toggles (parsed via robust tokens; default ON when unset)
+        "VISION_ENABLED": _ve,
+        "VISION_T2I_ENABLED": _t2i,
         # Single credential for Vision Gateway (provider secrets handled behind gateway)
         "VISION_API_KEY": _clean_env_value(os.getenv("VISION_API_KEY")),
         # Provider configuration
@@ -463,6 +485,18 @@ def load_config():
         "STT_LOCAL_CONCURRENCY": _safe_int(os.getenv("STT_LOCAL_CONCURRENCY"), "2", "STT_LOCAL_CONCURRENCY"),
     }
     
+    # One-time startup VISION flags summary [PA]
+    try:
+        ve_src = "env" if _ve_raw is not None else "default"
+        t2i_src = "env" if _t2i_raw is not None else "default"
+        logger.info(
+            f"VISION_FLAGS raw={{VISION_ENABLED:{_ve_raw}, VISION_T2I_ENABLED:{_t2i_raw}}} "
+            f"parsed={{vision_enabled:{_ve}, t2i:{_t2i}}} "
+            f"source={{vision_enabled:{ve_src}, t2i:{t2i_src}}}"
+        )
+    except Exception:
+        pass
+
     # Cache the config for performance (avoid repeated env var lookups)
     _config_cache = config
     _cache_timestamp = current_time
