@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum, auto
 from functools import lru_cache
 from typing import List, Literal, Union, TYPE_CHECKING, Optional, Pattern
@@ -143,6 +143,77 @@ def collect_input_items(message: Message) -> List[InputItem]:
     
     logger.info(f"📋 Collected {len(items)} input items from message {message.id}")
     return items
+
+
+@dataclass
+class ImageRef:
+    """Reference to an image with metadata for high-res harvesting."""
+    url: str
+    filename: Optional[str] = None
+    content_type: Optional[str] = None
+    fallback_urls: List[str] = field(default_factory=list)
+
+
+def collect_image_urls_from_message(message: Message) -> List[ImageRef]:
+    """
+    Harvest high-resolution images from a message (attachments + image embeds) with fallback candidates.
+    
+    Args:
+        message: Discord message to harvest images from
+        
+    Returns:
+        List of ImageRef objects with deduplication and fallback URLs
+    """
+    images = []
+    seen_urls = set()
+    
+    # Input validation [IV]
+    if not message or not hasattr(message, 'attachments'):
+        logger.warning("Invalid message object provided for image harvesting")
+        return []
+    
+    # 1. Attachments first (highest priority - full resolution)
+    for attachment in message.attachments:
+        if attachment.content_type and attachment.content_type.startswith('image/'):
+            if attachment.url not in seen_urls:
+                # Build candidate URLs for robust fetching
+                candidates = [attachment.url]  # Full CDN URL first
+                
+                # Add proxy URL as fallback
+                if hasattr(attachment, 'proxy_url') and attachment.proxy_url:
+                    candidates.append(attachment.proxy_url)
+                
+                # Add 4096 variant for media.discordapp.net
+                if 'media.discordapp.net' in attachment.url and '?format=' not in attachment.url:
+                    candidates.append(f"{attachment.url}?format=png&size=4096")
+                
+                images.append(ImageRef(
+                    url=candidates[0],  # Primary URL
+                    filename=attachment.filename,
+                    content_type=attachment.content_type,
+                    fallback_urls=candidates[1:] if len(candidates) > 1 else []
+                ))
+                seen_urls.add(attachment.url)
+    
+    # 2. Image embeds (use .image.url for full size, with proxy fallback)
+    for embed in message.embeds:
+        if embed.type in ('image', 'rich') and embed.image and embed.image.url:
+            if embed.image.url not in seen_urls:
+                candidates = [embed.image.url]
+                
+                # Add thumbnail proxy as fallback if available
+                if embed.thumbnail and embed.thumbnail.proxy_url:
+                    candidates.append(embed.thumbnail.proxy_url)
+                
+                images.append(ImageRef(
+                    url=candidates[0],
+                    filename=None,  # Embeds usually don't have filenames
+                    content_type='image/*',  # Generic type
+                    fallback_urls=candidates[1:] if len(candidates) > 1 else []
+                ))
+                seen_urls.add(embed.image.url)
+    
+    return images
 
 
 async def map_item_to_modality(item: InputItem) -> InputModality:

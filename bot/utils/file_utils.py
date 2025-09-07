@@ -8,6 +8,91 @@ import aiohttp
 from pathlib import Path
 from typing import Optional
 
+async def download_robust_image(image_ref, local_path: str, max_size_mb: int = 25) -> bool:
+    """
+    Robust image download with fallback candidate chain.
+    
+    Args:
+        image_ref: ImageRef object with primary URL and fallbacks
+        local_path: Local file path to save to
+        max_size_mb: Maximum file size in MB
+        
+    Returns:
+        bool: True if any candidate succeeded, False otherwise
+    """
+    import aiohttp
+    import asyncio
+    from ..util.logging import get_logger
+    
+    logger = get_logger(__name__)
+    
+    # Build candidate list: primary + fallbacks
+    candidates = [image_ref.url] + (image_ref.fallback_urls or [])
+    
+    headers = {
+        'User-Agent': 'DiscordBot/1.0 (+https://github.com/discord-llm-chatbot)'
+    }
+    
+    timeout = aiohttp.ClientTimeout(total=15)  # 15s timeout
+    max_size_bytes = max_size_mb * 1024 * 1024
+    
+    async with aiohttp.ClientSession(headers=headers, timeout=timeout) as session:
+        for idx, candidate_url in enumerate(candidates):
+            try:
+                async with session.get(candidate_url, allow_redirects=True) as response:
+                    # Check status
+                    if response.status in (403, 404, 410):
+                        logger.warning(f"Image download candidate {idx+1}/{len(candidates)} failed: {response.status} {candidate_url[:60]}...")
+                        continue
+                    
+                    if response.status != 200:
+                        logger.warning(f"Image download candidate {idx+1}/{len(candidates)} failed: HTTP {response.status}")
+                        continue
+                    
+                    # Check content type
+                    content_type = response.headers.get('content-type', '')
+                    if not content_type.startswith('image/'):
+                        logger.warning(f"Image download candidate {idx+1}/{len(candidates)} failed: invalid content-type {content_type}")
+                        continue
+                    
+                    # Check size
+                    content_length = response.headers.get('content-length')
+                    if content_length and int(content_length) > max_size_bytes:
+                        logger.warning(f"Image download candidate {idx+1}/{len(candidates)} failed: size {content_length} exceeds {max_size_mb}MB")
+                        continue
+                    
+                    # Download with size guard
+                    downloaded_size = 0
+                    with open(local_path, 'wb') as f:
+                        async for chunk in response.content.iter_chunked(8192):
+                            downloaded_size += len(chunk)
+                            if downloaded_size > max_size_bytes:
+                                logger.warning(f"Image download candidate {idx+1}/{len(candidates)} failed: size exceeded {max_size_mb}MB during download")
+                                break
+                            f.write(chunk)
+                        else:
+                            # Success - download completed
+                            logger.debug(f"Image download succeeded with candidate {idx+1}/{len(candidates)}: {downloaded_size} bytes")
+                            return True
+                    
+                    # If we broke out of the loop due to size, try next candidate
+                    try:
+                        import os
+                        os.unlink(local_path)  # Clean up partial file
+                    except:
+                        pass
+                    
+            except asyncio.TimeoutError:
+                logger.warning(f"Image download candidate {idx+1}/{len(candidates)} failed: timeout")
+                continue
+            except Exception as e:
+                logger.warning(f"Image download candidate {idx+1}/{len(candidates)} failed: {e}")
+                continue
+    
+    # All candidates failed
+    return False
+
+
 async def download_file(url: str, save_path: Path, session: Optional[aiohttp.ClientSession] = None) -> bool:
     """
     Download a file from a URL and save it to the specified path.

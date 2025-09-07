@@ -51,7 +51,7 @@ logger = get_logger(__name__)
 from .action import BotAction, ResponseMessage
 from .command_parser import parse_command
 from .types import Command, ParsedCommand
-from .modality import collect_input_items, InputModality, InputItem, map_item_to_modality
+from .modality import collect_input_items, InputModality, InputItem, map_item_to_modality, collect_image_urls_from_message
 from .result_aggregator import ResultAggregator
 from .exceptions import DispatchEmptyError, DispatchTypeError, APIError
 from .hear import hear_infer, hear_infer_from_url
@@ -62,6 +62,9 @@ from .vl.postprocess import sanitize_model_output
 from .utils.mention_utils import ensure_single_mention
 from .web_extraction_service import web_extractor
 from .utils.file_utils import download_file
+import time
+import os
+from datetime import datetime, timezone
 from .tts.state import tts_state
 
 # Vision generation system (import only, no flag constant)
@@ -873,6 +876,31 @@ class Router:
         # Collect all input items from the message
         items = collect_input_items(message)
         
+        # Check for reply-image harvesting [VISION_REPLY_IMAGE_HARVEST]
+        if message.reference and self.config.get("VISION_REPLY_IMAGE_HARVEST", True):
+            try:
+                # Fetch the referenced message to harvest images
+                ref_message = await message.channel.fetch_message(message.reference.message_id)
+                reply_images = collect_image_urls_from_message(ref_message)
+                
+                if reply_images:
+                    # Convert ImageRef objects to InputItem objects and append
+                    for idx, img_ref in enumerate(reply_images):
+                        items.append(InputItem(
+                            source_type="url",
+                            payload=img_ref.url,
+                            order_index=len(items) + idx
+                        ))
+                    
+                    # Updated logging format for silent mode
+                    kept_count = len(reply_images)
+                    truncated = False  # No truncation at harvest time
+                    self.logger.debug(f"Reply-image capture | from_msg={ref_message.id} images={len(reply_images)} (kept={kept_count}, truncated={truncated})")
+                    
+            except Exception as e:
+                # Non-fatal: continue without reply images if fetch fails
+                self.logger.debug(f"Reply image harvest failed: {e}")
+        
         # Process original text content (remove URLs that will be processed separately)
         original_text = message.content
         if self.bot.user in message.mentions:
@@ -899,6 +927,33 @@ class Router:
         except Exception as e:
             # Never break dispatch because of a precheck failure
             self.logger.debug(f"routing.precedence.vision_check_failed | {e}")
+        
+        # Check for reply-image → VL routing condition
+        is_dm = isinstance(message.channel, discord.DMChannel)
+        mentioned_me = self.bot.user in message.mentions
+        
+        # Count images in current items (from current message + reply context)
+        image_items = []
+        for item in items:
+            if item.source_type == "attachment":
+                if hasattr(item.payload, 'content_type') and item.payload.content_type and item.payload.content_type.startswith('image/'):
+                    image_items.append(item)
+            elif item.source_type == "url":
+                # Simple heuristic for image URLs
+                url_lower = str(item.payload).lower()
+                if any(ext in url_lower for ext in ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp']):
+                    image_items.append(item)
+        
+        # Route to VL analysis if conditions met
+        if (is_dm or mentioned_me) and image_items:
+            self.logger.info(f"🎯 Route: VL (reply-image) | images={len(image_items)} | msg_id={message.id}")
+            
+            # Dispatch to existing VL analysis path using reply text as instruction
+            try:
+                return await self._handle_reply_image_analysis(image_items, original_text, message, context_str)
+            except Exception as e:
+                self.logger.error(f"Reply-image VL analysis failed: {e}", exc_info=True)
+                # Continue to normal flow on error
         
         # If no items found, process as text-only
         if not items:
@@ -2858,6 +2913,224 @@ class Router:
             except:
                 pass  # Don't fail if message edit fails
             return BotAction(content="Job monitoring failed", error=True)
+
+    async def _handle_reply_image_analysis(self, image_items: List[InputItem], text_instruction: str, message: Message, context_str: str) -> BotAction:
+        """Handle reply-image → VL analysis with silent mode (no cards) [CA][REH]"""
+        if not image_items:
+            self.logger.info("Reply-image VL failed | reason=no_images")
+            return BotAction(content="Vision analysis failed. Please try again or re-upload the image.")
+        
+        # Check silent mode config (default on)
+        silent_mode = self.config.get("VISION_REPLY_IMAGE_SILENT", True)
+        
+        if not silent_mode:
+            # Fall back to card-based UI for backward compatibility
+            return await self._handle_reply_image_analysis_with_cards(image_items, text_instruction, message, context_str)
+        
+        # Silent mode: no cards, just plain text responses
+        try:
+            # Collect and convert ImageRef objects for robust downloading
+            from .modality import collect_image_urls_from_message
+            from .utils.file_utils import download_robust_image
+            import tempfile
+            
+            # Get the referenced message to extract ImageRef objects
+            if not message.reference:
+                self.logger.info("Reply-image VL failed | reason=no_reference")
+                return BotAction(content="Vision analysis failed. Please try again or re-upload the image.")
+            
+            ref_message = await message.channel.fetch_message(message.reference.message_id)
+            image_refs = collect_image_urls_from_message(ref_message)
+            
+            # Add current message images too
+            current_image_refs = collect_image_urls_from_message(message)
+            image_refs.extend(current_image_refs)
+            
+            if not image_refs:
+                self.logger.info("Reply-image VL failed | reason=no_images")
+                return BotAction(content="Vision analysis failed. Please try again or re-upload the image.")
+            
+            # Cap at provider limit (assume 1 for simplicity, could be configurable)
+            provider_limit = 1  # Most VL providers handle 1 image well
+            truncated = len(image_refs) > provider_limit
+            if truncated:
+                image_refs = image_refs[:provider_limit]
+                self.logger.debug(f"Truncated image batch from {len(image_refs)} to {provider_limit}")
+            
+            # Download first available image using robust method
+            downloaded_paths = []
+            
+            for img_ref in image_refs:
+                try:
+                    with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as tmp_file:
+                        tmp_path = tmp_file.name
+                    
+                    success = await download_robust_image(img_ref, tmp_path)
+                    if success:
+                        downloaded_paths.append(tmp_path)
+                        break  # Use first successful download for simplicity
+                    else:
+                        # Clean up failed download
+                        try:
+                            os.unlink(tmp_path)
+                        except:
+                            pass
+                        
+                except Exception as e:
+                    self.logger.debug(f"Image download attempt failed: {e}")
+                    continue
+            
+            if not downloaded_paths:
+                self.logger.info("Reply-image VL failed | reason=all_downloads_failed")
+                return BotAction(content="Vision analysis failed. Please try again or re-upload the image.")
+            
+            # Use existing VL analysis pipeline
+            prompt = text_instruction.strip() or "Analyze this image in detail. Describe what you see, including objects, text, and context."
+            
+            try:
+                vision_result = await see_infer(image_path=downloaded_paths[0], prompt=prompt)
+                
+                if vision_result and hasattr(vision_result, 'content') and vision_result.content:
+                    # Success - return plain text response
+                    result_content = str(vision_result.content).strip()
+                    
+                    # Add note about multiple images if applicable
+                    if truncated:
+                        result_content += f"\n\n*(Analyzed first image of {len(image_refs) + (len(image_refs) - provider_limit)} total)*"
+                    
+                    return BotAction(content=result_content)
+                else:
+                    raise Exception("Vision analysis returned no results")
+                    
+            finally:
+                # Cleanup temp files
+                for tmp_path in downloaded_paths:
+                    try:
+                        os.unlink(tmp_path)
+                    except:
+                        pass
+        
+        except Exception as e:
+            self.logger.info(f"Reply-image VL failed | reason=provider_error | error={str(e)[:100]}")
+            self.logger.debug(f"Reply-image VL analysis failed: {e}", exc_info=True)
+            return BotAction(content="Vision analysis failed. Please try again or re-upload the image.")
+    
+    async def _handle_reply_image_analysis_with_cards(self, image_items: List[InputItem], text_instruction: str, message: Message, context_str: str) -> BotAction:
+        """Legacy card-based reply-image analysis for backward compatibility [CA][REH]"""
+        # This preserves the original card-based implementation when silent mode is off
+        if not image_items:
+            return BotAction(content="❌ No images found for analysis.", error=True)
+        
+        # Create compact "Working" card
+        embed = discord.Embed(
+            title="🖼️ Vision Analysis Working",
+            color=0x3498db,  # Blue for working
+            timestamp=datetime.now(timezone.utc)
+        )
+        embed.add_field(name="Task", value="Image Analysis", inline=True)
+        embed.add_field(name="Images", value=str(len(image_items)), inline=True)
+        embed.add_field(name="Status", value="Processing...", inline=True)
+        
+        if text_instruction.strip():
+            # Truncate instruction to fit embed limits
+            instruction_display = text_instruction[:1020] + "..." if len(text_instruction) > 1020 else text_instruction
+            embed.add_field(name="Instruction", value=f"`{instruction_display}`", inline=False)
+        
+        # Post working card
+        working_msg = await message.channel.send(embed=embed)
+        
+        try:
+            # Process first image (respect provider limits - using first image for simplicity)
+            first_item = image_items[0]
+            image_url = str(first_item.payload)
+            
+            # Use existing VL analysis pipeline
+            prompt = text_instruction.strip() or "Analyze this image in detail. Describe what you see, including objects, text, and context."
+            
+            # Download and analyze image
+            analysis_start = time.time()
+            tmp_path = None
+            
+            try:
+                # Download image to temp file
+                import tempfile
+                from .utils.file_utils import download_file
+                
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as tmp_file:
+                    tmp_path = tmp_file.name
+                
+                success = await download_file(image_url, tmp_path)
+                if not success:
+                    raise Exception(f"Failed to download image from {image_url}")
+                
+                # Use existing see_infer for VL analysis
+                vision_result = await see_infer(image_path=tmp_path, prompt=prompt)
+                
+                processing_time = time.time() - analysis_start
+                
+                if vision_result and hasattr(vision_result, 'content') and vision_result.content:
+                    # Success - update to Complete card
+                    embed = discord.Embed(
+                        title="✅ Vision Analysis Complete",
+                        color=0x2ecc71,  # Green for success
+                        timestamp=datetime.now(timezone.utc)
+                    )
+                    embed.add_field(name="Task", value="Image Analysis", inline=True)
+                    embed.add_field(name="Images", value=str(len(image_items)), inline=True)
+                    embed.add_field(name="Processing Time", value=f"{processing_time:.2f}s", inline=True)
+                    
+                    if text_instruction.strip():
+                        instruction_display = text_instruction[:1020] + "..." if len(text_instruction) > 1020 else text_instruction
+                        embed.add_field(name="Prompt", value=f"`{instruction_display}`", inline=False)
+                    
+                    # Truncate result to fit embed limits
+                    result_content = str(vision_result.content).strip()
+                    if len(result_content) > 1020:
+                        result_content = result_content[:1020] + "..."
+                    
+                    embed.add_field(name="Analysis", value=result_content, inline=False)
+                    
+                    if len(image_items) > 1:
+                        embed.add_field(name="Note", value=f"Analyzed first image of {len(image_items)} total", inline=False)
+                    
+                    await working_msg.edit(embed=embed)
+                    return BotAction(content="Vision analysis completed", meta={'discord_msg': working_msg})
+                
+                else:
+                    raise Exception("Vision analysis returned no results")
+                    
+            finally:
+                # Cleanup temp file
+                if tmp_path and os.path.exists(tmp_path):
+                    try:
+                        os.unlink(tmp_path)
+                    except:
+                        pass
+        
+        except Exception as e:
+            self.logger.error(f"Reply-image VL analysis failed: {e}", exc_info=True)
+            
+            # Error - update to Failed card
+            embed = discord.Embed(
+                title="❌ Vision Analysis Failed",
+                color=0xe74c3c,  # Red for error
+                timestamp=datetime.now(timezone.utc)
+            )
+            embed.add_field(name="Task", value="Image Analysis", inline=True)
+            embed.add_field(name="Images", value=str(len(image_items)), inline=True)
+            embed.add_field(name="Status", value="Failed", inline=True)
+            embed.add_field(name="Error", value=f"```{str(e)[:500]}```", inline=False)
+            
+            try:
+                await working_msg.edit(embed=embed)
+            except:
+                pass  # Don't fail if edit fails
+            
+            return BotAction(
+                content="❌ Vision analysis failed. Please try again or re-upload the image.",
+                error=True,
+                meta={'discord_msg': working_msg}
+            )
 
     async def _handle_img_command(self, parsed_command, message: Message) -> BotAction:
         """Handle !img prefix command - delegate to existing image-gen handler [CA]"""
