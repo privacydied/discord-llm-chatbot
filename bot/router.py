@@ -2359,8 +2359,9 @@ class Router:
                 self.logger.info(f"VL response is too long ({len(vl_content)} chars), truncating for text fallback.")
                 vl_content = vl_content[:1999].rsplit('\n', 1)[0]
 
-            # Synthesize user intent for empty messages: "Thoughts?" (not shown directly to user)
-            user_text = (message.content or '').strip() or "Thoughts?"
+            # Synthesize user intent for empty messages: configurable default query (not shown directly to user)
+            default_query = os.getenv("IMAGE_NO_CONTEXT_QUERY", "Thoughts?")
+            user_text = (message.content or '').strip() or default_query
             final_prompt = f"{user_text}\n\nImage analysis:\n{vl_content}"
             return await brain_infer(final_prompt)
 
@@ -2860,7 +2861,29 @@ class Router:
                     )
                 except Exception:
                     pass
-                await original_msg.channel.send(files=files_to_upload)
+                # Check bot permissions before uploading files
+                try:
+                    me = original_msg.guild.me if original_msg.guild else self.bot.user
+                    perms = original_msg.channel.permissions_for(me)
+                    can_attach = bool(getattr(perms, 'attach_files', False))
+                    
+                    if can_attach and files_to_upload:
+                        await original_msg.channel.send(files=files_to_upload)
+                    elif files_to_upload:
+                        # Missing attach files permission - send clean fallback message
+                        file_paths = [str(f.fp.name) if hasattr(f.fp, 'name') else f"artifact_{i}" 
+                                     for i, f in enumerate(files_to_upload)]
+                        fallback_content = (f"✅ **Generation Complete**\n"
+                                          f"Job ID: `{job.job_id[:8]}`\n"
+                                          f"Files saved at: {', '.join(file_paths)}\n"
+                                          f"(missing Attach Files permission)")
+                        await original_msg.channel.send(content=fallback_content)
+                    else:
+                        # No files to upload
+                        await original_msg.channel.send(content="✅ Generation completed successfully")
+                except Exception as perm_e:
+                    self.logger.warning(f"Permission check failed, attempting upload anyway: {perm_e}")
+                    await original_msg.channel.send(files=files_to_upload)
             
             return BotAction(content="Vision generation completed successfully")
             

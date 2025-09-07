@@ -19,18 +19,18 @@
   "254254168234131456": {
     "user_id": "254254168234131456",
     "daily_limit": "5.0",
-    "daily_spent": "0.1660",
+    "daily_spent": "0.3320",
     "daily_reset_time": "2025-09-07T00:00:00+00:00",
     "weekly_limit": "20.0",
-    "weekly_spent": "0.1660",
+    "weekly_spent": "0.3320",
     "weekly_reset_time": "2025-09-08T00:00:00+00:00",
     "monthly_limit": "50.0",
-    "monthly_spent": "0.1660",
+    "monthly_spent": "0.3320",
     "monthly_reset_time": "2025-10-01T00:00:00+00:00",
     "reserved_amount": "3.1600",
-    "total_spent": "0.1660",
-    "total_jobs": 1,
+    "total_spent": "0.3320",
+    "total_jobs": 2,
     "created_at": "2025-09-03T18:08:03.082449+00:00",
-    "updated_at": "2025-09-06T22:17:25.579039+00:00"
+    "updated_at": "2025-09-06T22:30:24.203312+00:00"
   }
 }
