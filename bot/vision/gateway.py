@@ -272,17 +272,27 @@ class VisionGateway:
                 @with_retry(API_RETRY_CONFIG)
                 async def _download(url: str, tmp_path: Path, final_path: Path) -> Path:
                     try:
-                        async with session.get(url) as resp:
-                            if resp.status != 200:
-                                raise APIError(f"HTTP {resp.status} while downloading {url}")
-                            tmp_path.parent.mkdir(parents=True, exist_ok=True)
+                        async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                            resp.raise_for_status()
+                            
+                            # Try to detect proper file extension from content-type
+                            content_type = resp.headers.get('content-type', '').lower()
+                            if content_type and not final_path.suffix:
+                                if 'png' in content_type:
+                                    final_path = final_path.with_suffix('.png')
+                                elif 'jpeg' in content_type or 'jpg' in content_type:
+                                    final_path = final_path.with_suffix('.jpg')
+                                elif 'webp' in content_type:
+                                    final_path = final_path.with_suffix('.webp')
+                                elif 'gif' in content_type:
+                                    final_path = final_path.with_suffix('.gif')
+                                tmp_path = tmp_path.with_suffix(final_path.suffix)
+                            
                             with open(tmp_path, "wb") as f:
                                 async for chunk in resp.content.iter_chunked(8192):
-                                    if chunk:
-                                        f.write(chunk)
-                        # Atomic move into place
-                        os.replace(tmp_path, final_path)
-                        return final_path
+                                    f.write(chunk)
+                            os.replace(tmp_path, final_path)
+                            return final_path
                     except Exception as e:
                         # Normalize to APIError to trigger retries consistently
                         raise APIError(str(e))
@@ -291,9 +301,9 @@ class VisionGateway:
                     try:
                         parsed = urlparse(url)
                         name = unquote(os.path.basename(parsed.path)) or f"asset_{idx}"
-                        # Fallback extension if missing
+                        # Fallback extension if missing - sniff content type for proper extension
                         if "." not in name:
-                            name = f"{name}.bin"
+                            name = f"{name}.png"  # Default to .png instead of .bin
                         tmp_path = artifacts_dir / f".{name}.part"
                         final_path = artifacts_dir / name
                         if final_path.exists():
