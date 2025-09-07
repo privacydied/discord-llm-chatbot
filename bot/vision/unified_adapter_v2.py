@@ -189,7 +189,7 @@ class UnifiedVisionAdapter:
         """
         Submit request with cost estimation and normalization [REH]
         
-        Ensures all costs use Money type.
+        Ensures all costs use Money type. Enforces capability and pricing gates.
         """
         # Normalize request
         normalized = self.normalize_request(request)
@@ -197,7 +197,10 @@ class UnifiedVisionAdapter:
         # Get provider order
         provider_order = self._get_provider_order(request)
         
+        selected_provider = None
+        selection_reason = "no_providers"
         last_error = None
+        
         for provider_name in provider_order:
             try:
                 # Parse provider:endpoint format
@@ -210,11 +213,40 @@ class UnifiedVisionAdapter:
                     logger.warning(f"Provider {provider_name} not available")
                     continue
                 
-                # Estimate cost before submission
                 provider_enum = VisionProvider(provider_name.upper())
-                estimated_cost = self.estimate_cost(provider_enum, request)
                 
-                # Update request with estimate
+                # Strict capability gating - check if provider supports the task
+                if hasattr(provider, 'get_supported_tasks'):
+                    supported_tasks = provider.get_supported_tasks()
+                elif hasattr(provider, 'capabilities'):
+                    capabilities = provider.capabilities()
+                    supported_tasks = capabilities.get("modes", [])
+                else:
+                    # Fallback: assume basic support
+                    supported_tasks = [VisionTask.TEXT_TO_IMAGE, VisionTask.IMAGE_TO_IMAGE]
+                
+                if request.task not in supported_tasks:
+                    logger.debug(f"Provider {provider_name} does not support {request.task.value}")
+                    continue
+                
+                # Strict pricing gating - fail fast if no pricing exists
+                try:
+                    estimated_cost = self.estimate_cost(provider_enum, request)
+                    if estimated_cost.is_zero():
+                        logger.info(f"provider.select | task={request.task.value} selected=none reason=no_pricing provider={provider_name}")
+                        selection_reason = "no_pricing"
+                        continue
+                except Exception as e:
+                    logger.info(f"provider.select | task={request.task.value} selected=none reason=no_pricing provider={provider_name}")
+                    selection_reason = "no_pricing"
+                    continue
+                
+                # Provider selected successfully
+                selected_provider = provider_name
+                selection_reason = "supports_capability"
+                logger.info(f"provider.select | task={request.task.value} selected={provider_name} reason=supports_capability")
+                
+                # Update request with estimate (budget reserve only when estimate exists)
                 request.estimated_cost = estimated_cost.to_float()  # For compatibility
                 
                 logger.info(
@@ -272,6 +304,38 @@ class UnifiedVisionAdapter:
                     message=str(e),
                     provider=VisionProvider(provider_name.upper())
                 )
+        
+        # Log final selection result if no provider was selected
+        if not selected_provider:
+            logger.info(f"provider.select | task={request.task.value} selected=none reason={selection_reason}")
+        
+        # Early fail with clean user message
+        if selection_reason == "no_capability":
+            return VisionResponse(
+                success=False,
+                job_id=request.idempotency_key,
+                provider=VisionProvider.UNKNOWN,
+                model_used="unknown",
+                error=VisionError(
+                    error_type=VisionErrorType.VALIDATION_ERROR,
+                    message=f"No provider supports {request.task.value}",
+                    user_message=f"Sorry, {request.task.value.replace('_', ' ')} is not currently supported."
+                ),
+                actual_cost=0.0
+            )
+        elif selection_reason == "no_pricing":
+            return VisionResponse(
+                success=False,
+                job_id=request.idempotency_key,
+                provider=VisionProvider.UNKNOWN,
+                model_used="unknown",
+                error=VisionError(
+                    error_type=VisionErrorType.VALIDATION_ERROR,
+                    message=f"No pricing available for {request.task.value}",
+                    user_message="Pricing unavailable for this provider/task. Please try another provider or lower spec."
+                ),
+                actual_cost=0.0
+            )
         
         # All providers failed
         if last_error:

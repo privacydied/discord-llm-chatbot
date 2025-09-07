@@ -129,7 +129,14 @@ class VisionJobStore:
                 # Reconstruct job from dict
                 job = VisionJob.from_dict(job_data)
                 
-                self.logger.debug(f"Job loaded - job_id: {job_id[:8]}, state: {job.state.value}")
+                # Only log on state changes, not every load
+                if not hasattr(self, '_last_loaded_states'):
+                    self._last_loaded_states = {}
+                
+                current_state = job.state.value
+                if job_id not in self._last_loaded_states or self._last_loaded_states[job_id] != current_state:
+                    self.logger.debug(f"Job loaded - job_id: {job_id[:8]}, state: {current_state}")
+                    self._last_loaded_states[job_id] = current_state
                 
                 return job
                 

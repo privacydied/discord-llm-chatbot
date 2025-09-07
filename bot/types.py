@@ -29,6 +29,7 @@ class Command(Enum):
     RAG_SEARCH = auto() # Search RAG knowledge base
     RAG_STATUS = auto() # Show RAG system status
     ALERT = auto()      # Admin DM alert system
+    IMG = auto()        # Image generation command
     IGNORE = auto()     # A command to signify that the message should be ignored
 
 @dataclass

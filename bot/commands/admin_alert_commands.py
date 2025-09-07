@@ -58,12 +58,69 @@ class AdminAlertManager:
         self.config = load_config()
         self.logger = get_logger(f"{__name__}.AdminAlertManager")
         self.sessions: Dict[int, AlertSession] = {}
+        self.reaction_queues: Dict[int, List] = {}  # Per-message reaction queues
         
         self.enabled = self.config.get('ALERT_ENABLE', 'false').lower() == 'true'
         self.admin_user_ids = self._parse_admin_user_ids()
         self.session_timeout = int(self.config.get('ALERT_SESSION_TIMEOUT_S', '1800'))
         
         self.logger.info(f"🚨 Admin alert system initialized: enabled={self.enabled}")
+    
+    async def _queue_reaction_operation(self, message, emoji: str, operation: str, user):
+        """Queue reaction add/remove operations with spacing to prevent rate limits."""
+        import asyncio
+        
+        message_id = message.id
+        if message_id not in self.reaction_queues:
+            self.reaction_queues[message_id] = []
+        
+        queue = self.reaction_queues[message_id]
+        
+        # Check for duplicates
+        for queued_op in queue:
+            if queued_op['emoji'] == emoji and queued_op['operation'] == operation:
+                return  # Already queued
+        
+        queue.append({
+            'emoji': emoji,
+            'operation': operation,
+            'user': user,
+            'message': message
+        })
+        
+        # If this is the first item, start processing
+        if len(queue) == 1:
+            self.logger.debug(f"🎯 Starting reaction queue processing for message {message_id}")
+            await self._process_reaction_queue(message_id)
+    
+    async def _process_reaction_queue(self, message_id: int):
+        """Process queued reactions with spacing."""
+        import asyncio
+        
+        queue = self.reaction_queues.get(message_id, [])
+        
+        while queue:
+            op = queue.pop(0)
+            try:
+                if op['operation'] == 'add':
+                    # Check if reaction already exists
+                    existing_reactions = [r.emoji for r in op['message'].reactions]
+                    if op['emoji'] not in [str(r) for r in existing_reactions]:
+                        await op['message'].add_reaction(op['emoji'])
+                elif op['operation'] == 'remove':
+                    await op['message'].remove_reaction(op['emoji'], op['user'])
+                
+                # Wait between operations to prevent rate limits
+                if queue:  # Only wait if more operations pending
+                    await asyncio.sleep(0.25)  # 250ms spacing
+                    
+            except Exception as e:
+                self.logger.warning(f"⚠️ Reaction queue operation failed: {e}")
+        
+        # Clean up empty queue
+        if message_id in self.reaction_queues and not self.reaction_queues[message_id]:
+            del self.reaction_queues[message_id]
+            self.logger.debug(f"🎯 Reaction queue drained for message {message_id}")
     
     def _parse_admin_user_ids(self) -> Set[int]:
         try:
@@ -121,30 +178,107 @@ class AdminAlertManager:
         return session
     
     def _validate_embed_limits(self, embed: discord.Embed) -> discord.Embed:
-        """Validate and truncate embed to stay within Discord limits [REH]"""
-        # Title: 256 chars max
+        """Validate and truncate embed to stay within Discord limits."""
+        
+        # Title limit: 256 characters
         if embed.title and len(embed.title) > 256:
             embed.title = embed.title[:253] + "..."
         
-        # Description: 4096 chars max  
+        # Description limit: 4096 characters  
         if embed.description and len(embed.description) > 4096:
             embed.description = embed.description[:4093] + "..."
         
-        # Fields: 25 max, name 256 chars, value 1024 chars each
+        # Fields limit: 25 fields max
         if len(embed.fields) > 25:
-            embed._fields = embed._fields[:25]
+            truncated_count = len(embed.fields) - 24
+            embed.fields = embed.fields[:24]
+            embed.add_field(
+                name="Truncated",
+                value=f"...and {truncated_count} more fields",
+                inline=False
+            )
         
+        # Individual field limits
         for field in embed.fields:
             if len(field.name) > 256:
                 field.name = field.name[:253] + "..."
-            if len(field.value) > 1024:  
+            if len(field.value) > 1024:
                 field.value = field.value[:1021] + "..."
         
-        # Footer: 2048 chars max
-        if embed.footer and embed.footer.text and len(embed.footer.text) > 2048:
+        # Footer limit: 2048 characters
+        if embed.footer and len(embed.footer.text) > 2048:
             embed.set_footer(text=embed.footer.text[:2045] + "...")
-            
+        
+        # Total embed size check: 6000 characters max
+        total_length = 0
+        total_length += len(embed.title or "")
+        total_length += len(embed.description or "")
+        for field in embed.fields:
+            total_length += len(field.name) + len(field.value)
+        if embed.footer:
+            total_length += len(embed.footer.text)
+        
+        if total_length > 6000:
+            self.logger.warning(f"⚠️ Embed exceeds 6000 chars ({total_length}), may cause errors")
+        
         return embed
+    
+    def _discover_available_destinations(self, invoking_user_id: int) -> List[AlertDestination]:
+        """Cache-based, permission-aware discovery of available guilds/channels with strict bounds."""
+        destinations = []
+        guilds_shown = 0
+        channels_shown = 0
+        max_guilds = 10  # Hard limit per spec
+        max_channels_per_guild = 3  # Hard limit per spec
+        
+        try:
+            for guild in self.bot.guilds:
+                if guilds_shown >= max_guilds:
+                    break
+                
+                # Check if bot has send permissions in at least one text channel
+                bot_member = guild.get_member(self.bot.user.id)
+                if not bot_member:
+                    continue
+                
+                # Check if invoking user is a member (optional constraint)
+                invoking_member = guild.get_member(invoking_user_id)
+                if not invoking_member:
+                    continue
+                
+                # Find eligible channels
+                eligible_channels = []
+                for channel in guild.text_channels:
+                    if len(eligible_channels) >= max_channels_per_guild:
+                        break
+                    
+                    # Check bot permissions
+                    perms = channel.permissions_for(bot_member)
+                    if perms.send_messages:
+                        eligible_channels.append(channel)
+                        channels_shown += 1
+                
+                if eligible_channels:
+                    destinations.append(AlertDestination(
+                        guild_id=guild.id,
+                        guild_name=guild.name,
+                        channel_id=None,
+                        channel_name=None
+                    ))
+                    guilds_shown += 1
+            
+            # Log discovery results per spec
+            total_guilds = len(self.bot.guilds)
+            total_channels = sum(len(g.text_channels) for g in self.bot.guilds)
+            truncated = guilds_shown < total_guilds or channels_shown < total_channels
+            
+            self.logger.info(f"alert:discovery guilds={total_guilds} channels={total_channels} shown_guilds={guilds_shown} shown_channels={channels_shown} truncated={truncated}")
+            
+            return destinations
+            
+        except Exception as e:
+            self.logger.error(f"❌ Discovery failed: {e}")
+            return []
 
     async def build_composer_embed(self, session: AlertSession) -> discord.Embed:
         embed = discord.Embed(
@@ -321,10 +455,10 @@ class AdminAlertCommands(commands.Cog):
             
             session.composer_message_id = message.id
             
-            # Add reaction controls
+            # Add reaction controls with queuing
             reactions = ['📋', '✏️', '👁️', '📤', '❌']
             for emoji in reactions:
-                await message.add_reaction(emoji)
+                await self.alert_manager._queue_reaction_operation(message, emoji, 'add', ctx.author)
             
             # Mark composer as ready after all setup is complete
             session.composer_ready = True
@@ -527,46 +661,14 @@ class AdminAlertCommands(commands.Cog):
             if not session.composer_message_id:
                 return
             composer_embed = await self.alert_manager.build_composer_embed(session)
+            composer_embed = self.alert_manager._validate_embed_limits(composer_embed)
             dm_msg = await source_message.channel.fetch_message(session.composer_message_id)
             await dm_msg.edit(embed=composer_embed)
+        except discord.HTTPException as e:
+            response_text = getattr(e.response, 'text', 'N/A') if hasattr(e, 'response') else 'N/A'
+            self.logger.error(f"❌ Embed edit failed: status={e.status}, code={e.code}")
         except Exception as e:
             self.logger.error(f"❌ Failed to update composer embed: {e}")
-    
-    async def _handle_channel_selection(self, reaction, user, session):
-        session.current_step = "select_channels"
-        
-        channels = await self.alert_manager.get_accessible_channels()
-        
-        if not channels:
-            await user.send("❌ No accessible channels found.")
-            return
-        
-        embed = discord.Embed(
-            title="📋 Select Alert Destinations",
-            description="Available channels:",
-            color=0x5865f2
-        )
-        
-        channel_text = []
-        for i, channel in enumerate(channels[:20]):  # Limit to 20
-            channel_text.append(f"{i+1}. #{channel.name} ({channel.guild.name})")
-        
-        embed.add_field(
-            name="Channels",
-            value="\n".join(channel_text),
-            inline=False
-        )
-        
-        await user.send(embed=embed)
-        await user.send("📋 **Step 2: Select Channels**\n\nReply with the numbers of channels you want to alert (e.g., `1,3,5`):")
-        
-        # Update composer (embed-only, no components from reaction)
-        try:
-            composer_embed = await self.alert_manager.build_composer_embed(session)
-            await reaction.message.edit(embed=composer_embed, view=None)  # Explicitly remove components
-        except discord.HTTPException as e:
-            self.logger.error(f"❌ Failed to update composer embed in channel selection: status={e.status}, code={e.code}")
-            raise
     
     async def _handle_content_composition(self, reaction, user, session):
         session.current_step = "compose_content"
@@ -588,6 +690,7 @@ class AdminAlertCommands(commands.Cog):
         # Update composer (embed-only, no components from reaction)
         try:
             composer_embed = await self.alert_manager.build_composer_embed(session)
+            composer_embed = self.alert_manager._validate_embed_limits(composer_embed)
             await reaction.message.edit(embed=composer_embed, view=None)  # Explicitly remove components
         except discord.HTTPException as e:
             self.logger.error(f"❌ Failed to update composer embed in content composition: status={e.status}, code={e.code}")
@@ -636,6 +739,7 @@ class AdminAlertCommands(commands.Cog):
         session.current_step = "confirm_send"
         try:
             composer_embed = await self.alert_manager.build_composer_embed(session)
+            composer_embed = self.alert_manager._validate_embed_limits(composer_embed)
             await reaction.message.edit(embed=composer_embed, view=None)  # Explicitly remove components
         except discord.HTTPException as e:
             self.logger.error(f"❌ Failed to update composer embed in preview: status={e.status}, code={e.code}")
