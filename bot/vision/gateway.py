@@ -109,16 +109,41 @@ class VisionGateway:
             return job_id
             
         except Exception as e:
-            self.logger.error(f"Job submission failed: {e}")
-            if isinstance(e, VisionError):
-                raise
-            else:
-                raise VisionError(
-                    error_type=VisionErrorType.PROVIDER_ERROR,
-                    message=f"Submission failed: {e}",
-                    user_message="Failed to start vision generation. Please try again."
-                )
-    
+            # Clean up failed job
+            if job_id in self.active_jobs:
+                del self.active_jobs[job_id]
+            
+            self.logger.error(f"Vision gateway failed for job {job_id}: {e}", exc_info=True)
+            raise VisionError(
+                error_type=VisionErrorType.PROVIDER_ERROR,
+                message=f"Vision processing failed: {str(e)}",
+                user_message="I encountered an error while processing your request. Please try again.",
+                provider=VisionProvider.NOVITA
+            )
+
+    def _calculate_actual_cost(self, job_meta: Dict[str, Any], result) -> Money:
+        """Calculate actual cost using pricing table instead of trusting provider values [CA][REH]"""
+        try:
+            request = job_meta.get("request")
+            if not request:
+                return Money("0.006")  # Safe fallback
+            
+            # Use pricing table to calculate actual cost (same as estimate)
+            provider = VisionProvider(result.provider_used.lower()) if result.provider_used else VisionProvider.NOVITA
+            
+            return self.pricing_table.estimate_cost(
+                provider=provider,
+                task=getattr(request, 'task', 'text_to_image'),
+                width=getattr(request, 'width', 1024),
+                height=getattr(request, 'height', 1024),
+                num_images=getattr(request, 'batch_size', 1) or 1,
+                duration_seconds=getattr(request, 'duration_seconds', 4.0) or 4.0,
+                model=getattr(request, 'preferred_model', None) or getattr(request, 'model', None)
+            )
+        except Exception as e:
+            self.logger.warning(f"Actual cost calculation failed, using fallback: {e}")
+            return Money("0.006")
+
     async def generate(self, request: VisionRequest) -> VisionResponse:
         """
         Direct generation method - submit job and wait for completion [CA]
@@ -365,7 +390,7 @@ class VisionGateway:
                 model_used=result.metadata.get('model', 'unknown'),
                 artifacts=saved_artifacts,
                 processing_time_seconds=asyncio.get_event_loop().time() - job_meta["start_time"],
-                actual_cost=Money(result.final_cost) if result.final_cost is not None else None,
+                actual_cost=self._calculate_actual_cost(job_meta, result),
                 file_size_bytes=total_size,
                 warnings=warnings,
             )

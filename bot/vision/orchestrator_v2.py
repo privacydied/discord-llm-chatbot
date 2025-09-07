@@ -242,12 +242,12 @@ class VisionOrchestratorV2:
             self.logger.warning(f"Cost estimation failed: {e}, using fallback")
             # Fallback estimates based on task type
             fallback_costs = {
-                VisionTask.TEXT_TO_IMAGE: Money("0.04"),
-                VisionTask.IMAGE_TO_IMAGE: Money("0.06"),
+                VisionTask.TEXT_TO_IMAGE: Money("0.006"),
+                VisionTask.IMAGE_TO_IMAGE: Money("0.008"),
                 VisionTask.TEXT_TO_VIDEO: Money("1.50"),
                 VisionTask.IMAGE_TO_VIDEO: Money("2.00")
             }
-            return fallback_costs.get(request.task, Money("0.10"))
+            return fallback_costs.get(request.task, Money("0.006"))
     
     async def _execute_job(self, job: VisionJob) -> None:
         """Execute vision generation job asynchronously [CA][REH]"""

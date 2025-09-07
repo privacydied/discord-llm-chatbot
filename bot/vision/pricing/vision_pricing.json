@@ -7,8 +7,8 @@
       "name": "Novita AI",
       "base_prices": {
         "text_to_image": {
-          "base_cost": 0.02,
-          "per_image": 0.02,
+          "base_cost": 0.006,
+          "per_image": 0.006,
           "size_multipliers": {
             "512x512": 1.0,
             "768x768": 1.2,
@@ -24,8 +24,8 @@
           }
         },
         "image_to_image": {
-          "base_cost": 0.025,
-          "per_image": 0.025,
+          "base_cost": 0.008,
+          "per_image": 0.008,
           "size_multipliers": {
             "512x512": 1.0,
             "768x768": 1.2,
@@ -54,8 +54,8 @@
       "name": "Together AI",
       "base_prices": {
         "text_to_image": {
-          "base_cost": 0.018,
-          "per_image": 0.018,
+          "base_cost": 0.006,
+          "per_image": 0.006,
           "size_multipliers": {
             "512x512": 1.0,
             "768x768": 1.15,
@@ -70,8 +70,8 @@
           }
         },
         "image_to_image": {
-          "base_cost": 0.022,
-          "per_image": 0.022,
+          "base_cost": 0.008,
+          "per_image": 0.008,
           "size_multipliers": {
             "512x512": 1.0,
             "768x768": 1.15,
@@ -104,11 +104,11 @@
     }
   },
   "default_estimates": {
-    "text_to_image": 0.02,
-    "image_to_image": 0.025,
+    "text_to_image": 0.006,
+    "image_to_image": 0.008,
     "text_to_video": 0.30,
     "image_to_video": 0.36,
-    "unknown": 0.05
+    "unknown": 0.006
   },
   "estimation_config": {
     "safety_factor": 1.2,

@@ -102,7 +102,19 @@ class PricingTable:
         Returns:
             Estimated cost as Money object
         """
+        # Check for environment variable overrides first
         provider_name = provider.value.lower()
+        task_name = self._task_to_pricing_key(task)
+        
+        env_key = f"PRICING_{provider_name.upper()}_{task_name.upper()}_PER_IMAGE_USD"
+        env_override = os.getenv(env_key)
+        if env_override:
+            try:
+                per_image_cost = Money(env_override)
+                return per_image_cost * num_images
+            except Exception as e:
+                logger.warning(f"Invalid env override {env_key}={env_override}: {e}")
+        
         provider_config = self.pricing_data.get("providers", {}).get(provider_name)
         
         if not provider_config:
@@ -110,7 +122,6 @@ class PricingTable:
             logger.warning(f"No pricing config for provider: {provider_name}")
             return self._get_default_estimate(task, num_images, duration_seconds)
         
-        task_name = self._task_to_pricing_key(task)
         task_pricing = provider_config.get("base_prices", {}).get(task_name)
         
         if not task_pricing:

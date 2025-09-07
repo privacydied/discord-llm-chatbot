@@ -3065,10 +3065,9 @@ class Router:
             r'generate\s+(an?\s+)?(image|picture|pic|photo|art|drawing|render)',
             r'create\s+(an?\s+)?(image|picture|pic|photo|art|drawing|render)', 
             r'make\s+(an?\s+)?(image|picture|pic|photo|art|drawing|render)',
-            r'draw\s+(me\s+)?(an?\s+)?',  # "draw me a..." or just "draw"
-            r'imagine\s+(an?\s+)?',       # "imagine a..."
-            r'render\s+(an?\s+)?',        # "render something"
-            r'paint\s+(an?\s+)?',         # "paint a..."
+            r'draw\s+(me\s+)?(an?\s+)?(image|picture|pic|photo|art|drawing|render)',  # "draw me a..." with media noun
+            r'render\s+(an?\s+)?(image|picture|pic|photo|art|drawing|render)',        # "render something" with media noun
+            r'paint\s+(an?\s+)?(image|picture|pic|photo|art|drawing|render)',         # "paint a..." with media noun
         ]
         
         # Debug logging for trigger detection
