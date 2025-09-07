@@ -447,11 +447,13 @@ class VisionOrchestrator:
                 # Cleanup old artifacts 
                 await self._cleanup_old_artifacts()
                 
-                # Log system health
+                # Log system health (metadata via 'extra' to avoid kwargs to logger) [REH]
                 self.logger.debug(
                     "Orchestrator health check",
-                    active_jobs=len(self.active_jobs),
-                    user_counts=len(self.user_job_counts)
+                    extra={
+                        "active_jobs": len(self.active_jobs),
+                        "user_counts": len(self.user_job_counts),
+                    }
                 )
                 
             except asyncio.CancelledError:
@@ -510,10 +512,13 @@ class VisionOrchestrator:
                     cleaned_size += file_size
             
             if cleaned_count > 0:
+                # Include metrics via 'extra' to avoid unexpected kwargs to logger [REH]
                 self.logger.info(
-                    f"Cleaned up old artifacts",
-                    count=cleaned_count,
-                    size_mb=round(cleaned_size / (1024*1024), 1)
+                    "Cleaned up old artifacts",
+                    extra={
+                        "count": cleaned_count,
+                        "size_mb": round(cleaned_size / (1024*1024), 1),
+                    }
                 )
                 
         except Exception as e:

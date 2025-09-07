@@ -414,12 +414,12 @@ class VisionOrchestratorV2:
                 # Cleanup old artifacts
                 await self._cleanup_old_artifacts()
                 
-                # Log system health
+                # Log system health with structured extras (avoid kwargs to logger) [REH]
                 self.logger.debug(
                     "Orchestrator health check",
                     extra={
                         "active_jobs": len(self.active_jobs),
-                        "user_counts": len(self.user_job_counts)
+                        "user_counts": len(self.user_job_counts),
                     }
                 )
                 
@@ -478,9 +478,11 @@ class VisionOrchestratorV2:
             
             if cleaned_count > 0:
                 self.logger.info(
-                    f"Cleaned up old artifacts",
-                    count=cleaned_count,
-                    size_mb=round(cleaned_size / (1024*1024), 1)
+                    "Cleaned up old artifacts",
+                    extra={
+                        "count": cleaned_count,
+                        "size_mb": round(cleaned_size / (1024*1024), 1),
+                    }
                 )
                 
         except Exception as e:
