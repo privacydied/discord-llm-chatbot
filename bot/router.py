@@ -2748,14 +2748,14 @@ class Router:
             
             job = await self._vision_orchestrator.submit_job(vision_request)
             
-            # Send initial progress message
-            progress_msg = await message.channel.send(
-                f"🎨 **Vision Generation Started**\n"
-                f"Task: {vision_request.task.value.replace('_', ' ').title()}\n"
-                f"Job ID: `{job.job_id[:8]}`\n"
-                f"Status: {job.state.value.title()}\n"
-                f"⏳ *Processing...*"
+            # Send initial progress message using unified card system
+            initial_embed = self._build_vision_status_embed(
+                state="REQUESTED",
+                job=job,
+                user=message.author,
+                prompt=vision_request.prompt
             )
+            progress_msg = await message.channel.send(embed=initial_embed)
             
             # Monitor job progress and update message
             return await self._monitor_vision_job(job, progress_msg, message)
@@ -2834,16 +2834,15 @@ class Router:
                     self.logger.warning(f"⚠️ Vision job not found during monitoring - job_id: {job.job_id[:8]}")
                     break
                 
-                # Update progress message
+                # Update progress message using unified card
                 if updated_job.progress_percentage > 0:
-                    progress_bar = self._create_progress_bar(updated_job.progress_percentage)
-                    await progress_msg.edit(
-                        content=f"🎨 **Vision Generation**\n"
-                               f"Job ID: `{updated_job.job_id[:8]}`\n"
-                               f"Status: {updated_job.state.value.title()}\n"
-                               f"{progress_bar} {updated_job.progress_percentage}%\n"
-                               f"💭 *{getattr(updated_job, 'progress_message', 'Processing...')}*"
+                    working_embed = self._build_vision_status_embed(
+                        state="WORKING",
+                        job=updated_job,
+                        user=original_msg.author,
+                        prompt=updated_job.request.prompt if hasattr(updated_job.request, 'prompt') else ""
                     )
+                    await progress_msg.edit(embed=working_embed)
                 
                 # Check if job is complete
                 if updated_job.is_terminal_state():
@@ -2970,21 +2969,17 @@ class Router:
             except Exception:
                 pass
 
-            # Create final success message
-            success_content = (
-                f"✅ **Vision Generation Complete**\n"
-                f"Task: {job.request.task.value.replace('_', ' ').title()}\n"
-                f"Provider: {response.provider.value.title()}\n"
-                f"Processing Time: {response.processing_time_seconds:.1f}s\n"
-                f"Cost: {cost_str}\n\n"
-                f"**Results:**\n" + "\n".join(result_descriptions)
+            # Use unified card system for completion
+            success_embed = self._build_vision_status_embed(
+                state="COMPLETED",
+                job=job,
+                user=original_msg.author,
+                prompt=job.request.prompt if hasattr(job.request, 'prompt') else "",
+                response=response
             )
             
-            if job.request.prompt:
-                success_content += f"\n\n**Prompt:** {job.request.prompt[:100]}{'...' if len(job.request.prompt) > 100 else ''}"
-            
-            # Update progress message and upload files
-            await progress_msg.edit(content=success_content)
+            # Update progress message and upload files  
+            await progress_msg.edit(content=None, embed=success_embed)
             
             if files_to_upload:
                 # Log filenames and sizes before upload [PA]
@@ -3178,6 +3173,136 @@ class Router:
             )
         
         return vision_enabled and t2i_enabled and orchestrator_ready
+
+    def _build_vision_status_embed(self, state: str, job=None, user=None, prompt="", response=None, error_reason="") -> discord.Embed:
+        """Centralized vision status embed builder for all states [CA]"""
+        # Consistent brand colors
+        if state in ["REQUESTED", "WORKING"]:
+            color = 0x00d26a  # Discord success green (consistent theme)
+        elif state == "COMPLETED":
+            color = 0x00d26a  # Discord success green
+        elif state in ["FAILED", "CANCELED"]:
+            color = 0xed4245  # Discord red
+        else:
+            color = 0x5865f2  # Discord blurple (fallback)
+        
+        embed = discord.Embed(
+            title="✅ Vision Generation Complete" if state == "COMPLETED" else f"🎨 Vision Generation {state.title()}",
+            color=color,
+            timestamp=discord.utils.utcnow()
+        )
+        
+        # Fixed order fields
+        embed.add_field(
+            name="Task",
+            value="Text To Image",
+            inline=True
+        )
+        
+        # Provider field
+        provider_value = "—"
+        if response and hasattr(response, 'provider'):
+            provider_value = response.provider.value.title()
+        elif state == "WORKING" and job and hasattr(job, 'preferred_provider') and job.preferred_provider:
+            provider_value = job.preferred_provider.title()
+        
+        embed.add_field(
+            name="Provider",
+            value=provider_value,
+            inline=True
+        )
+        
+        # Processing time (only on completion)
+        time_value = "—"
+        if state == "COMPLETED" and response and hasattr(response, 'processing_time_seconds'):
+            time_value = f"{response.processing_time_seconds:.1f}s"
+        
+        embed.add_field(
+            name="Processing Time",
+            value=time_value,
+            inline=True
+        )
+        
+        # Cost field 
+        cost_value = "—"
+        if state == "COMPLETED" and response:
+            try:
+                ac = getattr(response, 'actual_cost', None)
+                if ac is not None:
+                    if hasattr(ac, 'to_display_string'):
+                        cost_value = ac.to_display_string()
+                    else:
+                        cost_value = f"${float(ac):.2f}"
+            except Exception:
+                cost_value = "—"
+        
+        embed.add_field(
+            name="Cost",
+            value=cost_value,
+            inline=True
+        )
+        
+        # Results field
+        if state in ["REQUESTED", "WORKING"]:
+            results_value = "(pending)"
+        elif state == "COMPLETED" and response and response.artifacts:
+            result_lines = []
+            for i, artifact_path in enumerate(response.artifacts[:3], 1):
+                ext = artifact_path.suffix.lower().lstrip('.') or 'png'
+                filename = f"generated_{job.job_id[:8] if job else 'unknown'}_{i}.{ext}"
+                result_lines.append(f"📎 {filename}")
+            
+            if len(response.artifacts) > 3:
+                result_lines.append(f"+{len(response.artifacts) - 3} more")
+            
+            results_value = "\n".join(result_lines)
+        elif state == "FAILED":
+            results_value = f"❌ {error_reason[:100] if error_reason else 'Generation failed'}"
+        else:
+            results_value = "No files"
+        
+        # Truncate results to field limit
+        if len(results_value) > 1024:
+            results_value = results_value[:1021] + "..."
+        
+        embed.add_field(
+            name="Results",
+            value=results_value,
+            inline=False
+        )
+        
+        # Prompt field with truncation
+        if prompt and prompt.strip():
+            prompt_text = prompt.strip()
+            if len(prompt_text) > 1024:
+                prompt_text = prompt_text[:1021] + "..."
+            
+            embed.add_field(
+                name="Prompt",
+                value=prompt_text,
+                inline=False
+            )
+        
+        # Footer with user and session info
+        footer_parts = []
+        if user:
+            footer_parts.append(f"Requested by {user.display_name}")
+        
+        if response and hasattr(response, 'model_name') and response.model_name:
+            footer_parts.append(f"Model: {response.model_name}")
+        else:
+            footer_parts.append("Model: —")
+        
+        if job and hasattr(job, 'job_id'):
+            footer_parts.append(f"Session: {job.job_id[:8]}")
+        
+        footer_text = " • ".join(footer_parts)
+        if len(footer_text) > 2048:
+            footer_text = footer_text[:2045] + "..."
+        
+        embed.set_footer(text=footer_text)
+        
+        return embed
 
 # Backward compatibility
 MessageRouter = Router
