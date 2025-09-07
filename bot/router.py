@@ -57,6 +57,7 @@ from .hear import hear_infer, hear_infer_from_url
 from .pdf_utils import PDFProcessor
 from .see import see_infer
 from .web import process_url
+from .vl.postprocess import sanitize_model_output
 from .utils.mention_utils import ensure_single_mention
 from .web_extraction_service import web_extractor
 from .utils.file_utils import download_file
@@ -1460,13 +1461,15 @@ class Router:
                             )
                         except Exception:
                             pass
-                        return await handle_twitter_syndication_to_vl(
+                        result = await handle_twitter_syndication_to_vl(
                             syn,
                             url,
-                            self._vl_describe_image_from_url,
+                            self._unified_vl_to_text_pipeline,
                             self.bot.system_prompts.get("vl_prompt"),
                             reply_style="ack+thoughts",
                         )
+                        # Syndication handler now returns final text, wrap in BotAction
+                        return BotAction(content=result)
 
                 # Tier 2 (optionally before API if syndication_first): X API [SFT]
                 if tweet_id and x_client is not None:
@@ -2336,6 +2339,78 @@ class Router:
             self.logger.warning(f"Unsupported attachment type: {filename} (msg_id: {message.id})")
             return BotAction(content="I can't process that type of file attachment.")
 
+    async def _unified_vl_to_text_pipeline(self, image_paths: List[str], user_caption: str = "", intent: str = "Thoughts?") -> BotAction:
+        """
+        Unified 1-hop VL → Text pipeline that enforces "1 in ➜ 1 out" rule.
+        
+        Args:
+            image_paths: List of local image file paths (up to VL_MAX_IMAGES)
+            user_caption: User's text caption or original message content
+            intent: Implicit intent when no caption (e.g., "Thoughts?" for naked images)
+            
+        Returns:
+            BotAction with single final response
+        """
+        try:
+            # Config variables
+            max_images = int(os.getenv("VL_MAX_IMAGES", "4"))
+            debug_flow = os.getenv("VL_DEBUG_FLOW", "0").lower() in ("1", "true", "yes", "on")
+            
+            # Limit images to max
+            limited_paths = image_paths[:max_images]
+            if debug_flow:
+                self.logger.info(f"VL_DEBUG_FLOW | processing {len(limited_paths)}/{len(image_paths)} images")
+            
+            # Get prompts
+            vl_prompt = self.bot.system_prompts.get("vl_prompt", "Analyze and describe this image.")
+            text_prompt = self.bot.system_prompts.get("text_prompt", "You are a helpful assistant.")
+            
+            # Step 1: Single VL call with all images
+            vl_results = []
+            for i, image_path in enumerate(limited_paths):
+                try:
+                    from .see import see_infer
+                    vision_result = await see_infer(image_path=image_path, prompt=vl_prompt)
+                    if vision_result and getattr(vision_result, 'content', None):
+                        raw_content = str(vision_result.content).strip()
+                        # Sanitize VL output immediately
+                        sanitized_content = sanitize_model_output(raw_content)
+                        vl_results.append(f"Image {i+1}: {sanitized_content}")
+                    else:
+                        vl_results.append(f"Image {i+1}: [No analysis available]")
+                except Exception as e:
+                    self.logger.error(f"VL processing failed for image {i+1}: {e}")
+                    vl_results.append(f"Image {i+1}: [Analysis failed: {str(e)[:100]}]")
+            
+            if not vl_results:
+                return BotAction(content="📷 I couldn't analyze any of the images. Please try again.", error=True)
+            
+            # Combine VL results
+            combined_vl_result = "\n\n".join(vl_results)
+            if debug_flow:
+                self.logger.info(f"VL_DEBUG_FLOW | sanitized VL result: {len(combined_vl_result)} chars")
+            
+            # Step 2: Prepare input for Text Flow
+            if user_caption.strip():
+                # User provided caption - include it as context
+                text_input = f"{combined_vl_result}\n\nUser message: {user_caption.strip()}"
+            else:
+                # No caption - use implicit intent (but don't echo it to Discord)
+                text_input = f"{combined_vl_result}\n\nInternal intent: {intent}"
+            
+            # Step 3: Single Text Flow call
+            from .brain import brain_infer
+            final_response = await brain_infer(text_input, context=text_prompt)
+            
+            if debug_flow:
+                self.logger.info(f"VL_DEBUG_FLOW | 1-hop pipeline complete: VL→Text→1 final response")
+            
+            return final_response
+            
+        except Exception as e:
+            self.logger.error(f"❌ Unified VL→Text pipeline failed: {e}", exc_info=True)
+            return BotAction(content="⚠️ An error occurred while processing the image(s). Please try again.", error=True)
+
     async def _process_image_attachment(self, message: Message, attachment) -> BotAction:
         self.logger.info(f"Processing image attachment: {attachment.filename} (msg_id: {message.id})")
         
@@ -2346,45 +2421,20 @@ class Router:
             await attachment.save(tmp_path)
             self.logger.debug(f"Saved image to temp file: {tmp_path} (msg_id: {message.id})")
 
-            # Use cached VL prompt instructions for vision; user text handled separately
-            vl_instructions = (self.bot.system_prompts.get("vl_prompt")
-                               or "Describe this image in detail, focusing on key visual elements, objects, text, and context.")
-            vision_response = await see_infer(image_path=tmp_path, prompt=vl_instructions)
-
-            if not vision_response or vision_response.error:
-                self.logger.warning(f"Vision model returned no/error response (msg_id: {message.id})")
-                return BotAction(content="I couldn't understand the image.", error=True)
-
-            vl_content = vision_response.content
-            # Truncate if response is too long for Discord
-            if len(vl_content) > 1999:
-                self.logger.info(f"VL response is too long ({len(vl_content)} chars), truncating for text fallback.")
-                vl_content = vl_content[:1999].rsplit('\n', 1)[0]
-
-            # Check for naked image attachment (implicit "Thoughts?" request)
-            # Strip bot mentions to check for empty content
-            mention_pattern = fr'^<@!?{self.bot.user.id}>\s*'
-            clean_content = re.sub(mention_pattern, '', (message.content or '').strip())
+            # Determine user caption and intent
+            user_caption = message.content.strip() if message.content else ""
+            intent = "Thoughts?" if not user_caption else user_caption
             
-            if not clean_content:
-                # Naked image - format as "ack+thoughts" style reply
-                self.logger.debug(f"Naked image attachment detected, using ack+thoughts format (msg_id: {message.id})")
-                return BotAction(content=f"Got your image — here's what I see:\n\n{vl_content}")
-            else:
-                # Image with text - use existing flow
-                user_text = clean_content
-                final_prompt = f"{user_text}\n\nImage analysis:\n{vl_content}"
-                return await brain_infer(final_prompt)
-
+            # Use unified VL → Text pipeline (enforces 1 in ➜ 1 out)
+            return await self._unified_vl_to_text_pipeline([tmp_path], user_caption, intent)
+            
         except Exception as e:
             self.logger.error(f"❌ Image processing failed: {e} (msg_id: {message.id})", exc_info=True)
-            
-            # Provide user-friendly error messages based on error type
             error_str = str(e).lower()
-            if "502" in error_str or "provider returned error" in error_str:
-                return BotAction(content="🔄 Vision processing failed. This could be due to a temporary service issue. Please try again in a moment.", error=True)
-            elif "timeout" in error_str:
-                return BotAction(content="⏱️ Vision processing timed out. Please try again with a smaller image.", error=True)
+            if "timeout" in error_str or "time" in error_str:
+                return BotAction(content="⏰ Image analysis took too long. Please try again with a smaller image.", error=True)
+            elif "memory" in error_str or "size" in error_str:
+                return BotAction(content="🧠 Image is too large to process. Please try uploading a smaller image.", error=True)
             elif "file format" in error_str or "unsupported" in error_str:
                 return BotAction(content="📷 Unsupported image format. Please try uploading a JPEG, PNG, or WebP image.", error=True)
             elif "file size" in error_str or "too large" in error_str:

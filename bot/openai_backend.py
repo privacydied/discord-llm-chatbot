@@ -14,6 +14,7 @@ try:
     from .exceptions import APIError
     from .util.logging import get_logger
     from .retry_utils import with_retry, VISION_RETRY_CONFIG, API_RETRY_CONFIG
+    from .action import BotAction
     # Optional: provider/model fallback for OpenRouter
     from .enhanced_retry import get_retry_manager
 except Exception:
@@ -493,10 +494,11 @@ async def generate_vl_response(
         
         logger.debug(f"🎨 Temperature: {temperature}")
         
-        # Combine VL system prompt with user prompt if provided
-        full_prompt = vl_system_prompt
+        # Move VL rules to system role, keep user message clean
+        system_prompt = vl_system_prompt
+        user_message_text = user_prompt if user_prompt else "Analyze this image."
+        
         if user_prompt:
-            full_prompt += f"\n\nAdditional context: {user_prompt}"
             logger.debug(f"🎨 Enhanced prompt with user context: +{len(user_prompt)} chars")
         
         # Handle data URLs directly, otherwise try to download and encode
@@ -514,14 +516,18 @@ async def generate_vl_response(
         logger.debug(f"🎨 Base64 data length: {len(image_content)} chars")
         logger.debug(f"🎨 Base64 preview: {image_content[:100]}...")
         
-        # Prepare the messages for vision model
+        # Prepare the messages for vision model with system/user role separation
         messages = [
             {
-                "role": "user",
+                "role": "system",
+                "content": system_prompt
+            },
+            {
+                "role": "user", 
                 "content": [
                     {
                         "type": "text",
-                        "text": full_prompt
+                        "text": user_message_text
                     },
                     {
                         "type": "image_url",
@@ -540,22 +546,46 @@ async def generate_vl_response(
         logger.debug(f"🎨 Max tokens: {max_tokens}")
         logger.info(f"🎨 Calling OpenAI VL API with model: {vl_model}")
         
-        # Generate the VL response
-        logger.debug(f"🎨 Sending request with messages: {len(messages)} messages")
-        response = await client.chat.completions.create(
-            model=vl_model,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
+        # Build initial params with all potential values
+        raw_params = {
+            "model": vl_model,
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
             **kwargs
-        )
+        }
+        
+        # OpenRouter allow-list: only supported parameters for /chat/completions
+        OPENROUTER_ALLOWED_PARAMS = {
+            "model", "messages", "temperature", "max_tokens", 
+            "top_p", "presence_penalty", "frequency_penalty", 
+            "stop", "stream"
+        }
+        
+        # Filter to only allowed parameters for OpenRouter compatibility
+        api_params = {k: v for k, v in raw_params.items() if k in OPENROUTER_ALLOWED_PARAMS}
+        
+        # Log filtered parameters for debugging
+        if config.get('VL_DEBUG_FLOW', '0') == '1':
+            logger.debug(f"🎨 VL payload keys: {list(api_params.keys())}")
+            filtered_out = set(raw_params.keys()) - set(api_params.keys())
+            if filtered_out:
+                logger.debug(f"🎨 Filtered out unsupported params: {filtered_out}")
+        
+        # Generate the VL response 
+        logger.debug(f"🎨 Sending request with messages: {len(messages)} messages")
+        
+        try:
+            response = await client.chat.completions.create(**api_params)
+        except Exception as e:
+            # Try VL model fallbacks on parameter or image errors
+            if "unexpected keyword" in str(e).lower() or "not supported" in str(e).lower():
+                logger.warning(f"🎨 VL call failed with param error, trying fallbacks: {e}")
+                response = await _try_vl_fallback_models(client, api_params, vl_model, str(e))
+            else:
+                raise
         
         # CHANGE: Enhanced error handling with detailed response logging
-        if response is None:
-            logger.error("❌ VL API returned None response")
-            raise APIError("VL API returned None response")
-        
-        # Minimal response logging for performance
         if response is None:
             logger.error("❌ VL API returned None response")
             raise APIError("VL API returned None response")
@@ -584,13 +614,42 @@ async def generate_vl_response(
         
         logger.info("✅ VL response completed")
         
-        return {
-            'text': response_text,
-            'model': vl_model,
-            'usage': usage_info,
-            'backend': 'openai_vl'
-        }
+        return BotAction(
+            content=response_text,
+            meta={'usage': usage_info}
+        )
     
     except Exception as e:
         logger.error(f"❌ Error in generate_vl_response: {e}")
         raise APIError(f"Failed to generate VL response: {str(e)}")
+
+
+async def _try_vl_fallback_models(client, api_params, failed_model, error_msg):
+    """Try VL model fallbacks when primary model fails with param/image errors."""
+    from .config import load_config
+    config = load_config()
+    
+    fallback_models = config.get('VL_MODEL_FALLBACKS', 'openai/gpt-4o-mini,anthropic/claude-3.5-sonnet').split(',')
+    fallback_models = [m.strip() for m in fallback_models if m.strip() and m.strip() != failed_model]
+    
+    if not fallback_models:
+        logger.error(f"❌ No VL fallback models configured, original error: {error_msg}")
+        raise APIError(f"VL model {failed_model} failed and no fallbacks available: {error_msg}")
+    
+    for fallback_model in fallback_models:
+        try:
+            logger.info(f"🎨 Trying VL fallback model: {fallback_model}")
+            fallback_params = api_params.copy()
+            fallback_params["model"] = fallback_model
+            
+            response = await client.chat.completions.create(**fallback_params)
+            logger.info(f"✅ VL fallback successful with: {fallback_model}")
+            return response
+            
+        except Exception as fallback_error:
+            logger.warning(f"🎨 VL fallback {fallback_model} also failed: {fallback_error}")
+            continue
+    
+    # All fallbacks failed
+    logger.error(f"❌ All VL fallbacks exhausted, original error: {error_msg}")
+    raise APIError(f"VL model {failed_model} and all fallbacks failed: {error_msg}")
