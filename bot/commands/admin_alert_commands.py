@@ -49,6 +49,7 @@ class AlertSession:
     mention_everyone: bool = False
     current_step: str = "select_channels"
     composer_message_id: Optional[int] = None
+    composer_ready: bool = False
 
 
 class AdminAlertManager:
@@ -119,6 +120,32 @@ class AdminAlertManager:
         
         return session
     
+    def _validate_embed_limits(self, embed: discord.Embed) -> discord.Embed:
+        """Validate and truncate embed to stay within Discord limits [REH]"""
+        # Title: 256 chars max
+        if embed.title and len(embed.title) > 256:
+            embed.title = embed.title[:253] + "..."
+        
+        # Description: 4096 chars max  
+        if embed.description and len(embed.description) > 4096:
+            embed.description = embed.description[:4093] + "..."
+        
+        # Fields: 25 max, name 256 chars, value 1024 chars each
+        if len(embed.fields) > 25:
+            embed._fields = embed._fields[:25]
+        
+        for field in embed.fields:
+            if len(field.name) > 256:
+                field.name = field.name[:253] + "..."
+            if len(field.value) > 1024:  
+                field.value = field.value[:1021] + "..."
+        
+        # Footer: 2048 chars max
+        if embed.footer and embed.footer.text and len(embed.footer.text) > 2048:
+            embed.set_footer(text=embed.footer.text[:2045] + "...")
+            
+        return embed
+
     async def build_composer_embed(self, session: AlertSession) -> discord.Embed:
         embed = discord.Embed(
             title="🚨 Admin Alert Composer",
@@ -181,7 +208,7 @@ class AdminAlertManager:
             embed.description = "⚠️ **Final confirmation required** - React with 📤 to send alert."
         
         embed.set_footer(text=f"Session: {session.session_id}")
-        return embed
+        return self._validate_embed_limits(embed)
     
     async def get_accessible_channels(self) -> List[discord.TextChannel]:
         accessible_channels = []
@@ -299,6 +326,9 @@ class AdminAlertCommands(commands.Cog):
             for emoji in reactions:
                 await message.add_reaction(emoji)
             
+            # Mark composer as ready after all setup is complete
+            session.composer_ready = True
+            
             self.logger.info(f"🚀 Alert session started for user {ctx.author.id}")
             
         except Exception as e:
@@ -315,6 +345,14 @@ class AdminAlertCommands(commands.Cog):
         if not session or session.composer_message_id != reaction.message.id:
             return
         
+        # Ready gate: ignore reactions until composer is fully initialized
+        if not session.composer_ready:
+            try:
+                await reaction.remove(user)
+            except:
+                pass  # Ignore removal failures
+            return
+        
         emoji = str(reaction.emoji)
         
         try:
@@ -329,6 +367,11 @@ class AdminAlertCommands(commands.Cog):
             elif emoji == '❌':
                 await self._handle_cancel(reaction, user, session)
             
+        except discord.HTTPException as e:
+            # Structured logging for 50035 diagnostics [REH]
+            response_text = getattr(e.response, 'text', 'N/A') if hasattr(e, 'response') else 'N/A'
+            self.logger.error(f"❌ Discord API error handling reaction {emoji}: status={e.status}, code={e.code}, response_length={len(str(response_text))}")
+            await user.send("❌ An error occurred. Please try again.")
         except Exception as e:
             self.logger.error(f"❌ Error handling reaction {emoji}: {e}")
             await user.send("❌ An error occurred. Please try again.")
@@ -515,18 +558,22 @@ class AdminAlertCommands(commands.Cog):
         )
         
         await user.send(embed=embed)
-        await user.send("Send the numbers of channels you want to alert (e.g., `1,3,5`):")
+        await user.send("📋 **Step 2: Select Channels**\n\nReply with the numbers of channels you want to alert (e.g., `1,3,5`):")
         
-        # Update composer
-        composer_embed = await self.alert_manager.build_composer_embed(session)
-        await reaction.message.edit(embed=composer_embed)
+        # Update composer (embed-only, no components from reaction)
+        try:
+            composer_embed = await self.alert_manager.build_composer_embed(session)
+            await reaction.message.edit(embed=composer_embed, view=None)  # Explicitly remove components
+        except discord.HTTPException as e:
+            self.logger.error(f"❌ Failed to update composer embed in channel selection: status={e.status}, code={e.code}")
+            raise
     
     async def _handle_content_composition(self, reaction, user, session):
         session.current_step = "compose_content"
         
         await user.send(
-            "✏️ **Compose Alert Content**\n\n"
-            "Please provide your alert content. You can include:\n"
+            "✏️ **Step 3: Compose Content**\n\n"
+            "Reply with your alert content. You can include:\n"
             "• Message text\n"
             "• Embed title (prefix with `TITLE: `)\n"
             "• Embed description (prefix with `DESC: `)\n\n"
@@ -538,8 +585,13 @@ class AdminAlertCommands(commands.Cog):
             "```"
         )
         
-        composer_embed = await self.alert_manager.build_composer_embed(session)
-        await reaction.message.edit(embed=composer_embed)
+        # Update composer (embed-only, no components from reaction)
+        try:
+            composer_embed = await self.alert_manager.build_composer_embed(session)
+            await reaction.message.edit(embed=composer_embed, view=None)  # Explicitly remove components
+        except discord.HTTPException as e:
+            self.logger.error(f"❌ Failed to update composer embed in content composition: status={e.status}, code={e.code}")
+            raise
     
     async def _handle_preview(self, reaction, user, session):
         if not session.destinations:
@@ -582,8 +634,12 @@ class AdminAlertCommands(commands.Cog):
             await user.send(f"**PREVIEW:** {session.content}")
         
         session.current_step = "confirm_send"
-        composer_embed = await self.alert_manager.build_composer_embed(session)
-        await reaction.message.edit(embed=composer_embed)
+        try:
+            composer_embed = await self.alert_manager.build_composer_embed(session)
+            await reaction.message.edit(embed=composer_embed, view=None)  # Explicitly remove components
+        except discord.HTTPException as e:
+            self.logger.error(f"❌ Failed to update composer embed in preview: status={e.status}, code={e.code}")
+            raise
     
     async def _handle_send_confirmation(self, reaction, user, session):
         if session.current_step != "confirm_send":
