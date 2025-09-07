@@ -218,6 +218,8 @@ class LLMBot(commands.Bot):
                     self.metrics.define_counter("x.syndication.cache_hit_locked", "Syndication: positive cache hit (within lock)") 
                     self.metrics.define_counter("x.syndication.neg_cache_hit_locked", "Syndication: negative cache hit (within lock)") 
                     self.metrics.define_counter("x.syndication.hit", "Syndication: final tier hit (produced text)") 
+                    # Vision routing counters [CMV][REH]
+                    self.metrics.define_counter("vision.route.vl_only_bypass_t2i", "VL-only bypass of text-to-image", labels=["route"])
                     self.logger.debug(
                         "📈 Registered gate counters",
                         extra={"event": "metrics.define", "counters": ["gate.allowed", "gate.blocked"]},

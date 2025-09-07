@@ -29,24 +29,24 @@ except Exception:
 async def handle_twitter_syndication_to_vl(
     tweet_json: Dict[str, Any],
     url: str,
-    vl_handler_func,
+    unified_vl_pipeline_func,
     prompt_guidelines: Optional[str] = None,
     timeout_s: Optional[float] = None,
     reply_style: str = "ack+thoughts",
 ) -> str:
     """
-    Handle Twitter/X link to VL flow using syndication data and full-resolution images.
+    Handle Twitter/X link to VL flow using syndication data and unified 1-hop pipeline.
     
     Args:
         tweet_json: Syndication JSON data from Twitter/X
         url: Original tweet URL for context
-        vl_handler_func: Function to handle individual image VL analysis (e.g., _vl_describe_image_from_url)
+        unified_vl_pipeline_func: Function that handles unified VL→Text pipeline (no midstream sends)
         prompt_guidelines: Optional override for VL prompt guidelines; if None, uses default VL_PROMPT_GUIDELINES.
         timeout_s: Optional per-image timeout (seconds). If None, uses env `VL_IMAGE_TIMEOUT_S` or defaults to 12s.
         reply_style: Reply formatting style - "ack+thoughts", "summarize", or "verbatim+thoughts"
         
     Returns:
-        Formatted string with tweet text and all image descriptions
+        Single final response from unified pipeline (no preview sends)
     """
     data = extract_text_and_images_from_syndication(tweet_json)
     
@@ -75,153 +75,64 @@ async def handle_twitter_syndication_to_vl(
             pass
     
     if not image_urls:
-        # Keep existing behavior: return text-only or handle as needed
+        # No images - return text-only or fallback
         log.info("No images found via syndication; returning text only")
         return text if text else "No content or images available."
     
-    # Process all high-res images through VL
-    descriptions: List[str] = []
-    metrics = None
-
-    # Metrics are optional and non-breaking
+    # Use unified VL→Text pipeline (no midstream sends, enforces 1 out)
     try:
-        from bot.metrics import METRICS  # type: ignore
-
-        metrics = METRICS
-    except Exception:
-        descriptions = []
-    
-    # SYND_DEBUG_MEDIA_PICK env-gated debug logging [IV]
-    debug_media_pick = os.getenv("SYND_DEBUG_MEDIA_PICK", "0").lower() in ("1", "true", "yes", "on")
-    if debug_media_pick:
-        preview_urls = image_urls[:2] if len(image_urls) >= 2 else image_urls
-        card_ignored = data.get("had_card", False) and data.get("source") != "card"
-        log.info(
-            f"SYND_DEBUG_MEDIA_PICK | source={data.get('source', 'unknown')} "
-            f"count={len(image_urls)} "
-            f"preview={preview_urls} "
-            f"card_ignored_due_to_native={card_ignored}"
-        )
-    
-    # Log which image we're analyzing for debug purposes
-    debug = log.isEnabledFor(logging.DEBUG)
-    # Determine effective timeout
-    if timeout_s is None:
-        try:
-            eff_timeout = float(os.getenv("VL_IMAGE_TIMEOUT_S", "12"))
-        except Exception:
-            eff_timeout = 12.0
-    else:
-        eff_timeout = float(timeout_s)
-    guidelines = (
-        prompt_guidelines.strip()
-        if isinstance(prompt_guidelines, str) and prompt_guidelines.strip()
-        else VL_PROMPT_GUIDELINES
-    )
-
-    sem = asyncio.Semaphore(VL_CONCURRENCY_LIMIT)
-
-    async def _process(idx: int, image_url: str) -> Dict[str, Any]:
-        log.debug(f"Processing image {idx}/{total}: {image_url}")
-        if metrics:
-            try:
-                metrics.counter("x.syndication.vl_attempt").inc(1)
-            except Exception:
-                pass
-        # Provide tweet text as context to VL adapter; keep concise/factual guidelines
-        caption_ctx = f"Tweet caption: {text}" if text else f"Tweet URL: {url}"
-        prompt = (
-            f"{caption_ctx}\n"
-            f"{guidelines}\n"
-            f"Describe photo {idx} of {total} factually and concisely."
-        )
-        try:
-            async with sem:
+        # Download images to temp files
+        import tempfile
+        import aiohttp
+        temp_paths = []
+        
+        max_images = int(os.getenv("VL_MAX_IMAGES", "4"))
+        limited_urls = image_urls[:max_images]
+        
+        async with aiohttp.ClientSession() as session:
+            for i, image_url in enumerate(limited_urls):
                 try:
-                    desc = await asyncio.wait_for(
-                        vl_handler_func(image_url, prompt=prompt),
-                        timeout=eff_timeout,
-                    )
-                except asyncio.TimeoutError:
-                    log.warning(f"VL analysis timed out for image {idx} after {eff_timeout}s")
-                    if metrics:
-                        try:
-                            metrics.counter("x.syndication.vl_timeout").inc(1)
-                        except Exception:
-                            pass
-                    return {
-                        "idx": idx,
-                        "text": f"📷 Photo {idx}/{total} — analysis failed (timeout)",
-                        "ok": False,
-                    }
-            if desc:
-                if metrics:
-                    try:
-                        metrics.counter("x.syndication.vl_success").inc(1)
-                    except Exception:
-                        pass
-                return {"idx": idx, "text": f"📷 Photo {idx}/{total}\n{desc}", "ok": True}
+                    async with session.get(image_url) as response:
+                        if response.status == 200:
+                            # Create temp file with appropriate extension
+                            suffix = ".jpg"
+                            if "png" in image_url.lower():
+                                suffix = ".png"
+                            elif "webp" in image_url.lower():
+                                suffix = ".webp"
+                            
+                            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp_file:
+                                data = await response.read()
+                                tmp_file.write(data)
+                                temp_paths.append(tmp_file.name)
+                                log.debug(f"Downloaded image {i+1} to {tmp_file.name}")
+                        else:
+                            log.warning(f"Failed to download image {i+1}: HTTP {response.status}")
+                except Exception as e:
+                    log.warning(f"Error downloading image {i+1}: {e}")
+        
+        if not temp_paths:
+            return f"Got the tweet but couldn't download any images."
+        
+        # Call unified pipeline with tweet text as caption
+        try:
+            import os
+            result = await unified_vl_pipeline_func(temp_paths, text, "Tweet analysis")
+            
+            # Extract content from BotAction if that's what's returned
+            if hasattr(result, 'content'):
+                return result.content
             else:
-                if metrics:
-                    try:
-                        metrics.counter("x.syndication.vl_failure").inc(1)
-                    except Exception:
-                        pass
-                return {"idx": idx, "text": f"📷 Photo {idx}/{total} — skipped (fetch failed)", "ok": False}
-        except Exception as e:
-            log.warning(f"VL analysis failed for image {idx}: {e}")
-            if metrics:
+                return str(result)
+                
+        finally:
+            # Clean up temp files
+            for path in temp_paths:
                 try:
-                    metrics.counter("x.syndication.vl_failure").inc(1)
+                    os.unlink(path)
                 except Exception:
                     pass
-            return {"idx": idx, "text": f"📷 Photo {idx}/{total} — skipped (fetch failed)", "ok": False}
-
-    tasks = [_process(idx, image_url) for idx, image_url in enumerate(image_urls, start=1)]
-    results: List[Dict[str, Any]] = await asyncio.gather(*tasks)
-    # Preserve order by idx
-    results.sort(key=lambda r: r.get("idx", 0))
-    descriptions = [r["text"] for r in results]
-    successes = sum(1 for r in results if r.get("ok"))
-    timeouts = sum(1 for r in results if isinstance(r, dict) and ("timeout" in r.get("text", "")))
-    
-    # Format response based on reply_style
-    try:
-        log.info(
-            "Syndication VL summary",
-            extra={
-                "detail": {
-                    "url": url,
-                    "found": len(image_urls),
-                    "analyzed": successes,
-                    "timeouts": timeouts,
-                    "concurrency": VL_CONCURRENCY_LIMIT,
-                    "timeout_s": eff_timeout,
-                    "reply_style": reply_style,
-                }
-            },
-        )
-    except Exception:
-        pass
-    
-    if not descriptions:
-        return f"Got the tweet but no images could be processed."
-        
-    # Format based on reply style
-    if reply_style == "ack+thoughts":
-        # Concise acknowledgment + insights, minimal source text
-        tweet_gist = text[:100] + "..." if text and len(text) > 100 else text
-        if tweet_gist:
-            return f"Got the tweet (\"{tweet_gist}\") — here's what the images show:\n\n" + "\n\n".join(descriptions)
-        else:
-            return f"Got the tweet — here's what the images show:\n\n" + "\n\n".join(descriptions)
-    elif reply_style == "summarize":
-        # Brief summary + key insights
-        base_text = text if text else f"Tweet from {url}"
-        summary_line = f"Summary: {successes}/{len(image_urls)} images analyzed"
-        return f"{base_text}\n{summary_line}\n\n" + "\n\n".join(descriptions)
-    else:  # verbatim+thoughts (legacy default)
-        # Full text + detailed analysis
-        base_text = text if text else f"Tweet from {url}"
-        header = f"{base_text}\nPhotos analyzed: {successes}/{len(image_urls)}"
-        return f"{header}\n\n" + "\n\n".join(descriptions)
+                    
+    except Exception as e:
+        log.error(f"Unified VL pipeline failed for syndication: {e}")
+        return f"Got the tweet but image analysis failed: {str(e)[:100]}"

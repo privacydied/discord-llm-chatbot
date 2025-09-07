@@ -65,12 +65,12 @@ async def see_infer(image_path: str, prompt: str = None, model_override: str | N
             model_override=model_override if model_override else None
         )
         
-        # Handle the response format from generate_vl_response
-        if 'text' in response:
-            vl_result = response['text']
+        # Handle the response format from generate_vl_response (now returns BotAction)
+        if isinstance(response, BotAction) and response.content:
+            vl_result = response.content
             logger.info(f"VL model returned: {len(vl_result)} chars")
             logger.debug(f"VL result preview: '{vl_result[:100]}...'")
-            return BotAction(content=vl_result)
+            return response  # Return the BotAction directly
         else:
             logger.error(f"Unexpected VL response format: {response}")
             raise InferenceError("Unexpected response format from vision model")
