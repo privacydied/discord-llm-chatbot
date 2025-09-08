@@ -6,22 +6,22 @@ with or without bot mention in guild channels. Delegates to the existing
 vision orchestrator system for actual processing.
 
 Enhancements:
-- Allow attachment-fed prompts when no inline text is provided (text/* or .txt/.md/.rtf/.json, ≤ 64 KB)
+- Allow attachment-fed prompts when no inline text is provided (text/* or .txt/.md/.rtf/.json/.yaml/.yml, ≤ 256 KB)
 - Provide a single, stylish help embed card (no job submission on help path)
 - Add a debug log indicating the prompt source (inline|attachment)
 """
 
 import os
 import re
-import tempfile
+import json
 from pathlib import Path
 import discord
 from discord.ext import commands
-from typing import Optional
+from typing import Optional, Tuple, Dict, Any
 
 from bot.util.logging import get_logger
 from bot.config import load_config
-from bot.utils.file_utils import download_file
+ 
 
 logger = get_logger(__name__)
 
@@ -35,6 +35,117 @@ class ImgCommands(commands.Cog):
         self.logger = logger
         
         self.logger.info("!img prefix commands cog initialized")
+
+    # === Helpers for attachment-fed prompts ===
+    def _eligible_text_attachment(self, att: discord.Attachment) -> bool:
+        """Return True if the attachment is likely text based on extension or content_type.
+        Accepts .txt/.md/.rtf/.json/.yaml/.yml, and tolerates missing or octet-stream content types.
+        """
+        try:
+            filename = (att.filename or "").lower()
+            ext = Path(filename).suffix
+            ctype = (att.content_type or "").lower()
+        except Exception:
+            filename, ext, ctype = "", "", ""
+
+        allowed_exts = {".txt", ".md", ".rtf", ".json", ".yaml", ".yml"}
+        if ext in allowed_exts:
+            return True
+
+        # Discord often leaves content_type None or application/octet-stream for .txt
+        if not ctype or ctype == "application/octet-stream":
+            return True
+
+        if ctype.startswith("text/"):
+            return True
+        if "json" in ctype or "yaml" in ctype:
+            return True
+        return False
+
+    async def _read_attachment_text(self, att: discord.Attachment, limit_bytes: int) -> Optional[str]:
+        """Read and decode attachment text using Discord's API with size checks and sanitization."""
+        # Enforce size cap before reading
+        try:
+            size = int(getattr(att, 'size', 0) or 0)
+            if size and size > limit_bytes:
+                return None
+        except Exception:
+            pass
+
+        try:
+            # Read up to limit+1 to detect oversize
+            data = await att.read(limit_bytes + 1)
+            if not isinstance(data, (bytes, bytearray)):
+                return None
+            if len(data) > limit_bytes:
+                return None
+            try:
+                text = data.decode("utf-8")
+            except Exception:
+                text = data.decode("latin-1", errors="ignore")
+            text = text.replace("\x00", "")
+            text = re.sub(r"\s+", " ", text).strip()
+            return text or None
+        except Exception:
+            return None
+
+    def _parse_prompt_blob(self, blob: str) -> Tuple[Optional[str], Dict[str, Any]]:
+        """Parse a blob into (prompt, params). Supports optional fenced JSON with keys.
+        Keys: prompt, negative_prompt, width, height, steps, guidance_scale, seed, model
+        """
+        params: Dict[str, Any] = {}
+        if not blob:
+            return None, params
+
+        s = blob.strip()
+        # Strip triple backtick code fences if present
+        # e.g., ```json { ... } ``` or ``` { ... } ```
+        fence_match = re.match(r"^```[a-zA-Z0-9_-]*\s*(.*?)\s*```$", s, flags=re.S)
+        if fence_match:
+            s = fence_match.group(1).strip()
+
+        # If JSON-like, extract known fields
+        candidate = s.lstrip()
+        if candidate.startswith("{"):
+            try:
+                obj = json.loads(candidate)
+                if isinstance(obj, dict):
+                    # Prompt
+                    p = obj.get("prompt")
+                    if isinstance(p, str):
+                        params_prompt = p.strip()
+                    else:
+                        params_prompt = None
+                    # Optional params
+                    if "negative_prompt" in obj and isinstance(obj.get("negative_prompt"), str):
+                        params["negative_prompt"] = obj.get("negative_prompt").strip()
+                    for k in ("width", "height", "steps", "seed"):
+                        if k in obj:
+                            try:
+                                params[k] = int(obj[k])
+                            except Exception:
+                                pass
+                    if "guidance_scale" in obj:
+                        try:
+                            params["guidance_scale"] = float(obj["guidance_scale"])
+                        except Exception:
+                            pass
+                    if "model" in obj and isinstance(obj.get("model"), str):
+                        params["model"] = obj.get("model").strip()
+
+                    # Enforce max length for prompt
+                    if params_prompt:
+                        return params_prompt[:2000], params
+                    # If no prompt key, fall back to plain text using the original blob
+                    s_plain = s.strip()
+                    return (s_plain[:2000] if s_plain else None), params
+            except Exception:
+                # Fall through to treat as plain text
+                pass
+
+        # Plain text prompt
+        s = s.strip()
+        return (s[:2000] if s else None), params
     
     @commands.command(name="img", aliases=["image"], help="Generate images from text prompts")
     async def img_command(self, ctx, *, prompt: Optional[str] = None):
@@ -51,6 +162,7 @@ class ImgCommands(commands.Cog):
             return
 
         final_prompt: Optional[str] = None
+        parsed_params: Dict[str, Any] = {}
         inline = (prompt or "").strip()
         if inline:
             # Inline prompt takes precedence
@@ -64,72 +176,40 @@ class ImgCommands(commands.Cog):
         else:
             # No inline prompt: try to use first eligible attachment as prompt
             attachments = getattr(ctx.message, 'attachments', []) or []
-            eligible_exts = {".txt", ".md", ".rtf", ".json"}
-            max_bytes = 0
             try:
-                max_bytes = int(os.getenv("IMG_ATTACHMENT_MAX_BYTES", "65536"))
+                max_bytes = int(os.getenv("IMG_ATTACHMENT_MAX_BYTES", "262144"))
             except Exception:
-                max_bytes = 65536
+                max_bytes = 262144
             chosen = None
             for att in attachments:
-                try:
-                    ct = (att.content_type or "").lower()
-                except Exception:
-                    ct = ""
-                try:
-                    ext = Path(att.filename or "").suffix.lower()
-                except Exception:
-                    ext = ""
-                size_ok = True
-                try:
-                    size_ok = int(getattr(att, 'size', 0) or 0) <= max_bytes
-                except Exception:
-                    size_ok = True
-                if (ct.startswith("text/") or ext in eligible_exts) and size_ok:
+                if self._eligible_text_attachment(att):
                     chosen = att
                     break
 
             if chosen is not None:
-                tmp_path = None
                 try:
-                    with tempfile.NamedTemporaryFile(delete=False) as tf:
-                        tmp_path = Path(tf.name)
-                    ok = await download_file(chosen.url, tmp_path)
-                    if not ok:
-                        await ctx.send(embed=self._build_img_help_embed())
-                        return
-                    # Guard read size and decode
-                    raw = b""
-                    with open(tmp_path, "rb") as f:
-                        raw = f.read(max_bytes + 1)
-                    try:
-                        text = raw.decode("utf-8", errors="ignore")
-                    except Exception:
-                        text = raw.decode("latin-1", errors="ignore")
-                    # Sanitize: strip NULs, collapse whitespace
-                    text = text.replace("\x00", "")
-                    text = re.sub(r"\s+", " ", text).strip()
-                    if text:
-                        final_prompt = text
-                        try:
-                            self.logger.debug(
-                                f"IMG.prompt_source=attachment file={chosen.filename} size={getattr(chosen, 'size', 0)} msg_id={ctx.message.id}"
-                            )
-                        except Exception:
-                            pass
+                    blob = await self._read_attachment_text(chosen, max_bytes)
+                    if blob:
+                        p, params = self._parse_prompt_blob(blob)
+                        if p:
+                            final_prompt = p
+                            parsed_params = params or {}
+                            try:
+                                self.logger.debug(
+                                    f"IMG.prompt_source=attachment file={chosen.filename} size={getattr(chosen, 'size', 0)} msg_id={ctx.message.id}"
+                                )
+                            except Exception:
+                                pass
+                        else:
+                            await ctx.send(embed=self._build_img_help_embed())
+                            return
                     else:
                         await ctx.send(embed=self._build_img_help_embed())
                         return
-                except Exception as e:
-                    self.logger.warning(f"Attachment prompt extraction failed: {e}")
+                except Exception:
+                    # Quietly fall back to help card on read/parse failure
                     await ctx.send(embed=self._build_img_help_embed())
                     return
-                finally:
-                    try:
-                        if tmp_path and tmp_path.exists():
-                            tmp_path.unlink(missing_ok=True)
-                    except Exception:
-                        pass
             else:
                 # No eligible attachment
                 await ctx.send(embed=self._build_img_help_embed())
@@ -160,6 +240,7 @@ class ImgCommands(commands.Cog):
                 self.guidance_scale = 7.0
                 self.seed = None
                 self.preferred_provider = None
+                self.model = None
         
         class MockIntentResult:
             def __init__(self, prompt: str):
@@ -169,6 +250,20 @@ class ImgCommands(commands.Cog):
         if hasattr(self.bot, 'router') and self.bot.router:
             try:
                 mock_intent = MockIntentResult(final_prompt)
+                # Gently apply parsed params (only keys present)
+                if parsed_params:
+                    ep = mock_intent.extracted_params
+                    for k in ("negative_prompt", "width", "height", "steps", "guidance_scale", "seed"):
+                        if k in parsed_params and parsed_params[k] is not None:
+                            try:
+                                setattr(ep, k, parsed_params[k])
+                            except Exception:
+                                pass
+                    if "model" in parsed_params and isinstance(parsed_params["model"], str):
+                        try:
+                            ep.model = parsed_params["model"]
+                        except Exception:
+                            pass
                 action = await self.bot.router._handle_vision_generation(
                     mock_intent, 
                     ctx.message, 
@@ -194,12 +289,12 @@ class ImgCommands(commands.Cog):
             color=BRAND_PURPLE,
         )
         embed.add_field(name="Usage", value="!img <description>", inline=False)
-        embed.add_field(name="Example", value="!img a kitten playing with yarn", inline=False)
+        embed.add_field(name="Examples", value="!img a kitten playing with yarn\n(or) attach message.txt with your prompt and send !img", inline=False)
         embed.add_field(
             name="Use a .txt file:",
             value=(
                 "Attach message.txt with your prompt and send !img (no text needed).\n"
-                "Supported: .txt, .md, .rtf, .json (≤ 64 KB)"
+                "Supported: .txt, .md, .rtf, .json, .yaml, .yml (≤ 256 KB). JSON with a \"prompt\" key is supported."
             ),
             inline=False,
         )
