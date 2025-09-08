@@ -118,3 +118,4 @@ vision_data/budgets.json
 vision_data/ledger.jsonl
 vision_data/spend_ledger.jsonl
 vision_data/transactions.jsonl
+AGENTS.md
