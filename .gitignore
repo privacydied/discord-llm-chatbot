@@ -119,3 +119,20 @@ vision_data/ledger.jsonl
 vision_data/spend_ledger.jsonl
 vision_data/transactions.jsonl
 AGENTS.md
+# --- Large / generated artifacts: keep out of Git ---
+# Vector DB / cache
+chroma_db/
+
+# Whisper / STT downloaded caches & weights
+stt/cache/
+
+# TTS models & big voice payloads
+tts/onnx/
+tts/*.bin
+tts/voices.json
+tts/temp_voices.json
+tts/*voices*.json
+
+# Safety: common heavyweight formats (scoped)
+tts/**/*.onnx
+chroma_db/**/*.sqlite3
