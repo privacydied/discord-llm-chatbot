@@ -1921,7 +1921,7 @@ class Router:
                 return None
             
             # 1) Direct trigger bypass (highest priority)
-            direct_vision = self._detect_direct_vision_triggers(content_clean)
+            direct_vision = self._detect_direct_vision_triggers(content_clean, message)
             if direct_vision:
                 self.logger.info(
                     f"🎨 Precheck: Direct vision bypass (reason: {direct_vision['bypass_reason']}) (msg_id: {message.id})"
@@ -1963,7 +1963,8 @@ class Router:
                 return await self._handle_vision_generation(intent_result, message, context_str)
             
             # 2) Intent router decision (lower priority than direct bypass)
-            if self._vision_intent_router:
+            allow_nlp_triggers = bool(self.config.get("VISION_ALLOW_NLP_TRIGGERS", False))
+            if allow_nlp_triggers and self._vision_intent_router:
                 try:
                     intent_result = await self._vision_intent_router.determine_intent(
                         user_message=content_clean,
@@ -2012,7 +2013,7 @@ class Router:
         """
         self.logger.info(f"route=text | Routing to text flow. (msg_id: {message.id})")
         
-        # Perception beats generation: suppress gen triggers if images/Twitter present
+        # Perception beats generation: suppress gen triggers if images/any-URL present (from original message)
         perception_guard = False
         try:
             has_img_attachments = any(
@@ -2022,15 +2023,27 @@ class Router:
         except Exception:
             has_img_attachments = False
         try:
-            url_candidates = re.findall(r'https?://\S+', content or '')
+            # IMPORTANT: check URLs on the original message, not sanitized content
+            raw_text = (message.content or '')
+            url_candidates = re.findall(r'https?://\S+', raw_text)
+            has_any_url = bool(url_candidates)
             has_twitter_url = any(self._is_twitter_url(u) for u in url_candidates)
         except Exception:
+            has_any_url = False
             has_twitter_url = False
-        if has_img_attachments or has_twitter_url:
+        if has_img_attachments or has_any_url or has_twitter_url:
             perception_guard = True
             try:
-                route = 'attachments' if has_img_attachments else 'x_syndication'
+                route = 'attachments' if has_img_attachments else ('x_syndication' if has_twitter_url else 'links')
                 self._metric_inc("vision.route.vl_only_bypass_t2i", {"route": route})
+            except Exception:
+                pass
+            # Minimal breadcrumb for verification
+            try:
+                self.logger.info(
+                    "vision.guard.blocked reason=links_or_attachments",
+                    extra={"event": "vision.guard.blocked", "reason": "links_or_attachments", "msg_id": message.id},
+                )
             except Exception:
                 pass
 
@@ -2038,9 +2051,9 @@ class Router:
         if perception_notes:
             perception_guard = True
 
-        # Check for direct vision triggers first (bypasses rate-limited intent detection)
+        # Check for direct vision triggers first (explicit tokens only)
         if content.strip() and not perception_guard:
-            direct_vision = self._detect_direct_vision_triggers(content)
+            direct_vision = self._detect_direct_vision_triggers(content, message)
             if direct_vision:
                 self.logger.info(
                     f"route=gen | 🎨 Direct vision bypass triggered (reason: {direct_vision['bypass_reason']}) (msg_id: {message.id})"
@@ -2062,7 +2075,8 @@ class Router:
                 return await self._handle_vision_generation(intent_result, message, context_str)
         
         # Check if this should be routed to Vision generation [CA][SFT]
-        if self._vision_intent_router and content.strip():
+        allow_nlp_triggers = bool(self.config.get("VISION_ALLOW_NLP_TRIGGERS", False))
+        if allow_nlp_triggers and (not perception_guard) and self._vision_intent_router and content.strip():
             try:
                 intent_result = await self._vision_intent_router.determine_intent(
                     user_message=content,
@@ -3624,7 +3638,7 @@ class Router:
                 # Never let metrics failures break the application
                 self.logger.debug(f"Metrics increment failed for {metric_name}: {e}")
 
-    def _detect_direct_vision_triggers(self, content: str) -> Optional[Dict[str, Any]]:
+    def _detect_direct_vision_triggers(self, content: str, message: Optional[Message] = None) -> Optional[Dict[str, Any]]:
         """
         Direct pattern matching for obvious vision requests to bypass rate-limited intent detection.
         Returns extracted vision parameters if triggers found, None otherwise.
@@ -3632,58 +3646,48 @@ class Router:
         """
         import re
         
-        # Normalize content: lowercase, strip mentions/whitespace, collapse punctuation
-        content_clean = content.lower().strip()
-        content_clean = re.sub(r'[!.?]+', '.', content_clean)  # Collapse punctuation
-        
-        # Comprehensive trigger patterns (case-insensitive, punctuation tolerant)
-        trigger_patterns = [
-            # generate variants
-            r'generate\s+(an?\s+)?(image|picture|pic|photo|art|drawing|render)',
-            r'create\s+(an?\s+)?(image|picture|pic|photo|art|drawing|render)', 
-            r'make\s+(an?\s+)?(image|picture|pic|photo|art|drawing|render)',
-            r'draw\s+(me\s+)?(an?\s+)?(image|picture|pic|photo|art|drawing|render)',  # "draw me a..." with media noun
-            r'render\s+(an?\s+)?(image|picture|pic|photo|art|drawing|render)',        # "render something" with media noun
-            r'paint\s+(an?\s+)?(image|picture|pic|photo|art|drawing|render)',         # "paint a..." with media noun
-        ]
-        
-        # Debug logging for trigger detection
-        debug_triggers = os.getenv("VISION_TRIGGER_DEBUG", "0").lower() in ("1", "true", "yes", "on")
-        
-        for pattern in trigger_patterns:
-            match = re.search(pattern, content_clean)
-            if match:
-                # Extract everything after the trigger as the prompt
-                trigger_end = match.end()
-                prompt_part = content[trigger_end:].strip()
-                
-                # Clean up common prefixes
-                for prefix in ["of", "a", "an", "some", "the"]:
-                    if prompt_part.lower().startswith(prefix + " "):
-                        prompt_part = prompt_part[len(prefix)+1:].strip()
-                
-                # Use original content case for the prompt, fall back to trigger if empty
-                final_prompt = prompt_part if prompt_part and len(prompt_part) > 2 else content.strip()
-                
-                if debug_triggers:
-                    self.logger.info(
-                        f"VISION_TRIGGER_DEBUG | matched_pattern='{pattern}' "
-                        f"extracted_prompt='{final_prompt[:50]}...' "
-                        f"original_content='{content[:100]}...'"
-                    )
-                
-                self.logger.info(f"🎨 Direct vision trigger detected: pattern '{pattern}' -> prompt: '{final_prompt[:50]}...'")
-                return {
-                    "use_vision": True,
-                    "task": "text_to_image", 
-                    "prompt": final_prompt,
-                    "confidence": 0.95,  # High confidence for direct triggers
-                    "bypass_reason": f"Direct trigger pattern: '{pattern}'"
-                }
-        
-        if debug_triggers:
-            self.logger.info(f"VISION_TRIGGER_DEBUG | no_pattern_matched content='{content[:100]}...'")
+        # Early bail-out: if original message has URLs or attachments, never trigger regex T2I
+        try:
+            if message is not None:
+                has_attachments = bool(getattr(message, 'attachments', None)) and len(message.attachments) > 0
+                raw_text = (message.content or '')
+                has_any_url = bool(re.search(r'https?://\S+', raw_text))
+                if has_attachments or has_any_url:
+                    return None
+        except Exception:
+            pass
 
+        # Start-anchored explicit tokens only (safe, intentional)
+        text = (content or '').strip()
+        token_patterns = [
+            re.compile(r'^(?:img|image):\s+(.+)$', re.IGNORECASE | re.DOTALL),
+            re.compile(r'^(?:draw|render):\s+(.+)$', re.IGNORECASE | re.DOTALL),
+        ]
+
+        debug_triggers = os.getenv('VISION_TRIGGER_DEBUG', '0').lower() in ('1','true','yes','on')
+
+        for pat in token_patterns:
+            m = pat.match(text)
+            if not m:
+                continue
+            prompt = (m.group(1) or '').strip()
+            # Require minimum substance and no URLs inside the extracted prompt
+            if len(prompt) < 8:
+                continue
+            if re.search(r'https?://', prompt, re.IGNORECASE):
+                return None
+            final_prompt = ' '.join(prompt.split())
+            self.logger.info(f"🎨 Direct vision trigger detected: token '{pat.pattern}' -> prompt: '{final_prompt[:50]}...'")
+            return {
+                "use_vision": True,
+                "task": "text_to_image",
+                "prompt": final_prompt,
+                "confidence": 0.95,
+                "bypass_reason": "Direct token trigger",
+            }
+
+        if debug_triggers:
+            self.logger.info(f"VISION_TRIGGER_DEBUG | no_token_matched content='{text[:100]}...'")
         return None
 
     def _vision_available(self) -> bool:
