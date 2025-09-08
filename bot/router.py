@@ -3293,16 +3293,31 @@ class Router:
         except Exception as e:
             self.logger.error(f"Reply-image VL analysis failed: {e}", exc_info=True)
             
-            # Error - update to Failed card
+            # Error - update to Failed card using unified system
             embed = discord.Embed(
                 title="❌ Vision Analysis Failed",
-                color=0xe74c3c,  # Red for error
+                color=0xed4245,  # Discord brand red
                 timestamp=datetime.now(timezone.utc)
             )
             embed.add_field(name="Task", value="Image Analysis", inline=True)
             embed.add_field(name="Images", value=str(len(image_items)), inline=True)
             embed.add_field(name="Status", value="Failed", inline=True)
-            embed.add_field(name="Error", value=f"```{str(e)[:500]}```", inline=False)
+            
+            # Sanitize error message - remove stack traces, keep it concise
+            error_msg = str(e)
+            if len(error_msg) > 220:
+                error_msg = error_msg[:217] + "..."
+            embed.add_field(name="Error", value=error_msg, inline=False)
+            
+            # Add prompt if provided
+            if text_instruction.strip():
+                prompt_display = text_instruction[:350] + "..." if len(text_instruction) > 350 else text_instruction
+                embed.add_field(name="Prompt", value=f"`{prompt_display}`", inline=False)
+            
+            # Footer with user info
+            if message.author:
+                footer_text = f"Requested by {message.author.display_name}"
+                embed.set_footer(text=footer_text)
             
             try:
                 await working_msg.edit(embed=embed)
@@ -3544,30 +3559,48 @@ class Router:
             
         except Exception as e:
             self.logger.error(f"❌ Vision success handling failed: {e}", exc_info=True)
-            await progress_msg.edit(
-                content=f"✅ **Generation Complete**\n"
-                       f"Job ID: `{job.job_id[:8]}`\n"
-                       f"⚠️ Results are ready but file upload failed. Please try the job ID with an admin command."
-            )
+            # Use unified failure card instead of legacy text
+            try:
+                user = progress_msg.author if hasattr(progress_msg, 'author') else None
+                failure_embed = self._build_vision_status_embed(
+                    state="FAILED",
+                    job=job,
+                    user=user,
+                    prompt=job.request.prompt if hasattr(job, 'request') and hasattr(job.request, 'prompt') else "",
+                    response=None,
+                    error_reason=f"Upload failed: {str(e)[:200]}..."
+                )
+                await progress_msg.edit(content=None, embed=failure_embed)
+            except Exception as card_e:
+                self.logger.error(f"❌ Failed to update failure card: {card_e}", exc_info=True)
+                await progress_msg.edit(content="❌ Vision generation failed")
             return BotAction(content="Generation completed with upload issues", error=True)
 
     async def _handle_vision_failure(self, job, progress_msg) -> BotAction:
-        """Handle failed Vision generation with user guidance [REH]"""
-        error_msg = job.error.user_message if job.error else "Unknown error occurred"
-        
-        failure_content = (
-            f"❌ **Generation Failed**\n"
-            f"Job ID: `{job.job_id[:8]}`\n"
-            f"Status: {job.state.value.title()}\n\n"
-            f"**Issue:** {error_msg}\n\n"
-            f"💡 **Suggestions:**\n"
-            f"• Try a different prompt or parameters\n"
-            f"• Check if your request follows content guidelines\n"
-            f"• Contact support if the issue persists"
-        )
-        
-        await progress_msg.edit(content=failure_content)
-        return BotAction(content="Vision generation failed", error=True)
+        """Handle failed Vision generation with unified card system [REH]"""
+        try:
+            # Get user from progress message for footer
+            user = progress_msg.author if hasattr(progress_msg, 'author') else None
+            
+            # Build unified failure card
+            failure_embed = self._build_vision_status_embed(
+                state="FAILED",
+                job=job,
+                user=user,
+                prompt=job.request.prompt if hasattr(job, 'request') and hasattr(job.request, 'prompt') else "",
+                response=None,
+                error_reason=job.error.user_message if job.error else "Unknown error occurred"
+            )
+            
+            # Edit the progress message to show failure card
+            await progress_msg.edit(content=None, embed=failure_embed)
+            return BotAction(content="Vision generation failed", error=True)
+            
+        except Exception as e:
+            self.logger.error(f"❌ Failed to update failure card: {e}", exc_info=True)
+            # Fallback to simple text edit if card update fails
+            await progress_msg.edit(content="❌ Vision generation failed")
+            return BotAction(content="Vision generation failed", error=True)
 
     def _create_progress_bar(self, percent: int, length: int = 10) -> str:
         """Create ASCII progress bar [CMV]"""
@@ -3679,58 +3712,7 @@ class Router:
         
         return vision_enabled and t2i_enabled and orchestrator_ready
 
-    def _build_vision_status_embed(self, state: str, job=None, user=None, prompt="", response=None, error_reason="") -> discord.Embed:
-        """Centralized vision status embed builder for all states [CA]"""
-        # Consistent brand colors
-        if state in ["REQUESTED", "WORKING"]:
-            color = 0x00d26a  # Discord success green (consistent theme)
-        elif state == "COMPLETED":
-            color = 0x00d26a  # Discord success green
-        elif state in ["FAILED", "CANCELED"]:
-            color = 0xed4245  # Discord red
-        else:
-            color = 0x5865f2  # Discord blurple (fallback)
-        
-        embed = discord.Embed(
-            title="✅ Vision Generation Complete" if state == "COMPLETED" else f"🎨 Vision Generation {state.title()}",
-            color=color,
-            timestamp=discord.utils.utcnow()
-        )
-        
-        # Fixed order fields
-        embed.add_field(
-            name="Task",
-            value="Text To Image",
-            inline=True
-        )
-        
-        # Provider field
-        provider_value = "—"
-        if response and hasattr(response, 'provider'):
-            provider_value = response.provider.value.title()
-        elif state == "WORKING" and job and hasattr(job, 'preferred_provider') and job.preferred_provider:
-            provider_value = job.preferred_provider.title()
-        
-        embed.add_field(
-            name="Provider",
-            value=provider_value,
-            inline=True
-        )
-        
-        # Processing time (only on completion)
-        time_value = "—"
-        if state == "COMPLETED" and response and hasattr(response, 'processing_time_seconds'):
-            time_value = f"{response.processing_time_seconds:.1f}s"
-        
-        embed.add_field(
-            name="Processing Time",
-            value=time_value,
-            inline=True
-        )
-        
-        # ... (rest of the code remains the same)
-
-    def _build_vision_status_embed(self, state: str, job, user, prompt: str, response=None, working_ellipsis=False) -> discord.Embed:
+    def _build_vision_status_embed(self, state: str, job, user, prompt: str, response=None, error_reason="", working_ellipsis=False) -> discord.Embed:
         """Centralized vision status embed builder for all job states."""
         
         if state == "FAILED":

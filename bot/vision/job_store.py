@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Any
 import fcntl
 from contextlib import asynccontextmanager
+import os
 
 from bot.util.logging import get_logger
 from bot.config import load_config
@@ -344,30 +345,43 @@ class VisionJobStore:
         except Exception as e:
             # Log errors but don't fail the main operation
             self.logger.debug(f"Progress log append failed: {e}")
-    
+
     async def _append_ledger_entry(self, entry: Dict[str, Any]) -> None:
         """Append entry to JSONL ledger file [CMV]"""
         try:
             async with aiofiles.open(self.ledger_path, "a") as f:
-                # File locking for concurrent writes
-                fd = f.fileno()
-                fcntl.flock(fd, fcntl.LOCK_EX)
-                
+                fd = None
+                try:
+                    fd = f.fileno()  # type: ignore[attr-defined]
+                except Exception:
+                    fd = None
+
+                if fd is not None:
+                    fcntl.flock(fd, fcntl.LOCK_EX)
                 try:
                     line = json.dumps(entry, ensure_ascii=False) + "\n"
                     await f.write(line)
-                    await f.fsync()
+                    await f.flush()
+                    if fd is not None:
+                        os.fsync(fd)
                 finally:
-                    fcntl.flock(fd, fcntl.LOCK_UN)
-                    
+                    if fd is not None:
+                        fcntl.flock(fd, fcntl.LOCK_UN)
         except Exception as e:
             self.logger.debug(f"Ledger append failed: {e}")
-    
-    def _get_job_lock(self, job_id: str) -> asyncio.Lock:
-        """Get or create lock for job ID [CMV]"""
-        if job_id not in self._locks:
-            self._locks[job_id] = asyncio.Lock()
-        return self._locks[job_id]
+
+    @asynccontextmanager
+    async def _get_job_lock(self, job_id: str):
+        """Async context manager for per-job lock [RM]."""
+        lock = self._locks.get(job_id)
+        if lock is None:
+            lock = asyncio.Lock()
+            self._locks[job_id] = lock
+        await lock.acquire()
+        try:
+            yield
+        finally:
+            lock.release()
     
     async def get_job_stats(self) -> Dict[str, Any]:
         """Get statistics about jobs in store [CMV]"""

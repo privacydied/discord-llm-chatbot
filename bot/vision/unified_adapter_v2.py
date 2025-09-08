@@ -194,8 +194,8 @@ class UnifiedVisionAdapter:
         # Normalize request
         normalized = self.normalize_request(request)
         
-        # Get provider order
-        provider_order = self._get_provider_order(request)
+        # Get provider order with credential/health filtering
+        provider_order = self._get_provider_order_with_health_check(request)
         
         selected_provider = None
         selection_reason = "no_providers"
@@ -387,8 +387,104 @@ class UnifiedVisionAdapter:
         
         return resolved_order
     
+    def _get_provider_order_with_health_check(self, request: VisionRequest) -> List[str]:
+        """Get provider order with credential and health filtering [REH][IV]"""
+        # Get base provider order
+        base_order = self._get_provider_order(request)
+        filtered_order = []
+        
+        for provider_name in base_order:
+            try:
+                # Parse provider:endpoint format
+                if ":" in provider_name:
+                    provider_name = provider_name.split(":")[0]
+                
+                # Check if provider has valid credentials
+                if not self._has_valid_credentials(provider_name):
+                    self.logger.debug(f"Provider {provider_name} filtered: missing/invalid credentials")
+                    continue
+                
+                # Check if provider is healthy (basic health check)
+                if not self._is_provider_healthy(provider_name):
+                    self.logger.debug(f"Provider {provider_name} filtered: unhealthy")
+                    continue
+                
+                # Provider passed all checks
+                filtered_order.append(provider_name)
+                self.logger.debug(f"Provider {provider_name} passed credential/health checks")
+                
+            except Exception as e:
+                self.logger.warning(f"Error checking provider {provider_name}: {e}")
+                continue
+        
+        if not filtered_order:
+            self.logger.warning("No providers passed credential/health checks")
+        
+        return filtered_order
+    
+    def _has_valid_credentials(self, provider_name: str) -> bool:
+        """Check if provider has valid API credentials [IV]"""
+        try:
+            if provider_name == "novita":
+                api_key = self.config.get("VISION_API_KEY", "")
+                return bool(api_key and api_key.strip())
+            
+            elif provider_name == "together":
+                api_key = self.config.get("VISION_API_KEY_TOGETHER", "")
+                return bool(api_key and api_key.strip())
+            
+            elif provider_name == "chutes":
+                api_key = self.config.get("VISION_API_KEY_CHUTES", "")
+                return bool(api_key and api_key.strip())
+            
+            else:
+                # Unknown provider - assume no credentials needed for now
+                return True
+                
+        except Exception as e:
+            self.logger.warning(f"Error checking credentials for {provider_name}: {e}")
+            return False
+    
+    def _is_provider_healthy(self, provider_name: str) -> bool:
+        """Check if provider is in a healthy state [PA]"""
+        try:
+            # For now, implement basic health checks
+            # In production, this could check rate limits, service status, etc.
+            
+            if provider_name == "novita":
+                # Check if API key exists and basic config is valid
+                api_key = self.config.get("VISION_API_KEY", "")
+                return bool(api_key and len(api_key) > 10)  # Basic length check
+            
+            elif provider_name == "together":
+                # Check if API key exists
+                api_key = self.config.get("VISION_API_KEY_TOGETHER", "")
+                return bool(api_key and len(api_key) > 10)
+            
+            elif provider_name == "chutes":
+                # Check if API key exists
+                api_key = self.config.get("VISION_API_KEY_CHUTES", "")
+                return bool(api_key and len(api_key) > 10)
+            
+            else:
+                # Unknown provider - assume healthy
+                return True
+                
+        except Exception as e:
+            self.logger.warning(f"Error checking health for {provider_name}: {e}")
+            return False
+    
     def resolve_model_selection(self, request: NormalizedRequest) -> Optional[Any]:
         """Resolve model selection from config [PA]"""
         # This would check VISION_MODEL env var or config
         # Simplified for now
         return None
+
+# ---- Compatibility Shim -------------------------------------------------------
+# Re-export canonical adapter to preserve imports from unified_adapter_v2.
+try:
+    from .unified_adapter import UnifiedVisionAdapter as _UnifiedVisionAdapterCanonical
+    UnifiedVisionAdapter = _UnifiedVisionAdapterCanonical  # type: ignore
+except Exception:
+    # If canonical import fails (during partial installs/tests), do nothing.
+    pass

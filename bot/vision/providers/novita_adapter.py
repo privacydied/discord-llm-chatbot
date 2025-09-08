@@ -45,8 +45,80 @@ class NovitaAdapter(BaseVisionProvider):
         self.polling_interval = 5  # seconds
         self.max_poll_attempts = 120  # 10 minutes max
         
+    def _get_model_config(self) -> VisionProvider:
+        return VisionProvider.NOVITA
+    
     def get_provider_name(self) -> VisionProvider:
         return VisionProvider.NOVITA
+    
+    def _normalize_request_for_novita(self, request: VisionRequest, task_type: str) -> Dict[str, Any]:
+        """Normalize and validate request parameters for Novita.ai to prevent 400 errors [IV][CMV]"""
+        # Start with clean payload - remove None/empty values
+        payload = {}
+        
+        # Normalize numeric parameters with safe defaults
+        if hasattr(request, 'steps') and request.steps is not None:
+            payload['steps'] = min(max(request.steps, 1), 100)  # Clamp to Novita range
+        
+        if hasattr(request, 'guidance_scale') and request.guidance_scale is not None:
+            payload['guidance_scale'] = min(max(request.guidance_scale, 1.0), 20.0)  # Clamp to Novita range
+        
+        # Normalize seed if provided
+        if hasattr(request, 'seed') and request.seed is not None:
+            try:
+                payload['seed'] = int(request.seed)
+            except (ValueError, TypeError):
+                pass  # Skip invalid seed
+        
+        # Handle negative_prompt as list (stringify for Novita)
+        if hasattr(request, 'negative_prompt') and request.negative_prompt:
+            if isinstance(request.negative_prompt, list):
+                payload['negative_prompt'] = ', '.join(request.negative_prompt)
+            else:
+                payload['negative_prompt'] = str(request.negative_prompt)
+        
+        # Task-specific normalization
+        if task_type == 'text_to_image':
+            # Normalize dimensions to multiple of 8, within Novita range
+            width = min(max(request.width or 1024, 256), 2048)
+            height = min(max(request.height or 1024, 256), 2048)
+            width = ((width + 7) // 8) * 8  # Round to nearest 8
+            height = ((height + 7) // 8) * 8
+            payload['size'] = f"{width}*{height}"
+            
+            if hasattr(request, 'prompt') and request.prompt:
+                payload['prompt'] = request.prompt
+                
+        elif task_type == 'text_to_video':
+            # Video-specific parameters
+            if hasattr(request, 'duration_seconds') and request.duration_seconds:
+                payload['duration'] = f"{min(max(request.duration_seconds, 1), 10)}s"  # Novita range 1-10s
+            
+            if hasattr(request, 'fps') and request.fps:
+                payload['fps'] = min(max(request.fps, 8), 30)  # Novita FPS range
+            
+            if hasattr(request, 'prompt') and request.prompt:
+                payload['prompt'] = request.prompt
+                
+        elif task_type == 'image_to_video':
+            # Image-to-video parameters
+            if hasattr(request, 'duration_seconds') and request.duration_seconds:
+                payload['duration'] = f"{min(max(request.duration_seconds, 1), 10)}s"
+            
+            if hasattr(request, 'fps') and request.fps:
+                payload['fps'] = min(max(request.fps, 8), 30)
+            
+            if hasattr(request, 'prompt') and request.prompt:
+                payload['prompt'] = request.prompt
+        
+        # Remove any remaining None values (defensive programming)
+        payload = {k: v for k, v in payload.items() if v is not None}
+        
+        # Debug log normalized payload (no secrets, just keys and ranges)
+        debug_payload = {k: '...' if k in ['prompt', 'negative_prompt'] else v for k, v in payload.items()}
+        self.logger.debug(f"Normalized Novita request for {task_type}: {debug_payload}")
+        
+        return payload
     
     def _validate_config(self) -> None:
         """Validate Novita.ai specific configuration [IV]"""
@@ -128,14 +200,8 @@ class NovitaAdapter(BaseVisionProvider):
         """Generate image from text using Novita.ai Qwen Image API"""
         session = await self._get_session()
         
-        # Format size for Qwen Image API
-        size = f"{request.width}*{request.height}"
-        
-        # Simple payload for Qwen Image API
-        payload = {
-            "prompt": request.prompt,
-            "size": size
-        }
+        # Use normalized request to prevent 400 errors
+        payload = self._normalize_request_for_novita(request, 'text_to_image')
         
         try:
             async with session.post(f"{self.base_url}/async/qwen-image-txt2img", json=payload) as resp:
@@ -179,22 +245,26 @@ class NovitaAdapter(BaseVisionProvider):
         
         novita_model = model_mapping.get(model, model)
         
-        # Determine resolution format
-        if request.width == 1280 and request.height == 720:
-            resolution = "720p"
-        elif request.width == 1920 and request.height == 1080:
-            resolution = "1080p"
-        else:
-            resolution = "720p"  # Default fallback
+        # Use normalized request for video parameters
+        payload = self._normalize_request_for_novita(request, 'text_to_video')
+        payload['model_name'] = novita_model
         
-        payload = {
-            "model_name": novita_model,
-            "prompt": request.prompt,
-            "duration": f"{request.duration_seconds}s",
-            "resolution": resolution,
-            "fps": request.fps,
-            "seed": request.seed or -1
-        }
+        # Add resolution based on normalized dimensions
+        width = min(max(request.width or 1024, 256), 2048)
+        height = min(max(request.height or 1024, 256), 2048)
+        if width == 1280 and height == 720:
+            payload['resolution'] = "720p"
+        elif width == 1920 and height == 1080:
+            payload['resolution'] = "1080p"
+        else:
+            payload['resolution'] = "720p"  # Default fallback
+        
+        # Add seed if not already set by normalizer
+        if 'seed' not in payload and hasattr(request, 'seed') and request.seed is not None:
+            try:
+                payload['seed'] = int(request.seed)
+            except (ValueError, TypeError):
+                payload['seed'] = -1  # Novita default
         
         try:
             async with session.post(f"{self.base_url}/async/txt2video", json=payload) as resp:
@@ -251,17 +321,17 @@ class NovitaAdapter(BaseVisionProvider):
         
         novita_model = model_mapping.get(model, model)
         
-        payload = {
-            "model_name": novita_model,
-            "image_url": image_url,
-            "duration": f"{request.duration_seconds}s",
-            "fps": request.fps,
-            "seed": request.seed or -1
-        }
+        # Use normalized request for image-to-video parameters
+        payload = self._normalize_request_for_novita(request, 'image_to_video')
+        payload['model_name'] = novita_model
+        payload['image_url'] = image_url
         
-        # Add prompt if provided
-        if request.prompt:
-            payload["prompt"] = request.prompt
+        # Add seed if not already set by normalizer
+        if 'seed' not in payload and hasattr(request, 'seed') and request.seed is not None:
+            try:
+                payload['seed'] = int(request.seed)
+            except (ValueError, TypeError):
+                payload['seed'] = -1  # Novita default
         
         # Handle start/end mode if end image provided
         if request.mode == "start_end" and request.end_image and request.end_image.exists():

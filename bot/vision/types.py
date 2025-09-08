@@ -18,6 +18,26 @@ import json
 from .money import Money
 
 
+def _parse_vision_provider(value) -> Optional["VisionProvider"]:
+    """Tolerant parser for provider values from persisted JSON [REH].
+    Accepts enum instances, bare strings (any case), and dotted strings
+    like "VisionProvider.NOVITA" and defaults safely to NOVITA on failure.
+    """
+    try:
+        if isinstance(value, VisionProvider):
+            return value
+        if isinstance(value, str):
+            token = value.split(".")[-1].strip().lower()
+            return VisionProvider(token)
+        # Fallback: coerce to string
+        return VisionProvider(str(value).strip().lower())
+    except Exception:
+        try:
+            return VisionProvider("novita")
+        except Exception:
+            return None
+
+
 class VisionTask(Enum):
     """Supported vision generation tasks"""
     TEXT_TO_IMAGE = "text_to_image"
@@ -193,11 +213,11 @@ class VisionRequest:
         if "end_image" in data and data["end_image"]:
             data["end_image"] = Path(data["end_image"])
         
-        # Convert provider string back to enum (support aliases)
-        if data.get("preferred_provider"):
-            data["preferred_provider"] = VisionProvider(data["preferred_provider"])
-        elif data.get("provider"):
-            data["provider"] = VisionProvider(data["provider"])
+        # Convert provider string back to enum (support aliases, tolerant)
+        if data.get("preferred_provider") is not None:
+            data["preferred_provider"] = _parse_vision_provider(data["preferred_provider"])
+        if data.get("provider") is not None:
+            data["provider"] = _parse_vision_provider(data["provider"])
         
         # Map legacy aliases prior to construction
         if "model" in data and "preferred_model" not in data:
@@ -398,14 +418,15 @@ class VisionJob:
         
         # Parse enums
         state = VisionJobState(data["state"])
-        provider_assigned = VisionProvider(data["provider_assigned"]) if data.get("provider_assigned") else None
+        provider_assigned = _parse_vision_provider(data.get("provider_assigned")) if data.get("provider_assigned") else None
         
         # Parse nested objects
         request = VisionRequest.from_dict(data["request"])
         response = None
         if data.get("response"):
             response_data = data["response"]
-            response_data["provider"] = VisionProvider(response_data["provider"])
+            pv = _parse_vision_provider(response_data.get("provider"))
+            response_data["provider"] = pv or VisionProvider.NOVITA
             response_data["artifacts"] = [Path(p) for p in response_data["artifacts"]]
             response_data["thumbnails"] = [Path(p) for p in response_data["thumbnails"]]
             if response_data.get("error"):
@@ -444,7 +465,8 @@ class VisionJob:
             else:
                 error_data["error_type"] = VisionErrorType(error_type_value)
             if "provider" in error_data and error_data["provider"]:
-                error_data["provider"] = VisionProvider(error_data["provider"])
+                pv_err = _parse_vision_provider(error_data["provider"])
+                error_data["provider"] = pv_err or VisionProvider.NOVITA
             error = VisionError(**error_data)
         
         return cls(
