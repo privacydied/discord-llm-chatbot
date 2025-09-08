@@ -1,9 +1,14 @@
 """
 OpenAI/OpenRouter Backend - Handles OpenAI API calls including OpenRouter.
 """
-from typing import Dict, Any, Union, AsyncGenerator
+from typing import Dict, Any, Union, AsyncGenerator, List, Optional
+import asyncio
+import base64
+import logging
+import os
 import openai
 import aiohttp
+<<<<<<< Updated upstream
 import httpx
 import base64
 import os
@@ -55,6 +60,14 @@ except Exception:
             async def run_with_fallback(self, *args, **kwargs):
                 raise NotImplementedError("Fallback manager not available in smoke mode")
         return _Dummy()
+=======
+from openai import AsyncOpenAI
+from .config import load_config
+from .memory import get_profile, get_server_profile
+from .exceptions import APIError, ConfigurationError
+from .retry_utils import with_retry, VISION_RETRY_CONFIG, is_retryable_error
+from .util.logging import get_logger
+>>>>>>> Stashed changes
 
 logger = get_logger(__name__)
 
@@ -167,6 +180,7 @@ Server Context: {server_context}"""
         logger.info(f"Generating OpenAI response with model: {model}")
         logger.debug(f"[OpenAI] Request params: temp={temperature}, max_tokens={max_tokens}, stream={stream}")
         
+<<<<<<< Updated upstream
         # Helper to normalize a completion response into our result dict
         def _normalize_nonstream_response(response_obj, used_model: str) -> Dict[str, Any]:
             try:
@@ -217,6 +231,27 @@ Server Context: {server_context}"""
                 raise APIError(f"Response normalization failed: {type(norm_error).__name__}: {norm_error}")
 
         # If streaming, do a single attempt with standard retry; fallback ladder is not supported for streams
+=======
+        # Generate the response
+        logger.debug("[OpenAI] 🔄 Sending request to API...")
+        logger.debug(f"[OpenAI] Request details: model={model}, messages={len(messages)}, temp={temperature}, max_tokens={max_tokens}, stream={stream}")
+        
+        # Log first few messages for debugging (without full content for privacy)
+        for i, msg in enumerate(messages[:2]):
+            logger.debug(f"[OpenAI] Message {i}: role={msg['role']}, content_length={len(msg['content'])}")
+        
+        response = await client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            stream=stream,
+            **kwargs
+        )
+        logger.debug("[OpenAI] ✅ Received response from API")
+        logger.debug(f"[OpenAI] Response type: {type(response)}")
+        
+>>>>>>> Stashed changes
         if stream:
             logger.debug("[OpenAI] 🔄 Sending request to API (streaming)...")
             response = await client.chat.completions.create(
@@ -241,6 +276,7 @@ Server Context: {server_context}"""
                 logger.debug(f"[OpenAI] ✅ Streaming complete, processed {chunk_count} chunks")
                 yield {'text': '', 'finished': True}
             return stream_generator()
+<<<<<<< Updated upstream
 
         # Non-streaming: if using OpenRouter base, engage provider/model fallback ladder
         base_url = str(config.get('OPENAI_API_BASE', 'https://api.openai.com/v1') or '')
@@ -340,6 +376,89 @@ Server Context: {server_context}"""
         result = _normalize_nonstream_response(response, model)
         logger.debug("[OpenAI] ✅ Response processing complete")
         return result
+=======
+        else:
+            # Handle non-streaming response
+            logger.debug("[OpenAI] 📝 Processing non-streaming response...")
+            logger.debug(f"[OpenAI] Response object type: {type(response)}")
+            
+            # Enhanced debugging for empty choices issue [REH]
+            logger.debug(f"[OpenAI] Response attributes: {dir(response)}")
+            
+            # Log response structure for debugging
+            try:
+                if hasattr(response, 'model_dump'):
+                    response_dict = response.model_dump()
+                    logger.debug(f"[OpenAI] Response model_dump keys: {list(response_dict.keys())}")
+                    if 'choices' in response_dict:
+                        logger.debug(f"[OpenAI] Choices in response: {len(response_dict['choices'])} items")
+                        if response_dict['choices']:
+                            logger.debug(f"[OpenAI] First choice keys: {list(response_dict['choices'][0].keys())}")
+                    else:
+                        logger.error("[OpenAI] ❌ No 'choices' key in response model_dump")
+                elif hasattr(response, '__dict__'):
+                    logger.debug(f"[OpenAI] Response __dict__ keys: {list(response.__dict__.keys())}")
+            except Exception as debug_error:
+                logger.warning(f"[OpenAI] ⚠️ Failed to debug response structure: {debug_error}")
+            
+            # Check if response has choices attribute
+            if not hasattr(response, 'choices'):
+                logger.error("[OpenAI] ❌ Response object has no 'choices' attribute")
+                logger.error(f"[OpenAI] Available attributes: {[attr for attr in dir(response) if not attr.startswith('_')]}")
+                raise APIError("OpenAI response missing 'choices' attribute - possible API format change or error")
+            
+            # Check if choices is None
+            if response.choices is None:
+                logger.error("[OpenAI] ❌ Response choices is None")
+                raise APIError("OpenAI response choices is None - API returned malformed response")
+            
+            # Check if choices is empty
+            if not response.choices:
+                logger.error("[OpenAI] ❌ No choices in response")
+                logger.error(f"[OpenAI] Choices type: {type(response.choices)}, length: {len(response.choices)}")
+                
+                # Log additional response details for debugging
+                if hasattr(response, 'usage'):
+                    logger.debug(f"[OpenAI] Usage info: {response.usage}")
+                if hasattr(response, 'model'):
+                    logger.debug(f"[OpenAI] Model used: {response.model}")
+                if hasattr(response, 'id'):
+                    logger.debug(f"[OpenAI] Response ID: {response.id}")
+                
+                # Check for content filtering or other API issues
+                error_msg = "No choices returned in OpenAI response. This may indicate:"
+                error_msg += "\n- Content filtering by OpenAI"
+                error_msg += "\n- Invalid model name or parameters"
+                error_msg += "\n- API quota/rate limiting"
+                error_msg += "\n- Malformed request payload"
+                error_msg += f"\n- Model: {model}, Messages: {len(messages)}, Max tokens: {max_tokens}"
+                
+                logger.error(f"[OpenAI] {error_msg}")
+                raise APIError(error_msg)
+            
+            if not response.choices[0].message:
+                logger.error("[OpenAI] ❌ No message in first choice")
+                raise APIError("No message in OpenAI response choice")
+            
+            response_text = response.choices[0].message.content
+            logger.debug(f"[OpenAI] 📄 Extracted response text length: {len(response_text) if response_text else 0}")
+            
+            usage_info = {
+                'prompt_tokens': response.usage.prompt_tokens if response.usage else 0,
+                'completion_tokens': response.usage.completion_tokens if response.usage else 0,
+                'total_tokens': response.usage.total_tokens if response.usage else 0
+            }
+            logger.debug(f"[OpenAI] 📊 Usage info: {usage_info}")
+            
+            result = {
+                'text': response_text,
+                'model': model,
+                'usage': usage_info,
+                'backend': 'openai'
+            }
+            logger.debug("[OpenAI] ✅ Response processing complete")
+            return result
+>>>>>>> Stashed changes
     
     except openai.AuthenticationError as e:
         logger.error(f"OpenAI authentication failed: {e}")
@@ -444,7 +563,8 @@ async def get_base64_image(image_url: str) -> str:
     elif image_url.startswith(('http://', 'https://')):
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(image_url) as response:
+                timeout = aiohttp.ClientTimeout(total=10)
+                async with session.get(image_url, timeout=timeout) as response:
                     if response.status == 200:
                         data = await response.read()
                         base64_data = base64.b64encode(data).decode('utf-8')
@@ -473,7 +593,11 @@ async def get_base64_image(image_url: str) -> str:
 
 
 @with_retry(VISION_RETRY_CONFIG)
+<<<<<<< Updated upstream
 async def generate_vl_response(
+=======
+async def _generate_vl_response_with_retry(
+>>>>>>> Stashed changes
     image_url: str,
     user_prompt: str = "",
     user_id: str = None,
@@ -617,12 +741,23 @@ async def generate_vl_response(
         logger.debug(f"🎨 Max tokens: {max_tokens}")
         logger.info(f"🎨 Calling OpenAI VL API with model: {vl_model}")
         
+<<<<<<< Updated upstream
         # Build initial params with all potential values
         raw_params = {
             "model": vl_model,
             "messages": messages,
             "temperature": temperature,
             "max_tokens": max_tokens,
+=======
+        # Generate the VL response
+        logger.debug(f"🎨 Sending request with messages: {len(messages)} messages")
+        response = await client.chat.completions.create(
+            model=vl_model,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            timeout=20.0,
+>>>>>>> Stashed changes
             **kwargs
         }
         
@@ -691,6 +826,7 @@ async def generate_vl_response(
         )
     
     except Exception as e:
+<<<<<<< Updated upstream
         logger.error(f"❌ Error in generate_vl_response: {e}")
         raise APIError(f"Failed to generate VL response: {str(e)}")
 
@@ -724,3 +860,76 @@ async def _try_vl_fallback_models(client, api_params, failed_model, error_msg):
     # All fallbacks failed
     logger.error(f"❌ All VL fallbacks exhausted, original error: {error_msg}")
     raise APIError(f"VL model {failed_model} and all fallbacks failed: {error_msg}")
+=======
+        logger.error(f"❌ Error in _generate_vl_response_with_retry: {e}", exc_info=True)
+        # Re-raise as APIError to ensure proper retry handling
+        if not isinstance(e, APIError):
+            raise APIError(f"Failed to generate VL response: {str(e)}")
+        raise e
+
+
+async def generate_vl_response(
+    image_url: str,
+    user_prompt: str = "",
+    user_id: str = None,
+    guild_id: str = None,
+    temperature: float = None,
+    max_tokens: int = None,
+    **kwargs
+) -> Dict[str, Any]:
+    """
+    Generate a vision-language response with robust error handling and retry logic.
+    
+    This function wraps the core VL generation with retry logic for transient errors
+    and provides fallback mechanisms for better user experience.
+    
+    Args:
+        image_url: URL or file path to the image
+        user_prompt: Text prompt for the vision model
+        user_id: Discord user ID for logging
+        guild_id: Discord guild ID for logging
+        temperature: Sampling temperature (0.0-2.0)
+        max_tokens: Maximum tokens in response
+        **kwargs: Additional arguments for the API call
+        
+    Returns:
+        Dict containing the response text, model info, and usage stats
+        
+    Raises:
+        APIError: For API-related errors after all retries are exhausted
+        InferenceError: For inference-specific errors
+    """
+    try:
+        logger.info(f"🎨 Starting VL response generation with retry logic")
+        logger.debug(f"🎨 User: {user_id}, Guild: {guild_id}")
+        
+        # Call the retry-wrapped function
+        result = await _generate_vl_response_with_retry(
+            image_url=image_url,
+            user_prompt=user_prompt,
+            user_id=user_id,
+            guild_id=guild_id,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            **kwargs
+        )
+        
+        logger.info("✅ VL response generation completed successfully")
+        return result
+        
+    except Exception as e:
+        logger.error(f"❌ VL response generation failed after all retries: {e}")
+        
+        # Check if this was a retryable error that exhausted retries
+        if is_retryable_error(e, VISION_RETRY_CONFIG):
+            logger.warning("⚠️ Provider appears to be experiencing issues. This may be temporary.")
+            # Provide a more user-friendly error message for transient issues
+            raise APIError(
+                "The vision service is temporarily unavailable due to provider issues. "
+                "Please try again in a few minutes. If the problem persists, the provider "
+                "may be experiencing extended downtime."
+            )
+        
+        # For non-retryable errors, re-raise as-is
+        raise e
+>>>>>>> Stashed changes

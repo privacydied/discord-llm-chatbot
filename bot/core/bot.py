@@ -335,7 +335,7 @@ class LLMBot(commands.Bot):
 
             guild_info = 'DM' if isinstance(message.channel, discord.DMChannel) else f"guild:{message.guild.id}"
             self.logger.info(
-                f"Processing queued message: msg_id:{message.id} author:{message.author.id} in:{guild_info} len:{len(message.content)}"
+                " === DM MESSAGE PROCESSING STARTED ====" if guild_info == 'DM' else f"Message queued: msg_id:{message.id} author:{message.author.id} in:{guild_info} len:{len(message.content)} queue_size:{self._get_user_queue(str(message.author.id)).qsize()}"
             )
 
             # The router decides if this is a command, a direct message, or something to ignore.
@@ -1074,9 +1074,91 @@ class LLMBot(commands.Bot):
 
         guild_info = 'DM' if isinstance(message.channel, discord.DMChannel) else f"guild:{message.guild.id}"
         self.logger.info(
-            f"Message queued: msg_id:{message.id} author:{message.author.id} in:{guild_info} len:{len(message.content)} queue_size:{user_queue.qsize()}"
+            " === DM MESSAGE PROCESSING STARTED ====" if guild_info == 'DM' else f"Message queued: msg_id:{message.id} author:{message.author.id} in:{guild_info} len:{len(message.content)} queue_size:{user_queue.qsize()}"
         )
 
+<<<<<<< Updated upstream
+=======
+    async def _execute_action(self, message: discord.Message, action: BotAction):
+        """Executes a BotAction by sending its content to the appropriate channel."""
+        self.logger.info(f"Executing action with meta: {action.meta} for message {message.id}")
+
+        files = None
+        # If action requires TTS, process it.
+        if action.meta.get('requires_tts'):
+            self.logger.info(f"Action requires TTS, processing... (msg_id: {message.id})")
+            if not self.tts_manager:
+                self.logger.error(f"TTS Manager not available, cannot process TTS action. (msg_id: {message.id})")
+                action.content = "I tried to respond with voice, but the TTS service is not working."
+            else:
+                action = await self.tts_manager.process(action)
+
+        # If action has an audio path after processing, prepare it for sending.
+        if action.audio_path:
+            if os.path.exists(action.audio_path):
+                files = [discord.File(action.audio_path, filename="voice_message.ogg")]
+            else:
+                self.logger.error(f"Audio file not found: {action.audio_path} (msg_id: {message.id})")
+                action.content = "I tried to send a voice message, but the audio file was missing."
+        elif action.meta.get('requires_tts'): # Log error only if TTS was expected but failed
+            self.logger.error(f"Audio file not generated after TTS processing. (msg_id: {message.id})")
+            action.content = "I tried to send a voice message, but the audio file was missing."
+
+        # If the action is empty, send an error embed
+        if not action.content and not action.embeds and not action.files and not action.audio_path:
+            self.logger.info("Creating embed for empty response")
+            self.logger.info("Logging when creating empty response embed")
+            embed = discord.Embed(
+                title="Empty Response",
+                description="I'm sorry, I didn't receive a response. Please try again.",
+                color=discord.Color.red()
+            )
+            action.embeds = [embed]
+            action.content = ""  # Clear any existing content to avoid duplication
+
+        content = action.content
+        # Note: User mentions are handled by Discord's mention_author=True in message.reply()
+        # No manual mention prepending needed to avoid duplicate mentions
+
+        # Discord has a 2000 character limit.
+        if content and len(content) > 2000:
+            self.logger.warning(f"Message content for {message.id} exceeds 2000 characters. Attaching as file.")
+            file_content = io.BytesIO(content.encode('utf-8'))
+            text_file = discord.File(fp=file_content, filename="full_response.txt")
+            if files is None:
+                files = []
+            files.append(text_file)
+
+            # The message becomes a notification about the attached file.
+            if action.meta.get('is_reply'):
+                content = f"{message.author.mention}\n\nThe response was too long to post directly. The full content is attached as a file."
+            else:
+                content = "The response was too long to post directly. The full content is attached as a file."
+
+        # Show typing indicator while sending the message
+        async with message.channel.typing():
+            try:
+                if content or action.embeds or files:
+                    # Use message.reply() for contextual replies.
+                    sent_message = await message.reply(content=content, embeds=action.embeds, files=files, mention_author=True)
+                    
+                    # Track bot response in enhanced context manager
+                    if self.enhanced_context_manager and sent_message:
+                        await self.enhanced_context_manager.append_message(sent_message, role="bot")
+            except discord.errors.HTTPException as e:
+                # If replying fails (e.g., original message deleted), send a normal message instead.
+                if e.code == 50035: # Unknown Message
+                    self.logger.warning(f"Replying to message {message.id} failed (likely deleted). Falling back to channel send.")
+                    sent_message = await message.channel.send(content=content, embeds=action.embeds, files=files)
+                    
+                    # Track bot response in enhanced context manager
+                    if self.enhanced_context_manager and sent_message:
+                        await self.enhanced_context_manager.append_message(sent_message, role="bot")
+                else:
+                    self.logger.error(f"Failed to send message: {e} (msg_id: {message.id})")
+                    raise # Re-raise other HTTP exceptions
+
+>>>>>>> Stashed changes
     async def load_profiles(self) -> None:
         """Load user and server memory profiles."""
         try:

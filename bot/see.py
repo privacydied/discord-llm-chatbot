@@ -8,6 +8,7 @@ from .action import BotAction
 from .ai_backend import generate_vl_response
 from .exceptions import InferenceError
 from .config import load_config
+from .retry_utils import is_retryable_error, VISION_RETRY_CONFIG
 
 logger = logging.getLogger(__name__)
 
@@ -76,5 +77,39 @@ async def see_infer(image_path: str, prompt: str = None, model_override: str | N
             raise InferenceError("Unexpected response format from vision model")
             
     except Exception as e:
+<<<<<<< Updated upstream
         logger.error(f"👁️ Vision inference failed: {str(e)}")
         raise InferenceError(f"Vision processing failed: {str(e)}")
+=======
+        logger.error(f"👁️ Vision inference failed: {str(e)}", exc_info=True)
+        
+        # Provide user-friendly error messages based on error type
+        error_str = str(e).lower()
+        
+        if is_retryable_error(e, VISION_RETRY_CONFIG):
+            logger.warning("⚠️ Detected transient provider error in vision inference")
+            user_message = (
+                "🔧 The vision service is temporarily unavailable due to provider issues. "
+                "This typically resolves within a few minutes. Please try uploading the image again shortly."
+            )
+        elif "file not found" in error_str or "no such file" in error_str:
+            user_message = (
+                "📁 The uploaded image could not be found. Please try uploading the image again."
+            )
+        elif "mime type" in error_str or "format" in error_str:
+            user_message = (
+                "🖼️ The image format is not supported. Please try uploading a JPEG, PNG, or WebP image."
+            )
+        elif "size" in error_str or "too large" in error_str:
+            user_message = (
+                "📏 The image is too large. Please try uploading a smaller image (under 10MB)."
+            )
+        else:
+            user_message = (
+                "❌ Vision processing failed. This could be due to a temporary service issue. "
+                "Please try again, and if the problem persists, the image may not be processable."
+            )
+        
+        logger.info(f"🎯 Providing user-friendly error message: {user_message}")
+        raise InferenceError(user_message)
+>>>>>>> Stashed changes

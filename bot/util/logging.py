@@ -2,13 +2,64 @@ import json
 import logging
 import os
 import sys
+<<<<<<< Updated upstream
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import NoReturn
+=======
+import json
+from datetime import datetime
+from typing import NoReturn, Dict, Any
+>>>>>>> Stashed changes
 
 from rich.logging import RichHandler
 
+# Define a custom filter to add level-based icons
+class LevelIconFilter(logging.Filter):
+    """Adds a level-icon to the log record for themed console logging."""
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.levelno >= logging.CRITICAL:
+            record.level_icon = "✖"
+        elif record.levelno >= logging.ERROR:
+            record.level_icon = "✖"
+        elif record.levelno >= logging.WARNING:
+            record.level_icon = "⚠"
+        elif record.levelno >= logging.INFO:
+            record.level_icon = "✔"
+        else: # DEBUG and below
+            record.level_icon = "ℹ"
+        return True
 
+# Define a custom JSON formatter for structured file logging
+class JsonFormatter(logging.Formatter):
+    """Formats log records into a structured JSON string."""
+    def format(self, record: logging.LogRecord) -> str:
+        # Start with base attributes from the log record
+        log_object: Dict[str, Any] = {
+            "ts": datetime.fromtimestamp(record.created).isoformat(),
+            "level": record.levelname,
+            "name": record.name,
+            "msg": record.getMessage(),
+        }
+        
+        # Add any extra fields passed to the logger
+        if hasattr(record, 'subsys'):
+            log_object['subsys'] = record.subsys
+        if hasattr(record, 'guild_id'):
+            log_object['guild_id'] = record.guild_id
+        if hasattr(record, 'user_id'):
+            log_object['user_id'] = record.user_id
+        if hasattr(record, 'msg_id'):
+            log_object['msg_id'] = record.msg_id
+        if hasattr(record, 'event'):
+            log_object['event'] = record.event
+        if hasattr(record, 'detail') and record.detail:
+            log_object['detail'] = record.detail
+
+        return json.dumps(log_object)
+
+
+<<<<<<< Updated upstream
 # Icons per level for pretty console sink - exact specification compliance
 # [CSD, CMV] - Code Smell Detection, Constants over Magic Values
 LEVEL_ICONS = {
@@ -217,8 +268,36 @@ def init_logging() -> None:
         format="%(message)s",  # RichHandler handles formatting for console
         handlers=[pretty, jsonl_handler],
         force=True,
-    )
+=======
+def init_logging() -> None:
+    """Configure dual-sink logging: pretty console and structured JSON file."""
+    log_level = os.getenv("LOG_LEVEL", "INFO").upper()
+    root_logger = logging.getLogger()
+    root_logger.setLevel(log_level)
 
+    # Clear any existing handlers to prevent duplicates
+    if root_logger.hasHandlers():
+        root_logger.handlers.clear()
+
+    # 1. Pretty Console Sink (RichHandler)
+    pretty_handler = RichHandler(
+        rich_tracebacks=True, 
+        show_path=False, 
+        show_time=True, 
+        keywords=RichHandler.KEYWORDS + ["TRACE"]
+>>>>>>> Stashed changes
+    )
+    pretty_handler.set_name("pretty_handler")
+    pretty_handler.addFilter(LevelIconFilter())
+    # The format includes the custom 'level_icon' field from our filter
+    pretty_formatter = logging.Formatter(
+        fmt="%(level_icon)s %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S.%f" # Millisecond precision
+    )
+    pretty_handler.setFormatter(pretty_formatter)
+    root_logger.addHandler(pretty_handler)
+
+<<<<<<< Updated upstream
     # Enforce both sinks are present with enhanced validation
     enforce_dual_logging_handlers()
 
@@ -294,6 +373,24 @@ def enforce_dual_logging_handlers() -> None:
             pass
         finally:
             sys.exit(2)
+=======
+    # 2. Structured JSON Sink (FileHandler)
+    log_dir = "logs"
+    os.makedirs(log_dir, exist_ok=True)
+    jsonl_handler = logging.FileHandler(os.path.join(log_dir, "bot.jsonl"), mode='a')
+    jsonl_handler.set_name("jsonl_handler")
+    jsonl_handler.setFormatter(JsonFormatter())
+    root_logger.addHandler(jsonl_handler)
+
+    # Enforcer Function: Verify both handlers are active
+    handler_names = {h.name for h in root_logger.handlers}
+    if "pretty_handler" not in handler_names or "jsonl_handler" not in handler_names:
+        sys.stderr.write("FATAL: Logging sinks not configured correctly. Aborting.\n")
+        sys.exit(1)
+
+    logger = get_logger(__name__)
+    logger.info("Dual-sink logging initialized (Rich Console + JSONL File).")
+>>>>>>> Stashed changes
 
 
 def get_logger(name: str) -> logging.Logger:

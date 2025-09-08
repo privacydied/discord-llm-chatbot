@@ -125,21 +125,52 @@ async def contextual_brain_infer(
         
     except Exception as e:
         logger.error(f"❌ Contextual brain inference failed: {e}", exc_info=True)
-        # Fallback to basic inference
+        
+        # Fallback to basic inference with enhanced error handling [REH]
         try:
+            logger.info("🔄 Attempting fallback to basic brain inference")
             basic_response = await brain_infer(prompt)
-            response_data = {
-                "response_text": f"Got you — y'all wild. {basic_response.content if hasattr(basic_response, 'content') else str(basic_response)}",
-                "used_history": [],
-                "fallback": True
-            }
+            response_text = basic_response.content if hasattr(basic_response, 'content') else str(basic_response)
+            
+            # Check if the basic response is already an error message from brain_infer
+            if any(emoji in response_text for emoji in ['🤖', '🔐', '⏱️', '⏰']):
+                # brain_infer already provided a user-friendly error message
+                response_data = {
+                    "response_text": response_text,
+                    "used_history": [],
+                    "fallback": True
+                }
+            else:
+                # Normal fallback response
+                response_data = {
+                    "response_text": f"Got you — y'all wild. {response_text}",
+                    "used_history": [],
+                    "fallback": True
+                }
+            logger.info("✅ Fallback to basic inference successful")
+            
         except Exception as fallback_error:
             logger.error(f"❌ Fallback inference also failed: {fallback_error}")
+            
+            # Provide user-friendly error message based on error type [REH]
+            error_str = str(fallback_error).lower()
+            if "no choices returned" in error_str:
+                error_message = "🤖 I'm experiencing an issue with the AI service. This might be due to content filtering, API limits, or a temporary service issue. Please try rephrasing your message or try again in a moment."
+            elif "authentication" in error_str or "api key" in error_str:
+                error_message = "🔐 There's an authentication issue with the AI service. Please contact an administrator."
+            elif "rate limit" in error_str or "quota" in error_str:
+                error_message = "⏱️ The AI service is currently rate-limited. Please wait a moment and try again."
+            elif "timeout" in error_str:
+                error_message = "⏰ The AI service timed out. Please try again with a shorter message."
+            else:
+                error_message = "🤖 I'm experiencing a temporary issue generating a response. Please try again in a moment."
+            
             response_data = {
-                "response_text": "⚠️ I'm having trouble processing your message right now. Please try again.",
+                "response_text": error_message,
                 "used_history": [],
                 "fallback": True
             }
+            logger.info(f"📢 Providing user-friendly error message: {error_message}")
     
     return response_data
 

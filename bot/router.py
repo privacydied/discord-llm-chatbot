@@ -1334,9 +1334,24 @@ class Router:
             f"🚶 Processing {len(items)} input items SEQUENTIALLY for deterministic order (precedence={precedence_applied}) (msg_id: {message.id})"
         )
         
+<<<<<<< Updated upstream
         # Initialize result aggregator and retry manager
         aggregator = ResultAggregator()
         retry_manager = get_retry_manager()
+=======
+        # Define timeout mappings for different modalities
+        TIMEOUTS = {
+            InputModality.SINGLE_IMAGE: 40.0,
+            InputModality.MULTI_IMAGE: 45.0,
+            InputModality.VIDEO_URL: 60.0,
+            InputModality.AUDIO_VIDEO_FILE: 45.0,
+            InputModality.PDF_DOCUMENT: 30.0,
+            InputModality.PDF_OCR: 45.0,
+            InputModality.GENERAL_URL: 15.0,
+            InputModality.SCREENSHOT_URL: 15.0,
+            InputModality.UNKNOWN: 10.0,
+        }
+>>>>>>> Stashed changes
         
         # Per-item budgets
         # LLM/vision tasks can be shorter; media (yt-dlp/transcribe) needs more time. [PA]
@@ -1514,8 +1529,24 @@ class Router:
                 return f"⚠️ Screenshot captured but vision analysis failed for: {url}"
                 
         except Exception as e:
+<<<<<<< Updated upstream
             self.logger.error(f"❌ Error in screenshot + vision processing: {e}", exc_info=True)
             return f"⚠️ Failed to process screenshot of URL: {url} (Error: {str(e)})"
+=======
+            self.logger.error(f"Error processing image item: {e}", exc_info=True)
+            # Extract user-friendly message from InferenceError if available
+            error_str = str(e)
+            if "temporarily unavailable" in error_str or "provider issues" in error_str:
+                return "🔧 The image analysis service is temporarily unavailable. Please try again in a few minutes."
+            elif "format is not supported" in error_str:
+                return "🖼️ This image format is not supported. Please try uploading a JPEG, PNG, or WebP image."
+            elif "too large" in error_str:
+                return "📏 This image is too large. Please try uploading a smaller image."
+            elif "could not be found" in error_str:
+                return "📁 The image could not be processed. Please try uploading it again."
+            else:
+                return "❌ Failed to analyze the image. This may be due to a temporary service issue - please try again."
+>>>>>>> Stashed changes
     
     async def _vl_describe_image_from_url(self, image_url: str, *, prompt: Optional[str] = None, model_override: Optional[str] = None) -> Optional[str]:
         """
@@ -1527,6 +1558,7 @@ class Router:
             return None
         suffix = ".jpg"
         try:
+<<<<<<< Updated upstream
             # Infer extension if present
             m = re.search(r"\.(jpg|jpeg|png|webp)(?:\?|$)", image_url, re.IGNORECASE)
             if m:
@@ -1579,6 +1611,20 @@ class Router:
         except Exception as e:
             self.logger.error(f"❌ VL describe failed for {image_url}: {e}", exc_info=True)
             return None
+=======
+            await attachment.save(tmp_path)
+            self.logger.debug(f"Saved image attachment to temp file: {tmp_path}")
+            
+            # Use the message content as prompt, or default prompt
+            prompt = "Describe this image in detail."
+            vision_response = await see_infer(image_path=tmp_path, prompt=prompt)
+            
+            if not vision_response or vision_response.error:
+                return "❌ Could not analyze the image. Please try again or check if the image is valid."
+            
+            return f"📸 **Image Analysis:** {vision_response.content}"
+            
+>>>>>>> Stashed changes
         finally:
             try:
                 if tmp_path and os.path.exists(tmp_path):
@@ -1727,7 +1773,15 @@ class Router:
             await attachment.save(tmp_path)
             self.logger.info(f"📄 Processing PDF attachment: {attachment.filename}")
             
-            text_content = await self.pdf_processor.process(tmp_path)
+            # Process PDF and get result dictionary
+            result = await self.pdf_processor.process(tmp_path)
+            
+            # Handle error case
+            if result.get('error'):
+                return f"Could not extract text from PDF: {attachment.filename} (Error: {result['error']})"
+            
+            # Extract text content from result dictionary
+            text_content = result.get('text', '')
             if not text_content or not text_content.strip():
                 return f"Could not extract text from PDF: {attachment.filename}"
             
@@ -1973,11 +2027,27 @@ class Router:
                         return "⚠️ X posts require API access and cannot be scraped. Configure X_API_BEARER_TOKEN to enable."
                     # else fall through to generic handling
             
+<<<<<<< Updated upstream
             # Use existing URL processing logic - process_url returns a dict
             url_result = await process_url(url)
             
             # Handle errors
             if not url_result or url_result.get('error'):
+=======
+            # Use existing URL processing logic
+            result = await process_url(url)
+            
+            # Handle error case
+            if result.get('error'):
+                return f"Could not extract content from URL: {url} (Error: {result['error']})"
+            
+            # Extract text content from result dictionary
+            content = result.get('text', '')
+            if not content or not content.strip():
+                # If no text content, check if we have a screenshot
+                if result.get('screenshot_path'):
+                    return f"Screenshot captured for {url}: {result['screenshot_path']}"
+>>>>>>> Stashed changes
                 return f"Could not extract content from URL: {url}"
             
             # Check if smart routing detected media and should route to yt-dlp
