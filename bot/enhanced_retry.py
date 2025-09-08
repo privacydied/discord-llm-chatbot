@@ -94,9 +94,9 @@ class EnhancedRetryManager:
             ProviderConfig("openrouter", "qwen/qwen2.5-vl-32b-instruct:free", timeout=10.0),
         ]
         default_text = [
-            ProviderConfig("openrouter", "deepseek/deepseek-r1-0528:free", timeout=10.0),
-            ProviderConfig("openrouter", "deepseek/deepseek-chat-v3-0324:free", timeout=12.0),
-            ProviderConfig("openrouter", "z-ai/glm-4.5-air:free", timeout=15.0),
+            ProviderConfig("openrouter", "deepseek/deepseek-r1-0528:free", timeout=15.0),
+            ProviderConfig("openrouter", "deepseek/deepseek-chat-v3-0324:free", timeout=20.0),
+            ProviderConfig("openrouter", "z-ai/glm-4.5-air:free", timeout=25.0),
         ]
         # Media tasks (e.g., video/audio downloads) are not LLM calls; they often need longer timeouts
         # and fewer attempts. Use an internal single-step "provider" to reuse the retry harness.
@@ -190,7 +190,7 @@ class EnhancedRetryManager:
             "502", "503", "504", "500", "429",  # HTTP server errors and rate limits
             "bad gateway", "service unavailable", "gateway timeout",
             "provider returned error", "provider error",
-            "timeout", "connection", "network",
+            "timeout", "connection", "network", "cancelled", "canceled",
             "rate limit", "too many requests", "client error"
         ]
         
@@ -280,6 +280,19 @@ class EnhancedRetryManager:
                     )
                 
                 except Exception as e:
+                    # Normalize timeouts to a descriptive message [REH]
+                    try:
+                        if isinstance(e, (asyncio.TimeoutError, TimeoutError)):
+                            desc = f"LLM attempt timed out after {attempt_timeout:.1f}s for {provider_key}"
+                            te = TimeoutError(desc)
+                            try:
+                                setattr(te, 'provider_key', provider_key)
+                                setattr(te, 'timeout_seconds', attempt_timeout)
+                            except Exception:
+                                pass
+                            e = te
+                    except Exception:
+                        pass
                     logger.warning(f"⚠️ Attempt {attempt + 1} failed with {provider_key}: {type(e).__name__}: {e}")
                     # Keep track of the last exception so callers can inspect specifics (e.g., Retry-After)
                     last_exception = e

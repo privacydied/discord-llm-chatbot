@@ -7,6 +7,7 @@ import aiohttp
 import httpx
 import base64
 import os
+import time
 
 try:
     from .config import load_config
@@ -91,7 +92,13 @@ async def generate_openai_response(
         
         # Configure OpenAI client with configurable timeout
         import httpx
-        timeout_seconds = float(config.get('TEXT_REQUEST_TIMEOUT', '30'))
+        # Prefer TEXTGEN_TIMEOUT_SECONDS; fall back to TEXT_REQUEST_TIMEOUT; default 45s
+        try:
+            timeout_seconds = float(
+                config.get('TEXTGEN_TIMEOUT_SECONDS', config.get('TEXT_REQUEST_TIMEOUT', '45'))
+            )
+        except Exception:
+            timeout_seconds = 45.0
         
         client = openai.AsyncOpenAI(
             api_key=config.get('OPENAI_API_KEY'),
@@ -248,6 +255,7 @@ Server Context: {server_context}"""
                 async def _run():
                     try:
                         logger.debug(f"[OpenAI] 🔄 Sending request to API with model: {selected_model}")
+                        t0 = time.monotonic()
                         resp = await client.chat.completions.create(
                             model=selected_model,
                             messages=messages,
@@ -278,14 +286,30 @@ Server Context: {server_context}"""
                         except Exception:
                             pass
                         raise err
+                    except Exception as e:
+                        # Normalize timeouts and log a compact line per attempt [REH]
+                        elapsed_ms = int((time.monotonic() - t0) * 1000)
+                        etype = type(e).__name__
+                        if 'timeout' in str(e).lower() or 'timeout' in etype.lower():
+                            logger.warning(f"TextGen timeout (model {selected_model}): {elapsed_ms}ms")
+                            raise APIError(f"Request timeout after ~{elapsed_ms}ms for model {selected_model}")
+                        raise
                 return _run
 
             per_item_budget = float(config.get('TEXT_PER_ITEM_BUDGET', 45.0))
             rr = await retry_mgr.run_with_fallback('text', _coro_factory, per_item_budget=per_item_budget)
             if not rr.success:
-                # Re-raise last error (if present) to flow into with_retry() logic
+                # Enrich error with ladder context for better observability [REH]
                 if rr.error:
-                    raise rr.error
+                    try:
+                        prov = getattr(rr, 'provider_used', None) or getattr(rr.error, 'provider_key', None) or 'unknown'
+                        attempts = getattr(rr, 'attempts', 0)
+                        total_time = getattr(rr, 'total_time', 0.0)
+                        msg = f"Text fallback ladder failed after {attempts} attempt(s) in {total_time:.2f}s (last_provider={prov}): {type(rr.error).__name__}: {rr.error}"
+                        raise APIError(msg)
+                    except Exception:
+                        # Fallback to original error if wrapping fails
+                        raise rr.error
                 raise APIError("All text providers exhausted")
             return rr.result
 
