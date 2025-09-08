@@ -174,44 +174,80 @@ class ImgCommands(commands.Cog):
             except Exception:
                 pass
         else:
-            # No inline prompt: try to use first eligible attachment as prompt
-            attachments = getattr(ctx.message, 'attachments', []) or []
+            # No inline prompt: collect attachments from current and referenced message
+            attachments = list(getattr(ctx.message, 'attachments', []) or [])
+            # Include attachments from replied-to message if present
+            try:
+                ref = getattr(ctx.message, 'reference', None)
+                ref_msg = None
+                if ref:
+                    if getattr(ref, 'resolved', None) and isinstance(ref.resolved, discord.Message):
+                        ref_msg = ref.resolved
+                    elif getattr(ref, 'message_id', None):
+                        ref_msg = await ctx.channel.fetch_message(ref.message_id)
+                if ref_msg and getattr(ref_msg, 'attachments', None):
+                    attachments.extend(ref_msg.attachments)
+            except Exception:
+                pass
+            # Log attachments count breadcrumb
+            try:
+                self.logger.debug(f"IMG.attachments count={len(attachments)} msg_id={ctx.message.id}")
+            except Exception:
+                pass
+
             try:
                 max_bytes = int(os.getenv("IMG_ATTACHMENT_MAX_BYTES", "262144"))
             except Exception:
                 max_bytes = 262144
-            chosen = None
-            for att in attachments:
-                if self._eligible_text_attachment(att):
-                    chosen = att
-                    break
 
-            if chosen is not None:
+            # Prefer text-like extensions but do not require them
+            allowed_exts = (".txt", ".md", ".rtf", ".json", ".yaml", ".yml")
+            preferred: list[discord.Attachment] = []
+            others: list[discord.Attachment] = []
+            for att in attachments:
+                name = (getattr(att, 'filename', '') or '').lower()
+                if not name:
+                    continue
                 try:
-                    blob = await self._read_attachment_text(chosen, max_bytes)
-                    if blob:
-                        p, params = self._parse_prompt_blob(blob)
-                        if p:
-                            final_prompt = p
-                            parsed_params = params or {}
-                            try:
-                                self.logger.debug(
-                                    f"IMG.prompt_source=attachment file={chosen.filename} size={getattr(chosen, 'size', 0)} msg_id={ctx.message.id}"
-                                )
-                            except Exception:
-                                pass
-                        else:
-                            await ctx.send(embed=self._build_img_help_embed())
-                            return
-                    else:
-                        await ctx.send(embed=self._build_img_help_embed())
-                        return
+                    size_ok = int(getattr(att, 'size', 0) or 0) <= max_bytes
                 except Exception:
-                    # Quietly fall back to help card on read/parse failure
-                    await ctx.send(embed=self._build_img_help_embed())
-                    return
-            else:
-                # No eligible attachment
+                    size_ok = True
+                if not size_ok:
+                    continue
+                if name.endswith(allowed_exts):
+                    preferred.append(att)
+                else:
+                    others.append(att)
+
+            candidates = preferred + others
+
+            found = False
+            for cand in candidates:
+                try:
+                    blob = await self._read_attachment_text(cand, max_bytes)
+                    if not blob:
+                        continue
+                    p, params = self._parse_prompt_blob(blob)
+                    if not p:
+                        # Fall back to using plain text if JSON lacked 'prompt'
+                        p = blob.strip()[:2000]
+                    if p:
+                        final_prompt = p
+                        parsed_params = params or {}
+                        try:
+                            self.logger.debug(
+                                f"IMG.prompt_source=attachment file={cand.filename} size={getattr(cand, 'size', 0)} msg_id={ctx.message.id}"
+                            )
+                        except Exception:
+                            pass
+                        found = True
+                        break
+                except Exception:
+                    # Continue to next candidate on read/parse failure
+                    continue
+
+            if not found:
+                # No usable attachment-derived prompt
                 await ctx.send(embed=self._build_img_help_embed())
                 return
 
@@ -291,10 +327,10 @@ class ImgCommands(commands.Cog):
         embed.add_field(name="Usage", value="!img <description>", inline=False)
         embed.add_field(name="Examples", value="!img a kitten playing with yarn\n(or) attach message.txt with your prompt and send !img", inline=False)
         embed.add_field(
-            name="Use a .txt file:",
+            name="Use a file:",
             value=(
-                "Attach message.txt with your prompt and send !img (no text needed).\n"
-                "Supported: .txt, .md, .rtf, .json, .yaml, .yml (≤ 256 KB). JSON with a \"prompt\" key is supported."
+                "You can also attach a small .txt or .json file and send !img with no text.\n"
+                "Max attachment size: 256 KB. JSON example: { \"prompt\": \"a red fox in snow\", \"width\": 1024, \"height\": 1024 }"
             ),
             inline=False,
         )
