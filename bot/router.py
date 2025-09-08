@@ -3348,14 +3348,50 @@ class Router:
         """Handle !img prefix command - delegate to existing image-gen handler [CA]"""
         prompt = parsed_command.cleaned_content.strip()
         
-        # Show usage if no prompt provided
+        # If no prompt, check for attachments
         if not prompt:
-            return BotAction(
-                content="🎨 **Image Generation Help**\n"
-                       "Usage: `!img <description>`\n"
-                       "Example: `!img a kitten playing with yarn`\n"
-                       "Works in DMs and guild channels, with or without mentioning me."
-            )
+            self.logger.info(f"IMG: No prompt, checking {len(message.attachments)} attachments")
+            
+            # Try to read prompt from attachments
+            for att in message.attachments:
+                try:
+                    self.logger.info(f"IMG: Trying attachment {att.filename} ({att.size} bytes)")
+                    if att.size > 262144:  # 256KB limit
+                        continue
+                    
+                    data = await att.read()
+                    if not data:
+                        continue
+                    
+                    # Try multiple encodings
+                    text = None
+                    for encoding in ['utf-8', 'utf-16', 'latin-1']:
+                        try:
+                            text = data.decode(encoding)
+                            break
+                        except:
+                            continue
+                    
+                    if text:
+                        text = text.replace("\x00", "").strip()
+                        if text:
+                            prompt = text[:2000]  # Limit prompt length
+                            self.logger.info(f"IMG: Found prompt from {att.filename}: '{prompt[:50]}...'")
+                            break
+                except Exception as e:
+                    self.logger.error(f"IMG: Error reading {att.filename}: {e}")
+                    continue
+            
+            # Show usage if still no prompt
+            if not prompt:
+                self.logger.info("IMG: No prompt from attachments, showing help")
+                return BotAction(
+                    content="🎨 **Image Generation Help**\n"
+                           "Usage: `!img <description>`\n"
+                           "Example: `!img a kitten playing with yarn`\n"
+                           "You can also attach a .txt file with your prompt.\n"
+                           "Works in DMs and guild channels, with or without mentioning me."
+                )
         
         # Check if Vision is enabled
         if not self._vision_orchestrator:

@@ -25,6 +25,12 @@ from bot.config import load_config
 
 logger = get_logger(__name__)
 
+# === Attachment prompt feature toggles (env-driven) ===
+# Defaults: enabled, max 256 KiB, preferred extensions order informational only
+IMG_ATTACHMENT_MAX_BYTES = int(os.getenv("IMG_ATTACHMENT_MAX_BYTES", "262144") or "262144")
+IMG_ATTACHMENT_ENABLE = (os.getenv("IMG_ATTACHMENT_ENABLE", "true").strip().lower() not in {"0", "false", "no", "off"})
+IMG_ATTACHMENT_EXTS = [".txt", ".md", ".json", ".rtf", ".yaml", ".yml"]
+
 
 class ImgCommands(commands.Cog):
     """Traditional !img prefix command cog"""
@@ -64,29 +70,32 @@ class ImgCommands(commands.Cog):
 
     async def _read_attachment_text(self, att: discord.Attachment, limit_bytes: int) -> Optional[str]:
         """Read and decode attachment text using Discord's API with size checks and sanitization."""
-        # Enforce size cap before reading
         try:
-            size = int(getattr(att, 'size', 0) or 0)
-            if size and size > limit_bytes:
-                return None
-        except Exception:
-            pass
-
-        try:
-            # Read up to limit+1 to detect oversize
-            data = await att.read(limit_bytes + 1)
+            # Read the full attachment, enforce limit after
+            data = await att.read()
             if not isinstance(data, (bytes, bytearray)):
                 return None
             if len(data) > limit_bytes:
                 return None
-            try:
-                text = data.decode("utf-8")
-            except Exception:
-                text = data.decode("latin-1", errors="ignore")
+            
+            # Try multiple encodings to handle different file types
+            text = None
+            for encoding in ['utf-8', 'utf-16', 'latin-1']:
+                try:
+                    text = data.decode(encoding)
+                    break
+                except Exception:
+                    continue
+            
+            if not text:
+                return None
+                
+            # Clean up the text
             text = text.replace("\x00", "")
             text = re.sub(r"\s+", " ", text).strip()
             return text or None
-        except Exception:
+        except Exception as e:
+            self.logger.debug(f"Failed to read attachment {att.filename}: {e}")
             return None
 
     def _parse_prompt_blob(self, blob: str) -> Tuple[Optional[str], Dict[str, Any]]:
@@ -164,18 +173,31 @@ class ImgCommands(commands.Cog):
         final_prompt: Optional[str] = None
         parsed_params: Dict[str, Any] = {}
         inline = (prompt or "").strip()
-        if inline:
+        
+        self.logger.info(f"IMG: Raw prompt param: '{prompt}' (type: {type(prompt)}), stripped inline: '{inline}' (len: {len(inline)})")
+        
+        # Only use inline if it's actually meaningful content (not just whitespace or empty)
+        if inline and len(inline) > 0:
             # Inline prompt takes precedence
             final_prompt = inline
             try:
-                self.logger.debug(
-                    f"IMG.prompt_source=inline file=none size={len(inline)} msg_id={ctx.message.id}"
+                self.logger.info(
+                    f"IMG.prompt_source=inline len={len(inline)} content='{inline[:50]}...' msg_id={ctx.message.id}"
                 )
             except Exception:
                 pass
         else:
             # No inline prompt: collect attachments from current and referenced message
             attachments = list(getattr(ctx.message, 'attachments', []) or [])
+            current_count = len(attachments)
+
+            self.logger.info(f"IMG: Processing attachments - found {current_count} attachments, enable={IMG_ATTACHMENT_ENABLE}")
+
+            # Respect feature flag: if disabled and no inline, show help immediately
+            if not IMG_ATTACHMENT_ENABLE:
+                self.logger.info("IMG: Attachment processing disabled, showing help")
+                await ctx.send(embed=self._build_img_help_embed())
+                return
             # Include attachments from replied-to message if present
             try:
                 ref = getattr(ctx.message, 'reference', None)
@@ -187,67 +209,65 @@ class ImgCommands(commands.Cog):
                         ref_msg = await ctx.channel.fetch_message(ref.message_id)
                 if ref_msg and getattr(ref_msg, 'attachments', None):
                     attachments.extend(ref_msg.attachments)
-            except Exception:
-                pass
+            except Exception as e:
+                self.logger.debug(f"IMG: Error processing reply attachments: {e}")
             # Log attachments count breadcrumb
             try:
-                self.logger.debug(f"IMG.attachments count={len(attachments)} msg_id={ctx.message.id}")
+                reply_has = bool(ref_msg and getattr(ref_msg, 'attachments', None))
+                total = len(attachments)
+                self.logger.info(
+                    f"IMG.attachments current={current_count} reply_has={reply_has} total={total} msg_id={ctx.message.id}"
+                )
+                for i, att in enumerate(attachments):
+                    self.logger.info(f"IMG: Attachment {i}: {att.filename} ({att.size} bytes, type: {att.content_type})")
             except Exception:
                 pass
 
-            try:
-                max_bytes = int(os.getenv("IMG_ATTACHMENT_MAX_BYTES", "262144"))
-            except Exception:
-                max_bytes = 262144
+            max_bytes = IMG_ATTACHMENT_MAX_BYTES
 
-            # Prefer text-like extensions but do not require them
-            allowed_exts = (".txt", ".md", ".rtf", ".json", ".yaml", ".yml")
-            preferred: list[discord.Attachment] = []
-            others: list[discord.Attachment] = []
+            # Try all attachments regardless of extension - simple approach
+            candidates = []
             for att in attachments:
-                name = (getattr(att, 'filename', '') or '').lower()
-                if not name:
-                    continue
                 try:
                     size_ok = int(getattr(att, 'size', 0) or 0) <= max_bytes
                 except Exception:
                     size_ok = True
-                if not size_ok:
-                    continue
-                if name.endswith(allowed_exts):
-                    preferred.append(att)
-                else:
-                    others.append(att)
-
-            candidates = preferred + others
+                if size_ok:
+                    candidates.append(att)
 
             found = False
             for cand in candidates:
                 try:
+                    self.logger.info(f"IMG: Trying to read attachment: {cand.filename}")
                     blob = await self._read_attachment_text(cand, max_bytes)
+                    self.logger.info(f"IMG: Read blob from {cand.filename}: '{blob[:100] if blob else None}...'")
                     if not blob:
+                        self.logger.info(f"IMG: No text content from {cand.filename}")
                         continue
                     p, params = self._parse_prompt_blob(blob)
                     if not p:
                         # Fall back to using plain text if JSON lacked 'prompt'
                         p = blob.strip()[:2000]
+                        self.logger.info(f"IMG: Using fallback plain text: '{p[:50]}...'")
                     if p:
                         final_prompt = p
                         parsed_params = params or {}
                         try:
-                            self.logger.debug(
-                                f"IMG.prompt_source=attachment file={cand.filename} size={getattr(cand, 'size', 0)} msg_id={ctx.message.id}"
+                            self.logger.info(
+                                f"IMG.prompt_source=attachment file={cand.filename} size={getattr(cand, 'size', 0)} prompt='{p[:50]}...' msg_id={ctx.message.id}"
                             )
                         except Exception:
                             pass
                         found = True
                         break
-                except Exception:
+                except Exception as e:
                     # Continue to next candidate on read/parse failure
+                    self.logger.error(f"IMG: Exception reading {cand.filename}: {e}")
                     continue
 
             if not found:
                 # No usable attachment-derived prompt
+                self.logger.info("IMG: No usable attachment found, showing help")
                 await ctx.send(embed=self._build_img_help_embed())
                 return
 
@@ -317,29 +337,31 @@ class ImgCommands(commands.Cog):
 
     def _build_img_help_embed(self) -> discord.Embed:
         """Build the single, stylish help embed card for !img usage."""
-        # Brand purple (amethyst) or adjust to your brand color constant
-        BRAND_PURPLE = 0x9B59B6
+        # Discord brand primary color
+        BRAND_PRIMARY = 0x5865F2
         embed = discord.Embed(
             title="🎨 Image Generation Help",
-            description="Generate images from text descriptions.",
-            color=BRAND_PURPLE,
+            description=(
+                "Generate images from text prompts.\n"
+                "Send text inline, or attach a small .txt/.json file and send !img."
+            ),
+            color=BRAND_PRIMARY,
         )
         embed.add_field(name="Usage", value="!img <description>", inline=False)
-        embed.add_field(name="Examples", value="!img a kitten playing with yarn\n(or) attach message.txt with your prompt and send !img", inline=False)
         embed.add_field(
-            name="Use a file:",
+            name="Examples",
+            value="• !img a kitten playing with yarn\n• !img (attach prompt.txt or prompt.json)",
+            inline=False,
+        )
+        embed.add_field(
+            name="Attachments:",
             value=(
-                "You can also attach a small .txt or .json file and send !img with no text.\n"
-                "Max attachment size: 256 KB. JSON example: { \"prompt\": \"a red fox in snow\", \"width\": 1024, \"height\": 1024 }"
+                "Attach a small .txt or .json (≤256 KB) and send !img with no text. "
+                "JSON may include options: {\"prompt\":\"a foggy forest\",\"width\":1024,\"height\":1024}."
             ),
             inline=False,
         )
-        embed.add_field(
-            name="Tips:",
-            value="Keep it clear and SFW. Style words help (e.g., ‘cinematic, soft lighting’).",
-            inline=False,
-        )
-        embed.set_footer(text="Works in DMs and guilds. One image per request.")
+        embed.set_footer(text="Works in DMs and guild channels. You can also reply to a message with a file.")
         return embed
 
 
