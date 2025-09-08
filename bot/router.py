@@ -68,6 +68,61 @@ import os
 from datetime import datetime, timezone
 from .tts.state import tts_state
 
+@dataclass
+class XTwitterMediaInfo:
+    """Detection result for X/Twitter media content."""
+    has_x_link: bool = False
+    media_kind: str = "none"  # "image", "video", "none"
+    media_urls: List[str] = field(default_factory=list)
+
+def _detect_x_twitter_media(message: Message) -> XTwitterMediaInfo:
+    """Detect X/Twitter links and classify media type from Discord embeds (no HTTP calls)."""
+    x_hosts = {"x.com", "twitter.com", "fxtwitter.com"}
+    
+    # Check message content for X/Twitter URLs
+    content = message.content or ""
+    has_x_link = any(host in content.lower() for host in x_hosts)
+    
+    # Check embeds for X/Twitter content and media classification
+    media_kind = "none"
+    media_urls = []
+    
+    for embed in message.embeds:
+        # Check embed URLs and provider info
+        embed_url = getattr(embed, 'url', '') or ''
+        provider = getattr(embed, 'provider', None)
+        provider_name = getattr(provider, 'name', '') if provider else ''
+        author = getattr(embed, 'author', None)
+        author_url = getattr(author, 'url', '') if author else ''
+        
+        # Detect X/Twitter from embed metadata
+        if (any(host in embed_url.lower() for host in x_hosts) or
+            'twitter' in provider_name.lower() or 'x.com' in provider_name.lower() or
+            any(host in author_url.lower() for host in x_hosts)):
+            has_x_link = True
+            
+            # Classify media type from embed structure
+            if hasattr(embed, 'video') and embed.video:
+                media_kind = "video"
+                # For videos, use the tweet URL itself (yt-dlp will handle extraction)
+                if embed_url:
+                    media_urls.append(embed_url)
+            elif hasattr(embed, 'image') and embed.image:
+                media_kind = "image"
+                if embed.image.url:
+                    media_urls.append(embed.image.url)
+            elif hasattr(embed, 'thumbnail') and embed.thumbnail:
+                if media_kind == "none":  # Don't override video detection
+                    media_kind = "image"
+                if embed.thumbnail.url:
+                    media_urls.append(embed.thumbnail.url)
+    
+    return XTwitterMediaInfo(
+        has_x_link=has_x_link,
+        media_kind=media_kind,
+        media_urls=media_urls
+    )
+
 # Vision generation system (import only, no flag constant)
 try:
     from .vision import VisionIntentRouter, VisionOrchestrator
@@ -759,6 +814,76 @@ class Router:
                     if router_debug:
                         self.logger.info(f"ROUTER_DEBUG | path=t2i reason=vision_intent_detected msg_id={message.id}")
                     return prechecked
+
+                # 5.5. Check for X/Twitter media routing (before multimodal)
+                x_info = _detect_x_twitter_media(message)
+                if (x_info.has_x_link and x_info.media_kind != "none" and 
+                    not parsed_command and x_info.media_urls):
+                    
+                    self.logger.debug(f"🔗 X/Twitter link detected | kind={x_info.media_kind} | embeds={len(message.embeds)}")
+                    
+                    try:
+                        if x_info.media_kind == "image":
+                            # X/Twitter images → VL perception → text flow
+                            image_url = x_info.media_urls[0]
+                            self.logger.debug(f"📎 X/Twitter image detected | url={image_url}")
+                            
+                            # Download and analyze image
+                            try:
+                                import httpx
+                                async with httpx.AsyncClient() as client:
+                                    response = await client.get(image_url, timeout=30.0)
+                                    if response.status_code == 200:
+                                        image_data = response.content
+                                        vl_notes = await see_infer(image_data)
+                                        if vl_notes:
+                                            vl_notes = sanitize_vl_reply_text(vl_notes)
+                                            perception_context = f"Perception (from the X/Twitter image):\n{vl_notes}\n\n"
+                                            return await self._flow_process_text(
+                                                content=message.content or "",
+                                                context=context_str,
+                                                message=message,
+                                                perception_notes=vl_notes
+                                            )
+                            except Exception as e:
+                                self.logger.debug(f"❌ X/Twitter media unavailable | reason=image_fetch_failed | continuing without media")
+                                # Continue with fallback hint
+                                fallback_content = f"{message.content or ''}\n\n(image was unavailable; proceeding without it)"
+                                return await self._flow_process_text(
+                                    content=fallback_content.strip(),
+                                    context=context_str,
+                                    message=message
+                                )
+                        
+                        elif x_info.media_kind == "video":
+                            # X/Twitter videos → yt-dlp → STT → text flow
+                            video_url = x_info.media_urls[0]
+                            self.logger.debug(f"🔊 X/Twitter video detected | url={video_url}")
+                            
+                            try:
+                                # Use existing STT pipeline
+                                transcript = await hear_infer_from_url(video_url)
+                                if transcript:
+                                    self.logger.debug(f"📝 STT complete | transcript_len={len(transcript)}")
+                                    transcript_context = f"Transcript (from the X/Twitter video):\n{transcript}\n\nPlease summarize or respond succinctly to this content. Note any uncertainty if the transcript seems unclear.\n\n"
+                                    return await self._flow_process_text(
+                                        content=f"{message.content or ''}\n\n{transcript_context}".strip(),
+                                        context=context_str,
+                                        message=message
+                                    )
+                            except Exception as e:
+                                self.logger.debug(f"❌ X/Twitter media unavailable | reason=video_stt_failed | continuing without media")
+                                # Continue with fallback hint
+                                fallback_content = f"{message.content or ''}\n\n(video audio unavailable; proceeding without it)"
+                                return await self._flow_process_text(
+                                    content=fallback_content.strip(),
+                                    context=context_str,
+                                    message=message
+                                )
+                    
+                    except Exception as e:
+                        self.logger.error(f"X/Twitter media processing failed: {e}", exc_info=True)
+                        # Fall through to normal processing
 
                 # 6. Sequential multimodal processing
                 result_action = await self._process_multimodal_message_internal(message, context_str)
