@@ -22,6 +22,8 @@ from .types import (
     VisionRequest, VisionResponse, VisionProvider, VisionTask,
     VisionError, VisionErrorType
 )
+from .money import Money
+from .pricing_loader import get_pricing_table
 
 logger = get_logger(__name__)
 
@@ -379,6 +381,10 @@ class NovitaPlugin(ProviderPlugin):
         # Ensure minimum sizes
         width = max(256, width)
         height = max(256, height)
+
+        # Align to multiples of 8 and clamp to endpoint maximums
+        width = min(max_w, (width // 8) * 8)
+        height = min(max_h, (height // 8) * 8)
         
         # Format according to endpoint requirements
         if endpoint_config["size_format"] == "WxH":
@@ -411,7 +417,6 @@ class NovitaPlugin(ProviderPlugin):
                 warnings.append("Custom guidance scale not supported by Qwen-Image endpoint, using default")
             if request.seed:
                 warnings.append("Custom seed not supported by Qwen-Image endpoint, ignoring")
-                
         elif endpoint == "txt2img":
             # SDXL endpoint: full parameter support [REH]
             payload.update({
@@ -423,22 +428,115 @@ class NovitaPlugin(ProviderPlugin):
             
             if request.negative_prompt:
                 payload["negative_prompt"] = request.negative_prompt
-                
+            
             if request.seed:
                 payload["seed"] = request.seed
-                
+            
             # NSFW detection (optional, billable)
             if request.safety_mode == "detect":
                 payload["extra"] = {
                     "enable_nsfw_detection": True,
                     "nsfw_detection_level": 2
                 }
-                
+            
             if request.input_image_data:
                 b64_image = base64.b64encode(request.input_image_data).decode()
                 payload["init_image"] = b64_image
         
         return payload, warnings
+
+    def _normalize_payload_for_novita(self, endpoint: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Sanitize/normalize payload before sending to Novita [IV][REH].
+        - Drops None/empty strings
+        - Clamps steps 1..100, guidance 1..20
+        - Coerces seed to int
+        - Rounds sizes to multiples of 8 (>=256) and within endpoint max
+        - Converts list negative_prompt to comma-joined string
+        - Removes keys outside the endpoint allowlist
+        """
+        allowed_qwen = {"prompt", "size"}
+        allowed_txt2img = {
+            "prompt", "model_name", "steps", "guidance_scale",
+            "width", "height", "negative_prompt", "seed",
+            "batch_size", "extra", "init_image"
+        }
+        allowed = allowed_qwen if endpoint == "qwen-image-txt2img" else allowed_txt2img
+
+        def _clean_ok(v: Any) -> bool:
+            return v is not None and not (isinstance(v, str) and v.strip() == "")
+
+        norm = {k: v for k, v in payload.items() if _clean_ok(v)}
+
+        # Prompt whitespace normalization and 2000-rune clamp [IV]
+        if "prompt" in norm:
+            p = norm.get("prompt")
+            # Coerce non-str to str defensively
+            prompt_clean = " ".join(str(p if p is not None else "").split()).strip()
+            orig_len = len(prompt_clean)
+            if orig_len == 0:
+                raise VisionError(
+                    message="Prompt is empty after normalization",
+                    error_type=VisionErrorType.VALIDATION_ERROR,
+                    user_message="A prompt is required."
+                )
+            if orig_len > 2000:
+                logger.debug(f"Novita prompt auto-truncated from {orig_len} to 2000")
+                prompt_clean = prompt_clean[:2000]
+            norm["prompt"] = prompt_clean
+
+        # negative_prompt as CSV
+        if isinstance(norm.get("negative_prompt"), list):
+            norm["negative_prompt"] = ", ".join(
+                str(x).strip() for x in norm["negative_prompt"] if str(x).strip()
+            )
+
+        # steps clamp
+        if "steps" in norm:
+            try:
+                norm["steps"] = max(1, min(int(norm["steps"]), 100))
+            except Exception:
+                norm.pop("steps", None)
+
+        # guidance_scale clamp
+        if "guidance_scale" in norm:
+            try:
+                norm["guidance_scale"] = max(1.0, min(float(norm["guidance_scale"]), 20.0))
+            except Exception:
+                norm.pop("guidance_scale", None)
+
+        # seed coercion
+        if "seed" in norm:
+            try:
+                norm["seed"] = int(norm["seed"])
+            except Exception:
+                norm.pop("seed", None)
+
+        # Size rounding depending on endpoint format
+        try:
+            max_w, max_h = self.endpoints[endpoint]["max_size"]
+            if endpoint == "qwen-image-txt2img" and isinstance(norm.get("size"), str) and "*" in norm["size"]:
+                w_str, h_str = norm["size"].split("*", 1)
+                w = min(max_w, (max(256, int(w_str)) // 8) * 8)
+                h = min(max_h, (max(256, int(h_str)) // 8) * 8)
+                norm["size"] = f"{w}*{h}"
+            else:
+                if "width" in norm:
+                    w = min(max_w, (max(256, int(norm["width"])) // 8) * 8)
+                    norm["width"] = w
+                if "height" in norm:
+                    h = min(max_h, (max(256, int(norm["height"])) // 8) * 8)
+                    norm["height"] = h
+        except Exception:
+            # Best-effort; leave as-is if parsing fails
+            pass
+
+        # Strict allowlist
+        norm = {k: v for k, v in norm.items() if k in allowed}
+
+        # Debug without leaking prompt text
+        debug_view = {k: ("…" if k in ("prompt", "negative_prompt") else v) for k, v in norm.items()}
+        logger.debug(f"Novita normalized payload for {endpoint}: {debug_view}")
+        return norm
 
     async def submit(self, request: NormalizedRequest, endpoint: str = "qwen-image-txt2img") -> str:
         """Submit to Novita.ai API with endpoint selection and unified error handling [REH]"""
@@ -448,17 +546,17 @@ class NovitaPlugin(ProviderPlugin):
                 error_type=VisionErrorType.UNSUPPORTED_TASK,
                 user_message=f"Sorry, the requested model is not supported."
             )
-        
+
         endpoint_config = self.endpoints[endpoint]
-        
-        # Build payload for specific endpoint
-        payload, warnings = self.build_payload_for_endpoint(endpoint, request)
-        
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
         }
-        
+
+        # Build and sanitize payload
+        payload, warnings = self.build_payload_for_endpoint(endpoint, request)
+        payload = self._normalize_payload_for_novita(endpoint, payload)
+
         try:
             async with self.session.post(
                 f"{self.base_url}{endpoint_config['path']}",
@@ -466,7 +564,7 @@ class NovitaPlugin(ProviderPlugin):
                 headers=headers
             ) as response:
                 error_text = await response.text()
-                
+
                 # Unified error handling with proper taxonomy [REH]
                 if response.status == 400:
                     if "nsfw" in error_text.lower() or "content" in error_text.lower():
@@ -480,6 +578,12 @@ class NovitaPlugin(ProviderPlugin):
                             message=f"Invalid request: {error_text}",
                             error_type=VisionErrorType.VALIDATION_ERROR,
                             user_message="There was an issue with your request parameters. Please check and try again."
+                        )
+                    elif "prompt: value length must be between 1 and 2000" in error_text.lower():
+                        raise VisionError(
+                            message=f"Invalid request: {error_text}",
+                            error_type=VisionErrorType.VALIDATION_ERROR,
+                            user_message="Your prompt is too long for this provider. I've trimmed it and will retry."
                         )
                 elif response.status == 401:
                     raise VisionError(
@@ -511,10 +615,10 @@ class NovitaPlugin(ProviderPlugin):
                         error_type=VisionErrorType.PROVIDER_ERROR,
                         user_message="Vision generation failed. Please try again."
                     )
-                
+
                 result = await response.json()
                 job_id = result.get("task_id", f"novita_{int(time.time() * 1000)}")
-                
+
                 # Store job for tracking
                 self._jobs = getattr(self, '_jobs', {})
                 self._jobs[job_id] = {
@@ -525,9 +629,9 @@ class NovitaPlugin(ProviderPlugin):
                     "result": None,
                     "endpoint": endpoint
                 }
-                
+
                 return job_id
-                
+
         except VisionError:
             raise
         except Exception as e:
@@ -804,6 +908,51 @@ class UnifiedVisionAdapter:
                 
             except Exception as e:
                 self.logger.error(f"Failed to initialize provider {name}: {e}")
+
+    def _has_valid_credentials(self, provider_name: str) -> bool:
+        """Best-effort credential presence check per provider [SFT].
+        Conservative: Together requires a provider-specific key; Novita can use NOVITA_API_KEY or fallback VISION_API_KEY.
+        """
+        try:
+            name = provider_name.split(":")[0].lower()
+            if name == "novita":
+                key = (self.config.get("NOVITA_API_KEY") or self.config.get("VISION_API_KEY") or "")
+            elif name == "together":
+                key = (self.config.get("TOGETHER_API_KEY") or self.config.get("VISION_API_KEY_TOGETHER") or "")
+            else:
+                key = self.config.get("VISION_API_KEY", "")
+            return isinstance(key, str) and len(key.strip()) > 10
+        except Exception:
+            return False
+
+    def _is_provider_healthy(self, provider_name: str) -> bool:
+        """Lightweight health gate. Currently mirrors credential presence/shape [PA]."""
+        return self._has_valid_credentials(provider_name)
+
+    def _estimate_cost_money(self, provider_name: str, request: NormalizedRequest) -> Optional[Money]:
+        """Best-effort Money estimate using pricing table [PA][CMV].
+        Returns None if pricing table does not cover this provider/task.
+        """
+        try:
+            table = get_pricing_table()
+            # Normalize provider string and strip endpoint suffix if present [IV]
+            normalized_provider = provider_name.split(":")[0].lower()
+            provider_enum = VisionProvider(normalized_provider)
+            # Derive model if available on normalized request
+            model = getattr(request, 'preferred_model', None)
+            money_est = table.estimate_cost(
+                provider=provider_enum,
+                task=request.task,
+                width=request.width,
+                height=request.height,
+                num_images=getattr(request, 'batch_size', 1) or 1,
+                duration_seconds=getattr(request, 'video_seconds', None) or 4.0,
+                model=model,
+            )
+            # Ensure Money type
+            return money_est if isinstance(money_est, Money) else Money(money_est)
+        except Exception:
+            return None
     
     def _build_model_aliases(self) -> Dict[str, ModelSelection]:
         """Build model alias mapping for VISION_MODEL resolution [CMV]"""
@@ -846,7 +995,7 @@ class UnifiedVisionAdapter:
         # Direct alias lookup
         selection = self._model_aliases.get(self.vision_model_override.lower())
         if selection:
-            self.logger.info(f"🎯 Resolved VISION_MODEL '{self.vision_model_override}' → {selection.provider}:{selection.endpoint}")
+            self.logger.info(f" Resolved VISION_MODEL '{self.vision_model_override}' → {selection.provider}:{selection.endpoint}")
             return selection
             
         # Parse provider:model format
@@ -871,7 +1020,7 @@ class UnifiedVisionAdapter:
                         supports_advanced=True
                     )
         
-        self.logger.warning(f"⚠️ Unrecognized VISION_MODEL '{self.vision_model_override}', falling back to policy")
+        self.logger.warning(f" Unrecognized VISION_MODEL '{self.vision_model_override}', falling back to policy")
         return None
     
     async def startup(self):
@@ -915,13 +1064,15 @@ class UnifiedVisionAdapter:
         provider_order = policy.get("provider_order", ["together", "novita"])
         
         for provider_name in provider_order:
-            provider = self.providers.get(provider_name)
-            if not provider:
+            # Support provider entries that include endpoint alias e.g. "novita:qwen-image"
+            provider_key = provider_name.split(":")[0].lower()
+            if provider_key not in self.providers:
                 continue
             
-            capabilities = provider.capabilities()
+            provider = self.providers[provider_key]
             
             # Check if provider supports the task
+            capabilities = provider.capabilities()
             if request.task not in capabilities.get("modes", []):
                 continue
             
@@ -933,19 +1084,23 @@ class UnifiedVisionAdapter:
             # Estimate cost and check budget
             try:
                 estimated_cost = self._estimate_cost(provider, request)
+                money_est = self._estimate_cost_money(provider_name, request)
                 budget_limit = policy.get("budget_per_job_usd", 0.25)
                 
                 if estimated_cost > budget_limit:
                     self.logger.warning(
-                        f"Provider {provider_name} cost ${estimated_cost:.3f} exceeds budget ${budget_limit:.3f}"
+                        f"Provider {provider_key} cost ${estimated_cost:.3f} exceeds budget ${budget_limit:.3f}"
                     )
                     continue
                 
-                self.logger.info(f"Selected provider: {provider_name} (cost: ${estimated_cost:.3f})")
+                if money_est is not None:
+                    self.logger.info(f"Selected provider: {provider_key} (cost: ${estimated_cost:.3f}, money={money_est})")
+                else:
+                    self.logger.info(f"Selected provider: {provider_key} (cost: ${estimated_cost:.3f})")
                 return provider
                 
             except Exception as e:
-                self.logger.warning(f"Cost estimation failed for {provider_name}: {e}")
+                self.logger.warning(f"Cost estimation failed for {provider_key}: {e}")
                 continue
         
         return None
@@ -997,6 +1152,22 @@ class UnifiedVisionAdapter:
                     resolved_order.append(entry)
             provider_order = resolved_order
         
+        # Filter by configured/healthy providers, preserving order [SFT]
+        filtered_order: List[str] = []
+        for name in provider_order:
+            base = name.split(":")[0]
+            if self._has_valid_credentials(base) and self._is_provider_healthy(base) and base in self.providers:
+                if base not in filtered_order:
+                    filtered_order.append(base)
+        if not filtered_order:
+            raise VisionError(
+                error_type=VisionErrorType.SYSTEM_ERROR,
+                message="No configured/healthy vision providers available",
+                user_message="Vision generation is not configured."
+            )
+        self.logger.debug(f"Provider order (filtered): {filtered_order}")
+        provider_order = filtered_order
+        
         last_error = None
         
         for provider_name in provider_order:
@@ -1004,6 +1175,10 @@ class UnifiedVisionAdapter:
                 continue
                 
             provider = self.providers[provider_name]
+            # Belt-and-braces: skip if not configured/healthy
+            if not (self._has_valid_credentials(provider_name) and self._is_provider_healthy(provider_name)):
+                self.logger.debug(f"Skipping provider {provider_name}: not configured/unhealthy")
+                continue
             
             # Check if provider supports the task
             capabilities = provider.capabilities()
@@ -1023,6 +1198,7 @@ class UnifiedVisionAdapter:
                     endpoint = "txt2img"
             
             # Attempt submission with retries
+            did_prompt_retry = False  # Single-shot retry for Novita prompt length
             for attempt in range(policy.get("max_retries_per_provider", 2)):
                 try:
                     # Submit with endpoint if supported (Novita), otherwise default
@@ -1041,6 +1217,27 @@ class UnifiedVisionAdapter:
                     
                 except VisionError as e:
                     last_error = e
+                    # Special-case: Novita 400 prompt length error → one clean retry with 2000-char prompt [REH]
+                    if (
+                        provider_name == "novita"
+                        and e.error_type == VisionErrorType.VALIDATION_ERROR
+                        and "prompt: value length must be between 1 and 2000" in (e.message or "").lower()
+                    ):
+                        if not did_prompt_retry:
+                            # Normalize whitespace and clamp to 2000
+                            clamped = " ".join((normalized_request.prompt or "").split()).strip()
+                            if len(clamped) > 2000:
+                                clamped = clamped[:2000]
+                            if len(clamped) == 0:
+                                # Nothing to retry with
+                                self.logger.debug("Novita prompt length retry skipped: prompt empty after normalization")
+                            else:
+                                normalized_request.prompt = clamped
+                                self.logger.debug("Novita retry with 2000-char prompt")
+                                did_prompt_retry = True
+                                # Immediate retry without backoff
+                                continue
+                        # Already retried once; fall through to existing handling
                     if e.error_type in [VisionErrorType.RATE_LIMITED, VisionErrorType.PROVIDER_ERROR]:
                         # Exponential backoff for retryable errors
                         wait_time = (2 ** attempt) * 1.0  # 1s, 2s, 4s...

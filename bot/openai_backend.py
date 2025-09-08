@@ -89,11 +89,15 @@ async def generate_openai_response(
     try:
         config = load_config()
         
-        # Configure OpenAI client with optimized timeout
+        # Configure OpenAI client with configurable timeout
+        import httpx
+        timeout_seconds = float(config.get('TEXT_REQUEST_TIMEOUT', '30'))
+        
         client = openai.AsyncOpenAI(
             api_key=config.get('OPENAI_API_KEY'),
             base_url=config.get('OPENAI_API_BASE', 'https://api.openai.com/v1'),
-            timeout=30.0  # Faster timeout for speed
+            timeout=httpx.Timeout(timeout_seconds),
+            max_retries=0  # Let our retry system handle retries
         )
         
         # Get model configuration
@@ -158,30 +162,52 @@ Server Context: {server_context}"""
         
         # Helper to normalize a completion response into our result dict
         def _normalize_nonstream_response(response_obj, used_model: str) -> Dict[str, Any]:
-            if not response_obj.choices:
-                logger.warning("[OpenAI] ⚠️ No choices in response - empty choices array (transient)")
-                logger.debug(f"[OpenAI] Response object: {response_obj}")
-                raise APIError("No choices returned in OpenAI response")
-            if not response_obj.choices[0].message:
-                logger.error("[OpenAI] ❌ No message in first choice")
-                logger.debug(f"[OpenAI] First choice: {response_obj.choices[0]}")
-                raise APIError("No message in OpenAI response choice")
-            if not response_obj.choices[0].message.content:
-                logger.warning("[OpenAI] ⚠️ Empty message content returned")
-                response_text_local = ""
-            else:
-                response_text_local = response_obj.choices[0].message.content
-            usage_info_local = {
-                'prompt_tokens': response_obj.usage.prompt_tokens if response_obj.usage else 0,
-                'completion_tokens': response_obj.usage.completion_tokens if response_obj.usage else 0,
-                'total_tokens': response_obj.usage.total_tokens if response_obj.usage else 0
-            }
-            return {
-                'text': response_text_local,
-                'model': used_model,
-                'usage': usage_info_local,
-                'backend': 'openai'
-            }
+            try:
+                logger.debug(f"[OpenAI] Normalizing response object: {type(response_obj)}")
+                
+                if not hasattr(response_obj, 'choices'):
+                    logger.error(f"[OpenAI] ❌ Response object missing 'choices' attribute: {response_obj}")
+                    raise APIError(f"Invalid OpenAI response structure - no choices attribute")
+                    
+                if not response_obj.choices:
+                    logger.warning("[OpenAI] ⚠️ No choices in response - empty choices array")
+                    logger.debug(f"[OpenAI] Response object: {response_obj}")
+                    raise APIError("No choices returned in OpenAI response")
+                    
+                if not hasattr(response_obj.choices[0], 'message'):
+                    logger.error(f"[OpenAI] ❌ First choice missing 'message' attribute: {response_obj.choices[0]}")
+                    raise APIError("No message in OpenAI response choice")
+                    
+                if not response_obj.choices[0].message:
+                    logger.error("[OpenAI] ❌ No message in first choice")
+                    logger.debug(f"[OpenAI] First choice: {response_obj.choices[0]}")
+                    raise APIError("No message in OpenAI response choice")
+                    
+                if not hasattr(response_obj.choices[0].message, 'content'):
+                    logger.error(f"[OpenAI] ❌ Message missing 'content' attribute: {response_obj.choices[0].message}")
+                    raise APIError("Message has no content attribute")
+                    
+                if not response_obj.choices[0].message.content:
+                    logger.warning("[OpenAI] ⚠️ Empty message content returned")
+                    response_text_local = ""
+                else:
+                    response_text_local = response_obj.choices[0].message.content
+                    
+                usage_info_local = {
+                    'prompt_tokens': response_obj.usage.prompt_tokens if response_obj.usage else 0,
+                    'completion_tokens': response_obj.usage.completion_tokens if response_obj.usage else 0,
+                    'total_tokens': response_obj.usage.total_tokens if response_obj.usage else 0
+                }
+                return {
+                    'text': response_text_local,
+                    'model': used_model,
+                    'usage': usage_info_local,
+                    'backend': 'openai'
+                }
+            except Exception as norm_error:
+                logger.error(f"[OpenAI] ❌ Error normalizing response: {type(norm_error).__name__}: {norm_error}")
+                logger.debug(f"[OpenAI] Raw response object: {response_obj}")
+                raise APIError(f"Response normalization failed: {type(norm_error).__name__}: {norm_error}")
 
         # If streaming, do a single attempt with standard retry; fallback ladder is not supported for streams
         if stream:
@@ -265,14 +291,23 @@ Server Context: {server_context}"""
 
         # Non-streaming single-provider path (OpenAI base or when ladder disabled)
         logger.debug("[OpenAI] 🔄 Sending request to API...")
-        response = await client.chat.completions.create(
-            model=model,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            stream=False,
-            **kwargs
-        )
+        
+        try:
+            response = await client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                stream=False,
+                **kwargs
+            )
+        except Exception as e:
+            if "timeout" in str(e).lower() or "TimeoutError" in str(type(e).__name__):
+                logger.warning(f"[OpenAI] ⏰ Request timeout after {config.get('TEXT_REQUEST_TIMEOUT', 30)}s: {e}")
+                raise APIError(f"Request timeout: {str(e)}")
+            else:
+                logger.error(f"[OpenAI] ❌ API request failed: {e}")
+                raise
         logger.debug("[OpenAI] ✅ Received response from API")
         
         # Handle non-streaming response
@@ -332,8 +367,13 @@ Server Context: {server_context}"""
         logger.warning(f"[OpenAI] Retriable APIError: {e}")
         raise
     except Exception as e:
-        logger.error(f"Unexpected error in generate_openai_response: {e}", exc_info=True)
-        raise APIError(f"Failed to generate OpenAI response: {str(e)}")
+        # Get detailed error information
+        error_type = type(e).__name__
+        error_msg = str(e) if str(e) else "No error message"
+        error_details = f"{error_type}: {error_msg}"
+        
+        logger.error(f"Unexpected error in generate_openai_response: {error_details}", exc_info=True)
+        raise APIError(f"Failed to generate OpenAI response: {error_details}")
 
 
 async def get_base64_image(image_url: str) -> str:
@@ -456,9 +496,16 @@ async def generate_vl_response(
             logger.info(f"🎨 Using VL model: {vl_model}")
             
         logger.debug("🎨 Configuring OpenAI client for VL")
+        
+        # Configure timeout to prevent hanging requests
+        import httpx
+        timeout_seconds = float(config.get('VL_REQUEST_TIMEOUT', '30'))
+        
         client = openai.AsyncOpenAI(
             api_key=config.get('OPENAI_API_KEY'),
-            base_url=config.get('OPENAI_API_BASE', 'https://api.openai.com/v1')
+            base_url=config.get('OPENAI_API_BASE', 'https://api.openai.com/v1'),
+            timeout=httpx.Timeout(timeout_seconds),
+            max_retries=0  # Let our retry system handle retries
         )
         logger.debug(f"🎨 Using API base: {config.get('OPENAI_API_BASE', 'https://api.openai.com/v1')}")
         

@@ -85,6 +85,10 @@ class VisionGateway:
         Raises:
             VisionError: On submission failure
         """
+        # Initialize job_id early for robust logging and error paths
+        # Use the request's idempotency key as a provisional identifier until the provider returns a job id.
+        job_id = getattr(request, 'idempotency_key', None) or "pending"
+        
         try:
             self.logger.info(
                 f"Submitting {request.task.value} job for user {request.user_id}"
@@ -93,8 +97,8 @@ class VisionGateway:
             # Submit through unified adapter
             response = await self.adapter.submit(request)
             
-            # Extract job details from VisionResponse
-            job_id = response.job_id
+            # Extract provider job details from VisionResponse
+            job_id = response.job_id  # replace provisional id with provider-qualified id
             provider_name = response.provider.value
             
             # Track job metadata

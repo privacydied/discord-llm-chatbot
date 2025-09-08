@@ -1,11 +1,10 @@
 """
-Vision Budget Manager with Money type and atomic writes [CA][REH][RM]
+Canonical v2 Vision Budget Manager implementation [CA][REH][RM]
 
-Manages user budgets for vision generation with:
-- Type-safe Money calculations using Decimal
-- Atomic JSON ledger writes (temp + fsync + rename)
-- Proper reservation tracking
-- Transaction logging for audit trail
+This module contains the Money + atomic I/O implementation, factored into an
+internal implementation module so that `bot/vision/budget_manager.py` can be the
+canonical import path while remaining small. The legacy v2 file becomes a shim
+that re-exports these canonical symbols from `budget_manager.py`.
 """
 
 from __future__ import annotations
@@ -63,7 +62,7 @@ class UserBudget:
         return asdict(self)
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> UserBudget:
+    def from_dict(cls, data: Dict[str, Any]) -> 'UserBudget':
         """Create from dict during JSON deserialization"""
         return cls(**data)
     
@@ -117,11 +116,7 @@ class BudgetResult:
     monthly_reserved: Optional[Money] = None
 
     def __post_init__(self) -> None:
-        """Normalize types to Money for robustness [IV][REH].
-
-        Tests may construct BudgetResult using floats/strs for fields or include
-        legacy fields (daily_remaining, etc.). We coerce where necessary.
-        """
+        """Normalize types to Money for robustness [IV][REH]."""
         # Coerce remaining_budget and estimated_cost to Money if needed
         if not isinstance(self.remaining_budget, Money):
             self.remaining_budget = Money(self.remaining_budget)
@@ -232,7 +227,7 @@ class VisionBudgetManager:
             finally:
                 os.close(dir_fd)
                 
-        except Exception as e:
+        except Exception:
             # Clean up temp file on error
             if os.path.exists(temp_path):
                 os.unlink(temp_path)
@@ -749,13 +744,13 @@ class VisionBudgetManager:
                 },
                 "weekly": {
                     "limit": weekly_limit.to_display_string(),
-                    "spent": weekly_spent.to_display_string(),
+                    "spent": budget.get_weekly_spent().to_display_string(),
                     "remaining": weekly_remaining.to_display_string(),
                     "reset_time": budget.weekly_reset_time
                 },
                 "monthly": {
                     "limit": monthly_limit.to_display_string(),
-                    "spent": monthly_spent.to_display_string(),
+                    "spent": budget.get_monthly_spent().to_display_string(),
                     "remaining": monthly_remaining.to_display_string(),
                     "reset_time": budget.monthly_reset_time
                 },
@@ -785,14 +780,3 @@ class VisionBudgetManager:
             return f"{hours}h {minutes}m"
         else:
             return f"{minutes} minute{'s' if minutes != 1 else ''}"
-
-# --- Compatibility Shim Re-export (canonical v2) ---
-# Preserve existing imports from budget_manager_v2 while ensuring a single
-# canonical implementation lives under bot/vision/budget_manager.py.
-# Rebinds symbols to canonical counterparts. [CA][REH]
-from .budget_manager import (
-    VisionBudgetManager,
-    BudgetResult,
-    UserBudget,
-    TransactionRecord,
-)

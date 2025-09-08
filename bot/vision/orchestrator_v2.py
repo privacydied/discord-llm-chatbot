@@ -528,3 +528,12 @@ class VisionOrchestratorV2:
         await self.gateway.close()
         
         self.logger.info("Vision Orchestrator V2 shutdown complete")
+
+# ---- Compatibility Shim -------------------------------------------------------
+# Re-export canonical orchestrator to preserve imports from orchestrator_v2.
+try:
+    from .orchestrator import VisionOrchestrator as _VisionOrchestratorCanonical
+    VisionOrchestratorV2 = _VisionOrchestratorCanonical  # type: ignore
+except Exception:
+    # If canonical import fails (during partial installs/tests), do nothing.
+    pass

@@ -516,3 +516,24 @@ class VisionBudgetManager:
         except Exception as e:
             self.logger.error(f"Failed to load budget policy: {e}")
             return {}
+
+# ===== Compatibility Re-export Layer (canonical v2) =====
+# Consolidate on the Money + atomic I/O version without breaking imports.
+# This module is now the canonical import path for the v2 implementation.
+# We import from the internal implementation module to avoid cycles with
+# budget_manager_v2.py, which will re-export from this module. [CA][REH]
+try:
+    from ._budget_v2_impl import (
+        VisionBudgetManager as _V2_VisionBudgetManager,
+        BudgetResult as _V2_BudgetResult,
+        UserBudget as _V2_UserBudget,
+        TransactionRecord as _V2_TransactionRecord,
+    )
+    VisionBudgetManager = _V2_VisionBudgetManager  # type: ignore
+    BudgetResult = _V2_BudgetResult  # type: ignore
+    UserBudget = _V2_UserBudget  # type: ignore
+    TransactionRecord = _V2_TransactionRecord  # type: ignore
+except Exception:
+    # If the internal implementation is unavailable for any reason,
+    # retain legacy behavior to prevent crashes.
+    pass
