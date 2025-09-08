@@ -114,3 +114,7 @@ tts/voices-v1.0.bin
 cache/video_audio/index.json
 tts/cache/*
 vision_data/*
+vision_data/budgets.json
+vision_data/ledger.jsonl
+vision_data/spend_ledger.jsonl
+vision_data/transactions.jsonl
