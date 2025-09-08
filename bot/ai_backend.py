@@ -141,13 +141,7 @@ async def generate_vl_response(
             return result
             
     except Exception as e:
-<<<<<<< Updated upstream
-        logger.error(f"❌ Error in generate_vl_response: {e}")
-        # Re-raise the original exception to preserve retry logic
-        raise e
-=======
         logger.error(f"❌ Error in generate_vl_response: {e}", exc_info=True)
-        
         # Provide more user-friendly error messages for common issues
         if is_retryable_error(e, VISION_RETRY_CONFIG):
             logger.warning("⚠️ Detected transient provider error in AI backend")
@@ -155,7 +149,5 @@ async def generate_vl_response(
                 "The vision service is temporarily unavailable. This appears to be a "
                 "provider issue that should resolve shortly. Please try again in a few minutes."
             )
-        
         # For other errors, provide a generic but helpful message
         raise Exception(f"Vision processing failed: {str(e)}")
->>>>>>> Stashed changes

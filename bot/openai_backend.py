@@ -8,66 +8,13 @@ import logging
 import os
 import openai
 import aiohttp
-<<<<<<< Updated upstream
 import httpx
-import base64
-import os
-import time
-
-try:
-    from .config import load_config
-    from .memory import get_profile, get_server_profile
-    from .exceptions import APIError
-    from .util.logging import get_logger
-    from .retry_utils import with_retry, VISION_RETRY_CONFIG, API_RETRY_CONFIG
-    from .action import BotAction
-    # Optional: provider/model fallback for OpenRouter
-    from .enhanced_retry import get_retry_manager
-except Exception:
-    # Standalone import fallback for smoke tests: define minimal shims
-    import logging as _logging
-
-    def get_logger(name: str):
-        logger = _logging.getLogger(name)
-        if not _logging.getLogger().handlers:
-            _logging.basicConfig(level=_logging.INFO)
-        return logger
-
-    class APIError(Exception):
-        pass
-
-    def load_config():
-        # Minimal stub; real config load not needed for smoke test
-        return {}
-
-    def get_profile(user_id: str):
-        return {}
-
-    def get_server_profile(guild_id: str):
-        return {}
-
-    def with_retry(config):
-        def decorator(fn):
-            return fn
-        return decorator
-
-    VISION_RETRY_CONFIG = {}
-    API_RETRY_CONFIG = {}
-
-    # Minimal stub so references don't break in smoke tests
-    def get_retry_manager():
-        class _Dummy:
-            async def run_with_fallback(self, *args, **kwargs):
-                raise NotImplementedError("Fallback manager not available in smoke mode")
-        return _Dummy()
-=======
 from openai import AsyncOpenAI
 from .config import load_config
 from .memory import get_profile, get_server_profile
 from .exceptions import APIError, ConfigurationError
-from .retry_utils import with_retry, VISION_RETRY_CONFIG, is_retryable_error
+from .retry_utils import with_retry, VISION_RETRY_CONFIG, is_retryable_error, API_RETRY_CONFIG
 from .util.logging import get_logger
->>>>>>> Stashed changes
 
 logger = get_logger(__name__)
 
@@ -180,78 +127,22 @@ Server Context: {server_context}"""
         logger.info(f"Generating OpenAI response with model: {model}")
         logger.debug(f"[OpenAI] Request params: temp={temperature}, max_tokens={max_tokens}, stream={stream}")
         
-<<<<<<< Updated upstream
         # Helper to normalize a completion response into our result dict
         def _normalize_nonstream_response(response_obj, used_model: str) -> Dict[str, Any]:
             try:
-                logger.debug(f"[OpenAI] Normalizing response object: {type(response_obj)}")
-                
-                if not hasattr(response_obj, 'choices'):
-                    logger.error(f"[OpenAI] ❌ Response object missing 'choices' attribute: {response_obj}")
-                    raise APIError(f"Invalid OpenAI response structure - no choices attribute")
-                    
-                if not response_obj.choices:
-                    logger.warning("[OpenAI] ⚠️ No choices in response - empty choices array")
-                    logger.debug(f"[OpenAI] Response object: {response_obj}")
+                if not getattr(response_obj, 'choices', None):
                     raise APIError("No choices returned in OpenAI response")
-                    
-                if not hasattr(response_obj.choices[0], 'message'):
-                    logger.error(f"[OpenAI] ❌ First choice missing 'message' attribute: {response_obj.choices[0]}")
-                    raise APIError("No message in OpenAI response choice")
-                    
-                if not response_obj.choices[0].message:
-                    logger.error("[OpenAI] ❌ No message in first choice")
-                    logger.debug(f"[OpenAI] First choice: {response_obj.choices[0]}")
-                    raise APIError("No message in OpenAI response choice")
-                    
-                if not hasattr(response_obj.choices[0].message, 'content'):
-                    logger.error(f"[OpenAI] ❌ Message missing 'content' attribute: {response_obj.choices[0].message}")
-                    raise APIError("Message has no content attribute")
-                    
-                if not response_obj.choices[0].message.content:
-                    logger.warning("[OpenAI] ⚠️ Empty message content returned")
-                    response_text_local = ""
-                else:
-                    response_text_local = response_obj.choices[0].message.content
-                    
+                first = response_obj.choices[0]
+                content = getattr(getattr(first, 'message', None), 'content', '') or ''
+                usage = getattr(response_obj, 'usage', None)
                 usage_info_local = {
-                    'prompt_tokens': response_obj.usage.prompt_tokens if response_obj.usage else 0,
-                    'completion_tokens': response_obj.usage.completion_tokens if response_obj.usage else 0,
-                    'total_tokens': response_obj.usage.total_tokens if response_obj.usage else 0
+                    'prompt_tokens': getattr(usage, 'prompt_tokens', 0),
+                    'completion_tokens': getattr(usage, 'completion_tokens', 0),
+                    'total_tokens': getattr(usage, 'total_tokens', 0),
                 }
-                return {
-                    'text': response_text_local,
-                    'model': used_model,
-                    'usage': usage_info_local,
-                    'backend': 'openai'
-                }
+                return {'text': content, 'model': used_model, 'usage': usage_info_local, 'backend': 'openai'}
             except Exception as norm_error:
-                logger.error(f"[OpenAI] ❌ Error normalizing response: {type(norm_error).__name__}: {norm_error}")
-                logger.debug(f"[OpenAI] Raw response object: {response_obj}")
                 raise APIError(f"Response normalization failed: {type(norm_error).__name__}: {norm_error}")
-
-        # If streaming, do a single attempt with standard retry; fallback ladder is not supported for streams
-=======
-        # Generate the response
-        logger.debug("[OpenAI] 🔄 Sending request to API...")
-        logger.debug(f"[OpenAI] Request details: model={model}, messages={len(messages)}, temp={temperature}, max_tokens={max_tokens}, stream={stream}")
-        
-        # Log first few messages for debugging (without full content for privacy)
-        for i, msg in enumerate(messages[:2]):
-            logger.debug(f"[OpenAI] Message {i}: role={msg['role']}, content_length={len(msg['content'])}")
-        
-        response = await client.chat.completions.create(
-            model=model,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            stream=stream,
-            **kwargs
-        )
-        logger.debug("[OpenAI] ✅ Received response from API")
-        logger.debug(f"[OpenAI] Response type: {type(response)}")
-        
->>>>>>> Stashed changes
         if stream:
             logger.debug("[OpenAI] 🔄 Sending request to API (streaming)...")
             response = await client.chat.completions.create(
@@ -276,7 +167,7 @@ Server Context: {server_context}"""
                 logger.debug(f"[OpenAI] ✅ Streaming complete, processed {chunk_count} chunks")
                 yield {'text': '', 'finished': True}
             return stream_generator()
-<<<<<<< Updated upstream
+ 
 
         # Non-streaming: if using OpenRouter base, engage provider/model fallback ladder
         base_url = str(config.get('OPENAI_API_BASE', 'https://api.openai.com/v1') or '')
@@ -369,96 +260,9 @@ Server Context: {server_context}"""
                 logger.error(f"[OpenAI] ❌ API request failed: {e}")
                 raise
         logger.debug("[OpenAI] ✅ Received response from API")
-        
         # Handle non-streaming response
-        logger.debug("[OpenAI] 📝 Processing non-streaming response...")
-        logger.debug(f"[OpenAI] Response object type: {type(response)}")
         result = _normalize_nonstream_response(response, model)
-        logger.debug("[OpenAI] ✅ Response processing complete")
         return result
-=======
-        else:
-            # Handle non-streaming response
-            logger.debug("[OpenAI] 📝 Processing non-streaming response...")
-            logger.debug(f"[OpenAI] Response object type: {type(response)}")
-            
-            # Enhanced debugging for empty choices issue [REH]
-            logger.debug(f"[OpenAI] Response attributes: {dir(response)}")
-            
-            # Log response structure for debugging
-            try:
-                if hasattr(response, 'model_dump'):
-                    response_dict = response.model_dump()
-                    logger.debug(f"[OpenAI] Response model_dump keys: {list(response_dict.keys())}")
-                    if 'choices' in response_dict:
-                        logger.debug(f"[OpenAI] Choices in response: {len(response_dict['choices'])} items")
-                        if response_dict['choices']:
-                            logger.debug(f"[OpenAI] First choice keys: {list(response_dict['choices'][0].keys())}")
-                    else:
-                        logger.error("[OpenAI] ❌ No 'choices' key in response model_dump")
-                elif hasattr(response, '__dict__'):
-                    logger.debug(f"[OpenAI] Response __dict__ keys: {list(response.__dict__.keys())}")
-            except Exception as debug_error:
-                logger.warning(f"[OpenAI] ⚠️ Failed to debug response structure: {debug_error}")
-            
-            # Check if response has choices attribute
-            if not hasattr(response, 'choices'):
-                logger.error("[OpenAI] ❌ Response object has no 'choices' attribute")
-                logger.error(f"[OpenAI] Available attributes: {[attr for attr in dir(response) if not attr.startswith('_')]}")
-                raise APIError("OpenAI response missing 'choices' attribute - possible API format change or error")
-            
-            # Check if choices is None
-            if response.choices is None:
-                logger.error("[OpenAI] ❌ Response choices is None")
-                raise APIError("OpenAI response choices is None - API returned malformed response")
-            
-            # Check if choices is empty
-            if not response.choices:
-                logger.error("[OpenAI] ❌ No choices in response")
-                logger.error(f"[OpenAI] Choices type: {type(response.choices)}, length: {len(response.choices)}")
-                
-                # Log additional response details for debugging
-                if hasattr(response, 'usage'):
-                    logger.debug(f"[OpenAI] Usage info: {response.usage}")
-                if hasattr(response, 'model'):
-                    logger.debug(f"[OpenAI] Model used: {response.model}")
-                if hasattr(response, 'id'):
-                    logger.debug(f"[OpenAI] Response ID: {response.id}")
-                
-                # Check for content filtering or other API issues
-                error_msg = "No choices returned in OpenAI response. This may indicate:"
-                error_msg += "\n- Content filtering by OpenAI"
-                error_msg += "\n- Invalid model name or parameters"
-                error_msg += "\n- API quota/rate limiting"
-                error_msg += "\n- Malformed request payload"
-                error_msg += f"\n- Model: {model}, Messages: {len(messages)}, Max tokens: {max_tokens}"
-                
-                logger.error(f"[OpenAI] {error_msg}")
-                raise APIError(error_msg)
-            
-            if not response.choices[0].message:
-                logger.error("[OpenAI] ❌ No message in first choice")
-                raise APIError("No message in OpenAI response choice")
-            
-            response_text = response.choices[0].message.content
-            logger.debug(f"[OpenAI] 📄 Extracted response text length: {len(response_text) if response_text else 0}")
-            
-            usage_info = {
-                'prompt_tokens': response.usage.prompt_tokens if response.usage else 0,
-                'completion_tokens': response.usage.completion_tokens if response.usage else 0,
-                'total_tokens': response.usage.total_tokens if response.usage else 0
-            }
-            logger.debug(f"[OpenAI] 📊 Usage info: {usage_info}")
-            
-            result = {
-                'text': response_text,
-                'model': model,
-                'usage': usage_info,
-                'backend': 'openai'
-            }
-            logger.debug("[OpenAI] ✅ Response processing complete")
-            return result
->>>>>>> Stashed changes
     
     except openai.AuthenticationError as e:
         logger.error(f"OpenAI authentication failed: {e}")
@@ -593,11 +397,8 @@ async def get_base64_image(image_url: str) -> str:
 
 
 @with_retry(VISION_RETRY_CONFIG)
-<<<<<<< Updated upstream
-async def generate_vl_response(
-=======
 async def _generate_vl_response_with_retry(
->>>>>>> Stashed changes
+ 
     image_url: str,
     user_prompt: str = "",
     user_id: str = None,
@@ -741,24 +542,13 @@ async def _generate_vl_response_with_retry(
         logger.debug(f"🎨 Max tokens: {max_tokens}")
         logger.info(f"🎨 Calling OpenAI VL API with model: {vl_model}")
         
-<<<<<<< Updated upstream
-        # Build initial params with all potential values
+        # Build initial params with all potential values (filter later for OpenRouter)
         raw_params = {
             "model": vl_model,
             "messages": messages,
             "temperature": temperature,
             "max_tokens": max_tokens,
-=======
-        # Generate the VL response
-        logger.debug(f"🎨 Sending request with messages: {len(messages)} messages")
-        response = await client.chat.completions.create(
-            model=vl_model,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            timeout=20.0,
->>>>>>> Stashed changes
-            **kwargs
+            **kwargs,
         }
         
         # OpenRouter allow-list: only supported parameters for /chat/completions
@@ -819,16 +609,20 @@ async def _generate_vl_response_with_retry(
         }
         
         logger.info("✅ VL response completed")
-        
-        return BotAction(
-            content=response_text,
-            meta={'usage': usage_info}
-        )
-    
+
+        return {
+            'text': response_text,
+            'model': vl_model,
+            'usage': usage_info,
+            'backend': 'openai'
+        }
+
     except Exception as e:
-<<<<<<< Updated upstream
-        logger.error(f"❌ Error in generate_vl_response: {e}")
-        raise APIError(f"Failed to generate VL response: {str(e)}")
+        logger.error(f"❌ Error in _generate_vl_response_with_retry: {e}", exc_info=True)
+        # Re-raise as APIError to ensure proper retry handling
+        if not isinstance(e, APIError):
+            raise APIError(f"Failed to generate VL response: {str(e)}")
+        raise e
 
 
 async def _try_vl_fallback_models(client, api_params, failed_model, error_msg):
@@ -860,14 +654,6 @@ async def _try_vl_fallback_models(client, api_params, failed_model, error_msg):
     # All fallbacks failed
     logger.error(f"❌ All VL fallbacks exhausted, original error: {error_msg}")
     raise APIError(f"VL model {failed_model} and all fallbacks failed: {error_msg}")
-=======
-        logger.error(f"❌ Error in _generate_vl_response_with_retry: {e}", exc_info=True)
-        # Re-raise as APIError to ensure proper retry handling
-        if not isinstance(e, APIError):
-            raise APIError(f"Failed to generate VL response: {str(e)}")
-        raise e
-
-
 async def generate_vl_response(
     image_url: str,
     user_prompt: str = "",
@@ -932,4 +718,4 @@ async def generate_vl_response(
         
         # For non-retryable errors, re-raise as-is
         raise e
->>>>>>> Stashed changes
+ 

@@ -66,21 +66,17 @@ async def see_infer(image_path: str, prompt: str = None, model_override: str | N
             model_override=model_override if model_override else None
         )
         
-        # Handle the response format from generate_vl_response (now returns BotAction)
-        if isinstance(response, BotAction) and response.content:
-            vl_result = response.content
-            logger.info(f"VL model returned: {len(vl_result)} chars")
-            logger.debug(f"VL result preview: '{vl_result[:100]}...'")
-            return response  # Return the BotAction directly
+        # Handle the response format (dict from backend)
+        if isinstance(response, dict) and response.get('text'):
+            vl_text = response['text']
+            logger.info(f"VL model returned: {len(vl_text)} chars")
+            logger.debug(f"VL result preview: '{vl_text[:100]}...'")
+            return BotAction(content=vl_text)
         else:
             logger.error(f"Unexpected VL response format: {response}")
             raise InferenceError("Unexpected response format from vision model")
             
     except Exception as e:
-<<<<<<< Updated upstream
-        logger.error(f"👁️ Vision inference failed: {str(e)}")
-        raise InferenceError(f"Vision processing failed: {str(e)}")
-=======
         logger.error(f"👁️ Vision inference failed: {str(e)}", exc_info=True)
         
         # Provide user-friendly error messages based on error type
@@ -112,4 +108,3 @@ async def see_infer(image_path: str, prompt: str = None, model_override: str | N
         
         logger.info(f"🎯 Providing user-friendly error message: {user_message}")
         raise InferenceError(user_message)
->>>>>>> Stashed changes
