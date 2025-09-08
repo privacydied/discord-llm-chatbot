@@ -76,17 +76,33 @@ class XTwitterMediaInfo:
     media_urls: List[str] = field(default_factory=list)
 
 def _detect_x_twitter_media(message: Message) -> XTwitterMediaInfo:
-    """Detect X/Twitter links and classify media type from Discord embeds (no HTTP calls)."""
+    """Detect X/Twitter links and conservatively classify media type from Discord embeds.
+    Rules:
+    - If a tweet has an explicit embed.video → classify as "video" and point at the tweet URL.
+    - If a tweet only has a thumbnail/image and no embed.video → classify as "unknown" and point at the tweet URL (STT-first probe).
+    - Only classify as "image" when the URL itself is a direct image (e.g., pbs.twimg.com) without a tweet URL.
+    """
     x_hosts = {"x.com", "twitter.com", "fxtwitter.com"}
-    
+
     # Check message content for X/Twitter URLs
     content = message.content or ""
     has_x_link = any(host in content.lower() for host in x_hosts)
-    
-    # Check embeds for X/Twitter content and media classification
+
+    # Collect actual tweet URLs from content for STT fallback
+    import re
+    tweet_urls: List[str] = []
+    url_pattern = r'https?://(?:www\.)?(x\.com|twitter\.com|fxtwitter\.com)/\S+'
+    for match in re.finditer(url_pattern, content, re.IGNORECASE):
+        u = match.group(0)
+        if u not in tweet_urls:
+            tweet_urls.append(u)
+
     media_kind = "none"
-    media_urls = []
-    
+    media_urls: List[str] = []
+
+    # Track direct image URLs that are not associated with a tweet URL
+    direct_image_urls: List[str] = []
+
     for embed in message.embeds:
         # Check embed URLs and provider info
         embed_url = getattr(embed, 'url', '') or ''
@@ -94,34 +110,82 @@ def _detect_x_twitter_media(message: Message) -> XTwitterMediaInfo:
         provider_name = getattr(provider, 'name', '') if provider else ''
         author = getattr(embed, 'author', None)
         author_url = getattr(author, 'url', '') if author else ''
-        
+
+        embed_url_l = (embed_url or '').lower()
+
         # Detect X/Twitter from embed metadata
-        if (any(host in embed_url.lower() for host in x_hosts) or
-            'twitter' in provider_name.lower() or 'x.com' in provider_name.lower() or
-            any(host in author_url.lower() for host in x_hosts)):
+        if (any(host in embed_url_l for host in x_hosts) or
+            'twitter' in (provider_name or '').lower() or 'x.com' in (provider_name or '').lower() or
+            any(host in (author_url or '').lower() for host in x_hosts)):
             has_x_link = True
-            
-            # Classify media type from embed structure
-            if hasattr(embed, 'video') and embed.video:
+            # Add embed URL to tweet URLs if it's a tweet URL
+            if embed_url and any(host in embed_url_l for host in x_hosts) and embed_url not in tweet_urls:
+                tweet_urls.append(embed_url)
+
+            # Classify based on embed structure
+            if getattr(embed, 'video', None):
+                # Explicit video → treat as video, point to tweet URL
                 media_kind = "video"
-                # For videos, use the tweet URL itself (yt-dlp will handle extraction)
                 if embed_url:
-                    media_urls.append(embed_url)
-            elif hasattr(embed, 'image') and embed.image:
+                    if embed_url not in media_urls:
+                        media_urls.append(embed_url)
+            elif getattr(embed, 'image', None):
+                # Photo-only tweets often expose embed.image. Treat as image (no STT),
+                # and prefer the tweet URL so downstream routing uses the syndication/VL path.
                 media_kind = "image"
-                if embed.image.url:
-                    media_urls.append(embed.image.url)
-            elif hasattr(embed, 'thumbnail') and embed.thumbnail:
-                if media_kind == "none":  # Don't override video detection
-                    media_kind = "image"
-                if embed.thumbnail.url:
-                    media_urls.append(embed.thumbnail.url)
-    
+                if tweet_urls:
+                    media_urls = list(tweet_urls)
+                elif embed_url:
+                    media_urls = [embed_url]
+                else:
+                    # Last resort, point at the image itself
+                    try:
+                        if getattr(embed.image, 'url', None):
+                            media_urls = [embed.image.url]
+                    except Exception:
+                        pass
+            else:
+                # If only thumbnail present without embed.video, mark as unknown and point to the tweet URL
+                if media_kind == "none" and tweet_urls:
+                    media_kind = "unknown"
+                    media_urls = list(tweet_urls)
+                elif media_kind == "none" and embed_url:
+                    media_kind = "unknown"
+                    media_urls = [embed_url]
+
+        # Also capture direct image URLs (pbs.twimg.com etc.) that are not tied to a tweet URL
+        try:
+            # Some embed shapes expose image/thumbnail URLs even when embed.url is unrelated
+            image_url = None
+            if hasattr(embed, 'image') and getattr(embed, 'image') and getattr(embed.image, 'url', None):
+                image_url = embed.image.url
+            elif hasattr(embed, 'thumbnail') and getattr(embed, 'thumbnail') and getattr(embed.thumbnail, 'url', None):
+                image_url = embed.thumbnail.url
+            if image_url:
+                u_l = str(image_url).lower()
+                # Only treat as direct image if it's clearly a twimg (not a tweet URL)
+                if 'twimg.com' in u_l and not any(host in u_l for host in x_hosts):
+                    if image_url not in direct_image_urls:
+                        direct_image_urls.append(image_url)
+        except Exception:
+            pass
+
+    # If we couldn't determine from embeds, but have tweet URLs → unknown for STT-first
+    if has_x_link and media_kind == "none" and tweet_urls:
+        media_kind = "unknown"
+        media_urls = list(tweet_urls)
+
+    # Only classify as image when we only have direct images without tweet URLs
+    if media_kind == "none" and direct_image_urls and not tweet_urls:
+        media_kind = "image"
+        media_urls = list(direct_image_urls)
+
     return XTwitterMediaInfo(
         has_x_link=has_x_link,
         media_kind=media_kind,
         media_urls=media_urls
     )
+
 
 # Vision generation system (import only, no flag constant)
 try:
@@ -226,6 +290,42 @@ class Router:
         except Exception:
             # Non-fatal; handler has built-in defaults
             self._vl_prompt_guidelines = None
+
+    def _format_x_tweet_with_transcription(self, tweet_url: str, transcript: str, user_content: str) -> str:
+        """Format X/Twitter video with transcription header and optional tweet context."""
+        # Simple transcription format with header
+        formatted = f"🎙️ Transcription: {transcript.strip()}"
+        
+        # Add user content if present
+        if user_content and user_content.strip():
+            formatted = f"{user_content.strip()}\n\n{formatted}"
+        
+        return formatted
+
+    async def _handle_x_twitter_fallback(self, tweet_url: str, message: Message, context_str: str) -> BotAction:
+        """Handle X/Twitter fallback to syndication/API for photos or text."""
+        try:
+            # Try to use existing _handle_general_url which already has syndication/VL logic
+            from .modality import InputItem
+            item = InputItem(source_type="url", payload=tweet_url)
+            result = await self._handle_general_url(item)
+            
+            if result and result.strip():
+                return await self._flow_process_text(
+                    content=f"{message.content or ''}\n\n{result}".strip(),
+                    context=context_str,
+                    message=message
+                )
+        except Exception as e:
+            self.logger.debug(f"X/Twitter syndication fallback failed: {e}")
+        
+        # Final fallback: just return the original content with hint
+        fallback_content = f"{message.content or ''}\n\n(tweet content unavailable; proceeding without it)"
+        return await self._flow_process_text(
+            content=fallback_content.strip(),
+            context=context_str,
+            message=message
+        )
         
         if VisionIntentRouter is not None and self.config.get("VISION_ENABLED", True):
             try:
@@ -757,6 +857,7 @@ class Router:
                         return BotAction(content=str(res))
             
             # Only parse if it looks like a command (starts with '!')
+            parsed_command = None
             if clean_content.startswith('!'):
                 parsed_command = parse_command(message, self.bot)
                 
@@ -817,69 +918,80 @@ class Router:
 
                 # 5.5. Check for X/Twitter media routing (before multimodal)
                 x_info = _detect_x_twitter_media(message)
-                if (x_info.has_x_link and x_info.media_kind != "none" and 
+                if (x_info.has_x_link and x_info.media_kind not in ("none",) and 
                     not parsed_command and x_info.media_urls):
                     
                     self.logger.debug(f"🔗 X/Twitter link detected | kind={x_info.media_kind} | embeds={len(message.embeds)}")
                     
                     try:
-                        if x_info.media_kind == "image":
-                            # X/Twitter images → VL perception → text flow
-                            image_url = x_info.media_urls[0]
-                            self.logger.debug(f"📎 X/Twitter image detected | url={image_url}")
-                            
-                            # Download and analyze image
-                            try:
-                                import httpx
-                                async with httpx.AsyncClient() as client:
-                                    response = await client.get(image_url, timeout=30.0)
-                                    if response.status_code == 200:
-                                        image_data = response.content
-                                        vl_notes = await see_infer(image_data)
-                                        if vl_notes:
-                                            vl_notes = sanitize_vl_reply_text(vl_notes)
-                                            perception_context = f"Perception (from the X/Twitter image):\n{vl_notes}\n\n"
-                                            return await self._flow_process_text(
-                                                content=message.content or "",
-                                                context=context_str,
-                                                message=message,
-                                                perception_notes=vl_notes
-                                            )
-                            except Exception as e:
-                                self.logger.debug(f"❌ X/Twitter media unavailable | reason=image_fetch_failed | continuing without media")
-                                # Continue with fallback hint
-                                fallback_content = f"{message.content or ''}\n\n(image was unavailable; proceeding without it)"
-                                return await self._flow_process_text(
-                                    content=fallback_content.strip(),
-                                    context=context_str,
-                                    message=message
-                                )
-                        
-                        elif x_info.media_kind == "video":
-                            # X/Twitter videos → yt-dlp → STT → text flow
-                            video_url = x_info.media_urls[0]
-                            self.logger.debug(f"🔊 X/Twitter video detected | url={video_url}")
+                        # STT-first approach: try STT for video OR unknown media types
+                        if x_info.media_kind in ("video", "unknown"):
+                            tweet_url = x_info.media_urls[0]
+                            self.logger.debug(f"🐦 X STT probe start | url={tweet_url}")
                             
                             try:
                                 # Use existing STT pipeline
-                                transcript = await hear_infer_from_url(video_url)
-                                if transcript:
+                                transcript = await hear_infer_from_url(tweet_url)
+                                if transcript and transcript.strip():
                                     self.logger.debug(f"📝 STT complete | transcript_len={len(transcript)}")
-                                    transcript_context = f"Transcript (from the X/Twitter video):\n{transcript}\n\nPlease summarize or respond succinctly to this content. Note any uncertainty if the transcript seems unclear.\n\n"
+                                    # Format with transcription header
+                                    formatted_response = self._format_x_tweet_with_transcription(
+                                        tweet_url, transcript, message.content or ""
+                                    )
                                     return await self._flow_process_text(
-                                        content=f"{message.content or ''}\n\n{transcript_context}".strip(),
+                                        content=formatted_response,
                                         context=context_str,
                                         message=message
                                     )
                             except Exception as e:
-                                self.logger.debug(f"❌ X/Twitter media unavailable | reason=video_stt_failed | continuing without media")
-                                # Continue with fallback hint
-                                fallback_content = f"{message.content or ''}\n\n(video audio unavailable; proceeding without it)"
-                                return await self._flow_process_text(
-                                    content=fallback_content.strip(),
-                                    context=context_str,
-                                    message=message
-                                )
+                                error_msg = str(e).lower()
+                                if any(phrase in error_msg for phrase in ["no video", "no audio", "no media", "not a video"]):
+                                    self.logger.debug(f"🐦 X STT probe: no media → falling back to syndication/api")
+                                    # Fall back to syndication/API for photos or text
+                                    return await self._handle_x_twitter_fallback(tweet_url, message, context_str)
+                                else:
+                                    self.logger.debug(f"❌ X/Twitter STT failed: {e} | continuing without media")
+                                    fallback_content = f"{message.content or ''}\n\n(video audio unavailable; proceeding without it)"
+                                    return await self._flow_process_text(
+                                        content=fallback_content.strip(),
+                                        context=context_str,
+                                        message=message
+                                    )
+                        
+                        elif x_info.media_kind == "image":
+                            # X/Twitter images → syndication/VL → text flow
+                            tweet_url = x_info.media_urls[0] if any(host in x_info.media_urls[0].lower() for host in {"x.com", "twitter.com", "fxtwitter.com"}) else None
+                            if tweet_url:
+                                self.logger.debug(f"🖼️🐦 Routing X photos to VL | url={tweet_url}")
+                                return await self._handle_x_twitter_fallback(tweet_url, message, context_str)
+                            else:
+                                # Direct image URL
+                                image_url = x_info.media_urls[0]
+                                self.logger.debug(f"📎 X/Twitter image detected | url={image_url}")
+                                
+                                try:
+                                    import httpx
+                                    async with httpx.AsyncClient() as client:
+                                        response = await client.get(image_url, timeout=30.0)
+                                        if response.status_code == 200:
+                                            image_data = response.content
+                                            vl_notes = await see_infer(image_data)
+                                            if vl_notes:
+                                                vl_notes = sanitize_vl_reply_text(vl_notes)
+                                                return await self._flow_process_text(
+                                                    content=message.content or "",
+                                                    context=context_str,
+                                                    message=message,
+                                                    perception_notes=vl_notes
+                                                )
+                                except Exception as e:
+                                    self.logger.debug(f"❌ X/Twitter image unavailable | reason=image_fetch_failed | continuing without media")
+                                    fallback_content = f"{message.content or ''}\n\n(image was unavailable; proceeding without it)"
+                                    return await self._flow_process_text(
+                                        content=fallback_content.strip(),
+                                        context=context_str,
+                                        message=message
+                                    )
                     
                     except Exception as e:
                         self.logger.error(f"X/Twitter media processing failed: {e}", exc_info=True)
@@ -1086,8 +1198,43 @@ class Router:
                         heuristic_image_items.append(item)
             combined_count = len(heuristic_image_items)
 
-        # Route to perception (VL notes) → TEXT when conditions met
-        if (is_dm or mentioned_me) and combined_count >= 1 and bool(self.config.get("HYBRID_FORCE_PERCEPTION_ON_REPLY", True)):
+        # Don't let "reply-image perception" hijack X/Twitter links
+        x_info_for_gate = None
+        try:
+            x_info_for_gate = _detect_x_twitter_media(message)
+        except Exception:
+            x_info_for_gate = None
+        has_x_url = (
+            any(host in (message.content or '').lower() for host in ["x.com", "twitter.com", "fxtwitter.com"]) 
+            or (x_info_for_gate.has_x_link if x_info_for_gate else False)
+        )
+
+        # Filter out Twitter thumbnails from image count if X URLs present
+        if has_x_url and heuristic_image_items:
+            filtered_items: List[InputItem] = []
+            suppressed = 0
+            for item in heuristic_image_items:
+                try:
+                    if item.source_type == "url":
+                        from urllib.parse import urlparse
+                        raw = str(item.payload)
+                        parsed = urlparse(raw)
+                        host = (parsed.netloc or '').lower()
+                        path = (parsed.path or '').lower()
+                        # Ignore common Twitter image thumbnail hosts and paths
+                        if host.endswith('twimg.com') or host in {"pbs.twimg.com", "video.twimg.com"}:
+                            suppressed += 1
+                            self._metric_inc("routing.twitter.thumb_suppressed", None)
+                            continue
+                except Exception:
+                    # On parse errors, keep the item
+                    pass
+                filtered_items.append(item)
+
+            combined_count = len(filtered_items)
+        
+        # Route to perception (VL notes) → TEXT when conditions met (but skip for X/Twitter)
+        if (is_dm or mentioned_me) and combined_count >= 1 and bool(self.config.get("HYBRID_FORCE_PERCEPTION_ON_REPLY", True)) and not has_x_url:
             self.logger.info(f"🎯 Route: text (with perception) | images={combined_count} | msg_id={message.id}")
             try:
                 # Run silent perception step to obtain VL notes (sanitized & capped)
