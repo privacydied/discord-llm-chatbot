@@ -33,19 +33,21 @@
 flowchart LR
   A[Discord Gateway] --> B["LLMBot (discord.py)"]
   B --> C[Router]
-  C -- Text --> D1[OpenAI / OpenRouter]
-  C -- Text-local --> D2[Ollama]
-  C -- RAG --> E[Hybrid Search (ChromaDB)]
-  C -- Vision --> F["Vision Orchestrator\nTogether / Novita"]
-  C -- Media --> G1[STT Orchestrator]
+
+  C --> D1[Text: OpenAI / OpenRouter]
+  C --> D2[Text (local): Ollama]
+  C --> E[RAG: Hybrid Search (ChromaDB)]
+  C --> F["Vision Orchestrator: Together / Novita"]
+  C --> G1[Media: STT Orchestrator]
   G1 --> G2[faster-whisper / whispercpp]
-  C -- PDF/OCR --> H1[PyMuPDF]
+  C --> H1[PDF / OCR: PyMuPDF]
   H1 --> H2[Tesseract OCR (optional)]
+
   B --> I[Commands / Cogs]
   B --> J[Prometheus Metrics]
   B --> K[Logging: Rich + JSONL]
 
-  subgraph Files_and_Storage["Files / Storage"]
+  subgraph Files / Storage
     L1[kb/]
     L2[chroma_db/]
     L3[vision_data/, logs/, user_profiles/, server_profiles/]
