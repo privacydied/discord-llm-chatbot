@@ -159,18 +159,15 @@ async def fetch_url_content(url: str, timeout: int = 15) -> Optional[Tuple[bytes
             )
             logging.info(f"Successfully fetched {url} with httpx.")
             return content, content_type
-    except (
-        httpx.HTTPStatusError,
-        httpx.RequestError,
-        httpx.TooManyRedirects,
-        httpx.InvalidHeader,
-    ) as e:
-        logging.error(f"httpx fetch failed for {url}: {e}", exc_info=True)
+    except httpx.HTTPStatusError as e:
+        status = e.response.status_code if getattr(e, "response", None) else "?"
+        logging.info(f"HTTP {status} for {url}: {str(e)[:160]}")
+        return None
+    except (httpx.RequestError, httpx.TooManyRedirects, httpx.TimeoutException) as e:
+        logging.info(f"Network error for {url}: {str(e)[:160]}")
         return None
     except Exception as e:
-        logging.error(
-            f"An unexpected error occurred while fetching {url}: {e}", exc_info=True
-        )
+        logging.debug(f"fetch_url_content unexpected error for {url}: {str(e)[:200]}")
         return None
 
 

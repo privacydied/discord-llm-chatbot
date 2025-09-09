@@ -445,6 +445,10 @@ class Router:
         except Exception:
             self._x_syn_accept_domains = {
                 "pbs.twimg.com",
+                "pbs-0.twimg.com",
+                "pbs-1.twimg.com",
+                "pbs-2.twimg.com",
+                "pbs-3.twimg.com",
                 "video.twimg.com",
                 "fxtwitter.com",
                 "vxtwitter.com",
@@ -873,18 +877,31 @@ class Router:
         async def _is_image(u: str) -> bool:
             if http is None:
                 return True  # best-effort
+            cfg = RequestConfig(
+                connect_timeout=min(self._x_syn_timeout_s, 3.0),
+                read_timeout=min(self._x_syn_timeout_s, 3.0),
+                total_timeout=min(self._x_syn_timeout_s + 0.5, 3.5),
+                max_retries=0,
+            )
             try:
-                cfg = RequestConfig(
-                    connect_timeout=min(self._x_syn_timeout_s, 3.0),
-                    read_timeout=min(self._x_syn_timeout_s, 3.0),
-                    total_timeout=min(self._x_syn_timeout_s + 0.5, 3.5),
-                    max_retries=0,
-                )
                 r = await http.head(u, config=cfg)
                 ctype = (r.headers.get("content-type") or "").lower()
-                return ctype.startswith("image/")
-            except Exception:
+                if ctype.startswith("image/"):
+                    return True
+                # Some CDNs block HEAD; fall back to lightweight GET
+                if r.status_code in (403, 405):
+                    g = await http.get(u, config=cfg)
+                    ctype_g = (g.headers.get("content-type") or "").lower()
+                    return ctype_g.startswith("image/")
                 return False
+            except Exception:
+                # Last resort: small GET probe
+                try:
+                    g = await http.get(u, config=cfg)
+                    ctype_g = (g.headers.get("content-type") or "").lower()
+                    return ctype_g.startswith("image/")
+                except Exception:
+                    return False
 
         # Helper: allowlist filter
         def _allowed(u: str) -> bool:
@@ -2963,18 +2980,32 @@ class Router:
             # Use existing URL processing logic - process_url returns a dict
             url_result = await process_url(url)
 
-            # Handle errors
+            # Handle errors: before giving up, try tiered extractor (A/B) [REH]
             if not url_result or url_result.get("error"):
+                self.logger.info(
+                    f"🧭 process_url failed for {url}; falling back to tiered extractor"
+                )
+                extract_res = await web_extractor.extract(url)
+                if extract_res.success:
+                    return f"Web content from {extract_res.canonical_url or url}:\n{extract_res.to_message()}"
+                # If tiered extractor also failed, return original error if present
                 if url_result and url_result.get("error"):
                     return f"Could not extract content from URL: {url} (Error: {url_result['error']})"
                 return f"Could not extract content from URL: {url}"
 
             # Extract text content from result dictionary
-            content = result.get("text", "")
+            content = url_result.get("text", "")
             if not content or not content.strip():
                 # If no text content, check if we have a screenshot
-                if result.get("screenshot_path"):
-                    return f"Screenshot captured for {url}: {result['screenshot_path']}"
+                if url_result.get("screenshot_path"):
+                    return f"Screenshot captured for {url}: {url_result['screenshot_path']}"
+                # As a last attempt, try tiered extractor (if process_url returned no error but empty)
+                self.logger.info(
+                    f"🧭 No text from process_url; trying tiered extractor for {url}"
+                )
+                extract_res = await web_extractor.extract(url)
+                if extract_res.success:
+                    return f"Web content from {extract_res.canonical_url or url}:\n{extract_res.to_message()}"
                 return f"Could not extract content from URL: {url}"
 
             # Check if smart routing detected media and should route to yt-dlp

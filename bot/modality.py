@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from enum import Enum, auto
 from functools import lru_cache
 from typing import List, Literal, Union, TYPE_CHECKING, Optional, Pattern
+from urllib.parse import urlparse
 
 import discord
 from .utils.logging import get_logger
@@ -289,6 +290,25 @@ async def _map_url_to_modality(url: str) -> InputModality:
     """Map URL to modality based on domain and pattern matching [PA]."""
     global _VIDEO_PATTERNS
 
+    # --- NYTimes guard (cheap and early): only /video/ goes to yt-dlp/STT --- [REH][IV]
+    try:
+        p = urlparse(url)
+        host = (p.netloc or "").lower()
+        path = p.path or "/"
+    except Exception:
+        host = ""
+        path = "/"
+    if host in {"nytimes.com", "www.nytimes.com", "m.nytimes.com"}:
+        if "/video/" in path:
+            logger.info(
+                f"modality.guard: nytimes video → VIDEO_URL (path={path})"
+            )
+            return InputModality.VIDEO_URL
+        logger.info(
+            f"modality.guard: nytimes non-video → GENERAL_URL (path={path})"
+        )
+        return InputModality.GENERAL_URL
+
     # Twitter/X status posts should go through API-first general URL path [SFT][CA]
     # but allow broadcasts (Spaces/live) to be handled as video-capable URLs.
     if re.search(r"https?://(?:www\.)?(?:twitter|x)\.com/.+/status/\d+", url):
@@ -296,6 +316,8 @@ async def _map_url_to_modality(url: str) -> InputModality:
             f"➡️ Routing Twitter/X status URL to GENERAL_URL for API-first: {url}"
         )
         return InputModality.GENERAL_URL
+
+    # (NYTimes handled above)
 
     # Load and cache video patterns once [PA]
     if _VIDEO_PATTERNS is None:

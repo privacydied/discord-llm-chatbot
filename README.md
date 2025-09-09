@@ -163,6 +163,37 @@ uv run playwright install chromium
 - SensitiveDataFilter scrubs common secret keys in logged dict extras
 - Prometheus metrics initialized if `PROMETHEUS_ENABLED=true` (port from `PROMETHEUS_PORT`)
 
+## Tiered Web Extraction (A/B)
+- Purpose: robust URL text extraction with a fast path (Tier A) and an optional JS-rendered fallback (Tier B).
+
+- Tier A (fast):
+  - Engine: `httpx` GET with reasonable headers, redirects on, short timeout.
+  - Parses HTML for OpenGraph/Twitter/meta and main text.
+  - Low latency; used first for every URL.
+
+- Tier B (JS fallback):
+  - Engine: Playwright + headless Chromium, minimal resource types to stay quick.
+  - Only invoked when Tier A fails to return text.
+  - Budget: `WEBEX_TIER_B_TIMEOUT_S` (default ~12s); can be disabled.
+
+- Router behavior:
+  - The router calls `process_url(url)` first (existing path).
+  - If it errors or returns empty text, it falls back to the tiered extractor: `web_extractor.extract(url)`.
+  - On success, returns canonical URL + text snippet; otherwise returns the same error message as before.
+
+
+- Setup (Playwright):
+  - Install the browser runtime: `uv run python -m playwright install chromium`
+  - Install system deps (if supported): `uv run python -m playwright install-deps`
+  - If `install-deps` isn’t available, install system packages typically required by headless Chromium (varies by distro):
+    `libatk-1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxrandr2 libasound2 libpangocairo-1.0-0 libpango-1.0-0 libxcursor1 libxfixes3 libxi6 libglib2.0-0 libgbm1 libnss3 libnspr4 libx11-6 libx11-xcb1 libxcb1 libxshmfence1 fonts-liberation`
+
+- Logs you’ll see:
+  - Tier A fail (expected on some paywalled/blocked sites): `Tier A failed for <url>: <reason>`
+  - Tier B exceptions (missing libs, etc.) are logged once and Tier B auto-disables for the run.
+
+Tip: Set `WEBEX_ENABLE_TIER_B=0` to revert to Tier A only without changing code.
+
 ## RAG / LLM Providers
 
 ### Text backends

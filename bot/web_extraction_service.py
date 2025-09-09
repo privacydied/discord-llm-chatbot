@@ -64,6 +64,8 @@ class WebExtractionService:
 
     def __init__(self) -> None:
         self._client: Optional[httpx.AsyncClient] = None
+        # Runtime gate for Tier B; auto-disables on fatal env errors [REH]
+        self._tier_b_available: bool = ENABLE_TIER_B
 
     async def _get_client(self) -> httpx.AsyncClient:
         if self._client is None:
@@ -90,17 +92,35 @@ class WebExtractionService:
             if res.success:
                 return res
             logger.info(f"Tier A failed for {url}: {res.error}")
-        except Exception as e:  # [REH]
-            logger.debug(f"Tier A exception for {url}: {e}", exc_info=True)
+        except httpx.HTTPStatusError as e:  # expected client/server responses
+            status = e.response.status_code if getattr(e, "response", None) else "?"
+            logger.info(
+                f"Tier A HTTP {status} for {url}: {str(e)[:160]}"
+            )
+        except (httpx.RequestError, httpx.TimeoutException, httpx.TooManyRedirects) as e:
+            logger.info(
+                f"Tier A network error for {url}: {str(e)[:160]}"
+            )
+        except Exception as e:  # unexpected
+            logger.debug(f"Tier A exception for {url}: {str(e)[:200]}")
 
-        # Tier B: Playwright (optional)
-        if ENABLE_TIER_B:
+        # Tier B: Playwright (optional, runtime-disabled on fatal errors)
+        if self._tier_b_available:
             try:
                 res_b = await self._tier_b_playwright(url)
                 if res_b and res_b.success:
                     return res_b
             except Exception as e:
-                logger.debug(f"Tier B exception for {url}: {e}", exc_info=True)
+                logger.info(f"Tier B exception for {url}: {str(e)[:200]}")
+                # Auto-disable Tier B on missing shared libs or launch failures
+                emsg = str(e).lower()
+                if (
+                    "error while loading shared libraries" in emsg
+                    or "browser has been closed" in emsg
+                    or "target page, context or browser has been closed" in emsg
+                ):
+                    self._tier_b_available = False
+                    logger.warning("🛑 Disabling Tier B (Playwright) due to missing system libraries/launch failure.")
 
         return ExtractionResult(
             success=False, tier_used="none", error="all tiers failed"
