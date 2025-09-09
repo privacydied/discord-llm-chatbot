@@ -633,6 +633,144 @@ class Router:
         )
 
     @staticmethod
+    def _canonicalize_x_url(url: str) -> str:
+        """Canonicalize X/Twitter URLs: lowercase host and strip non-essential params.
+        Keeps path untouched; removes params like s=, utm_*, t=.
+        """
+        try:
+            p = urlparse(url)
+            host = (p.netloc or "").lower()
+            # Normalize common hosts
+            if host.startswith("www."):
+                host = host[4:]
+            # Allowed hosts only: leave as-is but lowercased
+            qs = dict(parse_qsl(p.query, keep_blank_values=True))
+            # Drop noise params
+            drop_keys = {"s", "t", "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content"}
+            for k in list(qs.keys()):
+                if k.lower() in drop_keys or k.lower().startswith("utm_"):
+                    qs.pop(k, None)
+            new = urlunparse(
+                (
+                    p.scheme or "https",
+                    host,
+                    p.path,
+                    p.params,
+                    urlencode(qs, doseq=True),
+                    p.fragment,
+                )
+            )
+            return new
+        except Exception:
+            return url
+
+    async def _extract_raw_x_urls(self, message: Message) -> List[str]:
+        """Extract raw X/Twitter URLs from the author's message content and replied-to content only.
+        Ignores embeds and attachments to avoid picking preview thumbnails.
+        """
+        texts: List[str] = []
+        try:
+            texts.append(message.content or "")
+        except Exception:
+            pass
+        # Include referenced message's content when present
+        try:
+            if message.reference and message.reference.message_id:
+                try:
+                    ref_message = (
+                        message.reference.resolved
+                        if getattr(message.reference, "resolved", None)
+                        else None
+                    )
+                    if ref_message is None:
+                        ref_message = await message.channel.fetch_message(
+                            message.reference.message_id
+                        )
+                    texts.append(ref_message.content or "")
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        # Extract URLs from combined text blobs
+        raw_urls: List[str] = []
+        try:
+            url_re = re.compile(r"https?://[^\s<>\"'\[\]{}|\\^`]+", re.IGNORECASE)
+            for t in texts:
+                for m in url_re.finditer(t or ""):
+                    u = m.group(0)
+                    if u and u not in raw_urls:
+                        raw_urls.append(u)
+        except Exception:
+            pass
+        # Filter to X/Twitter domains only and canonicalize
+        out: List[str] = []
+        for u in raw_urls:
+            if self._is_twitter_url(u):
+                cu = self._canonicalize_x_url(u)
+                if cu not in out:
+                    out.append(cu)
+        return out
+
+    async def _yt_dlp_probe(self, url: str, timeout_s: float = 8.0) -> Optional[Dict[str, Any]]:
+        """Run a lightweight yt-dlp metadata probe to detect presence of video/audio.
+        Returns parsed JSON on success or None on errors/timeouts.
+        """
+        cmd = ["yt-dlp", "--dump-json", "--no-playlist", "--quiet", url]
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+            )
+            try:
+                stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout_s)
+            except asyncio.TimeoutError:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+                return None
+            if proc.returncode != 0:
+                return None
+            data = json.loads(stdout.decode(errors="ignore") or "{}")
+            return data if isinstance(data, dict) else None
+        except Exception:
+            return None
+
+    async def _resolve_x_media(self, urls: List[str]) -> Dict[str, Any]:
+        """Resolve X/Twitter URLs into a minimal media shape.
+        - kind: video | image | unknown
+        - url/images: best guess URL(s)
+        - duration: seconds or None
+        """
+        clean = [self._canonicalize_x_url(u) for u in urls or []]
+        # Probe for video first (first success wins)
+        for u in clean:
+            meta = await self._yt_dlp_probe(u)
+            if meta:
+                # Heuristics: duration or any format with audio/video codec
+                duration = None
+                try:
+                    d = meta.get("duration")
+                    if isinstance(d, (int, float)):
+                        duration = float(d)
+                except Exception:
+                    duration = None
+                has_formats = False
+                try:
+                    for f in meta.get("formats") or []:
+                        ac = str(f.get("acodec", ""))
+                        vc = str(f.get("vcodec", ""))
+                        if (ac and ac != "none") or (vc and vc != "none"):
+                            has_formats = True
+                            break
+                except Exception:
+                    has_formats = False
+                if duration or has_formats:
+                    return {"kind": "video", "url": u, "duration": duration}
+
+        # If no video detected, we don't try to harvest images here (keep minimal & safe)
+        return {"kind": "unknown", "reason": "no-formats"}
+
+    @staticmethod
     def _is_direct_image_url(url: str) -> bool:
         """Lightweight check for direct image URLs by extension. [IV]"""
         try:
@@ -1096,147 +1234,101 @@ class Router:
                         )
                     return prechecked
 
-                # 5.5. Check for X/Twitter media routing (before multimodal)
-                x_info = _detect_x_twitter_media(message)
-                if (
-                    x_info.has_x_link
-                    and x_info.media_kind not in ("none",)
-                    and not parsed_command
-                    and x_info.media_urls
-                ):
-                    self.logger.debug(
-                        f"🔗 X/Twitter link detected | kind={x_info.media_kind} | embeds={len(message.embeds)}"
+                # 5.5. Deterministic X/Twitter media routing (before multimodal, ignore embeds)
+                try:
+                    x_urls: List[str] = await self._extract_raw_x_urls(message)
+                except Exception:
+                    x_urls = []
+                if x_urls and not parsed_command:
+                    self.logger.info(
+                        f"route.media: x/twitter url(s)={len(x_urls)}",
+                        extra={"event": "route.media", "detail": {"count": len(x_urls)}},
                     )
-
                     try:
-                        # STT-first approach: try STT for video OR unknown media types
-                        if x_info.media_kind in ("video", "unknown"):
-                            tweet_url = x_info.media_urls[0]
-                            self.logger.debug(f"🐦 X STT probe start | url={tweet_url}")
-
-                            try:
-                                # Use existing STT pipeline
-                                transcript = await hear_infer_from_url(tweet_url)
-                                if transcript and transcript.strip():
-                                    self.logger.debug(
-                                        f"📝 STT complete | transcript_len={len(transcript)}"
-                                    )
-                                    # Format with transcription header
-                                    formatted_response = (
-                                        self._format_x_tweet_with_transcription(
-                                            tweet_url, transcript, message.content or ""
-                                        )
-                                    )
-                                    return await self._flow_process_text(
-                                        content=formatted_response,
-                                        context=context_str,
-                                        message=message,
-                                    )
-                            except Exception as e:
-                                error_msg = str(e).lower()
-                                if any(
-                                    phrase in error_msg
-                                    for phrase in [
-                                        "no video",
-                                        "no audio",
-                                        "no media",
-                                        "not a video",
-                                    ]
-                                ):
-                                    self.logger.debug(
-                                        "🐦 X STT probe: no media → falling back to syndication/api"
-                                    )
-                                    # Fall back to syndication/API for photos or text
-                                    return await self._handle_x_twitter_fallback(
-                                        tweet_url, message, context_str
-                                    )
-                                else:
-                                    self.logger.debug(
-                                        f"❌ X/Twitter STT failed: {e} | continuing without media"
-                                    )
-                                    note = "(video audio unavailable; proceeding without it)"
-                                    fallback_content = self._append_note_once(
-                                        message.content or "", note
-                                    )
-                                    return await self._flow_process_text(
-                                        content=fallback_content.strip(),
-                                        context=context_str,
-                                        message=message,
-                                    )
-
-                        elif x_info.media_kind == "image":
-                            # X/Twitter images → syndication/VL → text flow
-                            tweet_url = (
-                                x_info.media_urls[0]
-                                if any(
-                                    host in x_info.media_urls[0].lower()
-                                    for host in {
-                                        "x.com",
-                                        "twitter.com",
-                                        "fxtwitter.com",
-                                    }
-                                )
-                                else None
+                        resolved = await self._resolve_x_media(x_urls)
+                    except Exception as e:
+                        resolved = {"kind": "unknown", "reason": f"exception:{e}"}
+                    kind = (resolved or {}).get("kind", "unknown")
+                    if kind == "video":
+                        url_for_stt = (resolved.get("url") or x_urls[0])
+                        dur = resolved.get("duration")
+                        host = None
+                        try:
+                            host = urlparse(url_for_stt).netloc
+                        except Exception:
+                            host = ""
+                        self.logger.info(
+                            f"media.resolve: result=video url={host or url_for_stt} dur={int(dur) if isinstance(dur, (int,float)) else 'NA'}s"
+                        )
+                        # Always prefer STT for X/Twitter video
+                        try:
+                            stt_res = await hear_infer_from_url(url_for_stt)
+                            formatted = self._format_x_tweet_with_transcription(
+                                base_text=None, url=url_for_stt, stt_res=stt_res
                             )
-                            if tweet_url:
-                                self.logger.debug(
-                                    f"🖼️🐦 Routing X photos to VL | url={tweet_url}"
+                            self.logger.info(
+                                f"🎯 Route: stt_from_x_video | msg_id={message.id}"
+                            )
+                            return await self._flow_process_text(
+                                content=formatted, context=context_str, message=message
+                            )
+                        except Exception as e:
+                            em = str(e).lower()
+                            if any(
+                                p in em
+                                for p in (
+                                    "no video",
+                                    "no audio",
+                                    "no media",
+                                    "not a video",
+                                    "no video could be found",
                                 )
-                                return await self._handle_x_twitter_fallback(
-                                    tweet_url, message, context_str
+                            ):
+                                self.logger.info(
+                                    "media.resolve: result=unknown reason=no-formats | falling back"
                                 )
                             else:
-                                # Direct image URL
-                                image_url = x_info.media_urls[0]
                                 self.logger.debug(
-                                    f"📎 X/Twitter image detected | url={image_url}"
+                                    f"❌ STT from X failed | {e} | falling back"
                                 )
-
-                                try:
-                                    http_client = await get_http_client()
-                                    response = await http_client.get(image_url)
-                                    if response.status_code == 200:
-                                        ctype = response.headers.get(
-                                            "content-type", ""
-                                        ).lower()
-                                        if not ctype.startswith("image/"):
-                                            self.logger.debug(
-                                                f"❌ X/Twitter image URL did not return image content-type | content_type={ctype}"
-                                            )
-                                        else:
-                                            image_data = response.content
-                                            vl_notes = await see_infer(image_data)
-                                            if vl_notes:
-                                                vl_notes = sanitize_vl_reply_text(
-                                                    vl_notes
-                                                )
-                                                return await self._flow_process_text(
-                                                    content=message.content or "",
-                                                    context=context_str,
-                                                    message=message,
-                                                    perception_notes=vl_notes,
-                                                )
-                                except Exception:
-                                    self.logger.debug(
-                                        "❌ X/Twitter image unavailable | reason=image_fetch_failed | continuing without media"
-                                    )
-                                    note = (
-                                        "(image was unavailable; proceeding without it)"
-                                    )
-                                    fallback_content = self._append_note_once(
-                                        message.content or "", note
-                                    )
-                                    return await self._flow_process_text(
-                                        content=fallback_content.strip(),
-                                        context=context_str,
-                                        message=message,
-                                    )
-
-                    except Exception as e:
-                        self.logger.error(
-                            f"X/Twitter media processing failed: {e}", exc_info=True
+                            # Fall back to existing logic (syndication/VL/text)
+                            return await self._handle_x_twitter_fallback(
+                                x_urls[0], message, context_str
+                            )
+                    elif kind == "image":
+                        images = resolved.get("images") or []
+                        self.logger.info(
+                            f"media.resolve: result=image count={len(images)}"
                         )
-                        # Fall through to normal processing
+                        # Run silent perception notes on the first image only (budget-friendly)
+                        vl_notes = None
+                        if images:
+                            try:
+                                vl_notes = await self._vl_describe_image_from_url(
+                                    images[0],
+                                    prompt=(
+                                        "Describe this image in detail, focusing on key visual elements, objects, text, and context."
+                                    ),
+                                )
+                                vl_notes = sanitize_vl_reply_text(vl_notes or "")
+                            except Exception:
+                                vl_notes = None
+                        self.logger.info(
+                            f"🎯 Route: vl_from_x_images | msg_id={message.id}"
+                        )
+                        return await self._flow_process_text(
+                            content=(message.content or "").strip(),
+                            context=context_str,
+                            message=message,
+                            perception_notes=vl_notes or None,
+                        )
+                    else:
+                        # Unknown → fall back to existing logic
+                        reason = (resolved or {}).get("reason", "unknown")
+                        self.logger.info(
+                            f"media.resolve: result=unknown reason={reason}"
+                        )
+                        # Continue to normal processing (no early return)
 
                 # 6. Sequential multimodal processing
                 result_action = await self._process_multimodal_message_internal(
