@@ -31,28 +31,27 @@
 
 ```mermaid
 flowchart LR
-  A[Discord Gateway] --> B["LLMBot (discord.py)"]
-  B --> C[Router]
-
-  C --> D1[Text: OpenAI / OpenRouter]
-  C --> D2[Text (local): Ollama]
-  C --> E[RAG: Hybrid Search (ChromaDB)]
-  C --> F["Vision Orchestrator: Together / Novita"]
-  C --> G1[Media: STT Orchestrator]
-  G1 --> G2[faster-whisper / whispercpp]
-  C --> H1[PDF / OCR: PyMuPDF]
-  H1 --> H2[Tesseract OCR (optional)]
-
-  B --> I[Commands / Cogs]
-  B --> J[Prometheus Metrics]
-  B --> K[Logging: Rich + JSONL]
-
-  subgraph Files / Storage
-    L1[kb/]
-    L2[chroma_db/]
-    L3[vision_data/, logs/, user_profiles/, server_profiles/]
-  end
-
+    A[Discord Gateway] --> B["LLMBot (discord.py)"]
+    B --> C[Router]
+    
+    C --> D1[Text: OpenAI / OpenRouter]
+    C --> D2["Text (local): Ollama"]
+    C --> E["RAG: Hybrid Search (ChromaDB)"]
+    C --> F["Vision Orchestrator: Together / Novita"]
+    C --> G1[Media: STT Orchestrator]
+    G1 --> G2[faster-whisper / whispercpp]
+    C --> H1["PDF / OCR: PyMuPDF"]
+    H1 --> H2["Tesseract OCR (optional)"]
+    
+    B --> I[Commands / Cogs]
+    B --> J[Prometheus Metrics]
+    B --> K["Logging: Rich + JSONL"]
+    
+    subgraph Storage["Files / Storage"]
+        L1[kb/]
+        L2[chroma_db/]
+        L3["vision_data/, logs/, user_profiles/, server_profiles/"]
+    end
 ```
 
 - Entrypoint: `run.py` → `bot.main:run_bot()` → async `main()` → `LLMBot.start()`.
