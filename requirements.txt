@@ -33,7 +33,6 @@ distro==1.9.0
 dlinfo==2.0.0
 durationpy==0.10
 ebooklib==0.19
--e file:///volume1/py/discord-llm-chatbot-git
 espeakng-loader==0.2.4
 faster-whisper==1.2.0
 filelock==3.18.0

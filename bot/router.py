@@ -985,7 +985,9 @@ class Router:
                                                     perception_notes=vl_notes
                                                 )
                                 except Exception as e:
-                                    self.logger.debug(f"❌ X/Twitter image unavailable | reason=image_fetch_failed | continuing without media")
+                                    self.logger.debug(
+                                        "❌ X/Twitter image unavailable | reason=image_fetch_failed | continuing without media"
+                                    )
                                     fallback_content = f"{message.content or ''}\n\n(image was unavailable; proceeding without it)"
                                     return await self._flow_process_text(
                                         content=fallback_content.strip(),

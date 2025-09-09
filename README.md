@@ -307,7 +307,12 @@ To maintain conversational context, this bot stores recent messages. By default,
 - **Direct Messages (DMs)**: All DM conversations are stored **in-memory only** and are **never** written to disk. This history is ephemeral and will be lost on restart.
 - **Guild/Server Channels**: Conversation history from public channels is saved to `context.json` to persist across restarts. This file is included in `.gitignore`.
 
-**Security Recommendation**: For production environments, it is highly recommended to set restrictive file permissions for the context file (e.g., `chmod 600 context.json`) to protect its contents.
+**Security Recommendation**: For production environments, set restrictive file permissions for the configured context file to protect its contents. If you override the path via `CONTEXT_FILE_PATH`, harden that path specifically. Example:
+```
+chmod 600 "$CONTEXT_FILE_PATH"  # default is context.json
+```
+
+Note: When `IN_MEMORY_CONTEXT_ONLY=true`, the bot does not write any conversation history to disk, so no file hardening is required. When file-based context is enabled, the default path is `context.json` unless overridden by `CONTEXT_FILE_PATH`.
 
 To disable all file-based context storage and run the bot in a fully ephemeral, in-memory mode, set the following environment variable:
 ```
