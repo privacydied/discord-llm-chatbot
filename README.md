@@ -30,13 +30,13 @@
 ## Architecture
 
 ```mermaid
-flowchart LR
-  A[Discord Gateway] --> B[LLMBot (discord.py)]
+graph LR
+  A[Discord Gateway] --> B["LLMBot (discord.py)"]
   B --> C[Router]
   C -->|Text| D1[OpenAI/OpenRouter]
   C -->|Text (local)| D2[Ollama]
   C -->|RAG| E[Hybrid Search (ChromaDB)]
-  C -->|Vision| F[Vision Orchestrator<br/>Together/Novita]
+  C -->|Vision| F["Vision Orchestrator\nTogether/Novita"]
   C -->|Media| G1[STT Orchestrator]
   G1 --> G2[faster-whisper/whispercpp]
   C -->|PDF/OCR| H1[PyMuPDF]
@@ -44,11 +44,13 @@ flowchart LR
   B --> I[Commands/Cogs]
   B --> J[Prometheus Metrics]
   B --> K[Logging: Rich + JSONL]
-  subgraph FILES[Files/Storage]
+
+  subgraph FILES["Files/Storage"]
     L1[kb/]
     L2[chroma_db/]
     L3[vision_data/, logs/, user_profiles/, server_profiles/]
   end
+
 ```
 
 - Entrypoint: `run.py` → `bot.main:run_bot()` → async `main()` → `LLMBot.start()`.
@@ -84,6 +86,10 @@ uv pip install -e .
 
 # Ensure Playwright browser (Chromium) for screenshot/vision flows
 uv run playwright install chromium
+
+# Run the bot
+uv run python -m bot.main
+
 ```
 
 #### pip + venv
@@ -92,6 +98,7 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 pip install -e .
+python -m bot.main
 ```
 
 ### Configuration
