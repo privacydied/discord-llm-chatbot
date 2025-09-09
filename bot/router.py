@@ -36,7 +36,7 @@ from discord import DMChannel, Message
 from .brain import brain_infer
 from .enhanced_retry import ProviderConfig, get_retry_manager
 from .exceptions import APIError
-from .http_client import get_http_client
+from .http_client import get_http_client, RequestConfig
 from .modality import (
     InputItem,
     InputModality,
@@ -406,6 +406,58 @@ class Router:
                 f"⚠️ Vision system NOT initialized - vision_enabled={ve_parsed}, reason=module_unavailable_or_disabled"
             )
 
+        # --- X/Twitter syndication probe feature flags (read-once, cached) [CMV] ---
+        try:
+            self._x_syn_probe_enabled: bool = bool(
+                self.config.get("X_SYNDICATION_PROBE_ENABLED", True)
+            )
+        except Exception:
+            self._x_syn_probe_enabled = True
+        try:
+            self._x_syn_order: str = str(
+                self.config.get("X_SYNDICATION_ORDER", "yt_dlp,api,html")
+            ).strip()
+        except Exception:
+            self._x_syn_order = "yt_dlp,api,html"
+        try:
+            self._x_syn_timeout_s: float = float(
+                self.config.get("X_SYNDICATION_TIMEOUT_S", 3.0)
+            )
+        except Exception:
+            self._x_syn_timeout_s = 3.0
+        try:
+            self._x_syn_max_images: int = int(
+                self.config.get("X_SYNDICATION_MAX_IMAGES", 4)
+            )
+        except Exception:
+            self._x_syn_max_images = 4
+        try:
+            domains = (
+                self.config.get(
+                    "X_SYNDICATION_ACCEPT_DOMAINS",
+                    "pbs.twimg.com,video.twimg.com,fxtwitter.com,vxtwitter.com",
+                )
+                or ""
+            )
+            self._x_syn_accept_domains: set[str] = {
+                d.strip().lower() for d in str(domains).split(",") if d.strip()
+            }
+        except Exception:
+            self._x_syn_accept_domains = {
+                "pbs.twimg.com",
+                "video.twimg.com",
+                "fxtwitter.com",
+                "vxtwitter.com",
+            }
+
+        # Gate for previously added early X-resolve (default off to avoid behavioral change) [KBT]
+        try:
+            self._x_early_resolve_enabled: bool = bool(
+                self.config.get("X_EARLY_RESOLVE_ENABLED", False)
+            )
+        except Exception:
+            self._x_early_resolve_enabled = False
+
     async def _get_x_api_client(self) -> Optional[XApiClient]:
         """Create or return a cached XApiClient based on config. [CA][IV]"""
         cfg = self.config
@@ -769,6 +821,231 @@ class Router:
 
         # If no video detected, we don't try to harvest images here (keep minimal & safe)
         return {"kind": "unknown", "reason": "no-formats"}
+
+    # ---- New helpers for targeted syndication image probe on no-formats [REH][PA] ----
+    @staticmethod
+    def _parse_twitter_status_id(url: str) -> Optional[str]:
+        try:
+            # Prefer centralized extractor if available
+            tid = XApiClient.extract_tweet_id(str(url))
+            if tid:
+                return tid
+        except Exception:
+            pass
+        try:
+            m = re.search(r"/status/(\d{5,20})(?:\D|$)", str(url))
+            if m:
+                return m.group(1)
+        except Exception:
+            return None
+        return None
+
+    @staticmethod
+    def _is_twitter_status_url(url: str) -> bool:
+        try:
+            if not Router._is_twitter_url(url):
+                return False
+            return Router._parse_twitter_status_id(url) is not None
+        except Exception:
+            return False
+
+    @staticmethod
+    def _canonicalize_twitter_status_url(url: str) -> str:
+        try:
+            p = urlparse(url)
+            path = p.path or ""
+            # Normalize host to x.com
+            return urlunparse(("https", "x.com", path, "", "", ""))
+        except Exception:
+            return url
+
+    async def _probe_twitter_syndication_images(self, url: str, status_id: str) -> List[str]:
+        """Probe fx/vx API then HTML/meta for high-res images. Short, bounded budgets.
+        Returns unique HTTPS image URLs, filtered and content-type verified.
+        """
+        images: List[str] = []
+        try:
+            http = await get_http_client()
+        except Exception:
+            http = None
+
+        # Helper: content-type image HEAD check
+        async def _is_image(u: str) -> bool:
+            if http is None:
+                return True  # best-effort
+            try:
+                cfg = RequestConfig(
+                    connect_timeout=min(self._x_syn_timeout_s, 3.0),
+                    read_timeout=min(self._x_syn_timeout_s, 3.0),
+                    total_timeout=min(self._x_syn_timeout_s + 0.5, 3.5),
+                    max_retries=0,
+                )
+                r = await http.head(u, config=cfg)
+                ctype = (r.headers.get("content-type") or "").lower()
+                return ctype.startswith("image/")
+            except Exception:
+                return False
+
+        # Helper: allowlist filter
+        def _allowed(u: str) -> bool:
+            try:
+                host = urlparse(u).netloc.lower()
+                host = host.split(":")[0]
+                return host in self._x_syn_accept_domains
+            except Exception:
+                return False
+
+        # Stage 1: API probes (fx → vx)
+        api_hosts = ["api.fxtwitter.com", "api.vxtwitter.com"]
+        if http is not None and self._x_syn_probe_enabled:
+            for host in api_hosts:
+                try:
+                    api_url = f"https://{host}/status/{status_id}"
+                    cfg = RequestConfig(
+                        connect_timeout=self._x_syn_timeout_s,
+                        read_timeout=self._x_syn_timeout_s,
+                        total_timeout=self._x_syn_timeout_s,
+                        max_retries=0,
+                    )
+                    resp = await http.get(api_url, config=cfg)
+                    if resp.status_code != 200:
+                        self.logger.debug(
+                            f"x.syndication.api.non200 | host={host} status={resp.status_code}"
+                        )
+                        continue
+                    data = {}
+                    try:
+                        data = json.loads(resp.text)
+                    except Exception:
+                        self.logger.debug(
+                            f"x.syndication.api.json_error | host={host}"
+                        )
+                        data = {}
+                    # Extract photo URLs from common shapes
+                    candidates: List[str] = []
+                    # fx/vx often: {'tweet': {'media': {'photos':[{'url':...}]}}}
+                    try:
+                        tweet = (data.get("tweet") or data.get("status")) or {}
+                        media = (tweet.get("media") or {})
+                        photos = media.get("photos") or []
+                        for p in photos:
+                            u = p.get("url") or p.get("src") or p.get("href")
+                            if isinstance(u, str):
+                                candidates.append(u)
+                    except Exception:
+                        pass
+                    # Some variants: top-level 'photos'
+                    for p in (data.get("photos") or []):
+                        if isinstance(p, dict) and p.get("url"):
+                            candidates.append(p.get("url"))
+                        elif isinstance(p, str):
+                            candidates.append(p)
+                    # Filter + HEAD verify
+                    uniq = []
+                    for u in candidates:
+                        if not u or not u.startswith("http"):
+                            continue
+                        if not _allowed(u):
+                            continue
+                        if u not in uniq and await _is_image(u):
+                            uniq.append(u)
+                    if uniq:
+                        images.extend(uniq)
+                        break  # API success
+                except Exception as e:
+                    self.logger.debug(f"x.syndication.api.error | host={host} err={e}")
+
+        # Stage 2: HTML/meta fallback on fx/vx
+        if not images and http is not None and self._x_syn_probe_enabled:
+            html_hosts = ["fxtwitter.com", "vxtwitter.com"]
+            for host in html_hosts:
+                try:
+                    html_url = f"https://{host}/i/status/{status_id}"
+                    cfg = RequestConfig(
+                        connect_timeout=self._x_syn_timeout_s,
+                        read_timeout=self._x_syn_timeout_s,
+                        total_timeout=self._x_syn_timeout_s,
+                        max_retries=0,
+                    )
+                    resp = await http.get(html_url, config=cfg)
+                    if resp.status_code != 200 or not resp.text:
+                        self.logger.debug(
+                            f"x.syndication.html.non200 | host={host} status={resp.status_code}"
+                        )
+                        continue
+                    text = resp.text
+                    candidates: List[str] = []
+                    # og:image
+                    for m in re.finditer(
+                        r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']',
+                        text,
+                        re.IGNORECASE,
+                    ):
+                        candidates.append(m.group(1))
+                    # pbs links anywhere
+                    for m in re.finditer(
+                        r"https://pbs\.twimg\.com/[^\s'\"]+",
+                        text,
+                        re.IGNORECASE,
+                    ):
+                        candidates.append(m.group(0))
+                    uniq = []
+                    for u in candidates:
+                        if not u or not u.startswith("http"):
+                            continue
+                        if not _allowed(u):
+                            continue
+                        if u not in uniq and await _is_image(u):
+                            uniq.append(u)
+                    if uniq:
+                        images.extend(uniq)
+                        break
+                except Exception as e:
+                    self.logger.debug(f"x.syndication.html.error | host={host} err={e}")
+
+        # Deduplicate, cap to MAX, preserve order
+        final: List[str] = []
+        for u in images:
+            if u not in final:
+                final.append(u)
+            if len(final) >= max(1, self._x_syn_max_images):
+                break
+        return final
+
+    async def _route_tweet_as_perception_images(
+        self, img_urls: List[str], *, message: Message, context_str: str
+    ) -> BotAction:
+        first_host = ""
+        try:
+            if img_urls:
+                first_host = urlparse(img_urls[0]).netloc
+        except Exception:
+            first_host = ""
+        self.logger.info(
+            f"route.twitter.syndication | images={len(img_urls)} | {first_host or 'n/a'} | msg_id={message.id}"
+        )
+        # Run VL on first image (budget-friendly), inject to text flow
+        notes = None
+        if img_urls:
+            try:
+                notes = await self._vl_describe_image_from_url(
+                    img_urls[0],
+                    prompt=(
+                        "Describe this image in detail, focusing on key visual elements, objects, text, and context."
+                    ),
+                )
+                notes = sanitize_vl_reply_text(notes or "")
+            except Exception:
+                notes = None
+        self.logger.info(
+            f"🎯 Route: text (with perception) | images={len(img_urls)} | msg_id={message.id}"
+        )
+        return await self._flow_process_text(
+            content=(message.content or "").strip(),
+            context=context_str,
+            message=message,
+            perception_notes=notes or None,
+        )
 
     @staticmethod
     def _is_direct_image_url(url: str) -> bool:
@@ -1234,101 +1511,102 @@ class Router:
                         )
                     return prechecked
 
-                # 5.5. Deterministic X/Twitter media routing (before multimodal, ignore embeds)
-                try:
-                    x_urls: List[str] = await self._extract_raw_x_urls(message)
-                except Exception:
-                    x_urls = []
-                if x_urls and not parsed_command:
-                    self.logger.info(
-                        f"route.media: x/twitter url(s)={len(x_urls)}",
-                        extra={"event": "route.media", "detail": {"count": len(x_urls)}},
-                    )
+                # 5.5. Deterministic X/Twitter media routing (optional early path; default off)
+                if getattr(self, "_x_early_resolve_enabled", False):
                     try:
-                        resolved = await self._resolve_x_media(x_urls)
-                    except Exception as e:
-                        resolved = {"kind": "unknown", "reason": f"exception:{e}"}
-                    kind = (resolved or {}).get("kind", "unknown")
-                    if kind == "video":
-                        url_for_stt = (resolved.get("url") or x_urls[0])
-                        dur = resolved.get("duration")
-                        host = None
-                        try:
-                            host = urlparse(url_for_stt).netloc
-                        except Exception:
-                            host = ""
+                        x_urls: List[str] = await self._extract_raw_x_urls(message)
+                    except Exception:
+                        x_urls = []
+                    if x_urls and not parsed_command:
                         self.logger.info(
-                            f"media.resolve: result=video url={host or url_for_stt} dur={int(dur) if isinstance(dur, (int,float)) else 'NA'}s"
+                            f"route.media: x/twitter url(s)={len(x_urls)}",
+                            extra={"event": "route.media", "detail": {"count": len(x_urls)}},
                         )
-                        # Always prefer STT for X/Twitter video
                         try:
-                            stt_res = await hear_infer_from_url(url_for_stt)
-                            formatted = self._format_x_tweet_with_transcription(
-                                base_text=None, url=url_for_stt, stt_res=stt_res
-                            )
+                            resolved = await self._resolve_x_media(x_urls)
+                        except Exception as e:
+                            resolved = {"kind": "unknown", "reason": f"exception:{e}"}
+                        kind = (resolved or {}).get("kind", "unknown")
+                        if kind == "video":
+                            url_for_stt = (resolved.get("url") or x_urls[0])
+                            dur = resolved.get("duration")
+                            host = None
+                            try:
+                                host = urlparse(url_for_stt).netloc
+                            except Exception:
+                                host = ""
                             self.logger.info(
-                                f"🎯 Route: stt_from_x_video | msg_id={message.id}"
+                                f"media.resolve: result=video url={host or url_for_stt} dur={int(dur) if isinstance(dur, (int,float)) else 'NA'}s"
+                            )
+                            # Always prefer STT for X/Twitter video
+                            try:
+                                stt_res = await hear_infer_from_url(url_for_stt)
+                                formatted = self._format_x_tweet_with_transcription(
+                                    base_text=None, url=url_for_stt, stt_res=stt_res
+                                )
+                                self.logger.info(
+                                    f"🎯 Route: stt_from_x_video | msg_id={message.id}"
+                                )
+                                return await self._flow_process_text(
+                                    content=formatted, context=context_str, message=message
+                                )
+                            except Exception as e:
+                                em = str(e).lower()
+                                if any(
+                                    p in em
+                                    for p in (
+                                        "no video",
+                                        "no audio",
+                                        "no media",
+                                        "not a video",
+                                        "no video could be found",
+                                    )
+                                ):
+                                    self.logger.info(
+                                        "media.resolve: result=unknown reason=no-formats | falling back"
+                                    )
+                                else:
+                                    self.logger.debug(
+                                        f"❌ STT from X failed | {e} | falling back"
+                                    )
+                                # Fall back to existing logic (syndication/VL/text)
+                                return await self._handle_x_twitter_fallback(
+                                    x_urls[0], message, context_str
+                                )
+                        elif kind == "image":
+                            images = resolved.get("images") or []
+                            self.logger.info(
+                                f"media.resolve: result=image count={len(images)}"
+                            )
+                            # Run silent perception notes on the first image only (budget-friendly)
+                            vl_notes = None
+                            if images:
+                                try:
+                                    vl_notes = await self._vl_describe_image_from_url(
+                                        images[0],
+                                        prompt=(
+                                            "Describe this image in detail, focusing on key visual elements, objects, text, and context."
+                                        ),
+                                    )
+                                    vl_notes = sanitize_vl_reply_text(vl_notes or "")
+                                except Exception:
+                                    vl_notes = None
+                            self.logger.info(
+                                f"🎯 Route: vl_from_x_images | msg_id={message.id}"
                             )
                             return await self._flow_process_text(
-                                content=formatted, context=context_str, message=message
+                                content=(message.content or "").strip(),
+                                context=context_str,
+                                message=message,
+                                perception_notes=vl_notes or None,
                             )
-                        except Exception as e:
-                            em = str(e).lower()
-                            if any(
-                                p in em
-                                for p in (
-                                    "no video",
-                                    "no audio",
-                                    "no media",
-                                    "not a video",
-                                    "no video could be found",
-                                )
-                            ):
-                                self.logger.info(
-                                    "media.resolve: result=unknown reason=no-formats | falling back"
-                                )
-                            else:
-                                self.logger.debug(
-                                    f"❌ STT from X failed | {e} | falling back"
-                                )
-                            # Fall back to existing logic (syndication/VL/text)
-                            return await self._handle_x_twitter_fallback(
-                                x_urls[0], message, context_str
+                        else:
+                            # Unknown → fall back to existing logic
+                            reason = (resolved or {}).get("reason", "unknown")
+                            self.logger.info(
+                                f"media.resolve: result=unknown reason={reason}"
                             )
-                    elif kind == "image":
-                        images = resolved.get("images") or []
-                        self.logger.info(
-                            f"media.resolve: result=image count={len(images)}"
-                        )
-                        # Run silent perception notes on the first image only (budget-friendly)
-                        vl_notes = None
-                        if images:
-                            try:
-                                vl_notes = await self._vl_describe_image_from_url(
-                                    images[0],
-                                    prompt=(
-                                        "Describe this image in detail, focusing on key visual elements, objects, text, and context."
-                                    ),
-                                )
-                                vl_notes = sanitize_vl_reply_text(vl_notes or "")
-                            except Exception:
-                                vl_notes = None
-                        self.logger.info(
-                            f"🎯 Route: vl_from_x_images | msg_id={message.id}"
-                        )
-                        return await self._flow_process_text(
-                            content=(message.content or "").strip(),
-                            context=context_str,
-                            message=message,
-                            perception_notes=vl_notes or None,
-                        )
-                    else:
-                        # Unknown → fall back to existing logic
-                        reason = (resolved or {}).get("reason", "unknown")
-                        self.logger.info(
-                            f"media.resolve: result=unknown reason={reason}"
-                        )
-                        # Continue to normal processing (no early return)
+                            # Continue to normal processing (no early return)
 
                 # 6. Sequential multimodal processing
                 result_action = await self._process_multimodal_message_internal(
@@ -2211,11 +2489,38 @@ class Router:
                 "no video or audio content found" in error_str
                 or "no video could be found" in error_str
                 or "failed to download video" in error_str
+                or "no video" in error_str
             ):
+                # New: targeted syndication image probe (feature-flagged)
+                if getattr(self, "_x_syn_probe_enabled", True) and self._is_twitter_status_url(url):
+                    try:
+                        status_id = self._parse_twitter_status_id(url)
+                        imgs = await self._probe_twitter_syndication_images(url, status_id or "")
+                        if imgs:
+                            first_host = ""
+                            try:
+                                first_host = urlparse(imgs[0]).netloc
+                            except Exception:
+                                first_host = ""
+                            self.logger.info(
+                                f"route.twitter.syndication | images={len(imgs)} | {first_host or 'n/a'}"
+                            )
+                            # Run VL on the first image and return the description as text result
+                            try:
+                                desc = await self._vl_describe_image_from_url(imgs[0])
+                                return (
+                                    desc
+                                    or "⚠️ Unable to analyze the images from this tweet."
+                                )
+                            except Exception:
+                                # Fall through to general handler on VL error
+                                pass
+                    except Exception as e:
+                        self.logger.debug(f"x.syndication.probe.failed | {e}")
                 self.logger.info(
                     f"🐦 No video in Twitter URL; routing to syndication/API path: {url}"
                 )
-                # Force to general URL handler which has proper X syndication logic
+                # Fallback: general URL handler which has X syndication logic
                 return await self._handle_general_url(
                     InputItem(source_type="url", payload=url)
                 )
