@@ -1,39 +1,38 @@
-# discord-llm-bot
+# discord-llm-chatbot
 
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](pyproject.toml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-## Overview
-- Production‑oriented Discord bot that blends chat, search, RAG, and multimodal (vision, TTS/STT) features with robust logging, observability, and reliability.
-- Built on discord.py 2.x with message‑commands and selective slash commands for vision workflows.
-- Backends: OpenAI/OpenRouter or local Ollama for text; optional RAG over ChromaDB; OCR/STT for media.
-- Emphasizes clean startup, dual‑sink logging (Rich + JSONL), graceful shutdown, retries, and Prometheus metrics.
+**Production-ready Discord bot** that blends chat, search/RAG, and multimodal (vision, OCR, TTS/STT). Built on `discord.py 2.x` with robust routing, retries, structured logs, and optional Prometheus metrics.
 
-## Features
-- Discord commands:
-  - Text: general chat, admin/config, memory, search, screenshots.
-  - RAG: hybrid vector+keyword search over a local KB with lazy/eager loading.
-  - Media: video transcription, OCR fallbacks, and X/Twitter extractors.
-  - Vision: slash commands for image/video generation (Together/Novita).
-  - TTS: Kokoro‑ONNX speech synthesis and voice message publishing.
-- Backends and routing:
-  - Text: OpenAI/OpenRouter (default), or Ollama.
-  - RAG: ChromaDB (hybrid search + background indexing).
-  - Vision: providers (Together, Novita) with budgets, retries, and artifacts.
-  - STT: faster‑whisper/whispercpp orchestration with timeouts and caching.
-- Ops and reliability:
-  - Dual logging sinks: Rich console + structured JSONL at `logs/bot.jsonl`.
-  - Logging enforcer, sensitive data scrubbing, graceful shutdown.
-  - Prometheus metrics (optional HTTP server).
-  - Extensive test suite (pytest + pytest‑asyncio).
+> Text via OpenAI/OpenRouter **or** local Ollama. RAG via ChromaDB. Vision via Together/Novita. STT via faster-whisper/whispercpp. OCR via PyMuPDF + Tesseract.
 
-## Architecture
+---
+
+## ✨ Features
+
+* **Chat & Tools**
+  * General chat, search, screenshots, memory, admin/config.
+  * Hybrid RAG (vector + keyword) over a local KB.
+* **Media**
+  * Video → **STT** (yt-dlp + faster-whisper), PDF/Images → **OCR**.
+  * X/Twitter URL extraction with smart routing (VL vs STT vs web text).
+* **Vision**
+  * Image/video generation with provider budgeting, retries, and artifacts.
+* **Ops**
+  * Dual sinks: pretty console + **JSONL** (`logs/bot.jsonl`) with secret scrubbing.
+  * Graceful shutdown, backoff/retries, health logs.
+  * **Prometheus** (optional) for metrics.
+
+---
+
+## 🧭 Architecture (high-level)
 
 ```mermaid
 flowchart LR
     A[Discord Gateway] --> B["LLMBot (discord.py)"]
     B --> C[Router]
-    
+
     C --> D1[Text: OpenAI / OpenRouter]
     C --> D2["Text (local): Ollama"]
     C --> E["RAG: Hybrid Search (ChromaDB)"]
@@ -42,11 +41,11 @@ flowchart LR
     G1 --> G2[faster-whisper / whispercpp]
     C --> H1["PDF / OCR: PyMuPDF"]
     H1 --> H2["Tesseract OCR (optional)"]
-    
+
     B --> I[Commands / Cogs]
     B --> J[Prometheus Metrics]
     B --> K["Logging: Rich + JSONL"]
-    
+
     subgraph Storage["Files / Storage"]
         L1[kb/]
         L2[chroma_db/]
@@ -54,193 +53,162 @@ flowchart LR
     end
 ```
 
-- Entrypoint: `run.py` → `bot.main:run_bot()` → async `main()` → `LLMBot.start()`.
-- Intents: message_content, guilds, members, voice_states checked at startup.
-- Commands loaded in `LLMBot.setup_hook()` from `bot/commands/*`; vision slash commands via `discord.app_commands`.
-- Config loads from `.env` and validates required keys; prompt files loaded from disk.
+Entrypoint: `run.py` → `bot.main:run_bot()` → `LLMBot.start()`
+Commands autoload in `LLMBot.setup_hook()`; vision slash commands via `discord.app_commands`.
+Config is `.env`-driven; prompt files loaded from disk.
 
-## Getting Started
+---
 
-### Quickstart
+## 🚀 5-Minute Quickstart
 
-#### UV
+### 1) Create the bot in Discord
+
+* In **Developer Portal**: create an app → add **Bot**.
+* Enable **Message Content Intent** (and others if you use them).
+* Note the **TOKEN** and **CLIENT_ID**.
+
+**Invite URL** (replace placeholders):
+
+```
+https://discord.com/api/oauth2/authorize?client_id=<CLIENT_ID>&scope=bot%20applications.commands&permissions=<PERMISSIONS_INT>
+```
+
+Minimal permissions: Send Messages, Embed Links, Attach Files, Read Message History.
+
+### 2) Clone & create env
+
+```bash
+git clone <your-repo-url> && cd discord-llm-chatbot
+cp .env.example .env
+```
+
+### 3) Install (choose one)
+
+**uv (recommended)**
+
 ```bash
 uv venv --python 3.11
 source .venv/bin/activate
 uv pip sync requirements.txt
-cp .env.example .env
-uv run python -m bot.main
-# or: uv run python run.py
 ```
 
-#### pip
+**pip**
+
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt -e .
-cp .env.example .env
-python -m bot.main
 ```
 
-### Prerequisites
-- Python 3.11+
-- System tools (feature‑based):
-  - Tesseract OCR (tesseract, language packs like `tesseract-data-eng`)
-  - Playwright Chromium (auto‑install attempted; may need `uv run playwright install chromium`)
-  - Poppler utils for some OCR flows (`pdftoppm`)
-- Discord Developer Portal:
-  - A bot application with Bot + `applications.commands` scopes
-  - Message Content Intent enabled
+### 4) Fill the minimum config
 
+In `.env` set:
 
-### Configuration
-Copy `.env.example` to `.env` and fill in secrets and paths.
-```bash
-cp .env.example .env
-```
-At minimum: `DISCORD_TOKEN`, `PROMPT_FILE`, `VL_PROMPT_FILE`, and `OPENAI_API_KEY` (if using OpenAI/OpenRouter).
+* `DISCORD_TOKEN=<token>`
+* `PROMPT_FILE=prompts/prompt-yoroi-super-chill.txt`
+* `VL_PROMPT_FILE=prompts/vl-prompt.txt`
+* **Either** set OpenRouter/OpenAI: `OPENAI_API_KEY=...`
+  **Or** local: `TEXT_BACKEND=ollama`, `OLLAMA_MODEL=llama3`
 
-### Environment Variables (Core)
+### 5) Run
 
-| Name | Required | Default | Description | Example |
-| ---- | -------- | ------- | ----------- | ------- |
-| DISCORD_TOKEN | Yes | — | Discord bot token | A1B2... |
-| TEXT_BACKEND | No | openai | Text backend: openai or ollama | openai |
-| OPENAI_API_KEY | Maybe | — | API key for OpenAI/OpenRouter | sk-or-... |
-| OPENAI_API_BASE | No | https://openrouter.ai/api/v1 | API base for OpenRouter | https://openrouter.ai/api/v1 |
-| OPENAI_TEXT_MODEL | No | — | Text model ID (OpenRouter/OpenAI) | deepseek/... |
-| OLLAMA_BASE_URL | No | http://localhost:11434 | Ollama base URL | http://localhost:11434 |
-| OLLAMA_MODEL | No | llama3 | Default local model | qwen3 |
-| PROMPT_FILE | Yes | — | System prompt file path | prompts/prompt-yoroi-super-chill.txt |
-| VL_PROMPT_FILE | Yes | — | Vision system prompt file path | prompts/vl-prompt.txt |
-| BOT_PREFIX | No | ! | Message command prefix (comma‑separated allowed) | !,? |
-| LOG_LEVEL | No | INFO | Logging level | DEBUG |
-| LOG_JSONL_PATH | No | logs/bot.jsonl | JSONL log path | logs/bot.jsonl |
-| PROMETHEUS_ENABLED | No | true | Enable Prometheus metrics | true |
-| PROMETHEUS_PORT | No | 8000 | Metrics port | 8000 |
-| STREAMING_ENABLE | No | false | Streaming status embeds | true |
-
-More environment variables (RAG, budgets, retries, streaming, etc.) are documented in `.env.example` and `bot/config.py`.
-
-
-
-### Invite the bot
-- Scopes: `bot`, `applications.commands`
-- Permissions (minimal): Send Messages, Attach Files, Embed Links, Read Message History
-- Privileged intents: enable “Message Content Intent” in the Developer Portal
-
-## Usage
-
-### Local run
 ```bash
 uv run python -m bot.main
-```
-On first start, pre‑flight checks validate token, intents, and Playwright availability.
-If Playwright isn’t present, auto‑install is attempted; otherwise run:
-```bash
-uv run playwright install chromium
+# first run may need: uv run playwright install chromium
 ```
 
-### Slash commands (Vision)
-- `/image`, `/imgedit`, `/video`, `/vidref` (see `bot/commands/vision_commands.py`)
-- Set `VISION_ENABLED=true` and provide `VISION_API_KEY` for allowed providers
-- Slash command propagation can take time globally; per‑guild sync is not explicitly coded
+**Smoke test**: bot responds in a server DM with `!help` (or one of the commands below).
 
-### Message commands (examples)
-- Search: `!search <query>`
-- RAG: `!rag ...` (see `bot/commands/rag_commands.py`)
-- Admin/Config: `!reload-config`, `!config-status`, `!alert`
-- TTS: `!tts ...`, `!say ...`
-- Video: `!watch <url>` (transcribe), `!video-help`
-- Screenshot: `!ss <url>`
-- Memory: `!memory ...`
+---
 
-## Logging & Observability
-- Dual sinks:
-  - Rich console with pretty tracebacks (locals on DEBUG)
-  - JSONL structured file at `logs/bot.jsonl` (keys: ts, level, name, subsys, guild_id, user_id, msg_id, event, detail)
-- Enforcer requires exactly two handlers named `pretty_handler` and `jsonl_handler` or startup aborts
-- SensitiveDataFilter scrubs common secret keys in logged dict extras
-- Prometheus metrics initialized if `PROMETHEUS_ENABLED=true` (port from `PROMETHEUS_PORT`)
+## ⚙️ Configuration (core)
 
-## Tiered Web Extraction (A/B)
-- Purpose: robust URL text extraction with a fast path (Tier A) and an optional JS-rendered fallback (Tier B).
+> Full set lives in [docs/ENV_VARS.md](docs/ENV_VARS.md), `.env.example`, and `bot/config.py`. Here are the essentials:
 
-- Tier A (fast):
-  - Engine: `httpx` GET with reasonable headers, redirects on, short timeout.
-  - Parses HTML for OpenGraph/Twitter/meta and main text.
-  - Low latency; used first for every URL.
+| Name                 | Required | Default                        | Example                 | Notes                                 |
+| -------------------- | -------- | ------------------------------ | ----------------------- | ------------------------------------- |
+| `DISCORD_TOKEN`      | ✅        | —                              | `A1B2...`               | Bot token                             |
+| `BOT_PREFIX`         | ❌        | `!`                            | `!,?`                   | Comma-separated allowed               |
+| `TEXT_BACKEND`       | ❌        | `openai`                       | `ollama`                | Text provider                         |
+| `OPENAI_API_KEY`     | "Maybe"  | —                              | `sk-or-...`             | Needed for OpenAI/OpenRouter          |
+| `OPENAI_API_BASE`    | ❌        | `https://openrouter.ai/api/v1` | custom                  | OpenRouter base                       |
+| `OPENAI_TEXT_MODEL`  | ❌        | —                              | `deepseek/...`          | Model id when using OpenRouter/OpenAI |
+| `OLLAMA_BASE_URL`    | ❌        | `http://localhost:11434`       | custom                  | Local Ollama                          |
+| `OLLAMA_MODEL`       | ❌        | `llama3`                       | `qwen3`                 | Local model                           |
+| `PROMPT_FILE`        | ✅        | —                              | `prompts/...`           | System prompt (text)                  |
+| `VL_PROMPT_FILE`     | ✅        | —                              | `prompts/vl-prompt.txt` | Vision system prompt                  |
+| `LOG_LEVEL`          | ❌        | `INFO`                         | `DEBUG`                 | Log verbosity                         |
+| `LOG_JSONL_PATH`     | ❌        | `logs/bot.jsonl`               | custom                  | Structured logs                       |
+| `PROMETHEUS_ENABLED` | ❌        | `true`                         | `false`                 | Metrics switch                        |
+| `PROMETHEUS_PORT`    | ❌        | `8000`                         | `9100`                  | Metrics port                          |
 
-- Tier B (JS fallback):
-  - Engine: Playwright + headless Chromium, minimal resource types to stay quick.
-  - Only invoked when Tier A fails to return text.
-  - Budget: `WEBEX_TIER_B_TIMEOUT_S` (default ~12s); can be disabled.
+**Feature-based prerequisites**
 
-- Router behavior:
-  - The router calls `process_url(url)` first (existing path).
-  - If it errors or returns empty text, it falls back to the tiered extractor: `web_extractor.extract(url)`.
-  - On success, returns canonical URL + text snippet; otherwise returns the same error message as before.
+* **OCR/PDF**: Tesseract (`tesseract`, language packs), PyMuPDF, Poppler (`pdftoppm`).
+* **Tier-B Web**: Playwright Chromium (auto-installed on first run or `uv run playwright install chromium`).
+* **STT**: `ffmpeg` recommended for robust media handling.
 
+---
 
-- Setup (Playwright):
-  - Install the browser runtime: `uv run python -m playwright install chromium`
-  - Install system deps (if supported): `uv run python -m playwright install-deps`
-  - If `install-deps` isn’t available, install system packages typically required by headless Chromium (varies by distro):
-    `libatk-1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxrandr2 libasound2 libpangocairo-1.0-0 libpango-1.0-0 libxcursor1 libxfixes3 libxi6 libglib2.0-0 libgbm1 libnss3 libnspr4 libx11-6 libx11-xcb1 libxcb1 libxshmfence1 fonts-liberation`
+## 🧰 Usage
 
-- Logs you’ll see:
-  - Tier A fail (expected on some paywalled/blocked sites): `Tier A failed for <url>: <reason>`
-  - Tier B exceptions (missing libs, etc.) are logged once and Tier B auto-disables for the run.
+**Message commands (examples)**
 
-Tip: Set `WEBEX_ENABLE_TIER_B=0` to revert to Tier A only without changing code.
+* Image generation: `!img <prompt>` (alias `!image`)
+* Search: `!search <query>`
+* Screenshot: `!ss <url>`
+* Video transcription: `!watch <url>` (aliases `!transcribe`, `!listen`)
+* TTS and speech: `!tts <text>` / `!tts on|off` / `!say <text>` / `!speak <text>`
+* Memory: `!memory add <content>`, `!memory list`, `!memory clear`
+* Context & privacy: `!context_reset`, `!context_stats`, `!privacy_optout`, `!privacy_optin`
+* Admin/Config: `!reload-config`, `!config-status`, `!alert`, `!rag <subcommand>`
 
-## RAG / LLM Providers
+**Slash (vision)**
 
-### Text backends
-- `openai` (OpenAI/OpenRouter): requires `OPENAI_API_KEY`, optionally `OPENAI_API_BASE`
-- `ollama` (local): `OLLAMA_BASE_URL`, `OLLAMA_MODEL` or `TEXT_MODEL`
+* `/image`, `/imgedit`, `/video`, `/vidref` (enable `VISION_ENABLED=true` and provider key(s)).
 
-### RAG
-- Hybrid search over ChromaDB (vector + keyword) with configurable thresholds and weights
-- Control with `RAG_*` envs; `kb/` as default source and `chroma_db/` for index storage (configurable)
+---
 
-### Vision
-- Providers: Together, Novita (set `VISION_ALLOWED_PROVIDERS`, `VISION_DEFAULT_PROVIDER`, and `VISION_API_KEY`)
-- Artifacts and job state under `vision_data/…`
+## 📈 Observability
 
-## Deployment
-- No top‑level Dockerfile/compose for the bot is included. A TTS service Dockerfile exists at `tts/service/Dockerfile`.
-- For production: supervise the process, configure log rotation for `logs/*.jsonl`, and set restricted perms on data files.
+* **Logs (two sinks)**
+  * Pretty console (Rich)
+  * JSONL file: `logs/bot.jsonl` (keys: ts, level, name, subsys, guild_id, user_id, msg_id, event, detail)
+  * Secrets scrubbed by default filter.
+* **Metrics**
+  * Enable with `PROMETHEUS_ENABLED=true`, port via `PROMETHEUS_PORT`.
 
-## Security & Privacy
-- Never commit secrets; use `.env` locally and secret stores in production
-- Message content intent processes user messages; ensure policy compliance
-- Prompt/context files may contain sensitive data; restrict file permissions
-- Logging scrubs common secrets but never log raw credentials
+---
 
-## Troubleshooting
-Dependency alignment is critical.
+## 🧪 Troubleshooting (quick)
 
-- DOCX parsing: `ImportError: No module named docx.Document` → ensure `python-docx` is installed (this project pins `python-docx`, not the unrelated `docx` package)
-- PDF parsing: `ImportError: fitz` → ensure `pymupdf` is installed (this project pins `pymupdf`, not the unrelated `fitz` package)
-- Async tests failing immediately → ensure `pytest-asyncio` is installed and pytest reads `pytest.ini` (`asyncio_mode=auto`)
-- Playwright/browser not found → `uv run playwright install chromium`
-- Poppler missing → OCR fallback uses `pdftoppm`; install poppler‑utils on your system
-- Missing intents/scopes → enable Message Content Intent; re‑invite bot with `applications.commands` + `bot` scopes
+* **Slash commands not visible** → Re-invite with `applications.commands` scope; give it a few minutes or test in a specific guild.
+* **"Missing intents"** → Enable **Message Content Intent** in the Developer Portal.
+* **Playwright errors** → `uv run playwright install chromium`; install system deps if prompted.
+* **OCR errors** → Ensure `tesseract` + language packs and `pdftoppm` are installed.
+* **Ollama not found** → Start Ollama locally and confirm `OLLAMA_BASE_URL`.
 
-## Contributing
-- Keep functions tidy and add tests where possible
-- Respect the dual‑sink logging setup; do not log secrets
-- Update `.env.example` and docs under `docs/` when adding features
-- Describe changes, risks, and required env/schema updates in PRs
+---
 
-## License
+## 🤝 Contributing
+
+* Keep functions tidy, add tests where practical (`pytest`, `pytest-asyncio`).
+* Don’t log secrets; keep the two logging handlers intact.
+* Update `.env.example` and docs when adding features.
+* In PRs, note risks, new envs, and any schema changes.
+
+---
+
+## 🔒 Security & Privacy
+
+* Never commit secrets; use `.env` locally, secret stores in prod.
+* Message Content Intent processes user content; ensure policy compliance.
+* Restrict permissions on prompt/context files.
+* JSONL logs scrub common secrets.
+
+---
+
+## 📄 License
+
 MIT — see [LICENSE](LICENSE).
 
-## Acknowledgments
-- discord.py
-- Rich
-- Kokoro‑ONNX
-- ChromaDB
-- PyMuPDF, Tesseract OCR
-- Playwright
