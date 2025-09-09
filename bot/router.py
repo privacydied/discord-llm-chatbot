@@ -2811,6 +2811,38 @@ class Router:
                         # Syndication handler now returns final text, wrap in BotAction
                         return BotAction(content=result)
 
+                    # If syndication JSON failed to produce data, probe fx/vx for high-res photos [REH][PA]
+                    if getattr(self, "_x_syn_probe_enabled", True) and self._is_twitter_status_url(url):
+                        try:
+                            status_id = tweet_id or self._parse_twitter_status_id(url) or ""
+                            imgs = await self._probe_twitter_syndication_images(url, status_id)
+                            if imgs:
+                                try:
+                                    first_host = urlparse(imgs[0]).netloc
+                                except Exception:
+                                    first_host = ""
+                                self.logger.info(
+                                    f"route.twitter.syndication | images={len(imgs)} | {first_host or 'n/a'}"
+                                )
+                                # Convert to syndication-like shape and route to VL
+                                syn_like = {
+                                    "text": "",
+                                    "photos": [{"url": u} for u in imgs],
+                                }
+                                from ..syndication.handler import (
+                                    handle_twitter_syndication_to_vl,
+                                )
+                                result = await handle_twitter_syndication_to_vl(
+                                    syn_like,
+                                    url,
+                                    self._unified_vl_to_text_pipeline,
+                                    self.bot.system_prompts.get("vl_prompt"),
+                                    reply_style="ack+thoughts",
+                                )
+                                return result
+                        except Exception as e:
+                            self.logger.debug(f"x.syndication.image_probe.failed | {e}")
+
                 # Tier 2 (optionally before API if syndication_first): X API [SFT]
                 if tweet_id and x_client is not None:
                     try:
