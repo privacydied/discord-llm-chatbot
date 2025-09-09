@@ -67,30 +67,7 @@ graph LR
 
 ### Observability Configuration
 
-### Environment Variables
 
-```bash
-# ===== OBSERVABILITY SETTINGS =====
-# Enable Prometheus metrics (optional, default: false)
-OBS_ENABLE_PROMETHEUS=false
-PROMETHEUS_PORT=8001
-PROMETHEUS_HTTP_SERVER=true
-
-# Enable parallel startup orchestrator (3-5s improvement)
-OBS_PARALLEL_STARTUP=false
-
-# Health and resource monitoring (recommended: true)
-OBS_ENABLE_HEALTHCHECKS=true
-OBS_ENABLE_RESOURCE_METRICS=true
-
-# Resource monitoring thresholds
-RESOURCE_MEMORY_WARNING_MB=1024
-RESOURCE_MEMORY_CRITICAL_MB=2048
-RESOURCE_EVENT_LOOP_LAG_WARNING_MS=100
-RESOURCE_EVENT_LOOP_LAG_CRITICAL_MS=500
-RESOURCE_CPU_WARNING_PERCENT=80
-RESOURCE_CPU_CRITICAL_PERCENT=95
-```
 
 ### Health Check Endpoints
 
