@@ -30,11 +30,11 @@
 ## Architecture
 
 ```mermaid
-graph LR
+flowchart LR
   A[Discord Gateway] --> B["LLMBot (discord.py)"]
   B --> C[Router]
   C -->|Text| D1[OpenAI/OpenRouter]
-  C -->|Text (local)| D2[Ollama]
+  C -->|Text – local| D2[Ollama]
   C -->|RAG| E[Hybrid Search (ChromaDB)]
   C -->|Vision| F["Vision Orchestrator\nTogether/Novita"]
   C -->|Media| G1[STT Orchestrator]
