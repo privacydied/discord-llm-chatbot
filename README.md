@@ -110,46 +110,20 @@ Access comprehensive health status via the `get_comprehensive_health_status()` m
    cd discord-llm-chatbot
    ```
 
-2. Create a `.env` file based on the example:
+2. Create a `.env` file based on the example and edit with your configuration:
    ```bash
    cp .env.example .env
    ```
-   Edit the `.env` file with your configuration
 
-3. Set up the environment and install dependencies:
+3. Create the environment, install dependencies, and run:
    ```bash
-   # Option 1: Quick setup with fix_deps.sh (recommended)
-   chmod +x scripts/fix_deps.sh
-   ./scripts/fix_deps.sh
-   
-   # Option 2: Manual setup
-   # Create a Python 3.11 virtual environment using uv
-   python -m venv .venv
-   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-   
-   # Install locked dependencies
+   uv venv --python3.12
+   source .venv/bin/activate
    uv pip install -r requirements.txt
-
-# For Prometheus metrics (optional)
-pip install prometheus-client==0.22.1
-
-# For enhanced resource monitoring 
-pip install psutil>=5.8.0
-
-   uv pip install --no-deps -e .
-   
-   # Run the bot
    uv run python -m bot.main
    ```
-   
-   For development and testing:
-   ```bash
-   # Run tests with pytest
-   python -m pytest tests/ -o addopts=  # Override default pytest options
-   
-   # Run specific test
-   python -m pytest tests/test_tts_assets.py::TestTTSAssets::test_validate_voice_bin -v -o addopts=
-   ```
+
+For development and testing, use similar `uv run` patterns (e.g., `uv run -m pytest`).
 
 ## 🛠️ Configuration
 
@@ -178,7 +152,6 @@ pip install psutil>=5.8.0
 | `CONTEXT_FILE_PATH` | Path to context storage file | ❌ | `context.json` |
 | `MAX_CONTEXT_MESSAGES` | Max messages per context | ❌ | `10` |
 | `IN_MEMORY_CONTEXT_ONLY` | Disable all file-based context | ❌ | `false` |
-
 | `RAG_EAGER_VECTOR_LOAD` | Eagerly load RAG vector index on startup (legacy behavior) | ❌ | `true` |
 | `RAG_BACKGROUND_INDEXING` | Enable asynchronous background document indexing | ❌ | `true` |
 | `RAG_INDEXING_QUEUE_SIZE` | Max pending indexing tasks in queue | ❌ | `256` |
