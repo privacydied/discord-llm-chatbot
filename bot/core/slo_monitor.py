@@ -17,7 +17,7 @@ from rich.console import Console
 
 from .phase_constants import PhaseConstants as PC
 from .phase_timing import PipelineTracker
-from ..util.logging import get_logger
+from ..utils.logging import get_logger
 
 logger = get_logger(__name__)
 

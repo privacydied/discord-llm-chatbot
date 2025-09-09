@@ -10,7 +10,7 @@ from typing import Optional, List
 import discord
 from discord.ext import commands
 
-from ..util.logging import get_logger
+from ..utils.logging import get_logger
 from ..config import load_config
 from ..search.factory import get_search_provider
 from ..search.types import SearchQueryParams, SafeSearch, SearchResult

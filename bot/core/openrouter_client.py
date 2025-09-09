@@ -14,7 +14,7 @@ from aiohttp import ClientTimeout, ClientSession, TCPConnector
 
 from .phase_constants import PhaseConstants as PC
 from .phase_timing import get_timing_manager, PipelineTracker
-from ..util.logging import get_logger
+from ..utils.logging import get_logger
 
 logger = get_logger(__name__)
 

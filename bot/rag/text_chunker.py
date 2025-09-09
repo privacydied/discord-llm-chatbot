@@ -5,7 +5,7 @@ Text chunking utilities for RAG document processing.
 import re
 from typing import List, Dict, Any, Optional
 from .vector_schema import ChunkingResult, HybridSearchConfig
-from ..util.logging import get_logger
+from ..utils.logging import get_logger
 
 logger = get_logger(__name__)
 

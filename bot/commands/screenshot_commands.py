@@ -20,7 +20,7 @@ from typing import Optional, TYPE_CHECKING, Dict, Any
 import discord
 from discord.ext import commands
 
-from ..util.logging import get_logger
+from ..utils.logging import get_logger
 from ..modality import InputItem
 
 if TYPE_CHECKING:  # type hints only

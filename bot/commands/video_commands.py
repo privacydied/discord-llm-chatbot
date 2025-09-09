@@ -8,7 +8,7 @@ from typing import Optional
 import discord
 from discord.ext import commands
 
-from ..util.logging import get_logger
+from ..utils.logging import get_logger
 from ..exceptions import InferenceError
 from ..hear import hear_infer_from_url
 

@@ -10,7 +10,7 @@ from ..config_reload import (
     get_config_for_debug,
     get_config_version,
 )
-from ..util.logging import get_logger
+from ..utils.logging import get_logger
 
 logger = get_logger(__name__)
 

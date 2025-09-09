@@ -12,7 +12,7 @@ from typing import Dict, Any, Optional, List
 from datetime import datetime
 from enum import Enum
 
-from ..util.logging import get_logger
+from ..utils.logging import get_logger
 
 logger = get_logger(__name__)
 

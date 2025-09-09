@@ -8,7 +8,7 @@ into the HybridRAGSearch class.
 import asyncio
 import time
 
-from ..util.logging import get_logger
+from ..utils.logging import get_logger
 from .bootstrap import create_rag_system
 from .hybrid_search import IndexState
 

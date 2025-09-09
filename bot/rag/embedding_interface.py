@@ -8,7 +8,7 @@ from pathlib import Path
 from abc import ABC, abstractmethod
 from typing import List, Union, Optional, Dict, Any
 import numpy as np
-from ..util.logging import get_logger
+from ..utils.logging import get_logger
 
 logger = get_logger(__name__)
 

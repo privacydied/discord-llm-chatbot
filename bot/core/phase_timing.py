@@ -12,7 +12,7 @@ from rich.panel import Panel
 from rich.tree import Tree
 
 from .phase_constants import PhaseConstants as PC
-from ..util.logging import get_logger
+from ..utils.logging import get_logger
 
 logger = get_logger(__name__)
 

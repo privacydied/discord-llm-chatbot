@@ -26,7 +26,7 @@ async def download_robust_image(
     """
     import aiohttp
     import asyncio
-    from ..util.logging import get_logger
+    from ..utils.logging import get_logger
 
     logger = get_logger(__name__)
 

@@ -10,7 +10,7 @@ from discord.ext import commands
 
 from ..rag.hybrid_search import get_hybrid_search
 from ..rag.config import get_rag_environment_info, validate_rag_environment
-from ..util.logging import get_logger
+from ..utils.logging import get_logger
 
 logger = get_logger(__name__)
 

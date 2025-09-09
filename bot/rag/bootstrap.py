@@ -12,7 +12,7 @@ import logging
 from .chroma_backend import ChromaRAGBackend
 from .vector_schema import HybridSearchConfig
 from .document_parsers import document_parser_factory
-from ..util.logging import get_logger
+from ..utils.logging import get_logger
 
 logger = get_logger(__name__)
 

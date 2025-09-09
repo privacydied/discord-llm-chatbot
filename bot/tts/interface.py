@@ -14,7 +14,7 @@ from .engines.stub import StubEngine
 from .engines.kokoro import KokoroONNXEngine
 from .engines.kokoro_v8 import KokoroV8Engine
 from .errors import SynthesisError
-from ..util.logging import get_logger
+from ..utils.logging import get_logger
 from .assets import ensure_kokoro_assets
 from ..action import BotAction
 import hashlib

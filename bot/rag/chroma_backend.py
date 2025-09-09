@@ -10,7 +10,7 @@ from pathlib import Path
 from .embedding_interface import EmbeddingInterface, create_embedding_model
 from .vector_schema import VectorDocument, HybridSearchConfig, SearchResult
 from .text_chunker import TextChunker, create_chunker
-from ..util.logging import get_logger
+from ..utils.logging import get_logger
 
 logger = get_logger(__name__)
 
