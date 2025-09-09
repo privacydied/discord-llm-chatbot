@@ -2,19 +2,17 @@
 Tests for video ingestion and URL-based audio processing.
 """
 import pytest
-import asyncio
 import tempfile
 import json
 from pathlib import Path
-from unittest.mock import Mock, patch, AsyncMock, MagicMock
+from unittest.mock import Mock, patch, AsyncMock
 from datetime import datetime, timezone
 
 from bot.video_ingest import (
     VideoIngestionManager, 
     VideoMetadata, 
     ProcessedAudio,
-    VideoIngestError,
-    fetch_and_prepare_url_audio
+    VideoIngestError
 )
 from bot.hear import hear_infer_from_url
 from bot.exceptions import InferenceError
@@ -248,7 +246,7 @@ class TestHearInferFromUrl:
         assert result['transcription'] == "This is the transcribed text"
         assert result['metadata']['source'] == "youtube"
         assert result['metadata']['title'] == "Test Video"
-        assert result['metadata']['cache_hit'] == False
+        assert not result['metadata']['cache_hit']
         
         # Verify calls
         mock_fetch.assert_called_once_with("https://youtube.com/watch?v=test", 1.5, False)

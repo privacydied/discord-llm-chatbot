@@ -8,7 +8,6 @@ import random
 import logging
 import signal
 import asyncio
-import aiohttp
 import discord
 import datetime
 import pathlib
@@ -19,9 +18,6 @@ import tempfile
 import shutil
 import threading
 import traceback
-import urllib.parse
-import urllib.request
-import urllib.error
 import base64
 import glob
 from typing import Optional, Tuple
@@ -33,18 +29,15 @@ try:
     DIA_AVAILABLE = True
 except (ImportError, ModuleNotFoundError):
     DIA_AVAILABLE = False
-from pathlib import Path
-from typing import Dict, List, Optional, Any, Tuple, Union, Callable, Coroutine, TypeVar
-from functools import wraps
+from typing import Dict, List, Any, Union, Callable, Coroutine, TypeVar
 from dataclasses import dataclass
 from datetime import datetime
 from urllib.parse import urlparse
 
 # Third-party imports
 from dotenv import load_dotenv
-from discord import Intents, Message, File
+from discord import Intents, Message
 from discord.ext import commands
-import discord
 import httpx
 import requests
 from bs4 import BeautifulSoup
@@ -66,24 +59,13 @@ try:
 except ImportError as e:
     logging.warning(f"PDF processing disabled: {e}")
     PDF_PROCESSOR_AVAILABLE = False
-from urllib.parse import urlparse
-from collections import defaultdict, Counter
+from collections import defaultdict
 
-from datetime import datetime, timedelta, timezone
-from http.client import HTTPResponse
-from io import StringIO
-from typing import Dict, List, Optional, Tuple, Union, Any, Callable
-from bs4 import BeautifulSoup
-from urllib.parse import urlparse, urljoin, urlunparse
+from datetime import timezone
+from urllib.parse import urlunparse
 from urllib.robotparser import RobotFileParser
-from urllib.request import urlopen, Request
-from urllib.error import URLError, HTTPError
-import socket
-import tempfile
-import hashlib
 from fake_useragent import UserAgent
 import cachetools
-from collections import defaultdict, Counter, namedtuple
 
 # Optional Playwright import
 try:
@@ -463,7 +445,7 @@ def convert_audio_to_wav(input_path: str, keep_failed: bool = False) -> Tuple[Op
     output_path = None
     try:
         # Create a temporary file for the output with a predictable name for debugging
-        temp_dir = tempfile.gettempdir()
+        tempfile.gettempdir()
         temp_prefix = f"discord_audio_{os.getpid()}_{int(time.time())}_"
         temp_fd, output_path = tempfile.mkstemp(prefix=temp_prefix, suffix='.wav')
         os.close(temp_fd)  # We'll let ffmpeg create the file
@@ -1972,7 +1954,6 @@ async def get_vision_caption(image_path, prompt, config):
     Returns:
         str: The generated caption/description or error message
     """
-    import base64
     api_key = config["OPENAI_API_KEY"]
     api_base = config.get("OPENAI_API_BASE", "https://api.openai.com/v1")
     model = config.get("VL_MODEL", "gpt-4-vision-preview")
@@ -2269,7 +2250,7 @@ async def process_message(message: Message, is_dm: bool):
             
             if transcript:
                 # Add the transcription to the total text content
-                transcript_prefix = f"🎥 Video transcription" if is_video else "🎤 Audio transcription"
+                transcript_prefix = "🎥 Video transcription" if is_video else "🎤 Audio transcription"
                 
                 if total_text_content:
                     total_text_content = f"{total_text_content}\n\n{transcript_prefix}: {transcript}"

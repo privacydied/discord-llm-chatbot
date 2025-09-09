@@ -2,7 +2,6 @@
 Test suite for vision/image inference error handling and retry logic.
 Tests robust error handling patterns for external API calls.
 """
-import asyncio
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch, mock_open
 from openai import InternalServerError
@@ -13,7 +12,6 @@ from bot.retry_utils import (
 )
 from bot.exceptions import APIError, InferenceError
 from bot.see import see_infer
-from bot.ai_backend import generate_vl_response
 from bot.openai_backend import generate_vl_response as openai_generate_vl_response
 
 
@@ -281,7 +279,7 @@ class TestRouterErrorHandling:
         """Test router's ability to extract user-friendly messages from errors."""
         from bot.router import Router
         
-        router = Router(MagicMock())
+        Router(MagicMock())
         
         # Test different error patterns and expected responses
         test_cases = [

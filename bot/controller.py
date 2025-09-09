@@ -1,6 +1,7 @@
 """
 Hybrid multimodal pipeline controller
 """
+
 import logging
 import discord
 from pathlib import Path
@@ -12,21 +13,22 @@ from .hear import hear_infer
 
 logger = logging.getLogger(__name__)
 
+
 async def hybrid_pipeline(ctx, content: str, mode: str = "both"):
     """Orchestrate multimodal processing pipeline"""
     try:
         logger.info(f"🚀 Starting hybrid pipeline in {mode} mode")
-        
+
         # STT mode requires audio processing first
         if mode == "stt":
             if not ctx.message.attachments:
                 await ctx.send("❌ Please provide an audio file for STT processing")
                 return
-            
+
             audio_path = await download_attachment(ctx.message.attachments[0])
             content = await hear_infer(audio_path)
             logger.info(f"👂 Transcribed audio: {content}")
-            
+
             # After STT, continue with text processing
             mode = "text"
 
@@ -35,7 +37,7 @@ async def hybrid_pipeline(ctx, content: str, mode: str = "both"):
             if not ctx.message.attachments:
                 await ctx.send("❌ Please provide an image for vision processing")
                 return
-            
+
             image_path = await download_attachment(ctx.message.attachments[0])
             result = await see_infer(image_path, content)
             await ctx.send(result)
@@ -61,6 +63,7 @@ async def hybrid_pipeline(ctx, content: str, mode: str = "both"):
     except Exception as e:
         logger.error(f"🚨 Pipeline error: {str(e)}")
         await ctx.send("⚠️ An error occurred while processing your request")
+
 
 async def download_attachment(attachment) -> Path:
     """Download Discord attachment to temporary file"""

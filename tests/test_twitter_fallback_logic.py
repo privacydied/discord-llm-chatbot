@@ -5,13 +5,11 @@ Tests that video tweets are processed via yt-dlp and non-video tweets fallback t
 """
 
 import asyncio
-from typing import Dict, Any
 from unittest.mock import Mock, AsyncMock, patch
 
 # Import the modules we need to test
 from bot.modality import InputModality, InputItem, map_item_to_modality
 from bot.router import Router
-from bot.exceptions import InferenceError
 from bot.video_ingest import VideoIngestError
 
 async def test_twitter_fallback_behavior():
@@ -57,10 +55,10 @@ async def test_twitter_fallback_behavior():
             print(f"   ❌ FAIL: Expected VIDEO_URL, got {modality}")
             return False
         else:
-            print(f"   ✅ PASS: Correctly routed to VIDEO_URL modality")
+            print("   ✅ PASS: Correctly routed to VIDEO_URL modality")
     
     # Test fallback logic behavior
-    print(f"\n🔄 Step 2: Testing fallback logic in Router._handle_video_url")
+    print("\n🔄 Step 2: Testing fallback logic in Router._handle_video_url")
     
     # Create mock bot and router
     mock_bot = Mock()
@@ -136,7 +134,7 @@ async def test_twitter_fallback_behavior():
 async def test_error_patterns():
     """Test specific error pattern matching for fallback trigger."""
     
-    print(f"\n🔍 Testing error pattern detection...")
+    print("\n🔍 Testing error pattern detection...")
     
     # Test error patterns that should trigger fallback
     fallback_triggers = [

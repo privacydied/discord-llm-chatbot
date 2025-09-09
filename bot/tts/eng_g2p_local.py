@@ -4,43 +4,52 @@ Zero dependencies, no network downloads, offline-only operation.
 IPA-focused for Kokoro TTS model compatibility.
 """
 
+import json
 import logging
 import re
 import unicodedata
-import json
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
+
+try:
+    import cmudict  # type: ignore
+except ImportError:  # pragma: no cover - optional dependency
+    cmudict = None  # type: ignore
 
 logger = logging.getLogger(__name__)
 
+IPA_REWRITE_TABLE: Dict[str, str] = {}
+
 # Load lexicon from external JSON file
 _LEXICON_CACHE = None
+
 
 def _load_lexicon() -> Dict[str, str]:
     """Load lexicon from lexicon_en.json file."""
     global _LEXICON_CACHE
     if _LEXICON_CACHE is not None:
         return _LEXICON_CACHE
-        
+
     try:
         lexicon_path = Path(__file__).parent / "lexicon_en.json"
         if lexicon_path.exists():
-            with open(lexicon_path, 'r', encoding='utf-8') as f:
+            with open(lexicon_path, "r", encoding="utf-8") as f:
                 _LEXICON_CACHE = json.load(f)
                 logger.debug("Loaded English lexicon: %d entries", len(_LEXICON_CACHE))
                 return _LEXICON_CACHE
     except Exception as e:
         logger.warning("Failed to load lexicon_en.json: %s", e)
-    
+
     _LEXICON_CACHE = {}
     return _LEXICON_CACHE
+
 
 def apply_lexicon(text: str) -> str:
     """Apply lexicon replacements to text."""
     lexicon = _load_lexicon()
     if not lexicon:
         return text
-        
+
     words = text.split()
     out = []
     for w in words:
@@ -50,6 +59,7 @@ def apply_lexicon(text: str) -> str:
         else:
             out.append(w)
     return " ".join(out)
+
 
 def normalize_text(text: str) -> str:
     """Normalize text for TTS processing."""
@@ -61,16 +71,33 @@ def normalize_text(text: str) -> str:
     t = number_to_words(t)  # no-op if already words
     return t
 
+
 def number_to_words(text: str) -> str:
     """Convert basic numbers to words."""
     number_map = {
-        "0": "zero", "1": "one", "2": "two", "3": "three", "4": "four",
-        "5": "five", "6": "six", "7": "seven", "8": "eight", "9": "nine", 
-        "10": "ten", "11": "eleven", "12": "twelve", "13": "thirteen",
-        "14": "fourteen", "15": "fifteen", "16": "sixteen", "17": "seventeen",
-        "18": "eighteen", "19": "nineteen", "20": "twenty"
+        "0": "zero",
+        "1": "one",
+        "2": "two",
+        "3": "three",
+        "4": "four",
+        "5": "five",
+        "6": "six",
+        "7": "seven",
+        "8": "eight",
+        "9": "nine",
+        "10": "ten",
+        "11": "eleven",
+        "12": "twelve",
+        "13": "thirteen",
+        "14": "fourteen",
+        "15": "fifteen",
+        "16": "sixteen",
+        "17": "seventeen",
+        "18": "eighteen",
+        "19": "nineteen",
+        "20": "twenty",
     }
-    
+
     words = text.split()
     out = []
     for word in words:
@@ -79,6 +106,7 @@ def number_to_words(text: str) -> str:
         else:
             out.append(word)
     return " ".join(out)
+
 
 # REMOVED: No fallback vocabulary allowed for English IPA synthesis.
 # All vocabulary loading must go through official sources via ipa_vocab_loader.py
@@ -95,7 +123,6 @@ BUILTIN_LEXICON = {
     "eight": ["EY1", "T"],
     "nine": ["N", "AY1", "N"],
     "ten": ["T", "EH1", "N"],
-
     # Teens
     "eleven": ["IH", "L", "EH1", "V", "AH", "N"],
     "twelve": ["T", "W", "EH1", "L", "V"],
@@ -106,7 +133,6 @@ BUILTIN_LEXICON = {
     "seventeen": ["S", "EH1", "V", "AH", "N", "T", "IY", "N"],
     "eighteen": ["EY1", "T", "IY", "N"],
     "nineteen": ["N", "AY1", "N", "T", "IY", "N"],
-
     # Tens
     "twenty": ["T", "W", "EH1", "N", "T", "IY"],
     "thirty": ["TH", "ER1", "T", "IY"],
@@ -116,11 +142,9 @@ BUILTIN_LEXICON = {
     "seventy": ["S", "EH1", "V", "AH", "N", "T", "IY"],
     "eighty": ["EY1", "T", "IY"],
     "ninety": ["N", "AY1", "N", "T", "IY"],
-
     # Hundreds
     "hundred": ["HH", "AH1", "N", "D", "R", "AH", "D"],
     "thousand": ["TH", "AW1", "Z", "AH", "N", "D"],
-
     # Ordinals
     "first": ["F", "ER1", "S", "T"],
     "second": ["S", "EH1", "K", "AH", "N", "D"],
@@ -132,7 +156,6 @@ BUILTIN_LEXICON = {
     "eighth": ["EY1", "T", "TH"],
     "ninth": ["N", "AY1", "N", "TH"],
     "tenth": ["T", "EH1", "N", "TH"],
-
     # Common function words
     "the": ["DH", "AH"],
     "a": ["AH"],
@@ -149,7 +172,6 @@ BUILTIN_LEXICON = {
     "with": ["W", "IH", "TH"],
     "by": ["B", "AY"],
     "from": ["F", "R", "AH", "M"],
-
     # Common verbs
     "be": ["B", "IY"],
     "is": ["IH", "Z"],
@@ -225,9 +247,7 @@ BUILTIN_LEXICON = {
     "happened": ["HH", "AE", "P", "AH", "N", "D"],
     "begin": ["B", "IH", "G", "IH", "N"],
     "began": ["B", "IH", "G", "AE", "N"],
-    "begin": ["B", "IH", "G", "IH", "N"],
     "begun": ["B", "IH", "G", "AH", "N"],
-
     # Common adjectives
     "good": ["G", "UH", "D"],
     "bad": ["B", "AE", "D"],
@@ -241,7 +261,6 @@ BUILTIN_LEXICON = {
     "sad": ["S", "AE", "D"],
     "right": ["R", "AY", "T"],
     "wrong": ["R", "AO", "NG"],
-    "first": ["F", "ER", "S", "T"],
     "last": ["L", "AE", "S", "T"],
     "next": ["N", "EH", "K", "S", "T"],
     "same": ["S", "EY", "M"],
@@ -255,8 +274,6 @@ BUILTIN_LEXICON = {
     "long": ["L", "AO", "NG"],
     "short": ["SH", "AO", "R", "T"],
     "young": ["Y", "AH", "NG"],
-    "old": ["OW", "L", "D"],
-
     # Common nouns
     "time": ["T", "AY", "M"],
     "day": ["D", "EY"],
@@ -297,7 +314,6 @@ BUILTIN_LEXICON = {
     "farm": ["F", "AA", "R", "M"],
     "factory": ["F", "AE", "K", "T", "ER", "IY"],
     "office": ["AO", "F", "AH", "S"],
-    "school": ["S", "K", "UW", "L"],
     "university": ["Y", "UW", "N", "AH", "V", "ER", "S", "AH", "T", "IY"],
     "hospital": ["HH", "AA", "S", "P", "IH", "T", "AH", "L"],
     "church": ["CH", "ER", "CH"],
@@ -387,13 +403,10 @@ BUILTIN_LEXICON = {
     "map": ["M", "AE", "P"],
     "guide": ["G", "AY", "D"],
     "language": ["L", "AE", "NG", "G", "W", "IH", "JH"],
-    "word": ["W", "ER", "D"],
     "sentence": ["S", "EH", "N", "T", "AH", "N", "S"],
     "grammar": ["G", "R", "AE", "M", "ER"],
     "vocabulary": ["V", "OW", "K", "AE", "B", "Y", "AH", "L", "EH", "R", "IY"],
     "conversation": ["K", "AA", "N", "V", "ER", "S", "EY", "SH", "AH", "N"],
-    "question": ["K", "W", "EH", "S", "CH", "AH", "N"],
-    "answer": ["AE", "N", "S", "ER"],
     "hello": ["HH", "AH", "L", "OW"],
     "hi": ["HH", "AY"],
     "goodbye": ["G", "UH", "D", "B", "AY"],
@@ -407,16 +420,10 @@ BUILTIN_LEXICON = {
     "okay": ["OW", "K", "EY"],
     "alright": ["AO", "L", "R", "AY", "T"],
     "fine": ["F", "AY", "N"],
-    "good": ["G", "UH", "D"],
-    "bad": ["B", "AE", "D"],
-    "happy": ["HH", "AE", "P", "IY"],
-    "sad": ["S", "AE", "D"],
     "angry": ["AE", "NG", "G", "R", "IY"],
     "tired": ["T", "AY", "ER", "D"],
     "hungry": ["HH", "AH", "NG", "G", "R", "IY"],
     "thirsty": ["TH", "ER", "S", "T", "IY"],
-    "hot": ["HH", "AA", "T"],
-    "cold": ["K", "OW", "L", "D"],
     "sick": ["S", "IH", "K"],
     "healthy": ["HH", "EH", "L", "TH", "IY"],
     "busy": ["B", "IH", "Z", "IY"],
@@ -424,26 +431,15 @@ BUILTIN_LEXICON = {
     "ready": ["R", "EH", "D", "IY"],
     "late": ["L", "EY", "T"],
     "early": ["ER", "L", "IY"],
-    "fast": ["F", "AE", "S", "T"],
-    "slow": ["S", "L", "OW"],
-    "easy": ["IY", "Z", "IY"],
     "difficult": ["D", "IH", "F", "AH", "K", "AH", "L", "T"],
     "expensive": ["IH", "K", "S", "P", "EH", "N", "S", "IH", "V"],
     "cheap": ["CH", "IY", "P"],
-    "new": ["N", "UW"],
-    "old": ["OW", "L", "D"],
-    "big": ["B", "IH", "G"],
-    "small": ["S", "M", "AO", "L"],
-    "long": ["L", "AO", "NG"],
-    "short": ["SH", "AO", "R", "T"],
     "clean": ["K", "L", "IY", "N"],
     "dirty": ["D", "ER", "T", "IY"],
     "beautiful": ["B", "Y", "UW", "T", "AH", "F", "AH", "L"],
     "ugly": ["AH", "G", "L", "IY"],
     "rich": ["R", "IH", "CH"],
     "poor": ["P", "UH", "R"],
-    "young": ["Y", "AH", "NG"],
-    "old": ["OW", "L", "D"],
     "smart": ["S", "M", "AA", "R", "T"],
     "stupid": ["S", "T", "UW", "P", "IH", "D"],
     "kind": ["K", "AY", "N", "D"],
@@ -459,7 +455,6 @@ BUILTIN_LEXICON = {
     "quiet": ["K", "W", "AY", "AH", "T"],
     "dark": ["D", "AA", "R", "K"],
     "light": ["L", "AY", "T"],
-    "hard": ["HH", "AA", "R", "D"],
     "soft": ["S", "AO", "F", "T"],
     "wet": ["W", "EH", "T"],
     "dry": ["D", "R", "AY"],
@@ -467,22 +462,10 @@ BUILTIN_LEXICON = {
     "empty": ["EH", "M", "P", "T", "IY"],
     "open": ["OW", "P", "AH", "N"],
     "closed": ["K", "L", "OW", "Z", "D"],
-    "right": ["R", "AY", "T"],
-    "wrong": ["R", "AO", "NG"],
     "true": ["T", "R", "UW"],
     "false": ["F", "AO", "L", "S"],
     "real": ["R", "IY", "L"],
     "fake": ["F", "EY", "K"],
-    "first": ["F", "ER", "S", "T"],
-    "second": ["S", "EH1", "K", "AH", "N", "D"],
-    "third": ["TH", "ER1", "D"],
-    "fourth": ["F", "AO1", "R", "TH"],
-    "fifth": ["F", "IH1", "F", "TH"],
-    "sixth": ["S", "IH1", "K", "S", "TH"],
-    "seventh": ["S", "EH1", "V", "AH", "N", "TH"],
-    "eighth": ["EY1", "T", "TH"],
-    "ninth": ["N", "AY1", "N", "TH"],
-    "tenth": ["T", "EH1", "N", "TH"],
     "eleventh": ["IH", "L", "EH1", "V", "AH", "N", "TH"],
     "twelfth": ["T", "W", "EH1", "L", "F", "TH"],
     "thirteenth": ["TH", "ER1", "T", "IY", "N", "TH"],
@@ -499,13 +482,25 @@ BUILTIN_LEXICON = {
     "twenty fourth": ["T", "W", "EH1", "N", "T", "IY", "F", "AO1", "R", "TH"],
     "twenty fifth": ["T", "W", "EH1", "N", "T", "IY", "F", "IH1", "F", "TH"],
     "twenty sixth": ["T", "W", "EH1", "N", "T", "IY", "S", "IH1", "K", "S", "TH"],
-    "twenty seventh": ["T", "W", "EH1", "N", "T", "IY", "S", "EH1", "V", "AH", "N", "TH"],
+    "twenty seventh": [
+        "T",
+        "W",
+        "EH1",
+        "N",
+        "T",
+        "IY",
+        "S",
+        "EH1",
+        "V",
+        "AH",
+        "N",
+        "TH",
+    ],
     "twenty eighth": ["T", "W", "EH1", "N", "T", "IY", "EY1", "T", "TH"],
     "twenty ninth": ["T", "W", "EH1", "N", "T", "IY", "N", "AY1", "N", "TH"],
     "thirtieth": ["TH", "ER1", "T", "IY", "TH"],
     "thirty first": ["TH", "ER1", "T", "IY", "F", "ER1", "S", "T"],
     "counting": ["K", "AW", "N", "T", "IH", "NG"],
-    "from": ["F", "R", "AH", "M"],
     "i": ["AY"],
     "me": ["M", "IY"],
     "my": ["M", "AY"],
@@ -547,9 +542,6 @@ BUILTIN_LEXICON = {
     "when": ["W", "EH", "N"],
     "why": ["W", "AY"],
     "how": ["HH", "AW"],
-    "and": ["AH", "N", "D"],
-    "or": ["AO", "R"],
-    "but": ["B", "AH", "T"],
     "so": ["S", "OW"],
     "because": ["B", "IH", "K", "AO", "Z"],
     "although": ["AO", "L", "DH", "OW"],
@@ -565,7 +557,6 @@ BUILTIN_LEXICON = {
     "as": ["AE", "Z"],
     "like": ["L", "AY", "K"],
     "than": ["DH", "AE", "N"],
-    "with": ["W", "IH", "TH"],
     "without": ["W", "IH", "TH", "AW", "T"],
     "about": ["AH", "B", "AW", "T"],
     "against": ["AH", "G", "EH", "N", "S", "T"],
@@ -578,25 +569,10 @@ BUILTIN_LEXICON = {
     "beside": ["B", "IH", "S", "AY", "D"],
     "near": ["N", "IH", "R"],
     "far": ["F", "AA", "R"],
-    "from": ["F", "R", "AH", "M"],
-    "to": ["T", "UW"],
-    "at": ["AE", "T"],
-    "in": ["IH", "N"],
-    "on": ["AO", "N"],
-    "by": ["B", "AY"],
-    "for": ["F", "AO", "R"],
-    "of": ["AH", "V"],
-    "with": ["W", "IH", "TH"],
-    "about": ["AH", "B", "AW", "T"],
     "into": ["IH", "N", "T", "UW"],
-    "through": ["TH", "R", "UW"],
-    "during": ["D", "Y", "UW", "R", "IH", "NG"],
-    "before": ["B", "IH", "F", "AO", "R"],
-    "after": ["AE", "F", "T", "ER"],
     "above": ["AH", "B", "AH", "V"],
     "below": ["B", "IH", "L", "OW"],
     "left": ["L", "EH", "F", "T"],
-    "right": ["R", "AY", "T"],
     "front": ["F", "R", "AH", "N", "T"],
     "back": ["B", "AE", "K"],
     "inside": ["IH", "N", "S", "AY", "D"],
@@ -606,7 +582,6 @@ BUILTIN_LEXICON = {
     "here": ["HH", "IY", "R"],
     "there": ["DH", "EH", "R"],
     "now": ["N", "AW"],
-    "then": ["DH", "EH", "N"],
     "today": ["T", "AH", "D", "EY"],
     "tomorrow": ["T", "AH", "M", "AA", "R", "OW"],
     "yesterday": ["Y", "EH", "S", "T", "ER", "D", "EY"],
@@ -616,7 +591,6 @@ BUILTIN_LEXICON = {
     "night": ["N", "AY", "T"],
     "week": ["W", "IY", "K"],
     "month": ["M", "AH", "N", "TH"],
-    "year": ["Y", "IH", "R"],
     "monday": ["M", "AH", "N", "D", "EY"],
     "tuesday": ["T", "UW", "Z", "D", "EY"],
     "wednesday": ["W", "EH", "N", "Z", "D", "EY"],
@@ -628,7 +602,6 @@ BUILTIN_LEXICON = {
     "february": ["F", "EH", "B", "R", "UW", "EH", "R", "IY"],
     "march": ["M", "AA", "R", "CH"],
     "april": ["EY", "P", "R", "AH", "L"],
-    "may": ["M", "EY"],
     "june": ["JH", "UW", "N"],
     "july": ["JH", "AH", "L", "AY"],
     "august": ["AO", "G", "AH", "S", "T"],
@@ -657,66 +630,156 @@ BUILTIN_LEXICON = {
 
 # ARPAbet to IPA mapping (extended for better coverage)
 ARPABET_TO_IPA = {
-    "AA": "ɑ", "AA0": "ɑ", "AA1": "ɑ", "AA2": "ɑ",
-    "AE": "æ", "AE0": "æ", "AE1": "æ", "AE2": "æ",
-    "AH": "ʌ", "AH0": "ə", "AH1": "ʌ", "AH2": "ʌ",
-    "AO": "ɔ", "AO0": "ɔ", "AO1": "ɔ", "AO2": "ɔ",
-    "AW": "aʊ", "AW0": "aʊ", "AW1": "aʊ", "AW2": "aʊ",
-    "AY": "aɪ", "AY0": "aɪ", "AY1": "aɪ", "AY2": "aɪ",
-    "B": "b", "CH": "tʃ", "D": "d", "DH": "ð",
-    "EH": "ɛ", "EH0": "ɛ", "EH1": "ɛ", "EH2": "ɛ",
-    "ER": "ɜr", "ER0": "ər", "ER1": "ɜr", "ER2": "ɜr",
-    "EY": "eɪ", "EY0": "eɪ", "EY1": "eɪ", "EY2": "eɪ",
-    "F": "f", "G": "g", "HH": "h", "IH": "ɪ",
-    "IH0": "ɪ", "IH1": "ɪ", "IH2": "ɪ", "IY": "i",
-    "IY0": "i", "IY1": "i", "IY2": "i", "JH": "dʒ",
-    "K": "k", "L": "l", "M": "m", "N": "n",
-    "NG": "ŋ", "OW": "oʊ", "OW0": "oʊ", "OW1": "oʊ", "OW2": "oʊ",
-    "OY": "ɔɪ", "OY0": "ɔɪ", "OY1": "ɔɪ", "OY2": "ɔɪ",
-    "P": "p", "R": "ɹ", "S": "s", "SH": "ʃ",
-    "T": "t", "TH": "θ", "UH": "ʊ", "UH0": "ʊ", "UH1": "ʊ", "UH2": "ʊ",
-    "UW": "u", "UW0": "u", "UW1": "u", "UW2": "u",
-    "V": "v", "W": "w", "Y": "j", "Z": "z", "ZH": "ʒ"
+    "AA": "ɑ",
+    "AA0": "ɑ",
+    "AA1": "ɑ",
+    "AA2": "ɑ",
+    "AE": "æ",
+    "AE0": "æ",
+    "AE1": "æ",
+    "AE2": "æ",
+    "AH": "ʌ",
+    "AH0": "ə",
+    "AH1": "ʌ",
+    "AH2": "ʌ",
+    "AO": "ɔ",
+    "AO0": "ɔ",
+    "AO1": "ɔ",
+    "AO2": "ɔ",
+    "AW": "aʊ",
+    "AW0": "aʊ",
+    "AW1": "aʊ",
+    "AW2": "aʊ",
+    "AY": "aɪ",
+    "AY0": "aɪ",
+    "AY1": "aɪ",
+    "AY2": "aɪ",
+    "B": "b",
+    "CH": "tʃ",
+    "D": "d",
+    "DH": "ð",
+    "EH": "ɛ",
+    "EH0": "ɛ",
+    "EH1": "ɛ",
+    "EH2": "ɛ",
+    "ER": "ɜr",
+    "ER0": "ər",
+    "ER1": "ɜr",
+    "ER2": "ɜr",
+    "EY": "eɪ",
+    "EY0": "eɪ",
+    "EY1": "eɪ",
+    "EY2": "eɪ",
+    "F": "f",
+    "G": "g",
+    "HH": "h",
+    "IH": "ɪ",
+    "IH0": "ɪ",
+    "IH1": "ɪ",
+    "IH2": "ɪ",
+    "IY": "i",
+    "IY0": "i",
+    "IY1": "i",
+    "IY2": "i",
+    "JH": "dʒ",
+    "K": "k",
+    "L": "l",
+    "M": "m",
+    "N": "n",
+    "NG": "ŋ",
+    "OW": "oʊ",
+    "OW0": "oʊ",
+    "OW1": "oʊ",
+    "OW2": "oʊ",
+    "OY": "ɔɪ",
+    "OY0": "ɔɪ",
+    "OY1": "ɔɪ",
+    "OY2": "ɔɪ",
+    "P": "p",
+    "R": "ɹ",
+    "S": "s",
+    "SH": "ʃ",
+    "T": "t",
+    "TH": "θ",
+    "UH": "ʊ",
+    "UH0": "ʊ",
+    "UH1": "ʊ",
+    "UH2": "ʊ",
+    "UW": "u",
+    "UW0": "u",
+    "UW1": "u",
+    "UW2": "u",
+    "V": "v",
+    "W": "w",
+    "Y": "j",
+    "Z": "z",
+    "ZH": "ʒ",
 }
 
 # REMOVED: No IPA rewrite fallbacks allowed for English.
 # All IPA symbols must be handled by the official vocab loader.
 
+
 def _normalize_text(text: str) -> str:
     """Apply deterministic text normalization for English."""
     # Unicode normalization
-    text = unicodedata.normalize('NFKC', text)
+    text = unicodedata.normalize("NFKC", text)
 
     # Remove control characters except newlines and tabs
-    text = re.sub(r'[\x00-\x08\x0b-\x0c\x0e-\x1f\x7f]', '', text)
+    text = re.sub(r"[\x00-\x08\x0b-\x0c\x0e-\x1f\x7f]", "", text)
 
     # Normalize quotes
     text = re.sub(r'["""]', '"', text)
-    text = re.sub(r'[\'\']', "'", text)
+    text = re.sub(r"[\'\']", "'", text)
 
     # Collapse multiple whitespace
-    text = re.sub(r'\s+', ' ', text)
+    text = re.sub(r"\s+", " ", text)
 
     # Strip leading/trailing whitespace
     text = text.strip()
 
     return text
 
+
 def _expand_numbers(text: str) -> str:
     """Expand numbers and basic ordinals in text."""
     # Handle ordinals 1st-31st
     ordinal_map = {
-        "1st": "first", "2nd": "second", "3rd": "third", "4th": "fourth", "5th": "fifth",
-        "6th": "sixth", "7th": "seventh", "8th": "eighth", "9th": "ninth", "10th": "tenth",
-        "11th": "eleventh", "12th": "twelfth", "13th": "thirteenth", "14th": "fourteenth", "15th": "fifteenth",
-        "16th": "sixteenth", "17th": "seventeenth", "18th": "eighteenth", "19th": "nineteenth", "20th": "twentieth",
-        "21st": "twenty first", "22nd": "twenty second", "23rd": "twenty third", "24th": "twenty fourth",
-        "25th": "twenty fifth", "26th": "twenty sixth", "27th": "twenty seventh", "28th": "twenty eighth",
-        "29th": "twenty ninth", "30th": "thirtieth", "31st": "thirty first"
+        "1st": "first",
+        "2nd": "second",
+        "3rd": "third",
+        "4th": "fourth",
+        "5th": "fifth",
+        "6th": "sixth",
+        "7th": "seventh",
+        "8th": "eighth",
+        "9th": "ninth",
+        "10th": "tenth",
+        "11th": "eleventh",
+        "12th": "twelfth",
+        "13th": "thirteenth",
+        "14th": "fourteenth",
+        "15th": "fifteenth",
+        "16th": "sixteenth",
+        "17th": "seventeenth",
+        "18th": "eighteenth",
+        "19th": "nineteenth",
+        "20th": "twentieth",
+        "21st": "twenty first",
+        "22nd": "twenty second",
+        "23rd": "twenty third",
+        "24th": "twenty fourth",
+        "25th": "twenty fifth",
+        "26th": "twenty sixth",
+        "27th": "twenty seventh",
+        "28th": "twenty eighth",
+        "29th": "twenty ninth",
+        "30th": "thirtieth",
+        "31st": "thirty first",
     }
 
     for ordinal, word in ordinal_map.items():
-        text = re.sub(r'\b' + ordinal + r'\b', word, text, flags=re.IGNORECASE)
+        text = re.sub(r"\b" + ordinal + r"\b", word, text, flags=re.IGNORECASE)
 
     # Handle basic numbers 0-999
     def expand_number(match):
@@ -724,35 +787,89 @@ def _expand_numbers(text: str) -> str:
         if num == 0:
             return "zero"
         elif num <= 19:
-            teens = ["", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
-                    "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"]
+            teens = [
+                "",
+                "one",
+                "two",
+                "three",
+                "four",
+                "five",
+                "six",
+                "seven",
+                "eight",
+                "nine",
+                "ten",
+                "eleven",
+                "twelve",
+                "thirteen",
+                "fourteen",
+                "fifteen",
+                "sixteen",
+                "seventeen",
+                "eighteen",
+                "nineteen",
+            ]
             return teens[num]
         elif num <= 99:
-            tens = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"]
+            tens = [
+                "",
+                "",
+                "twenty",
+                "thirty",
+                "forty",
+                "fifty",
+                "sixty",
+                "seventy",
+                "eighty",
+                "ninety",
+            ]
             ten = num // 10
             one = num % 10
             if one == 0:
                 return tens[ten]
             else:
-                ones = ["", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"]
+                ones = [
+                    "",
+                    "one",
+                    "two",
+                    "three",
+                    "four",
+                    "five",
+                    "six",
+                    "seven",
+                    "eight",
+                    "nine",
+                ]
                 return tens[ten] + " " + ones[one]
         else:  # 100-999
             hundreds = num // 100
             remainder = num % 100
-            hundreds_word = ["", "one hundred", "two hundred", "three hundred", "four hundred", "five hundred",
-                           "six hundred", "seven hundred", "eight hundred", "nine hundred"][hundreds]
+            hundreds_word = [
+                "",
+                "one hundred",
+                "two hundred",
+                "three hundred",
+                "four hundred",
+                "five hundred",
+                "six hundred",
+                "seven hundred",
+                "eight hundred",
+                "nine hundred",
+            ][hundreds]
             if remainder == 0:
                 return hundreds_word
             else:
                 return hundreds_word + " " + expand_number(str(remainder))
 
-    text = re.sub(r'\b\d{1,3}\b', lambda m: expand_number(m), text)
+    text = re.sub(r"\b\d{1,3}\b", lambda m: expand_number(m), text)
 
     return text
+
 
 def _strip_stress(phone: str) -> str:
     """Remove stress digits from ARPAbet phones."""
     return re.sub(r"\d", "", phone)
+
 
 def _arpabet_to_ipa_seq(arp_seq: list[str]) -> str:
     """Convert ARPAbet phoneme sequence to IPA string."""
@@ -761,6 +878,7 @@ def _arpabet_to_ipa_seq(arp_seq: list[str]) -> str:
         base = _strip_stress(p).upper()
         ipa.append(ARPABET_TO_IPA.get(base, base.lower()))
     return " ".join(ipa)
+
 
 def _lookup_cmudict(word: str) -> list[list[str]] | None:
     """Look up word in CMU dictionary if available."""
@@ -771,20 +889,42 @@ def _lookup_cmudict(word: str) -> list[list[str]] | None:
         return None
     return entries
 
+
 def _heuristic_arpabet(word: str) -> list[str]:
     """Simple LTS for OOV words using letter-cluster heuristics."""
     w = word.lower()
 
     # Multi-character mappings first (longest first)
     replacements = [
-        ("tion", " SH AH N"), ("sion", " ZH AH N"), ("ough", " AO"),
-        ("augh", " AE F"), ("eigh", " EY"), ("ight", " AY T"),
-        ("ou", " AW"), ("ow", " OW"), ("oi", " OY"), ("oy", " OY"),
-        ("ea", " IY"), ("ee", " IY"), ("oo", " UW"), ("ai", " EY"),
-        ("ay", " EY"), ("ie", " IY"), ("oe", " OW"), ("ue", " UW"),
-        ("ui", " UW IY"), ("th", " TH "), ("sh", " SH "), ("ch", " CH "),
-        ("ph", " F "), ("wh", " W "), ("ck", " K "), ("ng", " NG "),
-        ("nk", " NG K"), ("tion", " SH AH N"), ("sion", " ZH AH N"),
+        ("tion", " SH AH N"),
+        ("sion", " ZH AH N"),
+        ("ough", " AO"),
+        ("augh", " AE F"),
+        ("eigh", " EY"),
+        ("ight", " AY T"),
+        ("ou", " AW"),
+        ("ow", " OW"),
+        ("oi", " OY"),
+        ("oy", " OY"),
+        ("ea", " IY"),
+        ("ee", " IY"),
+        ("oo", " UW"),
+        ("ai", " EY"),
+        ("ay", " EY"),
+        ("ie", " IY"),
+        ("oe", " OW"),
+        ("ue", " UW"),
+        ("ui", " UW IY"),
+        ("th", " TH "),
+        ("sh", " SH "),
+        ("ch", " CH "),
+        ("ph", " F "),
+        ("wh", " W "),
+        ("ck", " K "),
+        ("ng", " NG "),
+        ("nk", " NG K"),
+        ("tion", " SH AH N"),
+        ("sion", " ZH AH N"),
     ]
 
     for pattern, replacement in replacements:
@@ -792,11 +932,32 @@ def _heuristic_arpabet(word: str) -> list[str]:
 
     # Single character mappings
     char_map = {
-        "a": " AE ", "b": " B ", "c": " K ", "d": " D ", "e": " EH ",
-        "f": " F ", "g": " G ", "h": " HH ", "i": " IH ", "j": " JH ",
-        "k": " K ", "l": " L ", "m": " M ", "n": " N ", "o": " AO ",
-        "p": " P ", "q": " K ", "r": " R ", "s": " S ", "t": " T ",
-        "u": " UH ", "v": " V ", "w": " W ", "x": " K S ", "y": " Y ", "z": " Z "
+        "a": " AE ",
+        "b": " B ",
+        "c": " K ",
+        "d": " D ",
+        "e": " EH ",
+        "f": " F ",
+        "g": " G ",
+        "h": " HH ",
+        "i": " IH ",
+        "j": " JH ",
+        "k": " K ",
+        "l": " L ",
+        "m": " M ",
+        "n": " N ",
+        "o": " AO ",
+        "p": " P ",
+        "q": " K ",
+        "r": " R ",
+        "s": " S ",
+        "t": " T ",
+        "u": " UH ",
+        "v": " V ",
+        "w": " W ",
+        "x": " K S ",
+        "y": " Y ",
+        "z": " Z ",
     }
 
     result = []
@@ -807,6 +968,7 @@ def _heuristic_arpabet(word: str) -> list[str]:
             result.append("AH")  # Default to schwa for unknown letters
 
     return [p for p in result if p]
+
 
 def _word_to_ipa(word: str, cmudict_dict: Optional[Dict[str, List[str]]]) -> str:
     """Convert a single word to IPA phonemes."""
@@ -828,6 +990,7 @@ def _word_to_ipa(word: str, cmudict_dict: Optional[Dict[str, List[str]]]) -> str
     # Final fallback to heuristic
     arpabet_phones = _heuristic_arpabet(word_lower)
     return _arpabet_to_ipa_seq(arpabet_phones)
+
 
 def text_to_ipa(text: str) -> str:
     """
@@ -852,6 +1015,7 @@ def text_to_ipa(text: str) -> str:
     # Load CMU dictionary if available
     try:
         import cmudict
+
         cmudict_dict = cmudict.dict()
     except Exception:
         cmudict_dict = None
@@ -882,14 +1046,16 @@ def text_to_ipa(text: str) -> str:
 
     # 5. Join and normalize whitespace
     result = " ".join(ipa_parts)
-    result = re.sub(r'\s+', ' ', result).strip()
+    result = re.sub(r"\s+", " ", result).strip()
 
     logger.debug(f"Normalized text '{text}' to IPA: {result}")
     return result
 
+
 # Load the real model vocabulary from kokoro_onnx
 _REAL_VOCAB = None
 _VOCAB_SIZE = None
+
 
 def _load_real_vocab():
     """
@@ -904,20 +1070,23 @@ def _load_real_vocab():
     try:
         # Import from the hardcoded vocabulary
         from bot.tts.ipa_vocab_kokoro_v1 import PHONEME_TO_ID
-        
+
         _REAL_VOCAB = dict(PHONEME_TO_ID)
         _VOCAB_SIZE = len(_REAL_VOCAB)
-        
+
         logger.debug(f"Loaded hardcoded vocabulary with {_VOCAB_SIZE} entries")
         return _REAL_VOCAB, _VOCAB_SIZE
 
     except Exception as e:
-        raise RuntimeError(f"Failed to load hardcoded Kokoro IPA vocabulary: {e}. No fallbacks allowed for English.")
+        raise RuntimeError(
+            f"Failed to load hardcoded Kokoro IPA vocabulary: {e}. No fallbacks allowed for English."
+        )
+
 
 def _ipa_to_ids(phonemes: str) -> List[int]:
     """
     Convert IPA phoneme string to model token IDs using greedy longest-match.
-    
+
     Uses the real model vocabulary with no guessing or fallbacks.
     All returned IDs are guaranteed to be within [0, vocab_size-1].
 
@@ -926,7 +1095,7 @@ def _ipa_to_ids(phonemes: str) -> List[int]:
 
     Returns:
         List of token IDs within valid range
-        
+
     Raises:
         ValueError: If any IPA symbol cannot be encoded
     """
@@ -936,20 +1105,20 @@ def _ipa_to_ids(phonemes: str) -> List[int]:
     vocab, vocab_size = _load_real_vocab()
     ids = []
     oov_symbols = []
-    
+
     # Normalize whitespace to single spaces
-    phonemes = re.sub(r'\s+', ' ', phonemes.strip())
-    
+    phonemes = re.sub(r"\s+", " ", phonemes.strip())
+
     # Split by spaces first to handle word boundaries
-    words = phonemes.split(' ')
-    
+    words = phonemes.split(" ")
+
     for word_idx, word in enumerate(words):
         if not word:
             continue
-            
+
         # Add space token between words if vocab supports it
         if word_idx > 0:
-            space_tokens = ['<sp>', '_', 'sil', ' ']
+            space_tokens = ["<sp>", "_", "sil", " "]
             space_id = None
             for space_token in space_tokens:
                 if space_token in vocab:
@@ -957,21 +1126,21 @@ def _ipa_to_ids(phonemes: str) -> List[int]:
                     break
             if space_id is not None:
                 ids.append(space_id)
-        
+
         # Process each word with greedy longest-match
         i = 0
         while i < len(word):
             matched = False
-            
+
             # Try matches from longest to shortest (up to 4 chars for complex IPA)
             for length in range(min(4, len(word) - i), 0, -1):
-                candidate = word[i:i+length]
+                candidate = word[i : i + length]
                 if candidate in vocab:
                     ids.append(vocab[candidate])
                     i += length
                     matched = True
                     break
-            
+
             if not matched:
                 # Try rewrite table for unsupported symbols
                 char = word[i]
@@ -985,30 +1154,34 @@ def _ipa_to_ids(phonemes: str) -> List[int]:
                     else:
                         oov_symbols.append(f"{char}->{rewritten}")
                         # Use schwa as fallback
-                        fallback_id = vocab.get('ə', vocab.get('a', 0))
+                        fallback_id = vocab.get("ə", vocab.get("a", 0))
                         ids.append(fallback_id)
                 else:
                     oov_symbols.append(char)
                     # Use schwa as fallback
-                    fallback_id = vocab.get('ə', vocab.get('a', 0))
+                    fallback_id = vocab.get("ə", vocab.get("a", 0))
                     ids.append(fallback_id)
                 i += 1
-    
+
     # Validate all IDs are within vocabulary range
     if ids:
         max_id = max(ids)
         min_id = min(ids)
         if max_id >= vocab_size or min_id < 0:
-            raise ValueError(f"Token ID out of bounds: min={min_id}, max={max_id}, vocab_size={vocab_size}")
-    
+            raise ValueError(
+                f"Token ID out of bounds: min={min_id}, max={max_id}, vocab_size={vocab_size}"
+            )
+
     # Log results
     oov_count = len(oov_symbols)
     if oov_count > 0:
         logger.debug(f"OOV symbols: {oov_symbols[:3]}{'...' if oov_count > 3 else ''}")
-    
-    logger.debug(f"ipa_len={len(phonemes)} tokens={len(ids)} vocab_size={vocab_size} max_id={max(ids) if ids else 0} oov={oov_count}")
-    
+
+    logger.debug(
+        f"ipa_len={len(phonemes)} tokens={len(ids)} vocab_size={vocab_size} max_id={max(ids) if ids else 0} oov={oov_count}"
+    )
+
     if oov_count > 0:
         raise ValueError(f"Unsupported IPA symbol(s): {', '.join(oov_symbols[:5])}")
-    
+
     return ids

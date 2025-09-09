@@ -6,16 +6,13 @@ circuit breaker, per-item budget enforcement, and spam prevention.
 import asyncio
 import pytest
 import time
-from unittest.mock import AsyncMock, Mock, patch, MagicMock
-from dataclasses import dataclass
-from typing import List, Optional
+from unittest.mock import AsyncMock, Mock, patch
 
 # Import the modules we're testing
 from bot.router import Router
-from bot.enhanced_retry import EnhancedRetryManager, RetryResult, ProviderConfig, ProviderStatus
+from bot.enhanced_retry import EnhancedRetryManager, ProviderConfig
 from bot.metrics.null_metrics import NoopMetrics
 from bot.rag.embedding_interface import create_embedding_model, is_rag_legacy_mode
-from bot.modality import InputItem, InputModality
 
 
 @pytest.fixture

@@ -5,14 +5,12 @@ Uses the exact error chain from user's production tracebacks.
 """
 
 import asyncio
-from typing import Dict, Any
 from unittest.mock import Mock, AsyncMock, patch
 
 # Import the modules we need to test
-from bot.modality import InputModality, InputItem
+from bot.modality import InputItem
 from bot.router import Router
 from bot.exceptions import InferenceError
-from bot.video_ingest import VideoIngestError
 
 async def test_exact_production_error_handling():
     """Test fallback logic with the exact production error messages from user's logs."""
@@ -24,7 +22,7 @@ async def test_exact_production_error_handling():
     problem_url = "https://x.com/avaricum777/status/1953657907964477640"
     
     print(f"📋 Testing problematic URL: {problem_url}")
-    print(f"   This URL caused the original production traceback")
+    print("   This URL caused the original production traceback")
     
     # Create mock bot and router
     mock_bot = Mock()
@@ -42,7 +40,7 @@ async def test_exact_production_error_handling():
     )
     
     # Test with the EXACT error message format from production logs
-    print(f"\n🔍 Testing exact production error chain:")
+    print("\n🔍 Testing exact production error chain:")
     
     # The exact InferenceError message from the production traceback
     exact_production_error = InferenceError(
@@ -65,13 +63,13 @@ async def test_exact_production_error_handling():
     print(f"   should_trigger_fallback: {is_twitter_url and no_video_found}")
     
     if not (is_twitter_url and no_video_found):
-        print(f"   ❌ FAIL: Error pattern matching failed! Fallback will NOT trigger.")
+        print("   ❌ FAIL: Error pattern matching failed! Fallback will NOT trigger.")
         return False
     
-    print(f"   ✅ PASS: Error pattern matching works - fallback WILL trigger")
+    print("   ✅ PASS: Error pattern matching works - fallback WILL trigger")
     
     # Test the full fallback chain with the exact production error
-    print(f"\n🔄 Testing full fallback chain with production error...")
+    print("\n🔄 Testing full fallback chain with production error...")
     
     with patch('bot.router.hear_infer_from_url') as mock_hear:
         # Make hear_infer_from_url raise the exact production error
@@ -83,12 +81,12 @@ async def test_exact_production_error_handling():
             
             try:
                 result = await router._handle_video_url(item)
-                print(f"   ✅ PASS: Fallback successful!")
+                print("   ✅ PASS: Fallback successful!")
                 print(f"   Result: {result[:100]}...")
                 
                 # Verify that _handle_image was called (fallback happened)
                 mock_handle_image.assert_called_once_with(item)
-                print(f"   ✅ PASS: _handle_image was called - fallback executed correctly")
+                print("   ✅ PASS: _handle_image was called - fallback executed correctly")
                 
                 return True
                 
@@ -99,7 +97,7 @@ async def test_exact_production_error_handling():
 async def test_other_twitter_errors_no_fallback():
     """Test that other Twitter errors (not 'no video found') don't trigger fallback."""
     
-    print(f"\n🚫 Testing that other Twitter errors don't trigger fallback...")
+    print("\n🚫 Testing that other Twitter errors don't trigger fallback...")
     
     problem_url = "https://x.com/some_user/status/1234567890"
     
@@ -109,10 +107,10 @@ async def test_other_twitter_errors_no_fallback():
     mock_bot.tts_manager = Mock()
     mock_bot.loop = Mock()
     
-    router = Router(mock_bot)
+    Router(mock_bot)
     
     # Create InputItem
-    item = InputItem(
+    InputItem(
         source_type="url",
         payload=problem_url,
         order_index=0
@@ -141,10 +139,10 @@ async def test_other_twitter_errors_no_fallback():
         print(f"   should_fallback: {should_fallback}")
         
         if should_fallback:
-            print(f"   ❌ FAIL: This error should NOT trigger fallback")
+            print("   ❌ FAIL: This error should NOT trigger fallback")
             return False
         else:
-            print(f"   ✅ PASS: Correctly does NOT trigger fallback")
+            print("   ✅ PASS: Correctly does NOT trigger fallback")
     
     return True
 

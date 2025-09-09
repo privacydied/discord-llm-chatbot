@@ -47,7 +47,9 @@ class ScreenshotCommands(commands.Cog):
         return m.group(0) if m else None
 
     @commands.command(name="ss", aliases=["screenshot"])
-    async def screenshot_cmd(self, ctx: commands.Context, url: Optional[str] = None) -> None:
+    async def screenshot_cmd(
+        self, ctx: commands.Context, url: Optional[str] = None
+    ) -> None:
         """
         Take a screenshot of the given URL and analyze it with the vision model.
 
@@ -85,7 +87,9 @@ class ScreenshotCommands(commands.Cog):
             tick_ms = int(cfg.get("STREAMING_TICK_MS", 750))
 
             # Prepare initial embed message
-            def make_embed(stage_idx: int, stages: Dict[int, Dict[str, Any]]) -> discord.Embed:
+            def make_embed(
+                stage_idx: int, stages: Dict[int, Dict[str, Any]]
+            ) -> discord.Embed:
                 title = "📸 Screenshot"
                 color = 0x00AEEF
                 if stage_idx >= 6:
@@ -111,7 +115,9 @@ class ScreenshotCommands(commands.Cog):
                     description="\n".join(desc_lines)[:4000],
                     color=color,
                 )
-                embed.set_footer(text="Screenshots are opt-in via !ss · No secrets stored")
+                embed.set_footer(
+                    text="Screenshots are opt-in via !ss · No secrets stored"
+                )
                 return embed
 
             # Initialize stages map
@@ -120,7 +126,11 @@ class ScreenshotCommands(commands.Cog):
                 2: {"key": "prepare", "label": "Prepare capture", "status": "queued"},
                 3: {"key": "capture", "label": "Capture page", "status": "queued"},
                 4: {"key": "saved", "label": "Save to cache", "status": "queued"},
-                5: {"key": "analyze", "label": "Analyze screenshot", "status": "queued"},
+                5: {
+                    "key": "analyze",
+                    "label": "Analyze screenshot",
+                    "status": "queued",
+                },
                 6: {"key": "done", "label": "Complete", "status": "queued"},
             }
 
@@ -174,7 +184,9 @@ class ScreenshotCommands(commands.Cog):
                     description=result_text[:4000],
                     color=0x00AEEF,
                 )
-                embed.set_footer(text="Screenshots are opt-in via !ss · No secrets stored")
+                embed.set_footer(
+                    text="Screenshots are opt-in via !ss · No secrets stored"
+                )
                 await processing_msg.edit(content=None, embed=embed)
                 return
 
@@ -182,7 +194,9 @@ class ScreenshotCommands(commands.Cog):
             await update_stage(1)
             await update_stage(2)
             async with ctx.typing():
-                result_text = await router._handle_screenshot_url(item, progress_cb=progress_cb)
+                result_text = await router._handle_screenshot_url(
+                    item, progress_cb=progress_cb
+                )
             await update_stage(6)
 
             # Finalize with result embed
@@ -191,7 +205,9 @@ class ScreenshotCommands(commands.Cog):
                 description=result_text[:4000],
                 color=0x10C080,
             )
-            final_embed.set_footer(text="Screenshots are opt-in via !ss · No secrets stored")
+            final_embed.set_footer(
+                text="Screenshots are opt-in via !ss · No secrets stored"
+            )
             await processing_msg.edit(embed=final_embed)
 
         except Exception as e:

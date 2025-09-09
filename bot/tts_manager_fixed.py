@@ -5,6 +5,7 @@ Provides a TTSManager with the minimal interface expected by tests and older
 code: environment variable handling, tokenizer registry bootstrap, KokoroDirect
 loading, and a synchronous generate_speech() wrapper that returns a Path.
 """
+
 from __future__ import annotations
 
 import os
@@ -37,10 +38,12 @@ class TTSManager:
         self.config: Dict[str, Any] = config or {}
 
         # Public attributes expected by tests/scripts
-        self.backend: str = (
-            str(self.config.get("TTS_BACKEND") or os.getenv("TTS_BACKEND") or "kokoro-onnx")
+        self.backend: str = str(
+            self.config.get("TTS_BACKEND") or os.getenv("TTS_BACKEND") or "kokoro-onnx"
         )
-        self.voice: str = str(self.config.get("TTS_VOICE") or os.getenv("TTS_VOICE") or "default")
+        self.voice: str = str(
+            self.config.get("TTS_VOICE") or os.getenv("TTS_VOICE") or "default"
+        )
         self.available: bool = False
 
         # Internal state
@@ -104,14 +107,12 @@ class TTSManager:
 
         # 4) Config flat fallbacks
         if not model_path:
-            model_path = (
-                self.config.get("TTS_MODEL_PATH")
-                or self.config.get("TTS_MODEL_FILE")
+            model_path = self.config.get("TTS_MODEL_PATH") or self.config.get(
+                "TTS_MODEL_FILE"
             )
         if not voices_path:
-            voices_path = (
-                self.config.get("TTS_VOICES_PATH")
-                or self.config.get("TTS_VOICE_FILE")
+            voices_path = self.config.get("TTS_VOICES_PATH") or self.config.get(
+                "TTS_VOICE_FILE"
             )
 
         # 5) Defaults

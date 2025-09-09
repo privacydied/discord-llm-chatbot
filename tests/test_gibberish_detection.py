@@ -2,7 +2,6 @@
 
 import unittest
 import sys
-import os
 import numpy as np
 from pathlib import Path
 
@@ -11,7 +10,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from bot.tts_validation import (
     detect_gibberish_audio,
-    detect_gibberish_audio_with_metrics,
     validate_voice_vector,
     check_sample_rate_consistency
 )

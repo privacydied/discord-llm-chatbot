@@ -55,7 +55,7 @@ def main():
     success = convert_bin_to_json(bin_path, json_path)
     
     if success:
-        print(f"✅ Voice file successfully converted to JSON format")
+        print("✅ Voice file successfully converted to JSON format")
         print(f"   - Source: {bin_path}")
         print(f"   - Target: {json_path}")
         print("\nNow update your TTS_VOICE_FILE environment variable to point to this JSON file.")

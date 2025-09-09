@@ -2,17 +2,16 @@
 Test TTS error handling for zero audio and OCR soft-dependency.
 """
 
-import os
 import unittest
 import tempfile
 import numpy as np
 from pathlib import Path
-from unittest.mock import patch, MagicMock, mock_open
+from unittest.mock import patch, MagicMock
 
 # Import the modules we want to test
 from bot.tts.errors import TTSSynthesisError
 from bot.kokoro_direct_fixed import KokoroDirect
-from bot.pdf_utils import PDFProcessor, TESSERACT_AVAILABLE
+from bot.pdf_utils import PDFProcessor
 
 
 class TestTTSErrorHandling(unittest.TestCase):

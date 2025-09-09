@@ -1,8 +1,8 @@
 from .stub import generate_stub_wav
-import os
 import logging
 
 logger = logging.getLogger(__name__)
+
 
 class TTSManager:
     async def generate_tts(self, text: str, out_path: str) -> str:

@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 
 from bot.command_parser import parse_command
 from bot.core.client import Bot
-from bot.types import Command, ParsedCommand
+from bot.types import Command
 
 
 @pytest.fixture

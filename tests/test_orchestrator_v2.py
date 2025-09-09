@@ -11,11 +11,9 @@ Tests the orchestrator's integration with:
 
 import pytest
 from decimal import Decimal
-import asyncio
 from unittest.mock import Mock, AsyncMock, patch
 from datetime import datetime, timezone
 from pathlib import Path
-import pytest
 
 from bot.vision.money import Money
 from bot.vision.orchestrator_v2 import VisionOrchestratorV2
@@ -342,7 +340,7 @@ async def test_cost_estimation_fallback(orchestrator):
     )
     
     # Execute
-    job = await orchestrator.submit_job(request)
+    await orchestrator.submit_job(request)
     
     # Verify fallback cost was used
     assert request.estimated_cost == 0.04  # Fallback for TEXT_TO_IMAGE

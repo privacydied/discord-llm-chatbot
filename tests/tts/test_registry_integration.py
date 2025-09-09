@@ -84,7 +84,7 @@ class TestRegistryIntegration:
                 kd = KokoroDirect(model_path="test.onnx", voices_path="test.npz")
                 decision = mock_select.return_value
 
-                out_path = kd.create(
+                kd.create(
                     text=decision.payload,
                     voice="af_heart",
                     lang="en",
@@ -183,7 +183,7 @@ class TestEngineIntegration:
             with patch('builtins.open', mocker.mock_open(read_data=b'test wav data')):
                 with patch('pathlib.Path.exists', return_value=True):
                     with patch('pathlib.Path.unlink'):
-                        result = engine.synthesize("hello world", language="es")
+                        engine.synthesize("hello world", language="es")
 
             # Verify registry was consulted
             mock_select.assert_called_once_with('en', 'hello world')
@@ -215,7 +215,7 @@ class TestEngineIntegration:
             with patch('builtins.open', mocker.mock_open(read_data=b'test wav data')):
                 with patch('pathlib.Path.exists', return_value=True):
                     with patch('pathlib.Path.unlink'):
-                        result = engine.synthesize("hello world", language="es")
+                        engine.synthesize("hello world", language="es")
 
             # Verify KokoroDirect was called with text
             mock_kd.create.assert_called_once()

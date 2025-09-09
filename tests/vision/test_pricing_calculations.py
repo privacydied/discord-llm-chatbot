@@ -2,8 +2,7 @@
 Unit tests for vision pricing calculations and cost normalization [CA][REH][IV]
 """
 import unittest
-from unittest.mock import Mock, patch, MagicMock
-import os
+from unittest.mock import Mock, MagicMock
 import sys
 from decimal import Decimal
 

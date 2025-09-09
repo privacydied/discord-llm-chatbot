@@ -3,7 +3,7 @@ Tests for the MemoryCommands cog.
 """
 import pytest
 import asyncio
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import MagicMock, AsyncMock
 
 import discord
 

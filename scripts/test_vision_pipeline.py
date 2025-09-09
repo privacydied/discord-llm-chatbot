@@ -21,7 +21,7 @@ async def test_vision_pipeline(image_path: str, prompt: str = None):
         logger.info("👁️ Starting vision-language inference...")
         vl_result = await see_infer(Path(image_path), prompt or "What's in this image?")
         logger.info("✅ VL model output:")
-        print(f"\nVL Model Output:")
+        print("\nVL Model Output:")
         print("-" * 80)
         print(vl_result)
         print("-" * 80)

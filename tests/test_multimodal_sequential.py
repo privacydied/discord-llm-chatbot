@@ -4,10 +4,10 @@ Verifies the 1 IN → 1 OUT rule, retry logic, and result aggregation.
 """
 import pytest
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 from discord import Message, Attachment, Embed
 from bot.router import Router
-from bot.modality import InputModality, InputItem, collect_input_items, map_item_to_modality
+from bot.modality import InputModality, InputItem, collect_input_items
 from bot.result_aggregator import ResultAggregator
 from bot.multimodal_retry import run_with_retries
 

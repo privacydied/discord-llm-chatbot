@@ -1,10 +1,9 @@
 import asyncio
 import types
-import builtins
 import pytest
 
 from bot.router import Router
-from bot.search.types import SearchResult, SafeSearch, SearchCategory
+from bot.search.types import SearchResult, SearchCategory
 
 
 class FakeProvider:

@@ -2,6 +2,7 @@
 Base interfaces and helpers for search providers.
 [CA][CMV][IV][RM]
 """
+
 from __future__ import annotations
 
 import abc
@@ -18,5 +19,7 @@ class SearchProvider(Protocol):
 
 class AbstractSearchProvider(abc.ABC):
     @abc.abstractmethod
-    async def search(self, params: SearchQueryParams) -> SearchResults:  # pragma: no cover
+    async def search(
+        self, params: SearchQueryParams
+    ) -> SearchResults:  # pragma: no cover
         raise NotImplementedError

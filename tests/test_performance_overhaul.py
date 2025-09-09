@@ -8,16 +8,16 @@ import pytest
 import time
 import random
 from unittest.mock import AsyncMock, MagicMock, patch
-from typing import List, Dict, Any
+from typing import Dict
 import statistics
 
 # Import our performance overhaul components
-from bot.core.phase_timing import get_timing_manager, PipelineTracker, PhaseMetrics
+from bot.core.phase_timing import get_timing_manager
 from bot.core.phase_constants import PhaseConstants as PC
 from bot.core.openrouter_client import OptimizedOpenRouterClient, CircuitState
 from bot.core.template_cache import get_template_cache, get_prompt_builder
 from bot.core.fast_path_router import get_fast_path_router, MessageComplexity, RouteDecision
-from bot.core.session_cache import get_session_cache, get_context_manager
+from bot.core.session_cache import get_session_cache
 from bot.core.discord_client_optimizer import get_discord_sender, SendOptions
 from bot.core.slo_monitor import get_slo_monitor, AlertLevel
 
@@ -69,7 +69,7 @@ class TestPhaseTimingSystem:
         tracker = timing_manager.create_pipeline_tracker("msg_error", "user_error")
         
         with pytest.raises(ValueError):
-            async with timing_manager.track_phase(tracker, PC.PHASE_LLM_CALL) as phase_metric:
+            async with timing_manager.track_phase(tracker, PC.PHASE_LLM_CALL):
                 await asyncio.sleep(0.005)
                 raise ValueError("Test error")
         
@@ -309,7 +309,7 @@ class TestFastPathRouter:
         # This should cause budget exceeded without complex time mocking
         start_time = time.time()
         analysis = await router.analyze_message_route(mock_message)
-        elapsed_ms = (time.time() - start_time) * 1000
+        (time.time() - start_time) * 1000
         
         # Budget should be enforced (decision time measured)
         assert analysis.decision_time_ms >= 0
@@ -408,7 +408,7 @@ class TestDiscordSendOptimization:
         sender = get_discord_sender(mock_bot)
         
         short_text = "Hi!"
-        message = await sender.send_simple_text(mock_channel, short_text)
+        await sender.send_simple_text(mock_channel, short_text)
         
         # Should skip typing for very short messages
         mock_channel.typing.assert_not_called()  
@@ -420,7 +420,7 @@ class TestDiscordSendOptimization:
     @pytest.mark.asyncio  
     async def test_enrichment_skipping(self, mock_bot, mock_channel):
         """Test enrichment skipping for performance."""
-        sender = get_discord_sender(mock_bot)
+        get_discord_sender(mock_bot)
         options = SendOptions.for_simple_text(30)
         
         # Should skip embeds and files for simple text
@@ -542,7 +542,7 @@ class TestIntegrationAndSoak:
         ]
         
         for phase, duration_ms in phases_and_times:
-            async with timing_manager.track_phase(tracker, phase) as phase_metric:
+            async with timing_manager.track_phase(tracker, phase):
                 await asyncio.sleep(duration_ms / 1000)  # Simulate work
         
         # Complete pipeline
@@ -605,7 +605,7 @@ class TestIntegrationAndSoak:
             
             try:
                 # Simulate phase with potential failure
-                async with timing_manager.track_phase(tracker, PC.PHASE_LLM_CALL) as phase_metric:
+                async with timing_manager.track_phase(tracker, PC.PHASE_LLM_CALL):
                     if random.random() < 0.3:  # 30% failure rate
                         raise Exception(f"Simulated {scenario} failure")
                     await asyncio.sleep(0.05)  # 50ms work

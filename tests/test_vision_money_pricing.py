@@ -11,16 +11,12 @@ Tests:
 """
 
 import pytest
-import asyncio
 import json
-import tempfile
-from pathlib import Path
 from decimal import Decimal
-from datetime import datetime, timezone
 
 from bot.vision.money import Money
 from bot.vision.pricing_loader import PricingTable, get_pricing_table
-from bot.vision.budget_manager_v2 import VisionBudgetManager, UserBudget, BudgetResult
+from bot.vision.budget_manager_v2 import VisionBudgetManager
 from bot.vision.types import VisionTask, VisionProvider, VisionRequest
 
 

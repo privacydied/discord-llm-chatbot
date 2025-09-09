@@ -4,8 +4,6 @@ Simple validation test for Vision integration without Discord dependencies.
 Validates that the integration code is properly implemented in the router.
 """
 
-import os
-import sys
 from pathlib import Path
 
 def validate_vision_integration():

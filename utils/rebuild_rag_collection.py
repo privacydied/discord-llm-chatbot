@@ -17,9 +17,7 @@ project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
 from bot.rag.hybrid_search import get_hybrid_search
-from bot.rag.chroma_backend import ChromaRAGBackend
 from bot.rag.document_parsers import document_parser_factory
-from bot.rag.vector_schema import HybridSearchConfig
 from bot.util.logging import get_logger
 
 logger = get_logger(__name__)
@@ -89,7 +87,7 @@ async def _manual_rebuild_approach(search_engine):
                 print(f"   ❌ Error processing {file_path.name}: {e}")
                 continue
         
-        print(f"\n📊 Manual rebuild completed:")
+        print("\n📊 Manual rebuild completed:")
         print(f"   Files processed: {processed_count}")
         print(f"   Total chunks: {total_chunks}")
         
@@ -111,7 +109,7 @@ async def rebuild_rag_collection():
         
         # Get current stats
         stats_before = await search_engine.get_stats()
-        print(f"📊 Current collection stats:")
+        print("📊 Current collection stats:")
         print(f"   Total chunks: {stats_before.get('collection_stats', {}).get('total_chunks', 0)}")
         
         # Wipe the collection
@@ -160,11 +158,11 @@ async def rebuild_rag_collection():
         # Get final stats
         stats_final = await search_engine.get_stats()
         chunks_final = stats_final.get('collection_stats', {}).get('total_chunks', 0)
-        print(f"\n📊 Final collection stats:")
+        print("\n📊 Final collection stats:")
         print(f"   Total chunks: {chunks_final}")
         
         # Test a search query
-        print(f"\n🔍 Testing search with rebuilt collection...")
+        print("\n🔍 Testing search with rebuilt collection...")
         test_results = await search_engine.search("Gateway Process", max_results=3)
         print(f"   Test query results: {len(test_results)}")
         

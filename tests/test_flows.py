@@ -16,7 +16,6 @@ from pathlib import Path
 
 from bot.core.bot import LLMBot
 from bot.router import Router, OutputModality
-from bot.command_parser import Command, ParsedCommand
 
 
 @pytest.fixture
@@ -157,7 +156,7 @@ async def test_flow_document_to_text(mock_process_document, mock_brain_infer, mo
     mock_attachment.save.assert_called_once_with(Path('/tmp/fake_doc.pdf'))
     mock_process_document.assert_called_once_with('/tmp/fake_doc.pdf', '.pdf')
     mock_brain_infer.assert_called_once_with(
-        f"DOCUMENT CONTENT:\n---\nThis is the document content.\n---\n\nUSER'S PROMPT: Summarize this document."
+        "DOCUMENT CONTENT:\n---\nThis is the document content.\n---\n\nUSER'S PROMPT: Summarize this document."
     )
     assert response.text == "This is a summary of the document."
     mock_os_remove.assert_called_once_with('/tmp/fake_doc.pdf')

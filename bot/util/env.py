@@ -1,8 +1,8 @@
 """Environment parsing helpers for consistent boolean/numeric handling. [IV]"""
+
 from __future__ import annotations
 
 import os
-from typing import Optional
 
 
 def get_bool(name: str, default: bool = False) -> bool:
@@ -31,4 +31,3 @@ def get_float(name: str, default: float) -> float:
         return float(raw)
     except ValueError:
         return default
-

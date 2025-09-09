@@ -23,7 +23,7 @@ def compute_waveform_b64(wav_path: str | Path, bins: int = 256) -> str:
         n_channels = wf.getnchannels()
         sample_width = wf.getsampwidth()
         n_frames = wf.getnframes()
-        framerate = wf.getframerate()
+        wf.getframerate()
 
         if sample_width not in (1, 2, 3, 4):
             # Unsupported width; bail to flat waveform [REH]

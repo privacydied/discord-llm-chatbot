@@ -1,5 +1,4 @@
 import types
-import asyncio
 import pytest
 import httpx
 

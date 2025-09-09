@@ -7,7 +7,6 @@ to avoid Discord dependency issues.
 """
 
 import sys
-import os
 from pathlib import Path
 
 # Add project root to Python path

@@ -27,7 +27,6 @@ import shutil
 import sys
 import tempfile
 import time
-from typing import Optional
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -173,7 +172,7 @@ def download_file(url: str, dest: Path, session: requests.Session, timeout: int,
 
     with session.get(url, stream=True, timeout=timeout) as r:
         r.raise_for_status()
-        total = int(r.headers.get("content-length", 0))
+        int(r.headers.get("content-length", 0))
         hasher = hashlib.sha256()
         with tempfile.NamedTemporaryFile(delete=False) as tmp:
             for chunk in r.iter_content(chunk_size=1024 * 1024):
@@ -254,7 +253,7 @@ def main() -> int:
     # Env hints
     print()
     print("Add these to your .env for kokoro-onnx:")
-    print(f"TTS_ENGINE=kokoro-onnx")
+    print("TTS_ENGINE=kokoro-onnx")
     print(f"TTS_MODEL_PATH={model_path}")
     print(f"TTS_VOICES_PATH={voices_path}")
 

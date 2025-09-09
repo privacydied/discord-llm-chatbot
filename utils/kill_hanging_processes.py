@@ -8,7 +8,6 @@ Usage: python kill_hanging_processes.py
 import os
 import signal
 import subprocess
-import sys
 
 def kill_hanging_processes():
     """Kill any hanging Python processes related to RAG rebuild."""

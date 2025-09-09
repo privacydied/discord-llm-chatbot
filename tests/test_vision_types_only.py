@@ -7,7 +7,6 @@ without requiring full bot initialization or Discord libraries.
 """
 
 import sys
-import os
 from pathlib import Path
 
 # Add project root to Python path
@@ -95,7 +94,7 @@ def test_vision_response():
         )
         
         assert response.provider == VisionProvider.TOGETHER
-        assert response.success == True
+        assert response.success
         assert len(response.result_urls) == 1
         assert response.result_urls[0] == "https://example.com/image.png"
         assert response.processing_time_seconds == 5.2
@@ -111,7 +110,7 @@ def test_vision_job():
     try:
         from bot.vision.types import (
             VisionJob, VisionRequest, VisionTask, 
-            VisionProvider, VisionJobState
+            VisionJobState
         )
         
         # Create request

@@ -4,7 +4,6 @@ Test Novita.ai image generation integration
 """
 
 import asyncio
-import os
 import sys
 from pathlib import Path
 

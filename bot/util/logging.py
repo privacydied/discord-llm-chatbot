@@ -118,19 +118,25 @@ def init_logging() -> None:
     pretty.addFilter(SensitiveDataFilter())
     jsonl.addFilter(SensitiveDataFilter())
 
-    logging.basicConfig(handlers=[pretty, jsonl], level=level, force=True, format="%(message)s")
+    logging.basicConfig(
+        handlers=[pretty, jsonl], level=level, force=True, format="%(message)s"
+    )
 
     # Enforce exactly the two sinks are present
     names = sorted(h.get_name() for h in logging.getLogger().handlers)
     if names != ["jsonl_handler", "pretty_handler"]:
         try:
-            sys.stderr.write(f"[logging-enforcer] expected pretty_handler + jsonl_handler, got {names}\n")
+            sys.stderr.write(
+                f"[logging-enforcer] expected pretty_handler + jsonl_handler, got {names}\n"
+            )
             sys.stderr.flush()
         finally:
             logging.shutdown()
             sys.exit(2)
 
-    logging.getLogger(__name__).info("✔ Logging initialized (dual-sink)", extra={"subsys": "logging"})
+    logging.getLogger(__name__).info(
+        "✔ Logging initialized (dual-sink)", extra={"subsys": "logging"}
+    )
 
 
 def get_logger(name: str) -> logging.Logger:
@@ -199,4 +205,3 @@ class SensitiveDataFilter(logging.Filter):
                 self._scrub_dict_inplace(v)
             elif isinstance(v, str) and k in self.SECRET_KEYS:
                 obj[k] = "[REDACTED]"
-

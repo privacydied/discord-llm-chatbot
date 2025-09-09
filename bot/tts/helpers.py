@@ -7,6 +7,7 @@ Currently provides:
   kokoro drivers or stubs by checking common attribute names ("onnx_session",
   "sess"). Returns None if not present.
 """
+
 from __future__ import annotations
 from typing import Any, Optional
 

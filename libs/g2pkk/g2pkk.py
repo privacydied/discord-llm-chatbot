@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
-import os, re, platform, sys, importlib
+import os
+import platform
+import sys
+import importlib
 import subprocess
 
 import nltk
-from jamo import h2j
 from nltk.corpus import cmudict
 
 try:
@@ -39,14 +41,14 @@ class G2p(object):
             spam_spec = importlib.util.find_spec("eunjeon")
             non_found = spam_spec is None
             if non_found:
-                print(f'you have to install eunjeon. install it...')
+                print('you have to install eunjeon. install it...')
                 p = subprocess.Popen('pip install eunjeon')
                 p.wait()
         else:
             spam_spec = importlib.util.find_spec("mecab")
             non_found = spam_spec is None
             if non_found:
-                print(f'you have to install python-mecab-ko. install it...')
+                print('you have to install python-mecab-ko. install it...')
                 p = subprocess.Popen([sys.executable, "-m", "pip", "install", 'python-mecab-ko'])
                 p.wait()
 
@@ -56,14 +58,14 @@ class G2p(object):
             try:
                 m = self.load_module_func('eunjeon')
                 return m.Mecab()
-            except Exception as e:
-                raise print(f'you have to install eunjeon. "pip install eunjeon"')
+            except Exception:
+                raise print('you have to install eunjeon. "pip install eunjeon"')
         else:
             try:
                 m = self.load_module_func('mecab')
                 return m.MeCab()
-            except Exception as e:
-                print(f'you have to install python-mecab-ko. "pip install python-mecab-ko"')
+            except Exception:
+                print('you have to install python-mecab-ko. "pip install python-mecab-ko"')
 
 
     def idioms(self, string, descriptive=False, verbose=False):

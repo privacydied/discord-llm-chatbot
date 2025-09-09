@@ -9,11 +9,7 @@ Tests the core VISION_MODEL functionality:
 - Warning generation for unsupported parameters
 """
 
-import sys
-import os
-from pathlib import Path
 from dataclasses import dataclass
-from typing import Optional, List, Dict, Any, Tuple
 
 # Define minimal types without importing bot modules
 @dataclass

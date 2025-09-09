@@ -3,11 +3,9 @@ Unit tests for text→image generation routing and file handling fixes.
 Tests the key behaviors fixed in the "Fix This Code" implementation.
 """
 import pytest
-from unittest.mock import Mock, AsyncMock, MagicMock, patch
+from unittest.mock import Mock, patch
 import os
-import tempfile
 import re
-from pathlib import Path
 
 
 class TestDirectVisionTriggers:
@@ -15,8 +13,6 @@ class TestDirectVisionTriggers:
 
     def _detect_direct_vision_triggers(self, content: str):
         """Standalone implementation of trigger detection logic for testing."""
-        import re
-        from typing import Optional, Dict, Any
         
         content_clean = content.lower().strip()
         content_clean = re.sub(r'[!.?]+', '.', content_clean)
@@ -158,7 +154,6 @@ class TestRoutingPrecedence:
 
     def _is_twitter_url(self, url: str) -> bool:
         """Standalone Twitter URL detection for testing."""
-        import re
         twitter_patterns = [
             r'https?://(www\.)?(twitter|x)\.com/\w+/status/\d+',
             r'https?://t\.co/\w+'
@@ -167,7 +162,6 @@ class TestRoutingPrecedence:
 
     def test_twitter_url_blocks_generation(self):
         """X/Twitter URLs should route to VL, not image generation."""
-        content = "generate an image https://twitter.com/user/status/123"
         
         # Check that Twitter URL is detected
         has_twitter = self._is_twitter_url("https://twitter.com/user/status/123")
@@ -178,7 +172,6 @@ class TestRoutingPrecedence:
 
     def test_image_attachment_blocks_generation(self):
         """Image attachments should route to VL, not image generation."""
-        content = "generate an image"
         
         # Mock attachment
         attachment = Mock()
@@ -198,7 +191,6 @@ class TestRoutingPrecedence:
     def test_pure_generate_text_triggers_vision(self):
         """Pure generate text (no URLs/attachments) should trigger vision."""
         content = "generate an image of a puppy"
-        attachments = []
         
         # Should detect direct vision trigger
         result = TestDirectVisionTriggers()._detect_direct_vision_triggers(content)
@@ -418,7 +410,6 @@ class TestIntegrationScenarios:
         content = "<@!11111> generate an image of a cat"
         
         # Clean mention prefix
-        import re
         bot_id = 11111
         mention_pattern = fr'^<@!?{bot_id}>\s*'
         content_clean = re.sub(mention_pattern, '', content)
@@ -433,7 +424,6 @@ class TestIntegrationScenarios:
 
     def test_x_link_present_routes_to_syndication(self):
         """Test: X link present → routes to Syndication VL (NOT image gen)."""
-        content = "generate an image https://twitter.com/user/status/123"
         
         # Check Twitter URL detection
         url_detector = TestRoutingPrecedence()
@@ -445,7 +435,6 @@ class TestIntegrationScenarios:
 
     def test_image_attachment_no_text_routes_to_vl(self):
         """Test: image attachment + no text → routes to VL (NOT image gen)."""
-        content = ""  # No text content
         
         # Mock image attachment
         attachment = Mock()

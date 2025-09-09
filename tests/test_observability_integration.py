@@ -12,7 +12,6 @@ import pytest
 import tempfile
 import time
 from unittest.mock import Mock, patch, AsyncMock
-from typing import Dict, Any
 
 # Import observability components
 from bot.core.observability_integration import ObservabilityManager, get_observability_manager
@@ -20,7 +19,6 @@ from bot.core.startup_orchestrator import StartupOrchestrator, ComponentSpec, Co
 from bot.core.config_validation import ConfigValidator, HealthMonitor, HealthStatus
 from bot.core.background_task_monitor import BackgroundTaskMonitor, TaskConfig, RestartPolicy
 from bot.core.resource_monitor import ResourceMonitor
-from bot.metrics import metrics, is_degraded_mode
 
 
 class TestObservabilityIntegration:
@@ -160,7 +158,7 @@ class TestObservabilityIntegration:
         
         with patch.object(self.obs_manager.startup_orchestrator, 'execute') as mock_execute:
             with patch.object(self.obs_manager.startup_orchestrator, 'get_startup_summary') as mock_summary_method:
-                with patch.object(self.obs_manager.health_monitor, 'update_component_health') as mock_health:
+                with patch.object(self.obs_manager.health_monitor, 'update_component_health'):
                     mock_execute.return_value = mock_results
                     mock_summary_method.return_value = mock_summary
                     
@@ -361,7 +359,7 @@ class TestResourceMonitoringIntegration:
         monitor = ResourceMonitor()
         
         # Simulate some load
-        start_time = time.time()
+        time.time()
         await asyncio.sleep(0.01)  # Small delay
         
         lag = monitor._measure_event_loop_lag()

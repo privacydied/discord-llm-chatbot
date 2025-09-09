@@ -7,14 +7,14 @@ for selecting appropriate tokenizers based on language.
 
 import unittest
 import logging
-from unittest.mock import patch, MagicMock, PropertyMock
+from unittest.mock import patch, MagicMock
 import os
 import tempfile
 from pathlib import Path
 import numpy as np
 
 # Import the modules under test
-from bot.tokenizer_registry import TokenizerRegistry, discover_tokenizers
+from bot.tokenizer_registry import TokenizerRegistry
 from bot.kokoro_direct_fixed import KokoroDirect
 from bot.tts_errors import MissingTokeniserError
 

@@ -38,14 +38,14 @@ def run_health_check():
         from bot.core.bot import LLMBot
         # We don't need to run the bot, just instantiate it.
         # We pass dummy values because we are not connecting to Discord.
-        bot_instance = LLMBot(command_prefix="!", intents=None)
+        LLMBot(command_prefix="!", intents=None)
         logger.info("LLMBot instantiated successfully.")
 
         print("\n\033[92m✔ HEALTH CHECK PASSED\033[0m")
         print("All major components imported and initialized without errors.")
 
     except Exception as e:
-        print(f"\n\033[91m✖ HEALTH CHECK FAILED\033[0m")
+        print("\n\033[91m✖ HEALTH CHECK FAILED\033[0m")
         print(f"An error occurred: {e}")
         import traceback
         traceback.print_exc()

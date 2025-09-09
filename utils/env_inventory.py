@@ -23,14 +23,14 @@ import sys
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 try:
     from rich.logging import RichHandler
     from rich.console import Console
     from rich.panel import Panel
     from rich.tree import Tree
-except Exception as e:  # pragma: no cover
+except Exception:  # pragma: no cover
     print("Rich is required for this utility. Please install `rich`.\n", file=sys.stderr)
     raise
 

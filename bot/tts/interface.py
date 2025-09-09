@@ -1,5 +1,4 @@
 import asyncio
-import logging
 import os
 import re
 import tempfile
@@ -29,6 +28,7 @@ ENGINES = {
     "kokoro": KokoroV8Engine,
 }
 
+
 class TTSResult:
     """Tuple-and-path compatible return type for generate_tts.
 
@@ -38,6 +38,7 @@ class TTSResult:
 
     This reconciles mixed test expectations without breaking existing code.
     """
+
     __slots__ = ("path", "mime")
 
     def __init__(self, path: Path, mime: str) -> None:
@@ -76,6 +77,7 @@ class TTSResult:
     def __getattr__(self, name: str):
         return getattr(self.path, name)
 
+
 class TTSManager:
     """Manages loading and interacting with the configured TTS engine."""
 
@@ -83,13 +85,15 @@ class TTSManager:
         # bot is optional for compatibility with tests and standalone usage
         self.bot = bot
         self.engine: BaseEngine = None
-        self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='tts-worker')
-        self._engine_name = os.getenv('TTS_ENGINE', 'stub')
+        self._executor = ThreadPoolExecutor(
+            max_workers=1, thread_name_prefix="tts-worker"
+        )
+        self._engine_name = os.getenv("TTS_ENGINE", "stub")
         # In-memory file cache keyed by text hash [PA]
         self._file_cache: Dict[str, Path] = {}
         self._cache_order: List[str] = []
         try:
-            self._cache_max = int(os.getenv('TTS_CACHE_MAX_ITEMS', '100'))
+            self._cache_max = int(os.getenv("TTS_CACHE_MAX_ITEMS", "100"))
         except Exception:
             self._cache_max = 100
         # Track whether the primary (non-stub) engine has successfully synthesized at least once
@@ -110,8 +114,12 @@ class TTSManager:
             if engine_name == "kokoro-onnx":
                 # Best-effort prepare assets at startup if we're not already inside a running event loop
                 # Accept both legacy and new env var names for compatibility
-                model_path = os.getenv('TTS_MODEL_PATH') or os.getenv('KOKORO_MODEL_PATH')
-                voices_path = os.getenv('TTS_VOICES_PATH') or os.getenv('KOKORO_VOICES_PATH')
+                model_path = os.getenv("TTS_MODEL_PATH") or os.getenv(
+                    "KOKORO_MODEL_PATH"
+                )
+                voices_path = os.getenv("TTS_VOICES_PATH") or os.getenv(
+                    "KOKORO_VOICES_PATH"
+                )
                 model_exists = Path(model_path).exists() if model_path else False
                 voices_exist = Path(voices_path).exists() if voices_path else False
                 if not (model_path and voices_path and model_exists and voices_exist):
@@ -123,19 +131,28 @@ class TTSManager:
                         in_loop = False
                     if not in_loop:
                         try:
-                            mp, vp = asyncio.run(ensure_kokoro_assets(Path('tts')))
+                            mp, vp = asyncio.run(ensure_kokoro_assets(Path("tts")))
                             model_path, voices_path = str(mp), str(vp)
                             # Set both env variants to keep all components in sync
-                            os.environ['TTS_MODEL_PATH'] = model_path
-                            os.environ['TTS_VOICES_PATH'] = voices_path
-                            os.environ['KOKORO_MODEL_PATH'] = model_path
-                            os.environ['KOKORO_VOICES_PATH'] = voices_path
+                            os.environ["TTS_MODEL_PATH"] = model_path
+                            os.environ["TTS_VOICES_PATH"] = voices_path
+                            os.environ["KOKORO_MODEL_PATH"] = model_path
+                            os.environ["KOKORO_VOICES_PATH"] = voices_path
                             model_exists, voices_exist = True, True
-                            logger.info("Prepared Kokoro assets at startup", extra={"subsys": "tts", "event": "assets_ready"})
+                            logger.info(
+                                "Prepared Kokoro assets at startup",
+                                extra={"subsys": "tts", "event": "assets_ready"},
+                            )
                         except Exception:
-                            logger.warning("Startup asset prepare failed; will ensure on demand", extra={"subsys": "tts"}, exc_info=True)
+                            logger.warning(
+                                "Startup asset prepare failed; will ensure on demand",
+                                extra={"subsys": "tts"},
+                                exc_info=True,
+                            )
                 if model_path and voices_path and model_exists and voices_exist:
-                    self.engine = engine_class(model_path=model_path, voices_path=voices_path)
+                    self.engine = engine_class(
+                        model_path=model_path, voices_path=voices_path
+                    )
                 else:
                     # Defer to on-demand preparation in synthesize, use stub for now
                     self.engine = StubEngine()
@@ -148,7 +165,10 @@ class TTSManager:
             logger.info(f"Successfully loaded TTS engine: {engine_name}")
 
         except Exception as e:
-            logger.error(f"Failed to load primary TTS engine '{engine_name}': {e}. Falling back to stub.", exc_info=True)
+            logger.error(
+                f"Failed to load primary TTS engine '{engine_name}': {e}. Falling back to stub.",
+                exc_info=True,
+            )
             self.engine = StubEngine()
 
     def is_available(self) -> bool:
@@ -161,47 +181,79 @@ class TTSManager:
         """
         if self.engine is None:
             logger.error("TTS engine not loaded, cannot synthesize.")
-            return b''
+            return b""
 
         try:
             # On-demand asset preparation and engine upgrade if configured for kokoro-onnx
-            if self._engine_name == 'kokoro-onnx':
+            if self._engine_name == "kokoro-onnx":
                 # Accept both legacy and new env var names for compatibility
-                model_path = os.getenv('TTS_MODEL_PATH') or os.getenv('KOKORO_MODEL_PATH')
-                voices_path = os.getenv('TTS_VOICES_PATH') or os.getenv('KOKORO_VOICES_PATH')
+                model_path = os.getenv("TTS_MODEL_PATH") or os.getenv(
+                    "KOKORO_MODEL_PATH"
+                )
+                voices_path = os.getenv("TTS_VOICES_PATH") or os.getenv(
+                    "KOKORO_VOICES_PATH"
+                )
                 model_exists = Path(model_path).exists() if model_path else False
                 voices_exist = Path(voices_path).exists() if voices_path else False
                 if not (model_path and voices_path and model_exists and voices_exist):
                     try:
-                        mp, vp = await ensure_kokoro_assets(Path('tts'))
+                        mp, vp = await ensure_kokoro_assets(Path("tts"))
                         model_path, voices_path = str(mp), str(vp)
                         # Set both env variants to keep all components in sync
-                        os.environ['TTS_MODEL_PATH'] = model_path
-                        os.environ['TTS_VOICES_PATH'] = voices_path
-                        os.environ['KOKORO_MODEL_PATH'] = model_path
-                        os.environ['KOKORO_VOICES_PATH'] = voices_path
+                        os.environ["TTS_MODEL_PATH"] = model_path
+                        os.environ["TTS_VOICES_PATH"] = voices_path
+                        os.environ["KOKORO_MODEL_PATH"] = model_path
+                        os.environ["KOKORO_VOICES_PATH"] = voices_path
                         model_exists, voices_exist = True, True
-                        logger.info("Assets ensured on-demand", extra={"subsys": "tts", "event": "assets_ready"})
+                        logger.info(
+                            "Assets ensured on-demand",
+                            extra={"subsys": "tts", "event": "assets_ready"},
+                        )
                     except Exception:
-                        logger.warning("Failed to ensure Kokoro assets on-demand", extra={"subsys": "tts"}, exc_info=True)
+                        logger.warning(
+                            "Failed to ensure Kokoro assets on-demand",
+                            extra={"subsys": "tts"},
+                            exc_info=True,
+                        )
                 # If we have assets and current engine is stub, upgrade to Kokoro lazily
-                if model_path and voices_path and model_exists and voices_exist and isinstance(self.engine, StubEngine):
+                if (
+                    model_path
+                    and voices_path
+                    and model_exists
+                    and voices_exist
+                    and isinstance(self.engine, StubEngine)
+                ):
                     try:
-                        self.engine = KokoroONNXEngine(model_path=model_path, voices_path=voices_path)
-                        logger.info("Switched to KokoroONNXEngine after assets ready", extra={"subsys": "tts"})
+                        self.engine = KokoroONNXEngine(
+                            model_path=model_path, voices_path=voices_path
+                        )
+                        logger.info(
+                            "Switched to KokoroONNXEngine after assets ready",
+                            extra={"subsys": "tts"},
+                        )
                     except Exception:
-                        logger.warning("Kokoro engine init failed; continue with stub for this call", extra={"subsys": "tts"}, exc_info=True)
+                        logger.warning(
+                            "Kokoro engine init failed; continue with stub for this call",
+                            extra={"subsys": "tts"},
+                            exc_info=True,
+                        )
 
             loop = asyncio.get_running_loop()
             # If engine exposes an async synthesize, await it directly; otherwise run in executor.
             # Some engines may have a sync method that returns an awaitable; handle that as well. [REH]
-            is_async = asyncio.iscoroutinefunction(getattr(self.engine, "synthesize", None))
+            is_async = asyncio.iscoroutinefunction(
+                getattr(self.engine, "synthesize", None)
+            )
             if is_async:
-                audio_bytes = await asyncio.wait_for(self.engine.synthesize(text), timeout=timeout)
+                audio_bytes = await asyncio.wait_for(
+                    self.engine.synthesize(text), timeout=timeout
+                )
             else:
                 # Execute the sync call in a background thread to avoid blocking the event loop
                 result = await asyncio.wait_for(
-                    loop.run_in_executor(self._executor, lambda: self.engine.synthesize(text)),
+                    loop.run_in_executor(
+                        self._executor, lambda: self.engine.synthesize(text)
+                    ),
                     timeout=timeout,
                 )
                 # If the sync call returned an awaitable, await it to completion
@@ -212,7 +264,11 @@ class TTSManager:
 
             logger.info(
                 f"TTS synthesis successful (engine: {self.engine.__class__.__name__})",
-                extra={"subsys": "tts", "event": "synthesis_complete", "text_length": len(text)}
+                extra={
+                    "subsys": "tts",
+                    "event": "synthesis_complete",
+                    "text_length": len(text),
+                },
             )
             # Mark engine as warmed only if we're not using the stub. [CMV]
             if not isinstance(self.engine, StubEngine):
@@ -220,22 +276,35 @@ class TTSManager:
             return audio_bytes
 
         except concurrent.futures.TimeoutError:
-            logger.error(f"TTS synthesis timed out after {timeout}s.", extra={"subsys": "tts"})
+            logger.error(
+                f"TTS synthesis timed out after {timeout}s.", extra={"subsys": "tts"}
+            )
             # Fallback to stub on timeout as a resiliency measure
             try:
-                logger.warning("Falling back to StubEngine due to timeout", extra={"subsys": "tts"})
+                logger.warning(
+                    "Falling back to StubEngine due to timeout", extra={"subsys": "tts"}
+                )
                 stub = StubEngine()
-                audio_bytes = await asyncio.wait_for(stub.synthesize(text), timeout=timeout)
+                audio_bytes = await asyncio.wait_for(
+                    stub.synthesize(text), timeout=timeout
+                )
                 return audio_bytes
             except Exception:
                 raise SynthesisError(f"TTS synthesis timed out after {timeout} seconds")
         except Exception as e:
-            logger.error(f"TTS synthesis failed: {e}", extra={"subsys": "tts"}, exc_info=True)
+            logger.error(
+                f"TTS synthesis failed: {e}", extra={"subsys": "tts"}, exc_info=True
+            )
             # Fallback to stub if primary engine fails unexpectedly (e.g., missing kokoro API)
             try:
-                logger.warning("Primary engine failed, using StubEngine for this request", extra={"subsys": "tts"})
+                logger.warning(
+                    "Primary engine failed, using StubEngine for this request",
+                    extra={"subsys": "tts"},
+                )
                 stub = StubEngine()
-                audio_bytes = await asyncio.wait_for(stub.synthesize(text), timeout=timeout)
+                audio_bytes = await asyncio.wait_for(
+                    stub.synthesize(text), timeout=timeout
+                )
                 return audio_bytes
             except Exception:
                 raise SynthesisError(f"Synthesis failed: {e}") from e
@@ -250,11 +319,7 @@ class TTSManager:
         """Return simple cache stats for compatibility with tests.
         This implementation reports an empty cache structure.
         """
-        return {
-            "files": [],
-            "size_mb": 0.0,
-            "cache_dir": ""
-        }
+        return {"files": [], "size_mb": 0.0, "cache_dir": ""}
 
     def purge_old_cache(self) -> None:
         """Synchronous cache maintenance hook used by background task.
@@ -293,7 +358,9 @@ class TTSManager:
                         pass
         except Exception:
             # Never let maintenance crash callers
-            logger.debug("tts.cache.purge_ignored_error", extra={"subsys": "tts"}, exc_info=True)
+            logger.debug(
+                "tts.cache.purge_ignored_error", extra={"subsys": "tts"}, exc_info=True
+            )
 
     def _clean_text(self, text: str) -> str:
         """Remove simple markdown and URLs for cleaner TTS input.
@@ -304,12 +371,24 @@ class TTSManager:
         # Strip URLs
         text = re.sub(r"https?://\S+", "", text)
         # Remove basic markdown symbols and code backticks
-        text = text.replace("**", "").replace("__", "").replace("*", "").replace("_", "").replace("`", "")
+        text = (
+            text.replace("**", "")
+            .replace("__", "")
+            .replace("*", "")
+            .replace("_", "")
+            .replace("`", "")
+        )
         # Normalize whitespace
         text = re.sub(r"\s+", " ", text).strip()
         return text
 
-    async def generate_tts(self, text: str, out_path: str | Path | None = None, output_format: str = "ogg", timeout: Optional[float] = None) -> TTSResult:
+    async def generate_tts(
+        self,
+        text: str,
+        out_path: str | Path | None = None,
+        output_format: str = "ogg",
+        timeout: Optional[float] = None,
+    ) -> TTSResult:
         """Generate TTS to a file and return its Path.
         - If out_path is None, create a temporary .wav file.
         - If out_path is provided, its suffix takes precedence when inferring the
@@ -323,34 +402,42 @@ class TTSManager:
         # Select dynamic timeout when not explicitly provided. [CMV]
         if timeout is None:
             try:
-                base = float(os.getenv('TTS_TIMEOUT_S', '25.0'))
+                base = float(os.getenv("TTS_TIMEOUT_S", "25.0"))
             except Exception:
                 base = 25.0
             try:
-                cold = float(os.getenv('TTS_TIMEOUT_COLD_S', str(base)))
+                cold = float(os.getenv("TTS_TIMEOUT_COLD_S", str(base)))
             except Exception:
                 cold = base
             try:
-                warm = float(os.getenv('TTS_TIMEOUT_WARM_S', str(base)))
+                warm = float(os.getenv("TTS_TIMEOUT_WARM_S", str(base)))
             except Exception:
                 warm = base
             # Heuristic: cold until a successful non-stub synthesis, or if kokoro-onnx is configured but engine is stub. [PA]
-            is_cold = (not self._warmed_up) or (self._engine_name == 'kokoro-onnx' and isinstance(self.engine, StubEngine))
+            is_cold = (not self._warmed_up) or (
+                self._engine_name == "kokoro-onnx"
+                and isinstance(self.engine, StubEngine)
+            )
             selected_timeout = cold if is_cold else warm
             logger.debug(
                 "tts.timeout.selected",
-                extra={"subsys": "tts", "event": "timeout_selected", "phase": "cold" if is_cold else "warm", "timeout_s": selected_timeout},
+                extra={
+                    "subsys": "tts",
+                    "event": "timeout_selected",
+                    "phase": "cold" if is_cold else "warm",
+                    "timeout_s": selected_timeout,
+                },
             )
             audio_bytes = await self.synthesize(cleaned, timeout=selected_timeout)
         else:
             audio_bytes = await self.synthesize(cleaned, timeout=timeout)
-            
+
         # Always write to intermediate WAV first
         fd, wav_tmp_name = tempfile.mkstemp(prefix="tts_", suffix=".wav")
         os.close(fd)
         wav_path = Path(wav_tmp_name)
         wav_path.write_bytes(audio_bytes)
-        
+
         # Determine effective format. Suffix (when provided) takes precedence over argument.
         effective_format = output_format
         if out_path is not None:
@@ -359,7 +446,7 @@ class TTSManager:
                 effective_format = "wav"
             elif suffix == ".ogg":
                 effective_format = "ogg"
-        
+
         if effective_format == "wav":
             final_path = out_path or wav_path
             if out_path and out_path != wav_path:
@@ -367,16 +454,20 @@ class TTSManager:
                     Path(out_path).parent.mkdir(parents=True, exist_ok=True)
                 shutil.move(str(wav_path), str(final_path))
             return TTSResult(Path(final_path), "audio/wav")
-        
+
         # OGG/Opus (48k mono) using async ffmpeg subprocess
-        ogg_out = Path(out_path) if out_path else Path(tempfile.mktemp(prefix="tts_", suffix=".ogg"))
+        ogg_out = (
+            Path(out_path)
+            if out_path
+            else Path(tempfile.mktemp(prefix="tts_", suffix=".ogg"))
+        )
         if ogg_out.parent and not ogg_out.parent.exists():
             ogg_out.parent.mkdir(parents=True, exist_ok=True)
         try:
-            bitrate = os.getenv('OPUS_BITRATE', '64k')
-            vbr = os.getenv('OPUS_VBR', 'on')
+            bitrate = os.getenv("OPUS_BITRATE", "64k")
+            vbr = os.getenv("OPUS_VBR", "on")
             try:
-                compression_level = int(os.getenv('OPUS_COMPRESSION_LEVEL', '10'))
+                compression_level = int(os.getenv("OPUS_COMPRESSION_LEVEL", "10"))
             except Exception:
                 compression_level = 10
             ogg_path = await transcode_to_ogg_opus(
@@ -407,16 +498,16 @@ class TTSManager:
         """
         try:
             # Config and limits [IV][CMV]
-            include_transcript = bool(action.meta.get('include_transcript', True))
+            include_transcript = bool(action.meta.get("include_transcript", True))
             try:
-                max_chars = int(os.getenv('TTS_MAX_CHARS', '800'))
+                max_chars = int(os.getenv("TTS_MAX_CHARS", "800"))
             except Exception:
                 max_chars = 800
             # Timeout selection with overrides and cold/warm split. [CMV]
             timeout_s: float
-            if 'tts_timeout_s' in action.meta:
+            if "tts_timeout_s" in action.meta:
                 try:
-                    timeout_s = float(action.meta.get('tts_timeout_s'))
+                    timeout_s = float(action.meta.get("tts_timeout_s"))
                 except Exception:
                     timeout_s = 25.0
             else:
@@ -427,33 +518,42 @@ class TTSManager:
                         return float(v) if v is not None else default
                     except Exception:
                         return default
+
                 try:
-                    base = float(os.getenv('TTS_TIMEOUT_S', '25.0'))
+                    base = float(os.getenv("TTS_TIMEOUT_S", "25.0"))
                 except Exception:
                     base = 25.0
                 try:
-                    env_cold = float(os.getenv('TTS_TIMEOUT_COLD_S', str(base)))
+                    env_cold = float(os.getenv("TTS_TIMEOUT_COLD_S", str(base)))
                 except Exception:
                     env_cold = base
                 try:
-                    env_warm = float(os.getenv('TTS_TIMEOUT_WARM_S', str(base)))
+                    env_warm = float(os.getenv("TTS_TIMEOUT_WARM_S", str(base)))
                 except Exception:
                     env_warm = base
-                cold_override = _get_float('tts_timeout_cold_s', env_cold)
-                warm_override = _get_float('tts_timeout_warm_s', env_warm)
+                cold_override = _get_float("tts_timeout_cold_s", env_cold)
+                warm_override = _get_float("tts_timeout_warm_s", env_warm)
                 # Determine phase: explicit meta wins; else heuristic
-                if 'tts_cold' in action.meta:
-                    is_cold = bool(action.meta.get('tts_cold'))
+                if "tts_cold" in action.meta:
+                    is_cold = bool(action.meta.get("tts_cold"))
                 else:
-                    is_cold = (not self._warmed_up) or (self._engine_name == 'kokoro-onnx' and isinstance(self.engine, StubEngine))
+                    is_cold = (not self._warmed_up) or (
+                        self._engine_name == "kokoro-onnx"
+                        and isinstance(self.engine, StubEngine)
+                    )
                 timeout_s = cold_override if is_cold else warm_override
                 logger.debug(
                     "tts.timeout.selected",
-                    extra={"subsys": "tts", "event": "timeout_selected", "phase": "cold" if is_cold else "warm", "timeout_s": timeout_s},
+                    extra={
+                        "subsys": "tts",
+                        "event": "timeout_selected",
+                        "phase": "cold" if is_cold else "warm",
+                        "timeout_s": timeout_s,
+                    },
                 )
 
             # Select text
-            raw_text = action.meta.get('tts_text') or (action.content or '')
+            raw_text = action.meta.get("tts_text") or (action.content or "")
             cleaned_for_cache = self._clean_text(raw_text)
             if not cleaned_for_cache:
                 logger.warning("tts:empty_text_after_clean")
@@ -464,12 +564,16 @@ class TTSManager:
             truncated = len(cleaned_for_cache) > len(synth_text)
 
             # Cache lookup
-            key = hashlib.sha256(synth_text.encode('utf-8')).hexdigest()
+            key = hashlib.sha256(synth_text.encode("utf-8")).hexdigest()
             cached_path: Optional[Path] = self._file_cache.get(key)
             if cached_path and cached_path.exists():
                 logger.info(
                     "tts.cache.hit",
-                    extra={"subsys": "tts", "event": "cache_hit", "text_len": len(synth_text)},
+                    extra={
+                        "subsys": "tts",
+                        "event": "cache_hit",
+                        "text_len": len(synth_text),
+                    },
                 )
                 action.audio_path = str(cached_path)
             else:
@@ -501,26 +605,32 @@ class TTSManager:
                 if len(self._cache_order) > self._cache_max:
                     old_key = self._cache_order.pop(0)
                     try:
-                        old_path = self._file_cache.pop(old_key, None)
+                        self._file_cache.pop(old_key, None)
                         # Don't delete files on disk; keep ephemeral tmp files managed by OS
                     except Exception:
                         pass
                 logger.info(
                     "tts.cache.store",
-                    extra={"subsys": "tts", "event": "cache_store", "text_len": len(synth_text)},
+                    extra={
+                        "subsys": "tts",
+                        "event": "cache_store",
+                        "text_len": len(synth_text),
+                    },
                 )
 
             # Annotate meta
             if truncated:
-                action.meta['tts_truncated'] = True
+                action.meta["tts_truncated"] = True
 
             # Keep or drop transcript content
             if not include_transcript:
-                action.content = ''  # files-only message allowed
+                action.content = ""  # files-only message allowed
 
             return action
         except Exception as e:
-            logger.error(f"tts.process.failed | {e}", extra={"subsys": "tts"}, exc_info=True)
+            logger.error(
+                f"tts.process.failed | {e}", extra={"subsys": "tts"}, exc_info=True
+            )
             return action
 
     # --- Legacy/Test compatibility transcoder ---
@@ -540,12 +650,12 @@ class TTSManager:
         """
         # Resolve defaults from environment to mirror generate_tts behaviour
         if bitrate is None:
-            bitrate = os.getenv('OPUS_BITRATE', '64k')
+            bitrate = os.getenv("OPUS_BITRATE", "64k")
         if vbr is None:
-            vbr = os.getenv('OPUS_VBR', 'on')
+            vbr = os.getenv("OPUS_VBR", "on")
         if compression_level is None:
             try:
-                compression_level = int(os.getenv('OPUS_COMPRESSION_LEVEL', '10'))
+                compression_level = int(os.getenv("OPUS_COMPRESSION_LEVEL", "10"))
             except Exception:
                 compression_level = 10
 

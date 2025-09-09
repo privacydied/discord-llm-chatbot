@@ -3,7 +3,6 @@ Integration tests for Twitter/X syndication to VL flow.
 Tests the complete pipeline from syndication data to VL processing with full-res images.
 """
 import pytest
-from unittest.mock import AsyncMock, Mock, patch
 import asyncio
 from bot.syndication.handler import handle_twitter_syndication_to_vl
 

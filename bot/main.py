@@ -2,6 +2,7 @@
 Discord bot main entry point - BOOTSTRAP ONLY
 This module should contain NO business logic, only orchestration.
 """
+
 import asyncio
 import os
 import sys
@@ -16,7 +17,6 @@ from bot.core.bot import LLMBot
 from bot.core.cli import parse_arguments, show_version_info, validate_configuration_only
 from bot.core.startup import run_pre_flight_checks, create_bot_intents, get_prefix
 from bot.exceptions import ConfigurationError
-from bot.memory import load_all_profiles
 from bot.tasks import spawn_background_tasks
 from bot.util.logging import init_logging, get_logger, shutdown_logging_and_exit
 from bot.shutdown import setup_signal_handlers
@@ -33,7 +33,7 @@ async def main() -> NoReturn:
         shutdown_logging_and_exit(0)
 
     if args.debug:
-        os.environ['LOG_LEVEL'] = 'DEBUG'
+        os.environ["LOG_LEVEL"] = "DEBUG"
 
     logger = get_logger(__name__)
 
@@ -43,10 +43,10 @@ async def main() -> NoReturn:
 
     try:
         check_venv_activation()
-        
+
         # Set up dynamic configuration reload system
         setup_config_reload()
-        
+
         config = load_config()
         config.update(load_system_prompts())
         run_pre_flight_checks(config)
@@ -54,15 +54,14 @@ async def main() -> NoReturn:
         logger.critical(f"Unhandled exception during bot startup: {e}", exc_info=True)
         shutdown_logging_and_exit(1)
     except Exception as e:
-        logger.critical(f"A fatal error occurred during startup validation: {e}", exc_info=True)
+        logger.critical(
+            f"A fatal error occurred during startup validation: {e}", exc_info=True
+        )
         shutdown_logging_and_exit(1)
 
     intents = create_bot_intents()
     bot = LLMBot(
-        config=config,
-        command_prefix=get_prefix,
-        intents=intents,
-        help_command=None
+        config=config, command_prefix=get_prefix, intents=intents, help_command=None
     )
 
     try:
@@ -73,32 +72,36 @@ async def main() -> NoReturn:
     # Set up background tasks and file watcher before starting bot
     await spawn_background_tasks(bot)
     await start_file_watcher()
-    
+
     max_retries = 3
     base_delay = 5  # seconds
     for attempt in range(max_retries):
         try:
-            logger.info(f"Connecting to Discord... (Attempt {attempt + 1}/{max_retries})")
+            logger.info(
+                f"Connecting to Discord... (Attempt {attempt + 1}/{max_retries})"
+            )
             logger.info("🚀 Bot is ready and operational!")
-            
+
             # This call blocks until bot disconnects
             await bot.start(config["DISCORD_TOKEN"])
-            
+
             # If we reach here, bot disconnected gracefully
             logger.info("Bot disconnected gracefully")
             shutdown_logging_and_exit(0)
-            
+
         except (discord.HTTPException, aiohttp.ClientConnectorError):
             if attempt == max_retries - 1:
                 logger.error("Failed to log in. Please check your Discord token.")
                 shutdown_logging_and_exit(1)
-            delay = base_delay * (2 ** attempt)
+            delay = base_delay * (2**attempt)
             logger.warning(f"Connection failed, retrying in {delay}s...")
             await asyncio.sleep(delay)
         except Exception as e:
-            logger.critical(f"Unexpected error during bot execution: {e}", exc_info=True)
+            logger.critical(
+                f"Unexpected error during bot execution: {e}", exc_info=True
+            )
             shutdown_logging_and_exit(1)
-    
+
     # If all retries failed
     logger.critical("All connection attempts failed")
     shutdown_logging_and_exit(1)
@@ -106,7 +109,6 @@ async def main() -> NoReturn:
 
 def run_bot() -> None:
     """Entry point for running the bot with proper error handling."""
-    bot_instance = None
     try:
         # Store bot instance for proper cleanup
         asyncio.run(main_with_cleanup())
@@ -116,6 +118,7 @@ def run_bot() -> None:
     except Exception as e:
         print(f"FATAL ERROR: {e}", file=sys.stderr)
         import traceback
+
         traceback.print_exc()
         shutdown_logging_and_exit(1)
 

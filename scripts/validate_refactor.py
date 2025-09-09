@@ -4,13 +4,9 @@ Comprehensive validation script for the Discord bot refactor.
 This script validates all aspects of the refactored system according to the 
 ultra-exhaustive requirements.
 """
-import os
 import sys
-import importlib
-import asyncio
-import logging
 from pathlib import Path
-from typing import Dict, List, Any, Optional
+from typing import Dict, Any
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent))
@@ -203,7 +199,6 @@ def validate_import_safety() -> Dict[str, Any]:
             del sys.modules['bot.main']
         
         # Import the module
-        import bot.main
         
         # Check that no bot instance was created
         # This is a heuristic check - in real implementation, we'd need discord.py

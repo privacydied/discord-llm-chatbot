@@ -33,21 +33,21 @@ def convert_binary_to_json():
         try:
             # Try to load as a numpy file
             voices_data = np.load(binary_path, allow_pickle=True).item()
-            logging.info(f"✅ Successfully loaded binary voices file (numpy format)")
+            logging.info("✅ Successfully loaded binary voices file (numpy format)")
         except Exception as e:
             logging.error(f"❌ Failed to load binary voices file as numpy: {e}")
             
             # Try to load as raw binary and convert
             try:
                 with open(binary_path, 'rb') as f:
-                    binary_data = f.read()
+                    f.read()
                 
                 # Create an empty dictionary as a fallback
                 voices_data = {}
                 
                 # If we detect voices from the binary format, add them here
                 # This is a simplification - actual implementation may vary depending on format
-                logging.info(f"Creating basic voices structure as fallback")
+                logging.info("Creating basic voices structure as fallback")
                 for voice_id in ["am_michael", "af_nova", "am_onyx", "bf_emma", "bm_daniel"]:
                     # Create random embeddings as placeholders (512-dimensional)
                     voices_data[voice_id] = np.random.randn(512).tolist()

@@ -2,8 +2,6 @@
 Test suite for TTS functionality.
 """
 import pytest
-import asyncio
-from pathlib import Path
 from unittest.mock import Mock, patch
 
 from bot.tts import TTSManager

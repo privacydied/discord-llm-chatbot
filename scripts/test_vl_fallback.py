@@ -22,7 +22,6 @@ from typing import Callable, Dict, Tuple
 from rich.logging import RichHandler
 from rich.console import Console
 from rich.panel import Panel
-from rich.tree import Tree
 
 # Project imports
 from bot.enhanced_retry import get_retry_manager, ProviderConfig

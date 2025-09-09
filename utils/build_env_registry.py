@@ -133,7 +133,7 @@ class RegistryItem:
 def build_registry(inv: Dict[str, Any], logger: logging.Logger) -> Dict[str, List[RegistryItem]]:
     groups: Dict[str, List[RegistryItem]] = {}
     for key, meta in inv.items():
-        uses: List[Dict[str, Any]] = meta.get("uses", [])
+        meta.get("uses", [])
         defaults_raw = [d for d in meta.get("defaults", [])]
         coercions = [c for c in meta.get("coercions", []) if c]
         cdefault, conflicts = choose_default(defaults_raw)

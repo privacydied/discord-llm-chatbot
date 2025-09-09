@@ -2,10 +2,8 @@
 Smoke tests for environment variables and multimodal functionality.
 CHANGE: Added comprehensive tests to verify .env→code mapping and multimodal branch coverage.
 """
-import os
 import sys
 import pytest
-import tempfile
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -14,12 +12,11 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 # Import bot modules
 from bot.config import (
-    load_config, validate_required_env, audit_env_file, 
-    validate_prompt_files, check_venv_activation, ConfigurationError
+    load_config, validate_required_env, validate_prompt_files, check_venv_activation, ConfigurationError
 )
 from bot.ai_backend import generate_response, generate_vl_response
 from bot.events import has_image_attachments, get_image_urls
-from bot.openai_backend import generate_openai_response, generate_vl_response as openai_vl_response
+from bot.openai_backend import generate_vl_response as openai_vl_response
 
 
 class TestEnvironmentVariables:
@@ -66,7 +63,7 @@ class TestEnvironmentVariables:
             vl_prompt_content = f.read()
             assert len(vl_prompt_content.strip()) > 0, "VL prompt file is empty"
         
-        print(f"✅ Prompt files exist and are readable:")
+        print("✅ Prompt files exist and are readable:")
         print(f"  • Text prompt: {prompt_path}")
         print(f"  • VL prompt: {vl_prompt_path}")
     

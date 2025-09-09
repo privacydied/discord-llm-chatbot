@@ -14,9 +14,9 @@ from bot.kokoro_direct import KokoroDirect, SAMPLE_RATE
 def mock_kokoro_direct():
     """Fixture to create a KokoroDirect instance with a mocked ONNX session."""
     # Patch the methods that perform I/O during initialization
-    with patch('bot.kokoro_direct.en.G2P') as mock_g2p_class, \
-         patch('bot.kokoro_direct.KokoroDirect._init_session') as mock_init_session, \
-         patch('bot.kokoro_direct.KokoroDirect._load_available_voices') as mock_load_voices:
+    with patch('bot.kokoro_direct.en.G2P'), \
+         patch('bot.kokoro_direct.KokoroDirect._init_session'), \
+         patch('bot.kokoro_direct.KokoroDirect._load_available_voices'):
 
         kokoro = KokoroDirect(onnx_dir="dummy/onnx", voices_dir="dummy/voices")
 
