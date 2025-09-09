@@ -667,9 +667,7 @@ class Router:
                             "x.syndication.invalid_json", {"endpoint": endpoint}
                         )
                         continue
-                    # Found a candidate
-                    break
-                    # If no usable JSON with text/full_text, try oEmbed as last resort
+                    # If the JSON lacks usable text, try oEmbed fallbacks before moving on
                     if not (
                         isinstance(data, dict)
                         and (data.get("text") or data.get("full_text"))
@@ -682,60 +680,71 @@ class Router:
                             "hide_thread": "true",
                             "lang": "en",
                         }
-                        self._metric_inc("x.syndication.fetch", {"endpoint": "oembed"})
-                        resp = await http_client.get(
-                            oembed_url, headers=headers, params=oembed_params
-                        )
-                        if resp.status_code == 200:
-                            try:
-                                obj = resp.json()
-                            except Exception:
-                                obj = None
-                            if isinstance(obj, dict):
-                                html = obj.get("html")
-                                if html:
-                                    # Very light HTML → text conversion
-                                    txt = re.sub(r"<br\\s*/?>", "\n", html)
-                                    txt = re.sub(r"<[^>]+>", "", txt)
-                                    txt = unescape(txt).strip()
-                                    if txt:
-                                        data = {
-                                            "text": txt,
-                                            "user": {"name": obj.get("author_name")},
-                                        }
+                        try:
+                            self._metric_inc("x.syndication.fetch", {"endpoint": "oembed"})
+                            resp_oe = await http_client.get(
+                                oembed_url, headers=headers, params=oembed_params
+                            )
+                            if resp_oe.status_code == 200:
+                                try:
+                                    obj = resp_oe.json()
+                                except Exception:
+                                    obj = None
+                                if isinstance(obj, dict):
+                                    html = obj.get("html")
+                                    if html:
+                                        # Very light HTML → text conversion
+                                        txt = re.sub(r"<br\\s*/?>", "\n", html)
+                                        txt = re.sub(r"<[^>]+>", "", txt)
+                                        txt = unescape(txt).strip()
+                                        if txt:
+                                            data = {
+                                                "text": txt,
+                                                "user": {"name": obj.get("author_name")},
+                                            }
+                        except Exception:
+                            pass
                         # Try x.com oembed variant if still no data
                         if not (
                             isinstance(data, dict)
                             and (data.get("text") or data.get("full_text"))
                         ):
-                            oembed_params_x = dict(oembed_params)
-                            oembed_params_x["url"] = (
-                                f"https://x.com/i/status/{tweet_id}"
-                            )
-                            self._metric_inc(
-                                "x.syndication.fetch", {"endpoint": "oembed_x"}
-                            )
-                            resp2 = await http_client.get(
-                                oembed_url, headers=headers, params=oembed_params_x
-                            )
-                            if resp2.status_code == 200:
-                                try:
-                                    obj2 = resp2.json()
-                                except Exception:
-                                    obj2 = None
-                                if isinstance(obj2, dict):
-                                    html2 = obj2.get("html")
-                                    if html2:
-                                        txt2 = re.sub(r"<br\\s*/?>", "\n", html2)
-                                        txt2 = re.sub(r"<[^>]+>", "", txt2)
-                                        txt2 = unescape(txt2).strip()
-                                        if txt2:
-                                            data = {
-                                                "text": txt2,
-                                                "user": {
-                                                    "name": obj2.get("author_name")
-                                                },
-                                            }
+                            try:
+                                oembed_params_x = dict(oembed_params)
+                                oembed_params_x["url"] = (
+                                    f"https://x.com/i/status/{tweet_id}"
+                                )
+                                self._metric_inc(
+                                    "x.syndication.fetch", {"endpoint": "oembed_x"}
+                                )
+                                resp2 = await http_client.get(
+                                    oembed_url, headers=headers, params=oembed_params_x
+                                )
+                                if resp2.status_code == 200:
+                                    try:
+                                        obj2 = resp2.json()
+                                    except Exception:
+                                        obj2 = None
+                                    if isinstance(obj2, dict):
+                                        html2 = obj2.get("html")
+                                        if html2:
+                                            txt2 = re.sub(r"<br\\s*/?>", "\n", html2)
+                                            txt2 = re.sub(r"<[^>]+>", "", txt2)
+                                            txt2 = unescape(txt2).strip()
+                                            if txt2:
+                                                data = {
+                                                    "text": txt2,
+                                                    "user": {
+                                                        "name": obj2.get("author_name")
+                                                    },
+                                                }
+                            except Exception:
+                                pass
+                    # Break when we have usable data; otherwise continue to next variant
+                    if isinstance(data, dict) and (
+                        data.get("text") or data.get("full_text")
+                    ):
+                        break
             except Exception as e:
                 self.logger.info(
                     "Syndication fetch failed",
@@ -1063,6 +1072,11 @@ class Router:
                             data = {}
                     # Extract photo URLs from common shapes
                     candidates: List[str] = []
+                    # Prefer high-res for pbs assets
+                    try:
+                        from .syndication.url_utils import upgrade_pbs_to_orig  # lazy import to avoid cycles
+                    except Exception:
+                        upgrade_pbs_to_orig = lambda u: u  # type: ignore
                     # fx/vx often: {'tweet': {'media': {'photos':[{'url':...}]}}}
                     try:
                         tweet = (data.get("tweet") or data.get("status")) or {}
@@ -1071,15 +1085,15 @@ class Router:
                         for p in photos:
                             u = p.get("url") or p.get("src") or p.get("href")
                             if isinstance(u, str):
-                                candidates.append(u)
+                                candidates.append(upgrade_pbs_to_orig(u))
                     except Exception:
                         pass
                     # Some variants: top-level 'photos'
                     for p in (data.get("photos") or []):
                         if isinstance(p, dict) and p.get("url"):
-                            candidates.append(p.get("url"))
+                            candidates.append(upgrade_pbs_to_orig(p.get("url")))
                         elif isinstance(p, str):
-                            candidates.append(p)
+                            candidates.append(upgrade_pbs_to_orig(p))
                     # Filter + HEAD verify
                     uniq = []
                     for u in candidates:
@@ -1122,14 +1136,22 @@ class Router:
                     ]
                     for pat in meta_patterns:
                         for m in re.finditer(pat, text, re.IGNORECASE):
-                            candidates.append(m.group(1))
+                            try:
+                                from .syndication.url_utils import upgrade_pbs_to_orig  # lazy import
+                            except Exception:
+                                upgrade_pbs_to_orig = lambda u: u  # type: ignore
+                            candidates.append(upgrade_pbs_to_orig(m.group(1)))
                     # pbs links anywhere
                     for m in re.finditer(
                         r"https://pbs\.twimg\.com/[^\s'\"]+",
                         text,
                         re.IGNORECASE,
                     ):
-                        candidates.append(m.group(0))
+                        try:
+                            from .syndication.url_utils import upgrade_pbs_to_orig  # lazy import
+                        except Exception:
+                            upgrade_pbs_to_orig = lambda u: u  # type: ignore
+                        candidates.append(upgrade_pbs_to_orig(m.group(0)))
                     uniq = []
                     for u in candidates:
                         if not u or not u.startswith("http"):
@@ -1356,16 +1378,44 @@ class Router:
             title = meta.get("title") or ""
             dur = meta.get("original_duration_s") or meta.get("processed_duration_s")
             dur_s = f" • {int(dur)}s" if isinstance(dur, (int, float)) else ""
-            title_str = f" • '{title}'" if title else ""
-            header = f"🎙️ Transcription ({src}{title_str}{dur_s})"
-            if base_text and base_text.strip():
-                return f"{base_text}\n\n{header}:\n{transcription}"
-            # Fallback if no tweet text available
-            return f"Tweet → {url}\n\n{header}:\n{transcription}"
+            # Derive caption from base_text when available (formatted output contains the tweet body on the last line)
+            caption = ""
+            try:
+                bt = (base_text or "").strip()
+                if bt:
+                    # base_text typically resembles "<prefix> → <url>\n<body>"
+                    if "\n" in bt:
+                        caption = bt.split("\n", 1)[1].strip()
+                    else:
+                        caption = bt
+            except Exception:
+                caption = ""
+
+            if not caption:
+                caption = "—"
+
+            lines: List[str] = []
+            lines.append("tweet caption:")
+            lines.append(caption)
+            lines.append("")
+            hdr = "stt transcript:"
+            # Keep brief technical hint inline
+            details = []
+            if title:
+                details.append(f"'{title}'")
+            if isinstance(dur, (int, float)):
+                details.append(f"{int(dur)}s")
+            if src:
+                details.append(src)
+            if details:
+                hdr = f"{hdr} ({', '.join(details)})"
+            lines.append(hdr)
+            lines.append(transcription)
+            return "\n".join(lines)
         except Exception:
             # Last-resort fallback: just return transcription string
             transcription = (stt_res or {}).get("transcription") or ""
-            return f"Video/audio content from {url}: {transcription}"
+            return f"stt transcript:\n{transcription}"
 
     def _is_reply_to_bot(self, message: Message) -> bool:
         """Check if a message is a reply to the bot."""
@@ -2646,16 +2696,70 @@ class Router:
                             self.logger.info(
                                 f"route.twitter.syndication | images={len(imgs)} | {first_host or 'n/a'}"
                             )
-                            # Run VL on the first image and return the description as text result
+                            # Prefer unified VL pipeline with caption when available [CA][REH]
                             try:
-                                desc = await self._vl_describe_image_from_url(imgs[0])
-                                return (
-                                    desc
-                                    or "⚠️ Unable to analyze the images from this tweet."
+                                tweet_text = ""
+                                try:
+                                    syn = await self._get_tweet_via_syndication(status_id)
+                                    if isinstance(syn, dict):
+                                        tweet_text = (
+                                            (syn.get("text") or syn.get("full_text") or "").strip()
+                                        )
+                                except Exception:
+                                    tweet_text = ""
+
+                                # If syndication text empty, fall back to fx/vx API text [REH]
+                                if not tweet_text:
+                                    try:
+                                        http2 = await get_http_client()
+                                        cfg2 = RequestConfig(
+                                            connect_timeout=min(self._x_syn_timeout_s, 3.0),
+                                            read_timeout=min(self._x_syn_timeout_s, 3.0),
+                                            total_timeout=min(self._x_syn_timeout_s + 0.5, 3.5),
+                                            max_retries=0,
+                                        )
+                                        fxu = f"https://api.fxtwitter.com/status/{status_id}"
+                                        r2 = await http2.get(fxu, config=cfg2)
+                                        if r2.status_code == 200:
+                                            try:
+                                                fxj = r2.json()
+                                            except Exception:
+                                                fxj = {}
+                                            tnode = (fxj.get("tweet") or fxj.get("status") or {})
+                                            tweet_text = (
+                                                tnode.get("text")
+                                                or tnode.get("content")
+                                                or tnode.get("full_text")
+                                                or ""
+                                            ).strip()
+                                    except Exception:
+                                        pass
+
+                                syn_like = {
+                                    "text": tweet_text,
+                                    "photos": [{"url": u} for u in imgs],
+                                }
+                                from .syndication.handler import (
+                                    handle_twitter_syndication_to_vl,
+                                )
+                                return await handle_twitter_syndication_to_vl(
+                                    syn_like,
+                                    url,
+                                    self._unified_vl_to_text_pipeline,
+                                    self.bot.system_prompts.get("vl_prompt"),
+                                    reply_style="ack+thoughts",
                                 )
                             except Exception:
-                                # Fall through to general handler on VL error
-                                pass
+                                # Fallback: single-image VL without caption
+                                try:
+                                    desc = await self._vl_describe_image_from_url(imgs[0])
+                                    return (
+                                        desc
+                                        or "⚠️ Unable to analyze the images from this tweet."
+                                    )
+                                except Exception:
+                                    # Fall through to general handler on VL error
+                                    pass
                     except Exception as e:
                         self.logger.debug(f"x.syndication.probe.failed | {e}")
                 self.logger.info(
@@ -2949,8 +3053,44 @@ class Router:
                                     f"route.twitter.syndication | images={len(imgs)} | {first_host or 'n/a'}"
                                 )
                                 # Convert to syndication-like shape and route to VL
+                                tweet_text = ""
+                                try:
+                                    if status_id:
+                                        syn = await self._get_tweet_via_syndication(status_id)
+                                        if isinstance(syn, dict):
+                                            tweet_text = (
+                                                (syn.get("text") or syn.get("full_text") or "").strip()
+                                            )
+                                except Exception:
+                                    tweet_text = ""
+                                # Fallback to fx/vx API for caption if still empty [REH]
+                                if not tweet_text:
+                                    try:
+                                        http2 = await get_http_client()
+                                        cfg2 = RequestConfig(
+                                            connect_timeout=min(self._x_syn_timeout_s, 3.0),
+                                            read_timeout=min(self._x_syn_timeout_s, 3.0),
+                                            total_timeout=min(self._x_syn_timeout_s + 0.5, 3.5),
+                                            max_retries=0,
+                                        )
+                                        fxu = f"https://api.fxtwitter.com/status/{status_id}"
+                                        r2 = await http2.get(fxu, config=cfg2)
+                                        if r2.status_code == 200:
+                                            try:
+                                                fxj = r2.json()
+                                            except Exception:
+                                                fxj = {}
+                                            tnode = (fxj.get("tweet") or fxj.get("status") or {})
+                                            tweet_text = (
+                                                tnode.get("text")
+                                                or tnode.get("content")
+                                                or tnode.get("full_text")
+                                                or ""
+                                            ).strip()
+                                    except Exception:
+                                        pass
                                 syn_like = {
-                                    "text": "",
+                                    "text": tweet_text,
                                     "photos": [{"url": u} for u in imgs],
                                 }
                                 from .syndication.handler import (
@@ -4377,6 +4517,7 @@ class Router:
 
             # Step 1: Single VL call with all images
             vl_results = []
+            vl_raw_contents = []  # keep raw sanitized content for structured outputs
             for i, image_path in enumerate(limited_paths):
                 try:
                     from .see import see_infer
@@ -4389,13 +4530,16 @@ class Router:
                         # Sanitize VL output immediately
                         sanitized_content = sanitize_model_output(raw_content)
                         vl_results.append(f"Image {i + 1}: {sanitized_content}")
+                        vl_raw_contents.append(sanitized_content)
                     else:
                         vl_results.append(f"Image {i + 1}: [No analysis available]")
+                        vl_raw_contents.append("[No analysis available]")
                 except Exception as e:
                     self.logger.error(f"VL processing failed for image {i + 1}: {e}")
                     vl_results.append(
                         f"Image {i + 1}: [Analysis failed: {str(e)[:100]}]"
                     )
+                    vl_raw_contents.append("[Analysis failed]")
 
             if not vl_results:
                 return BotAction(
@@ -4410,7 +4554,25 @@ class Router:
                     f"VL_DEBUG_FLOW | sanitized VL result: {len(combined_vl_result)} chars"
                 )
 
-            # Step 2: Prepare input for Text Flow
+            # Structured output for Tweet analysis: include caption + per-image blocks [CA]
+            if intent.lower().startswith("tweet"):
+                total = len(vl_raw_contents)
+                cap = (user_caption or "").strip()
+                if not cap:
+                    cap = "—"
+                lines: List[str] = []
+                lines.append("tweet caption:")
+                lines.append(cap)
+                lines.append("")
+                lines.append("vl prompt output:")
+                for idx, content in enumerate(vl_raw_contents, start=1):
+                    lines.append(f"[image {idx}/{total}]")
+                    lines.append(content)
+                    if idx != total:
+                        lines.append("")
+                return BotAction(content="\n".join(lines))
+
+            # Step 2 (default): Prepare input for Text Flow
             if user_caption.strip():
                 # User provided caption - include it as context
                 text_input = (

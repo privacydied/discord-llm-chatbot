@@ -78,7 +78,8 @@ Minimal permissions: Send Messages, Embed Links, Attach Files, Read Message Hist
 ### 2) Clone & create env
 
 ```bash
-git clone <your-repo-url> && cd discord-llm-chatbot
+git clone https://github.com/privacydied/discord-llm-chatbot.git 
+cd discord-llm-chatbot
 cp .env.example .env
 ```
 
