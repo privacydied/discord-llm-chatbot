@@ -61,6 +61,27 @@ flowchart LR
 
 ## Getting Started
 
+### Quickstart
+
+#### UV
+```bash
+uv venv --python 3.11
+source .venv/bin/activate
+uv pip sync requirements.txt
+cp .env.example .env
+uv run python -m bot.main
+# or: uv run python run.py
+```
+
+#### pip
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt -e .
+cp .env.example .env
+python -m bot.main
+```
+
 ### Prerequisites
 - Python 3.11+
 - System tools (feature‑based):
@@ -71,26 +92,6 @@ flowchart LR
   - A bot application with Bot + `applications.commands` scopes
   - Message Content Intent enabled
 
-### Installation
-
-#### UV (preferred)
-```bash
-uv venv --python 3.11 # Create and activate an isolated venv
-source .venv/bin/activate
-uv pip sync requirements.txt # Install dependencies
-uv run playwright install chromium # Ensure Playwright browser (Chromium) for screenshot/vision flows
-uv run python -m bot.main # Run the bot
-
-```
-
-#### pip + venv
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-pip install -e .
-python -m bot.main
-```
 
 ### Configuration
 Copy `.env.example` to `.env` and fill in secrets and paths.
@@ -121,31 +122,7 @@ At minimum: `DISCORD_TOKEN`, `PROMPT_FILE`, `VL_PROMPT_FILE`, and `OPENAI_API_KE
 
 More environment variables (RAG, budgets, retries, streaming, etc.) are documented in `.env.example` and `bot/config.py`.
 
-## Quickstart
 
-### UV
-```bash
-# 1) venv + deps
-uv venv --python 3.11
-source .venv/bin/activate
-uv pip sync requirements.txt
-
-# 2) configure env
-cp .env.example .env
-
-# 3) run
-uv run python -m bot.main
-# or: python run.py
-```
-
-### pip
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt -e .
-cp .env.example .env
-python -m bot.main
-```
 
 ### Invite the bot
 - Scopes: `bot`, `applications.commands`
