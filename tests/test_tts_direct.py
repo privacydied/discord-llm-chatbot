@@ -8,7 +8,7 @@ import soundfile as sf
 from dotenv import load_dotenv
 
 # Import the fixed KokoroDirect implementation
-from bot.kokoro_direct_fixed import KokoroDirect
+from bot.tts.kokoro_direct_fixed import KokoroDirect
 
 def main():
     # Load environment variables

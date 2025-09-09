@@ -16,7 +16,7 @@ from typing import Dict, Any, Optional, List, Tuple, NamedTuple
 import base64
 from enum import Enum
 
-from bot.util.logging import get_logger
+from bot.utils.logging import get_logger
 from .types import (
     VisionRequest,
     VisionResponse,

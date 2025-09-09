@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any, Dict, Optional
 import discord
 
 from bot.brain import brain_infer
-from bot.util.logging import get_logger
+from bot.utils.logging import get_logger
 
 if TYPE_CHECKING:  # pragma: no cover - import for type checking only
     from bot.core.bot import LLMBot

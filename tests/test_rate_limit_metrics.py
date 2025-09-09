@@ -8,7 +8,7 @@ from bot.exceptions import APIError
 from bot.x_api_client import XApiClient
 from bot.metrics.prometheus_metrics import PrometheusMetrics
 from bot.router import Router
-from bot.util.logging import init_logging
+from bot.utils.logging import init_logging
 import httpx
 
 

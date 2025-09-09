@@ -12,7 +12,7 @@ from __future__ import annotations
 from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
 from typing import Union
 
-from bot.util.logging import get_logger
+from bot.utils.logging import get_logger
 
 logger = get_logger(__name__)
 

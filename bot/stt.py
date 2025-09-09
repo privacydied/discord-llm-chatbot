@@ -14,7 +14,7 @@ import threading
 import torch
 from faster_whisper import WhisperModel
 
-from .util.logging import get_logger
+from .utils.logging import get_logger
 
 logger = get_logger(__name__)
 

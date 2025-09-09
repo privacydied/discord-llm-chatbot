@@ -32,7 +32,7 @@ TTS_LANGUAGE=en-US
 TTS_BACKEND=kokoro-onnx
 
 # Directory for TTS cache files
-TTS_CACHE_DIR=tts_cache
+TTS_CACHE_DIR=cache/tts
 
 # Paths for TTS model and voice assets
 TTS_ASSET_DIR=tts/assets
@@ -73,14 +73,6 @@ uv pip install g2p_en
 ```
 
 Without a phonetic tokenizer, the TTS quality may be reduced as it will fall back to grapheme tokenization.
-
-## Note on Gruut Fork
-
-This project uses a fork of the Gruut package and its English language plugin to support NumPy 2.0. The fork is available at:
-- gruut: `https://github.com/<org>/gruut@1.4.0-np2`
-- gruut-lang-en: `https://github.com/<org>/gruut-lang-en@2.0.0-np2`
-
-We have submitted a pull request to the upstream repository. Once merged, we will revert to the official packages.
 
 ## Automatic Asset Management
 

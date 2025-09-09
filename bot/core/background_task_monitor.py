@@ -15,7 +15,7 @@ from enum import Enum
 from typing import Any, Awaitable, Callable, Dict, Optional
 from concurrent.futures import CancelledError
 
-from bot.util.logging import get_logger
+from bot.utils.logging import get_logger
 from bot.metrics import (
     metrics,
     METRIC_BACKGROUND_HEARTBEAT,

@@ -15,7 +15,7 @@ from bs4 import BeautifulSoup  # beautifulsoup4 is in requirements
 import importlib
 import logging
 
-from bot.util.logging import get_logger
+from bot.utils.logging import get_logger
 from bot.config import load_config
 from ..types import (
     SearchQueryParams,

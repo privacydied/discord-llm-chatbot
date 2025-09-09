@@ -6,7 +6,7 @@ Combines per-item results into a single coherent response for the text flow.
 from dataclasses import dataclass
 from typing import List, Optional
 from .modality import InputModality, InputItem
-from .util.logging import get_logger
+from .utils.logging import get_logger
 
 logger = get_logger(__name__)
 

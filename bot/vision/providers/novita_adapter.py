@@ -11,7 +11,7 @@ import time
 from pathlib import Path
 from typing import Dict, Any, Optional
 
-from bot.util.logging import get_logger
+from bot.utils.logging import get_logger
 from ..types import (
     VisionRequest,
     VisionResponse,

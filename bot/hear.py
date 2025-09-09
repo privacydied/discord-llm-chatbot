@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Dict, Any
 from .stt_orchestrator import stt_orchestrator
 from .exceptions import InferenceError
-from .util.logging import get_logger
+from .utils.logging import get_logger
 
 logger = get_logger(__name__)
 

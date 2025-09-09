@@ -7,7 +7,7 @@ import asyncio
 import random
 from typing import Any, Callable, TypeVar
 from .exceptions import APIError, InferenceError
-from .util.logging import get_logger
+from .utils.logging import get_logger
 
 logger = get_logger(__name__)
 

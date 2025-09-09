@@ -35,7 +35,7 @@ async def main():
         "TTS_VOICE": os.getenv("TTS_VOICE", "am_michael"),
         "TTS_VOICE_FILE": os.getenv("TTS_VOICE_FILE", "tts/voices.json"),
         "TTS_MODEL_FILE": os.getenv("TTS_MODEL_FILE", "tts/kokoro-v1.0.onnx"),
-        "TTS_CACHE_DIR": os.getenv("TTS_CACHE_DIR", "tts_cache"),
+        "TTS_CACHE_DIR": os.getenv("TTS_CACHE_DIR", "cache/tts"),
     }
     
     print(f"Config: {config}")

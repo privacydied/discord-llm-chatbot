@@ -7,16 +7,16 @@ from unittest.mock import MagicMock, patch
 
 from onnxruntime import InferenceSession
 
-from bot.kokoro_direct import KokoroDirect, SAMPLE_RATE
+from bot.tts.kokoro_direct import KokoroDirect, SAMPLE_RATE
 
 
 @pytest.fixture
 def mock_kokoro_direct():
     """Fixture to create a KokoroDirect instance with a mocked ONNX session."""
     # Patch the methods that perform I/O during initialization
-    with patch('bot.kokoro_direct.en.G2P'), \
-         patch('bot.kokoro_direct.KokoroDirect._init_session'), \
-         patch('bot.kokoro_direct.KokoroDirect._load_available_voices'):
+    with patch('bot.tts.kokoro_direct.en.G2P'), \
+         patch('bot.tts.kokoro_direct.KokoroDirect._init_session'), \
+         patch('bot.tts.kokoro_direct.KokoroDirect._load_available_voices'):
 
         kokoro = KokoroDirect(onnx_dir="dummy/onnx", voices_dir="dummy/voices")
 

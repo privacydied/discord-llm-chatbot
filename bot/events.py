@@ -8,7 +8,7 @@ from pathlib import Path
 import discord
 from discord.ext import commands
 
-from bot.util.logging import get_logger
+from bot.utils.logging import get_logger
 from bot.router import get_router
 from bot.config import load_config
 

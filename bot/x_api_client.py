@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 
-from .util.logging import get_logger
+from .utils.logging import get_logger
 from .exceptions import APIError
 from .retry_utils import with_retry, API_RETRY_CONFIG
 

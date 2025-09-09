@@ -1,9 +1,9 @@
 version: '3.8'
 services:
   tts-service:
-    build: ./tts_service
+    build: ./tts/service
     working_dir: /app
     ports:
       - "5000:5000"
     volumes:
-      - ./tts_cache:/app/tts_cache
+      - ./cache/tts:/app/cache/tts

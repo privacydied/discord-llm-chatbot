@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Any
 import aiohttp
 
-from bot.util.logging import get_logger
+from bot.utils.logging import get_logger
 from bot.config import load_config
 from bot.retry_utils import with_retry, API_RETRY_CONFIG
 from bot.exceptions import APIError

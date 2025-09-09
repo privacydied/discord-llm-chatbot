@@ -20,7 +20,7 @@ sys.path.insert(0, str(project_root))
 from bot.rag.chroma_backend import ChromaRAGBackend
 from bot.rag.vector_schema import HybridSearchConfig
 from bot.rag.embedding_interface import create_embedding_model
-from bot.util.logging import get_logger
+from bot.utils.logging import get_logger
 
 logger = get_logger(__name__)
 

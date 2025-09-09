@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Optional, Any
 
-from bot.util.logging import get_logger
+from bot.utils.logging import get_logger
 from bot.config import load_config
 from bot.vision.money import Money
 from bot.vision.pricing_loader import get_pricing_table

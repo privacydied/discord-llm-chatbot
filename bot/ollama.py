@@ -11,7 +11,7 @@ import aiohttp
 from .config import load_config
 from .exceptions import APIError as OllamaAPIError
 from .memory import get_profile, get_server_profile
-from .util.logging import get_logger
+from .utils.logging import get_logger
 
 # Load configuration
 config = load_config()

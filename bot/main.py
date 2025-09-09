@@ -18,7 +18,7 @@ from bot.core.cli import parse_arguments, show_version_info, validate_configurat
 from bot.core.startup import run_pre_flight_checks, create_bot_intents, get_prefix
 from bot.exceptions import ConfigurationError
 from bot.tasks import spawn_background_tasks
-from bot.util.logging import init_logging, get_logger, shutdown_logging_and_exit
+from bot.utils.logging import init_logging, get_logger, shutdown_logging_and_exit
 from bot.shutdown import setup_signal_handlers
 
 

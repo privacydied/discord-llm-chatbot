@@ -5,7 +5,7 @@ Context management commands for the enhanced contextual conversation manager.
 import discord
 from discord.ext import commands
 
-from bot.util.logging import get_logger
+from bot.utils.logging import get_logger
 from bot.contextual_brain import create_context_command_handler
 
 logger = get_logger(__name__)

@@ -2347,7 +2347,7 @@
       {
         "key": "LOG_LEVEL",
         "source": "getenv",
-        "file": "bot/util/logging.py",
+        "file": "bot/utils/logging.py",
         "line": 163,
         "default": "'INFO'",
         "coerced_as": null,
@@ -2374,7 +2374,7 @@
       {
         "key": "LOG_LEVEL",
         "source": "getenv",
-        "file": "build/lib/bot/util/logging.py",
+        "file": "build/lib/bot/utils/logging.py",
         "line": 90,
         "default": "'INFO'",
         "coerced_as": null,
@@ -3831,7 +3831,7 @@
       {
         "key": "TTS_LANGUAGE",
         "source": "environ_get",
-        "file": "bot/kokoro_direct_fixed.py",
+        "file": "bot/tts/kokoro_direct_fixed.py",
         "line": 128,
         "default": "'en'",
         "coerced_as": null,
@@ -3885,7 +3885,7 @@
       {
         "key": "TTS_LANGUAGE",
         "source": "environ_get",
-        "file": "build/lib/bot/kokoro_direct_fixed.py",
+        "file": "build/lib/bot/tts/kokoro_direct_fixed.py",
         "line": 128,
         "default": "'en'",
         "coerced_as": null,
@@ -3923,7 +3923,7 @@
       {
         "key": "XDG_CACHE_HOME",
         "source": "environ_get",
-        "file": "bot/kokoro_direct_fixed.py",
+        "file": "bot/tts/kokoro_direct_fixed.py",
         "line": 32,
         "default": "Path('tts/cache')",
         "coerced_as": null,
@@ -3932,7 +3932,7 @@
       {
         "key": "XDG_CACHE_HOME",
         "source": "environ_get",
-        "file": "build/lib/bot/kokoro_direct_fixed.py",
+        "file": "build/lib/bot/tts/kokoro_direct_fixed.py",
         "line": 32,
         "default": "Path('tts/cache')",
         "coerced_as": null,
@@ -3951,7 +3951,7 @@
       {
         "key": "TTS_PHONEMISER",
         "source": "environ_get",
-        "file": "bot/kokoro_direct_fixed.py",
+        "file": "bot/tts/kokoro_direct_fixed.py",
         "line": 151,
         "default": "''",
         "coerced_as": null,
@@ -3987,7 +3987,7 @@
       {
         "key": "TTS_PHONEMISER",
         "source": "environ_get",
-        "file": "build/lib/bot/kokoro_direct_fixed.py",
+        "file": "build/lib/bot/tts/kokoro_direct_fixed.py",
         "line": 151,
         "default": "''",
         "coerced_as": null,
@@ -5674,7 +5674,7 @@
       {
         "key": "LOG_JSONL_PATH",
         "source": "getenv",
-        "file": "bot/util/logging.py",
+        "file": "bot/utils/logging.py",
         "line": 164,
         "default": "'./logs/bot.jsonl'",
         "coerced_as": null,
@@ -5683,7 +5683,7 @@
       {
         "key": "LOG_JSONL_PATH",
         "source": "getenv",
-        "file": "build/lib/bot/util/logging.py",
+        "file": "build/lib/bot/utils/logging.py",
         "line": 91,
         "default": "'./logs/bot.jsonl'",
         "coerced_as": null,
@@ -7592,14 +7592,14 @@
         "source": "getenv",
         "file": "tests/test_tts_scripts.py",
         "line": 38,
-        "default": "'tts_cache'",
+        "default": "'cache/tts'",
         "coerced_as": null,
         "notes": null
       }
     ],
     "count": 1,
     "defaults": [
-      "'tts_cache'"
+      "'cache/tts'"
     ],
     "coercions": [],
     "sensitivity": "normal"

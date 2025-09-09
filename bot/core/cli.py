@@ -6,7 +6,7 @@ import argparse
 import sys
 
 from bot.config import load_config, validate_required_env, ConfigurationError
-from bot.util.logging import get_logger
+from bot.utils.logging import get_logger
 
 
 def parse_arguments():

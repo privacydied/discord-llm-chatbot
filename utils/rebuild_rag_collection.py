@@ -18,7 +18,7 @@ sys.path.insert(0, str(project_root))
 
 from bot.rag.hybrid_search import get_hybrid_search
 from bot.rag.document_parsers import document_parser_factory
-from bot.util.logging import get_logger
+from bot.utils.logging import get_logger
 
 logger = get_logger(__name__)
 

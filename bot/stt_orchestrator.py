@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Dict, Any, List, Tuple
 
-from .util.logging import get_logger
+from .utils.logging import get_logger
 from .config import load_config
 from .stt import stt_manager  # Leverage existing local STT
 

@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 from dotenv import load_dotenv
 from .exceptions import ConfigurationError
-from .util.logging import get_logger
+from .utils.logging import get_logger
 import time
 from typing import Dict, Any, Optional
 

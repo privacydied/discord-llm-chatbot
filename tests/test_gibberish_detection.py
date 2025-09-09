@@ -8,7 +8,7 @@ from pathlib import Path
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from bot.tts_validation import (
+from bot.tts.validation import (
     detect_gibberish_audio,
     validate_voice_vector,
     check_sample_rate_consistency

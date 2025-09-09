@@ -10,8 +10,8 @@ import logging
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # Import the bot module directly
-import bot.tts_validation
-from bot.tts_validation import (
+import bot.tts.validation
+from bot.tts.validation import (
     TokenizerType,
     detect_available_tokenizers,
     select_tokenizer_for_language,
@@ -19,7 +19,7 @@ from bot.tts_validation import (
     get_tokenizer_warning_message,
     AVAILABLE_TOKENIZERS
 )
-from bot.tts_errors import MissingTokeniserError
+from bot.tts.errors import MissingTokeniserError
 
 
 class TestTokenizerDiscovery(unittest.TestCase):
@@ -50,7 +50,7 @@ class TestTokenizerDiscovery(unittest.TestCase):
         AVAILABLE_TOKENIZERS.clear()
         
         # Directly mock the functions that detect_available_tokenizers calls
-        with patch('bot.tts_validation.dump_environment_diagnostics') as mock_dump, \
+        with patch('bot.tts.validation.dump_environment_diagnostics') as mock_dump, \
              patch('subprocess.run') as mock_run, \
              patch('importlib.util.find_spec', return_value=None):
             
@@ -80,8 +80,8 @@ class TestTokenizerDiscovery(unittest.TestCase):
             self.assertFalse(available[TokenizerType.MISAKI.value])
             
             # Force update the global AVAILABLE_TOKENIZERS set (mutate in place)
-            bot.tts_validation.AVAILABLE_TOKENIZERS.clear()
-            bot.tts_validation.AVAILABLE_TOKENIZERS.update({TokenizerType.GRAPHEME.value})
+            bot.tts.validation.AVAILABLE_TOKENIZERS.clear()
+            bot.tts.validation.AVAILABLE_TOKENIZERS.update({TokenizerType.GRAPHEME.value})
             
             # Verify that only grapheme is in the global set
             self.assertEqual(AVAILABLE_TOKENIZERS, {TokenizerType.GRAPHEME.value})
@@ -92,7 +92,7 @@ class TestTokenizerDiscovery(unittest.TestCase):
         AVAILABLE_TOKENIZERS.clear()
         
         # Directly mock the functions that detect_available_tokenizers calls
-        with patch('bot.tts_validation.dump_environment_diagnostics') as mock_dump, \
+        with patch('bot.tts.validation.dump_environment_diagnostics') as mock_dump, \
              patch('subprocess.run') as mock_run, \
              patch('importlib.util.find_spec', return_value=None):
             
@@ -125,8 +125,8 @@ class TestTokenizerDiscovery(unittest.TestCase):
             self.assertFalse(available[TokenizerType.ESPEAK_NG.value])
             
             # Force update the global AVAILABLE_TOKENIZERS set (mutate in place)
-            bot.tts_validation.AVAILABLE_TOKENIZERS.clear()
-            bot.tts_validation.AVAILABLE_TOKENIZERS.update({TokenizerType.ESPEAK.value, TokenizerType.GRAPHEME.value})
+            bot.tts.validation.AVAILABLE_TOKENIZERS.clear()
+            bot.tts.validation.AVAILABLE_TOKENIZERS.update({TokenizerType.ESPEAK.value, TokenizerType.GRAPHEME.value})
             
             # Verify that espeak and grapheme are in the global set
             self.assertEqual(AVAILABLE_TOKENIZERS, {TokenizerType.ESPEAK.value, TokenizerType.GRAPHEME.value})
@@ -137,7 +137,7 @@ class TestTokenizerDiscovery(unittest.TestCase):
         AVAILABLE_TOKENIZERS.clear()
         
         # Directly mock the functions that detect_available_tokenizers calls
-        with patch('bot.tts_validation.dump_environment_diagnostics') as mock_dump, \
+        with patch('bot.tts.validation.dump_environment_diagnostics') as mock_dump, \
              patch('subprocess.run') as mock_run, \
              patch('importlib.util.find_spec') as mock_find_spec, \
              patch.dict('sys.modules', {'phonemizer': MagicMock()}):
@@ -172,8 +172,8 @@ class TestTokenizerDiscovery(unittest.TestCase):
             self.assertFalse(available[TokenizerType.ESPEAK.value])
             
             # Force update the global AVAILABLE_TOKENIZERS set (mutate in place)
-            bot.tts_validation.AVAILABLE_TOKENIZERS.clear()
-            bot.tts_validation.AVAILABLE_TOKENIZERS.update({TokenizerType.PHONEMIZER.value, TokenizerType.GRAPHEME.value})
+            bot.tts.validation.AVAILABLE_TOKENIZERS.clear()
+            bot.tts.validation.AVAILABLE_TOKENIZERS.update({TokenizerType.PHONEMIZER.value, TokenizerType.GRAPHEME.value})
             
             # Verify that phonemizer and grapheme are in the global set
             self.assertEqual(AVAILABLE_TOKENIZERS, {TokenizerType.PHONEMIZER.value, TokenizerType.GRAPHEME.value})

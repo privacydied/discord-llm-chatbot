@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import sys
 
-from bot.util.logging import get_logger
+from bot.utils.logging import get_logger
 
 logger = get_logger("utils.vision_smoke")
 

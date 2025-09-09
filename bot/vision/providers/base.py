@@ -9,7 +9,7 @@ from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional
 from pathlib import Path
 
-from bot.util.logging import get_logger
+from bot.utils.logging import get_logger
 from ..types import (
     VisionRequest,
     VisionResponse,

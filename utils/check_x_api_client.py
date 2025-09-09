@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from bot.x_api_client import XApiClient
-from bot.util.logging import get_logger
+from bot.utils.logging import get_logger
 
 logger = get_logger(__name__)
 

@@ -20,7 +20,7 @@ import tempfile
 from bot.vision.money import Money
 from bot.vision.types import VisionRequest, VisionProvider
 from bot.vision.pricing_loader import get_pricing_table
-from bot.util.logging import get_logger
+from bot.utils.logging import get_logger
 
 logger = get_logger(__name__)
 

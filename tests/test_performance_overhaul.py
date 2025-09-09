@@ -637,7 +637,7 @@ class TestRegressionPrevention:
     
     def test_logging_format_preservation(self):
         """Test that logging format is preserved [CA]."""
-        from bot.util.logging import get_logger
+        from bot.utils.logging import get_logger
         
         logger = get_logger("test_regression")
         

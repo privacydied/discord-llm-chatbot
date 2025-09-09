@@ -21,7 +21,7 @@ from typing import Dict, Optional, Any
 from dataclasses import dataclass, asdict
 from enum import Enum
 
-from bot.util.logging import get_logger
+from bot.utils.logging import get_logger
 from bot.config import load_config
 from .types import VisionRequest
 

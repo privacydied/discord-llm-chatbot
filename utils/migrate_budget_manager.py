@@ -17,7 +17,7 @@ import os
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from bot.vision.money import Money
-from bot.util.logging import get_logger
+from bot.utils.logging import get_logger
 
 logger = get_logger(__name__)
 

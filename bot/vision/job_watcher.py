@@ -13,7 +13,7 @@ import asyncio
 import random
 import time
 from typing import Dict, Set
-from bot.util.logging import get_logger
+from bot.utils.logging import get_logger
 
 logger = get_logger(__name__)
 

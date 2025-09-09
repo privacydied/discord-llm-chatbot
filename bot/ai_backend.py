@@ -5,7 +5,7 @@ AI Backend Router - Routes requests to appropriate AI service based on configura
 from typing import Dict, Any, Union, AsyncGenerator, Optional
 
 from .config import load_config
-from .util.logging import get_logger
+from .utils.logging import get_logger
 from .retry_utils import is_retryable_error, VISION_RETRY_CONFIG
 
 logger = get_logger(__name__)

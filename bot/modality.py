@@ -21,7 +21,7 @@ from functools import lru_cache
 from typing import List, Literal, Union, TYPE_CHECKING, Optional, Pattern
 
 import discord
-from .util.logging import get_logger
+from .utils.logging import get_logger
 
 if TYPE_CHECKING:
     from discord import Message

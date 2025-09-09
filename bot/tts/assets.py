@@ -17,7 +17,7 @@ import asyncio
 from pathlib import Path
 from typing import Tuple
 
-from bot.util.logging import get_logger
+from bot.utils.logging import get_logger
 
 logger = get_logger(__name__)
 

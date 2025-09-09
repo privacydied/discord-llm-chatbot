@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from bot.tts_instrumentation import (
+from bot.tts.instrumentation import (
     log_tts_config,
     log_phonemiser_selection,
     log_voice_loading,

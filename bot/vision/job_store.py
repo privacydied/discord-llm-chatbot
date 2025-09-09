@@ -22,7 +22,7 @@ import fcntl
 from contextlib import asynccontextmanager
 import os
 
-from bot.util.logging import get_logger
+from bot.utils.logging import get_logger
 from bot.config import load_config
 from .types import VisionJob, VisionJobState, VisionError, VisionErrorType
 from .money import Money
