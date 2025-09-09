@@ -1,4 +1,3 @@
-
 import numpy as np
 import logging
 import tempfile
@@ -16,16 +15,26 @@ logger = logging.getLogger(__name__)
 # Public constant for sample rate expected by tests and shim module
 SAMPLE_RATE = 24000
 
+
 class TokenizationMethod(Enum):
     """Enumeration of tokenization/phonemization methods discoverable by the engine."""
+
     PHONEME_ENCODE = "PHONEME_ENCODE"
     PHONEME_TO_ID = "PHONEME_TO_ID"
     ESPEAK = "ESPEAK"
     PHONEMIZER = "PHONEMIZER"
     MISAKI = "MISAKI"
 
+
 class KokoroDirect:
-    def __init__(self, model_path: str, voices_path: str, use_tokenizer: bool = True, language: str = "en", force_ipa: bool = False):
+    def __init__(
+        self,
+        model_path: str,
+        voices_path: str,
+        use_tokenizer: bool = True,
+        language: str = "en",
+        force_ipa: bool = False,
+    ):
         """Fixed KokoroDirect implementation compatible with tests.
 
         Exposes attributes and methods expected by tests:
@@ -61,10 +70,11 @@ class KokoroDirect:
         self._init_session()
         self._init_official_vocab()
         self._load_voices()
-        
+
         # Initialize tokenizer for backward compatibility with tests
         try:
             import kokoro_onnx.tokenizer as ktok  # type: ignore
+
             self.tokenizer = getattr(ktok, "Tokenizer", object)()
         except Exception:
             self.tokenizer = object()
@@ -131,7 +141,7 @@ class KokoroDirect:
         if lang.startswith("ja") or lang.startswith("zh"):
             return "misaki"
         return "espeak"
-        
+
     def _init_session(self):
         """Initialize ONNX session once with providers and options."""
         if not Path(self.model_path).exists():
@@ -139,19 +149,25 @@ class KokoroDirect:
 
         # Configure session options for optimal performance
         session_options = ort.SessionOptions()
-        session_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_EXTENDED
+        session_options.graph_optimization_level = (
+            ort.GraphOptimizationLevel.ORT_ENABLE_EXTENDED
+        )
         session_options.enable_cpu_mem_arena = True
 
         # Configure providers (prefer CUDA if available)
         providers = []
-        if ort.get_device() == 'GPU':
-            providers.append(('CUDAExecutionProvider', {}))
-        providers.append(('CPUExecutionProvider', {}))
+        if ort.get_device() == "GPU":
+            providers.append(("CUDAExecutionProvider", {}))
+        providers.append(("CPUExecutionProvider", {}))
 
         try:
-            self.sess = ort.InferenceSession(self.model_path, session_options, providers=providers)
+            self.sess = ort.InferenceSession(
+                self.model_path, session_options, providers=providers
+            )
             self.onnx_session = self.sess  # Alias for compatibility
-            logger.debug(f"Initialized ONNX session with providers: {[p[0] for p in providers]}")
+            logger.debug(
+                f"Initialized ONNX session with providers: {[p[0] for p in providers]}"
+            )
         except Exception as e:
             raise RuntimeError(f"Failed to initialize ONNX session: {e}")
 
@@ -159,8 +175,11 @@ class KokoroDirect:
         """Load and validate official IPA vocabulary against ONNX model."""
         try:
             from bot.tts.ipa_vocab_loader import load_vocab
+
             self.official_vocab = load_vocab(maybe_onnx_session(self))
-            logger.debug(f"Loaded official IPA vocab: {self.official_vocab.rows} entries")
+            logger.debug(
+                f"Loaded official IPA vocab: {self.official_vocab.rows} entries"
+            )
         except Exception as e:
             raise RuntimeError(f"Failed to load official vocabulary: {e}")
 
@@ -168,6 +187,7 @@ class KokoroDirect:
         """Encode IPA using official vocabulary with validation."""
         try:
             from bot.tts.ipa_vocab_loader import encode_ipa
+
             return encode_ipa(ipa, maybe_onnx_session(self))
         except Exception as e:
             raise ValueError(f"Failed to encode IPA '{ipa}': {e}")
@@ -180,29 +200,38 @@ class KokoroDirect:
         try:
             # Load voice embeddings (assuming .bin format)
             self.voice_embeddings = np.fromfile(self.voices_path, dtype=np.float32)
-            
+
             # Reshape based on expected embedding size
             # Kokoro typically uses 256-dimensional embeddings
             embedding_size = 256
             num_voices = len(self.voice_embeddings) // embedding_size
-            
+
             if len(self.voice_embeddings) % embedding_size != 0:
-                logger.warning(f"Voice file size ({len(self.voice_embeddings)}) not divisible by embedding size ({embedding_size})")
+                logger.warning(
+                    f"Voice file size ({len(self.voice_embeddings)}) not divisible by embedding size ({embedding_size})"
+                )
                 # Truncate to nearest complete embedding
                 truncate_size = num_voices * embedding_size
                 self.voice_embeddings = self.voice_embeddings[:truncate_size]
-            
-            self.voice_embeddings = self.voice_embeddings.reshape(num_voices, embedding_size)
-            
+
+            self.voice_embeddings = self.voice_embeddings.reshape(
+                num_voices, embedding_size
+            )
+
             # Create voice ID list
             self.voices = [f"voice_{i:03d}" for i in range(num_voices)]
-            self._voices_data = {voice_id: self.voice_embeddings[i] for i, voice_id in enumerate(self.voices)}
-            
+            self._voices_data = {
+                voice_id: self.voice_embeddings[i]
+                for i, voice_id in enumerate(self.voices)
+            }
+
             if self.voices:
                 self.default_voice = self.voices[0]
-                
-            logger.debug(f"Loaded {len(self.voices)} voice embeddings with {embedding_size}D")
-            
+
+            logger.debug(
+                f"Loaded {len(self.voices)} voice embeddings with {embedding_size}D"
+            )
+
         except Exception as e:
             raise RuntimeError(f"Failed to load voice embeddings: {e}")
 
@@ -237,6 +266,7 @@ class KokoroDirect:
                 # Convert to IPA using the built-in G2P
                 try:
                     from bot.tts.eng_g2p_local import text_to_ipa
+
                     phonemes = text_to_ipa(text)
                 except Exception as e:
                     raise ValueError(f"Failed to convert text to IPA: {e}")
@@ -277,10 +307,15 @@ class KokoroDirect:
             voice_embedding = voice
         else:
             # Use default voice if present
-            if self.default_voice and self._voices_data.get(self.default_voice) is not None:
+            if (
+                self.default_voice
+                and self._voices_data.get(self.default_voice) is not None
+            ):
                 voice_embedding = self._voices_data[self.default_voice]
             else:
-                raise ValueError("Voice embedding is required for synthesis (no default voice available)")
+                raise ValueError(
+                    "Voice embedding is required for synthesis (no default voice available)"
+                )
 
         # Text path (quiet, pre-tokenized)
         if text is None:
@@ -294,6 +329,7 @@ class KokoroDirect:
         audio, sr = self._create_audio(text, voice_embedding, speed)
         if not isinstance(audio, np.ndarray) or audio.size == 0:
             from bot.tts.errors import TTSWriteError
+
             raise TTSWriteError("Empty audio from model")
 
         # Apply audio hygiene: highpass, limiter, fade, resample to 48kHz
@@ -312,6 +348,7 @@ class KokoroDirect:
     def _ensure_model_loaded(self) -> None:
         if maybe_onnx_session(self) is None or self.voice_embeddings is None:
             self._load_model()
+
     def _load_model(self) -> None:
         """Compatibility shim: initialize session and load voices.
 
@@ -331,12 +368,20 @@ class KokoroDirect:
             # Voices are optional in some test paths
             pass
 
-    def _synthesize_from_ipa(self, phonemes: str, voice: Optional[str] = None,
-                              voice_embedding: Optional[np.ndarray] = None,
-                              lang: str = "en", speed: float = 1.0,
-                              use_tokenizer: bool = False, force_ipa: bool = True, disable_autodiscovery: bool = True,
-                              out_path: Optional[Path] = None, logger: Optional[logging.Logger] = None,
-                              **kwargs) -> str:
+    def _synthesize_from_ipa(
+        self,
+        phonemes: str,
+        voice: Optional[str] = None,
+        voice_embedding: Optional[np.ndarray] = None,
+        lang: str = "en",
+        speed: float = 1.0,
+        use_tokenizer: bool = False,
+        force_ipa: bool = True,
+        disable_autodiscovery: bool = True,
+        out_path: Optional[Path] = None,
+        logger: Optional[logging.Logger] = None,
+        **kwargs,
+    ) -> str:
         """Internal: IPA → token IDs → ONNX → WAV path."""
         if not phonemes or not str(phonemes).strip():
             raise ValueError("phonemes parameter is required and cannot be empty")
@@ -345,13 +390,12 @@ class KokoroDirect:
         if out_path is not None:
             temp_path = str(out_path)
         else:
-            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_file:
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_file:
                 temp_path = temp_file.name
 
         try:
             # Convert IPA phonemes to token IDs using the OFFICIAL Kokoro vocabulary (strict)
             from bot.tts.ipa_vocab_loader import (
-                load_vocab,
                 UnsupportedIPASymbolError,
             )
 
@@ -364,6 +408,7 @@ class KokoroDirect:
                 """
                 if self.official_vocab is None:
                     from bot.tts.ipa_vocab_loader import load_vocab
+
                     vocab = load_vocab(maybe_onnx_session(self))
                 else:
                     vocab = self.official_vocab
@@ -396,7 +441,7 @@ class KokoroDirect:
                     while i < n:
                         matched = False
                         for L in range(min(max_tok_len, n - i), 0, -1):
-                            cand = w[i:i+L]
+                            cand = w[i : i + L]
                             if cand in p2i:
                                 ids.append(p2i[cand])
                                 i += L
@@ -416,7 +461,9 @@ class KokoroDirect:
                 cleaned = self._sanitize_ipa(str(phonemes))
                 token_ids = _encode_official(cleaned)
                 if not token_ids:
-                    raise ValueError("Failed to encode sanitized IPA to token IDs (empty)")
+                    raise ValueError(
+                        "Failed to encode sanitized IPA to token IDs (empty)"
+                    )
 
             # Build inputs and run using the same path as text synthesis
             self._init_session()  # Ensure sess respects any test patches
@@ -438,7 +485,9 @@ class KokoroDirect:
                 return None
 
             inputs: Dict[str, np.ndarray] = {}
-            token_name = _pick(["tokens", "input_ids", "phoneme_ids", "text"]) or (input_names[0] if input_names else "input_ids")
+            token_name = _pick(["tokens", "input_ids", "phoneme_ids", "text"]) or (
+                input_names[0] if input_names else "input_ids"
+            )
             inputs[token_name] = tokens
 
             # Style / voice embedding (strict: must exist)
@@ -450,7 +499,11 @@ class KokoroDirect:
                 # Prefer direct embedding if provided
                 if isinstance(voice_embedding, np.ndarray):
                     style_emb = voice_embedding
-                elif selected_voice and self._voices_data and selected_voice in self._voices_data:
+                elif (
+                    selected_voice
+                    and self._voices_data
+                    and selected_voice in self._voices_data
+                ):
                     style_emb = self._voices_data[selected_voice]
                 else:
                     # Try model-bound voices if available
@@ -458,9 +511,16 @@ class KokoroDirect:
                         self._ensure_model_loaded()
                     except Exception:
                         pass
-                    if selected_voice and isinstance(self.voice_embeddings, dict) and selected_voice in self.voice_embeddings:
+                    if (
+                        selected_voice
+                        and isinstance(self.voice_embeddings, dict)
+                        and selected_voice in self.voice_embeddings
+                    ):
                         style_emb = self.voice_embeddings[selected_voice]
-                    elif isinstance(self.voice_embeddings, dict) and self.default_voice in self.voice_embeddings:
+                    elif (
+                        isinstance(self.voice_embeddings, dict)
+                        and self.default_voice in self.voice_embeddings
+                    ):
                         style_emb = self.voice_embeddings[self.default_voice]
                 # If still unavailable, fall back to a zeroed style vector (deterministic)
                 if style_emb is None:
@@ -486,7 +546,12 @@ class KokoroDirect:
                     rebuilt["tokens"] = tokens
                     # Reuse validated style vector; enforce presence
                     if style_name is not None:
-                        if "style" not in inputs and "speaker" not in inputs and "voice" not in inputs and "speaker_embedding" not in inputs:
+                        if (
+                            "style" not in inputs
+                            and "speaker" not in inputs
+                            and "voice" not in inputs
+                            and "speaker_embedding" not in inputs
+                        ):
                             raise e
                         # Prefer 'style' key on retry
                         rebuilt["style"] = inputs.get(style_name, inputs.get("style"))  # type: ignore
@@ -495,21 +560,27 @@ class KokoroDirect:
                         outputs = self.sess.run(None, rebuilt)
                     except Exception:
                         raise e
-                audio = np.asarray(outputs[0]).reshape(-1).astype(np.float32, copy=False)
+                audio = (
+                    np.asarray(outputs[0]).reshape(-1).astype(np.float32, copy=False)
+                )
 
             # Guard against empty audio
             if not isinstance(audio, np.ndarray) or audio.size == 0:
                 from bot.tts.errors import TTSWriteError
+
                 raise TTSWriteError("Empty audio from model")
 
             # Save WAV (fail-fast; no scipy fallback) with logging
             try:
                 self._save_audio_to_wav(audio, temp_path)
                 if logger:
-                    logger.debug("Created audio with length=%d samples", int(audio.size))
+                    logger.debug(
+                        "Created audio with length=%d samples", int(audio.size)
+                    )
                     logger.debug("Saved audio to %s", str(temp_path))
             except Exception as e:
                 from bot.tts.errors import TTSWriteError
+
                 raise TTSWriteError(f"Failed to write WAV: {e}")
             return temp_path
 
@@ -517,10 +588,12 @@ class KokoroDirect:
             # Clean up temp file on error
             try:
                 os.unlink(temp_path)
-            except:
+            except Exception:
                 pass
             # Use provided logger if available; otherwise fall back to module logger
-            (logger or logging.getLogger(__name__)).error(f"TTS synthesis failed: {e}", exc_info=True)
+            (logger or logging.getLogger(__name__)).error(
+                f"TTS synthesis failed: {e}", exc_info=True
+            )
             raise
 
     # --- Additional methods/properties required by tests ---
@@ -535,7 +608,9 @@ class KokoroDirect:
         """Initialize or re-initialize ONNX session (backward compatibility)."""
         # Always (re)initialize to honor test-time patches of onnxruntime.InferenceSession
         try:
-            self.sess = ort.InferenceSession(self.model_path, providers=["CPUExecutionProvider"])
+            self.sess = ort.InferenceSession(
+                self.model_path, providers=["CPUExecutionProvider"]
+            )
             self.onnx_session = self.sess
             self._session_initialized = True
         except Exception:
@@ -575,13 +650,15 @@ class KokoroDirect:
             flat = vec.flatten()
             if flat.size < 256:
                 padded = np.zeros(256, dtype=flat.dtype)
-                padded[:flat.size] = flat
+                padded[: flat.size] = flat
                 vec = padded.reshape(1, 256)
             else:
                 vec = flat[:256].reshape(1, 256)
         return vec.astype(np.float32, copy=False)
 
-    def _create_audio(self, text: str, voice_embedding: Optional[np.ndarray], speed: float = 1.0) -> Tuple[np.ndarray, int]:
+    def _create_audio(
+        self, text: str, voice_embedding: Optional[np.ndarray], speed: float = 1.0
+    ) -> Tuple[np.ndarray, int]:
         """Tokenize text and run model to produce audio array and sample rate.
 
         Builds ONNX input map by probing session input names for compatibility
@@ -617,7 +694,9 @@ class KokoroDirect:
             return None
 
         inputs: Dict[str, np.ndarray] = {}
-        token_name = _pick(["tokens", "input_ids", "phoneme_ids", "text"]) or (input_names[0] if input_names else "input_ids")
+        token_name = _pick(["tokens", "input_ids", "phoneme_ids", "text"]) or (
+            input_names[0] if input_names else "input_ids"
+        )
         inputs[token_name] = tokens
 
         # Style / voice embedding
@@ -642,7 +721,7 @@ class KokoroDirect:
                 outputs = self.sess.run(None, inputs)
             except ValueError as e:
                 # Retry with standard input names if model complains about missing required inputs
-                msg = str(e)
+                str(e)
                 rebuilt: Dict[str, np.ndarray] = {}
                 rebuilt["tokens"] = tokens
                 # Ensure style
@@ -660,30 +739,35 @@ class KokoroDirect:
         audio = self._apply_audio_processing(audio, SAMPLE_RATE)
         return audio, SAMPLE_RATE
 
-    def _apply_audio_processing(self, audio: np.ndarray, sample_rate: int) -> np.ndarray:
+    def _apply_audio_processing(
+        self, audio: np.ndarray, sample_rate: int
+    ) -> np.ndarray:
         """Apply light audio processing (highpass, limiter, short fade). No resample."""
         try:
             # High-pass filter to remove DC/rumble (~20Hz cutoff)
             audio = self._highpass_filter(audio, sample_rate, cutoff_hz=20.0)
-            
+
             # Soft limiter to prevent clipping (-1 dBFS ceiling)
             audio = self._soft_limiter(audio, ceiling_db=-1.0)
-            
+
             # Apply fade-in/out (5ms)
             audio = self._apply_fade(audio, sample_rate, fade_ms=5)
-            
+
             return audio
         except Exception as e:
             logger.warning(f"Audio processing failed, using original: {e}")
             return audio
 
-    def _highpass_filter(self, audio: np.ndarray, sr: int, cutoff_hz: float = 20.0) -> np.ndarray:
+    def _highpass_filter(
+        self, audio: np.ndarray, sr: int, cutoff_hz: float = 20.0
+    ) -> np.ndarray:
         """Simple highpass filter using scipy if available."""
         try:
             from scipy import signal
+
             nyquist = sr / 2
             normalized_cutoff = cutoff_hz / nyquist
-            b, a = signal.butter(2, normalized_cutoff, btype='high')
+            b, a = signal.butter(2, normalized_cutoff, btype="high")
             return signal.filtfilt(b, a, audio).astype(np.float32)
         except ImportError:
             logger.debug("scipy not available, skipping highpass filter")
@@ -702,24 +786,27 @@ class KokoroDirect:
         fade_samples = int(fade_ms * sr / 1000)
         if fade_samples >= len(audio) // 2:
             return audio
-            
+
         # Fade-in
         fade_in = np.linspace(0, 1, fade_samples)
         audio[:fade_samples] *= fade_in
-        
-        # Fade-out  
+
+        # Fade-out
         fade_out = np.linspace(1, 0, fade_samples)
         audio[-fade_samples:] *= fade_out
-        
+
         return audio
 
-    def _highpass(self, audio: np.ndarray, sr: int, cutoff_hz: float = 20.0) -> np.ndarray:
+    def _highpass(
+        self, audio: np.ndarray, sr: int, cutoff_hz: float = 20.0
+    ) -> np.ndarray:
         """Simple highpass filter using scipy if available."""
         try:
             from scipy import signal
+
             nyquist = sr / 2
             normalized_cutoff = cutoff_hz / nyquist
-            b, a = signal.butter(2, normalized_cutoff, btype='high')
+            b, a = signal.butter(2, normalized_cutoff, btype="high")
             return signal.filtfilt(b, a, audio).astype(np.float32)
         except ImportError:
             logger.debug("scipy not available, skipping highpass filter")
@@ -738,50 +825,65 @@ class KokoroDirect:
         fade_samples = int(ms * sr / 1000)
         if fade_samples >= len(audio) // 2:
             return audio
-            
+
         # Fade-in
         fade_in = np.linspace(0, 1, fade_samples)
         audio[:fade_samples] *= fade_in
-        
-        # Fade-out  
+
+        # Fade-out
         fade_out = np.linspace(1, 0, fade_samples)
         audio[-fade_samples:] *= fade_out
-        
+
         return audio
 
     def _resample(self, audio: np.ndarray, from_sr: int, to_sr: int) -> np.ndarray:
         """Resample audio using available library."""
         if from_sr == to_sr:
             return audio
-            
+
         try:
             # Try librosa first
             import librosa
-            return librosa.resample(audio, orig_sr=from_sr, target_sr=to_sr).astype(np.float32)
+
+            return librosa.resample(audio, orig_sr=from_sr, target_sr=to_sr).astype(
+                np.float32
+            )
         except ImportError:
             try:
                 # Try scipy
                 from scipy import signal
-                return signal.resample(audio, int(len(audio) * to_sr / from_sr)).astype(np.float32)
+
+                return signal.resample(audio, int(len(audio) * to_sr / from_sr)).astype(
+                    np.float32
+                )
             except ImportError:
-                logger.warning(f"No resampling library available, keeping original sample rate {from_sr}")
+                logger.warning(
+                    f"No resampling library available, keeping original sample rate {from_sr}"
+                )
                 return audio
 
-    def _run_onnx_inference(self, token_ids: List[int], voice_embedding: np.ndarray, speed: float) -> Tuple[np.ndarray, int]:
+    def _run_onnx_inference(
+        self, token_ids: List[int], voice_embedding: np.ndarray, speed: float
+    ) -> Tuple[np.ndarray, int]:
         """Run ONNX inference with proper input/output handling."""
         if self.sess is None:
             raise RuntimeError("ONNX session not initialized")
 
         # Prepare inputs with correct names and shapes
         inputs = {}
-        
+
         # Discover input names from session
         input_info = self.sess.get_inputs()
         for inp in input_info:
             name = inp.name.lower()
             if "token" in name or "text" in name or "input" in name:
                 inputs[inp.name] = np.array([token_ids], dtype=np.int64)
-            elif "style" in name or "speaker" in name or "voice" in name or "embedding" in name:
+            elif (
+                "style" in name
+                or "speaker" in name
+                or "voice" in name
+                or "embedding" in name
+            ):
                 # Ensure voice embedding has correct shape
                 emb = self._to_style_vector(voice_embedding)
                 inputs[inp.name] = emb
@@ -792,13 +894,13 @@ class KokoroDirect:
         try:
             outputs = self.sess.run(None, inputs)
             audio = outputs[0]  # Assume first output is audio
-            
+
             # Convert to 1D array if needed
             if audio.ndim > 1:
                 audio = audio.flatten()
-                
+
             return audio.astype(np.float32), SAMPLE_RATE
-            
+
         except Exception as e:
             raise RuntimeError(f"ONNX inference failed: {e}")
 
@@ -848,7 +950,7 @@ class KokoroDirect:
             actual_voice = self.default_voice
         else:
             actual_voice = voice
-            
+
         return self.voice_embeddings[actual_voice]
 
     def _save_audio_to_wav(self, audio: np.ndarray, wav_path: str):
@@ -869,12 +971,12 @@ class KokoroDirect:
             audio = audio * (0.8912509381337456 / peak)  # 10 ** (-1/20)
 
         # Save as WAV using the public sample rate constant
-        sf.write(wav_path, audio, SAMPLE_RATE, format='WAV', subtype='PCM_16')
+        sf.write(wav_path, audio, SAMPLE_RATE, format="WAV", subtype="PCM_16")
 
     def __del__(self):
         """Clean up resources."""
-        if hasattr(self, 'voices') and hasattr(self.voices, 'close'):
+        if hasattr(self, "voices") and hasattr(self.voices, "close"):
             try:
                 self.voices.close()
-            except:
+            except Exception:
                 pass

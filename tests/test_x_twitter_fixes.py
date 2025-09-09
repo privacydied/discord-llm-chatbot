@@ -3,7 +3,7 @@ Unit tests for X/Twitter image processing and naked image attachment fixes.
 Tests the key behaviors fixed in the "Fix This Code" implementation.
 """
 import pytest
-from unittest.mock import Mock, AsyncMock, MagicMock
+from unittest.mock import Mock, AsyncMock
 from bot.syndication.extract import extract_text_and_images_from_syndication
 from bot.syndication.handler import handle_twitter_syndication_to_vl
 from bot.syndication.url_utils import upgrade_pbs_to_orig, pbs_base_key

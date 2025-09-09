@@ -2,17 +2,11 @@
 PDF processing module with text extraction, OCR fallback, and metadata handling.
 """
 import asyncio
-import io
-import os
 import re
 import hashlib
 import logging
-from typing import Dict, List, Optional, Tuple, Union, Callable, Awaitable
+from typing import Dict, Tuple, Union
 from datetime import datetime
-from pathlib import Path
-import tempfile
-from urllib.parse import urlparse
-from concurrent.futures import ThreadPoolExecutor
 
 import fitz  # PyMuPDF
 import pytesseract
@@ -244,14 +238,14 @@ if __name__ == "__main__":
     
     result = processor.process_pdf(source, is_url=is_url)
     
-    print(f"\n=== PDF Metadata ===")
+    print("\n=== PDF Metadata ===")
     for key, value in result.get('metadata', {}).items():
         print(f"{key}: {value}")
     
-    print(f"\n=== Extracted Text (first 1000 chars) ===")
+    print("\n=== Extracted Text (first 1000 chars) ===")
     print(result.get('text', '')[:1000] + '...')
     
-    print(f"\n=== Processing Info ===")
+    print("\n=== Processing Info ===")
     print(f"Pages: {result.get('pages', 0)}")
     print(f"Is Scanned: {result.get('is_scanned', False)}")
     if 'error' in result:

@@ -8,7 +8,6 @@ https://huggingface.co/hexgrad/Kokoro-82M/blob/main/VOICES.md
 
 import io
 import os
-import json
 from pathlib import Path
 
 import numpy as np

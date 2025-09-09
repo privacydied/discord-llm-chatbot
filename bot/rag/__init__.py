@@ -7,8 +7,8 @@ from .vector_schema import VectorDocument, HybridSearchConfig
 from .chroma_backend import ChromaRAGBackend
 
 __all__ = [
-    'EmbeddingInterface',
-    'VectorDocument', 
-    'HybridSearchConfig',
-    'ChromaRAGBackend'
+    "EmbeddingInterface",
+    "VectorDocument",
+    "HybridSearchConfig",
+    "ChromaRAGBackend",
 ]

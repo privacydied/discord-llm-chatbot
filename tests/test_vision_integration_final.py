@@ -6,7 +6,6 @@ Validates the router integration pattern and method signatures.
 
 import os
 import sys
-import tempfile
 import json
 from pathlib import Path
 
@@ -46,8 +45,6 @@ def test_vision_integration():
     try:
         # Test 1: Vision types import correctly
         print("📦 Testing Vision types...")
-        from bot.vision.types import VisionTask, VisionRequest, VisionJob
-        from bot.vision.intent_router import VisionIntentRouter
         print("✅ Vision types import successful")
         
         # Test 2: Check router has Vision methods
@@ -107,9 +104,9 @@ def test_vision_integration():
         
         for pattern in init_patterns:
             if pattern in router_content:
-                print(f"  ✅ Vision component initialization found")
+                print("  ✅ Vision component initialization found")
             else:
-                print(f"  ⚠️  Initialization pattern not exactly matched (may be fine)")
+                print("  ⚠️  Initialization pattern not exactly matched (may be fine)")
         
         # Test 6: Error handling patterns
         print("🛡️  Checking error handling patterns...")

@@ -5,18 +5,11 @@ Tests for the tokenizer registry implementation.
 import unittest
 from unittest.mock import patch, MagicMock
 import os
-import sys
-import importlib
 
 # Import the module under test
 from bot.tokenizer_registry import (
-    TokenizerRegistry,
-    discover_tokenizers,
-    select_tokenizer_for_language,
-    is_tokenizer_warning_needed,
-    get_tokenizer_warning_message
+    TokenizerRegistry
 )
-from bot.tts_errors import MissingTokeniserError
 
 
 class TestTokenizerRegistry(unittest.TestCase):
@@ -64,7 +57,7 @@ class TestTokenizerRegistry(unittest.TestCase):
         self.assertFalse(registry1._initialized)
         
         # Discover tokenizers
-        available = registry1.discover_tokenizers()
+        registry1.discover_tokenizers()
         
         # Verify discovery results
         self.assertTrue(registry1._initialized)
@@ -97,7 +90,7 @@ class TestTokenizerRegistry(unittest.TestCase):
         
         # Discover tokenizers
         registry = TokenizerRegistry.get_instance()
-        available = registry.discover_tokenizers()
+        registry.discover_tokenizers()
         
         # Set blank TTS_TOKENISER
         with patch.dict(os.environ, {"TTS_TOKENISER": ""}):
@@ -131,7 +124,7 @@ class TestTokenizerRegistry(unittest.TestCase):
         
         # First module imports and initializes registry
         registry1 = TokenizerRegistry.get_instance()
-        available = registry1.discover_tokenizers()
+        registry1.discover_tokenizers()
         
         # Verify first module's view of registry
         self.assertTrue('espeak' in registry1._available_tokenizers)

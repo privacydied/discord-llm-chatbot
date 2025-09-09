@@ -3,7 +3,6 @@
 import unittest
 from unittest.mock import patch, MagicMock
 import sys
-import os
 from pathlib import Path
 
 # Add project root to path
@@ -14,8 +13,7 @@ from bot.tts_validation import (
     select_tokenizer_for_language,
     is_tokenizer_warning_needed,
     get_tokenizer_warning_message,
-    AVAILABLE_TOKENIZERS,
-    TOKENIZER_WARNING_SHOWN
+    AVAILABLE_TOKENIZERS
 )
 
 

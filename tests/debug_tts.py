@@ -34,7 +34,7 @@ def check_file_exists(file_path):
         if parent.exists():
             logger.info(f"  - Parent directory exists: {parent}")
             # List files in parent directory
-            logger.info(f"  - Files in parent directory:")
+            logger.info("  - Files in parent directory:")
             for item in parent.iterdir():
                 logger.info(f"    - {item.name} ({'dir' if item.is_dir() else 'file'})")
         else:
@@ -92,7 +92,7 @@ def main():
                 if output_path.exists():
                     logger.info(f"  - Output file size: {output_path.stat().st_size} bytes")
                 else:
-                    logger.error(f"  - Output file does not exist!")
+                    logger.error("  - Output file does not exist!")
             except Exception as e:
                 logger.error(f"❌ TTS generation failed: {e}", exc_info=True)
         

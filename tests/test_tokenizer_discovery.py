@@ -5,9 +5,6 @@ import sys
 import unittest
 from unittest.mock import patch, MagicMock
 import logging
-from contextlib import contextmanager
-import importlib.util
-import subprocess
 
 # Add the parent directory to the path so we can import the bot modules
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))

@@ -2,6 +2,7 @@
 Parses raw Discord messages to identify commands and extract clean content,
 enforcing strict context rules for guilds vs. DMs.
 """
+
 import logging
 import re
 from typing import Optional
@@ -34,7 +35,10 @@ COMMAND_MAP = {
     "!img": Command.IMG,
 }
 
-def parse_command(message: discord.Message, bot: commands.Bot) -> Optional[ParsedCommand]:
+
+def parse_command(
+    message: discord.Message, bot: commands.Bot
+) -> Optional[ParsedCommand]:
     """
     Parses a message to determine if it's an explicit command.
 
@@ -51,10 +55,10 @@ def parse_command(message: discord.Message, bot: commands.Bot) -> Optional[Parse
     content = message.content.strip()
 
     # Remove bot mention from the beginning of the message to isolate the command
-    mention_pattern = fr'^<@!?{bot.user.id}>\s*'
-    content = re.sub(mention_pattern, '', content)
+    mention_pattern = rf"^<@!?{bot.user.id}>\s*"
+    content = re.sub(mention_pattern, "", content)
 
-    if not content.startswith('!'):
+    if not content.startswith("!"):
         # Not an explicit command, so the router should handle it as a regular message.
         return None
 
@@ -66,11 +70,15 @@ def parse_command(message: discord.Message, bot: commands.Bot) -> Optional[Parse
 
     if command:
         # A known command was found.
-        logger.debug(f"Parsed command: {command.name} with content: '{remaining_content[:50]}...'",
-                     extra={'subsys': 'parser', 'event': 'command.found'})
+        logger.debug(
+            f"Parsed command: {command.name} with content: '{remaining_content[:50]}...'",
+            extra={"subsys": "parser", "event": "command.found"},
+        )
         return ParsedCommand(command=command, cleaned_content=remaining_content.strip())
-    
+
     # An unknown '!' command was found, ignore it.
-    logger.debug(f"Ignoring unknown command: {command_str}", 
-                 extra={'subsys': 'parser', 'event': 'command.unknown'})
+    logger.debug(
+        f"Ignoring unknown command: {command_str}",
+        extra={"subsys": "parser", "event": "command.unknown"},
+    )
     return None

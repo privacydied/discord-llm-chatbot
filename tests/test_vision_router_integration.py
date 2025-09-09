@@ -6,7 +6,6 @@ Verifies natural language intent detection and job orchestration flow.
 
 import asyncio
 import os
-import tempfile
 import shutil
 from unittest.mock import AsyncMock, MagicMock, patch
 from pathlib import Path
@@ -74,8 +73,6 @@ async def test_vision_router_integration():
         # Test imports work
         print("📦 Testing imports...")
         from bot.router import Router
-        from bot.vision import VisionIntentRouter, VisionOrchestrator
-        from bot.vision.types import VisionTask
         print("✅ Router and Vision imports successful")
         
         # Create mock bot and router
@@ -132,7 +129,7 @@ async def test_vision_router_integration():
             mock_vision_handler.return_value = MagicMock(content="Vision generation completed", has_payload=True)
             
             # Test with vision prompt
-            result = await router._invoke_text_flow(
+            await router._invoke_text_flow(
                 content="generate an image of a rainbow",
                 message=mock_message,
                 context_str=""

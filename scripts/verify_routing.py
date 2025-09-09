@@ -3,7 +3,6 @@
 import unittest
 from unittest.mock import MagicMock, patch
 from bot.command_parser import parse_command
-from bot.controller import hybrid_pipeline
 
 class TestRouting(unittest.TestCase):
     def setUp(self):

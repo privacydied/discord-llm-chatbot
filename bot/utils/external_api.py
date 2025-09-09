@@ -9,6 +9,7 @@ logger = logging.getLogger(__name__)
 SCREENSHOT_CACHE_DIR = Path("cache/screenshots")
 SCREENSHOT_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
+
 def _normalize_url_for_screenshot(url: str) -> str:
     """Normalizes URLs for the screenshot API (e.g., x.com -> twitter.com)."""
     try:
@@ -36,6 +37,7 @@ def _normalize_url_for_screenshot(url: str) -> str:
         logger.error(f"URL normalization failed for {url}: {e}", exc_info=True)
     # Always return a string
     return str(url)
+
 
 async def external_screenshot(url: str) -> str | None:
     """
@@ -76,9 +78,13 @@ async def external_screenshot(url: str) -> str | None:
 
     # Load configurable screenshot API parameters
     api_key = os.getenv("SCREENSHOT_API_KEY")
-    fallback_enabled = os.getenv("SCREENSHOT_FALLBACK_PLAYWRIGHT", "true").lower() == "true"
+    fallback_enabled = (
+        os.getenv("SCREENSHOT_FALLBACK_PLAYWRIGHT", "true").lower() == "true"
+    )
     if not api_key:
-        logger.warning("⚠️ SCREENSHOT_API_KEY not set. Attempting Playwright fallback...")
+        logger.warning(
+            "⚠️ SCREENSHOT_API_KEY not set. Attempting Playwright fallback..."
+        )
         if fallback_enabled:
             return await _playwright_screenshot(normalized_url_str)
         return None
@@ -99,19 +105,21 @@ async def external_screenshot(url: str) -> str | None:
         f"&url={quote(normalized_url_str, safe='/', encoding='utf-8', errors='strict')}"
         f"&device={device}&dimension={dimension}&format={format_type}&delay={delay}"
     )
-    
+
     # Add cookies parameter if provided (properly URL-encoded)
     if cookies and cookies.strip():
         # Ensure cookies is a str before quoting
         cookies_str = cookies if isinstance(cookies, str) else str(cookies)
-        encoded_cookies = quote(cookies_str, safe='', encoding='utf-8', errors='strict')
+        encoded_cookies = quote(cookies_str, safe="", encoding="utf-8", errors="strict")
         api_url += f"&cookies={encoded_cookies}"
         logger.debug(f"🍪 Added URL-encoded cookies: {encoded_cookies[:50]}...")
-    
+
     logger.debug(f"⏱️ Using screenshot delay: {delay}ms")
     logger.debug(f"🔗 Final API URL: {api_url}")
-    
-    logger.info(f"📷 Requesting screenshot from {api_url_base} for {normalized_url} [{dimension}, {format_type}]")
+
+    logger.info(
+        f"📷 Requesting screenshot from {api_url_base} for {normalized_url} [{dimension}, {format_type}]"
+    )
 
     try:
         async with httpx.AsyncClient() as client:
@@ -142,19 +150,26 @@ async def external_screenshot(url: str) -> str | None:
         return str(filepath)
 
     except httpx.HTTPStatusError as e:
-        logger.error(f"❌ Screenshot Machine API error: {e.response.status_code} for URL: {original_url_str}")
+        logger.error(
+            f"❌ Screenshot Machine API error: {e.response.status_code} for URL: {original_url_str}"
+        )
         if fallback_enabled:
             logger.info("Attempting Playwright fallback after API error...")
             return await _playwright_screenshot(normalized_url_str)
         return None
     except httpx.RequestError as e:
-        logger.error(f"❌ Failed to connect to Screenshot Machine API for URL: {original_url_str}. Error: {e}")
+        logger.error(
+            f"❌ Failed to connect to Screenshot Machine API for URL: {original_url_str}. Error: {e}"
+        )
         if fallback_enabled:
             logger.info("Attempting Playwright fallback after request error...")
             return await _playwright_screenshot(normalized_url_str)
         return None
     except Exception as e:
-        logger.error(f"❌ Unexpected error during screenshot capture for {original_url_str}: {e}", exc_info=True)
+        logger.error(
+            f"❌ Unexpected error during screenshot capture for {original_url_str}: {e}",
+            exc_info=True,
+        )
         if fallback_enabled:
             logger.info("Attempting Playwright fallback after unexpected error...")
             return await _playwright_screenshot(normalized_url_str)

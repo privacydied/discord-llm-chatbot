@@ -1,7 +1,6 @@
 import os
 from pathlib import Path
 
-import pytest
 
 from bot.memory import profiles as profiles
 

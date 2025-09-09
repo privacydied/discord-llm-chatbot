@@ -22,7 +22,9 @@ from utils.waveform import compute_waveform_b64
 
 IS_VOICE_MESSAGE_FLAG = 8192  # Discord message flags: IS_VOICE_MESSAGE
 USER_AGENT = "DiscordVoicePublisher/1.0"
-VOICE_MSG_FORBIDDEN_CODE = 50173  # Discord API error code when voice messages are disallowed in channel
+VOICE_MSG_FORBIDDEN_CODE = (
+    50173  # Discord API error code when voice messages are disallowed in channel
+)
 BLOCK_TTL_SECONDS = 15 * 60  # 15 minutes [PA]
 
 
@@ -83,13 +85,26 @@ class VoiceMessagePublisher:
     def _block(self, channel_id: int) -> None:
         self._blocked_channels[channel_id] = time.monotonic() + BLOCK_TTL_SECONDS
 
-    async def _attachments_create(self, session: aiohttp.ClientSession, channel_id: int, token: str, filename: str, file_size: int) -> dict:
+    async def _attachments_create(
+        self,
+        session: aiohttp.ClientSession,
+        channel_id: int,
+        token: str,
+        filename: str,
+        file_size: int,
+    ) -> dict:
         url = f"https://discord.com/api/v10/channels/{channel_id}/attachments"
         payload = {"files": [{"filename": filename, "file_size": file_size, "id": "0"}]}
-        headers = {"Authorization": f"Bot {token}", "Content-Type": "application/json", "User-Agent": USER_AGENT}
+        headers = {
+            "Authorization": f"Bot {token}",
+            "Content-Type": "application/json",
+            "User-Agent": USER_AGENT,
+        }
 
         async def _do():
-            async with session.post(url, headers=headers, json=payload, timeout=self._attachments_timeout_s) as resp:
+            async with session.post(
+                url, headers=headers, json=payload, timeout=self._attachments_timeout_s
+            ) as resp:
                 if resp.status >= 400:
                     text = await resp.text()
                     err = aiohttp.ClientResponseError(
@@ -110,12 +125,23 @@ class VoiceMessagePublisher:
 
         return await retry_async(_do, API_RETRY_CONFIG)
 
-    async def _upload_file(self, session: aiohttp.ClientSession, upload_url: str, token: str, ogg_bytes: bytes) -> None:
+    async def _upload_file(
+        self,
+        session: aiohttp.ClientSession,
+        upload_url: str,
+        token: str,
+        ogg_bytes: bytes,
+    ) -> None:
         # Do NOT send bot Authorization to the upload_url (usually a signed CDN/S3 URL). [REH]
         headers = {"Content-Type": "audio/ogg"}
 
         async def _do():
-            async with session.put(upload_url, headers=headers, data=ogg_bytes, timeout=self._upload_timeout_s) as resp:
+            async with session.put(
+                upload_url,
+                headers=headers,
+                data=ogg_bytes,
+                timeout=self._upload_timeout_s,
+            ) as resp:
                 if resp.status >= 400:
                     text = await resp.text()
                     err = aiohttp.ClientResponseError(
@@ -135,7 +161,16 @@ class VoiceMessagePublisher:
 
         return await retry_async(_do, API_RETRY_CONFIG)
 
-    async def _post_voice_message(self, session: aiohttp.ClientSession, channel_id: int, token: str, uploaded_filename: str, duration_secs: float, waveform_b64: str, reply_to_id: Optional[int]) -> dict:
+    async def _post_voice_message(
+        self,
+        session: aiohttp.ClientSession,
+        channel_id: int,
+        token: str,
+        uploaded_filename: str,
+        duration_secs: float,
+        waveform_b64: str,
+        reply_to_id: Optional[int],
+    ) -> dict:
         url = f"https://discord.com/api/v10/channels/{channel_id}/messages"
         attachments = [
             {
@@ -148,11 +183,20 @@ class VoiceMessagePublisher:
         ]
         payload: dict = {"flags": IS_VOICE_MESSAGE_FLAG, "attachments": attachments}
         if reply_to_id:
-            payload["message_reference"] = {"message_id": str(reply_to_id), "fail_if_not_exists": False}
-        headers = {"Authorization": f"Bot {token}", "Content-Type": "application/json", "User-Agent": USER_AGENT}
+            payload["message_reference"] = {
+                "message_id": str(reply_to_id),
+                "fail_if_not_exists": False,
+            }
+        headers = {
+            "Authorization": f"Bot {token}",
+            "Content-Type": "application/json",
+            "User-Agent": USER_AGENT,
+        }
 
         async def _do():
-            async with session.post(url, headers=headers, json=payload, timeout=self._message_post_timeout_s) as resp:
+            async with session.post(
+                url, headers=headers, json=payload, timeout=self._message_post_timeout_s
+            ) as resp:
                 if resp.status >= 400:
                     text = await resp.text()
                     err = aiohttp.ClientResponseError(
@@ -172,7 +216,9 @@ class VoiceMessagePublisher:
 
         return await retry_async(_do, API_RETRY_CONFIG)
 
-    async def publish(self, *,
+    async def publish(
+        self,
+        *,
         message: discord.Message,
         wav_path: str | Path,
         include_transcript: bool = False,
@@ -188,7 +234,9 @@ class VoiceMessagePublisher:
         try:
             # Global fallback (0.0 or missing -> ignore)
             global_to = float(cfg.get("VOICE_PUBLISHER_TIMEOUT_S", 0.0) or 0.0)
-            att_to = float(cfg.get("VOICE_PUBLISHER_ATTACHMENTS_CREATE_TIMEOUT_S", 30.0))
+            att_to = float(
+                cfg.get("VOICE_PUBLISHER_ATTACHMENTS_CREATE_TIMEOUT_S", 30.0)
+            )
             upl_to = float(cfg.get("VOICE_PUBLISHER_UPLOAD_TIMEOUT_S", 60.0))
             msg_to = float(cfg.get("VOICE_PUBLISHER_MESSAGE_POST_TIMEOUT_S", 30.0))
             if global_to > 0:
@@ -211,7 +259,7 @@ class VoiceMessagePublisher:
             self.logger.error("voice.native.missing_token")
             return VoicePublishResult(message=None, ogg_path=None, ok=False)
 
-        channel_id = getattr(message.channel, 'id', None)
+        channel_id = getattr(message.channel, "id", None)
         if not channel_id:
             self.logger.error("voice.native.missing_channel_id")
             return VoicePublishResult(message=None, ogg_path=None, ok=False)
@@ -239,7 +287,9 @@ class VoiceMessagePublisher:
             bitrate = str(cfg.get("VOICE_PUBLISHER_OPUS_BITRATE", "64k") or "64k")
             vbr = str(cfg.get("VOICE_PUBLISHER_OPUS_VBR", "on") or "on")
             comp = int(cfg.get("VOICE_PUBLISHER_OPUS_COMP_LEVEL", 10) or 10)
-            ogg_p = await transcode_to_ogg_opus(wav_p, bitrate=bitrate, vbr=vbr, compression_level=comp)
+            ogg_p = await transcode_to_ogg_opus(
+                wav_p, bitrate=bitrate, vbr=vbr, compression_level=comp
+            )
             ogg_bytes = ogg_p.read_bytes()
             waveform_b64 = compute_waveform_b64(wav_p)
             # Prefer probing duration from OGG (matches reference behavior)
@@ -255,11 +305,15 @@ class VoiceMessagePublisher:
             async with aiohttp.ClientSession(raise_for_status=False) as session:
                 # Use a standard display filename per reference script
                 filename_display = "voice-message.ogg"
-                meta = await self._attachments_create(session, channel_id, token, filename_display, len(ogg_bytes))
+                meta = await self._attachments_create(
+                    session, channel_id, token, filename_display, len(ogg_bytes)
+                )
                 attach = (meta or {}).get("attachments", [{}])[0]
                 upload_url = attach.get("upload_url")
                 # API typically returns 'upload_filename'; be tolerant if 'uploaded_filename' appears.
-                upload_filename = attach.get("upload_filename") or attach.get("uploaded_filename")
+                upload_filename = attach.get("upload_filename") or attach.get(
+                    "uploaded_filename"
+                )
                 if not upload_url or not upload_filename:
                     raise RuntimeError(f"attachments.create missing fields: {attach}")
 
@@ -271,36 +325,58 @@ class VoiceMessagePublisher:
                     upload_filename,
                     duration,
                     waveform_b64,
-                    getattr(message, 'id', None),
+                    getattr(message, "id", None),
                 )
 
             # 3) Fetch created message (optional) and return success
             try:
-                created_id = int(msg_json.get('id')) if isinstance(msg_json.get('id'), (str, int)) else None
+                created_id = (
+                    int(msg_json.get("id"))
+                    if isinstance(msg_json.get("id"), (str, int))
+                    else None
+                )
                 created_msg: Optional[discord.Message] = None
                 if created_id:
                     created_msg = await message.channel.fetch_message(created_id)
-                self.logger.info("voice.native.ok", extra={"subsys": "voice", "event": "native_voice_ok", "channel_id": channel_id})
+                self.logger.info(
+                    "voice.native.ok",
+                    extra={
+                        "subsys": "voice",
+                        "event": "native_voice_ok",
+                        "channel_id": channel_id,
+                    },
+                )
                 return VoicePublishResult(message=created_msg, ogg_path=ogg_p, ok=True)
             except Exception:
                 # If we cannot fetch, still consider it success if we got a valid JSON back
-                self.logger.info("voice.native.ok.fetch_failed", extra={"subsys": "voice", "event": "native_voice_ok_nofetch", "channel_id": channel_id})
+                self.logger.info(
+                    "voice.native.ok.fetch_failed",
+                    extra={
+                        "subsys": "voice",
+                        "event": "native_voice_ok_nofetch",
+                        "channel_id": channel_id,
+                    },
+                )
                 return VoicePublishResult(message=None, ogg_path=ogg_p, ok=True)
 
         except Exception as e:
             # Detect Discord code 50173 and block channel for a while [REH]
             blocked = False
             # Attempt to parse known structure from aiohttp.ClientResponseError
-            if hasattr(e, 'status') and getattr(e, 'status', None) == 400:
-                msg_text = getattr(e, 'message', '') or ''
+            if hasattr(e, "status") and getattr(e, "status", None) == 400:
+                msg_text = getattr(e, "message", "") or ""
                 try:
                     data = json.loads(msg_text)
-                    if int(data.get('code', 0)) == VOICE_MSG_FORBIDDEN_CODE and isinstance(channel_id, int):
+                    if int(
+                        data.get("code", 0)
+                    ) == VOICE_MSG_FORBIDDEN_CODE and isinstance(channel_id, int):
                         self._block(channel_id)
                         blocked = True
                 except Exception:
                     # Fallback string check
-                    if str(VOICE_MSG_FORBIDDEN_CODE) in msg_text and isinstance(channel_id, int):
+                    if str(VOICE_MSG_FORBIDDEN_CODE) in msg_text and isinstance(
+                        channel_id, int
+                    ):
                         self._block(channel_id)
                         blocked = True
 
@@ -315,10 +391,16 @@ class VoiceMessagePublisher:
         """Probe audio duration using ffprobe; return seconds (rounded to 0 decimals per reference) or None."""
         try:
             proc = await asyncio.create_subprocess_exec(
-                "ffprobe", "-v", "error", "-hide_banner",
-                "-select_streams", "a:0",
-                "-show_entries", "format=duration",
-                "-of", "json",
+                "ffprobe",
+                "-v",
+                "error",
+                "-hide_banner",
+                "-select_streams",
+                "a:0",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "json",
                 str(path),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,

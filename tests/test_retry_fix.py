@@ -2,14 +2,12 @@
 """
 Test script to verify that the retry logic is working for 502 provider errors.
 """
-import asyncio
 import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'bot'))
 
 from bot.retry_utils import is_retryable_error, VISION_RETRY_CONFIG
 from bot.exceptions import APIError
-from openai import InternalServerError
 
 def test_retry_logic():
     """Test that 502 errors are properly detected as retryable."""

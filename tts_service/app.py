@@ -2,7 +2,6 @@ from flask import Flask, request, send_file
 from kokoro_onnx import KokoroONNXTTS
 import hashlib
 import os
-import numpy as np
 from pathlib import Path
 from pydub import AudioSegment
 import onnxruntime as ort

@@ -4,8 +4,6 @@ Test script for server memory and history functionality.
 """
 import os
 import sys
-import json
-import shutil
 from datetime import datetime
 from pathlib import Path
 
@@ -14,8 +12,7 @@ sys.path.insert(0, str(Path(__file__).parent.absolute()))
 from main import (
     get_server_profile,
     save_server_profile,
-    SERVER_PROFILE_DIR,
-    default_server_profile
+    SERVER_PROFILE_DIR
 )
 
 def test_server_profile_creation():

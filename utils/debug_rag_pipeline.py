@@ -18,7 +18,6 @@ import os
 import sys
 import json
 from pathlib import Path
-from typing import Dict, List, Any
 
 # Add the project root to Python path
 project_root = Path(__file__).parent
@@ -115,7 +114,7 @@ class RAGPipelineDebugger:
             print(f"🔍 Parsing: {gateway_file.name}")
             content, metadata = await document_parser_factory.parse_document(gateway_file)
             
-            print(f"✅ Parsing successful!")
+            print("✅ Parsing successful!")
             print(f"📊 Content length: {len(content):,} characters")
             print(f"📊 Line count: {len(content.splitlines()):,}")
             print(f"📊 Parser metadata: {json.dumps(metadata, indent=2)}")
@@ -131,7 +130,7 @@ class RAGPipelineDebugger:
             print(f"🔍 Key terms found: {', '.join(found_terms) if found_terms else 'None'}")
             
             # Show first 500 characters
-            print(f"📝 Content preview (first 500 chars):")
+            print("📝 Content preview (first 500 chars):")
             print(f"   {repr(content[:500])}")
             
         except Exception as e:
@@ -158,7 +157,7 @@ class RAGPipelineDebugger:
             # Chunk the content
             chunking_result = chunker.chunk_text(content, metadata)
             
-            print(f"✅ Chunking successful!")
+            print("✅ Chunking successful!")
             print(f"📊 Total chunks created: {len(chunking_result.chunks)}")
             print(f"📊 Chunking method: {chunking_result.chunking_method}")
             print(f"📊 Chunk size range: {chunking_result.chunk_size_range}")
@@ -173,7 +172,7 @@ class RAGPipelineDebugger:
             print(f"🔍 Chunks containing 'Gateway Process': {len(gateway_chunks)}")
             
             # Show sample chunks
-            print(f"\n📝 Sample chunks (first 3):")
+            print("\n📝 Sample chunks (first 3):")
             for i, chunk in enumerate(chunking_result.chunks[:3]):
                 print(f"   Chunk {i}: {len(chunk.content)} chars")
                 print(f"   Preview: {repr(chunk.content[:200])}")
@@ -198,12 +197,12 @@ class RAGPipelineDebugger:
             
             # Get collection stats
             stats = await backend.get_collection_stats()
-            print(f"✅ ChromaDB connection successful!")
+            print("✅ ChromaDB connection successful!")
             print(f"📊 Collection stats: {json.dumps(stats, indent=2)}")
             
             # Try to peek at stored data
             if stats.get("total_chunks", 0) > 0:
-                print(f"\n🔍 Attempting to peek at stored documents...")
+                print("\n🔍 Attempting to peek at stored documents...")
                 
                 # Get a small sample of documents
                 try:
@@ -214,7 +213,7 @@ class RAGPipelineDebugger:
                     # Get first 5 documents
                     result = collection.peek(limit=5)
                     
-                    print(f"📊 Sample documents in collection:")
+                    print("📊 Sample documents in collection:")
                     if result.get('ids'):
                         for i, doc_id in enumerate(result['ids']):
                             metadata = result.get('metadatas', [{}])[i] if i < len(result.get('metadatas', [])) else {}
@@ -257,7 +256,7 @@ class RAGPipelineDebugger:
                 "CIA remote viewing techniques"
             ]
             
-            print(f"\n🔍 Testing embedding generation:")
+            print("\n🔍 Testing embedding generation:")
             for text in test_texts:
                 try:
                     embedding = await embedding_model.encode_single(text)
@@ -282,11 +281,11 @@ class RAGPipelineDebugger:
             
             # Get search statistics
             stats = await search_engine.get_stats()
-            print(f"✅ Hybrid search engine initialized!")
+            print("✅ Hybrid search engine initialized!")
             print(f"📊 Search engine stats: {json.dumps(stats, indent=2)}")
             
             # Test each query
-            print(f"\n🔍 Testing search queries:")
+            print("\n🔍 Testing search queries:")
             for query in self.test_queries:
                 try:
                     print(f"\n   Query: '{query}'")
@@ -334,13 +333,13 @@ class RAGPipelineDebugger:
             print(f"🔍 Debugging query: '{query}'")
             
             # Step 1: Generate query embedding
-            print(f"\n1️⃣ Generating query embedding...")
+            print("\n1️⃣ Generating query embedding...")
             query_embedding = await embedding_model.encode_single(query)
             print(f"   ✅ Query embedding generated: {len(query_embedding)} dimensions")
             print(f"   Embedding preview: {query_embedding[:10]}")
             
             # Step 2: Direct ChromaDB search
-            print(f"\n2️⃣ Direct ChromaDB search...")
+            print("\n2️⃣ Direct ChromaDB search...")
             try:
                 import chromadb
                 client = chromadb.PersistentClient(path=str(self.db_path))
@@ -353,11 +352,11 @@ class RAGPipelineDebugger:
                     include=['documents', 'metadatas', 'distances']
                 )
                 
-                print(f"   ✅ Direct search completed")
+                print("   ✅ Direct search completed")
                 print(f"   Results found: {len(search_results.get('ids', [[]])[0])}")
                 
                 if search_results.get('ids') and search_results['ids'][0]:
-                    print(f"   Top results:")
+                    print("   Top results:")
                     for i in range(min(3, len(search_results['ids'][0]))):
                         doc_id = search_results['ids'][0][i]
                         distance = search_results.get('distances', [[]])[0][i] if search_results.get('distances') else 'N/A'
@@ -370,20 +369,20 @@ class RAGPipelineDebugger:
                         print(f"        Content: {repr(document[:200])}")
                         print()
                 else:
-                    print(f"   ⚠️ No results returned from direct search")
+                    print("   ⚠️ No results returned from direct search")
                     
             except Exception as e:
                 print(f"   ❌ Direct search failed: {e}")
             
             # Step 3: Backend search
-            print(f"\n3️⃣ Backend search test...")
+            print("\n3️⃣ Backend search test...")
             try:
                 backend_results = await backend.search(
                     query=query,
                     n_results=5
                 )
                 
-                print(f"   ✅ Backend search completed")
+                print("   ✅ Backend search completed")
                 print(f"   Results: {len(backend_results)}")
                 
                 for i, result in enumerate(backend_results):

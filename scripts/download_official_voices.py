@@ -7,10 +7,8 @@ This script fetches the official voice files from the kokoro-onnx GitHub reposit
 import requests
 import logging
 import json
-import os
 import sys
 from pathlib import Path
-import hashlib
 
 # Configure logging
 logging.basicConfig(

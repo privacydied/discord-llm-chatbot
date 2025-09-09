@@ -8,10 +8,9 @@ handling for static, cog-based, and standard chat commands.
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 import discord
-from dataclasses import dataclass
 import logging
 
-from bot.router import InputModality, Router, ResponseMessage, BotAction
+from bot.router import InputModality, Router, BotAction
 from bot.command_parser import ParsedCommand
 from bot.types import Command
 

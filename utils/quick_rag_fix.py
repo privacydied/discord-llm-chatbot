@@ -18,9 +18,7 @@ from pathlib import Path
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
-from bot.rag.chroma_backend import ChromaRAGBackend
 from bot.rag.document_parsers import document_parser_factory
-from bot.rag.vector_schema import HybridSearchConfig
 from bot.rag.hybrid_search import get_hybrid_search
 from bot.util.logging import get_logger
 
@@ -105,7 +103,7 @@ async def quick_rag_fix():
         # Get final stats
         final_stats = await search_engine.get_stats()
         final_chunks = final_stats.get('collection_stats', {}).get('total_chunks', 0)
-        print(f"\n📊 Final collection stats:")
+        print("\n📊 Final collection stats:")
         print(f"   Total chunks: {final_chunks}")
         
         if final_chunks > 0:

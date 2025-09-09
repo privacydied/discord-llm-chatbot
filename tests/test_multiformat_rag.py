@@ -3,7 +3,6 @@
 Test script for multi-format RAG document support.
 Creates sample documents in various formats and tests parsing.
 """
-import os
 import sys
 from pathlib import Path
 import pytest

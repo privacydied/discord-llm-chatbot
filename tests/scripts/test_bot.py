@@ -6,8 +6,6 @@ an actual Discord connection.
 """
 import os
 import sys
-import json
-import asyncio
 import unittest
 import tempfile
 from pathlib import Path
@@ -17,17 +15,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 sys.path.append(str(Path(__file__).parent.parent))
 
 # Import bot modules
-from bot.config import load_config
 from bot.memory import (
     get_profile, save_profile, 
     get_server_profile, save_server_profile,
     user_profiles, server_profiles
 )
-from bot.ollama import OllamaClient, ollama_client
+from bot.ollama import OllamaClient
 from bot.tts import generate_tts, cleanup_tts
-from bot.search import search_all, SearchResult
-from bot.web import get_url_preview, process_url
-from bot.pdf_utils import pdf_processor, PDFProcessor
 
 class TestMemory(unittest.IsolatedAsyncioTestCase):
     """Test memory management functionality."""

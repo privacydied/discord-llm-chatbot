@@ -20,6 +20,7 @@ Environment variables commonly used by the surrounding engine:
 - TTS_LANGUAGE, TTS_TOKENISER
 - KOKORO_TTS_TIMEOUT_COLD, KOKORO_TTS_TIMEOUT_WARM
 """
+
 from __future__ import annotations
 
 from typing import Any, Optional
@@ -38,6 +39,7 @@ logger = logging.getLogger(__name__)
 try:
     # Import once here; rest of the codebase imports via this adapter
     from kokoro_onnx import Kokoro as _RealKokoro  # type: ignore
+
     _IMPORT_ERR: Exception | None = None
 except Exception as e:  # pragma: no cover - exercised only when kokoro_onnx missing
     _RealKokoro = None  # type: ignore
@@ -59,7 +61,9 @@ def Kokoro(*args: Any, **kwargs: Any):  # pragma: no cover - thin wrapper
     return _RealKokoro(*args, **kwargs)
 
 
-def get_kokoro_engine(model_path: Optional[str] = None, voices_path: Optional[str] = None):
+def get_kokoro_engine(
+    model_path: Optional[str] = None, voices_path: Optional[str] = None
+):
     """Construct and return a Kokoro engine instance.
 
     This wrapper exists to centralize construction logic in case we need to

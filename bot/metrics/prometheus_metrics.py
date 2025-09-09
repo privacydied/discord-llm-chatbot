@@ -1,6 +1,6 @@
 """Prometheus-based metrics implementation for bot monitoring and observability."""
 
-from typing import Dict, Optional, Any
+from typing import Dict, Optional
 import re
 import time
 from contextlib import contextmanager
@@ -19,10 +19,10 @@ logger = logging.getLogger(__name__)
 
 class PrometheusMetrics:
     """Prometheus-based metrics provider for comprehensive bot monitoring."""
-    
+
     def __init__(self, port: int = 8000, enable_http_server: bool = True):
         """Initialize Prometheus metrics with optional HTTP server for scraping.
-        
+
         Args:
             port: Port for Prometheus metrics HTTP server (0 for auto-select)
             enable_http_server: Whether to start HTTP server for metrics scraping
@@ -33,9 +33,11 @@ class PrometheusMetrics:
         self._histograms: Dict[str, Histogram] = {}
         self._gauges: Dict[str, Gauge] = {}
         self._http_server_started = False
-        
-        logger.info(f"📊 Initializing Prometheus metrics (HTTP server: {enable_http_server}, port: {port})")
-        
+
+        logger.info(
+            f"📊 Initializing Prometheus metrics (HTTP server: {enable_http_server}, port: {port})"
+        )
+
         # Start HTTP server for metrics scraping if enabled
         if enable_http_server:
             try:
@@ -47,10 +49,12 @@ class PrometheusMetrics:
                 logger.warning(f"⚠️  Failed to start Prometheus HTTP server: {e}")
         else:
             logger.info("📊 Prometheus metrics initialized without HTTP server")
-    
-    def define_counter(self, name: str, description: str, labels: Optional[list] = None) -> None:
+
+    def define_counter(
+        self, name: str, description: str, labels: Optional[list] = None
+    ) -> None:
         """Define a counter metric.
-        
+
         Args:
             name: Metric name
             description: Metric description
@@ -64,16 +68,19 @@ class PrometheusMetrics:
             logger.debug(f"Normalizing counter labels: {labels} -> {norm_labels}")
         if norm_name not in self._counters:
             self._counters[norm_name] = Counter(
-                name=norm_name,
-                documentation=description,
-                labelnames=norm_labels
+                name=norm_name, documentation=description, labelnames=norm_labels
             )
             logger.debug(f"📈 Defined counter: {norm_name}")
-    
-    def define_histogram(self, name: str, description: str, labels: Optional[list] = None, 
-                        buckets: Optional[tuple] = None) -> None:
+
+    def define_histogram(
+        self,
+        name: str,
+        description: str,
+        labels: Optional[list] = None,
+        buckets: Optional[tuple] = None,
+    ) -> None:
         """Define a histogram metric.
-        
+
         Args:
             name: Metric name
             description: Metric description
@@ -88,21 +95,23 @@ class PrometheusMetrics:
             logger.debug(f"Normalizing histogram labels: {labels} -> {norm_labels}")
         if norm_name not in self._histograms:
             kwargs = {
-                'name': norm_name,
-                'documentation': description,
-                'labelnames': norm_labels
+                "name": norm_name,
+                "documentation": description,
+                "labelnames": norm_labels,
             }
             if buckets:
-                kwargs['buckets'] = buckets
-                
+                kwargs["buckets"] = buckets
+
             self._histograms[norm_name] = Histogram(**kwargs)
             logger.debug(f"📊 Defined histogram: {norm_name}")
-    
-    def define_gauge(self, name: str, description: str, labels: Optional[list] = None) -> None:
+
+    def define_gauge(
+        self, name: str, description: str, labels: Optional[list] = None
+    ) -> None:
         """Define a gauge metric.
-        
+
         Args:
-            name: Metric name  
+            name: Metric name
             description: Metric description
             labels: List of label names
         """
@@ -114,15 +123,15 @@ class PrometheusMetrics:
             logger.debug(f"Normalizing gauge labels: {labels} -> {norm_labels}")
         if norm_name not in self._gauges:
             self._gauges[norm_name] = Gauge(
-                name=norm_name,
-                documentation=description,
-                labelnames=norm_labels
+                name=norm_name, documentation=description, labelnames=norm_labels
             )
             logger.debug(f"📏 Defined gauge: {norm_name}")
-    
-    def inc(self, name: str, value: int = 1, labels: Optional[Dict[str, str]] = None) -> None:
+
+    def inc(
+        self, name: str, value: int = 1, labels: Optional[Dict[str, str]] = None
+    ) -> None:
         """Increment a counter.
-        
+
         Args:
             name: Counter name
             value: Increment value
@@ -137,20 +146,24 @@ class PrometheusMetrics:
                 self._counters[norm_name].inc(value)
         else:
             logger.warning(f"⚠️  Counter '{name}' not defined")
-    
-    def increment(self, name: str, labels: Optional[Dict[str, str]] = None, value: int = 1) -> None:
+
+    def increment(
+        self, name: str, labels: Optional[Dict[str, str]] = None, value: int = 1
+    ) -> None:
         """Increment a counter (alternative interface).
-        
+
         Args:
             name: Counter name
             labels: Label values
             value: Increment value
         """
         self.inc(name, value, labels)
-    
-    def observe(self, name: str, value: float, labels: Optional[Dict[str, str]] = None) -> None:
+
+    def observe(
+        self, name: str, value: float, labels: Optional[Dict[str, str]] = None
+    ) -> None:
         """Observe a histogram value.
-        
+
         Args:
             name: Histogram name
             value: Value to observe
@@ -165,10 +178,12 @@ class PrometheusMetrics:
                 self._histograms[norm_name].observe(value)
         else:
             logger.warning(f"⚠️  Histogram '{name}' not defined")
-    
-    def gauge(self, name: str, value: float, labels: Optional[Dict[str, str]] = None) -> None:
+
+    def gauge(
+        self, name: str, value: float, labels: Optional[Dict[str, str]] = None
+    ) -> None:
         """Set a gauge value.
-        
+
         Args:
             name: Gauge name
             value: Gauge value
@@ -183,11 +198,11 @@ class PrometheusMetrics:
                 self._gauges[norm_name].set(value)
         else:
             logger.warning(f"⚠️  Gauge '{name}' not defined")
-    
+
     @contextmanager
     def timer(self, name: str, labels: Optional[Dict[str, str]] = None):
         """Context manager for timing operations.
-        
+
         Args:
             name: Histogram name for timing
             labels: Label values
@@ -196,14 +211,14 @@ class PrometheusMetrics:
             logger.warning(f"⚠️  Timer histogram '{name}' not defined")
             yield
             return
-            
+
         start_time = time.time()
         try:
             yield
         finally:
             duration = time.time() - start_time
             self.observe(name, duration, labels)
-    
+
     def get_registry(self):
         """Get the Prometheus registry for advanced usage."""
         return REGISTRY
@@ -224,10 +239,10 @@ class PrometheusMetrics:
     def _normalize_label_names(self, labels: list) -> list:
         """Normalize label names to Prometheus spec."""
         normed = []
-        for l in labels:
-            if not isinstance(l, str):
+        for label in labels:
+            if not isinstance(label, str):
                 continue
-            n = re.sub(r"[^a-zA-Z0-9_]", "_", l)
+            n = re.sub(r"[^a-zA-Z0-9_]", "_", label)
             if not re.match(r"^[a-zA-Z_]", n):
                 n = f"l_{n}"
             normed.append(n)

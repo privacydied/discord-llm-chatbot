@@ -1,6 +1,4 @@
-import asyncio
 import json
-import tempfile
 import wave
 from pathlib import Path
 from unittest.mock import MagicMock, AsyncMock

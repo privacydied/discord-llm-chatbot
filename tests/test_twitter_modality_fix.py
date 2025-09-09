@@ -5,8 +5,6 @@ Ensures text/image tweets are routed to screenshot flow, not video/STT flow.
 """
 
 import asyncio
-from typing import List
-from unittest.mock import Mock
 
 # Import the modules we need to test
 from bot.modality import _map_url_to_modality, InputModality, InputItem, map_item_to_modality
@@ -78,7 +76,7 @@ async def test_twitter_url_routing():
             if is_regular_tweet:
                 # Regular tweets should NOT be VIDEO_URL
                 if modality == InputModality.VIDEO_URL:
-                    print(f"   ❌ FAIL: Regular tweet incorrectly detected as VIDEO_URL")
+                    print("   ❌ FAIL: Regular tweet incorrectly detected as VIDEO_URL")
                     return False
                 else:
                     print(f"   ✅ PASS: Regular tweet correctly routed to {modality}")
@@ -86,7 +84,7 @@ async def test_twitter_url_routing():
             elif is_expected_video:
                 # These should be VIDEO_URL
                 if modality == InputModality.VIDEO_URL:
-                    print(f"   ✅ PASS: Video URL correctly detected")
+                    print("   ✅ PASS: Video URL correctly detected")
                 else:
                     print(f"   ❌ FAIL: Video URL incorrectly detected as {modality}")
                     return False

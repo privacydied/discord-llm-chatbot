@@ -2,7 +2,6 @@
 Simple smoke test for environment variables and multimodal functionality.
 CHANGE: Simplified version without pytest for basic validation.
 """
-import os
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -12,8 +11,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 # Import bot modules
 from bot.config import (
-    load_config, validate_required_env, audit_env_file, 
-    validate_prompt_files, check_venv_activation
+    load_config, validate_required_env, validate_prompt_files, check_venv_activation
 )
 from bot.events import has_image_attachments, get_image_urls
 

@@ -1,9 +1,8 @@
 """Tests for TTS instrumentation utilities."""
 
-import logging
 import unittest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from bot.tts_instrumentation import (
     log_tts_config,

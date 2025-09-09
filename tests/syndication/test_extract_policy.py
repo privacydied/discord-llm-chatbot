@@ -1,5 +1,3 @@
-import os
-import copy
 from bot.syndication.extract import extract_text_and_images_from_syndication
 from bot.syndication.url_utils import upgrade_pbs_to_orig
 

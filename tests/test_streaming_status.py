@@ -1,5 +1,4 @@
 import asyncio
-import types
 from typing import Optional, List
 
 import pytest

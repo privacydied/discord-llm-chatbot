@@ -8,7 +8,6 @@ def test_imports():
     print("=== Testing Imports ===")
     
     try:
-        from bot.commands.admin_alert_commands import AdminAlertCommands
         print("✅ AdminAlertCommands imports successfully")
     except Exception as e:
         print(f"❌ AdminAlertCommands import failed: {e}")

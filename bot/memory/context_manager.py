@@ -1,6 +1,5 @@
 import json
 import os
-from datetime import datetime
 from typing import Dict, List, Optional, Tuple, Any
 import logging
 import stat
@@ -10,13 +9,19 @@ import discord
 
 logger = logging.getLogger(__name__)
 
+
 class ContextManager:
     """
     Manages ephemeral conversation context, storing recent messages in a JSON file
     or in-memory, with separation for guilds/channels and DMs.
     """
 
-    def __init__(self, bot: discord.Client, filepath: str = "runtime/context.json", max_messages: int = 10):
+    def __init__(
+        self,
+        bot: discord.Client,
+        filepath: str = "runtime/context.json",
+        max_messages: int = 10,
+    ):
         """
         Initializes the ContextManager.
 
@@ -30,7 +35,9 @@ class ContextManager:
         self.bot = bot
         self.memory: Dict[str, Any] = {}
         self._load()
-        logger.info(f"ContextManager initialized. In-memory only: {self.in_memory_only}, Max messages: {self.max_messages}")
+        logger.info(
+            f"ContextManager initialized. In-memory only: {self.in_memory_only}, Max messages: {self.max_messages}"
+        )
 
     def _get_source_keys(self, message: discord.Message) -> Tuple[str, Optional[str]]:
         """
@@ -62,9 +69,13 @@ class ContextManager:
                     self.memory = json.load(f)
                 logger.info(f"Successfully loaded context from {self.filepath}")
             else:
-                logger.info(f"Context file not found at {self.filepath}. Starting with empty context.")
+                logger.info(
+                    f"Context file not found at {self.filepath}. Starting with empty context."
+                )
         except (json.JSONDecodeError, IOError) as e:
-            logger.error(f"Failed to load or parse context file at {self.filepath}. Using in-memory fallback. Error: {e}")
+            logger.error(
+                f"Failed to load or parse context file at {self.filepath}. Using in-memory fallback. Error: {e}"
+            )
             self.memory = {}
 
     def _save(self):
@@ -94,7 +105,10 @@ class ContextManager:
                         os.chmod(self.filepath, 0o600)
                         logger.info(
                             "Hardened context file permissions to 600",
-                            extra={"subsys": "context", "event": "context.perms.hardened"}
+                            extra={
+                                "subsys": "context",
+                                "event": "context.perms.hardened",
+                            },
                         )
                     else:
                         logger.warning(
@@ -111,7 +125,7 @@ class ContextManager:
     def append(self, message: discord.Message):
         """Appends a message to the appropriate context history."""
         primary_key, secondary_key = self._get_source_keys(message)
-        
+
         entry = {
             "author_id": str(message.author.id),
             "content": message.content,
@@ -119,11 +133,15 @@ class ContextManager:
         }
 
         if secondary_key:  # Guild message
-            self.memory.setdefault(primary_key, {}).setdefault(secondary_key, []).append(entry)
-            self.memory[primary_key][secondary_key] = self.memory[primary_key][secondary_key][-self.max_messages:]
+            self.memory.setdefault(primary_key, {}).setdefault(
+                secondary_key, []
+            ).append(entry)
+            self.memory[primary_key][secondary_key] = self.memory[primary_key][
+                secondary_key
+            ][-self.max_messages :]
         else:  # DM
             self.memory.setdefault(primary_key, []).append(entry)
-            self.memory[primary_key] = self.memory[primary_key][-self.max_messages:]
+            self.memory[primary_key] = self.memory[primary_key][-self.max_messages :]
 
         self._save()
 
@@ -152,12 +170,16 @@ class ContextManager:
 
             if not username:
                 try:
-                    user = await message.guild.fetch_member(author_id) if message.guild else await self.bot.fetch_user(author_id)
+                    user = (
+                        await message.guild.fetch_member(author_id)
+                        if message.guild
+                        else await self.bot.fetch_user(author_id)
+                    )
                     username = user.display_name
                     user_cache[author_id] = username
                 except (discord.NotFound, discord.HTTPException):
                     username = f"User ({author_id})"
-            
+
             lines.append(f"[{username}]: {entry.get('content', '')}")
-        
+
         return "\n".join(lines)

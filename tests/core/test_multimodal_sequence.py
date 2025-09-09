@@ -15,12 +15,11 @@ sequentially without skipping any modalities, with proper error handling and use
 
 import asyncio
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch, call
-from discord import Message, Attachment, Embed, DMChannel, User, Guild
+from unittest.mock import AsyncMock, MagicMock, patch
+from discord import Message, Attachment, Embed, DMChannel
 
 from bot.router import Router
 from bot.modality import InputModality, InputItem, collect_input_items, map_item_to_modality
-from bot.action import BotAction
 
 
 @pytest.fixture

@@ -2,8 +2,6 @@
 Unit tests for syndication content extraction.
 Tests for extract_text_and_images_from_syndication function.
 """
-import pytest
-from unittest.mock import patch
 from bot.syndication.extract import extract_text_and_images_from_syndication
 
 

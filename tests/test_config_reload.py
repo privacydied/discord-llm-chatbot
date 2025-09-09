@@ -1,11 +1,7 @@
 """
 Tests for dynamic configuration reloading functionality.
 """
-import os
-import tempfile
-import time
-from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
 

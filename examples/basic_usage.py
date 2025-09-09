@@ -149,7 +149,7 @@ async def demo_web():
         result = await process_url(url, extract_content=True)
         
         if result and not result.get('error'):
-            print(f"\nExtracted Content (first 300 chars):")
+            print("\nExtracted Content (first 300 chars):")
             content = result.get('content', {})
             print(content.get('text', '')[:300] + "...")
     

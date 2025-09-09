@@ -15,7 +15,7 @@ def test_metric_label_name_normalization():
     m = PrometheusMetrics(enable_http_server=False)
     # Label with dash should be normalized
     m.define_counter('gate.blocked', 'blocked', labels=['reason-code'])
-    key = next(iter(m._counters.keys()))
+    next(iter(m._counters.keys()))
     # Ensure counter exists and increment with normalized label name
     m.increment('gate.blocked', labels={'reason_code': 'policy'})
 

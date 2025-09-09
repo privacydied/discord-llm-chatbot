@@ -7,6 +7,7 @@ New path:   bot.tts.instrumentation
 This module re-exports the instrumentation utilities for backward compatibility
 with existing tests and any code still importing the legacy path.
 """
+
 from .tts.instrumentation import (
     log_tts_config,
     log_phonemiser_selection,

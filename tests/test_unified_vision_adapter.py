@@ -6,10 +6,8 @@ error handling, fallback logic, and integration with gateway.
 """
 
 import asyncio
-import json
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 from bot.vision.unified_adapter import (
     UnifiedVisionAdapter, TogetherPlugin, NovitaPlugin, 
@@ -17,7 +15,7 @@ from bot.vision.unified_adapter import (
 )
 from bot.vision.gateway import VisionGateway
 from bot.vision.types import (
-    VisionRequest, VisionTask, VisionProvider, VisionError, VisionErrorType
+    VisionRequest, VisionTask, VisionError, VisionErrorType
 )
 
 

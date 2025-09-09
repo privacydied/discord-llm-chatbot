@@ -4,13 +4,10 @@ Tests for empty-body messages with attachments and !speak/!say commands with emp
 import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
 import discord
-import tempfile
-import os
 from pathlib import Path
 
 from bot.router import Router, ResponseMessage
 from bot.command_parser import Command, ParsedCommand
-from bot.types import InputModality, OutputModality
 
 
 @pytest.fixture

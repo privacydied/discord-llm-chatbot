@@ -5,8 +5,7 @@ Tests cover unit, integration, and fault-injection scenarios.
 
 import pytest
 import asyncio
-from unittest.mock import Mock, AsyncMock, patch, MagicMock
-from typing import Dict, Any, List, Optional
+from unittest.mock import Mock, AsyncMock, patch
 import json
 
 from bot.router import Router
@@ -92,21 +91,21 @@ class TestImageOnlyTweetFlow:
     def test_is_image_only_tweet_detection(self, router, sample_image_only_tweet, sample_mixed_content_tweet):
         """Test detection of image-only tweets vs mixed content."""
         # Test image-only tweet (empty text + photos)
-        assert router._is_image_only_tweet(sample_image_only_tweet) == True
+        assert router._is_image_only_tweet(sample_image_only_tweet)
         
         # Test mixed content tweet (text + photos)
-        assert router._is_image_only_tweet(sample_mixed_content_tweet) == False
+        assert not router._is_image_only_tweet(sample_mixed_content_tweet)
         
         # Test text-only tweet (no photos)
         text_only = {"text": "Just text", "photos": []}
-        assert router._is_image_only_tweet(text_only) == False
+        assert not router._is_image_only_tweet(text_only)
         
         # Test edge cases
         whitespace_only = {"text": "   \n  ", "photos": [{"url": "test.jpg"}]}
-        assert router._is_image_only_tweet(whitespace_only) == True
+        assert router._is_image_only_tweet(whitespace_only)
         
         no_photos = {"text": "", "photos": None}
-        assert router._is_image_only_tweet(no_photos) == False
+        assert not router._is_image_only_tweet(no_photos)
 
     @pytest.mark.asyncio
     async def test_handle_image_only_tweet_single_image(self, router, sample_image_only_tweet):

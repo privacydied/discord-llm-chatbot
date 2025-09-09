@@ -8,6 +8,7 @@ Shim module for legacy KokoroDirect interface used in tests.
 This shim does NOT perform real I/O. The tests patch `_init_session` and
 `_load_available_voices`, and inject a mocked `session` and `g2p`.
 """
+
 from __future__ import annotations
 
 from typing import Tuple, Any
@@ -51,7 +52,7 @@ class KokoroDirect:
 
         # Placeholders; tests will patch or set these
         self.session = None  # set by tests to a MagicMock(InferenceSession)
-        self.g2p = None      # set by tests to a MagicMock or patched en.G2P
+        self.g2p = None  # set by tests to a MagicMock or patched en.G2P
 
         # Hooks that tests patch to avoid I/O
         self._init_session()
@@ -64,7 +65,9 @@ class KokoroDirect:
     def _load_available_voices(self) -> None:  # pragma: no cover - tests patch this
         return None
 
-    def _load_voice(self, voice_id: str) -> np.ndarray:  # pragma: no cover - tests patch this
+    def _load_voice(
+        self, voice_id: str
+    ) -> np.ndarray:  # pragma: no cover - tests patch this
         """Load a voice embedding for the given voice_id.
         Tests patch this to return a (N, 256) float32 array.
         """
@@ -86,7 +89,9 @@ class KokoroDirect:
             vec = vec.reshape(1, 256)
         return vec.astype(np.float32, copy=False)
 
-    def create(self, *, text: str, voice_id: str, speed: float = 1.0) -> Tuple[np.ndarray, int]:
+    def create(
+        self, *, text: str, voice_id: str, speed: float = 1.0
+    ) -> Tuple[np.ndarray, int]:
         """Create audio from text using the specified voice.
 
         Returns a tuple (audio, SAMPLE_RATE) to match legacy tests.
@@ -109,7 +114,9 @@ class KokoroDirect:
 
         # Session is provided by tests as a MagicMock(InferenceSession)
         assert self.session is not None, "session must be set by tests"
-        outputs = self.session.run(None, {"input_ids": tokens, "style": style, "speed": speed_arr})
+        outputs = self.session.run(
+            None, {"input_ids": tokens, "style": style, "speed": speed_arr}
+        )
 
         # Take first output and squeeze to 1D
         audio = np.asarray(outputs[0]).reshape(-1).astype(np.float32, copy=False)

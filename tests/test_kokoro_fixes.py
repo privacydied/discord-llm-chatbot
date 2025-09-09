@@ -6,7 +6,6 @@ Tests vocab sanity, longest-match encoding, and English IPA synthesis.
 
 import os
 import sys
-import tempfile
 from pathlib import Path
 
 # Add bot to path
@@ -177,7 +176,7 @@ def test_voice_memo_sender():
         
         try:
             # This should fail due to missing bot token, but validates import/structure
-            result = wav_bytes_to_voice_memo(12345, dummy_wav, "fake_token")
+            wav_bytes_to_voice_memo(12345, dummy_wav, "fake_token")
             print("  ⚠️  Unexpectedly succeeded with fake token")
         except VoiceMemoError as e:
             if "token" in str(e).lower() or "bot" in str(e).lower():

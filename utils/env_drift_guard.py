@@ -26,7 +26,6 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import os
 import re
 from dataclasses import asdict, dataclass
 from datetime import datetime

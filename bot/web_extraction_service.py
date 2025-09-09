@@ -23,7 +23,11 @@ USER_AGENT = os.getenv(
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/120.0 Safari/537.36",
 )
-ENABLE_TIER_B = os.getenv("WEBEX_ENABLE_TIER_B", "1").strip() not in {"0", "false", "False"}
+ENABLE_TIER_B = os.getenv("WEBEX_ENABLE_TIER_B", "1").strip() not in {
+    "0",
+    "false",
+    "False",
+}
 ACCEPT_LANGUAGE = os.getenv("WEBEX_ACCEPT_LANGUAGE", "en-US,en;q=0.9")
 
 
@@ -98,7 +102,9 @@ class WebExtractionService:
             except Exception as e:
                 logger.debug(f"Tier B exception for {url}: {e}", exc_info=True)
 
-        return ExtractionResult(success=False, tier_used="none", error="all tiers failed")
+        return ExtractionResult(
+            success=False, tier_used="none", error="all tiers failed"
+        )
 
     async def _tier_a_httpx(self, url: str) -> ExtractionResult:
         client = await self._get_client()
@@ -107,7 +113,11 @@ class WebExtractionService:
         canonical_url = str(r.url)
         content_type = r.headers.get("content-type", "")
         if "text/html" not in content_type:
-            return ExtractionResult(success=False, tier_used="A", error=f"unsupported content-type: {content_type}")
+            return ExtractionResult(
+                success=False,
+                tier_used="A",
+                error=f"unsupported content-type: {content_type}",
+            )
         html = r.text
         parsed = self._parse_html_for_text(html, canonical_url)
         if parsed.get("text"):
@@ -130,18 +140,23 @@ class WebExtractionService:
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
             try:
-                context = await browser.new_context(user_agent=USER_AGENT, java_script_enabled=True)
+                context = await browser.new_context(
+                    user_agent=USER_AGENT, java_script_enabled=True
+                )
                 page = await context.new_page()
                 await page.route(
                     "**/*",
                     lambda route: asyncio.create_task(route.continue_())
-                    if route.request.resource_type in {"document", "xhr", "fetch", "script"}
+                    if route.request.resource_type
+                    in {"document", "xhr", "fetch", "script"}
                     else asyncio.create_task(route.abort()),
                 )
                 await page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
                 # Try to read meta/og after DOM loaded
                 html = await page.content()
-                parsed = self._parse_html_for_text(html, await page.evaluate("() => document.location.href"))
+                parsed = self._parse_html_for_text(
+                    html, await page.evaluate("() => document.location.href")
+                )
                 if parsed.get("text"):
                     return ExtractionResult(
                         success=True,
@@ -151,7 +166,9 @@ class WebExtractionService:
                         author=parsed.get("author"),
                         raw_json_present=parsed.get("raw_json_present", False),
                     )
-                return ExtractionResult(success=False, tier_used="B", error="no text extracted")
+                return ExtractionResult(
+                    success=False, tier_used="B", error="no text extracted"
+                )
             finally:
                 await browser.close()
 
@@ -164,7 +181,7 @@ class WebExtractionService:
         # Unescape HTML entities and trim quotes/wrappers
         t = html.unescape(text).strip()
         # Remove leading/trailing Unicode quotes often used in OG
-        t = t.strip("\u201c\u201d\"\'")
+        t = t.strip("\u201c\u201d\"'")
         # Collapse whitespace
         t = re.sub(r"\s+", " ", t).strip()
         return t
@@ -183,7 +200,9 @@ class WebExtractionService:
             tw_desc = soup.find("meta", attrs={"name": "twitter:description"})
             for m in (og_desc, tw_desc):
                 if m and m.get("content"):
-                    norm = WebExtractionService._normalize_tweet_text(m["content"])  # often contains tweet text
+                    norm = WebExtractionService._normalize_tweet_text(
+                        m["content"]
+                    )  # often contains tweet text
                     if norm:
                         text_candidates.append(norm)
 
@@ -217,7 +236,12 @@ class WebExtractionService:
                 if not t:
                     continue
                 is_ld = script.get("type") == "application/ld+json"
-                if is_ld or "__NEXT_DATA__" in t or "__INITIAL_STATE__" in t or "hydrate" in t:
+                if (
+                    is_ld
+                    or "__NEXT_DATA__" in t
+                    or "__INITIAL_STATE__" in t
+                    or "hydrate" in t
+                ):
                     try:
                         raw_json_present = True
                         # Attempt to parse a JSON object within the script content
@@ -239,10 +263,10 @@ class WebExtractionService:
             # Generic site extraction via meta
             og_desc = soup.find("meta", attrs={"property": "og:description"})
             if og_desc and og_desc.get("content"):
-                text_candidates.append(og_desc["content"]) 
+                text_candidates.append(og_desc["content"])
             desc = soup.find("meta", attrs={"name": "description"})
             if desc and desc.get("content"):
-                text_candidates.append(desc["content"]) 
+                text_candidates.append(desc["content"])
 
         # Fallback main text: take largest paragraph block
         if not text_candidates:

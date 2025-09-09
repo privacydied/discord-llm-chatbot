@@ -19,12 +19,10 @@ PHONEME_TO_ID: dict[str, int] = {
     "_": 7,
     "<sp>": 8,
     "sil": 9,
-    
     # Stress and prosody
     "ˈ": 10,  # Primary stress
-    "ˌ": 11,  # Secondary stress  
+    "ˌ": 11,  # Secondary stress
     "ː": 12,  # Length mark
-    
     # Consonants - stops
     "p": 20,
     "b": 21,
@@ -33,7 +31,6 @@ PHONEME_TO_ID: dict[str, int] = {
     "k": 24,
     "g": 25,
     "ʔ": 26,  # Glottal stop
-    
     # Consonants - fricatives
     "f": 30,
     "v": 31,
@@ -44,28 +41,23 @@ PHONEME_TO_ID: dict[str, int] = {
     "ʃ": 36,  # ship
     "ʒ": 37,  # vision
     "h": 38,
-    
     # Consonants - affricates
     "t͡ʃ": 40,  # church
     "d͡ʒ": 41,  # judge
-    "tʃ": 42,   # alternative encoding
-    "dʒ": 43,   # alternative encoding
-    
+    "tʃ": 42,  # alternative encoding
+    "dʒ": 43,  # alternative encoding
     # Consonants - nasals
     "m": 50,
     "n": 51,
     "ŋ": 52,  # sing
-    
     # Consonants - liquids
     "l": 60,
     "ɹ": 61,  # red (English r)
     "r": 62,  # alternative r
-    
     # Consonants - glides
     "w": 70,
     "j": 71,  # yes
     "y": 72,  # alternative encoding
-    
     # Vowels - monophthongs
     "i": 100,  # beat
     "ɪ": 101,  # bit
@@ -83,7 +75,6 @@ PHONEME_TO_ID: dict[str, int] = {
     "ɚ": 113,  # letter (r-colored schwa)
     "ɜ": 114,  # bird (without r)
     "ɝ": 115,  # bird (with r)
-    
     # Vowels - diphthongs
     "eɪ": 120,  # bay
     "aɪ": 121,  # buy
@@ -93,14 +84,12 @@ PHONEME_TO_ID: dict[str, int] = {
     "ɪə": 125,  # beer
     "ɛə": 126,  # bear
     "ʊə": 127,  # tour
-    
     # Alternative diphthong encodings
     "ei": 130,
     "ai": 131,
     "oi": 132,
     "ou": 133,
     "au": 134,
-    
     # Numbers (if model supports them)
     "0": 200,
     "1": 201,
@@ -112,7 +101,6 @@ PHONEME_TO_ID: dict[str, int] = {
     "7": 207,
     "8": 208,
     "9": 209,
-    
     # Special tokens (if present in model)
     "<bos>": 1000,
     "<eos>": 1001,
@@ -128,7 +116,9 @@ EXPECTED_VOCAB_SIZE: int | None = len(PHONEME_TO_ID)
 _id_counts = {}
 for phoneme, id_val in PHONEME_TO_ID.items():
     if id_val in _id_counts:
-        raise ValueError(f"Duplicate ID {id_val} for phonemes '{_id_counts[id_val]}' and '{phoneme}'")
+        raise ValueError(
+            f"Duplicate ID {id_val} for phonemes '{_id_counts[id_val]}' and '{phoneme}'"
+        )
     _id_counts[id_val] = phoneme
 
 # Create reverse mapping for efficiency

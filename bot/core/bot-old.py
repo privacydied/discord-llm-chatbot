@@ -27,10 +27,10 @@ class LLMBot(commands.Bot):
         self.logger = get_logger(__name__)
         self.metrics = NullMetrics()
         self.config = {
-            'tts': {
-                'voice_model_path': os.getenv('TTS_MODEL_PATH'),
-                'voice_style_path': os.getenv('TTS_VOICES_PATH'),
-                'tokenizer_alias': os.getenv('TTS_TOKENISER', 'default')
+            "tts": {
+                "voice_model_path": os.getenv("TTS_MODEL_PATH"),
+                "voice_style_path": os.getenv("TTS_VOICES_PATH"),
+                "tokenizer_alias": os.getenv("TTS_TOKENISER", "default"),
             }
         }
         self.user_profiles = {}
@@ -47,6 +47,7 @@ class LLMBot(commands.Bot):
         self.logger.info("Setting up bot...")
         try:
             from bot.metrics.prometheus import PrometheusMetrics
+
             self.metrics = PrometheusMetrics()
         except Exception:
             self.logger.warning("Prometheus metrics not available, using NullMetrics.")
@@ -62,21 +63,27 @@ class LLMBot(commands.Bot):
     async def on_ready(self):
         """Called when the bot is ready and connected to Discord."""
         if not self._is_ready.is_set():
-            self.logger.info(f'Logged in as {self.user} (ID: {self.user.id})')
-            self.logger.info('Running setup_hook...')
+            self.logger.info(f"Logged in as {self.user} (ID: {self.user.id})")
+            self.logger.info("Running setup_hook...")
             await self.setup_hook()
             self._is_ready.set()
             self.logger.info("Bot is ready to receive commands.")
 
     async def on_message(self, message: discord.Message):
-        await self._is_ready.wait() # Wait until the bot is ready
+        await self._is_ready.wait()  # Wait until the bot is ready
         if message.author == self.user:
             return
 
-        if (not message.content or not message.content.strip()) and not message.attachments:
+        if (
+            not message.content or not message.content.strip()
+        ) and not message.attachments:
             return
 
-        guild_info = 'DM' if isinstance(message.channel, discord.DMChannel) else f"guild:{message.guild.id}"
+        guild_info = (
+            "DM"
+            if isinstance(message.channel, discord.DMChannel)
+            else f"guild:{message.guild.id}"
+        )
         self.logger.info(
             f"Message received: msg_id:{message.id} author:{message.author.id} in:{guild_info} len:{len(message.content)}"
         )
@@ -85,8 +92,10 @@ class LLMBot(commands.Bot):
         if self.router:
             action = await self.router.dispatch_message(message)
             if action:
-                if action.meta.get('delegated_to_cog'):
-                    self.logger.info(f"Message {message.id} delegated to command processor.")
+                if action.meta.get("delegated_to_cog"):
+                    self.logger.info(
+                        f"Message {message.id} delegated to command processor."
+                    )
                     await self.process_commands(message)
                 elif action.has_payload:
                     await self._execute_action(message, action)
@@ -95,20 +104,30 @@ class LLMBot(commands.Bot):
                 # Fallback for messages that don't trigger the router (e.g. standard commands)
                 await self.process_commands(message)
         else:
-            self.logger.error("Router not initialized, falling back to command processing.")
+            self.logger.error(
+                "Router not initialized, falling back to command processing."
+            )
             await self.process_commands(message)
 
     async def _execute_action(self, message: discord.Message, action: BotAction):
         """Executes a BotAction by sending its content to the appropriate channel."""
-        self.logger.info(f"Executing action with meta: {action.meta} for message {message.id}")
+        self.logger.info(
+            f"Executing action with meta: {action.meta} for message {message.id}"
+        )
 
         files = None
         # If action requires TTS, process it.
-        if action.meta.get('requires_tts'):
-            self.logger.info(f"Action requires TTS, processing... (msg_id: {message.id})")
+        if action.meta.get("requires_tts"):
+            self.logger.info(
+                f"Action requires TTS, processing... (msg_id: {message.id})"
+            )
             if not self.tts_manager:
-                self.logger.error(f"TTS Manager not available, cannot process TTS action. (msg_id: {message.id})")
-                action.content = "I tried to respond with voice, but the TTS service is not working."
+                self.logger.error(
+                    f"TTS Manager not available, cannot process TTS action. (msg_id: {message.id})"
+                )
+                action.content = (
+                    "I tried to respond with voice, but the TTS service is not working."
+                )
             else:
                 action = await self.tts_manager.process(action)
 
@@ -117,31 +136,43 @@ class LLMBot(commands.Bot):
             if os.path.exists(action.audio_path):
                 files = [discord.File(action.audio_path, filename="voice_message.ogg")]
             else:
-                self.logger.error(f"Audio file not found: {action.audio_path} (msg_id: {message.id})")
-                action.content = "I tried to send a voice message, but the audio file was missing."
-        elif action.meta.get('requires_tts'): # Log error only if TTS was expected but failed
-            self.logger.error(f"Audio file not generated after TTS processing. (msg_id: {message.id})")
-            action.content = "I tried to send a voice message, but the audio file was missing."
+                self.logger.error(
+                    f"Audio file not found: {action.audio_path} (msg_id: {message.id})"
+                )
+                action.content = (
+                    "I tried to send a voice message, but the audio file was missing."
+                )
+        elif action.meta.get(
+            "requires_tts"
+        ):  # Log error only if TTS was expected but failed
+            self.logger.error(
+                f"Audio file not generated after TTS processing. (msg_id: {message.id})"
+            )
+            action.content = (
+                "I tried to send a voice message, but the audio file was missing."
+            )
 
         try:
             content = action.content
             # Per user request, add a mention to the user unless it's a reply in a thread.
-            if action.meta.get('is_reply'):
+            if action.meta.get("is_reply"):
                 # Prepend mention only if content exists and is not just whitespace
                 if content and content.strip():
                     content = f"{message.author.mention}\n\n{content}"
 
             # Discord message character limit handling
             if content and len(content) > 2000:
-                self.logger.warning(f"Message content for {message.id} exceeds 2000 characters. Attaching as file.")
-                file_content = io.BytesIO(content.encode('utf-8'))
+                self.logger.warning(
+                    f"Message content for {message.id} exceeds 2000 characters. Attaching as file."
+                )
+                file_content = io.BytesIO(content.encode("utf-8"))
                 text_file = discord.File(fp=file_content, filename="full_response.txt")
                 if files is None:
                     files = []
                 files.append(text_file)
 
                 # The message becomes a notification about the attached file.
-                if action.meta.get('is_reply'):
+                if action.meta.get("is_reply"):
                     content = f"{message.author.mention}\n\nThe response was too long to post directly. The full content is attached as a file."
                 else:
                     content = "The response was too long to post directly. The full content is attached as a file."
@@ -149,14 +180,23 @@ class LLMBot(commands.Bot):
             if content or action.embeds or files:
                 try:
                     # Use message.reply() for contextual replies.
-                    await message.reply(content=content, embeds=action.embeds, files=files, mention_author=True)
+                    await message.reply(
+                        content=content,
+                        embeds=action.embeds,
+                        files=files,
+                        mention_author=True,
+                    )
                 except discord.errors.HTTPException as e:
                     # If replying fails (e.g., original message deleted), send a normal message instead.
-                    if e.code == 50035: # Unknown Message
-                        self.logger.warning(f"Replying to message {message.id} failed (likely deleted). Falling back to channel send.")
-                        await message.channel.send(content=content, embeds=action.embeds, files=files)
+                    if e.code == 50035:  # Unknown Message
+                        self.logger.warning(
+                            f"Replying to message {message.id} failed (likely deleted). Falling back to channel send."
+                        )
+                        await message.channel.send(
+                            content=content, embeds=action.embeds, files=files
+                        )
                     else:
-                        raise # Re-raise other HTTP exceptions
+                        raise  # Re-raise other HTTP exceptions
 
         except discord.errors.HTTPException as e:
             self.logger.error(f"Failed to send message: {e} (msg_id: {message.id})")
@@ -166,7 +206,9 @@ class LLMBot(commands.Bot):
         try:
             self.logger.info("Loading memory profiles...")
             self.user_profiles, self.server_profiles = load_all_profiles()
-            self.logger.info(f"Loaded {len(self.user_profiles)} user and {len(self.server_profiles)} server profiles.")
+            self.logger.info(
+                f"Loaded {len(self.user_profiles)} user and {len(self.server_profiles)} server profiles."
+            )
         except Exception as e:
             self.logger.error(f"Failed to load profiles: {e}", exc_info=True)
 
@@ -174,6 +216,7 @@ class LLMBot(commands.Bot):
         """Set up background tasks for the bot."""
         try:
             from bot.tasks import setup_memory_save_task
+
             self.memory_save_task = setup_memory_save_task(self)
             self.memory_save_task.start()
         except Exception as e:
@@ -183,6 +226,7 @@ class LLMBot(commands.Bot):
         """Set up TTS manager if configured."""
         try:
             from bot.tts.interface import TTSManager
+
             self.tts_manager = TTSManager(self)
             self.logger.info("TTS manager initialized")
         except Exception as e:
@@ -192,6 +236,7 @@ class LLMBot(commands.Bot):
         """Set up message router."""
         try:
             from bot.router import Router
+
             self.router = Router(self)
             self.logger.info("Router initialized")
         except Exception as e:
@@ -201,6 +246,7 @@ class LLMBot(commands.Bot):
         """Load command extensions."""
         try:
             from bot.commands import setup_commands
+
             await setup_commands(self)
             self.logger.info("Commands loaded")
         except Exception as e:
@@ -218,4 +264,3 @@ class LLMBot(commands.Bot):
             await self.tts_manager.close()
         await super().close()
         self.logger.info("Bot shutdown complete")
-

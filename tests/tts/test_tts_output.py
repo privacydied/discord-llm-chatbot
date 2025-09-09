@@ -8,7 +8,6 @@ import json
 import os
 import numpy as np
 from pathlib import Path
-from unittest.mock import patch, MagicMock
 
 # Import the modules we want to test
 try:
@@ -121,7 +120,7 @@ def test_no_clipping_and_dc():
 
 def test_lexicon_applied():
     """Test that lexicon entries are properly applied."""
-    from bot.tts.eng_g2p_local import apply_lexicon, normalize_text
+    from bot.tts.eng_g2p_local import apply_lexicon
     
     # Test lexicon application
     original = "cavalli furs whats the weather"
@@ -135,7 +134,7 @@ def test_lexicon_applied():
     
 def test_text_normalization():
     """Test text normalization for numbers and contractions."""
-    from bot.tts.eng_g2p_local import normalize_text, number_to_words
+    from bot.tts.eng_g2p_local import normalize_text
     
     # Test number conversion
     text = "counting from 1 to 10"
@@ -163,7 +162,7 @@ def test_ipa_normalization():
                 'f': 8, 'ɝ': 9, 'z': 10, 'ɚ': 11, 'ː': 12, 'g': 13, 'u': 14, 'd': 15
             }
     
-    vocab = MockVocab()
+    MockVocab()
     
     # Test length marker removal
     ipa_with_length = "kəːˈvɑliː"
@@ -185,14 +184,13 @@ def test_environment_variables():
     from bot.tokenizer_registry import FORCE_IPA, ALLOW_GRAPHEME
     
     # These should be set according to our hardening
-    assert FORCE_IPA == True  # Should default to True
-    assert ALLOW_GRAPHEME == False  # Should default to False
+    assert FORCE_IPA  # Should default to True
+    assert not ALLOW_GRAPHEME  # Should default to False
 
 
 @pytest.mark.integration
 def test_end_to_end_synthesis():
     """Integration test for complete synthesis pipeline."""
-    text = "counting from one to ten: one two three four five six seven eight nine ten cavalli furs whats the weather today"
     
     # This would require actual TTS setup, so we'll mock it
     from bot.tts.interface import TTSManager

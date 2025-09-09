@@ -2,6 +2,7 @@
 Discord commands for video URL ingestion and transcription.
 Supports YouTube and TikTok URL processing through STT pipeline.
 """
+
 import re
 from typing import Optional
 import discord
@@ -15,14 +16,14 @@ logger = get_logger(__name__)
 
 # URL validation patterns
 YOUTUBE_PATTERNS = [
-    r'https?://(?:www\.)?youtube\.com/watch\?v=[\w-]+',
-    r'https?://youtu\.be/[\w-]+',
+    r"https?://(?:www\.)?youtube\.com/watch\?v=[\w-]+",
+    r"https?://youtu\.be/[\w-]+",
 ]
 
 TIKTOK_PATTERNS = [
-    r'https?://(?:www\.)?tiktok\.com/@[\w.-]+/video/\d+',
-    r'https?://(?:www\.)?tiktok\.com/t/[\w-]+',
-    r'https?://(?:m|vm)\.tiktok\.com/[\w-]+',
+    r"https?://(?:www\.)?tiktok\.com/@[\w.-]+/video/\d+",
+    r"https?://(?:www\.)?tiktok\.com/t/[\w-]+",
+    r"https?://(?:m|vm)\.tiktok\.com/[\w-]+",
 ]
 
 ALL_PATTERNS = YOUTUBE_PATTERNS + TIKTOK_PATTERNS
@@ -30,11 +31,11 @@ ALL_PATTERNS = YOUTUBE_PATTERNS + TIKTOK_PATTERNS
 
 class VideoCommands(commands.Cog):
     """Commands for video URL processing and transcription."""
-    
+
     def __init__(self, bot):
         self.bot = bot
         logger.info("🎥 VideoCommands cog initialized")
-    
+
     def _extract_url_from_message(self, content: str) -> Optional[str]:
         """Extract first supported URL from message content."""
         for pattern in ALL_PATTERNS:
@@ -42,7 +43,7 @@ class VideoCommands(commands.Cog):
             if match:
                 return match.group(0)
         return None
-    
+
     def _get_url_type(self, url: str) -> str:
         """Determine URL type (YouTube or TikTok)."""
         if any(re.match(pattern, url) for pattern in YOUTUBE_PATTERNS):
@@ -51,12 +52,12 @@ class VideoCommands(commands.Cog):
             return "TikTok"
         else:
             return "Unknown"
-    
+
     @commands.command(name="watch", aliases=["transcribe", "listen"])
     async def watch_video(self, ctx, url: str = None, *, options: str = ""):
         """
         Transcribe audio from YouTube or TikTok video.
-        
+
         Usage:
             !watch <url> [--speed 1.5] [--force]
             !transcribe https://youtu.be/example
@@ -73,14 +74,14 @@ class VideoCommands(commands.Cog):
                         "**Example:** `!watch https://youtu.be/dQw4w9WgXcQ`"
                     )
                     return
-            
+
             # Parse options
             speedup = 1.5  # default
             force_refresh = False
-            
+
             if "--speed" in options:
                 try:
-                    speed_match = re.search(r'--speed\s+([\d.]+)', options)
+                    speed_match = re.search(r"--speed\s+([\d.]+)", options)
                     if speed_match:
                         speedup = float(speed_match.group(1))
                         if speedup < 0.5 or speedup > 3.0:
@@ -89,155 +90,158 @@ class VideoCommands(commands.Cog):
                 except ValueError:
                     await ctx.reply("❌ Invalid speed value. Use format: `--speed 1.5`")
                     return
-            
+
             if "--force" in options:
                 force_refresh = True
-            
+
             url_type = self._get_url_type(url)
-            
+
             # Send initial processing message
             processing_msg = await ctx.reply(
                 f"🎥 Processing {url_type} video...\n"
                 f"📊 Speed: {speedup}x | Cache: {'Refresh' if force_refresh else 'Enabled'}\n"
                 f"⏳ This may take a moment..."
             )
-            
+
             # Show typing indicator
             async with ctx.typing():
                 # Process the video URL
                 result = await hear_infer_from_url(url, speedup, force_refresh)
-                
-                transcription = result['transcription']
-                metadata = result['metadata']
-                
+
+                transcription = result["transcription"]
+                metadata = result["metadata"]
+
                 # Create rich response embed
                 embed = discord.Embed(
                     title="🎥 Video Transcription Complete",
                     description=f"**{metadata['title']}**",
-                    color=0x00ff00,
-                    url=metadata['url']
+                    color=0x00FF00,
+                    url=metadata["url"],
                 )
-                
+
                 # Add metadata fields
                 embed.add_field(
                     name="📊 Details",
                     value=f"**Source:** {metadata['source'].title()}\n"
-                          f"**Uploader:** {metadata['uploader']}\n"
-                          f"**Duration:** {metadata['original_duration_s']:.1f}s → {metadata['processed_duration_s']:.1f}s\n"
-                          f"**Speed:** {metadata['speedup_factor']}x\n"
-                          f"**Cache:** {'Hit' if metadata['cache_hit'] else 'Miss'}",
-                    inline=True
+                    f"**Uploader:** {metadata['uploader']}\n"
+                    f"**Duration:** {metadata['original_duration_s']:.1f}s → {metadata['processed_duration_s']:.1f}s\n"
+                    f"**Speed:** {metadata['speedup_factor']}x\n"
+                    f"**Cache:** {'Hit' if metadata['cache_hit'] else 'Miss'}",
+                    inline=True,
                 )
-                
+
                 # Add transcription (truncated if too long)
                 transcription_preview = transcription
                 if len(transcription) > 1000:
                     transcription_preview = transcription[:1000] + "..."
-                
+
                 embed.add_field(
                     name="📝 Transcription",
                     value=f"```\n{transcription_preview}\n```",
-                    inline=False
+                    inline=False,
                 )
-                
+
                 # Add footer with processing info
-                embed.set_footer(
-                    text=f"Processed at {metadata['timestamp'][:19]} UTC"
-                )
-                
+                embed.set_footer(text=f"Processed at {metadata['timestamp'][:19]} UTC")
+
                 # Edit the processing message with results
                 await processing_msg.edit(content=None, embed=embed)
-                
+
                 # Log successful transcription
                 logger.info(
-                    f"✅ Video transcription completed",
+                    "✅ Video transcription completed",
                     extra={
                         "subsys": "video_ingest",
                         "event": "transcription_complete",
                         "user_id": ctx.author.id,
                         "guild_id": ctx.guild.id if ctx.guild else None,
                         "url": url,
-                        "source": metadata['source'],
-                        "duration": metadata['original_duration_s'],
-                        "cache_hit": metadata['cache_hit']
-                    }
+                        "source": metadata["source"],
+                        "duration": metadata["original_duration_s"],
+                        "cache_hit": metadata["cache_hit"],
+                    },
                 )
-                
+
         except InferenceError as e:
             # User-friendly error message
-            await processing_msg.edit(
-                content=f"❌ **Transcription Failed**\n{str(e)}"
+            await processing_msg.edit(content=f"❌ **Transcription Failed**\n{str(e)}")
+            logger.warning(
+                f"Video transcription failed: {e}",
+                extra={
+                    "subsys": "video_ingest",
+                    "event": "transcription_error",
+                    "user_id": ctx.author.id,
+                    "url": url,
+                },
             )
-            logger.warning(f"Video transcription failed: {e}", extra={
-                "subsys": "video_ingest", 
-                "event": "transcription_error",
-                "user_id": ctx.author.id,
-                "url": url
-            })
-            
+
         except Exception as e:
             # Unexpected error
             await processing_msg.edit(
                 content="❌ **Unexpected Error**\n"
-                        "An unexpected error occurred while processing the video. "
-                        "Please try again or contact support."
+                "An unexpected error occurred while processing the video. "
+                "Please try again or contact support."
             )
-            logger.error(f"Unexpected video transcription error: {e}", exc_info=True, extra={
-                "subsys": "video_ingest",
-                "event": "transcription_error_unexpected", 
-                "user_id": ctx.author.id,
-                "url": url
-            })
-    
+            logger.error(
+                f"Unexpected video transcription error: {e}",
+                exc_info=True,
+                extra={
+                    "subsys": "video_ingest",
+                    "event": "transcription_error_unexpected",
+                    "user_id": ctx.author.id,
+                    "url": url,
+                },
+            )
+
     @commands.command(name="video-help", aliases=["watch-help"])
     async def video_help(self, ctx):
         """Show help for video transcription commands."""
         embed = discord.Embed(
             title="🎥 Video Transcription Commands",
             description="Transcribe audio from YouTube and TikTok videos",
-            color=0x0099ff
+            color=0x0099FF,
         )
-        
+
         embed.add_field(
             name="📋 Commands",
             value="`!watch <url>` - Transcribe video audio\n"
-                  "`!transcribe <url>` - Same as watch\n"
-                  "`!listen <url>` - Same as watch",
-            inline=False
+            "`!transcribe <url>` - Same as watch\n"
+            "`!listen <url>` - Same as watch",
+            inline=False,
         )
-        
+
         embed.add_field(
             name="⚙️ Options",
             value="`--speed <number>` - Set playback speed (0.5x to 3.0x)\n"
-                  "`--force` - Force re-download (ignore cache)",
-            inline=False
+            "`--force` - Force re-download (ignore cache)",
+            inline=False,
         )
-        
+
         embed.add_field(
             name="🌐 Supported Sites",
             value="• YouTube (youtube.com, youtu.be)\n"
-                  "• TikTok (tiktok.com, tiktok.com/t, m.tiktok.com, vm.tiktok.com)",
-            inline=False
+            "• TikTok (tiktok.com, tiktok.com/t, m.tiktok.com, vm.tiktok.com)",
+            inline=False,
         )
-        
+
         embed.add_field(
             name="📝 Examples",
             value="`!watch https://youtu.be/dQw4w9WgXcQ`\n"
-                  "`!transcribe https://tiktok.com/@user/video/123 --speed 2.0`\n"
-                  "`!listen https://youtu.be/example --force`",
-            inline=False
+            "`!transcribe https://tiktok.com/@user/video/123 --speed 2.0`\n"
+            "`!listen https://youtu.be/example --force`",
+            inline=False,
         )
-        
+
         embed.add_field(
             name="⚠️ Limitations",
             value="• Maximum video length: 10 minutes\n"
-                  "• Rate limited to prevent abuse\n"
-                  "• Cached results expire after 7 days",
-            inline=False
+            "• Rate limited to prevent abuse\n"
+            "• Cached results expire after 7 days",
+            inline=False,
         )
-        
+
         await ctx.reply(embed=embed)
-    
+
     @commands.command(name="video-cache", aliases=["watch-cache"])
     @commands.has_permissions(administrator=True)
     async def video_cache_info(self, ctx):
@@ -245,60 +249,55 @@ class VideoCommands(commands.Cog):
         try:
             from ..video_ingest import video_manager
             import json
-            
+
             # Read cache index
             if not video_manager.cache_index_path.exists():
                 await ctx.reply("📁 Video cache is empty.")
                 return
-            
-            with open(video_manager.cache_index_path, 'r') as f:
+
+            with open(video_manager.cache_index_path, "r") as f:
                 index = json.load(f)
-            
+
             if not index:
                 await ctx.reply("📁 Video cache is empty.")
                 return
-            
+
             # Calculate cache statistics
             total_entries = len(index)
-            total_duration = sum(entry.get('duration_seconds', 0) for entry in index.values())
-            
-            # Create cache info embed
-            embed = discord.Embed(
-                title="📁 Video Cache Information",
-                color=0x0099ff
+            total_duration = sum(
+                entry.get("duration_seconds", 0) for entry in index.values()
             )
-            
+
+            # Create cache info embed
+            embed = discord.Embed(title="📁 Video Cache Information", color=0x0099FF)
+
             embed.add_field(
                 name="📊 Statistics",
                 value=f"**Entries:** {total_entries}\n"
-                      f"**Total Duration:** {total_duration/60:.1f} minutes\n"
-                      f"**Cache Directory:** `{video_manager.cache_dir}`",
-                inline=False
+                f"**Total Duration:** {total_duration / 60:.1f} minutes\n"
+                f"**Cache Directory:** `{video_manager.cache_dir}`",
+                inline=False,
             )
-            
+
             # Show recent entries
             recent_entries = sorted(
-                index.items(),
-                key=lambda x: x[1].get('cached_at', ''),
-                reverse=True
+                index.items(), key=lambda x: x[1].get("cached_at", ""), reverse=True
             )[:5]
-            
+
             if recent_entries:
                 recent_list = []
                 for cache_key, entry in recent_entries:
-                    title = entry.get('title', 'Unknown')[:30]
-                    source = entry.get('source_type', 'unknown').title()
-                    duration = entry.get('duration_seconds', 0)
+                    title = entry.get("title", "Unknown")[:30]
+                    source = entry.get("source_type", "unknown").title()
+                    duration = entry.get("duration_seconds", 0)
                     recent_list.append(f"• **{title}** ({source}, {duration:.0f}s)")
-                
+
                 embed.add_field(
-                    name="🕒 Recent Entries",
-                    value="\n".join(recent_list),
-                    inline=False
+                    name="🕒 Recent Entries", value="\n".join(recent_list), inline=False
                 )
-            
+
             await ctx.reply(embed=embed)
-            
+
         except Exception as e:
             await ctx.reply(f"❌ Error reading cache information: {str(e)}")
             logger.error(f"Error reading video cache info: {e}", exc_info=True)

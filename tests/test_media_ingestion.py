@@ -3,10 +3,7 @@ Tests for unified media ingestion system.
 """
 import asyncio
 import os
-import tempfile
-import time
-from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch, Mock
+from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from bot.media_ingestion import (

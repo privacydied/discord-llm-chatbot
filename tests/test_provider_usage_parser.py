@@ -3,9 +3,9 @@ Tests for ProviderUsageParser [REH][PA][CMV]
 """
 
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 
-from bot.vision.provider_usage_parser import ProviderUsageParser, UsageUnit
+from bot.vision.provider_usage_parser import ProviderUsageParser
 from bot.vision.money import Money
 from bot.vision.types import VisionProvider, VisionTask
 

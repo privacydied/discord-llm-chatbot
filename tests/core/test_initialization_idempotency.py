@@ -8,11 +8,8 @@ are called multiple times, preventing duplicate initialization.
 import asyncio
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch, call
-from typing import Dict, Any
-import re
 
 import discord
-from discord.ext import commands
 from rich.console import Console
 
 from bot.core.bot import LLMBot, log_commands_setup
@@ -361,7 +358,6 @@ async def test_load_extensions_with_rich_output(test_bot):
     test_bot.console = Console(record=True, width=80)
     
     # Mock importlib to simulate mixed success/failure
-    import importlib
     
     def mock_import_module(name):
         if "memory_cmds" in name:
@@ -420,7 +416,6 @@ async def test_load_extensions_idempotency_with_rich(test_bot):
     test_bot.console = Console(record=True, width=80)
     
     # Mock successful imports and cog loading
-    import importlib
     
     def mock_import_module(name):
         mock_module = MagicMock()

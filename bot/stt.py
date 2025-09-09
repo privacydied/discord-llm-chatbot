@@ -1,6 +1,7 @@
 """
 Speech-to-text module for Discord bot using faster-whisper and whisper.cpp
 """
+
 import os
 import json
 import asyncio
@@ -28,10 +29,8 @@ _FW_COMPUTE_TYPE = os.getenv("STT_COMPUTE_TYPE", "int8")
 _FW_INIT_TIMEOUT = float(os.getenv("STT_INIT_TIMEOUT", "8"))
 
 # Accept common patterns like "base-int8" -> (size=base, compute_type=int8)
-_ALLOWED_CT = {
-    "int8", "int8_float16", "int8_float32",
-    "int16", "float16", "float32"
-}
+_ALLOWED_CT = {"int8", "int8_float16", "int8_float32", "int16", "float16", "float32"}
+
 
 def _resolve_size_and_ct(size_str: str, default_ct: str) -> tuple[str, str]:
     s = (size_str or "").strip()
@@ -42,6 +41,7 @@ def _resolve_size_and_ct(size_str: str, default_ct: str) -> tuple[str, str]:
             s = cand_size
             ct = cand_ct
     return s, ct
+
 
 @lru_cache
 def _load_fw():
@@ -72,7 +72,7 @@ def _load_fw():
 
 class STTManager:
     """Manages STT operations with support for multiple backends."""
-    
+
     def __init__(self):
         self.available = False
         self.engine = _ENGINE
@@ -81,7 +81,7 @@ class STTManager:
         self._init_thread: threading.Thread | None = None
         self._ready_event = threading.Event()
         self._init_model()
-    
+
     def _init_model(self):
         """Initialize the STT model."""
         try:
@@ -98,7 +98,10 @@ class STTManager:
                         self.available = False
                     finally:
                         self._ready_event.set()
-                self._init_thread = threading.Thread(target=_bg_init, name="stt-fw-init", daemon=True)
+
+                self._init_thread = threading.Thread(
+                    target=_bg_init, name="stt-fw-init", daemon=True
+                )
                 self._init_thread.start()
             else:
                 logger.warning(f"Unsupported STT engine: {self.engine}")
@@ -108,43 +111,46 @@ class STTManager:
             logger.error(f"Failed to initialize STT: {str(e)}")
             self.available = False
             self._ready_event.set()
-    
+
     def is_available(self) -> bool:
         """Check if STT is available."""
         return self.available
-    
+
     async def transcribe_async(self, audio_path: Path) -> str:
         """Transcribe audio file asynchronously."""
         # Wait briefly for background init if needed to avoid false negatives [REH]
         if self.engine == "faster-whisper" and not self.available:
-            logger.info("ℹ [STT] Waiting up to %.1fs for faster-whisper to initialize", _FW_INIT_TIMEOUT)
+            logger.info(
+                "ℹ [STT] Waiting up to %.1fs for faster-whisper to initialize",
+                _FW_INIT_TIMEOUT,
+            )
             loop = asyncio.get_running_loop()
-            ready = await loop.run_in_executor(None, self._ready_event.wait, _FW_INIT_TIMEOUT)
+            ready = await loop.run_in_executor(
+                None, self._ready_event.wait, _FW_INIT_TIMEOUT
+            )
             if not ready or not self.available:
                 raise RuntimeError("STT engine not ready after init timeout")
-        
+
         try:
             loop = asyncio.get_running_loop()
             return await loop.run_in_executor(
                 None,  # Use default executor
                 self._transcribe_sync,
-                audio_path
+                audio_path,
             )
         except Exception as e:
             logger.error(f"STT transcription failed: {str(e)}")
             raise
-    
+
     def _transcribe_sync(self, audio_path: Path) -> str:
         """Synchronous transcription wrapper."""
         if not audio_path.exists():
             raise FileNotFoundError(f"Audio file not found: {audio_path}")
-        
+
         try:
             if self.engine == "faster-whisper" and self.model:
                 segments, _ = self.model.transcribe(
-                    str(audio_path),
-                    beam_size=5,
-                    language="en"
+                    str(audio_path), beam_size=5, language="en"
                 )
                 return " ".join(segment.text for segment in segments)
             else:
@@ -152,6 +158,7 @@ class STTManager:
         except Exception as e:
             logger.error(f"STT transcription error: {str(e)}")
             raise
+
 
 # Create a single instance of STTManager
 stt_manager = STTManager()
@@ -165,54 +172,52 @@ async def transcribe_wav(path: Path) -> str:
         try:
             # Prefer the manager's background-initialized model to avoid blocking here
             if not stt_manager.available:
-                await loop.run_in_executor(None, stt_manager._ready_event.wait, _FW_INIT_TIMEOUT)
+                await loop.run_in_executor(
+                    None, stt_manager._ready_event.wait, _FW_INIT_TIMEOUT
+                )
             if stt_manager.available and stt_manager.model:
                 segments, _ = await loop.run_in_executor(
                     None,
-                    lambda: stt_manager.model.transcribe(str(path), vad_filter=True)
+                    lambda: stt_manager.model.transcribe(str(path), vad_filter=True),
                 )
                 return " ".join(seg.text for seg in segments)
             else:
                 logger.error("✖ [STT] faster-whisper not ready after init timeout")
                 if _FALLBACK == "none":
-                    raise RuntimeError("faster-whisper not ready and no fallback enabled")
+                    raise RuntimeError(
+                        "faster-whisper not ready and no fallback enabled"
+                    )
         except Exception as e:
             logger.error(f"faster-whisper failed: {e}")
             if _FALLBACK == "none":
                 raise
-    
+
     # Fallback to whisper.cpp binary
     if _FALLBACK == "whispercpp":
         model_path = Path(os.getenv("WHISPER_CPP_MODEL", "models/ggml-medium.bin"))
         if not model_path.exists():
             logger.error(f"whisper.cpp model not found: {model_path}")
             raise FileNotFoundError(f"whisper.cpp model not found: {model_path}")
-        
-        cmd = [
-            "whisper.cpp", 
-            "-m", str(model_path),
-            "-f", str(path),
-            "-of", "json"
-        ]
+
+        cmd = ["whisper.cpp", "-m", str(model_path), "-f", str(path), "-of", "json"]
         proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
+            *cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE
         )
         out, err = await proc.communicate()
-        
+
         if proc.returncode != 0:
             logger.error(f"whisper.cpp failed: {err.decode()}")
             raise RuntimeError(f"whisper.cpp failed: {err.decode()}")
-        
+
         try:
             result = json.loads(out)
             return result["text"]
         except json.JSONDecodeError:
             logger.error("Failed to parse whisper.cpp output")
             raise
-    
+
     raise RuntimeError("No valid STT engine available")
+
 
 async def normalise_to_wav(attachment) -> Path:
     """Normalize audio attachment to 16kHz mono WAV with smart preprocessing"""
@@ -221,12 +226,12 @@ async def normalise_to_wav(attachment) -> Path:
         with tempfile.NamedTemporaryFile(suffix=".tmp", delete=False) as tmp:
             await attachment.save(tmp.name)
             orig_path = Path(tmp.name)
-        
+
         logger.debug(f"[STT] Starting smart preprocessing for: {orig_path.name}")
-        
+
         # Create output WAV file
         wav_path = orig_path.with_suffix(".wav")
-        
+
         # Smart preprocessing pipeline:
         # 1. loudnorm - normalize audio levels first to prevent distortion
         # 2. atempo=1.5 - increase speed by 50% for faster processing
@@ -234,37 +239,40 @@ async def normalise_to_wav(attachment) -> Path:
         # 4. Convert to 16kHz mono WAV format required by Whisper
         audio_filters = [
             "loudnorm=I=-16:TP=-1.5:LRA=11",  # Normalize loudness (EBU R128)
-            "atempo=1.5",                      # Speed up by 50%
-            "silenceremove=start_periods=1:start_duration=0.1:start_threshold=-40dB:detection=peak,aformat=sample_fmts=s16:sample_rates=16000:channel_layouts=mono"  # Remove silence + format
+            "atempo=1.5",  # Speed up by 50%
+            "silenceremove=start_periods=1:start_duration=0.1:start_threshold=-40dB:detection=peak,aformat=sample_fmts=s16:sample_rates=16000:channel_layouts=mono",  # Remove silence + format
         ]
-        
+
         cmd = [
-            "ffmpeg", "-y", "-i", str(orig_path),
-            "-af", ",".join(audio_filters),
-            "-acodec", "pcm_s16le",
-            str(wav_path)
+            "ffmpeg",
+            "-y",
+            "-i",
+            str(orig_path),
+            "-af",
+            ",".join(audio_filters),
+            "-acodec",
+            "pcm_s16le",
+            str(wav_path),
         ]
-        
+
         logger.debug(f"[STT] Running ffmpeg with filters: {','.join(audio_filters)}")
-        
+
         proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
+            *cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE
         )
         stdout, stderr = await proc.communicate()
-        
+
         if proc.returncode != 0:
             logger.error(f"[STT] ffmpeg preprocessing failed: {stderr.decode()}")
             # Fallback to basic conversion if smart preprocessing fails
             logger.warning("[STT] Falling back to basic audio conversion")
             return await _basic_normalise_to_wav(orig_path, wav_path)
-        
-        logger.debug(f"[STT] Smart preprocessing completed successfully")
-        
+
+        logger.debug("[STT] Smart preprocessing completed successfully")
+
         # Clean up original file
         orig_path.unlink()
-        
+
         return wav_path
     except Exception as e:
         logger.error(f"[STT] Audio normalization failed: {e}")
@@ -275,20 +283,26 @@ async def _basic_normalise_to_wav(orig_path: Path, wav_path: Path) -> Path:
     """Fallback basic audio conversion without smart preprocessing"""
     try:
         cmd = [
-            "ffmpeg", "-y", "-i", str(orig_path),
-            "-ar", "16000", "-ac", "1", "-acodec", "pcm_s16le",
-            str(wav_path)
+            "ffmpeg",
+            "-y",
+            "-i",
+            str(orig_path),
+            "-ar",
+            "16000",
+            "-ac",
+            "1",
+            "-acodec",
+            "pcm_s16le",
+            str(wav_path),
         ]
         proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL
+            *cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
         )
         await proc.wait()
-        
+
         # Clean up original file
         orig_path.unlink()
-        
+
         return wav_path
     except Exception as e:
         logger.error(f"[STT] Basic audio conversion failed: {e}")

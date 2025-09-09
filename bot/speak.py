@@ -1,6 +1,7 @@
 """
 Centralized TTS inference module (speak)
 """
+
 import logging
 from pathlib import Path
 from .tts.interface import TTSManager
@@ -21,10 +22,14 @@ async def speak_infer(text: str) -> Path:
 
         if not manager.is_available():
             # Proceed anyway; manager will fall back to StubEngine internally
-            logger.warning("TTS primary engine unavailable; using stub fallback where applicable")
+            logger.warning(
+                "TTS primary engine unavailable; using stub fallback where applicable"
+            )
 
         # Ask the manager to generate a WAV file (non-blocking APIs internally)
-        out_path, content_type = await manager.generate_tts(text, out_path=None, output_format="wav")
+        out_path, content_type = await manager.generate_tts(
+            text, out_path=None, output_format="wav"
+        )
 
         # Validate output file
         if not isinstance(out_path, Path):
@@ -38,7 +43,9 @@ async def speak_infer(text: str) -> Path:
             logger.error(f"TTS output file is empty: {out_path}")
             raise TTSAudioError("Speech synthesis failed: Output file is empty")
 
-        logger.debug(f"TTS synthesis successful: {out_path}, size: {out_path.stat().st_size} bytes, type: {content_type}")
+        logger.debug(
+            f"TTS synthesis successful: {out_path}, size: {out_path.stat().st_size} bytes, type: {content_type}"
+        )
         return out_path
     except Exception as e:
         logger.error(f"🔊 TTS inference failed: {str(e)}")

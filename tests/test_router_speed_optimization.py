@@ -21,10 +21,9 @@ from __future__ import annotations
 import asyncio
 import pytest
 import time
-from unittest.mock import AsyncMock, MagicMock, patch
-from pathlib import Path
+from unittest.mock import MagicMock
 
-from bot.router_classifier import FastClassifier, PlanResult, ClassificationResult, get_classifier
+from bot.router_classifier import FastClassifier
 from bot.http_client import SharedHttpClient, RequestConfig
 from bot.concurrency_manager import ConcurrencyManager, PoolType
 from bot.single_flight_cache import SingleFlightCache, CacheFamily
@@ -294,7 +293,7 @@ class TestSingleFlightCache:
         
         # First result should be cache miss, others should be single-flight hits
         cache_hits = [result[1] for result in results]
-        assert cache_hits[0] == False, "First result should be cache miss"
+        assert not cache_hits[0], "First result should be cache miss"
         
         # Check metrics
         metrics = await cache.get_metrics()

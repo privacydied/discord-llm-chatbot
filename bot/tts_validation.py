@@ -8,6 +8,7 @@ Implements tokenizer discovery/selection utilities and two globals:
 This intentionally mirrors a simplified subset of the old interface
 so tests importing `bot.tts_validation` continue to work.
 """
+
 from __future__ import annotations
 
 import logging
@@ -97,7 +98,11 @@ def detect_available_tokenizers() -> Dict[str, bool]:
     if diagnostics.get("espeak_binary"):
         try:
             res = subprocess.run(
-                ["espeak", "--version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=False
+                ["espeak", "--version"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=False,
             )
             available[TokenizerType.ESPEAK.value] = res.returncode == 0
         except (FileNotFoundError, subprocess.SubprocessError):
@@ -107,7 +112,11 @@ def detect_available_tokenizers() -> Dict[str, bool]:
     if diagnostics.get("espeak_ng_binary"):
         try:
             res = subprocess.run(
-                ["espeak-ng", "--version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=False
+                ["espeak-ng", "--version"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=False,
             )
             available[TokenizerType.ESPEAK_NG.value] = res.returncode == 0
         except (FileNotFoundError, subprocess.SubprocessError):
@@ -147,7 +156,9 @@ def detect_available_tokenizers() -> Dict[str, bool]:
     return available
 
 
-def select_tokenizer_for_language(language: str, available_tokenizers: Optional[Dict[str, bool]] = None) -> str:
+def select_tokenizer_for_language(
+    language: str, available_tokenizers: Optional[Dict[str, bool]] = None
+) -> str:
     """Select the best tokenizer for the given language.
 
     If available_tokenizers is provided, use it; otherwise, use the
@@ -180,12 +191,16 @@ def select_tokenizer_for_language(language: str, available_tokenizers: Optional[
             return tok
 
     # For English, require a phonetic tokenizer
-    if language.startswith("en") and not any(t in available_set for t in ["espeak", "espeak-ng", "phonemizer", "g2p_en"]):
+    if language.startswith("en") and not any(
+        t in available_set for t in ["espeak", "espeak-ng", "phonemizer", "g2p_en"]
+    ):
         required = ["espeak-ng", "phonemizer", "g2p_en"]
         raise MissingTokeniserError(language, list(available_set), required)
 
     # Fallback to grapheme
-    logger.warning("No preferred tokenizer available for '%s', using grapheme fallback", language)
+    logger.warning(
+        "No preferred tokenizer available for '%s', using grapheme fallback", language
+    )
     return DEFAULT_TOKENIZER
 
 
@@ -201,7 +216,10 @@ def is_tokenizer_warning_needed() -> bool:
     # cross-call/process leakage; this function should reflect current availability.
 
     if lang.startswith("en"):
-        return not any(t in AVAILABLE_TOKENIZERS for t in {"espeak", "espeak-ng", "phonemizer", "g2p_en"})
+        return not any(
+            t in AVAILABLE_TOKENIZERS
+            for t in {"espeak", "espeak-ng", "phonemizer", "g2p_en"}
+        )
     if lang.startswith("ja") or lang.startswith("zh"):
         return "misaki" not in AVAILABLE_TOKENIZERS
     # Other languages: warn if nothing except grapheme

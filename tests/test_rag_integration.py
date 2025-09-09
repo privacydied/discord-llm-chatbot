@@ -2,9 +2,7 @@
 Integration tests for the RAG (Retrieval Augmented Generation) system.
 """
 import pytest
-import asyncio
 import tempfile
-import shutil
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 import numpy as np
@@ -13,7 +11,7 @@ from bot.rag.vector_schema import VectorDocument, HybridSearchConfig, ChunkingRe
 from bot.rag.embedding_interface import SentenceTransformerEmbedding, create_embedding_model
 from bot.rag.text_chunker import TextChunker, MarkdownChunker
 from bot.rag.chroma_backend import ChromaRAGBackend
-from bot.rag.bootstrap import RAGBootstrap, create_rag_system
+from bot.rag.bootstrap import RAGBootstrap
 from bot.rag.hybrid_search import HybridRAGSearch
 from bot.rag.config import load_rag_config, validate_rag_environment
 
@@ -328,7 +326,7 @@ class TestHybridSearch:
                 with patch.object(search_system, 'rag_backend') as mock_backend:
                     mock_backend.get_collection_stats.return_value = {"total_chunks": 5}
                     
-                    initialized = await search_system.initialize()
+                    await search_system.initialize()
                     
                     # Should initialize successfully with mocked backend
                     assert search_system._initialized
@@ -362,7 +360,7 @@ class TestRAGConfiguration:
             
             assert config.vector_confidence_threshold == 0.8
             assert config.chunk_size == 256
-            assert config.enforce_user_scoping == False
+            assert not config.enforce_user_scoping
     
     def test_environment_validation(self):
         """Test environment validation."""
@@ -409,7 +407,7 @@ class TestRAGRegression:
         # For now, we'll mock the expected behavior
         
         for test_case in SYNTHETIC_TEST_QUERIES:
-            query = test_case["query"]
+            test_case["query"]
             expected_keywords = test_case["expected_keywords"]
             min_results = test_case["min_results"]
             
