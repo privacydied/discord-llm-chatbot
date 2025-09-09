@@ -45,6 +45,10 @@ yarn-debug.log*
 yarn-error.log*
 bot.log
 bot.pid
+logs/*
+!logs/.gitkeep
+tts/voices/logs/*
+!tts/voices/logs/.gitkeep
 
 # User data
 dm_logs/*
@@ -53,16 +57,20 @@ user_profiles/*
 server_profiles/*
 server_profiles/*.json
 user_profiles/*.json
-dm_logs/*.json  
-tts_cache/*.wav
-tts_cache/*
+dm_logs/*.json
+
+# Cache directories
+cache/media_probes/*
+cache/screenshots/*
 cache/video_audio/*
 cache/video_audio/index.json
+cache/tts/*
+!cache/**/.gitkeep
+
 kb/*
 rag_versions.json
 chroma_db/*
 test_documents/*
-cache/*
 temp/*
 vendor/*
 

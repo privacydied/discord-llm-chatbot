@@ -8,7 +8,7 @@ from pathlib import Path
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from bot.tts_validation import (
+from bot.tts.validation import (
     detect_available_tokenizers,
     select_tokenizer_for_language,
     is_tokenizer_warning_needed,

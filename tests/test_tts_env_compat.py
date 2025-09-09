@@ -9,8 +9,8 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 # Import the modules we want to test
-from bot.tts_manager_fixed import TTSManager
-from bot.kokoro_direct_fixed import KokoroDirect, TokenizationMethod
+from bot.tts.manager_fixed import TTSManager
+from bot.tts.kokoro_direct_fixed import KokoroDirect, TokenizationMethod
 
 
 class TestTTSEnvVarCompat(unittest.TestCase):
@@ -42,7 +42,7 @@ class TestTTSEnvVarCompat(unittest.TestCase):
         # Clean up temporary directory
         self.temp_dir.cleanup()
     
-    @patch('bot.tts_manager_fixed.KokoroDirect')
+    @patch('bot.tts.manager_fixed.KokoroDirect')
     def test_new_env_vars(self, mock_kokoro):
         """Test that new environment variables are used correctly."""
         # Set new environment variables
@@ -61,7 +61,7 @@ class TestTTSEnvVarCompat(unittest.TestCase):
         self.assertEqual(kwargs['model_path'], str(self.temp_path / 'new_model.onnx'))
         self.assertEqual(kwargs['voices_path'], str(self.temp_path / 'new_voices.bin'))
     
-    @patch('bot.tts_manager_fixed.KokoroDirect')
+    @patch('bot.tts.manager_fixed.KokoroDirect')
     def test_old_env_vars(self, mock_kokoro):
         """Test that old environment variables are used as fallback."""
         # Set old environment variables
@@ -80,7 +80,7 @@ class TestTTSEnvVarCompat(unittest.TestCase):
         self.assertEqual(kwargs['model_path'], str(self.temp_path / 'old_model.onnx'))
         self.assertEqual(kwargs['voices_path'], str(self.temp_path / 'old_voices.bin'))
     
-    @patch('bot.tts_manager_fixed.KokoroDirect')
+    @patch('bot.tts.manager_fixed.KokoroDirect')
     def test_new_vars_override_old(self, mock_kokoro):
         """Test that new environment variables override old ones."""
         # Set both old and new environment variables
@@ -105,8 +105,8 @@ class TestTTSEnvVarCompat(unittest.TestCase):
 class TestTokenizerSelection(unittest.TestCase):
     """Test tokenizer selection and discovery."""
     
-    @patch('bot.kokoro_direct_fixed.importlib.util.find_spec')
-    @patch('bot.kokoro_direct_fixed.shutil.which')
+    @patch('bot.tts.kokoro_direct_fixed.importlib.util.find_spec')
+    @patch('bot.tts.kokoro_direct_fixed.shutil.which')
     def test_tokenizer_discovery(self, mock_which, mock_find_spec):
         """Test that tokenizer methods are correctly discovered."""
         # Mock tokenizer

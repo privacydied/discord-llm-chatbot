@@ -30,7 +30,7 @@ class BotAction:
 
             # Only sanitize if content contains reasoning patterns
             if has_reasoning_content(content):
-                from .util.logging import get_logger
+                from .utils.logging import get_logger
 
                 logger = get_logger("bot.action.safety_net")
                 logger.warning(
@@ -52,7 +52,7 @@ class BotAction:
         except Exception as e:
             # If sanitization fails, return original content (fail-safe)
             try:
-                from .util.logging import get_logger
+                from .utils.logging import get_logger
 
                 logger = get_logger("bot.action.safety_net")
                 logger.error(f"Final sanitization failed, using original content: {e}")

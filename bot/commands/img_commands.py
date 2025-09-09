@@ -19,7 +19,7 @@ import discord
 from discord.ext import commands
 from typing import Optional, Tuple, Dict, Any
 
-from bot.util.logging import get_logger
+from bot.utils.logging import get_logger
 from bot.config import load_config
 
 

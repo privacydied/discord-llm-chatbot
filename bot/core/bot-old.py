@@ -10,7 +10,7 @@ import io
 from discord.ext import commands
 
 from bot.config import load_system_prompts
-from bot.util.logging import get_logger
+from bot.utils.logging import get_logger
 from bot.metrics import NullMetrics
 from bot.memory import load_all_profiles
 

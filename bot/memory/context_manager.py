@@ -3,7 +3,7 @@ import os
 from typing import Dict, List, Optional, Tuple, Any
 import logging
 import stat
-from bot.util.env import get_bool
+from bot.utils.env import get_bool
 
 import discord
 

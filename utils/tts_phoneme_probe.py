@@ -25,7 +25,7 @@ from typing import Optional
 
 # Project logging (dual sink with RichHandler + JSONL)
 try:
-    from bot.util.logging import init_logging, enforce_dual_logging_handlers
+    from bot.utils.logging import init_logging, enforce_dual_logging_handlers
     init_logging()
     enforce_dual_logging_handlers()
 except Exception:

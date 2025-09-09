@@ -78,7 +78,7 @@ def get_direct_wrapper():  # pragma: no cover - import shim
     Keeping this import localized avoids circular imports and keeps a single
     source of truth for KokoroDirect access.
     """
-    from bot.kokoro_direct_fixed import KokoroDirect
+    from .kokoro_direct_fixed import KokoroDirect
 
     return KokoroDirect
 

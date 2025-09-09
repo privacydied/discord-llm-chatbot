@@ -45,7 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Migration Guide
 - **From monolithic main.py**: The bot now uses a proper package structure with `python -m bot.main`
-- **Environment variables**: All configuration is now properly documented in `.env-sample`
+- **Environment variables**: All configuration is now properly documented in `.env.example`
 - **Dependencies**: Install with `uv pip install -e .` for development or use `pyproject.toml`
 - **CLI usage**: Use `uv run python -m bot.main` with optional flags for enhanced functionality
 

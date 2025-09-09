@@ -31,7 +31,7 @@ class _EN:
             return text
 
 
-# Namespace expected by tests: bot.kokoro_direct.en.G2P
+# Namespace expected by tests: bot.tts.kokoro_direct.en.G2P
 en = _EN()
 
 

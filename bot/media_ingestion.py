@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Dict, Any, Optional, Tuple
 from urllib.parse import urlparse
 
-from .util.logging import get_logger
+from .utils.logging import get_logger
 from .media_capability import media_detector, ProbeResult
 from .action import BotAction
 

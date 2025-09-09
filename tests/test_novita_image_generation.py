@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from bot.vision.providers.novita_adapter import NovitaAdapter
 from bot.vision.types import VisionRequest, VisionTask
-from bot.util.logging import init_logging
+from bot.utils.logging import init_logging
 
 async def test_novita_image_generation():
     """Test Novita.ai text-to-image generation"""

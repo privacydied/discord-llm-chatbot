@@ -21,7 +21,7 @@ def run_health_check():
     
     try:
         print("1. Initializing logging...")
-        from bot.util.logging import init_logging, get_logger
+        from bot.utils.logging import init_logging, get_logger
         init_logging()
         logger = get_logger(__name__)
         logger.info("Logging initialized successfully.")

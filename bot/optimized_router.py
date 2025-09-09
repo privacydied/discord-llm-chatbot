@@ -28,7 +28,7 @@ from typing import Dict, List, Optional, TypeVar, TYPE_CHECKING
 from discord import Message, DMChannel
 import re
 
-from .util.logging import get_logger
+from .utils.logging import get_logger
 from .router_classifier import get_classifier, PlanResult, ClassificationResult
 from .http_client import get_http_client, SharedHttpClient
 from .concurrency_manager import get_concurrency_manager, ConcurrencyManager

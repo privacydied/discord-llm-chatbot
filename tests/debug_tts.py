@@ -72,7 +72,7 @@ def main():
     try:
         logger.info("Attempting to import KokoroDirect...")
         sys.path.insert(0, os.path.abspath('.'))
-        from bot.kokoro_direct_fixed import KokoroDirect
+        from bot.tts.kokoro_direct_fixed import KokoroDirect
         
         logger.info("Creating KokoroDirect instance...")
         kokoro = KokoroDirect(model_path, voices_path)

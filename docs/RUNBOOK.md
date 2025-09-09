@@ -52,7 +52,7 @@ These steps will guide you through setting up the project environment from scrat
     Copy the sample environment file and fill in your specific API keys and configuration details.
 
     ```bash
-    cp .env-sample .env
+    cp .env.example .env
     ```
 
     Now, edit the `.env` file with your credentials:

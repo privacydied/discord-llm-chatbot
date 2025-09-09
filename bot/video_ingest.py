@@ -15,7 +15,7 @@ from typing import Dict, Any, Optional, Tuple
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from .util.logging import get_logger
+from .utils.logging import get_logger
 from .exceptions import InferenceError
 
 logger = get_logger(__name__)

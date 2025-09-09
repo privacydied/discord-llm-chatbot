@@ -10,7 +10,7 @@ from typing import Optional
 
 import httpx
 
-from bot.util.logging import get_logger
+from bot.utils.logging import get_logger
 from bot.config import load_config
 from .base import SearchProvider
 

@@ -9,7 +9,7 @@ import onnxruntime as ort
 app = Flask(__name__)
 
 # Configuration
-CACHE_DIR = Path("tts_cache")
+CACHE_DIR = Path("cache/tts")
 CACHE_DIR.mkdir(exist_ok=True, parents=True)
 TTS_MODEL = "kokoro-base"
 MAX_TEXT_LENGTH = 500

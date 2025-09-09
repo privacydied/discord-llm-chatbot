@@ -22,7 +22,7 @@ from bot.vision.types import (
 from bot.vision.money import Money
 from bot.vision.pricing_loader import get_pricing_table
 from bot.vision.providers.base import ProviderPlugin
-from bot.util.logging import get_logger
+from bot.utils.logging import get_logger
 
 logger = get_logger(__name__)
 

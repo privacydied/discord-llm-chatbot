@@ -19,7 +19,7 @@ from pathlib import Path
 import tempfile
 import aiohttp
 
-from bot.util.logging import get_logger
+from bot.utils.logging import get_logger
 from bot.config import load_config
 from bot.vision.types import VisionRequest, VisionTask, VisionProvider, VisionError
 from bot.vision.orchestrator import VisionOrchestrator

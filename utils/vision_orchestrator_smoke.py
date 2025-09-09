@@ -14,7 +14,7 @@ import os
 import asyncio
 from typing import List, Optional
 
-from bot.util.logging import get_logger
+from bot.utils.logging import get_logger
 
 logger = get_logger("utils.vision_orch_smoke")
 

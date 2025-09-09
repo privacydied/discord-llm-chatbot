@@ -13,7 +13,7 @@ import os
 
 from bot.vision.money import Money
 from bot.vision.types import VisionTask, VisionProvider
-from bot.util.logging import get_logger
+from bot.utils.logging import get_logger
 
 logger = get_logger(__name__)
 

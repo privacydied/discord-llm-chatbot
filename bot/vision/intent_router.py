@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import discord
-from bot.util.logging import get_logger
+from bot.utils.logging import get_logger
 from bot.config import load_config
 from .types import (
     VisionTask,

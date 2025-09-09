@@ -1,9 +1,10 @@
 """
-Compatibility shim for legacy imports expecting `bot.tts_manager_fixed`.
+Compatibility shim for the legacy ``bot.tts_manager_fixed`` module.
 
-Provides a TTSManager with the minimal interface expected by tests and older
-code: environment variable handling, tokenizer registry bootstrap, KokoroDirect
-loading, and a synchronous generate_speech() wrapper that returns a Path.
+Exposes a minimal ``TTSManager`` used in tests and older code.  It handles
+environment variable resolution, tokenizer registry bootstrap, lazy
+``KokoroDirect`` loading, and a synchronous ``generate_speech`` helper that
+returns a :class:`pathlib.Path`.
 """
 
 from __future__ import annotations

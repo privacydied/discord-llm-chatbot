@@ -39,7 +39,6 @@ For full TTS functionality, the following dependencies are required:
 - **Python packages**:
   - kokoro-onnx (>=0.4.9)
   - numpy (>=2.0.2)
-  - librosa (>=0.11.0)
   - phonemizer (>=3.2.0)
   - soundfile (>=0.12.1)
 
@@ -93,14 +92,10 @@ The OCR functionality is implemented as a soft dependency. If Tesseract is not a
 
 ## Installation
 
-All dependencies can be installed using the `fix_deps.sh` script:
+All Python dependencies can be installed with:
 
 ```bash
-# Activate virtual environment
-source .venv/bin/activate
-
-# Run the dependency fix script
-./scripts/fix_deps.sh
+pip install -r requirements.txt
 ```
 
 For system dependencies on Arch Linux:

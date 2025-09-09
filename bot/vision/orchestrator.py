@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Dict, Optional, Any
 import inspect
 
-from bot.util.logging import get_logger
+from bot.utils.logging import get_logger
 from bot.config import load_config
 from .types import (
     VisionRequest,

@@ -12,7 +12,7 @@ import wave
 from typing import Optional
 
 import numpy as np
-from bot.util.logging import get_logger
+from bot.utils.logging import get_logger
 from .base import BaseEngine
 from bot.tts.errors import TTSError
 

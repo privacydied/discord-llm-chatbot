@@ -1308,9 +1308,9 @@
       "required": false,
       "sensitive": false,
       "type": "unknown",
-      "default": "'tts_cache'",
+      "default": "'cache/tts'",
       "all_defaults": [
-        "'tts_cache'"
+        "'cache/tts'"
       ],
       "valid_values": null
     },

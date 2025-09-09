@@ -19,7 +19,7 @@ from .retry_utils import (
     is_retryable_error,
     with_retry,
 )
-from .util.logging import get_logger
+from .utils.logging import get_logger
 from bot.enhanced_retry import get_retry_manager
 
 logger = get_logger(__name__)

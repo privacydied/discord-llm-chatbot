@@ -13,7 +13,7 @@ from cryptography.fernet import Fernet
 
 import discord
 
-from bot.util.logging import get_logger
+from bot.utils.logging import get_logger
 
 logger = get_logger(__name__)
 

@@ -16,7 +16,7 @@ Centralized router enforcing sequential multimodal message processing.
 from __future__ import annotations
 
 import asyncio
-from .util.logging import get_logger
+from .utils.logging import get_logger
 import logging
 import os
 import re
@@ -51,7 +51,7 @@ from .search.types import SafeSearch, SearchCategory, SearchQueryParams, SearchR
 from .hear import hear_infer, hear_infer_from_url
 from .see import see_infer
 from .types import Command, ParsedCommand
-from .util.env import get_bool
+from .utils.env import get_bool
 from .vl.postprocess import sanitize_model_output, sanitize_vl_reply_text
 from .web import process_url
 from .web_extraction_service import web_extractor

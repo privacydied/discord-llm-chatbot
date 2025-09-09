@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Import the fixed KokoroDirect class
-from bot.kokoro_direct_fixed import KokoroDirect
+from bot.tts.kokoro_direct_fixed import KokoroDirect
 
 def test_tts_pipeline():
     """Test the TTS pipeline with the fixed KokoroDirect class."""

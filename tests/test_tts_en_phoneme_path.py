@@ -17,7 +17,7 @@ def test_en_uses_phoneme_only(monkeypatch):
     assert created.get("disable_autodiscovery") is True
 
 def test_no_error_when_no_tokenizer_if_phonemes(monkeypatch, caplog):
-    from bot.kokoro_direct_fixed import KokoroDirect
+    from bot.tts.kokoro_direct_fixed import KokoroDirect
     kd = KokoroDirect("/model.onnx", "/voices.bin", use_tokenizer=False)
     # create must not log 'No tokenizer available' nor invoke grapheme path
     caplog.clear()

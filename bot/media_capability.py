@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Dict, Optional, Tuple
 from urllib.parse import urlparse
 
-from .util.logging import get_logger
+from .utils.logging import get_logger
 
 logger = get_logger(__name__)
 

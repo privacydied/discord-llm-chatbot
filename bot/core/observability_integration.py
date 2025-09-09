@@ -21,7 +21,7 @@ import os
 import time
 from typing import Any, Dict, Optional
 
-from bot.util.logging import get_logger
+from bot.utils.logging import get_logger
 from bot.core.startup_orchestrator import (
     StartupOrchestrator,
     ComponentSpec,

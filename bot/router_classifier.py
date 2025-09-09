@@ -21,7 +21,7 @@ from typing import Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
 from .modality import InputModality, InputItem
-from .util.logging import get_logger
+from .utils.logging import get_logger
 
 logger = get_logger(__name__)
 

@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Optional
 
 from bot.config import ConfigurationError
-from bot.util.logging import get_logger
+from bot.utils.logging import get_logger
 
 
 def _get_playwright_chromium_path() -> Optional[Path]:

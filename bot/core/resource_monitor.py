@@ -15,7 +15,7 @@ import psutil
 from dataclasses import dataclass, field
 from typing import Dict, Optional
 
-from bot.util.logging import get_logger
+from bot.utils.logging import get_logger
 from bot.metrics import metrics, METRIC_PROCESS_RSS_BYTES, METRIC_EVENT_LOOP_LAG_SECONDS
 
 

@@ -17,7 +17,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Set, Tuple, Union, Callable
 from pathlib import Path
 
-from bot.util.logging import get_logger
+from bot.utils.logging import get_logger
 
 
 class HealthStatus(Enum):

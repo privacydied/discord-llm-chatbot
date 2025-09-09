@@ -276,7 +276,7 @@ Single-Flight Cache Check → Budget-Managed Execution → Edit Coalescing → S
 
 ## Configuration Summary
 
-All new configuration keys are **additive only** (no renames). See `.env-sample` for complete list with documentation.
+All new configuration keys are **additive only** (no renames). See `.env.example` for complete list with documentation.
 
 ### Critical Settings
 ```env
