@@ -36,13 +36,15 @@ flowchart LR
   C -->|Text| D1[OpenAI/OpenRouter]
   C -->|Text (local)| D2[Ollama]
   C -->|RAG| E[Hybrid Search (ChromaDB)]
-  C -->|Vision| F[Vision Orchestrator\nTogether/Novita]
-  C -->|Media| G1[STT Orchestrator] --> G2[faster-whisper/whispercpp]
-  C -->|PDF/OCR| H1[PyMuPDF] --> H2[Tesseract OCR (optional)]
+  C -->|Vision| F[Vision Orchestrator<br/>Together/Novita]
+  C -->|Media| G1[STT Orchestrator]
+  G1 --> G2[faster-whisper/whispercpp]
+  C -->|PDF/OCR| H1[PyMuPDF]
+  H1 --> H2[Tesseract OCR (optional)]
   B --> I[Commands/Cogs]
   B --> J[Prometheus Metrics]
   B --> K[Logging: Rich + JSONL]
-  subgraph Files/Storage
+  subgraph FILES[Files/Storage]
     L1[kb/]
     L2[chroma_db/]
     L3[vision_data/, logs/, user_profiles/, server_profiles/]
@@ -236,4 +238,3 @@ MIT — see [LICENSE](LICENSE).
 - ChromaDB
 - PyMuPDF, Tesseract OCR
 - Playwright
-
