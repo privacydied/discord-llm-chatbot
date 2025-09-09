@@ -1,270 +1,239 @@
-# Discord LLM ChatBot
+# discord-llm-bot
 
-An advanced Discord chatbot with memory, web search, file processing, vision capabilities, and AI-powered responses using Ollama or OpenAI as the backend.
+[![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](pyproject.toml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
+## Overview
+- Production‑oriented Discord bot that blends chat, search, RAG, and multimodal (vision, TTS/STT) features with robust logging, observability, and reliability.
+- Built on discord.py 2.x with message‑commands and selective slash commands for vision workflows.
+- Backends: OpenAI/OpenRouter or local Ollama for text; optional RAG over ChromaDB; OCR/STT for media.
+- Emphasizes clean startup, dual‑sink logging (Rich + JSONL), graceful shutdown, retries, and Prometheus metrics.
 
 ## Features
+- Discord commands:
+  - Text: general chat, admin/config, memory, search, screenshots.
+  - RAG: hybrid vector+keyword search over a local KB with lazy/eager loading.
+  - Media: video transcription, OCR fallbacks, and X/Twitter extractors.
+  - Vision: slash commands for image/video generation (Together/Novita).
+  - TTS: Kokoro‑ONNX speech synthesis and voice message publishing.
+- Backends and routing:
+  - Text: OpenAI/OpenRouter (default), or Ollama.
+  - RAG: ChromaDB (hybrid search + background indexing).
+  - Vision: providers (Together, Novita) with budgets, retries, and artifacts.
+  - STT: faster‑whisper/whispercpp orchestration with timeouts and caching.
+- Ops and reliability:
+  - Dual logging sinks: Rich console + structured JSONL at `logs/bot.jsonl`.
+  - Logging enforcer, sensitive data scrubbing, graceful shutdown.
+  - Prometheus metrics (optional HTTP server).
+  - Extensive test suite (pytest + pytest‑asyncio).
 
-### 🔍 **Enhanced Observability & Performance** (NEW)
-- **Dual-Sink Logging**: Rich console output + structured JSON logs
-- **Startup Orchestrator**: 3-5s faster parallel startup with dependency management
-- **Health Monitoring**: Liveness/readiness checks with degraded mode detection
-- **Background Task Watchdogs**: Heartbeat monitoring with automatic restarts
-- **Resource Monitoring**: RSS memory, CPU, event loop lag tracking with threshold alerts
-- **Prometheus Metrics**: Optional metrics collection (disabled by default)
-- **Configuration Validation**: Fail-fast validation with detailed diagnostics
+## Architecture
 
-### 🎯 **Core Features**
-
-- **Multi-modal AI Chat**: Support for text, voice, and image inputs
-- **Text-to-Speech (TTS)**: Convert AI responses to voice messages
-- **Speech-to-Text (STT)**: Process voice messages and convert to text with advanced preprocessing
-- **Image Analysis**: Analyze and describe uploaded images
-- **Conversation Context**: Maintain conversation history and context
-- **Retrieval Augmented Generation (RAG)**: Advanced knowledge base search with vector embeddings
-- **Hybrid Search**: Combines vector similarity search with keyword fallback
-- **Knowledge Base Management**: Automatic ingestion and versioning of documentation files
-- **Flexible AI Backend**: Support for multiple AI providers (OpenAI, Anthropic, etc.)
-- **Discord Integration**: Native Discord bot with slash commands and message handling
-- **Comprehensive Logging**: Detailed debugging logs
-- **Automatic Memory Extraction**: Learns from conversations
-
-## 🎛️ Command Usage
-
-In Direct Messages (DMs), commands start with `!`. In servers (Guilds), commands must start by mentioning the bot, e.g., `@BotName !command`.
-
-### Core Commands
-- `!chat <prompt>`: Get a standard text-based response from the AI.
-- `!say <text>`: The bot will speak the provided text in a voice note.
-- `!speak`: Toggles your responses to be voice notes until you use the command again.
-- `!tts [on|off]`: Enables or disables TTS responses for your user account.
-- `!ping`: Checks if the bot is online and responsive.
-
-### Vision
-- `!see <prompt>` - Analyze attached image
-
-### Hybrid Processing
 ```mermaid
-graph LR
-    User[User Input] --> Parser[Command Parser]
-    Parser -->|text/tts| Brain[Text Inference]
-    Parser -->|stt| Hear[Speech-to-Text]
-    Parser -->|vl| See[Vision-Language]
-    Hear --> Brain
-    Brain -->|text| Response[Text Reply]
-    Brain -->|tts| Speak[Text-to-Speech]
-    See --> Response
-    Speak --> Response[Audio Reply]
+flowchart LR
+  A[Discord Gateway] --> B[LLMBot (discord.py)]
+  B --> C[Router]
+  C -->|Text| D1[OpenAI/OpenRouter]
+  C -->|Text (local)| D2[Ollama]
+  C -->|RAG| E[Hybrid Search (ChromaDB)]
+  C -->|Vision| F[Vision Orchestrator\nTogether/Novita]
+  C -->|Media| G1[STT Orchestrator] --> G2[faster-whisper/whispercpp]
+  C -->|PDF/OCR| H1[PyMuPDF] --> H2[Tesseract OCR (optional)]
+  B --> I[Commands/Cogs]
+  B --> J[Prometheus Metrics]
+  B --> K[Logging: Rich + JSONL]
+  subgraph Files/Storage
+    L1[kb/]
+    L2[chroma_db/]
+    L3[vision_data/, logs/, user_profiles/, server_profiles/]
+  end
 ```
 
-## 🚀 Quick Start
+- Entrypoint: `run.py` → `bot.main:run_bot()` → async `main()` → `LLMBot.start()`.
+- Intents: message_content, guilds, members, voice_states checked at startup.
+- Commands loaded in `LLMBot.setup_hook()` from `bot/commands/*`; vision slash commands via `discord.app_commands`.
+- Config loads from `.env` and validates required keys; prompt files loaded from disk.
+
+## Getting Started
 
 ### Prerequisites
-
 - Python 3.11+
-- Discord Bot Token ([Get one here](https://discord.com/developers/applications))
-- (For local models) Ollama installed and running ([Installation Guide](https://ollama.com/))
-- (For OpenAI/OpenRouter) API key
+- System tools (feature‑based):
+  - Tesseract OCR (tesseract, language packs like `tesseract-data-eng`)
+  - Playwright Chromium (auto‑install attempted; may need `uv run playwright install chromium`)
+  - Poppler utils for some OCR flows (`pdftoppm`)
+- Discord Developer Portal:
+  - A bot application with Bot + `applications.commands` scopes
+  - Message Content Intent enabled
 
-### Observability Configuration
+### Installation
 
+#### UV (preferred)
+```bash
+# Create and activate an isolated venv
+uv venv --python 3.11
+source .venv/bin/activate
 
+# Install dependencies
+uv pip sync requirements.txt
 
-### Health Check Endpoints
+# Optionally, install the package in editable mode
+uv pip install -e .
 
-The bot provides health monitoring through the observability system:
-
-- **Liveness**: Process responsive, event loop healthy
-- **Readiness**: All components initialized and ready
-- **Degraded Mode**: System running but with reduced functionality
-
-Access comprehensive health status via the `get_comprehensive_health_status()` method.
-
-## Installation
-
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/yourusername/discord-llm-chatbot.git
-   cd discord-llm-chatbot
-   ```
-
-2. Create a `.env` file based on the example and edit with your configuration:
-   ```bash
-   cp .env.example .env
-   ```
-
-3. Create the environment, install dependencies, and run:
-   ```bash
-   uv venv --python3.12
-   source .venv/bin/activate
-   uv pip install -r requirements.txt
-   uv run python -m bot.main
-   ```
-
-For development and testing, use similar `uv run` patterns (e.g., `uv run -m pytest`).
-
-## 🛠️ Configuration
-
-### Environment Variables
-
-| Variable | Description | Required | Default |
-|----------|-------------|----------|---------|
-| `DISCORD_TOKEN` | Discord bot token | ✅ | - |
-| `TEXT_BACKEND` | Backend for text generation (`openai` or `ollama`) | ❌ | `openai` |
-| `OPENAI_API_KEY` | API key for OpenAI/OpenRouter | ❌ | - |
-| `OPENAI_API_BASE` | Base URL for API | ❌ | `https://openrouter.ai/api/v1` |
-| `SCREENSHOT_API_KEY` | API key for screenshotmachine.com | ❌ | - |
-| `OPENAI_TEXT_MODEL` | Text model for chat | ❌ | `qwen/qwen3-235b-a22b:free` |
-| `VL_MODEL` | Vision model for images | ❌ | `qwen/qwen2.5-vl-72b-instruct:free` |
-| `OLLAMA_BASE_URL` | URL to Ollama server | ❌ | `http://localhost:11434` |
-| `TEXT_MODEL` | Ollama text model | ❌ | `qwen3-235b-a22b` |
-| `TEMPERATURE` | AI response creativity | ❌ | `0.7` |
-| `TIMEOUT` | Response timeout (seconds) | ❌ | `120.0` |
-| `CHANGE_NICKNAME` | Allow bot to change nickname | ❌ | `True` |
-| `MAX_CONVERSATION_LENGTH` | Max conversation context | ❌ | `50` |
-| `MAX_TEXT_ATTACHMENT_SIZE` | Max text file size (chars) | ❌ | `20000` |
-| `MAX_FILE_SIZE` | Max attachment size (bytes) | ❌ | `2097152` |
-| `PROMPT_FILE` | System prompt file | ❌ | `prompts/prompt-pry-super-chill-v2.txt` |
-| `MAX_USER_MEMORY` | Max memories per user | ❌ | `1000` |
-| `MEMORY_SAVE_INTERVAL` | Memory save interval (sec) | ❌ | `30` |
-| `CONTEXT_FILE_PATH` | Path to context storage file | ❌ | `context.json` |
-| `MAX_CONTEXT_MESSAGES` | Max messages per context | ❌ | `10` |
-| `IN_MEMORY_CONTEXT_ONLY` | Disable all file-based context | ❌ | `false` |
-| `RAG_EAGER_VECTOR_LOAD` | Eagerly load RAG vector index on startup (legacy behavior) | ❌ | `true` |
-| `RAG_BACKGROUND_INDEXING` | Enable asynchronous background document indexing | ❌ | `true` |
-| `RAG_INDEXING_QUEUE_SIZE` | Max pending indexing tasks in queue | ❌ | `256` |
-| `RAG_INDEXING_WORKERS` | Number of concurrent indexing workers | ❌ | `2` |
-| `RAG_INDEXING_BATCH_SIZE` | Number of docs per indexing batch/flush | ❌ | `32` |
-| `RAG_LAZY_LOAD_TIMEOUT` | Seconds to wait in search path for lazy load (0 = non-blocking) | ❌ | `0.0` |
-
-### X / Twitter API (API-first Routing)
-
-When enabled, the bot uses the X API to hydrate tweets and route by media type.
-
-- `X_API_ENABLED` (default: `false`) — Enable X API integration.
-- `X_API_BEARER_TOKEN` — Bearer token for v2 API.
-- `X_API_REQUIRE_API_FOR_TWITTER` (default: `false`) — If true, do not scrape/fallback on 401/403/404/410.
-- `X_API_ALLOW_FALLBACK_ON_5XX` (default: `true`) — Allow generic extraction fallback on 429/5xx.
-- `X_API_ROUTE_PHOTOS_TO_VL` (default: `false`) — If true, tweets with photos are analyzed by the Vision-Language model and aggregated into the reply with the tweet text.
-- `X_API_TIMEOUT_MS`, `X_API_RETRY_MAX_ATTEMPTS`, `X_API_BREAKER_*` — Networking/resilience knobs.
-- `X_TWEET_FIELDS`, `X_EXPANSIONS`, `X_MEDIA_FIELDS`, `X_USER_FIELDS`, `X_POLL_FIELDS` — Field hydration lists.
-
-Notes:
-- Video/animated GIF tweets are routed to STT via yt-dlp ingest. Photo-only tweets, when the flag is enabled, are described by VL and combined with tweet text. Otherwise, the bot returns formatted tweet text with a photo count.
-- This honors the sequential multi-modal pipeline (1 in → 1 out) and existing retry/error handling.
-
-## 🤖 Commands
-
-### User Commands
-- `!reset` - Reset conversation context
-- `!show-memories` - View your memories
-- `!remember <text>` - Add a memory
-- `!preference <key> <value>` - Set personal preference
-- `!forget [@user]` - Forget memories (admin can target others)
-- `!search <query>` - Web search
-- `!extract-memories [limit]` - Extract memories from recent messages
-
-### Admin Commands
-- `!servermemories` - View server memories
-- `!clearservermemories` - Clear server memories
-
-### Special Features
-- **Image Inference**: Attach image + prompt for VL model response
-- **File Processing**: Attach text files for summarization/analysis
-- **Auto Web Search**: Fact-based queries trigger automatic searches
-
-## 🏗️ Project Structure
-```
-.
-├── bot/               # Core bot functionality
-│   ├── commands/      # Command handlers
-│   ├── ai_backend.py  # AI model interactions
-│   ├── config.py      # Configuration loading
-│   ├── context.py     # Conversation context
-│   ├── events.py      # Discord event handlers
-│   ├── logs.py        # Logging setup
-│   ├── main.py        # Entry point
-│   ├── memory.py      # Memory management
-│   ├── ollama.py      # Ollama backend
-│   ├── openai_backend.py # OpenAI backend
-│   ├── pdf_utils.py   # PDF processing
-│   ├── router.py      # Message routing and dispatch
-│   ├── search.py      # Web search
-│   ├── stt.py         # Speech-to-text
-│   ├── tasks.py       # Background tasks
-│   ├── tts.py         # Text-to-speech
-│   ├── utils.py       # Utilities
-│   └── web.py         # Web content extraction
-├── dm_logs/           # DM conversation logs
-├── examples/          # Usage examples
-├── kb/                # Knowledge base
-├── logs/              # Application logs
-├── prompts/           # System prompts
-├── server_profiles/   # Server-specific data
-├── tests/             # Test cases
-├── user_logs/         # User message logs
-└── user_profiles/     # User memory profiles
+# Ensure Playwright browser (Chromium) for screenshot/vision flows
+uv run playwright install chromium
 ```
 
-## 📚 Documentation
-
-### Memory System
-- **User Memory**: Personal memories/preferences stored in `user_profiles/`
-- **Server Memory**: Shared memories in `server_profiles/`
-- **Automatic Extraction**: Bot learns facts from conversations
-- **Persistent Storage**: JSON files preserve memories between sessions
-
-### Vision System
-- Uses VL models for image understanding
-- Automatic processing of image attachments
-- Supports multiple VL models (Qwen-VL, LLaVA, GPT-4V)
-
-### Search System
-- DuckDuckGo integration for factual queries
-- Automatic triggering for "who/what/when" questions
-- Results integrated into AI responses
-
-### RAG Subsystem (Lazy Load + Background Indexing)
-- Immediate replies: The bot never blocks responses while the vector index is loading. A keyword fallback is used until the vector index is ready.
-- Lazy vector index loading: Controlled by `RAG_EAGER_VECTOR_LOAD` (default `true` to preserve legacy). When set to `false`, the index loads on first query in a background task.
-- Background indexing: When `RAG_BACKGROUND_INDEXING` is `true` (default), new documents are enqueued to an async queue processed by workers (`RAG_INDEXING_WORKERS`) with backpressure (`RAG_INDEXING_QUEUE_SIZE`).
-- Observability: Structured logs and metrics track lazy load start/success/failure, queue events, and search completions. The system adheres to the 1 IN → 1 OUT rule.
-- Tunables: `RAG_INDEXING_BATCH_SIZE` controls batching; `RAG_LAZY_LOAD_TIMEOUT` keeps the reply path non-blocking when set to `0.0`.
-
-### TTS/STT System
-- DIA TTS for text-to-speech
-- Speech recognition for voice messages
-- Per-user TTS preferences
-
-## 🤝 Contributing
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit changes (`git commit -m 'Add feature'`)
-4. Push to branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
-## 📜 License
-MIT License - see [LICENSE](LICENSE) for details
-
-## 🙏 Acknowledgments
-- [Ollama](https://ollama.com/) for local LLM framework
-- [Discord.py](https://github.com/Rapptz/discord.py) for Discord API
-- [OpenRouter](https://openrouter.ai/) for model access
-- [Kokoro-ONNX TTS](https://github.com/Oleg-Yarosh/kokoro-onnx) for TTS functionality
-
-## ⚠️ Privacy & Security: Context Storage
-To maintain conversational context, this bot stores recent messages. By default, it operates in a hybrid privacy mode:
-
-- **Direct Messages (DMs)**: All DM conversations are stored **in-memory only** and are **never** written to disk. This history is ephemeral and will be lost on restart.
-- **Guild/Server Channels**: Conversation history from public channels is saved to `context.json` to persist across restarts. This file is included in `.gitignore`.
-
-**Security Recommendation**: For production environments, set restrictive file permissions for the configured context file to protect its contents. If you override the path via `CONTEXT_FILE_PATH`, harden that path specifically. Example:
-```
-chmod 600 "$CONTEXT_FILE_PATH"  # default is context.json
+#### pip + venv
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+pip install -e .
 ```
 
-Note: When `IN_MEMORY_CONTEXT_ONLY=true`, the bot does not write any conversation history to disk, so no file hardening is required. When file-based context is enabled, the default path is `context.json` unless overridden by `CONTEXT_FILE_PATH`.
+### Configuration
+Copy `.env.example` to `.env` and fill in secrets and paths.
+```bash
+cp .env.example .env
+```
+At minimum: `DISCORD_TOKEN`, `PROMPT_FILE`, `VL_PROMPT_FILE`, and `OPENAI_API_KEY` (if using OpenAI/OpenRouter).
 
-To disable all file-based context storage and run the bot in a fully ephemeral, in-memory mode, set the following environment variable:
+### Environment Variables (Core)
+
+| Name | Required | Default | Description | Example |
+| ---- | -------- | ------- | ----------- | ------- |
+| DISCORD_TOKEN | Yes | — | Discord bot token | A1B2... |
+| TEXT_BACKEND | No | openai | Text backend: openai or ollama | openai |
+| OPENAI_API_KEY | Maybe | — | API key for OpenAI/OpenRouter | sk-or-... |
+| OPENAI_API_BASE | No | https://openrouter.ai/api/v1 | API base for OpenRouter | https://openrouter.ai/api/v1 |
+| OPENAI_TEXT_MODEL | No | — | Text model ID (OpenRouter/OpenAI) | deepseek/... |
+| OLLAMA_BASE_URL | No | http://localhost:11434 | Ollama base URL | http://localhost:11434 |
+| OLLAMA_MODEL | No | llama3 | Default local model | qwen3 |
+| PROMPT_FILE | Yes | — | System prompt file path | prompts/prompt-yoroi-super-chill.txt |
+| VL_PROMPT_FILE | Yes | — | Vision system prompt file path | prompts/vl-prompt.txt |
+| BOT_PREFIX | No | ! | Message command prefix (comma‑separated allowed) | !,? |
+| LOG_LEVEL | No | INFO | Logging level | DEBUG |
+| LOG_JSONL_PATH | No | logs/bot.jsonl | JSONL log path | logs/bot.jsonl |
+| PROMETHEUS_ENABLED | No | true | Enable Prometheus metrics | true |
+| PROMETHEUS_PORT | No | 8000 | Metrics port | 8000 |
+| STREAMING_ENABLE | No | false | Streaming status embeds | true |
+
+More environment variables (RAG, budgets, retries, streaming, etc.) are documented in `.env.example` and `bot/config.py`.
+
+## Quickstart
+
+### UV
+```bash
+# 1) venv + deps
+uv venv --python 3.11
+source .venv/bin/activate
+uv pip sync requirements.txt
+
+# 2) configure env
+cp .env.example .env
+
+# 3) run
+uv run python -m bot.main
+# or: python run.py
 ```
-IN_MEMORY_CONTEXT_ONLY=true
+
+### pip
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt -e .
+cp .env.example .env
+python -m bot.main
 ```
+
+### Invite the bot
+- Scopes: `bot`, `applications.commands`
+- Permissions (minimal): Send Messages, Attach Files, Embed Links, Read Message History
+- Privileged intents: enable “Message Content Intent” in the Developer Portal
+
+## Usage
+
+### Local run
+```bash
+uv run python -m bot.main
+```
+On first start, pre‑flight checks validate token, intents, and Playwright availability.
+If Playwright isn’t present, auto‑install is attempted; otherwise run:
+```bash
+uv run playwright install chromium
+```
+
+### Slash commands (Vision)
+- `/image`, `/imgedit`, `/video`, `/vidref` (see `bot/commands/vision_commands.py`)
+- Set `VISION_ENABLED=true` and provide `VISION_API_KEY` for allowed providers
+- Slash command propagation can take time globally; per‑guild sync is not explicitly coded
+
+### Message commands (examples)
+- Search: `!search <query>`
+- RAG: `!rag ...` (see `bot/commands/rag_commands.py`)
+- Admin/Config: `!reload-config`, `!config-status`, `!alert`
+- TTS: `!tts ...`, `!say ...`
+- Video: `!watch <url>` (transcribe), `!video-help`
+- Screenshot: `!ss <url>`
+- Memory: `!memory ...`
+
+## Logging & Observability
+- Dual sinks:
+  - Rich console with pretty tracebacks (locals on DEBUG)
+  - JSONL structured file at `logs/bot.jsonl` (keys: ts, level, name, subsys, guild_id, user_id, msg_id, event, detail)
+- Enforcer requires exactly two handlers named `pretty_handler` and `jsonl_handler` or startup aborts
+- SensitiveDataFilter scrubs common secret keys in logged dict extras
+- Prometheus metrics initialized if `PROMETHEUS_ENABLED=true` (port from `PROMETHEUS_PORT`)
+
+## RAG / LLM Providers
+
+### Text backends
+- `openai` (OpenAI/OpenRouter): requires `OPENAI_API_KEY`, optionally `OPENAI_API_BASE`
+- `ollama` (local): `OLLAMA_BASE_URL`, `OLLAMA_MODEL` or `TEXT_MODEL`
+
+### RAG
+- Hybrid search over ChromaDB (vector + keyword) with configurable thresholds and weights
+- Control with `RAG_*` envs; `kb/` as default source and `chroma_db/` for index storage (configurable)
+
+### Vision
+- Providers: Together, Novita (set `VISION_ALLOWED_PROVIDERS`, `VISION_DEFAULT_PROVIDER`, and `VISION_API_KEY`)
+- Artifacts and job state under `vision_data/…`
+
+## Deployment
+- No top‑level Dockerfile/compose for the bot is included. A TTS service Dockerfile exists at `tts/service/Dockerfile`.
+- For production: supervise the process, configure log rotation for `logs/*.jsonl`, and set restricted perms on data files.
+
+## Security & Privacy
+- Never commit secrets; use `.env` locally and secret stores in production
+- Message content intent processes user messages; ensure policy compliance
+- Prompt/context files may contain sensitive data; restrict file permissions
+- Logging scrubs common secrets but never log raw credentials
+
+## Troubleshooting
+Dependency alignment is critical.
+
+- DOCX parsing: `ImportError: No module named docx.Document` → ensure `python-docx` is installed (this project pins `python-docx`, not the unrelated `docx` package)
+- PDF parsing: `ImportError: fitz` → ensure `pymupdf` is installed (this project pins `pymupdf`, not the unrelated `fitz` package)
+- Async tests failing immediately → ensure `pytest-asyncio` is installed and pytest reads `pytest.ini` (`asyncio_mode=auto`)
+- Playwright/browser not found → `uv run playwright install chromium`
+- Poppler missing → OCR fallback uses `pdftoppm`; install poppler‑utils on your system
+- Missing intents/scopes → enable Message Content Intent; re‑invite bot with `applications.commands` + `bot` scopes
+
+## Contributing
+- Keep functions tidy and add tests where possible
+- Respect the dual‑sink logging setup; do not log secrets
+- Update `.env.example` and docs under `docs/` when adding features
+- Describe changes, risks, and required env/schema updates in PRs
+
+## License
+MIT — see [LICENSE](LICENSE).
+
+## Acknowledgments
+- discord.py
+- Rich
+- Kokoro‑ONNX
+- ChromaDB
+- PyMuPDF, Tesseract OCR
+- Playwright
+
