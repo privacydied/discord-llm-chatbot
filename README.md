@@ -33,19 +33,19 @@
 flowchart LR
   A[Discord Gateway] --> B["LLMBot (discord.py)"]
   B --> C[Router]
-  C -->|Text| D1[OpenAI/OpenRouter]
-  C -->|Text – local| D2[Ollama]
-  C -->|RAG| E[Hybrid Search (ChromaDB)]
-  C -->|Vision| F["Vision Orchestrator\nTogether/Novita"]
-  C -->|Media| G1[STT Orchestrator]
-  G1 --> G2[faster-whisper/whispercpp]
-  C -->|PDF/OCR| H1[PyMuPDF]
+  C -- "Text" --> D1[OpenAI/OpenRouter]
+  C -- "Text (local)" --> D2[Ollama]
+  C -- "RAG" --> E[Hybrid Search (ChromaDB)]
+  C -- "Vision" --> F["Vision Orchestrator<br/>Together / Novita"]
+  C -- "Media" --> G1[STT Orchestrator]
+  G1 --> G2[faster-whisper / whispercpp]
+  C -- "PDF/OCR" --> H1[PyMuPDF]
   H1 --> H2[Tesseract OCR (optional)]
-  B --> I[Commands/Cogs]
+  B --> I[Commands / Cogs]
   B --> J[Prometheus Metrics]
   B --> K[Logging: Rich + JSONL]
 
-  subgraph FILES["Files/Storage"]
+  subgraph "Files / Storage"
     L1[kb/]
     L2[chroma_db/]
     L3[vision_data/, logs/, user_profiles/, server_profiles/]
@@ -74,21 +74,11 @@ flowchart LR
 
 #### UV (preferred)
 ```bash
-# Create and activate an isolated venv
-uv venv --python 3.11
+uv venv --python 3.11 # Create and activate an isolated venv
 source .venv/bin/activate
-
-# Install dependencies
-uv pip sync requirements.txt
-
-# Optionally, install the package in editable mode
-uv pip install -e .
-
-# Ensure Playwright browser (Chromium) for screenshot/vision flows
-uv run playwright install chromium
-
-# Run the bot
-uv run python -m bot.main
+uv pip sync requirements.txt # Install dependencies
+uv run playwright install chromium # Ensure Playwright browser (Chromium) for screenshot/vision flows
+uv run python -m bot.main # Run the bot
 
 ```
 
