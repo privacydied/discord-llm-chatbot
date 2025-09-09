@@ -31,6 +31,8 @@ import json
 from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
 import discord
 import httpx
+from .http_client import get_http_client
+from .util.env import get_bool
 from .x_api_client import XApiClient
 from .enhanced_retry import EnhancedRetryManager, ProviderConfig, get_retry_manager
 from .brain import brain_infer
@@ -259,6 +261,14 @@ class Router:
                 self.logger.error(f"Failed to create VisionOrchestrator (router fallback): {e}", exc_info=True)
                 self._vision_orchestrator = None
 
+    def _append_note_once(self, text: str, note: str) -> str:
+        """Append a parenthetical note once, avoiding duplicates and preserving spacing."""
+        text = text or ""
+        if note in text:
+            return text
+        sep = "\n\n" if text and not text.endswith("\n") else ""
+        return f"{text}{sep}{note}".strip()
+
         # Queue non-blocking eager start to reduce first-check false negatives [PA]
         try:
             import asyncio
@@ -418,25 +428,25 @@ class Router:
             base = "https://cdn.syndication.twimg.com/"
             data = None
             try:
-                async with httpx.AsyncClient(timeout=timeout_ms / 1000.0) as client:
-                    for endpoint, params in params_variants:
-                        url = base + ("widgets/tweet" if endpoint == "widgets" else "tweet-result")
-                        self._metric_inc("x.syndication.fetch", {"endpoint": endpoint})
-                        resp = await client.get(url, headers=headers, params=params)
-                        if resp.status_code != 200:
-                            self.logger.info(
-                                "Syndication non-200",
-                                extra={"detail": {"tweet_id": tweet_id, "status": resp.status_code, "endpoint": endpoint}},
-                            )
-                            self._metric_inc("x.syndication.non_200", {"status": str(resp.status_code), "endpoint": endpoint})
-                            continue
-                        try:
-                            data = resp.json()
-                        except Exception:
-                            self._metric_inc("x.syndication.invalid_json", {"endpoint": endpoint})
-                            continue
-                        # Found a candidate
-                        break
+                http_client = await get_http_client()
+                for endpoint, params in params_variants:
+                    url = base + ("widgets/tweet" if endpoint == "widgets" else "tweet-result")
+                    self._metric_inc("x.syndication.fetch", {"endpoint": endpoint})
+                    resp = await http_client.get(url, headers=headers, params=params)
+                    if resp.status_code != 200:
+                        self.logger.info(
+                            "Syndication non-200",
+                            extra={"detail": {"tweet_id": tweet_id, "status": resp.status_code, "endpoint": endpoint}},
+                        )
+                        self._metric_inc("x.syndication.non_200", {"status": str(resp.status_code), "endpoint": endpoint})
+                        continue
+                    try:
+                        data = resp.json()
+                    except Exception:
+                        self._metric_inc("x.syndication.invalid_json", {"endpoint": endpoint})
+                        continue
+                    # Found a candidate
+                    break
                     # If no usable JSON with text/full_text, try oEmbed as last resort
                     if not (isinstance(data, dict) and (data.get("text") or data.get("full_text"))):
                         oembed_url = "https://publish.twitter.com/oembed"
@@ -448,7 +458,7 @@ class Router:
                             "lang": "en",
                         }
                         self._metric_inc("x.syndication.fetch", {"endpoint": "oembed"})
-                        resp = await client.get(oembed_url, headers=headers, params=oembed_params)
+                        resp = await http_client.get(oembed_url, headers=headers, params=oembed_params)
                         if resp.status_code == 200:
                             try:
                                 obj = resp.json()
@@ -471,7 +481,7 @@ class Router:
                             oembed_params_x = dict(oembed_params)
                             oembed_params_x["url"] = f"https://x.com/i/status/{tweet_id}"
                             self._metric_inc("x.syndication.fetch", {"endpoint": "oembed_x"})
-                            resp2 = await client.get(oembed_url, headers=headers, params=oembed_params_x)
+                            resp2 = await http_client.get(oembed_url, headers=headers, params=oembed_params_x)
                             if resp2.status_code == 200:
                                 try:
                                     obj2 = resp2.json()
@@ -828,7 +838,7 @@ class Router:
         self.logger.info(f"🔄 === ROUTER DISPATCH STARTED: MSG {message.id} ====")
 
         # ROUTER_DEBUG=1 diagnostics for path selection [IV]
-        router_debug = os.getenv("ROUTER_DEBUG", "0").lower() in ("1", "true", "yes", "on")
+        router_debug = get_bool("ROUTER_DEBUG", False)
 
         try:
             # 1. Quick pre-filter: Only parse commands for messages that start with '!' to avoid unnecessary parsing
@@ -951,7 +961,8 @@ class Router:
                                     return await self._handle_x_twitter_fallback(tweet_url, message, context_str)
                                 else:
                                     self.logger.debug(f"❌ X/Twitter STT failed: {e} | continuing without media")
-                                    fallback_content = f"{message.content or ''}\n\n(video audio unavailable; proceeding without it)"
+                                    note = "(video audio unavailable; proceeding without it)"
+                                    fallback_content = self._append_note_once(message.content or "", note)
                                     return await self._flow_process_text(
                                         content=fallback_content.strip(),
                                         context=context_str,
@@ -970,10 +981,15 @@ class Router:
                                 self.logger.debug(f"📎 X/Twitter image detected | url={image_url}")
                                 
                                 try:
-                                    import httpx
-                                    async with httpx.AsyncClient() as client:
-                                        response = await client.get(image_url, timeout=30.0)
-                                        if response.status_code == 200:
+                                    http_client = await get_http_client()
+                                    response = await http_client.get(image_url)
+                                    if response.status_code == 200:
+                                        ctype = response.headers.get("content-type", "").lower()
+                                        if not ctype.startswith("image/"):
+                                            self.logger.debug(
+                                                f"❌ X/Twitter image URL did not return image content-type | content_type={ctype}"
+                                            )
+                                        else:
                                             image_data = response.content
                                             vl_notes = await see_infer(image_data)
                                             if vl_notes:
@@ -988,7 +1004,8 @@ class Router:
                                     self.logger.debug(
                                         "❌ X/Twitter image unavailable | reason=image_fetch_failed | continuing without media"
                                     )
-                                    fallback_content = f"{message.content or ''}\n\n(image was unavailable; proceeding without it)"
+                                    note = "(image was unavailable; proceeding without it)"
+                                    fallback_content = self._append_note_once(message.content or "", note)
                                     return await self._flow_process_text(
                                         content=fallback_content.strip(),
                                         context=context_str,

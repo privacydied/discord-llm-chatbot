@@ -3,6 +3,8 @@ import os
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple, Any
 import logging
+import stat
+from bot.util.env import get_bool
 
 import discord
 
@@ -24,7 +26,7 @@ class ContextManager:
         """
         self.filepath = filepath
         self.max_messages = int(os.getenv("MAX_CONTEXT_MESSAGES", max_messages))
-        self.in_memory_only = os.getenv("IN_MEMORY_CONTEXT_ONLY", "false").lower() == "true"
+        self.in_memory_only = get_bool("IN_MEMORY_CONTEXT_ONLY", False)
         self.bot = bot
         self.memory: Dict[str, Any] = {}
         self._load()
@@ -83,6 +85,26 @@ class ContextManager:
         try:
             with open(self.filepath, "w", encoding="utf-8") as f:
                 json.dump(guild_context_only, f, indent=2)
+            # Post-write permission check (best-effort)
+            try:
+                st = os.stat(self.filepath)
+                mode = stat.S_IMODE(st.st_mode)
+                if mode != 0o600:
+                    if get_bool("STRICT_CONTEXT_PERMS", False):
+                        os.chmod(self.filepath, 0o600)
+                        logger.info(
+                            "Hardened context file permissions to 600",
+                            extra={"subsys": "context", "event": "context.perms.hardened"}
+                        )
+                    else:
+                        logger.warning(
+                            "Context file permissions are not 600 (mode=%o). Consider: chmod 600 %s",
+                            mode,
+                            self.filepath,
+                        )
+            except Exception:
+                # Never fail route on permission checks
+                pass
         except IOError as e:
             logger.error(f"Failed to save context to {self.filepath}. Error: {e}")
 

@@ -41,6 +41,29 @@ class TokenizerType(Enum):
     GRAPHEME = "grapheme"
     UNKNOWN = "unknown"
 
+_ALIAS_WARNING_SHOWN = False
+
+def _get_env_tokenizer() -> Optional[str]:
+    """Read tokenizer env with alias support for TTS_TOKENIZER.
+
+    Prefer British spelling TTS_TOKENISER. If absent, accept TTS_TOKENIZER
+    and log a one-time warning.
+    """
+    global _ALIAS_WARNING_SHOWN
+    val = os.environ.get('TTS_TOKENISER')
+    if val:
+        return val
+    alt = os.environ.get('TTS_TOKENIZER')
+    if alt:
+        if not _ALIAS_WARNING_SHOWN:
+            logger.warning(
+                "Using TTS_TOKENIZER (alias of TTS_TOKENISER). Prefer TTS_TOKENISER for consistency.",
+                extra={'subsys': 'tts', 'event': 'tokenizer.env_alias'}
+            )
+            _ALIAS_WARNING_SHOWN = True
+        return alt
+    return None
+
 def get_site_packages_dirs() -> List[str]:
     """Get a list of site-packages directories in the current Python environment."""
     try:
@@ -211,7 +234,7 @@ def detect_available_tokenizers() -> Dict[str, bool]:
                      extra={'subsys': 'tts', 'event': 'tokenizer.none_available'})
     
     # Check if TTS_TOKENISER environment variable is set
-    env_tokenizer = os.environ.get('TTS_TOKENISER')
+    env_tokenizer = _get_env_tokenizer()
     if env_tokenizer and env_tokenizer not in AVAILABLE_TOKENIZERS:
         logger.error(f"TTS_TOKENISER environment variable '{env_tokenizer}' is not available. "
                    f"Available tokenizers: {sorted(list(AVAILABLE_TOKENIZERS))}",
@@ -249,7 +272,7 @@ def select_tokenizer_for_language(language: str, available_tokenizers: Optional[
         available_set = {k for k, v in available_tokenizers.items() if v}
     
     # Check for environment variable override
-    env_tokenizer = os.environ.get('TTS_TOKENISER')
+    env_tokenizer = _get_env_tokenizer()
     if env_tokenizer:
         if env_tokenizer in available_set:
             logger.info(f"Using tokenizer from TTS_TOKENISER environment variable: {env_tokenizer}",

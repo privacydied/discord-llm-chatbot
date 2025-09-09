@@ -49,7 +49,7 @@ class KokoroONNXEngine(BaseEngine):
         self.voices_path = voices_path or _first_existing(default_voice_candidates)
         self.language = os.getenv("TTS_LANGUAGE", "en").strip() or "en"
         # Respect explicit tokenizer argument. For English, avoid registry autodiscovery entirely.
-        env_tokenizer = os.environ.get("TTS_TOKENISER", "").strip().lower()
+        env_tokenizer = (os.environ.get("TTS_TOKENISER") or os.environ.get("TTS_TOKENIZER") or "").strip().lower()
         if tokenizer is not None:
             self.tokenizer = tokenizer
         else:

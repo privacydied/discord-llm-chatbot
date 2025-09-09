@@ -1,6 +1,7 @@
 """Prometheus-based metrics implementation for bot monitoring and observability."""
 
 from typing import Dict, Optional, Any
+import re
 import time
 from contextlib import contextmanager
 import logging
@@ -55,13 +56,19 @@ class PrometheusMetrics:
             description: Metric description
             labels: List of label names
         """
-        if name not in self._counters:
-            self._counters[name] = Counter(
-                name=name,
+        norm_name = self._normalize_metric_name(name)
+        norm_labels = self._normalize_label_names(labels or [])
+        if name != norm_name:
+            logger.debug(f"Normalizing counter name: '{name}' -> '{norm_name}'")
+        if labels and norm_labels != labels:
+            logger.debug(f"Normalizing counter labels: {labels} -> {norm_labels}")
+        if norm_name not in self._counters:
+            self._counters[norm_name] = Counter(
+                name=norm_name,
                 documentation=description,
-                labelnames=labels or []
+                labelnames=norm_labels
             )
-            logger.debug(f"📈 Defined counter: {name}")
+            logger.debug(f"📈 Defined counter: {norm_name}")
     
     def define_histogram(self, name: str, description: str, labels: Optional[list] = None, 
                         buckets: Optional[tuple] = None) -> None:
@@ -73,17 +80,23 @@ class PrometheusMetrics:
             labels: List of label names
             buckets: Histogram buckets
         """
-        if name not in self._histograms:
+        norm_name = self._normalize_metric_name(name)
+        norm_labels = self._normalize_label_names(labels or [])
+        if name != norm_name:
+            logger.debug(f"Normalizing histogram name: '{name}' -> '{norm_name}'")
+        if labels and norm_labels != labels:
+            logger.debug(f"Normalizing histogram labels: {labels} -> {norm_labels}")
+        if norm_name not in self._histograms:
             kwargs = {
-                'name': name,
+                'name': norm_name,
                 'documentation': description,
-                'labelnames': labels or []
+                'labelnames': norm_labels
             }
             if buckets:
                 kwargs['buckets'] = buckets
                 
-            self._histograms[name] = Histogram(**kwargs)
-            logger.debug(f"📊 Defined histogram: {name}")
+            self._histograms[norm_name] = Histogram(**kwargs)
+            logger.debug(f"📊 Defined histogram: {norm_name}")
     
     def define_gauge(self, name: str, description: str, labels: Optional[list] = None) -> None:
         """Define a gauge metric.
@@ -93,13 +106,19 @@ class PrometheusMetrics:
             description: Metric description
             labels: List of label names
         """
-        if name not in self._gauges:
-            self._gauges[name] = Gauge(
-                name=name,
+        norm_name = self._normalize_metric_name(name)
+        norm_labels = self._normalize_label_names(labels or [])
+        if name != norm_name:
+            logger.debug(f"Normalizing gauge name: '{name}' -> '{norm_name}'")
+        if labels and norm_labels != labels:
+            logger.debug(f"Normalizing gauge labels: {labels} -> {norm_labels}")
+        if norm_name not in self._gauges:
+            self._gauges[norm_name] = Gauge(
+                name=norm_name,
                 documentation=description,
-                labelnames=labels or []
+                labelnames=norm_labels
             )
-            logger.debug(f"📏 Defined gauge: {name}")
+            logger.debug(f"📏 Defined gauge: {norm_name}")
     
     def inc(self, name: str, value: int = 1, labels: Optional[Dict[str, str]] = None) -> None:
         """Increment a counter.
@@ -109,11 +128,13 @@ class PrometheusMetrics:
             value: Increment value
             labels: Label values
         """
-        if name in self._counters:
-            if labels:
-                self._counters[name].labels(**labels).inc(value)
+        norm_name = self._normalize_metric_name(name)
+        norm_labels = labels or None
+        if norm_name in self._counters:
+            if norm_labels:
+                self._counters[norm_name].labels(**norm_labels).inc(value)
             else:
-                self._counters[name].inc(value)
+                self._counters[norm_name].inc(value)
         else:
             logger.warning(f"⚠️  Counter '{name}' not defined")
     
@@ -135,11 +156,13 @@ class PrometheusMetrics:
             value: Value to observe
             labels: Label values
         """
-        if name in self._histograms:
-            if labels:
-                self._histograms[name].labels(**labels).observe(value)
+        norm_name = self._normalize_metric_name(name)
+        norm_labels = labels or None
+        if norm_name in self._histograms:
+            if norm_labels:
+                self._histograms[norm_name].labels(**norm_labels).observe(value)
             else:
-                self._histograms[name].observe(value)
+                self._histograms[norm_name].observe(value)
         else:
             logger.warning(f"⚠️  Histogram '{name}' not defined")
     
@@ -151,11 +174,13 @@ class PrometheusMetrics:
             value: Gauge value
             labels: Label values
         """
-        if name in self._gauges:
-            if labels:
-                self._gauges[name].labels(**labels).set(value)
+        norm_name = self._normalize_metric_name(name)
+        norm_labels = labels or None
+        if norm_name in self._gauges:
+            if norm_labels:
+                self._gauges[norm_name].labels(**norm_labels).set(value)
             else:
-                self._gauges[name].set(value)
+                self._gauges[norm_name].set(value)
         else:
             logger.warning(f"⚠️  Gauge '{name}' not defined")
     
@@ -182,3 +207,28 @@ class PrometheusMetrics:
     def get_registry(self):
         """Get the Prometheus registry for advanced usage."""
         return REGISTRY
+
+    def _normalize_metric_name(self, name: str) -> str:
+        """Normalize metric name to Prometheus spec.
+
+        - Replace invalid characters with '_'
+        - Ensure leading char is [a-zA-Z_:] (prefix with 'm_' if not)
+        """
+        # Replace anything not allowed with underscore
+        norm = re.sub(r"[^a-zA-Z0-9_:]", "_", name)
+        # If starts with invalid, prefix
+        if not re.match(r"^[a-zA-Z_:]", norm):
+            norm = f"m_{norm}"
+        return norm
+
+    def _normalize_label_names(self, labels: list) -> list:
+        """Normalize label names to Prometheus spec."""
+        normed = []
+        for l in labels:
+            if not isinstance(l, str):
+                continue
+            n = re.sub(r"[^a-zA-Z0-9_]", "_", l)
+            if not re.match(r"^[a-zA-Z_]", n):
+                n = f"l_{n}"
+            normed.append(n)
+        return normed

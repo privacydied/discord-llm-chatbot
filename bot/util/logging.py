@@ -114,6 +114,10 @@ def init_logging() -> None:
     jsonl.set_name("jsonl_handler")
     jsonl.setFormatter(JsonlFormatter())
 
+    # Attach sensitive data scrubber to handlers
+    pretty.addFilter(SensitiveDataFilter())
+    jsonl.addFilter(SensitiveDataFilter())
+
     logging.basicConfig(handlers=[pretty, jsonl], level=level, force=True, format="%(message)s")
 
     # Enforce exactly the two sinks are present
@@ -158,4 +162,41 @@ def cleanup_rich_handlers() -> None:
                     pass
     except Exception:
         pass
+
+
+class SensitiveDataFilter(logging.Filter):
+    """Filter that scrubs sensitive values in structured extras before emission. [SFT]"""
+
+    SECRET_KEYS = {
+        "OPENAI_API_KEY",
+        "X_API_BEARER_TOKEN",
+        "DISCORD_TOKEN",
+        "VISION_API_KEY",
+        "AUTHORIZATION",
+        "authorization",
+        "api_key",
+        "token",
+        "bearer",
+    }
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        try:
+            for key, value in list(record.__dict__.items()):
+                if isinstance(value, dict):
+                    self._scrub_dict_inplace(value)
+            # Also scrub 'detail' if it's a dict-like stored as attribute
+            if hasattr(record, "detail") and isinstance(record.detail, dict):
+                self._scrub_dict_inplace(record.detail)
+        except Exception:
+            # Never block logging on scrubber errors
+            return True
+        return True
+
+    def _scrub_dict_inplace(self, obj: Dict[str, Any]) -> None:
+        for k in list(obj.keys()):
+            v = obj[k]
+            if isinstance(v, dict):
+                self._scrub_dict_inplace(v)
+            elif isinstance(v, str) and k in self.SECRET_KEYS:
+                obj[k] = "[REDACTED]"
 

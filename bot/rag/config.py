@@ -155,7 +155,13 @@ def validate_rag_environment() -> tuple[bool, list[str]]:
         "RAG_DEDUPLICATION_THRESHOLD": (0.0, 1.0),
         "RAG_CHUNK_SIZE": (50, 2048),
         "RAG_CHUNK_OVERLAP": (0, 500),
-        "RAG_MIN_CHUNK_SIZE": (10, 1000)
+        "RAG_MIN_CHUNK_SIZE": (10, 1000),
+        # Background processing bounds [REH]
+        "RAG_INDEXING_QUEUE_SIZE": (1, 10000),
+        "RAG_INDEXING_WORKERS": (1, 16),
+        "RAG_INDEXING_BATCH_SIZE": (1, 1024),
+        # Lazy load timeout bound (0 allows non-blocking path)
+        "RAG_LAZY_LOAD_TIMEOUT": (0.0, 600.0),
     }
     
     for param, (min_val, max_val) in numeric_params.items():

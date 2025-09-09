@@ -56,6 +56,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Sensitive-data scrubber in logging pipeline to redact secrets in structured logs. [SFT]
+- RAG defaults regression test ensuring `RAG_BACKGROUND_INDEXING` defaults to true when unset. [REH]
+- Environment helpers for consistent boolean/numeric parsing. [IV]
+
+### Changed
+- Router: use shared HTTP client with retries/timeouts for X/Twitter image/syndication fetch; validate image content-type. [REH][PA]
+- Router: standardized fallback notes appended once to avoid duplication. [REH]
+- RAG: validated bounds for indexing queue/workers/batch and lazy load timeout. [IV]
+- Prometheus metrics: validate metric and label names before registration. [REH]
+- TTS: accept `TTS_TOKENIZER` as an alias for `TTS_TOKENISER` with a one-time warning. [IV]
+- Context storage: warn/harden file permissions (opt-in via `STRICT_CONTEXT_PERMS=true`). [SFT]
+
 ### Planned
 - Unit test suite with pytest
 - Integration tests for Discord commands
