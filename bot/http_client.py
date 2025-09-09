@@ -162,6 +162,14 @@ class SharedHttpClient:
             return  # Already started
 
         # Configure HTTP client with optimizations
+        # Gracefully disable HTTP/2 if the optional 'h2' dependency is missing [REH]
+        if self.http2_enabled:
+            try:
+                import h2  # type: ignore  # noqa: F401
+            except Exception:
+                self.http2_enabled = False
+                logger.info("🌐 HTTP/2 not available (h2 missing); falling back to HTTP/1.1")
+
         limits = httpx.Limits(
             max_connections=self.max_connections,
             max_keepalive_connections=self.max_keepalive,
@@ -303,6 +311,54 @@ class SharedHttpClient:
                 last_exception = e
                 circuit_breaker.record_failure()
                 self.metrics.requests_failed += 1
+
+                # Special-case: if HTTP/2 is enabled but the optional 'h2' package is missing,
+                # transparently recreate the client with HTTP/1.1 and retry immediately. [REH]
+                msg = str(e)
+                if self.http2_enabled and (
+                    "http2=True" in msg or "http2" in msg
+                ) and "h2" in msg and "not installed" in msg:
+                    try:
+                        # Switch to HTTP/1.1 client
+                        if self.client is not None:
+                            await self.client.aclose()
+                        self.http2_enabled = False
+                        limits = httpx.Limits(
+                            max_connections=self.max_connections,
+                            max_keepalive_connections=self.max_keepalive,
+                            keepalive_expiry=30.0,
+                        )
+                        timeout = httpx.Timeout(
+                            connect=self.default_config.connect_timeout,
+                            read=self.default_config.read_timeout,
+                            write=5.0,
+                            pool=1.0,
+                        )
+                        headers = {
+                            "User-Agent": "Discord-LLM-Bot/1.0 (+https://github.com/example/discord-llm-chatbot)",
+                            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+                            "Accept-Language": "en-US,en;q=0.5",
+                            "Accept-Encoding": "gzip, deflate, br",
+                            "DNT": "1",
+                            "Connection": "keep-alive",
+                            "Upgrade-Insecure-Requests": "1",
+                        }
+                        self.client = AsyncClient(
+                            limits=limits,
+                            timeout=timeout,
+                            headers=headers,
+                            http2=False,
+                            follow_redirects=True,
+                            max_redirects=5,
+                        )
+                        logger.info(
+                            "🌐 HTTP/2 unavailable at runtime; switched to HTTP/1.1 and retrying"
+                        )
+                        # Try again immediately without backoff for this specific condition
+                        continue
+                    except Exception:
+                        # If recreation fails, fall through to normal retry/backoff
+                        pass
 
                 # Don't retry on the last attempt
                 if attempt == config.max_retries:

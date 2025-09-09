@@ -13,7 +13,8 @@ faster_whisper==1.2.0
 pymupdf==1.26.3
 Flask==3.1.2
 g2p_en==2.1.0
-httpx==0.28.1
+httpx[http2]==0.28.1
+brotli==1.1.0
 kokoro_onnx==0.4.9
 misaki==0.9.4
 nltk==3.9.1

@@ -296,6 +296,104 @@ class Router:
                 )
                 self._vision_orchestrator = None
 
+        # Eagerly start the vision orchestrator in the background to reduce cold-start delays [PA]
+        try:
+            loop = asyncio.get_running_loop()
+            if (
+                loop
+                and loop.is_running()
+                and self._vision_orchestrator
+                and not getattr(self._vision_orchestrator, "_started", False)
+            ):
+                asyncio.create_task(self._vision_orchestrator.start())
+                self.logger.debug("🚀 Vision Orchestrator start queued (router init)")
+        except Exception:
+            # Non-fatal; lazy start path covers this if needed
+            pass
+
+        # Feature flags summary (treat missing as enabled) [CMV]
+        try:
+            ve = bool(self.config.get("VISION_ENABLED", True))
+            vti = bool(self.config.get("VISION_T2I_ENABLED", True))
+            self.logger.info(
+                f"Vision flags | VISION_ENABLED={'on' if ve else 'off'} VISION_T2I_ENABLED={'on' if vti else 'off'}"
+            )
+        except Exception:
+            pass
+
+        # Load centralized VL prompt guidelines if available [CA]
+        self._vl_prompt_guidelines: Optional[str] = None
+        try:
+            prompts_path = (
+                Path(__file__).resolve().parents[1] / "prompts" / "vl-prompt.txt"
+            )
+            if prompts_path.exists():
+                content = prompts_path.read_text(encoding="utf-8").strip()
+                if content:
+                    self._vl_prompt_guidelines = content
+                    self.logger.debug(
+                        "Loaded VL prompt guidelines from prompts/vl-prompt.txt"
+                    )
+        except Exception:
+            # Non-fatal; handler has built-in defaults
+            self._vl_prompt_guidelines = None
+
+        # --- X/Twitter syndication probe feature flags (read-once, cached) [CMV] ---
+        try:
+            self._x_syn_probe_enabled: bool = bool(
+                self.config.get("X_SYNDICATION_PROBE_ENABLED", True)
+            )
+        except Exception:
+            self._x_syn_probe_enabled = True
+        try:
+            self._x_syn_order: str = str(
+                self.config.get("X_SYNDICATION_ORDER", "yt_dlp,api,html")
+            ).strip()
+        except Exception:
+            self._x_syn_order = "yt_dlp,api,html"
+        try:
+            self._x_syn_timeout_s: float = float(
+                self.config.get("X_SYNDICATION_TIMEOUT_S", 3.0)
+            )
+        except Exception:
+            self._x_syn_timeout_s = 3.0
+        try:
+            self._x_syn_max_images: int = int(
+                self.config.get("X_SYNDICATION_MAX_IMAGES", 4)
+            )
+        except Exception:
+            self._x_syn_max_images = 4
+        try:
+            domains = (
+                self.config.get(
+                    "X_SYNDICATION_ACCEPT_DOMAINS",
+                    "pbs.twimg.com,video.twimg.com,fxtwitter.com,vxtwitter.com",
+                )
+                or ""
+            )
+            self._x_syn_accept_domains: set[str] = {
+                d.strip().lower() for d in str(domains).split(",") if d.strip()
+            }
+        except Exception:
+            self._x_syn_accept_domains = {
+                "pbs.twimg.com",
+                "pbs-0.twimg.com",
+                "pbs-1.twimg.com",
+                "pbs-2.twimg.com",
+                "pbs-3.twimg.com",
+                "video.twimg.com",
+                "fxtwitter.com",
+                "vxtwitter.com",
+            }
+
+        # Gate for previously added early X-resolve (default off to avoid behavioral change) [KBT]
+        try:
+            self._x_early_resolve_enabled: bool = bool(
+                self.config.get("X_EARLY_RESOLVE_ENABLED", False)
+            )
+        except Exception:
+            self._x_early_resolve_enabled = False
+
     def _append_note_once(self, text: str, note: str) -> str:
         """Append a parenthetical note once, avoiding duplicates and preserving spacing."""
         text = text or ""
@@ -883,21 +981,31 @@ class Router:
                 total_timeout=min(self._x_syn_timeout_s + 0.5, 3.5),
                 max_retries=0,
             )
+            # Use referer + real UA for pbs compatibility [IV]
+            import os as _os
+            headers = {
+                "Referer": _os.getenv("IMAGEDL_REFERER", "https://x.com/"),
+                "User-Agent": _os.getenv(
+                    "IMAGEDL_USER_AGENT",
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36",
+                ),
+                "Accept": "image/*,*/*;q=0.8",
+            }
             try:
-                r = await http.head(u, config=cfg)
+                r = await http.head(u, config=cfg, headers=headers)
                 ctype = (r.headers.get("content-type") or "").lower()
                 if ctype.startswith("image/"):
                     return True
                 # Some CDNs block HEAD; fall back to lightweight GET
                 if r.status_code in (403, 405):
-                    g = await http.get(u, config=cfg)
+                    g = await http.get(u, config=cfg, headers=headers)
                     ctype_g = (g.headers.get("content-type") or "").lower()
                     return ctype_g.startswith("image/")
                 return False
             except Exception:
                 # Last resort: small GET probe
                 try:
-                    g = await http.get(u, config=cfg)
+                    g = await http.get(u, config=cfg, headers=headers)
                     ctype_g = (g.headers.get("content-type") or "").lower()
                     return ctype_g.startswith("image/")
                 except Exception:
@@ -932,12 +1040,27 @@ class Router:
                         continue
                     data = {}
                     try:
-                        data = json.loads(resp.text)
+                        # Prefer native JSON parsing to avoid encoding/CE pitfalls [REH]
+                        data = resp.json()
                     except Exception:
-                        self.logger.debug(
-                            f"x.syndication.api.json_error | host={host}"
-                        )
-                        data = {}
+                        try:
+                            # If brotli is used and not auto-decoded, attempt manual decode [REH]
+                            enc = (resp.headers.get("content-encoding") or "").lower()
+                            if "br" in enc:
+                                try:
+                                    import brotli  # type: ignore
+
+                                    decoded = brotli.decompress(resp.content)
+                                    data = json.loads(decoded.decode("utf-8", errors="replace"))
+                                except Exception:
+                                    data = json.loads(resp.text)
+                            else:
+                                data = json.loads(resp.text)
+                        except Exception:
+                            self.logger.debug(
+                                f"x.syndication.api.json_error | host={host}"
+                            )
+                            data = {}
                     # Extract photo URLs from common shapes
                     candidates: List[str] = []
                     # fx/vx often: {'tweet': {'media': {'photos':[{'url':...}]}}}
@@ -992,13 +1115,14 @@ class Router:
                         continue
                     text = resp.text
                     candidates: List[str] = []
-                    # og:image
-                    for m in re.finditer(
-                        r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']',
-                        text,
-                        re.IGNORECASE,
-                    ):
-                        candidates.append(m.group(1))
+                    # og:image and twitter:image (robust attribute order) [REH]
+                    meta_patterns = [
+                        r'<meta[^>]+(?:property|name)=["\']og:image(?:[:a-z]+)?["\'][^>]+(?:content|value)=["\']([^"\']+)["\']',
+                        r'<meta[^>]+(?:property|name)=["\']twitter:image(?:[:a-z]+)?["\'][^>]+(?:content|value)=["\']([^"\']+)["\']',
+                    ]
+                    for pat in meta_patterns:
+                        for m in re.finditer(pat, text, re.IGNORECASE):
+                            candidates.append(m.group(1))
                     # pbs links anywhere
                     for m in re.finditer(
                         r"https://pbs\.twimg\.com/[^\s'\"]+",
@@ -2789,7 +2913,7 @@ class Router:
                         # This ensures native photos are analyzed instead of just counting them
 
                         # Use new syndication handler for full-res images [CA][PA]
-                        from ..syndication.handler import (
+                        from .syndication.handler import (
                             handle_twitter_syndication_to_vl,
                         )
 
@@ -2829,7 +2953,7 @@ class Router:
                                     "text": "",
                                     "photos": [{"url": u} for u in imgs],
                                 }
-                                from ..syndication.handler import (
+                                from .syndication.handler import (
                                     handle_twitter_syndication_to_vl,
                                 )
                                 result = await handle_twitter_syndication_to_vl(
@@ -2956,7 +3080,7 @@ class Router:
                             }
 
                             # Use new syndication handler for full-res images [CA][PA]
-                            from ..syndication.handler import (
+                            from .syndication.handler import (
                                 handle_twitter_syndication_to_vl,
                             )
 
