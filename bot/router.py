@@ -4141,7 +4141,8 @@ class Router:
                 try:
                     content_lower = (content or "").lower()
                     has_vl_section = (
-                        "vl prompt output:" in content_lower
+                        "visual_facts:" in content_lower
+                        or "vl prompt output:" in content_lower
                         or bool(re.search(r"^image\s+\d+:", content, re.IGNORECASE | re.MULTILINE))
                         or "tweet caption:" in content_lower
                     )
@@ -4157,6 +4158,10 @@ class Router:
                             "- Do not claim there is no image or that you cannot see images when such analysis is provided.\n"
                             "- Keep persona, tone, and safety rules intact."
                         )
+                        try:
+                            self.logger.info("text.anchor | visual_facts_detected=true")
+                        except Exception:
+                            pass
                 except Exception:
                     anchored_system = None
 
@@ -4168,6 +4173,57 @@ class Router:
                     extra_context=enhanced_context,
                     system_prompt=anchored_system,
                 )
+                # Post-generation guard: if model contradicts visual facts, regenerate once, else fallback to VL text. [REH]
+                try:
+                    bad_phrases = (
+                        "no image", "can't see", "cannot see", "can't analyze",
+                        "resend the pic", "dead tweet", "no pic", "thin air",
+                    )
+                    lower_out = (response_text or "").lower()
+                    contradicts = any(p in lower_out for p in bad_phrases)
+                except Exception:
+                    contradicts = False
+
+                if anchored_system and contradicts:
+                    # Try one more time with a tighter instruction
+                    try:
+                        repair_instr = (
+                            content
+                            + "\n\n[REWRITE_TASK]\n"
+                            + "Draft a short reply that uses the VISUAL_FACTS above. "
+                            + "Do not claim the image is missing. Be concise and on-tone."
+                        )
+                        second = await contextual_brain_infer_simple(
+                            message,
+                            repair_instr,
+                            self.bot,
+                            perception_notes=perception_notes,
+                            extra_context=enhanced_context,
+                            system_prompt=anchored_system,
+                        )
+                        if second and not any(p in (second or "").lower() for p in bad_phrases):
+                            return BotAction(content=second)
+                    except Exception as _e:
+                        self.logger.debug(f"text.anchor.guard.regen_failed | {_e}")
+
+                    # Fallback: extract VL summary directly from aggregated content
+                    try:
+                        vl_section = ""
+                        s = content or ""
+                        start = s.lower().find("vl prompt output:")
+                        if start != -1:
+                            vl_section = s[start:]
+                            # Trim at next header if present
+                            for marker in ("###", "tweet caption:"):
+                                pos = vl_section.lower().find(marker)
+                                if pos > 0:
+                                    vl_section = vl_section[:pos]
+                        vl_section = vl_section.strip() or "Visual analysis available, but failed to synthesize."
+                        return BotAction(content=vl_section)
+                    except Exception:
+                        # Last resort: return the first response anyway
+                        pass
+
                 return BotAction(content=response_text)
             except Exception as e:
                 self.logger.warning(
@@ -4191,7 +4247,8 @@ class Router:
         try:
             content_lower = (content or "").lower()
             has_vl_section = (
-                "vl prompt output:" in content_lower
+                "visual_facts:" in content_lower
+                or "vl prompt output:" in content_lower
                 or bool(re.search(r"^image\s+\d+:", content, re.IGNORECASE | re.MULTILINE))
                 or "tweet caption:" in content_lower
             )
@@ -4207,6 +4264,10 @@ class Router:
                     "- Do not claim there is no image or that you cannot see images when such analysis is provided.\n"
                     "- Keep persona, tone, and safety rules intact."
                 )
+                try:
+                    self.logger.info("text.anchor | visual_facts_detected=true (fallback)")
+                except Exception:
+                    pass
         except Exception:
             anchored_system_fallback = None
 
@@ -4677,6 +4738,8 @@ class Router:
                 if not cap:
                     cap = "—"
                 lines: List[str] = []
+                # Sentinel to help downstream anchoring logic [IV][REH]
+                lines.append("VISUAL_FACTS:")
                 lines.append("tweet caption:")
                 lines.append(cap)
                 lines.append("")
