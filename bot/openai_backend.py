@@ -237,12 +237,28 @@ Server Context: {server_context}"""
                         )
                         retry_after = None
                         try:
+                            # Prefer standard Retry-After; fall back to common rate-limit reset hints
                             if getattr(he, "response", None) is not None:
-                                ra = he.response.headers.get(
-                                    "retry-after"
-                                ) or he.response.headers.get("Retry-After")
+                                hdrs = he.response.headers
+                                ra = hdrs.get("retry-after") or hdrs.get("Retry-After")
                                 if ra is not None:
                                     retry_after = float(ra)
+                                else:
+                                    # OpenRouter-style reset headers (may be a unix epoch or delta seconds)
+                                    reset = (
+                                        hdrs.get("x-ratelimit-reset")
+                                        or hdrs.get("X-RateLimit-Reset")
+                                        or hdrs.get("rate-limit-reset")
+                                    )
+                                    if reset is not None:
+                                        try:
+                                            val = float(reset)
+                                            now = time.time()
+                                            retry_after = val - now if val > now + 1 else val
+                                            if retry_after < 0:
+                                                retry_after = 0.0
+                                        except Exception:
+                                            retry_after = None
                         except Exception:
                             retry_after = None
                         extra = (
@@ -359,11 +375,26 @@ Server Context: {server_context}"""
         retry_after = None
         try:
             if getattr(e, "response", None) is not None:
-                ra = e.response.headers.get("retry-after") or e.response.headers.get(
-                    "Retry-After"
-                )
+                hdrs = e.response.headers
+                ra = hdrs.get("retry-after") or hdrs.get("Retry-After")
                 if ra is not None:
                     retry_after = float(ra)
+                else:
+                    # OpenRouter-style reset headers (epoch or delta seconds)
+                    reset = (
+                        hdrs.get("x-ratelimit-reset")
+                        or hdrs.get("X-RateLimit-Reset")
+                        or hdrs.get("rate-limit-reset")
+                    )
+                    if reset is not None:
+                        try:
+                            val = float(reset)
+                            now = time.time()
+                            retry_after = val - now if val > now + 1 else val
+                            if retry_after < 0:
+                                retry_after = 0.0
+                        except Exception:
+                            retry_after = None
         except Exception:
             retry_after = None
         extra = f" (retry-after={retry_after}s)" if retry_after is not None else ""

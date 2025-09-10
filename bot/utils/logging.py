@@ -134,6 +134,14 @@ def init_logging() -> None:
             logging.shutdown()
             sys.exit(2)
 
+    # Tame noisy third-party libraries unless explicitly overridden [REH]
+    try:
+        third_party_level = os.getenv("THIRD_PARTY_LOG_LEVEL", "WARNING").upper()
+        for name in ("openai", "httpx", "aiohttp", "urllib3"):
+            logging.getLogger(name).setLevel(third_party_level)
+    except Exception:
+        pass
+
     logging.getLogger(__name__).info(
         "✔ Logging initialized (dual-sink)", extra={"subsys": "logging"}
     )

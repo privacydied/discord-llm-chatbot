@@ -387,16 +387,13 @@ class EnhancedRetryManager:
 
                     # Calculate delay for next attempt (if not last attempt)
                     if attempt < provider_config.max_attempts - 1:
+                        use_retry_after = False
                         delay = min(
                             provider_config.base_delay
                             * (provider_config.exponential_base**attempt),
                             provider_config.max_delay,
                         )
 
-                        if provider_config.jitter:
-                            delay *= (
-                                0.8 + random.random() * 0.4
-                            )  # Reduced jitter for speed
                         # Respect server-provided Retry-After hint if present on the exception [REH]
                         extra_note = ""
                         try:
@@ -404,12 +401,15 @@ class EnhancedRetryManager:
                             if retry_after_hint is not None:
                                 ra = float(retry_after_hint)
                                 if ra > 0:
-                                    delay = max(
-                                        delay, min(ra, provider_config.max_delay)
-                                    )
-                                    extra_note = f" (respecting Retry-After={min(ra, provider_config.max_delay):.2f}s)"
+                                    delay = ra  # Follow server hint exactly; budget check below
+                                    use_retry_after = True
+                                    extra_note = f" (Retry-After={ra:.2f}s)"
                         except Exception:
-                            pass
+                            use_retry_after = False
+
+                        # Only apply jitter to backoff-based delays (not Retry-After)
+                        if (not use_retry_after) and provider_config.jitter:
+                            delay *= 0.8 + random.random() * 0.4
 
                         # Check if we have budget for the delay
                         elapsed = time.time() - start_time

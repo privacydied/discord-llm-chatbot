@@ -2957,22 +2957,42 @@ class Router:
                     syn = await self._get_tweet_via_syndication(tweet_id)
                     if syn:
                         self._metric_inc("x.syndication.hit", None)
-                        # Media-first branching: detect image-only tweets [CA][IV]
+                        # Media-first branching: use robust extractor rather than only 'photos' [CA][REH]
                         photos = syn.get("photos") or []
                         text = (syn.get("text") or syn.get("full_text") or "").strip()
 
-                        # Check for image-only tweet: photos present AND empty/whitespace text [IV]
+                        # Enhanced: look for images in extended_entities/quoted/card as well
+                        extracted_images = []
+                        try:
+                            from .syndication.extract import (
+                                extract_text_and_images_from_syndication,
+                            )
+
+                            _ext = extract_text_and_images_from_syndication(syn)
+                            extracted_images = _ext.get("image_urls", []) or []
+                        except Exception:
+                            extracted_images = []
+
+                        # Bread crumb for future debugging [CMV]
+                        try:
+                            self.logger.info(
+                                f"route=x_syndication.pick | photos={len(photos)} extracted={len(extracted_images)}"
+                            )
+                        except Exception:
+                            pass
+
+                        # Check for image-only tweet
                         normalize_empty = bool(
                             cfg.get("TWITTER_NORMALIZE_EMPTY_TEXT", True)
                         )
-                        is_image_only = photos and (
-                            not text or (normalize_empty and not text.strip())
+                        is_image_only = (
+                            bool(photos) and (not text or (normalize_empty and not text.strip()))
                         )
 
                         if is_image_only and bool(
                             cfg.get("TWITTER_IMAGE_ONLY_ENABLE", True)
                         ):
-                            # Route to Vision/OCR pipeline for image-only tweets [CA]
+                            # Preserve existing specialized path when native photos are present [CA]
                             self.logger.info(
                                 f"🖼️ Image-only tweet detected, routing to Vision/OCR: {url}"
                             )
@@ -2985,7 +3005,54 @@ class Router:
                             )
 
                         base = self._format_syndication_result(syn, url)
-                        if not photos:
+
+                        # If we have no images at all (neither native photos nor extracted),
+                        # try targeted fx/vx/HTML probe for images before falling back to text. [REH][PA]
+                        if (not photos) and (not extracted_images):
+                            try:
+                                status_id = tweet_id or self._parse_twitter_status_id(url) or ""
+                            except Exception:
+                                status_id = ""
+                            if status_id:
+                                try:
+                                    imgs = await self._probe_twitter_syndication_images(url, status_id)
+                                except Exception as _img_probe_err:
+                                    imgs = []
+                                if imgs:
+                                    try:
+                                        first_host = urlparse(imgs[0]).netloc
+                                    except Exception:
+                                        first_host = ""
+                                    self.logger.info(
+                                        f"route.twitter.syndication | images={len(imgs)} | {first_host or 'n/a'}"
+                                    )
+                                    # Convert to syndication-like shape and route to VL
+                                    tweet_text = text
+                                    if not tweet_text:
+                                        try:
+                                            syn2 = await self._get_tweet_via_syndication(status_id)
+                                            if isinstance(syn2, dict):
+                                                tweet_text = (
+                                                    (syn2.get("text") or syn2.get("full_text") or "").strip()
+                                                )
+                                        except Exception:
+                                            pass
+                                    syn_like = {
+                                        "text": tweet_text,
+                                        "photos": [{"url": u} for u in imgs],
+                                    }
+                                    from .syndication.handler import (
+                                        handle_twitter_syndication_to_vl,
+                                    )
+                                    result = await handle_twitter_syndication_to_vl(
+                                        syn_like,
+                                        url,
+                                        self._unified_vl_to_text_pipeline,
+                                        self.bot.system_prompts.get("vl_prompt"),
+                                        reply_style="ack+thoughts",
+                                    )
+                                    return result
+
                             # Attempt STT for potential video tweets; silently fall back if not video [PA][REH]
                             try:
                                 stt_res = await hear_infer_from_url(url)
@@ -3013,22 +3080,20 @@ class Router:
                                         },
                                     )
                             return base
-                        # SURGICAL FIX: Always route photos to VL for X URLs (ignore the flag) [CA][REH]
-                        # This ensures native photos are analyzed instead of just counting them
 
-                        # Use new syndication handler for full-res images [CA][PA]
+                        # Images are present somewhere; route to unified syndication→VL handler [CA]
                         from .syndication.handler import (
                             handle_twitter_syndication_to_vl,
                         )
 
-                        # Minimal route log for observability [CMV]
                         try:
                             self.logger.info(
-                                "route=x_syndication | sending photos to VL with high-res upgrade",
+                                "route=x_syndication | sending images to VL (hi-res)",
                                 extra={"detail": {"url": url}},
                             )
                         except Exception:
                             pass
+
                         result = await handle_twitter_syndication_to_vl(
                             syn,
                             url,
@@ -3036,8 +3101,8 @@ class Router:
                             self.bot.system_prompts.get("vl_prompt"),
                             reply_style="ack+thoughts",
                         )
-                        # Syndication handler now returns final text, wrap in BotAction
-                        return BotAction(content=result)
+                        # Syndication handler returns final text; pass through as string for aggregator
+                        return result
 
                     # If syndication JSON failed to produce data, probe fx/vx for high-res photos [REH][PA]
                     if getattr(self, "_x_syn_probe_enabled", True) and self._is_twitter_status_url(url):
@@ -4071,12 +4136,37 @@ class Router:
                         )
                     except Exception:
                         pass
+                # Anchor visual analysis when present to avoid "no image" drift while preserving persona [REH][IV]
+                anchored_system: Optional[str] = None
+                try:
+                    content_lower = (content or "").lower()
+                    has_vl_section = (
+                        "vl prompt output:" in content_lower
+                        or bool(re.search(r"^image\s+\d+:", content, re.IGNORECASE | re.MULTILINE))
+                        or "tweet caption:" in content_lower
+                    )
+                    if has_vl_section:
+                        base_sys = self.bot.system_prompts.get(
+                            "text_prompt", "You are a helpful assistant."
+                        )
+                        anchored_system = (
+                            f"{base_sys}\n\n[VISUAL-ANALYSIS-ANCHOR]\n"
+                            "- If the user prompt includes a section titled 'vl prompt output:' or lines beginning with 'Image n:',\n"
+                            "  treat these as non-negotiable visual facts extracted from the image(s).\n"
+                            "- Base your reply on those facts and the user's request.\n"
+                            "- Do not claim there is no image or that you cannot see images when such analysis is provided.\n"
+                            "- Keep persona, tone, and safety rules intact."
+                        )
+                except Exception:
+                    anchored_system = None
+
                 response_text = await contextual_brain_infer_simple(
                     message,
                     content,
                     self.bot,
                     perception_notes=perception_notes,
                     extra_context=enhanced_context,
+                    system_prompt=anchored_system,
                 )
                 return BotAction(content=response_text)
             except Exception as e:
@@ -4096,7 +4186,33 @@ class Router:
                 )
             except Exception:
                 pass
-        return await brain_infer(content, context=enhanced_context)
+        # Basic fallback: apply the same visual-analysis anchoring when present
+        anchored_system_fallback: Optional[str] = None
+        try:
+            content_lower = (content or "").lower()
+            has_vl_section = (
+                "vl prompt output:" in content_lower
+                or bool(re.search(r"^image\s+\d+:", content, re.IGNORECASE | re.MULTILINE))
+                or "tweet caption:" in content_lower
+            )
+            if has_vl_section:
+                base_sys = self.bot.system_prompts.get(
+                    "text_prompt", "You are a helpful assistant."
+                )
+                anchored_system_fallback = (
+                    f"{base_sys}\n\n[VISUAL-ANALYSIS-ANCHOR]\n"
+                    "- If the user prompt includes a section titled 'vl prompt output:' or lines beginning with 'Image n:',\n"
+                    "  treat these as non-negotiable visual facts extracted from the image(s).\n"
+                    "- Base your reply on those facts and the user's request.\n"
+                    "- Do not claim there is no image or that you cannot see images when such analysis is provided.\n"
+                    "- Keep persona, tone, and safety rules intact."
+                )
+        except Exception:
+            anchored_system_fallback = None
+
+        return await brain_infer(
+            content, context=enhanced_context, system_prompt=anchored_system_fallback
+        )
 
     # ===== Inline [search(...)] directive handling =====
     def _extract_inline_search_queries(

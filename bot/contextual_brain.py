@@ -22,6 +22,7 @@ async def contextual_brain_infer(
     *,
     perception_notes: Optional[str] = None,
     extra_context: Optional[str] = None,
+    system_prompt: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Enhanced brain inference with contextual conversation awareness.
@@ -54,7 +55,9 @@ async def contextual_brain_infer(
                     "Enhanced context manager not available, falling back to basic inference"
                 )
                 response_data["fallback"] = True
-                response_data["response_text"] = await brain_infer(prompt)
+                response_data["response_text"] = await brain_infer(
+                    prompt, system_prompt=system_prompt
+                )
                 return response_data
 
         # Check if enhanced context manager is available
@@ -66,7 +69,9 @@ async def contextual_brain_infer(
                 "Enhanced context manager not available, falling back to basic inference"
             )
             response_data["fallback"] = True
-            response_data["response_text"] = await brain_infer(prompt)
+            response_data["response_text"] = await brain_infer(
+                prompt, system_prompt=system_prompt
+            )
             return response_data
 
         # Get conversation context
@@ -119,7 +124,7 @@ async def contextual_brain_infer(
             contextual_prompt = "\n\n".join(blocks) + f"\n\nCurrent message: {prompt}"
 
         # Generate AI response
-        ai_response = await brain_infer(contextual_prompt)
+        ai_response = await brain_infer(contextual_prompt, system_prompt=system_prompt)
 
         # Get contextual response with metadata
         context_response = await bot.enhanced_context_manager.get_contextual_response(
@@ -147,7 +152,7 @@ async def contextual_brain_infer(
         # Fallback to basic inference with enhanced error handling [REH]
         try:
             logger.info("🔄 Attempting fallback to basic brain inference")
-            basic_response = await brain_infer(prompt)
+            basic_response = await brain_infer(prompt, system_prompt=system_prompt)
             response_text = (
                 basic_response.content
                 if hasattr(basic_response, "content")
@@ -204,6 +209,7 @@ async def contextual_brain_infer_simple(
     *,
     perception_notes: Optional[str] = None,
     extra_context: Optional[str] = None,
+    system_prompt: Optional[str] = None,
 ) -> str:
     """
     Simplified contextual brain inference that returns just the response text.
@@ -224,6 +230,7 @@ async def contextual_brain_infer_simple(
         return_json_envelope=False,
         perception_notes=perception_notes,
         extra_context=extra_context,
+        system_prompt=system_prompt,
     )
     return result["response_text"]
 
