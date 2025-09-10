@@ -4253,6 +4253,7 @@ class Router:
                             "  treat these as non-negotiable visual facts extracted from the image(s).\n"
                             "- Base your reply on those facts and the user's request.\n"
                             "- Do not claim there is no image or that you cannot see images when such analysis is provided.\n"
+                            "- Screenshots of documents or text are still images; do not dismiss them as 'not a pic'.\n"
                             "- Do not ask the user to resend or post the image; assume the VISUAL_FACTS reflect what was shown.\n"
                             "- Keep persona, tone, and safety rules intact."
                         )
@@ -4277,6 +4278,12 @@ class Router:
                         # direct claims
                         "no image",
                         "no pic",
+                        "isn't a pic",
+                        "isn't an image",
+                        "ain't a pic",
+                        "ain't an image",
+                        "not a pic",
+                        "not an image",
                         "can't see",
                         "cannot see",
                         "can't analyze",
@@ -4295,6 +4302,10 @@ class Router:
                         "just a description",
                         "description only",
                         "just text",
+                        "just a letter",
+                        "just some letter",
+                        "just a screenshot",
+                        "just a scan",
                     )
                     lower_out = (response_text or "").lower()
                     contradicts = any(p in lower_out for p in bad_phrases)
@@ -4307,9 +4318,19 @@ class Router:
                         pattern_send = re.compile(
                             r"(re)?send\s+the\s+(pic|image|photo)", re.IGNORECASE
                         )
+                        pattern_not_pic = re.compile(
+                            r"\b(ain['’]?t|isn['’]?t|not)\s+(an?\s+)?(pic|image|photo)\b",
+                            re.IGNORECASE,
+                        )
+                        pattern_just = re.compile(
+                            r"\bjust\s+(a\s+)?(screenshot|scan|document|letter|text)\b",
+                            re.IGNORECASE,
+                        )
                         contradicts = bool(
                             pattern_where.search(response_text or "")
                             or pattern_send.search(response_text or "")
+                            or pattern_not_pic.search(response_text or "")
+                            or pattern_just.search(response_text or "")
                         )
                 except Exception:
                     contradicts = False
@@ -4399,6 +4420,7 @@ class Router:
                     "  treat these as non-negotiable visual facts extracted from the image(s).\n"
                     "- Base your reply on those facts and the user's request.\n"
                     "- Do not claim there is no image or that you cannot see images when such analysis is provided.\n"
+                    "- Screenshots of documents or text are still images; do not dismiss them as 'not a pic'.\n"
                     "- Do not ask the user to resend or post the image; assume the VISUAL_FACTS reflect what was shown.\n"
                     "- Keep persona, tone, and safety rules intact."
                 )
