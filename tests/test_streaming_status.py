@@ -43,8 +43,14 @@ class FakeGuild:
 class FakeMessage:
     _id_counter = 1000
 
-    def __init__(self, channel: FakeChannel, content: str = "", embeds: Optional[list] = None,
-                 author: Optional[FakeAuthor] = None, guild: Optional[FakeGuild] = None):
+    def __init__(
+        self,
+        channel: FakeChannel,
+        content: str = "",
+        embeds: Optional[list] = None,
+        author: Optional[FakeAuthor] = None,
+        guild: Optional[FakeGuild] = None,
+    ):
         FakeMessage._id_counter += 1
         self.id = FakeMessage._id_counter
         self.channel = channel
@@ -57,7 +63,13 @@ class FakeMessage:
 
     async def reply(self, content=None, embeds=None, files=None, mention_author=True):
         # Simulate creating a new message in channel
-        m = FakeMessage(channel=self.channel, content=content or "", embeds=embeds or [], author=self.author, guild=self.guild)
+        m = FakeMessage(
+            channel=self.channel,
+            content=content or "",
+            embeds=embeds or [],
+            author=self.author,
+            guild=self.guild,
+        )
         self.channel.sent_messages.append(m)
         return m
 
@@ -79,12 +91,16 @@ class FakeMessage:
 async def test_streaming_lifecycle_and_final_edit(monkeypatch):
     # Configure a minimal bot instance (no network). Intents and prefix are arbitrary here.
     intents = discord.Intents.none()
-    bot = LLMBot(command_prefix="!", intents=intents, config={
-        "STREAMING_ENABLE": True,
-        "STREAMING_EMBED_STYLE": "compact",
-        "STREAMING_TICK_MS": 5,
-        "STREAMING_MAX_STEPS": 3,
-    })
+    bot = LLMBot(
+        command_prefix="!",
+        intents=intents,
+        config={
+            "STREAMING_ENABLE": True,
+            "STREAMING_EMBED_STYLE": "compact",
+            "STREAMING_TICK_MS": 5,
+            "STREAMING_MAX_STEPS": 3,
+        },
+    )
     # Disable enhanced context manager for unit test
     bot.enhanced_context_manager = None
 
@@ -123,12 +139,16 @@ async def test_streaming_lifecycle_and_final_edit(monkeypatch):
 @pytest.mark.asyncio
 async def test_replace_placeholder_when_files_present():
     intents = discord.Intents.none()
-    bot = LLMBot(command_prefix="!", intents=intents, config={
-        "STREAMING_ENABLE": True,
-        "STREAMING_EMBED_STYLE": "compact",
-        "STREAMING_TICK_MS": 5,
-        "STREAMING_MAX_STEPS": 2,
-    })
+    bot = LLMBot(
+        command_prefix="!",
+        intents=intents,
+        config={
+            "STREAMING_ENABLE": True,
+            "STREAMING_EMBED_STYLE": "compact",
+            "STREAMING_TICK_MS": 5,
+            "STREAMING_MAX_STEPS": 2,
+        },
+    )
     bot.enhanced_context_manager = None
 
     ch = FakeChannel()
@@ -144,11 +164,16 @@ async def test_replace_placeholder_when_files_present():
     import os as _os
     import builtins as _builtins
     import io as _io
+
     orig_exists = _os.path.exists
     orig_open = _builtins.open
     try:
         _os.path.exists = lambda p: True
-        _builtins.open = lambda p, mode='rb', *a, **k: _io.BytesIO(b"dummy-audio") if p == "/nonexistent.ogg" else orig_open(p, mode, *a, **k)
+        _builtins.open = (
+            lambda p, mode="rb", *a, **k: _io.BytesIO(b"dummy-audio")
+            if p == "/nonexistent.ogg"
+            else orig_open(p, mode, *a, **k)
+        )
         await bot._execute_action(incoming, action, target_message=placeholder)
     finally:
         _os.path.exists = orig_exists

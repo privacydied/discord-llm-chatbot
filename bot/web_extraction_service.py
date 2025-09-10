@@ -94,13 +94,13 @@ class WebExtractionService:
             logger.info(f"Tier A failed for {url}: {res.error}")
         except httpx.HTTPStatusError as e:  # expected client/server responses
             status = e.response.status_code if getattr(e, "response", None) else "?"
-            logger.info(
-                f"Tier A HTTP {status} for {url}: {str(e)[:160]}"
-            )
-        except (httpx.RequestError, httpx.TimeoutException, httpx.TooManyRedirects) as e:
-            logger.info(
-                f"Tier A network error for {url}: {str(e)[:160]}"
-            )
+            logger.info(f"Tier A HTTP {status} for {url}: {str(e)[:160]}")
+        except (
+            httpx.RequestError,
+            httpx.TimeoutException,
+            httpx.TooManyRedirects,
+        ) as e:
+            logger.info(f"Tier A network error for {url}: {str(e)[:160]}")
         except Exception as e:  # unexpected
             logger.debug(f"Tier A exception for {url}: {str(e)[:200]}")
 
@@ -120,7 +120,9 @@ class WebExtractionService:
                     or "target page, context or browser has been closed" in emsg
                 ):
                     self._tier_b_available = False
-                    logger.warning("🛑 Disabling Tier B (Playwright) due to missing system libraries/launch failure.")
+                    logger.warning(
+                        "🛑 Disabling Tier B (Playwright) due to missing system libraries/launch failure."
+                    )
 
         return ExtractionResult(
             success=False, tier_used="none", error="all tiers failed"

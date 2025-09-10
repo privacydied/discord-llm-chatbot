@@ -8,6 +8,7 @@ Vision Orchestrator readiness smoke test (no external API calls).
 Run:
     uv run python -m utils.vision_orchestrator_smoke
 """
+
 from __future__ import annotations
 
 import os

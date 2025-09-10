@@ -14,20 +14,21 @@ With custom input/output/engine/voice:
     --engine kokoro-onnx \
     --voice en_US-hfc_male-medium
 """
+
 from __future__ import annotations
 
 import asyncio
 import os
 from pathlib import Path
 import argparse
+import importlib
 import sys
 
 # Ensure project root is importable (so 'bot' and 'utils' resolve correctly)
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
-
-from bot.tts.interface import TTSManager
+TTSManager = getattr(importlib.import_module("bot.tts.interface"), "TTSManager")
 
 
 async def main() -> None:
@@ -74,7 +75,9 @@ async def main() -> None:
     size_kb = len(data) / 1024.0
     # Minimal WAV header validation
     if not data.startswith(b"RIFF"):
-        print(f"WARN: Output does not start with RIFF header: {wav_path} ({size_kb:.1f} KiB)")
+        print(
+            f"WARN: Output does not start with RIFF header: {wav_path} ({size_kb:.1f} KiB)"
+        )
     else:
         print(f"OK: wrote {wav_path} ({size_kb:.1f} KiB)")
 

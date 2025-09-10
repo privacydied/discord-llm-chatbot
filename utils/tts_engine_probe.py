@@ -12,6 +12,7 @@ It uses environment variables for model and voices with sane defaults:
 
 Note: This touches no Discord APIs.
 """
+
 import os
 import sys
 import asyncio
@@ -42,7 +43,9 @@ async def _run(text: str) -> int:
     print(f"Voice: {voice}")
     print(f"Text: {text}")
 
-    eng = KokoroONNXEngine(model_path=model_path, voices_path=voices_path, tokenizer="espeak", voice=voice)
+    eng = KokoroONNXEngine(
+        model_path=model_path, voices_path=voices_path, tokenizer="espeak", voice=voice
+    )
 
     try:
         audio_bytes = await eng.synthesize(text)
@@ -64,7 +67,11 @@ async def _run(text: str) -> int:
 
 
 def main() -> int:
-    text = "pyrex stirs turned to cavalli furs" if len(sys.argv) < 2 else " ".join(sys.argv[1:])
+    text = (
+        "pyrex stirs turned to cavalli furs"
+        if len(sys.argv) < 2
+        else " ".join(sys.argv[1:])
+    )
     return asyncio.run(_run(text))
 
 

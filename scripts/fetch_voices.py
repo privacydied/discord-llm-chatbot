@@ -46,9 +46,7 @@ def download_config():
     )
     resp.raise_for_status()
     content = resp.content
-    with open(
-        Path(__file__).parent / "../tts/config.json", "wb"
-    ) as fp:
+    with open(Path(__file__).parent / "../tts/config.json", "wb") as fp:
         fp.write(content)
 
 
@@ -71,7 +69,7 @@ def download_voices(voice_url: str, names: list[str], npz_path: str):
     npz_path = Path("tts") / npz_path
     os.makedirs(os.path.dirname(npz_path), exist_ok=True)
     response = requests.get(VOICES_URL)
-    with open(npz_path, 'w') as f:
+    with open(npz_path, "w") as f:
         f.write(response.text)
 
     mb_size = os.path.getsize(npz_path) // 1000 // 1000

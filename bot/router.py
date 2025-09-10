@@ -681,7 +681,9 @@ class Router:
                             "lang": "en",
                         }
                         try:
-                            self._metric_inc("x.syndication.fetch", {"endpoint": "oembed"})
+                            self._metric_inc(
+                                "x.syndication.fetch", {"endpoint": "oembed"}
+                            )
                             resp_oe = await http_client.get(
                                 oembed_url, headers=headers, params=oembed_params
                             )
@@ -700,7 +702,9 @@ class Router:
                                         if txt:
                                             data = {
                                                 "text": txt,
-                                                "user": {"name": obj.get("author_name")},
+                                                "user": {
+                                                    "name": obj.get("author_name")
+                                                },
                                             }
                         except Exception:
                             pass
@@ -809,7 +813,15 @@ class Router:
             # Allowed hosts only: leave as-is but lowercased
             qs = dict(parse_qsl(p.query, keep_blank_values=True))
             # Drop noise params
-            drop_keys = {"s", "t", "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content"}
+            drop_keys = {
+                "s",
+                "t",
+                "utm_source",
+                "utm_medium",
+                "utm_campaign",
+                "utm_term",
+                "utm_content",
+            }
             for k in list(qs.keys()):
                 if k.lower() in drop_keys or k.lower().startswith("utm_"):
                     qs.pop(k, None)
@@ -874,7 +886,9 @@ class Router:
                     out.append(cu)
         return out
 
-    async def _yt_dlp_probe(self, url: str, timeout_s: float = 8.0) -> Optional[Dict[str, Any]]:
+    async def _yt_dlp_probe(
+        self, url: str, timeout_s: float = 8.0
+    ) -> Optional[Dict[str, Any]]:
         """Run a lightweight yt-dlp metadata probe to detect presence of video/audio.
         Returns parsed JSON on success or None on errors/timeouts.
         """
@@ -884,7 +898,9 @@ class Router:
                 *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
             try:
-                stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout_s)
+                stdout, stderr = await asyncio.wait_for(
+                    proc.communicate(), timeout=timeout_s
+                )
             except asyncio.TimeoutError:
                 try:
                     proc.kill()
@@ -970,7 +986,9 @@ class Router:
         except Exception:
             return url
 
-    async def _probe_twitter_syndication_images(self, url: str, status_id: str) -> List[str]:
+    async def _probe_twitter_syndication_images(
+        self, url: str, status_id: str
+    ) -> List[str]:
         """Probe fx/vx API then HTML/meta for high-res images. Short, bounded budgets.
         Returns unique HTTPS image URLs, filtered and content-type verified.
         """
@@ -992,6 +1010,7 @@ class Router:
             )
             # Use referer + real UA for pbs compatibility [IV]
             import os as _os
+
             headers = {
                 "Referer": _os.getenv("IMAGEDL_REFERER", "https://x.com/"),
                 "User-Agent": _os.getenv(
@@ -1060,7 +1079,9 @@ class Router:
                                     import brotli  # type: ignore
 
                                     decoded = brotli.decompress(resp.content)
-                                    data = json.loads(decoded.decode("utf-8", errors="replace"))
+                                    data = json.loads(
+                                        decoded.decode("utf-8", errors="replace")
+                                    )
                                 except Exception:
                                     data = json.loads(resp.text)
                             else:
@@ -1074,13 +1095,18 @@ class Router:
                     candidates: List[str] = []
                     # Prefer high-res for pbs assets
                     try:
-                        from .syndication.url_utils import upgrade_pbs_to_orig  # lazy import to avoid cycles
+                        from .syndication.url_utils import (
+                            upgrade_pbs_to_orig,
+                        )  # lazy import to avoid cycles
                     except Exception:
-                        upgrade_pbs_to_orig = lambda u: u  # type: ignore
+
+                        def upgrade_pbs_to_orig(u):  # fallback passthrough
+                            return u
+
                     # fx/vx often: {'tweet': {'media': {'photos':[{'url':...}]}}}
                     try:
                         tweet = (data.get("tweet") or data.get("status")) or {}
-                        media = (tweet.get("media") or {})
+                        media = tweet.get("media") or {}
                         photos = media.get("photos") or []
                         for p in photos:
                             u = p.get("url") or p.get("src") or p.get("href")
@@ -1089,7 +1115,7 @@ class Router:
                     except Exception:
                         pass
                     # Some variants: top-level 'photos'
-                    for p in (data.get("photos") or []):
+                    for p in data.get("photos") or []:
                         if isinstance(p, dict) and p.get("url"):
                             candidates.append(upgrade_pbs_to_orig(p.get("url")))
                         elif isinstance(p, str):
@@ -1137,9 +1163,14 @@ class Router:
                     for pat in meta_patterns:
                         for m in re.finditer(pat, text, re.IGNORECASE):
                             try:
-                                from .syndication.url_utils import upgrade_pbs_to_orig  # lazy import
+                                from .syndication.url_utils import (
+                                    upgrade_pbs_to_orig,
+                                )  # lazy import
                             except Exception:
-                                upgrade_pbs_to_orig = lambda u: u  # type: ignore
+
+                                def upgrade_pbs_to_orig(u):  # fallback passthrough
+                                    return u
+
                             candidates.append(upgrade_pbs_to_orig(m.group(1)))
                     # pbs links anywhere
                     for m in re.finditer(
@@ -1148,9 +1179,14 @@ class Router:
                         re.IGNORECASE,
                     ):
                         try:
-                            from .syndication.url_utils import upgrade_pbs_to_orig  # lazy import
+                            from .syndication.url_utils import (
+                                upgrade_pbs_to_orig,
+                            )  # lazy import
                         except Exception:
-                            upgrade_pbs_to_orig = lambda u: u  # type: ignore
+
+                            def upgrade_pbs_to_orig(u):  # fallback passthrough
+                                return u
+
                         candidates.append(upgrade_pbs_to_orig(m.group(0)))
                     uniq = []
                     for u in candidates:
@@ -1377,7 +1413,6 @@ class Router:
             src = meta.get("source") or "media"
             title = meta.get("title") or ""
             dur = meta.get("original_duration_s") or meta.get("processed_duration_s")
-            dur_s = f" • {int(dur)}s" if isinstance(dur, (int, float)) else ""
             # Derive caption from base_text when available (formatted output contains the tweet body on the last line)
             caption = ""
             try:
@@ -1711,7 +1746,10 @@ class Router:
                     if x_urls and not parsed_command:
                         self.logger.info(
                             f"route.media: x/twitter url(s)={len(x_urls)}",
-                            extra={"event": "route.media", "detail": {"count": len(x_urls)}},
+                            extra={
+                                "event": "route.media",
+                                "detail": {"count": len(x_urls)},
+                            },
                         )
                         try:
                             resolved = await self._resolve_x_media(x_urls)
@@ -1719,7 +1757,7 @@ class Router:
                             resolved = {"kind": "unknown", "reason": f"exception:{e}"}
                         kind = (resolved or {}).get("kind", "unknown")
                         if kind == "video":
-                            url_for_stt = (resolved.get("url") or x_urls[0])
+                            url_for_stt = resolved.get("url") or x_urls[0]
                             dur = resolved.get("duration")
                             host = None
                             try:
@@ -1727,7 +1765,7 @@ class Router:
                             except Exception:
                                 host = ""
                             self.logger.info(
-                                f"media.resolve: result=video url={host or url_for_stt} dur={int(dur) if isinstance(dur, (int,float)) else 'NA'}s"
+                                f"media.resolve: result=video url={host or url_for_stt} dur={int(dur) if isinstance(dur, (int, float)) else 'NA'}s"
                             )
                             # Always prefer STT for X/Twitter video
                             try:
@@ -1739,7 +1777,9 @@ class Router:
                                     f"🎯 Route: stt_from_x_video | msg_id={message.id}"
                                 )
                                 return await self._flow_process_text(
-                                    content=formatted, context=context_str, message=message
+                                    content=formatted,
+                                    context=context_str,
+                                    message=message,
                                 )
                             except Exception as e:
                                 em = str(e).lower()
@@ -2683,10 +2723,14 @@ class Router:
                 or "no video" in error_str
             ):
                 # New: targeted syndication image probe (feature-flagged)
-                if getattr(self, "_x_syn_probe_enabled", True) and self._is_twitter_status_url(url):
+                if getattr(
+                    self, "_x_syn_probe_enabled", True
+                ) and self._is_twitter_status_url(url):
                     try:
                         status_id = self._parse_twitter_status_id(url)
-                        imgs = await self._probe_twitter_syndication_images(url, status_id or "")
+                        imgs = await self._probe_twitter_syndication_images(
+                            url, status_id or ""
+                        )
                         if imgs:
                             first_host = ""
                             try:
@@ -2700,11 +2744,15 @@ class Router:
                             try:
                                 tweet_text = ""
                                 try:
-                                    syn = await self._get_tweet_via_syndication(status_id)
+                                    syn = await self._get_tweet_via_syndication(
+                                        status_id
+                                    )
                                     if isinstance(syn, dict):
                                         tweet_text = (
-                                            (syn.get("text") or syn.get("full_text") or "").strip()
-                                        )
+                                            syn.get("text")
+                                            or syn.get("full_text")
+                                            or ""
+                                        ).strip()
                                 except Exception:
                                     tweet_text = ""
 
@@ -2713,9 +2761,15 @@ class Router:
                                     try:
                                         http2 = await get_http_client()
                                         cfg2 = RequestConfig(
-                                            connect_timeout=min(self._x_syn_timeout_s, 3.0),
-                                            read_timeout=min(self._x_syn_timeout_s, 3.0),
-                                            total_timeout=min(self._x_syn_timeout_s + 0.5, 3.5),
+                                            connect_timeout=min(
+                                                self._x_syn_timeout_s, 3.0
+                                            ),
+                                            read_timeout=min(
+                                                self._x_syn_timeout_s, 3.0
+                                            ),
+                                            total_timeout=min(
+                                                self._x_syn_timeout_s + 0.5, 3.5
+                                            ),
                                             max_retries=0,
                                         )
                                         fxu = f"https://api.fxtwitter.com/status/{status_id}"
@@ -2725,7 +2779,11 @@ class Router:
                                                 fxj = r2.json()
                                             except Exception:
                                                 fxj = {}
-                                            tnode = (fxj.get("tweet") or fxj.get("status") or {})
+                                            tnode = (
+                                                fxj.get("tweet")
+                                                or fxj.get("status")
+                                                or {}
+                                            )
                                             tweet_text = (
                                                 tnode.get("text")
                                                 or tnode.get("content")
@@ -2742,6 +2800,7 @@ class Router:
                                 from .syndication.handler import (
                                     handle_twitter_syndication_to_vl,
                                 )
+
                                 return await handle_twitter_syndication_to_vl(
                                     syn_like,
                                     url,
@@ -2752,7 +2811,9 @@ class Router:
                             except Exception:
                                 # Fallback: single-image VL without caption
                                 try:
-                                    desc = await self._vl_describe_image_from_url(imgs[0])
+                                    desc = await self._vl_describe_image_from_url(
+                                        imgs[0]
+                                    )
                                     return (
                                         desc
                                         or "⚠️ Unable to analyze the images from this tweet."
@@ -2985,8 +3046,8 @@ class Router:
                         normalize_empty = bool(
                             cfg.get("TWITTER_NORMALIZE_EMPTY_TEXT", True)
                         )
-                        is_image_only = (
-                            bool(photos) and (not text or (normalize_empty and not text.strip()))
+                        is_image_only = bool(photos) and (
+                            not text or (normalize_empty and not text.strip())
                         )
 
                         if is_image_only and bool(
@@ -3010,12 +3071,16 @@ class Router:
                         # try targeted fx/vx/HTML probe for images before falling back to text. [REH][PA]
                         if (not photos) and (not extracted_images):
                             try:
-                                status_id = tweet_id or self._parse_twitter_status_id(url) or ""
+                                status_id = (
+                                    tweet_id or self._parse_twitter_status_id(url) or ""
+                                )
                             except Exception:
                                 status_id = ""
                             if status_id:
                                 try:
-                                    imgs = await self._probe_twitter_syndication_images(url, status_id)
+                                    imgs = await self._probe_twitter_syndication_images(
+                                        url, status_id
+                                    )
                                 except Exception as _img_probe_err:
                                     imgs = []
                                 if imgs:
@@ -3030,11 +3095,17 @@ class Router:
                                     tweet_text = text
                                     if not tweet_text:
                                         try:
-                                            syn2 = await self._get_tweet_via_syndication(status_id)
+                                            syn2 = (
+                                                await self._get_tweet_via_syndication(
+                                                    status_id
+                                                )
+                                            )
                                             if isinstance(syn2, dict):
                                                 tweet_text = (
-                                                    (syn2.get("text") or syn2.get("full_text") or "").strip()
-                                                )
+                                                    syn2.get("text")
+                                                    or syn2.get("full_text")
+                                                    or ""
+                                                ).strip()
                                         except Exception:
                                             pass
                                     syn_like = {
@@ -3044,6 +3115,7 @@ class Router:
                                     from .syndication.handler import (
                                         handle_twitter_syndication_to_vl,
                                     )
+
                                     result = await handle_twitter_syndication_to_vl(
                                         syn_like,
                                         url,
@@ -3105,10 +3177,16 @@ class Router:
                         return result
 
                     # If syndication JSON failed to produce data, probe fx/vx for high-res photos [REH][PA]
-                    if getattr(self, "_x_syn_probe_enabled", True) and self._is_twitter_status_url(url):
+                    if getattr(
+                        self, "_x_syn_probe_enabled", True
+                    ) and self._is_twitter_status_url(url):
                         try:
-                            status_id = tweet_id or self._parse_twitter_status_id(url) or ""
-                            imgs = await self._probe_twitter_syndication_images(url, status_id)
+                            status_id = (
+                                tweet_id or self._parse_twitter_status_id(url) or ""
+                            )
+                            imgs = await self._probe_twitter_syndication_images(
+                                url, status_id
+                            )
                             if imgs:
                                 try:
                                     first_host = urlparse(imgs[0]).netloc
@@ -3121,11 +3199,15 @@ class Router:
                                 tweet_text = ""
                                 try:
                                     if status_id:
-                                        syn = await self._get_tweet_via_syndication(status_id)
+                                        syn = await self._get_tweet_via_syndication(
+                                            status_id
+                                        )
                                         if isinstance(syn, dict):
                                             tweet_text = (
-                                                (syn.get("text") or syn.get("full_text") or "").strip()
-                                            )
+                                                syn.get("text")
+                                                or syn.get("full_text")
+                                                or ""
+                                            ).strip()
                                 except Exception:
                                     tweet_text = ""
                                 # Fallback to fx/vx API for caption if still empty [REH]
@@ -3133,9 +3215,15 @@ class Router:
                                     try:
                                         http2 = await get_http_client()
                                         cfg2 = RequestConfig(
-                                            connect_timeout=min(self._x_syn_timeout_s, 3.0),
-                                            read_timeout=min(self._x_syn_timeout_s, 3.0),
-                                            total_timeout=min(self._x_syn_timeout_s + 0.5, 3.5),
+                                            connect_timeout=min(
+                                                self._x_syn_timeout_s, 3.0
+                                            ),
+                                            read_timeout=min(
+                                                self._x_syn_timeout_s, 3.0
+                                            ),
+                                            total_timeout=min(
+                                                self._x_syn_timeout_s + 0.5, 3.5
+                                            ),
                                             max_retries=0,
                                         )
                                         fxu = f"https://api.fxtwitter.com/status/{status_id}"
@@ -3145,7 +3233,11 @@ class Router:
                                                 fxj = r2.json()
                                             except Exception:
                                                 fxj = {}
-                                            tnode = (fxj.get("tweet") or fxj.get("status") or {})
+                                            tnode = (
+                                                fxj.get("tweet")
+                                                or fxj.get("status")
+                                                or {}
+                                            )
                                             tweet_text = (
                                                 tnode.get("text")
                                                 or tnode.get("content")
@@ -3161,6 +3253,7 @@ class Router:
                                 from .syndication.handler import (
                                     handle_twitter_syndication_to_vl,
                                 )
+
                                 result = await handle_twitter_syndication_to_vl(
                                     syn_like,
                                     url,
@@ -4143,7 +4236,11 @@ class Router:
                     has_vl_section = (
                         "visual_facts:" in content_lower
                         or "vl prompt output:" in content_lower
-                        or bool(re.search(r"^image\s+\d+:", content, re.IGNORECASE | re.MULTILINE))
+                        or bool(
+                            re.search(
+                                r"^image\s+\d+:", content, re.IGNORECASE | re.MULTILINE
+                            )
+                        )
                         or "tweet caption:" in content_lower
                     )
                     if has_vl_section:
@@ -4156,6 +4253,7 @@ class Router:
                             "  treat these as non-negotiable visual facts extracted from the image(s).\n"
                             "- Base your reply on those facts and the user's request.\n"
                             "- Do not claim there is no image or that you cannot see images when such analysis is provided.\n"
+                            "- Do not ask the user to resend or post the image; assume the VISUAL_FACTS reflect what was shown.\n"
                             "- Keep persona, tone, and safety rules intact."
                         )
                         try:
@@ -4176,11 +4274,43 @@ class Router:
                 # Post-generation guard: if model contradicts visual facts, regenerate once, else fallback to VL text. [REH]
                 try:
                     bad_phrases = (
-                        "no image", "can't see", "cannot see", "can't analyze",
-                        "resend the pic", "dead tweet", "no pic", "thin air",
+                        # direct claims
+                        "no image",
+                        "no pic",
+                        "can't see",
+                        "cannot see",
+                        "can't analyze",
+                        "thin air",
+                        "dead tweet",
+                        # solicitations / absence insinuations
+                        "resend the pic",
+                        "resend the image",
+                        "send the pic",
+                        "send the image",
+                        "post the pic",
+                        "post the image",
+                        # description-only hedges
+                        "just text from a description",
+                        "just text from description",
+                        "just a description",
+                        "description only",
+                        "just text",
                     )
                     lower_out = (response_text or "").lower()
                     contradicts = any(p in lower_out for p in bad_phrases)
+                    if not contradicts:
+                        # Lightweight regex heuristics for variants [REH]
+                        pattern_where = re.compile(
+                            r"where['’]s\s+the\s+(actual\s+)?(pic|image|photo)",
+                            re.IGNORECASE,
+                        )
+                        pattern_send = re.compile(
+                            r"(re)?send\s+the\s+(pic|image|photo)", re.IGNORECASE
+                        )
+                        contradicts = bool(
+                            pattern_where.search(response_text or "")
+                            or pattern_send.search(response_text or "")
+                        )
                 except Exception:
                     contradicts = False
 
@@ -4201,7 +4331,9 @@ class Router:
                             extra_context=enhanced_context,
                             system_prompt=anchored_system,
                         )
-                        if second and not any(p in (second or "").lower() for p in bad_phrases):
+                        if second and not any(
+                            p in (second or "").lower() for p in bad_phrases
+                        ):
                             return BotAction(content=second)
                     except Exception as _e:
                         self.logger.debug(f"text.anchor.guard.regen_failed | {_e}")
@@ -4218,7 +4350,10 @@ class Router:
                                 pos = vl_section.lower().find(marker)
                                 if pos > 0:
                                     vl_section = vl_section[:pos]
-                        vl_section = vl_section.strip() or "Visual analysis available, but failed to synthesize."
+                        vl_section = (
+                            vl_section.strip()
+                            or "Visual analysis available, but failed to synthesize."
+                        )
                         return BotAction(content=vl_section)
                     except Exception:
                         # Last resort: return the first response anyway
@@ -4249,7 +4384,9 @@ class Router:
             has_vl_section = (
                 "visual_facts:" in content_lower
                 or "vl prompt output:" in content_lower
-                or bool(re.search(r"^image\s+\d+:", content, re.IGNORECASE | re.MULTILINE))
+                or bool(
+                    re.search(r"^image\s+\d+:", content, re.IGNORECASE | re.MULTILINE)
+                )
                 or "tweet caption:" in content_lower
             )
             if has_vl_section:
@@ -4262,10 +4399,13 @@ class Router:
                     "  treat these as non-negotiable visual facts extracted from the image(s).\n"
                     "- Base your reply on those facts and the user's request.\n"
                     "- Do not claim there is no image or that you cannot see images when such analysis is provided.\n"
+                    "- Do not ask the user to resend or post the image; assume the VISUAL_FACTS reflect what was shown.\n"
                     "- Keep persona, tone, and safety rules intact."
                 )
                 try:
-                    self.logger.info("text.anchor | visual_facts_detected=true (fallback)")
+                    self.logger.info(
+                        "text.anchor | visual_facts_detected=true (fallback)"
+                    )
                 except Exception:
                     pass
         except Exception:

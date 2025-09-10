@@ -24,13 +24,15 @@ class TestRegistryIntegration:
         monkeypatch.setenv("TTS_TOKENISER", "misaki")
 
         # Mock available tokenizers to include both misaki and phonemizer
-        with patch('bot.tokenizer_registry.TokenizerRegistry.get_instance') as mock_registry:
+        with patch(
+            "bot.tokenizer_registry.TokenizerRegistry.get_instance"
+        ) as mock_registry:
             registry = MagicMock()
             registry._initialized = True
-            registry._available_tokenizers = {'misaki', 'phonemizer', 'grapheme'}
-            registry._canonicalize_language.return_value = 'en'
-            registry.apply_lexicon.return_value = ('hello world', False)
-            registry._tokenize_to_phonemes.return_value = 'həˈloʊ wɝːld'
+            registry._available_tokenizers = {"misaki", "phonemizer", "grapheme"}
+            registry._canonicalize_language.return_value = "en"
+            registry.apply_lexicon.return_value = ("hello world", False)
+            registry._tokenize_to_phonemes.return_value = "həˈloʊ wɝːld"
             mock_registry.return_value = registry
 
             decision = select_for_language("en", "hello world")
@@ -50,14 +52,14 @@ class TestRegistryIntegration:
         # Mock the registry to return phoneme decision
         decision = Decision("phonemes", "həˈloʊ wɝːld", "IPA")
 
-        with patch('bot.tts.kokoro_direct_fixed.KokoroDirect', return_value=kd):
+        with patch("bot.tts.kokoro_direct_fixed.KokoroDirect", return_value=kd):
             # This would be called from the engine
             kd.create(
                 phonemes=decision.payload,
                 voice="af_heart",
                 lang="en",
                 disable_autodiscovery=True,
-                logger=MagicMock()
+                logger=MagicMock(),
             )
 
         kd.create.assert_called_once()
@@ -70,17 +72,20 @@ class TestRegistryIntegration:
         caplog.set_level("DEBUG")
 
         # Mock KokoroDirect to avoid actual file operations
-        with patch('bot.tts.kokoro_direct_fixed.KokoroDirect') as mock_kd_class:
+        with patch("bot.tts.kokoro_direct_fixed.KokoroDirect") as mock_kd_class:
             mock_kd = MagicMock()
             mock_kd.create.return_value = Path("/tmp/test.wav")
             mock_kd_class.return_value = mock_kd
 
             # Mock registry to return grapheme decision
-            with patch('bot.tokenizer_registry.select_for_language') as mock_select:
-                mock_select.return_value = Decision("grapheme", "hello world", "GRAPHEME")
+            with patch("bot.tokenizer_registry.select_for_language") as mock_select:
+                mock_select.return_value = Decision(
+                    "grapheme", "hello world", "GRAPHEME"
+                )
 
                 # This simulates what happens in KokoroONNXEngine
                 from bot.tts.kokoro_direct_fixed import KokoroDirect
+
                 kd = KokoroDirect(model_path="test.onnx", voices_path="test.npz")
                 decision = mock_select.return_value
 
@@ -89,7 +94,7 @@ class TestRegistryIntegration:
                     voice="af_heart",
                     lang="en",
                     disable_autodiscovery=True,
-                    logger=MagicMock()
+                    logger=MagicMock(),
                 )
 
         # Check that no tokenizer-related logs appear
@@ -106,13 +111,15 @@ class TestRegistryIntegration:
 
     def test_registry_phoneme_tokenization(self):
         """Test that registry properly tokenizes text to phonemes."""
-        with patch('bot.tokenizer_registry.TokenizerRegistry.get_instance') as mock_registry:
+        with patch(
+            "bot.tokenizer_registry.TokenizerRegistry.get_instance"
+        ) as mock_registry:
             registry = MagicMock()
             registry._initialized = True
-            registry._available_tokenizers = {'phonemizer', 'grapheme'}
-            registry._canonicalize_language.return_value = 'en'
-            registry.apply_lexicon.return_value = ('hello world', False)
-            registry._tokenize_to_phonemes.return_value = 'həˈloʊ wɝːld'
+            registry._available_tokenizers = {"phonemizer", "grapheme"}
+            registry._canonicalize_language.return_value = "en"
+            registry.apply_lexicon.return_value = ("hello world", False)
+            registry._tokenize_to_phonemes.return_value = "həˈloʊ wɝːld"
             mock_registry.return_value = registry
 
             decision = select_for_language("en", "hello world")
@@ -123,13 +130,17 @@ class TestRegistryIntegration:
 
     def test_registry_grapheme_fallback(self):
         """Test that registry falls back to grapheme when tokenization fails."""
-        with patch('bot.tokenizer_registry.TokenizerRegistry.get_instance') as mock_registry:
+        with patch(
+            "bot.tokenizer_registry.TokenizerRegistry.get_instance"
+        ) as mock_registry:
             registry = MagicMock()
             registry._initialized = True
-            registry._available_tokenizers = {'grapheme'}
-            registry._canonicalize_language.return_value = 'en'
-            registry.apply_lexicon.return_value = ('hello world', False)
-            registry._tokenize_to_phonemes.side_effect = Exception("No phonemizer available")
+            registry._available_tokenizers = {"grapheme"}
+            registry._canonicalize_language.return_value = "en"
+            registry.apply_lexicon.return_value = ("hello world", False)
+            registry._tokenize_to_phonemes.side_effect = Exception(
+                "No phonemizer available"
+            )
             mock_registry.return_value = registry
 
             decision = select_for_language("en", "hello world")
@@ -140,20 +151,22 @@ class TestRegistryIntegration:
 
     def test_registry_lexicon_application(self):
         """Test that lexicon overrides are applied before tokenization."""
-        with patch('bot.tokenizer_registry.TokenizerRegistry.get_instance') as mock_registry:
+        with patch(
+            "bot.tokenizer_registry.TokenizerRegistry.get_instance"
+        ) as mock_registry:
             registry = MagicMock()
             registry._initialized = True
-            registry._available_tokenizers = {'phonemizer', 'grapheme'}
-            registry._canonicalize_language.return_value = 'en'
-            registry.apply_lexicon.return_value = ('həˈloʊ wɝːld', True)  # Changed
-            registry._tokenize_to_phonemes.return_value = 'həˈloʊ wɝːld'
+            registry._available_tokenizers = {"phonemizer", "grapheme"}
+            registry._canonicalize_language.return_value = "en"
+            registry.apply_lexicon.return_value = ("həˈloʊ wɝːld", True)  # Changed
+            registry._tokenize_to_phonemes.return_value = "həˈloʊ wɝːld"
             mock_registry.return_value = registry
 
             decision = select_for_language("en", "hello world")
 
             # Verify lexicon was applied
-            registry.apply_lexicon.assert_called_once_with('hello world', 'en')
-            assert decision.payload == 'həˈloʊ wɝːld'
+            registry.apply_lexicon.assert_called_once_with("hello world", "en")
+            assert decision.payload == "həˈloʊ wɝːld"
 
 
 class TestEngineIntegration:
@@ -162,16 +175,16 @@ class TestEngineIntegration:
     def test_engine_uses_registry_decisions(self, mocker):
         """Test that KokoroONNXEngine uses registry decisions for routing."""
         # Mock all the dependencies
-        mock_kd_class = mocker.patch('bot.tts.kokoro_direct_fixed.KokoroDirect')
+        mock_kd_class = mocker.patch("bot.tts.kokoro_direct_fixed.KokoroDirect")
         mock_kd = MagicMock()
         mock_kd.create.return_value = Path("/tmp/test.wav")
         mock_kd_class.return_value = mock_kd
 
-        mock_select = mocker.patch('bot.tokenizer_registry.select_for_language')
+        mock_select = mocker.patch("bot.tokenizer_registry.select_for_language")
         mock_select.return_value = Decision("phonemes", "həˈloʊ wɝːld", "IPA")
 
         # Mock the engine internals
-        with patch('bot.tts.engines.kokoro.Kokoro') as mock_kokoro:
+        with patch("bot.tts.engines.kokoro.Kokoro") as mock_kokoro:
             mock_engine = MagicMock()
             mock_engine.generate_audio.side_effect = Exception("No audio")
             mock_kokoro.return_value = mock_engine
@@ -180,13 +193,13 @@ class TestEngineIntegration:
             engine = KokoroONNXEngine("test.onnx", "test.npz")
 
             # Mock file reading and force non-English branch to use registry path
-            with patch('builtins.open', mocker.mock_open(read_data=b'test wav data')):
-                with patch('pathlib.Path.exists', return_value=True):
-                    with patch('pathlib.Path.unlink'):
+            with patch("builtins.open", mocker.mock_open(read_data=b"test wav data")):
+                with patch("pathlib.Path.exists", return_value=True):
+                    with patch("pathlib.Path.unlink"):
                         engine.synthesize("hello world", language="es")
 
             # Verify registry was consulted
-            mock_select.assert_called_once_with('en', 'hello world')
+            mock_select.assert_called_once_with("en", "hello world")
 
             # Verify KokoroDirect was called with phonemes
             mock_kd.create.assert_called_once()
@@ -196,15 +209,15 @@ class TestEngineIntegration:
 
     def test_engine_grapheme_path(self, mocker):
         """Test that grapheme decisions route to text path."""
-        mock_kd_class = mocker.patch('bot.tts.kokoro_direct_fixed.KokoroDirect')
+        mock_kd_class = mocker.patch("bot.tts.kokoro_direct_fixed.KokoroDirect")
         mock_kd = MagicMock()
         mock_kd.create.return_value = Path("/tmp/test.wav")
         mock_kd_class.return_value = mock_kd
 
-        mock_select = mocker.patch('bot.tokenizer_registry.select_for_language')
+        mock_select = mocker.patch("bot.tokenizer_registry.select_for_language")
         mock_select.return_value = Decision("grapheme", "hello world", "GRAPHEME")
 
-        with patch('bot.tts.engines.kokoro.Kokoro') as mock_kokoro:
+        with patch("bot.tts.engines.kokoro.Kokoro") as mock_kokoro:
             mock_engine = MagicMock()
             mock_engine.generate_audio.side_effect = Exception("No audio")
             mock_kokoro.return_value = mock_engine
@@ -212,9 +225,9 @@ class TestEngineIntegration:
             engine = KokoroONNXEngine("test.onnx", "test.npz")
 
             # Force non-English branch to use registry path
-            with patch('builtins.open', mocker.mock_open(read_data=b'test wav data')):
-                with patch('pathlib.Path.exists', return_value=True):
-                    with patch('pathlib.Path.unlink'):
+            with patch("builtins.open", mocker.mock_open(read_data=b"test wav data")):
+                with patch("pathlib.Path.exists", return_value=True):
+                    with patch("pathlib.Path.unlink"):
                         engine.synthesize("hello world", language="es")
 
             # Verify KokoroDirect was called with text

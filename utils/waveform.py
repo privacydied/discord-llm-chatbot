@@ -43,7 +43,7 @@ def compute_waveform_b64(wav_path: str | Path, bins: int = 256) -> str:
             # signed little-endian
             step = width
             for i in range(0, len(buf), step):
-                chunk = buf[i:i+step]
+                chunk = buf[i : i + step]
                 if len(chunk) < step:
                     break
                 # Pad to 4 bytes for int.from_bytes sign handling
@@ -81,7 +81,7 @@ def compute_waveform_b64(wav_path: str | Path, bins: int = 256) -> str:
     for i in range(0, len(norm), stride):
         if len(binned) >= bins:
             break
-        window = norm[i:i+stride]
+        window = norm[i : i + stride]
         # take mean of absolute values as amplitude
         amp = sum(abs(x) for x in window) / max(1, len(window))
         # map to 0..255

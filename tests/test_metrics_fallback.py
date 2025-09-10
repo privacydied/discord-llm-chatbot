@@ -1,15 +1,16 @@
 import unittest
 from unittest.mock import patch
 
-class TestMetricsFallback(unittest.TestCase):
 
+class TestMetricsFallback(unittest.TestCase):
     def test_null_metrics_import(self):
         pass
 
-    @patch.dict('sys.modules', {'prometheus_client': None})
+    @patch.dict("sys.modules", {"prometheus_client": None})
     def test_prometheus_metrics_import_fails_without_prometheus_client(self):
         with self.assertRaises(ImportError):
             pass
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

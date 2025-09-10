@@ -10,21 +10,20 @@ import sys
 import os
 
 # Set up minimal environment
-os.environ['TTS_TOKENISER'] = ''  # Unset to let code decide
-os.environ['TTS_ENGINE'] = 'kokoro-onnx'
-os.environ['TTS_VOICE'] = 'af_heart'
-os.environ['TTS_LANGUAGE'] = 'en'
+os.environ["TTS_TOKENISER"] = ""  # Unset to let code decide
+os.environ["TTS_ENGINE"] = "kokoro-onnx"
+os.environ["TTS_VOICE"] = "af_heart"
+os.environ["TTS_LANGUAGE"] = "en"
 
 # Configure logging to capture debug messages
 logging.basicConfig(
     level=logging.DEBUG,
-    format='%(levelname)s %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout)
-    ]
+    format="%(levelname)s %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout)],
 )
 
 logger = logging.getLogger(__name__)
+
 
 def test_english_ipa_fix():
     """Test that English text uses IPA phonemes and never graphemes."""
@@ -33,8 +32,7 @@ def test_english_ipa_fix():
 
         # Create engine instance
         engine = KokoroONNXEngine(
-            model_path="tts/kokoro-v1.0.onnx",
-            voices_path="tts/voices-v1.0.bin"
+            model_path="tts/kokoro-v1.0.onnx", voices_path="tts/voices-v1.0.bin"
         )
 
         test_text = "Hello world, this is a test of English speech synthesis."
@@ -57,6 +55,7 @@ def test_english_ipa_fix():
         try:
             # This should trigger the English IPA path
             import asyncio
+
             result = asyncio.run(engine.synthesize(test_text))
 
             print("✅ Synthesis completed successfully!")
@@ -119,8 +118,10 @@ def test_english_ipa_fix():
     except Exception as e:
         print(f"\n❌ ERROR: Test failed with exception: {e}")
         import traceback
+
         traceback.print_exc()
         return False
+
 
 if __name__ == "__main__":
     success = test_english_ipa_fix()

@@ -12,6 +12,7 @@ Usage:
 
 [PA][REH][IV][CMV][CA][CSD]
 """
+
 from __future__ import annotations
 
 import argparse
@@ -31,7 +32,9 @@ try:
     from rich.panel import Panel
     from rich.tree import Tree
 except Exception:  # pragma: no cover
-    print("Rich is required for this utility. Please install `rich`.\n", file=sys.stderr)
+    print(
+        "Rich is required for this utility. Please install `rich`.\n", file=sys.stderr
+    )
     raise
 
 
@@ -40,7 +43,11 @@ except Exception:  # pragma: no cover
 # -----------------------------
 class JSONLFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
-        ts = datetime.fromtimestamp(record.created).astimezone().strftime("%Y-%m-%dT%H:%M:%S.%f%z")
+        ts = (
+            datetime.fromtimestamp(record.created)
+            .astimezone()
+            .strftime("%Y-%m-%dT%H:%M:%S.%f%z")
+        )
         payload = {
             "ts": ts[:-8] + ts[-5:],  # ms precision alignment
             "level": record.levelname,
@@ -68,7 +75,9 @@ def setup_logging(log_dir: Path) -> logging.Logger:
     )
     pretty_handler.setLevel(logging.INFO)
 
-    jsonl_handler = logging.FileHandler(log_dir / "env_inventory.jsonl", encoding="utf-8")
+    jsonl_handler = logging.FileHandler(
+        log_dir / "env_inventory.jsonl", encoding="utf-8"
+    )
     jsonl_handler.setLevel(logging.DEBUG)
     jsonl_handler.setFormatter(JSONLFormatter())
 
@@ -79,8 +88,13 @@ def setup_logging(log_dir: Path) -> logging.Logger:
 
     # Enforcer: two handlers must be active [SFT]
     handlers = logger.handlers
-    if not any(isinstance(h, RichHandler) for h in handlers) or not any(isinstance(h, logging.FileHandler) for h in handlers):
-        print("✖ Logging enforcer failed: missing Pretty or JSONL handler", file=sys.stderr)
+    if not any(isinstance(h, RichHandler) for h in handlers) or not any(
+        isinstance(h, logging.FileHandler) for h in handlers
+    ):
+        print(
+            "✖ Logging enforcer failed: missing Pretty or JSONL handler",
+            file=sys.stderr,
+        )
         sys.exit(2)
 
     logger.debug("Logging configured with Pretty and JSONL sinks")
@@ -144,7 +158,9 @@ class EnvScanner(ParentTrackingNodeVisitor):
 
     def visit_Call(self, node: ast.Call):
         # os.getenv("KEY", default)
-        if isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Name):
+        if isinstance(node.func, ast.Attribute) and isinstance(
+            node.func.value, ast.Name
+        ):
             if node.func.value.id == "os" and node.func.attr == "getenv":
                 if node.args:
                     key = self._extract_str(node.args[0])
@@ -157,9 +173,13 @@ class EnvScanner(ParentTrackingNodeVisitor):
                     if key:
                         self._record(key, "getenv", node, default)
         # os.environ.get("KEY", default)
-        if isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Subscript):
+        if isinstance(node.func, ast.Attribute) and isinstance(
+            node.func.value, ast.Subscript
+        ):
             pass  # not our case
-        if isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Attribute):
+        if isinstance(node.func, ast.Attribute) and isinstance(
+            node.func.value, ast.Attribute
+        ):
             # os.environ.get
             if (
                 isinstance(node.func.value.value, ast.Name)
@@ -178,12 +198,18 @@ class EnvScanner(ParentTrackingNodeVisitor):
 
     def visit_Subscript(self, node: ast.Subscript):
         # os.environ["KEY"]
-        if isinstance(node.value, ast.Attribute) and isinstance(node.value.value, ast.Name):
+        if isinstance(node.value, ast.Attribute) and isinstance(
+            node.value.value, ast.Name
+        ):
             if node.value.value.id == "os" and node.value.attr == "environ":
                 key = None
-                if isinstance(node.slice, ast.Constant) and isinstance(node.slice.value, str):
+                if isinstance(node.slice, ast.Constant) and isinstance(
+                    node.slice.value, str
+                ):
                     key = node.slice.value
-                elif isinstance(node.slice, ast.Index) and isinstance(node.slice.value, ast.Constant):  # py<3.9
+                elif isinstance(node.slice, ast.Index) and isinstance(
+                    node.slice.value, ast.Constant
+                ):  # py<3.9
                     if isinstance(node.slice.value.value, str):
                         key = node.slice.value.value
                 if key:
@@ -196,7 +222,11 @@ class EnvScanner(ParentTrackingNodeVisitor):
                 return repr(node.value)
             if isinstance(node, (ast.List, ast.Tuple, ast.Set, ast.Dict)):
                 return ast.unparse(node)  # py3.9+
-            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in {"int", "float", "bool", "str"}:
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id in {"int", "float", "bool", "str"}
+            ):
                 # show callable default like int("5")
                 return ast.unparse(node)
             # fallback generic
@@ -221,7 +251,16 @@ class EnvScanner(ParentTrackingNodeVisitor):
 # -----------------------------
 # Core logic
 # -----------------------------
-SENSITIVE_HINTS = ("TOKEN", "SECRET", "KEY", "PASSWORD", "BEARER", "API_KEY", "AUTH", "WEBHOOK")
+SENSITIVE_HINTS = (
+    "TOKEN",
+    "SECRET",
+    "KEY",
+    "PASSWORD",
+    "BEARER",
+    "API_KEY",
+    "AUTH",
+    "WEBHOOK",
+)
 
 
 def classify_sensitivity(key: str) -> str:
@@ -232,7 +271,10 @@ def classify_sensitivity(key: str) -> str:
 def scan_repo(root: Path, logger: logging.Logger) -> Dict[str, List[Dict[str, Any]]]:
     results: Dict[str, List[Dict[str, Any]]] = {}
     for dirpath, _, filenames in os.walk(root):
-        if any(part in {".git", ".venv", "node_modules", "logs"} for part in Path(dirpath).parts):
+        if any(
+            part in {".git", ".venv", "node_modules", "logs"}
+            for part in Path(dirpath).parts
+        ):
             continue
         for fn in filenames:
             if not fn.endswith(".py"):
@@ -260,7 +302,9 @@ def scan_repo(root: Path, logger: logging.Logger) -> Dict[str, List[Dict[str, An
 def summarize(results: Dict[str, List[Dict[str, Any]]]) -> Dict[str, Any]:
     summary: Dict[str, Any] = {}
     for key, uses in results.items():
-        defaults = sorted({u.get("default") for u in uses if u.get("default") is not None})
+        defaults = sorted(
+            {u.get("default") for u in uses if u.get("default") is not None}
+        )
         coercions = sorted({u.get("coerced_as") for u in uses if u.get("coerced_as")})
         summary[key] = {
             "uses": uses,
@@ -273,9 +317,18 @@ def summarize(results: Dict[str, List[Dict[str, Any]]]) -> Dict[str, Any]:
 
 
 def main(argv: Optional[List[str]] = None) -> int:
-    parser = argparse.ArgumentParser(description="Inventory environment variable usage across the repo")
-    parser.add_argument("--root", type=str, default=str(Path.cwd()), help="Repository root to scan")
-    parser.add_argument("--out", type=str, default="utils/env_inventory.json", help="Output JSON file path")
+    parser = argparse.ArgumentParser(
+        description="Inventory environment variable usage across the repo"
+    )
+    parser.add_argument(
+        "--root", type=str, default=str(Path.cwd()), help="Repository root to scan"
+    )
+    parser.add_argument(
+        "--out",
+        type=str,
+        default="utils/env_inventory.json",
+        help="Output JSON file path",
+    )
     args = parser.parse_args(argv)
 
     root = Path(args.root).resolve()
@@ -284,7 +337,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     logger = setup_logging(Path("logs"))
 
     console = Console()
-    console.print(Panel.fit(f"Starting env inventory scan in [bold]{root}[/bold]", title="Env Inventory"))
+    console.print(
+        Panel.fit(
+            f"Starting env inventory scan in [bold]{root}[/bold]", title="Env Inventory"
+        )
+    )
 
     if not root.exists():
         logger.error(f"Root path does not exist: {root}")
@@ -295,13 +352,19 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     # Ensure output directory exists
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
+    out_path.write_text(
+        json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
 
     # Pretty report tree
     tree = Tree("Environment Variables")
     for key in sorted(report.keys()):
-        node = tree.add(f"[bold]{key}[/bold] x{report[key]['count']} [{report[key]['sensitivity']}]")
-        defs = ", ".join(d for d in report[key]["defaults"] if d is not None) or "(none)"
+        node = tree.add(
+            f"[bold]{key}[/bold] x{report[key]['count']} [{report[key]['sensitivity']}]"
+        )
+        defs = (
+            ", ".join(d for d in report[key]["defaults"] if d is not None) or "(none)"
+        )
         coers = ", ".join(report[key]["coercions"]) or "(none)"
         node.add(f"defaults: {defs}")
         node.add(f"coercions: {coers}")

@@ -10,8 +10,14 @@ class FakeProvider:
     async def search(self, params):
         # Return deterministic results for testing
         return [
-            SearchResult(title="Result One", url="https://example.com/1", snippet="First snippet"),
-            SearchResult(title="Result Two", url="https://example.com/2", snippet="Second snippet"),
+            SearchResult(
+                title="Result One", url="https://example.com/1", snippet="First snippet"
+            ),
+            SearchResult(
+                title="Result Two",
+                url="https://example.com/2",
+                snippet="Second snippet",
+            ),
         ]
 
 
@@ -19,21 +25,32 @@ class FakeContextManager:
     async def get_context_string(self, message):
         return ""
 
+
 class FakeMetrics:
     def __init__(self):
         self.calls = []
+
     def increment(self, name, labels=None, value=1):
         self.calls.append(("increment", name, labels or {}, value))
+
     def inc(self, name, value=1, labels=None):
         self.calls.append(("inc", name, labels or {}, value))
+
 
 class CapturingProvider:
     def __init__(self, results=None):
         self.calls = []
         self._results = results or [
-            SearchResult(title="Result One", url="https://example.com/1", snippet="First snippet"),
-            SearchResult(title="Result Two", url="https://example.com/2", snippet="Second snippet"),
+            SearchResult(
+                title="Result One", url="https://example.com/1", snippet="First snippet"
+            ),
+            SearchResult(
+                title="Result Two",
+                url="https://example.com/2",
+                snippet="Second snippet",
+            ),
         ]
+
     async def search(self, params):
         self.calls.append(params)
         return list(self._results)
@@ -76,6 +93,7 @@ async def test_extract_inline_search_queries():
 async def test_resolve_inline_searches_replaces_with_results(monkeypatch):
     # Monkeypatch the provider factory to return our fake provider
     import bot.router as router_mod
+
     monkeypatch.setattr(router_mod, "get_search_provider", lambda: FakeProvider())
 
     bot = FakeBot()
@@ -167,8 +185,12 @@ async def test_inline_search_metrics_labels_include_category_success(monkeypatch
     assert "inline_search.success" in names
 
     # Find labels for start and success
-    start_labels = next(lbl for (kind, n, lbl, _v) in metrics.calls if n == "inline_search.start")
-    success_labels = next(lbl for (kind, n, lbl, _v) in metrics.calls if n == "inline_search.success")
+    start_labels = next(
+        lbl for (kind, n, lbl, _v) in metrics.calls if n == "inline_search.start"
+    )
+    success_labels = next(
+        lbl for (kind, n, lbl, _v) in metrics.calls if n == "inline_search.success"
+    )
 
     assert start_labels.get("category") == "videos"
     assert success_labels.get("category") == "videos"
@@ -198,7 +220,9 @@ async def test_inline_search_metrics_labels_include_category_error(monkeypatch):
     assert "inline_search.start" in names
     assert "inline_search.error" in names
 
-    error_labels = next(lbl for (kind, n, lbl, _v) in metrics.calls if n == "inline_search.error")
+    error_labels = next(
+        lbl for (kind, n, lbl, _v) in metrics.calls if n == "inline_search.error"
+    )
     assert error_labels.get("category") == "images"
     assert error_labels.get("provider") == bot.config["SEARCH_PROVIDER"]
 

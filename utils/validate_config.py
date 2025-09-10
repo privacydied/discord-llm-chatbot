@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import sys
 from typing import Any
+import importlib
 
 from rich.console import Console
 from rich.panel import Panel
@@ -13,8 +14,11 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(ROOT)
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
-
-from bot.config import load_config, audit_env_file, validate_required_env, validate_prompt_files
+_cfg_mod = importlib.import_module("bot.config")  # noqa: E402
+load_config = getattr(_cfg_mod, "load_config")
+audit_env_file = getattr(_cfg_mod, "audit_env_file")
+validate_required_env = getattr(_cfg_mod, "validate_required_env")
+validate_prompt_files = getattr(_cfg_mod, "validate_prompt_files")
 
 console = Console()
 
@@ -35,13 +39,21 @@ def _kv_table(title: str, data: dict[str, Any]) -> Table:
 
 
 def main() -> int:
-    console.print(Panel.fit("Config Validation", subtitle="utils/validate_config.py", border_style="blue"))
+    console.print(
+        Panel.fit(
+            "Config Validation",
+            subtitle="utils/validate_config.py",
+            border_style="blue",
+        )
+    )
 
     # Audit .env
     try:
         audit_env_file()
     except Exception as e:
-        console.print(Panel.fit(f".env audit warning: {e}", title="ENV AUDIT", style="yellow"))
+        console.print(
+            Panel.fit(f".env audit warning: {e}", title="ENV AUDIT", style="yellow")
+        )
 
     # Validate required env and prompt files
     try:
@@ -55,7 +67,9 @@ def main() -> int:
 
     screenshot = {
         "SCREENSHOT_API_KEY": os.getenv("SCREENSHOT_API_KEY", ""),
-        "SCREENSHOT_API_URL": cfg.get("SCREENSHOT_API_URL", os.getenv("SCREENSHOT_API_URL", "")),
+        "SCREENSHOT_API_URL": cfg.get(
+            "SCREENSHOT_API_URL", os.getenv("SCREENSHOT_API_URL", "")
+        ),
         "SCREENSHOT_API_DEVICE": os.getenv("SCREENSHOT_API_DEVICE", ""),
         "SCREENSHOT_API_DIMENSION": os.getenv("SCREENSHOT_API_DIMENSION", ""),
         "SCREENSHOT_API_FORMAT": os.getenv("SCREENSHOT_API_FORMAT", ""),
@@ -80,7 +94,7 @@ def main() -> int:
         "SEARCH_BREAKER_FAILURE_WINDOW": cfg.get("SEARCH_BREAKER_FAILURE_WINDOW"),
         "SEARCH_BREAKER_OPEN_MS": cfg.get("SEARCH_BREAKER_OPEN_MS"),
         "SEARCH_BREAKER_HALFOPEN_PROB": cfg.get("SEARCH_BREAKER_HALFOPEN_PROB"),
-        "SEARCH_INLINE_MAX_CONCURRENCY": os.getenv("SEARCH_INLINE_MAX_CONCURRENCY", "")
+        "SEARCH_INLINE_MAX_CONCURRENCY": os.getenv("SEARCH_INLINE_MAX_CONCURRENCY", ""),
     }
 
     streaming = {

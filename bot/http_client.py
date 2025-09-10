@@ -168,7 +168,9 @@ class SharedHttpClient:
                 import h2  # type: ignore  # noqa: F401
             except Exception:
                 self.http2_enabled = False
-                logger.info("🌐 HTTP/2 not available (h2 missing); falling back to HTTP/1.1")
+                logger.info(
+                    "🌐 HTTP/2 not available (h2 missing); falling back to HTTP/1.1"
+                )
 
         limits = httpx.Limits(
             max_connections=self.max_connections,
@@ -315,9 +317,12 @@ class SharedHttpClient:
                 # Special-case: if HTTP/2 is enabled but the optional 'h2' package is missing,
                 # transparently recreate the client with HTTP/1.1 and retry immediately. [REH]
                 msg = str(e)
-                if self.http2_enabled and (
-                    "http2=True" in msg or "http2" in msg
-                ) and "h2" in msg and "not installed" in msg:
+                if (
+                    self.http2_enabled
+                    and ("http2=True" in msg or "http2" in msg)
+                    and "h2" in msg
+                    and "not installed" in msg
+                ):
                     try:
                         # Switch to HTTP/1.1 client
                         if self.client is not None:

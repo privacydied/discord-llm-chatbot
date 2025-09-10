@@ -300,13 +300,9 @@ async def _map_url_to_modality(url: str) -> InputModality:
         path = "/"
     if host in {"nytimes.com", "www.nytimes.com", "m.nytimes.com"}:
         if "/video/" in path:
-            logger.info(
-                f"modality.guard: nytimes video → VIDEO_URL (path={path})"
-            )
+            logger.info(f"modality.guard: nytimes video → VIDEO_URL (path={path})")
             return InputModality.VIDEO_URL
-        logger.info(
-            f"modality.guard: nytimes non-video → GENERAL_URL (path={path})"
-        )
+        logger.info(f"modality.guard: nytimes non-video → GENERAL_URL (path={path})")
         return InputModality.GENERAL_URL
 
     # Twitter/X status posts should go through API-first general URL path [SFT][CA]

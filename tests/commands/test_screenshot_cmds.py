@@ -28,8 +28,10 @@ def mock_ctx(mock_bot):
     class _Typing:
         async def __aenter__(self):
             return None
+
         async def __aexit__(self, exc_type, exc, tb):
             return False
+
     ctx.typing = MagicMock(return_value=_Typing())
     return ctx
 

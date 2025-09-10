@@ -4,12 +4,14 @@ Pytest configuration for Kokoro-related tests.
 Ensures the vendored IPA vocabulary is allowed so KokoroDirect can load
 phoneme-to-id mapping in environments without the official assets.
 """
+
 import os
 import pytest
 from unittest import mock
 
 # Allow vendored IPA vocabulary for KokoroDirect tests (safe in CI)
 os.environ.setdefault("KOKORO_ALLOW_VENDORED_VOCAB", "true")
+
 
 @pytest.fixture
 def mocker(request):
@@ -19,6 +21,7 @@ def mocker(request):
     - mocker.patch(target, ...) -> started mock (auto-teardown on test end)
     - mocker.mock_open(...) -> unittest.mock.mock_open
     """
+
     class _SimpleMocker:
         def patch(self, target, *args, **kwargs):
             patcher = mock.patch(target, *args, **kwargs)

@@ -15,6 +15,7 @@ Heuristics:
 
 [PA][REH][IV][CMV][CA][CSD]
 """
+
 from __future__ import annotations
 
 import argparse
@@ -35,7 +36,11 @@ from rich.panel import Panel
 # -----------------------------
 class JSONLFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
-        ts = datetime.fromtimestamp(record.created).astimezone().strftime("%Y-%m-%dT%H:%M:%S.%f%z")
+        ts = (
+            datetime.fromtimestamp(record.created)
+            .astimezone()
+            .strftime("%Y-%m-%dT%H:%M:%S.%f%z")
+        )
         payload = {
             "ts": ts[:-8] + ts[-5:],
             "level": record.levelname,
@@ -63,7 +68,9 @@ def get_logger() -> logging.Logger:
 
     logs_dir = Path("logs")
     logs_dir.mkdir(parents=True, exist_ok=True)
-    jsonl_handler = logging.FileHandler(logs_dir / "env_registry.jsonl", encoding="utf-8")
+    jsonl_handler = logging.FileHandler(
+        logs_dir / "env_registry.jsonl", encoding="utf-8"
+    )
     jsonl_handler.setLevel(logging.DEBUG)
     jsonl_handler.setFormatter(JSONLFormatter())
 
@@ -73,7 +80,11 @@ def get_logger() -> logging.Logger:
     logger.propagate = False
 
     # Enforce both handlers exist
-    if not any(isinstance(h, RichHandler) for h in logger.handlers) or not any(hasattr(h, "stream") for h in logger.handlers if isinstance(h, logging.FileHandler)):
+    if not any(isinstance(h, RichHandler) for h in logger.handlers) or not any(
+        hasattr(h, "stream")
+        for h in logger.handlers
+        if isinstance(h, logging.FileHandler)
+    ):
         print("✖ Logging enforcer failed: missing Pretty or JSONL handler")
         raise SystemExit(2)
 
@@ -83,12 +94,35 @@ def get_logger() -> logging.Logger:
 # -----------------------------
 # Core
 # -----------------------------
-SENSITIVE_HINTS = ("TOKEN", "SECRET", "KEY", "PASSWORD", "BEARER", "API_KEY", "AUTH", "WEBHOOK")
+SENSITIVE_HINTS = (
+    "TOKEN",
+    "SECRET",
+    "KEY",
+    "PASSWORD",
+    "BEARER",
+    "API_KEY",
+    "AUTH",
+    "WEBHOOK",
+)
 REQUIRED_SET = {"DISCORD_TOKEN", "PROMPT_FILE", "VL_PROMPT_FILE"}
 
 GROUP_PREFIXES = [
-    "PROMETHEUS_", "X_API_", "X_", "RAG_", "STT_", "TTS_", "KOKORO_", "WEBEX_", "MEDIA_", "VIDEO_",
-    "STREAMING_", "SEARCH_", "CACHE_", "OCR_", "PDF_", "SCREENSHOT_",
+    "PROMETHEUS_",
+    "X_API_",
+    "X_",
+    "RAG_",
+    "STT_",
+    "TTS_",
+    "KOKORO_",
+    "WEBEX_",
+    "MEDIA_",
+    "VIDEO_",
+    "STREAMING_",
+    "SEARCH_",
+    "CACHE_",
+    "OCR_",
+    "PDF_",
+    "SCREENSHOT_",
 ]
 
 
@@ -130,7 +164,9 @@ class RegistryItem:
     valid_values: Optional[str]
 
 
-def build_registry(inv: Dict[str, Any], logger: logging.Logger) -> Dict[str, List[RegistryItem]]:
+def build_registry(
+    inv: Dict[str, Any], logger: logging.Logger
+) -> Dict[str, List[RegistryItem]]:
     groups: Dict[str, List[RegistryItem]] = {}
     for key, meta in inv.items():
         meta.get("uses", [])
@@ -139,14 +175,20 @@ def build_registry(inv: Dict[str, Any], logger: logging.Logger) -> Dict[str, Lis
         cdefault, conflicts = choose_default(defaults_raw)
         # Prefer curated type when provided, else infer from coercions
         curated_type = meta.get("type") if isinstance(meta, dict) else None
-        typ = str(curated_type) if curated_type else (",".join(sorted(set(coercions))) if coercions else "unknown")
+        typ = (
+            str(curated_type)
+            if curated_type
+            else (",".join(sorted(set(coercions))) if coercions else "unknown")
+        )
 
         # Prefer curated description/group/sensitivity/required when provided
         desc = str(meta.get("description") or "") if isinstance(meta, dict) else ""
         group_override = meta.get("group") if isinstance(meta, dict) else None
         group = str(group_override) if group_override else classify_group(key)
 
-        sens_override = (meta.get("sensitivity") or "").lower() if isinstance(meta, dict) else ""
+        sens_override = (
+            (meta.get("sensitivity") or "").lower() if isinstance(meta, dict) else ""
+        )
         if sens_override in ("sensitive", "secret"):
             sensitive = True
         elif sens_override in ("normal", "public"):
@@ -155,7 +197,9 @@ def build_registry(inv: Dict[str, Any], logger: logging.Logger) -> Dict[str, Lis
             sensitive = classify_sensitivity(key) == "sensitive"
 
         req_override = meta.get("required") if isinstance(meta, dict) else None
-        required = bool(req_override) if req_override is not None else (key in REQUIRED_SET)
+        required = (
+            bool(req_override) if req_override is not None else (key in REQUIRED_SET)
+        )
 
         item = RegistryItem(
             key=key,
@@ -245,11 +289,27 @@ def write_env_sample(groups: Dict[str, List[RegistryItem]], out_env: Path):
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Build canonical env registry and .env.sample")
-    parser.add_argument("--inventory", default="utils/env_inventory.json", help="Path to env inventory JSON")
-    parser.add_argument("--env-sample", default="configs/.env.sample", help="Output sample env file")
-    parser.add_argument("--registry-md", default="docs/config/ENV_REGISTRY.md", help="Output registry markdown")
-    parser.add_argument("--registry-json", default="docs/config/ENV_REGISTRY.json", help="Output registry JSON")
+    parser = argparse.ArgumentParser(
+        description="Build canonical env registry and .env.sample"
+    )
+    parser.add_argument(
+        "--inventory",
+        default="utils/env_inventory.json",
+        help="Path to env inventory JSON",
+    )
+    parser.add_argument(
+        "--env-sample", default="configs/.env.sample", help="Output sample env file"
+    )
+    parser.add_argument(
+        "--registry-md",
+        default="docs/config/ENV_REGISTRY.md",
+        help="Output registry markdown",
+    )
+    parser.add_argument(
+        "--registry-json",
+        default="docs/config/ENV_REGISTRY.json",
+        help="Output registry JSON",
+    )
     args = parser.parse_args()
 
     logger = get_logger()
@@ -273,7 +333,9 @@ def main() -> int:
     serializable = {
         grp: [asdict(item) for item in items] for grp, items in groups.items()
     }
-    json_out.write_text(json.dumps(serializable, indent=2, ensure_ascii=False), encoding="utf-8")
+    json_out.write_text(
+        json.dumps(serializable, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
 
     logger.info(f"✔ Wrote sample env to {args.env_sample}")
     logger.info(f"✔ Wrote registry markdown to {args.registry_md}")

@@ -254,7 +254,9 @@ Server Context: {server_context}"""
                                         try:
                                             val = float(reset)
                                             now = time.time()
-                                            retry_after = val - now if val > now + 1 else val
+                                            retry_after = (
+                                                val - now if val > now + 1 else val
+                                            )
                                             if retry_after < 0:
                                                 retry_after = 0.0
                                         except Exception:

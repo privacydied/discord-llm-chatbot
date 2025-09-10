@@ -5,6 +5,7 @@ import shutil
 
 PROFILE_DIR = "user_profiles"
 
+
 def fix_json_file(path):
     with open(path, "r", encoding="utf-8") as f:
         content = f.read().strip()
@@ -26,7 +27,7 @@ def fix_json_file(path):
             objects.append(obj)
             idx = end
             # Skip whitespace between objects
-            while idx < len(content) and content[idx] in ' \r\n\t':
+            while idx < len(content) and content[idx] in " \r\n\t":
                 idx += 1
         except json.JSONDecodeError:
             break
@@ -43,6 +44,7 @@ def fix_json_file(path):
     print(f"Fixed {path} (found {len(objects)} JSON objects, kept last one)")
     return True
 
+
 def main():
     files = glob.glob(os.path.join(PROFILE_DIR, "*.json"))
     fixed = 0
@@ -50,6 +52,7 @@ def main():
         if fix_json_file(fpath):
             fixed += 1
     print(f"Fixed {fixed} files.")
+
 
 if __name__ == "__main__":
     main()

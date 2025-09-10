@@ -11,8 +11,8 @@ def test_rag_background_indexing_default_true(monkeypatch):
 
     # Import after environment cleanup
     import bot.rag.config as rag_config
+
     reload(rag_config)
 
     cfg = rag_config.reload_rag_config()
     assert cfg.background_indexing is True
-

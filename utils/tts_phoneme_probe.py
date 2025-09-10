@@ -14,6 +14,7 @@ This probes the following, if available:
 
 Outputs structured, concise results with RichHandler logging and JSONL sink per project logging rules.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -26,6 +27,7 @@ from typing import Optional
 # Project logging (dual sink with RichHandler + JSONL)
 try:
     from bot.utils.logging import init_logging, enforce_dual_logging_handlers
+
     init_logging()
     enforce_dual_logging_handlers()
 except Exception:
@@ -39,7 +41,7 @@ def _safe_preview(s: Optional[str], limit: int = 160) -> str:
     try:
         if s is None:
             return "<None>"
-        return (s[:limit] + ("…(+%d)" % (len(s) - limit) if len(s) > limit else ""))
+        return s[:limit] + ("…(+%d)" % (len(s) - limit) if len(s) > limit else "")
     except Exception:
         return "<unpreviewable>"
 
@@ -47,8 +49,10 @@ def _safe_preview(s: Optional[str], limit: int = 160) -> str:
 def probe_misaki(text: str) -> Optional[str]:
     try:
         from misaki import en as misaki_en  # type: ignore
+
         try:
             from misaki import espeak as misaki_espeak  # type: ignore
+
             fallback = misaki_espeak.EspeakFallback(british=False)
             logger.info("Misaki: using espeak fallback")
         except Exception:
@@ -67,6 +71,7 @@ def probe_misaki(text: str) -> Optional[str]:
 def probe_phonemizer(text: str) -> Optional[str]:
     try:
         from phonemizer import phonemize  # type: ignore
+
         # Use espeak backend for English; fall back gracefully
         ph = phonemize(text, language="en-us", backend="espeak", strip=True, njobs=1)
         return str(ph)
@@ -78,6 +83,7 @@ def probe_phonemizer(text: str) -> Optional[str]:
 def probe_g2p_en(text: str) -> Optional[str]:
     try:
         from g2p_en import G2p  # type: ignore
+
         g2p = G2p()
         toks = g2p(text)
         if isinstance(toks, (list, tuple)):
@@ -90,7 +96,9 @@ def probe_g2p_en(text: str) -> Optional[str]:
 
 def _run_cli(cmd: list[str]) -> Optional[str]:
     try:
-        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False, timeout=5)
+        proc = subprocess.run(
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False, timeout=5
+        )
         if proc.returncode == 0 and proc.stdout:
             return proc.stdout.decode("utf-8", errors="replace").strip()
         return None
@@ -122,7 +130,9 @@ def probe_espeak_ng_cli(text: str) -> Optional[str]:
 
 
 def main(argv: list[str]) -> int:
-    ap = argparse.ArgumentParser(description="Probe phonemizers for problematic words/phrases")
+    ap = argparse.ArgumentParser(
+        description="Probe phonemizers for problematic words/phrases"
+    )
     ap.add_argument("text", nargs="?", default="pyrex stirs turned to cavalli furs")
     args = ap.parse_args(argv)
 

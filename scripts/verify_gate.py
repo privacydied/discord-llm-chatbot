@@ -35,6 +35,7 @@ class FakeGuild:
 
 class FakeChannel:
     """A generic guild text channel (not DM, not Thread)."""
+
     def __init__(self):
         # No special fields needed; importantly, not an instance of discord.Thread
         pass
@@ -65,7 +66,12 @@ async def main():
     config = {
         "BOT_SPEAKS_ONLY_WHEN_SPOKEN_TO": True,
         "REPLY_TRIGGERS": [
-            "dm", "mention", "reply", "bot_threads", "owner", "command_prefix"
+            "dm",
+            "mention",
+            "reply",
+            "bot_threads",
+            "owner",
+            "command_prefix",
         ],
         "COMMAND_PREFIX": "!",
         "OWNER_IDS": [42],  # owners not including our author

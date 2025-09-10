@@ -34,7 +34,12 @@ class _FakeSession:
 
     def post(self, url, headers=None, json=None, timeout=None):
         # Capture the payload for assertions
-        self.captured = {"url": url, "headers": headers, "json": json, "timeout": timeout}
+        self.captured = {
+            "url": url,
+            "headers": headers,
+            "json": json,
+            "timeout": timeout,
+        }
         return _FakeResp(status=200, payload={"id": "100"})
 
 
@@ -120,12 +125,18 @@ async def test_publish_success_flow(monkeypatch, tmp_path: Path):
     monkeypatch.setattr(
         pub,
         "_attachments_create",
-        AsyncMock(return_value={
-            "attachments": [{"upload_url": "https://upload", "upload_filename": "u_fn"}]
-        }),
+        AsyncMock(
+            return_value={
+                "attachments": [
+                    {"upload_url": "https://upload", "upload_filename": "u_fn"}
+                ]
+            }
+        ),
     )
     monkeypatch.setattr(pub, "_upload_file", AsyncMock(return_value=None))
-    monkeypatch.setattr(pub, "_post_voice_message", AsyncMock(return_value={"id": "4242"}))
+    monkeypatch.setattr(
+        pub, "_post_voice_message", AsyncMock(return_value={"id": "4242"})
+    )
 
     msg = _DummyMessage(cid=98765, mid=321)
     result = await pub.publish(message=msg, wav_path=wav_path)

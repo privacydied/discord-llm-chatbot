@@ -1,6 +1,7 @@
 """
 Tests for the KokoroDirect TTS engine interface.
 """
+
 import numpy as np
 import pytest
 from unittest.mock import MagicMock, patch
@@ -14,10 +15,11 @@ from bot.tts.kokoro_direct import KokoroDirect, SAMPLE_RATE
 def mock_kokoro_direct():
     """Fixture to create a KokoroDirect instance with a mocked ONNX session."""
     # Patch the methods that perform I/O during initialization
-    with patch('bot.tts.kokoro_direct.en.G2P'), \
-         patch('bot.tts.kokoro_direct.KokoroDirect._init_session'), \
-         patch('bot.tts.kokoro_direct.KokoroDirect._load_available_voices'):
-
+    with (
+        patch("bot.tts.kokoro_direct.en.G2P"),
+        patch("bot.tts.kokoro_direct.KokoroDirect._init_session"),
+        patch("bot.tts.kokoro_direct.KokoroDirect._load_available_voices"),
+    ):
         kokoro = KokoroDirect(onnx_dir="dummy/onnx", voices_dir="dummy/voices")
 
         # Manually set the session and g2p attributes that the constructor would have created
@@ -30,6 +32,7 @@ def mock_kokoro_direct():
 
         yield kokoro
 
+
 def test_create_audio_with_g2p(mock_kokoro_direct):
     """Test that audio can be created from text using the misaki G2P phonemizer."""
     # Mock the internal voice loading to avoid file I/O
@@ -41,7 +44,9 @@ def test_create_audio_with_g2p(mock_kokoro_direct):
     voice_id = "test_voice"
 
     # Call the create method, which should now use misaki
-    audio, sample_rate = mock_kokoro_direct.create(text=text_to_synthesize, voice_id=voice_id)
+    audio, sample_rate = mock_kokoro_direct.create(
+        text=text_to_synthesize, voice_id=voice_id
+    )
 
     # Assertions
     assert isinstance(audio, np.ndarray), "Audio output should be a numpy array"

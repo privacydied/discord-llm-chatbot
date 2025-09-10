@@ -18,8 +18,14 @@ from pathlib import Path
 from bot.vision.money import Money
 from bot.vision.orchestrator_v2 import VisionOrchestratorV2
 from bot.vision.types import (
-    VisionRequest, VisionResponse, VisionJob, VisionJobState,
-    VisionError, VisionErrorType, VisionProvider, VisionTask
+    VisionRequest,
+    VisionResponse,
+    VisionJob,
+    VisionJobState,
+    VisionError,
+    VisionErrorType,
+    VisionProvider,
+    VisionTask,
 )
 from bot.vision.safety_filter import SafetyResult, SafetyLevel
 from bot.vision.budget_manager_v2 import BudgetResult
@@ -36,36 +42,36 @@ async def orchestrator():
         "VISION_ARTIFACT_TTL_DAYS": 7,
         "VISION_JOBS_DIR": "/tmp/test_jobs",
         "VISION_BUDGET_DIR": "/tmp/test_budgets",
-        "VISION_LEDGER_PATH": "/tmp/test_ledger.json"
+        "VISION_LEDGER_PATH": "/tmp/test_ledger.json",
     }
-    
+
     # Mock the job_store to avoid file system initialization
-    with patch('bot.vision.orchestrator_v2.VisionJobStore') as mock_job_store:
+    with patch("bot.vision.orchestrator_v2.VisionJobStore") as mock_job_store:
         mock_job_store.return_value = AsyncMock()
-        
+
         orchestrator = VisionOrchestratorV2(config)
-        
+
         # Mock dependencies
         orchestrator.gateway = AsyncMock()
         orchestrator.safety_filter = AsyncMock()
         orchestrator.budget_manager = AsyncMock()
         orchestrator.pricing_table = Mock()
         orchestrator.usage_parser = Mock()
-        
+
         # Setup default mock behaviors
         orchestrator.safety_filter.validate_request.return_value = SafetyResult(
             approved=True,
             level=SafetyLevel.SAFE,
             reason="",
             user_message="",
-            detected_issues=[]
+            detected_issues=[],
         )
-        
+
         orchestrator.job_store.save_job = AsyncMock()
         orchestrator.job_store.load_job = AsyncMock()
-        
+
         yield orchestrator
-        
+
         # Cleanup
         await orchestrator.close()
 
@@ -81,31 +87,31 @@ async def test_submit_job_with_money_estimation(orchestrator):
         width=1024,
         height=1024,
         batch_size=1,
-        preferred_provider=VisionProvider.TOGETHER
+        preferred_provider=VisionProvider.TOGETHER,
     )
-    
+
     # Mock pricing table to return Money
     estimated_cost = Money("0.04")
     orchestrator.pricing_table.estimate_cost.return_value = estimated_cost
-    
+
     # Mock budget check with reserved amounts considered
     orchestrator.budget_manager.check_budget.return_value = BudgetResult(
         approved=True,
         reason="approved",
         user_message="",
         remaining_budget=Money("5.00"),  # Already accounts for reserved
-        estimated_cost=estimated_cost
+        estimated_cost=estimated_cost,
     )
-    
+
     # Execute
     job = await orchestrator.submit_job(request)
-    
+
     # Verify
     assert job is not None
     assert job.request == request
     assert job.state == VisionJobState.QUEUED
     assert request.estimated_cost == 0.04  # Stored as float
-    
+
     # Verify pricing table was called with correct params
     orchestrator.pricing_table.estimate_cost.assert_called_once_with(
         provider=VisionProvider.TOGETHER,
@@ -114,9 +120,9 @@ async def test_submit_job_with_money_estimation(orchestrator):
         height=1024,
         num_images=1,
         duration_seconds=4.0,
-        model=None
+        model=None,
     )
-    
+
     # Verify budget reservation with Money type
     orchestrator.budget_manager.reserve_budget.assert_called_once_with(
         "test_user", estimated_cost
@@ -133,12 +139,12 @@ async def test_quota_check_includes_reserved_amounts(orchestrator):
         prompt="Transform this image",
         width=512,
         height=512,
-        provider=VisionProvider.NOVITA
+        provider=VisionProvider.NOVITA,
     )
-    
+
     estimated_cost = Money("0.06")
     orchestrator.pricing_table.estimate_cost.return_value = estimated_cost
-    
+
     # Mock budget check showing reserved amounts affect available quota
     orchestrator.budget_manager.check_budget.return_value = BudgetResult(
         approved=False,
@@ -150,13 +156,13 @@ async def test_quota_check_includes_reserved_amounts(orchestrator):
         estimated_cost=estimated_cost.to_float(),
         daily_reserved=Money("4.98"),  # $4.98 reserved from $5 daily limit
         weekly_reserved=Money("4.98"),
-        monthly_reserved=Money("4.98")
+        monthly_reserved=Money("4.98"),
     )
-    
+
     # Execute and expect quota error
     with pytest.raises(VisionError) as exc_info:
         await orchestrator.submit_job(request)
-    
+
     # Verify
     assert exc_info.value.error_type == VisionErrorType.QUOTA_EXCEEDED
     assert "Daily budget limit reached" in exc_info.value.user_message
@@ -173,15 +179,11 @@ async def test_job_completion_with_actual_usage_parsing(orchestrator):
         user_id="test_user",
         task=VisionTask.TEXT_TO_IMAGE,
         prompt="Test prompt",
-        preferred_provider=VisionProvider.TOGETHER
+        preferred_provider=VisionProvider.TOGETHER,
     )
-    
-    job = VisionJob(
-        job_id=job_id,
-        request=request,
-        state=VisionJobState.RUNNING
-    )
-    
+
+    job = VisionJob(job_id=job_id, request=request, state=VisionJobState.RUNNING)
+
     # Mock successful response with usage data
     response = VisionResponse(
         success=True,
@@ -189,22 +191,22 @@ async def test_job_completion_with_actual_usage_parsing(orchestrator):
         provider=VisionProvider.TOGETHER,
         model_used="test-model",
         artifacts=[Path("result.png")],
-        actual_cost=0.04
+        actual_cost=0.04,
     )
-    
+
     orchestrator.gateway.generate.return_value = response
-    
+
     # Mock usage parsing
     usage_data = {"credits": 40, "unit": "credits"}
     actual_cost = Money("0.04")
-    
+
     orchestrator.usage_parser.extract_usage_from_response.return_value = usage_data
     orchestrator.usage_parser.parse_usage.return_value = actual_cost
     orchestrator.usage_parser.validate_usage_cost.return_value = (True, None)
-    
+
     # Execute job
     await orchestrator._execute_job(job)
-    
+
     # Verify budget finalization with actual cost
     orchestrator.budget_manager.finalize_reservation.assert_called_once_with(
         user_id="test_user",
@@ -212,9 +214,9 @@ async def test_job_completion_with_actual_usage_parsing(orchestrator):
         actual_cost=actual_cost,
         job_id=job_id,
         provider="VisionProvider.TOGETHER",
-        task="VisionTask.TEXT_TO_IMAGE"
+        task="VisionTask.TEXT_TO_IMAGE",
     )
-    
+
     # Verify job state
     assert job.state == VisionJobState.COMPLETED
     assert job.response == response
@@ -230,40 +232,36 @@ async def test_job_failure_releases_reservation(orchestrator):
         task=VisionTask.TEXT_TO_IMAGE,
         prompt="Generate an image",
         preferred_provider=VisionProvider.NOVITA,
-        estimated_cost=1.50
+        estimated_cost=1.50,
     )
-    
-    job = VisionJob(
-        job_id=job_id,
-        request=request,
-        state=VisionJobState.RUNNING
-    )
-    
+
+    job = VisionJob(job_id=job_id, request=request, state=VisionJobState.RUNNING)
+
     # Mock failed response
     error = VisionError(
         error_type=VisionErrorType.PROVIDER_ERROR,
         message="Provider service unavailable",
-        user_message="The image generation service is temporarily unavailable."
+        user_message="The image generation service is temporarily unavailable.",
     )
-    
+
     response = VisionResponse(
         success=False,
         job_id=job_id,
         provider=VisionProvider.NOVITA,
         model_used="test-model",
-        error=error
+        error=error,
     )
-    
+
     orchestrator.gateway.generate.return_value = response
-    
+
     # Execute job
     await orchestrator._execute_job(job)
-    
+
     # Verify reservation was released
     orchestrator.budget_manager.release_reservation.assert_called_once_with(
         "test_user", Money("1.50")
     )
-    
+
     # Verify job state
     assert job.state == VisionJobState.FAILED
     # Check that error was logged
@@ -280,35 +278,35 @@ async def test_job_cancellation_releases_reservation(orchestrator):
         task=VisionTask.IMAGE_TO_VIDEO,
         prompt="Create animation",
         preferred_provider=VisionProvider.TOGETHER,
-        estimated_cost=2.00
+        estimated_cost=2.00,
     )
-    
+
     # Mock successful submission
     estimated_cost = Money("2.00")
     orchestrator.pricing_table.estimate_cost.return_value = estimated_cost
-    
+
     orchestrator.budget_manager.check_budget.return_value = BudgetResult(
         approved=True,
         reason="approved",
         user_message="",
         remaining_budget=Money("10.00"),
-        estimated_cost=estimated_cost
+        estimated_cost=estimated_cost,
     )
-    
+
     # Submit job
     job = await orchestrator.submit_job(request)
     job_id = job.job_id
-    
+
     # Mock job load for cancellation
     orchestrator.job_store.load_job.return_value = job
-    
+
     # Cancel job
     success = await orchestrator.cancel_job(job_id, "test_user")
-    
+
     # Verify
     assert success is True
     assert job.state == VisionJobState.CANCELLED
-    
+
     # Verify reservation was released
     orchestrator.budget_manager.release_reservation.assert_called_with(
         "test_user", Money("2.00")
@@ -324,27 +322,27 @@ async def test_cost_estimation_fallback(orchestrator):
         task=VisionTask.TEXT_TO_IMAGE,
         prompt="Generate an image",
         batch_size=2,
-        preferred_provider=VisionProvider.TOGETHER
+        preferred_provider=VisionProvider.TOGETHER,
     )
-    
+
     # Mock pricing table failure
     orchestrator.pricing_table.estimate_cost.side_effect = Exception("Pricing error")
-    
+
     # Mock budget approval
     orchestrator.budget_manager.check_budget.return_value = BudgetResult(
         approved=True,
         reason="approved",
         user_message="",
         remaining_budget=Money("10.00"),
-        estimated_cost=Money("0.04")
+        estimated_cost=Money("0.04"),
     )
-    
+
     # Execute
     await orchestrator.submit_job(request)
-    
+
     # Verify fallback cost was used
     assert request.estimated_cost == 0.04  # Fallback for TEXT_TO_IMAGE
-    
+
     # Verify reservation with fallback amount
     orchestrator.budget_manager.reserve_budget.assert_called_once_with(
         "test_user", Money("0.04")
@@ -356,20 +354,18 @@ async def test_concurrent_job_limits(orchestrator):
     """Test per-user concurrent job limits"""
     # Setup
     user_id = "test_user"
-    
+
     # Simulate user already has max concurrent jobs
     orchestrator.user_job_counts[user_id] = 2  # Max is 2
-    
+
     request = VisionRequest(
-        user_id=user_id,
-        task=VisionTask.TEXT_TO_IMAGE,
-        prompt="Another image"
+        user_id=user_id, task=VisionTask.TEXT_TO_IMAGE, prompt="Another image"
     )
-    
+
     # Execute and expect quota error
     with pytest.raises(VisionError) as exc_info:
         await orchestrator.submit_job(request)
-    
+
     # Verify
     assert exc_info.value.error_type == VisionErrorType.QUOTA_EXCEEDED
     assert "You have 2 jobs running" in exc_info.value.user_message
@@ -384,30 +380,30 @@ async def test_expired_job_cleanup(orchestrator):
         user_id="test_user",
         task=VisionTask.TEXT_TO_IMAGE,
         prompt="Test",
-        estimated_cost=0.05
+        estimated_cost=0.05,
     )
-    
+
     job = VisionJob(
         job_id=job_id,
         request=request,
         state=VisionJobState.RUNNING,
-        created_at=datetime.now(timezone.utc).isoformat()
+        created_at=datetime.now(timezone.utc).isoformat(),
     )
-    
+
     # Mock job as expired
     job.is_expired = Mock(return_value=True)
-    
+
     orchestrator.active_jobs[job_id] = Mock()  # Mock task
     orchestrator.job_store.load_job.return_value = job
-    
+
     # Mock the cleanup method to avoid async issues
-    with patch.object(orchestrator, '_cleanup_expired_jobs') as mock_cleanup:
+    with patch.object(orchestrator, "_cleanup_expired_jobs") as mock_cleanup:
         # Call the method
         await mock_cleanup()
-        
+
     # Manually verify what cleanup should do
     job.state = VisionJobState.EXPIRED
-    
+
     # Verify the job would be marked as expired
     assert job.state == VisionJobState.EXPIRED
 
@@ -420,25 +416,25 @@ async def test_money_precision_in_budget_operations(orchestrator):
         user_id="test_user",
         task=VisionTask.TEXT_TO_IMAGE,
         prompt="Precision test",
-        preferred_provider=VisionProvider.TOGETHER
+        preferred_provider=VisionProvider.TOGETHER,
     )
-    
+
     # Use precise cost that would have rounding issues with float
     estimated_cost = Money("0.0333")  # $0.0333
     orchestrator.pricing_table.estimate_cost.return_value = estimated_cost
-    
+
     # Mock budget with precise values
     orchestrator.budget_manager.check_budget.return_value = BudgetResult(
         approved=True,
         reason="approved",
         user_message="",
         remaining_budget=Money("0.0334"),  # Just enough after reserved
-        estimated_cost=estimated_cost
+        estimated_cost=estimated_cost,
     )
-    
+
     # Execute
     job = await orchestrator.submit_job(request)
-    
+
     # Verify precise values were used in budget operations
     # The estimated_cost in request gets updated by orchestrator
     assert job is not None
@@ -447,7 +443,7 @@ async def test_money_precision_in_budget_operations(orchestrator):
     call_args = orchestrator.budget_manager.reserve_budget.call_args
     assert call_args[0][0] == "test_user"
     assert isinstance(call_args[0][1], Money)
-    
+
     # Verify Money maintains 4 decimal precision
     assert estimated_cost.to_decimal() == Decimal("0.0333")
 
@@ -462,15 +458,11 @@ async def test_integration_with_provider_usage_parser(orchestrator):
         task=VisionTask.TEXT_TO_IMAGE,
         prompt="Integration test",
         preferred_provider=VisionProvider.NOVITA,
-        estimated_cost=0.04
+        estimated_cost=0.04,
     )
-    
-    job = VisionJob(
-        job_id=job_id,
-        request=request,
-        state=VisionJobState.RUNNING
-    )
-    
+
+    job = VisionJob(job_id=job_id, request=request, state=VisionJobState.RUNNING)
+
     # Mock response with Novita-style usage
     response = VisionResponse(
         success=True,
@@ -478,43 +470,42 @@ async def test_integration_with_provider_usage_parser(orchestrator):
         provider=VisionProvider.NOVITA,
         model_used="test-model",
         artifacts=[Path("result.png")],
-        actual_cost=0.04
+        actual_cost=0.04,
     )
-    
+
     orchestrator.gateway.generate.return_value = response
-    
+
     # Mock usage parser chain
     usage_data = {"credits": 40, "unit": "credits"}
     actual_cost = Money("0.04")
-    
+
     orchestrator.usage_parser.extract_usage_from_response.return_value = usage_data
     orchestrator.usage_parser.parse_usage.return_value = actual_cost
     orchestrator.usage_parser.validate_usage_cost.return_value = (True, None)
-    
+
     # Execute
     await orchestrator._execute_job(job)
-    
+
     # Verify parser was called correctly
     orchestrator.usage_parser.extract_usage_from_response.assert_called_once_with(
-        provider=VisionProvider.NOVITA,
-        response=response
+        provider=VisionProvider.NOVITA, response=response
     )
-    
+
     orchestrator.usage_parser.parse_usage.assert_called_once_with(
         provider=VisionProvider.NOVITA,
         task=VisionTask.TEXT_TO_IMAGE,
         usage_data=usage_data,
-        model=None
+        model=None,
     )
-    
+
     # Verify validation
     orchestrator.usage_parser.validate_usage_cost.assert_called_once_with(
         provider=VisionProvider.NOVITA,
         task=VisionTask.TEXT_TO_IMAGE,
         estimated_cost=Money("0.04"),
-        actual_cost=actual_cost
+        actual_cost=actual_cost,
     )
-    
+
     # Verify finalization with actual cost
     orchestrator.budget_manager.finalize_reservation.assert_called_once_with(
         user_id="test_user",
@@ -522,5 +513,5 @@ async def test_integration_with_provider_usage_parser(orchestrator):
         actual_cost=actual_cost,
         job_id=job_id,
         provider="VisionProvider.NOVITA",
-        task="VisionTask.TEXT_TO_IMAGE"
+        task="VisionTask.TEXT_TO_IMAGE",
     )

@@ -18,7 +18,7 @@ async def test_command_registration_direct_add():
     # Initialize a standard bot with minimal setup for testing
     intents = discord.Intents.default()
     intents.message_content = True
-    bot = commands.Bot(command_prefix='!', intents=intents)
+    bot = commands.Bot(command_prefix="!", intents=intents)
 
     # Mock essential bot attributes that would be set up by bot.run()
     user_mock = MagicMock(spec=discord.ClientUser)
@@ -34,5 +34,5 @@ async def test_command_registration_direct_add():
     command_names = {cmd.name for cmd in registered_commands}
 
     # Assert that our test command and the default help command were registered
-    assert 'ping' in command_names
-    assert 'help' in command_names
+    assert "ping" in command_names
+    assert "help" in command_names

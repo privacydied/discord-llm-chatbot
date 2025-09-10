@@ -23,7 +23,9 @@ async def main() -> None:
 
     for val in TEST_INPUTS:
         tid = client.extract_tweet_id(val)
-        logger.info("extract_tweet_id", extra={"detail": {"input": val, "tweet_id": tid}})
+        logger.info(
+            "extract_tweet_id", extra={"detail": {"input": val, "tweet_id": tid}}
+        )
 
     await client.aclose()
 

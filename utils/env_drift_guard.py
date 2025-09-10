@@ -21,6 +21,7 @@ Outputs report to logs/env_drift_report.json.
 
 [IV][CMV][SFT][PA][REH][CA]
 """
+
 from __future__ import annotations
 
 import argparse
@@ -42,7 +43,11 @@ from rich.console import Console
 # -----------------------------
 class JSONLFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
-        ts = datetime.fromtimestamp(record.created).astimezone().strftime("%Y-%m-%dT%H:%M:%S.%f%z")
+        ts = (
+            datetime.fromtimestamp(record.created)
+            .astimezone()
+            .strftime("%Y-%m-%dT%H:%M:%S.%f%z")
+        )
         payload = {
             "ts": ts[:-8] + ts[-5:],
             "level": record.levelname,
@@ -70,7 +75,9 @@ def get_logger() -> logging.Logger:
 
     logs_dir = Path("logs")
     logs_dir.mkdir(parents=True, exist_ok=True)
-    jsonl_handler = logging.FileHandler(logs_dir / "env_drift_guard.jsonl", encoding="utf-8")
+    jsonl_handler = logging.FileHandler(
+        logs_dir / "env_drift_guard.jsonl", encoding="utf-8"
+    )
     jsonl_handler.setLevel(logging.DEBUG)
     jsonl_handler.setFormatter(JSONLFormatter())
 
@@ -80,7 +87,9 @@ def get_logger() -> logging.Logger:
     logger.propagate = False
 
     # Enforcer: ensure both pretty and json handlers
-    if not any(isinstance(h, RichHandler) for h in logger.handlers) or not any(isinstance(h, logging.FileHandler) for h in logger.handlers):
+    if not any(isinstance(h, RichHandler) for h in logger.handlers) or not any(
+        isinstance(h, logging.FileHandler) for h in logger.handlers
+    ):
         print("✖ Logging enforcer failed: missing Pretty or JSONL handler")
         raise SystemExit(2)
 
@@ -201,12 +210,15 @@ def compute_drift(
 # Main
 # -----------------------------
 
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Environment config drift guard")
     parser.add_argument("--inventory", default="utils/env_inventory.json")
     parser.add_argument("--registry-json", default="docs/config/ENV_REGISTRY.json")
     parser.add_argument("--env-sample", default="configs/.env.sample")
-    parser.add_argument("--ignore-keys", default="", help="Comma-separated list of keys to ignore")
+    parser.add_argument(
+        "--ignore-keys", default="", help="Comma-separated list of keys to ignore"
+    )
     parser.add_argument("--fail-on-unused", action="store_true", default=True)
     parser.add_argument("--allow-unused", dest="fail_on_unused", action="store_false")
     args = parser.parse_args()
@@ -233,7 +245,9 @@ def main() -> int:
     reg_items = load_registry(reg_path)
     sample_map = parse_env_sample(sample_path)
 
-    report, fail = compute_drift(inv_keys, reg_items, sample_map, ignore, args.fail_on_unused)
+    report, fail = compute_drift(
+        inv_keys, reg_items, sample_map, ignore, args.fail_on_unused
+    )
 
     # Persist JSON report
     logs_dir = Path("logs")
@@ -242,14 +256,22 @@ def main() -> int:
 
     # Log findings succinctly
     if report.missing_in_registry:
-        logger.error(f"Keys used in code but MISSING from registry: {report.missing_in_registry}")
+        logger.error(
+            f"Keys used in code but MISSING from registry: {report.missing_in_registry}"
+        )
     if report.missing_in_sample:
-        logger.error(f"Keys in registry but MISSING from .env.sample: {report.missing_in_sample}")
+        logger.error(
+            f"Keys in registry but MISSING from .env.sample: {report.missing_in_sample}"
+        )
     if report.sensitive_nonblank_in_sample:
-        logger.error(f"Sensitive keys with NON-BLANK values in sample: {report.sensitive_nonblank_in_sample}")
+        logger.error(
+            f"Sensitive keys with NON-BLANK values in sample: {report.sensitive_nonblank_in_sample}"
+        )
     if report.unused_in_code:
         level = logging.ERROR if args.fail_on_unused else logging.WARNING
-        logger.log(level, f"Keys in registry but UNUSED in code: {report.unused_in_code}")
+        logger.log(
+            level, f"Keys in registry but UNUSED in code: {report.unused_in_code}"
+        )
 
     if fail:
         logger.error("✖ Drift detected. Failing.")

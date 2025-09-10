@@ -25,14 +25,22 @@ async def transcode_to_ogg_opus(
     dst = Path(out_path) if out_path else src.with_suffix(".ogg")
 
     cmd = [
-        "ffmpeg", "-y",
-        "-i", str(src),
-        "-ac", "1",          # mono
-        "-ar", "48000",      # 48kHz
-        "-c:a", "libopus",
-        "-b:a", bitrate,
-        "-vbr", vbr,
-        "-compression_level", str(compression_level),
+        "ffmpeg",
+        "-y",
+        "-i",
+        str(src),
+        "-ac",
+        "1",  # mono
+        "-ar",
+        "48000",  # 48kHz
+        "-c:a",
+        "libopus",
+        "-b:a",
+        bitrate,
+        "-vbr",
+        vbr,
+        "-compression_level",
+        str(compression_level),
         str(dst),
     ]
 
