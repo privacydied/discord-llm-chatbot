@@ -2965,6 +2965,18 @@ class Router:
             # Optional: Twitter/X author self-reply thread unroll (feature-gated) [PA][REH]
             try:
                 if bool(self.config.get("TWITTER_UNROLL_ENABLED", False)) and self._is_twitter_status_url(url):
+                    # Emit a DEBUG start event so operators can see attempts when LOG_LEVEL=debug
+                    try:
+                        self.logger.debug(
+                            "threads.x: unroll_start",
+                            extra={
+                                "subsys": "threads.x",
+                                "event": "unroll_start",
+                                "detail": {"url": url},
+                            },
+                        )
+                    except Exception:
+                        pass
                     t0 = time.time()
                     ctx, reason = await unroll_author_thread(
                         url,
@@ -2998,16 +3010,21 @@ class Router:
                             )
                         except Exception:
                             pass
-            except Exception:
-                # Quiet failure; continue with existing flow
+            except Exception as e:
+                # Failure: include exception details for visibility, but keep flow moving [REH]
                 try:
                     self.logger.info(
                         "threads.x: unroll_failed",
                         extra={
                             "subsys": "threads.x",
                             "event": "unroll_failed",
-                            "detail": {"reason": "unroll_not_available"},
+                            "detail": {
+                                "reason": "exception",
+                                "error": f"{e.__class__.__name__}: {e}",
+                                "url": url,
+                            },
                         },
+                        exc_info=True,
                     )
                 except Exception:
                     pass

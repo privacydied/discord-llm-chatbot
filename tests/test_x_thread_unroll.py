@@ -169,3 +169,32 @@ async def test_mirrors_and_mobile_urls_normalize(monkeypatch):
         assert ctx is not None, reason
         assert ctx.tweet_count == 1
         assert "Single tweet only" in ctx.joined_text
+
+
+@pytest.mark.asyncio
+async def test_fx_meta_redirect_single_block(monkeypatch):
+    """If fx/vx mirrors only expose meta + redirect, synthesize a single block from meta."""
+    html = (
+        "<!DOCTYPE html><html><head>"
+        '<link rel="canonical" href="https://x.com/author/status/424242" />'
+        '<meta property="twitter:creator" content="@author" />'
+        '<meta property="og:description" content="Single tweet only via meta." />'
+        "</head><body>Redirecting...</body></html>"
+    )
+
+    async def fake_fetch(url: str, timeout_s: float):
+        return html
+
+    async def no_expand(url: str, timeout_s: float):
+        return url
+
+    from bot.threads import x_thread_unroll as xu
+    monkeypatch.setattr(xu, "_fetch_html_with_playwright", fake_fetch)
+    monkeypatch.setattr(xu, "_expand_tco_if_needed", no_expand)
+
+    ctx, reason = await unroll_author_thread(
+        "https://fxtwitter.com/author/status/424242", timeout_s=5, max_tweets=30, max_chars=6000
+    )
+    assert ctx is not None, reason
+    assert ctx.tweet_count == 1
+    assert "Single tweet only via meta." in ctx.joined_text
