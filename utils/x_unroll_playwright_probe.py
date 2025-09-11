@@ -6,15 +6,13 @@ from an X/Twitter status URL, and print specific tweet indices (e.g. 7, 13, 22, 
 
 Usage:
   uv run playwright install chromium   # one-time
-  uv run python utils/x_unroll_playwright_probe.py \
-      https://x.com/<handle>/status/<id> --only 7 13 22 26
+  uv run python utils/x_unroll_playwright_probe.py https://x.com/<handle>/status/<id> --only 7 13 22 26
 
 Notes:
   - This script is API-less and uses Playwright to render the SPA.
   - It filters to tweets authored by the same handle and orders them by timestamp.
   - It prints a compact text-only output for easy verification.
 """
-
 import argparse
 import asyncio
 from dataclasses import dataclass
