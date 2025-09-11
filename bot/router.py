@@ -54,6 +54,7 @@ from .types import Command, ParsedCommand
 from .utils.env import get_bool
 from .vl.postprocess import sanitize_model_output, sanitize_vl_reply_text
 from .web import process_url
+from .threads.x_thread_unroll import unroll_author_thread
 from .web_extraction_service import web_extractor
 from .x_api_client import XApiClient
 from .action import BotAction
@@ -2960,6 +2961,56 @@ class Router:
 
             url = item.payload
             self.logger.info(f"🌐 Processing general URL: {url}")
+
+            # Optional: Twitter/X author self-reply thread unroll (feature-gated) [PA][REH]
+            try:
+                if bool(self.config.get("TWITTER_UNROLL_ENABLED", False)) and self._is_twitter_status_url(url):
+                    t0 = time.time()
+                    ctx, reason = await unroll_author_thread(
+                        url,
+                        timeout_s=float(self.config.get("TWITTER_UNROLL_TIMEOUT_S", 15.0)),
+                        max_tweets=int(self.config.get("TWITTER_UNROLL_MAX_TWEETS", 30)),
+                        max_chars=int(self.config.get("TWITTER_UNROLL_MAX_CHARS", 6000)),
+                    )
+                    if ctx is not None and getattr(ctx, "joined_text", None):
+                        dt_ms = int((time.time() - t0) * 1000)
+                        try:
+                            self.logger.info(
+                                f"threads.x: unroll_ok tweets={ctx.tweet_count} ms={dt_ms}",
+                                extra={
+                                    "subsys": "threads.x",
+                                    "event": "unroll_ok",
+                                    "detail": {"tweets": ctx.tweet_count, "ms": dt_ms, "url": ctx.canonical_url},
+                                },
+                            )
+                        except Exception:
+                            pass
+                        return ctx.joined_text
+                    else:
+                        try:
+                            self.logger.info(
+                                "threads.x: unroll_fallback",
+                                extra={
+                                    "subsys": "threads.x",
+                                    "event": "unroll_fallback",
+                                    "detail": {"reason": reason or "unroll_not_available"},
+                                },
+                            )
+                        except Exception:
+                            pass
+            except Exception:
+                # Quiet failure; continue with existing flow
+                try:
+                    self.logger.info(
+                        "threads.x: unroll_failed",
+                        extra={
+                            "subsys": "threads.x",
+                            "event": "unroll_failed",
+                            "detail": {"reason": "unroll_not_available"},
+                        },
+                    )
+                except Exception:
+                    pass
 
             # API-first for Twitter/X posts [CA][SFT]
             if self._is_twitter_url(url):

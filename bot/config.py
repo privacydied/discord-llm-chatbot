@@ -550,6 +550,19 @@ def load_config():
             ).split(",")
             if s.strip()
         ],
+        # Twitter/X thread unroll feature flags [CMV]
+        "TWITTER_UNROLL_ENABLED": _parse_bool_str(
+            _clean_env_value(os.getenv("TWITTER_UNROLL_ENABLED")), True
+        ),
+        "TWITTER_UNROLL_MAX_TWEETS": _safe_int(
+            os.getenv("TWITTER_UNROLL_MAX_TWEETS"), "30", "TWITTER_UNROLL_MAX_TWEETS"
+        ),
+        "TWITTER_UNROLL_MAX_CHARS": _safe_int(
+            os.getenv("TWITTER_UNROLL_MAX_CHARS"), "6000", "TWITTER_UNROLL_MAX_CHARS"
+        ),
+        "TWITTER_UNROLL_TIMEOUT_S": _safe_float(
+            os.getenv("TWITTER_UNROLL_TIMEOUT_S"), "15", "TWITTER_UNROLL_TIMEOUT_S"
+        ),
         # Routing defaults
         "TWITTER_ROUTE_DEFAULT": os.getenv("TWITTER_ROUTE_DEFAULT", "api_first"),
         # STREAMING STATUS CARDS [CA][CMV]

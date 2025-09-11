@@ -151,6 +151,19 @@ uv run python -m bot.main
 
 ---
 
+### Twitter/X Thread Unroll (author self-replies)
+
+- Enabled by default. Toggle off with `TWITTER_UNROLL_ENABLED=false`.
+- Limits (env): `TWITTER_UNROLL_MAX_TWEETS` (default 30), `TWITTER_UNROLL_MAX_CHARS` (default 6000), `TWITTER_UNROLL_TIMEOUT_S` (default 15).
+- Behavior: When a `x.com/twitter.com` status URL is shared, the bot collects the author’s self-reply chain (contiguous) and packages it as a single context block; on any failure, it silently falls back to existing single-tweet handling. Non-Twitter links unaffected.
+- Validate manually:
+  - Post a long author thread → bot replies with consolidated context (count shown as [i/N] lines).
+  - Post a single tweet → behavior unchanged.
+  - Interleaved replies by others → only author tweets included.
+  - Toggle `TWITTER_UNROLL_ENABLED=false` → identical to prior behavior.
+
+---
+
 ## 🧰 Usage
 
 **Message commands (examples)**
@@ -212,4 +225,3 @@ uv run python -m bot.main
 ## 📄 License
 
 MIT — see [LICENSE](LICENSE).
-
