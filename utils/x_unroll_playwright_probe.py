@@ -18,12 +18,11 @@ Notes:
 import argparse
 import asyncio
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import List, Optional, Tuple
 from urllib.parse import urlparse
 
 from playwright.async_api import async_playwright
-
 
 @dataclass
 class Tweet:

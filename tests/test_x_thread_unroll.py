@@ -1,6 +1,3 @@
-import asyncio
-import os
-import re
 from pathlib import Path
 
 import pytest
@@ -23,7 +20,6 @@ async def test_single_tweet_minimal(monkeypatch):
     async def no_expand(url: str, timeout_s: float):
         return url
 
-    from bot import threads as _threads  # to locate module namespace
     from bot.threads import x_thread_unroll as xu
 
     monkeypatch.setattr(xu, "_fetch_html_with_playwright", fake_fetch)
