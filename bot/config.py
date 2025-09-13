@@ -300,6 +300,17 @@ def load_config():
         "MAX_CONTEXT_MESSAGES": _safe_int(
             os.getenv("MAX_CONTEXT_MESSAGES"), "10", "MAX_CONTEXT_MESSAGES"
         ),
+        "MEM_MAX_MSGS": _safe_int(os.getenv("MEM_MAX_MSGS"), "40", "MEM_MAX_MSGS"),
+        "MEM_MAX_CHARS": _safe_int(
+            os.getenv("MEM_MAX_CHARS"), "8000", "MEM_MAX_CHARS"
+        ),
+        "MEM_MAX_AGE_MIN": _safe_int(
+            os.getenv("MEM_MAX_AGE_MIN"), "240", "MEM_MAX_AGE_MIN"
+        ),
+        "MEM_FETCH_TIMEOUT_S": _safe_float(
+            os.getenv("MEM_FETCH_TIMEOUT_S"), "5", "MEM_FETCH_TIMEOUT_S"
+        ),
+        "MEM_LOG_SUBSYS": os.getenv("MEM_LOG_SUBSYS", "mem.ctx"),
         # DIRECTORY SETTINGS
         "USER_PROFILE_DIR": Path(os.getenv("USER_PROFILE_DIR", "user_profiles")),
         "SERVER_PROFILE_DIR": Path(os.getenv("SERVER_PROFILE_DIR", "server_profiles")),

@@ -74,9 +74,19 @@ async def contextual_brain_infer(
             )
             return response_data
 
+        # Derive include_cross_user when mention/reply context is injected (extra_context set) in non-thread replies
+        include_cross_user_eff = include_cross_user
+        try:
+            is_thread = isinstance(message.channel, discord.Thread)
+            is_reply = getattr(message, "reference", None) is not None
+            if extra_context and (not is_thread) and is_reply:
+                include_cross_user_eff = False
+        except Exception:
+            include_cross_user_eff = include_cross_user
+
         # Get conversation context
         context_entries = bot.enhanced_context_manager.get_context_for_user(
-            message, include_cross_user=include_cross_user
+            message, include_cross_user=include_cross_user_eff
         )
 
         # Build contextual prompt with optional perception notes and extra context
@@ -113,10 +123,11 @@ async def contextual_brain_infer(
                 pass
 
         blocks = []
-        if history_block:
-            blocks.append(history_block)
+        # Prepend mention/reply context before historical memory
         if extra_context:
             blocks.append(extra_context.strip())
+        if history_block:
+            blocks.append(history_block)
         if perception_block:
             blocks.append(perception_block)
 

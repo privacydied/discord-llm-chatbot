@@ -62,6 +62,7 @@ from .command_parser import parse_command
 from .utils.file_utils import download_file
 from .tts.state import tts_state
 from datetime import datetime, timezone
+from .memory.mention_context import maybe_build_mention_context
 
 if TYPE_CHECKING:
     from bot.core.bot import LLMBot as DiscordBot
@@ -1721,7 +1722,37 @@ class Router:
                             return BotAction(content=str(res))
 
                 # Continue with normal flow processing
-                context_str = ""  # Simple fix: no conversation context for now
+                # Mention-aware context: build lightweight thread/reply-chain context before normal memory packer.
+                context_str = ""
+                try:
+                    mc = await maybe_build_mention_context(self.bot, message, self.config)
+                except Exception:
+                    mc = None
+                if mc and isinstance(mc, tuple) and len(mc) == 2:
+                    joined_text, block = mc
+                    try:
+                        context_str = (joined_text or "").strip()
+                    except Exception:
+                        context_str = joined_text or ""
+                    # Telemetry: if we also have enhanced history available, record merge event [mem.ctx]
+                    try:
+                        entries = []
+                        if hasattr(self.bot, "enhanced_context_manager") and self.bot.enhanced_context_manager:
+                            entries = self.bot.enhanced_context_manager.get_context_for_user(message, include_cross_user=True) or []
+                        if entries:
+                            self.logger.info(
+                                "merge_ok",
+                                extra={
+                                    "subsys": self.config.get("MEM_LOG_SUBSYS", "mem.ctx"),
+                                    "event": "merge_ok",
+                                    "guild_id": getattr(getattr(message, "guild", None), "id", None),
+                                    "user_id": getattr(getattr(message, "author", None), "id", None),
+                                    "msg_id": getattr(message, "id", None),
+                                    "detail": {"dedup": 0},
+                                },
+                            )
+                    except Exception:
+                        pass
 
                 # 5. Check for vision generation intent early (before multi-modal)
                 try:
