@@ -27,6 +27,19 @@ CACHE_DIR = Path(os.getenv("VIDEO_CACHE_DIR", "cache/video_audio"))
 DEFAULT_SPEEDUP = float(os.getenv("VIDEO_SPEEDUP", "1.5"))
 CACHE_EXPIRY_DAYS = int(os.getenv("VIDEO_CACHE_EXPIRY_DAYS", "7"))
 
+# Optional cookies support for yt-dlp to access age/region gated content (e.g., TikTok)
+# Provide one of:
+#  - VIDEO_COOKIES_FROM_BROWSER="firefox:default-release" (preferred)
+#  - VIDEO_COOKIES_FILE="/path/to/cookies.txt" (Netscape format)
+# Scope control via VIDEO_COOKIES_SITES (comma-separated, defaults to tiktok only)
+YTDLP_COOKIES_FROM_BROWSER = os.getenv("VIDEO_COOKIES_FROM_BROWSER")
+YTDLP_COOKIES_FILE = os.getenv("VIDEO_COOKIES_FILE")
+YTDLP_COOKIES_SITES = set(
+    s.strip().lower()
+    for s in os.getenv("VIDEO_COOKIES_SITES", "tiktok").split(",")
+    if s.strip()
+)
+
 # Supported URL patterns - must match MEDIA_CAPABLE_DOMAINS from media_capability.py
 SUPPORTED_PATTERNS = [
     # ---------- YouTube (full set of common forms) ----------
@@ -235,8 +248,45 @@ class VideoIngestionManager:
         """Download video audio using yt-dlp."""
         logger.info(f"📥 Downloading audio from: {url}")
 
+        def _should_apply_cookies(u: str) -> bool:
+            source = self._get_source_type(u)
+            return (
+                bool(YTDLP_COOKIES_FROM_BROWSER or YTDLP_COOKIES_FILE)
+                and (not YTDLP_COOKIES_SITES or source in YTDLP_COOKIES_SITES)
+            )
+
+        def _maybe_with_cookies(base_cmd: list, u: str) -> list:
+            """Append cookies args if configured and within scope.
+
+            Returns a new list (does not mutate the input).
+            """
+            cmd = list(base_cmd)
+            if _should_apply_cookies(u):
+                if YTDLP_COOKIES_FROM_BROWSER:
+                    cmd += ["--cookies-from-browser", YTDLP_COOKIES_FROM_BROWSER]
+                    logger.debug(
+                        "🔑 Applying cookies from browser for yt-dlp (site scope: %s)",
+                        ",".join(sorted(YTDLP_COOKIES_SITES)) or "<all>",
+                    )
+                elif YTDLP_COOKIES_FILE:
+                    cmd += ["--cookies", YTDLP_COOKIES_FILE]
+                    logger.debug(
+                        "🔑 Applying cookies from file for yt-dlp (site scope: %s)",
+                        ",".join(sorted(YTDLP_COOKIES_SITES)) or "<all>",
+                    )
+            else:
+                logger.debug(
+                    "ℹ️ Not applying cookies (configured: %s, site: %s, scope: %s)",
+                    bool(YTDLP_COOKIES_FROM_BROWSER or YTDLP_COOKIES_FILE),
+                    self._get_source_type(u),
+                    ",".join(sorted(YTDLP_COOKIES_SITES)) or "<all>",
+                )
+            return cmd
+
         # First get metadata with JSON output for reliable parsing
         metadata_cmd = ["yt-dlp", "--dump-json", "--no-playlist", "--quiet", url]
+        metadata_cmd = _maybe_with_cookies(metadata_cmd, url)
+        logger.debug("🧰 yt-dlp metadata cmd: %s", " ".join(metadata_cmd[:-1] + ["<URL>"]))
 
         try:
             # Get metadata first
@@ -270,6 +320,19 @@ class VideoIngestionManager:
                         "No video or audio content found in this URL. This might be a text-only post or unavailable content."
                     )
 
+                # Provide targeted guidance for authentication-gated content
+                if any(
+                    k in error_msg.lower()
+                    for k in [
+                        "log in for access",
+                        "use --cookies-from-browser",
+                        "use --cookies for the authentication",
+                        "age-restricted",
+                    ]
+                ):
+                    logger.warning(
+                        "⚠️ yt-dlp requires authentication for this URL. Configure VIDEO_COOKIES_FROM_BROWSER or VIDEO_COOKIES_FILE env vars."
+                    )
                 raise VideoIngestError(
                     f"yt-dlp metadata extraction failed: {error_msg}"
                 )
@@ -299,6 +362,10 @@ class VideoIngestionManager:
                 "--quiet",
                 url,
             ]
+            download_cmd = _maybe_with_cookies(download_cmd, url)
+            logger.debug(
+                "🧰 yt-dlp download cmd: %s", " ".join(download_cmd[:-1] + ["<URL>"])
+            )
 
             proc = await asyncio.create_subprocess_exec(
                 *download_cmd,
@@ -309,6 +376,18 @@ class VideoIngestionManager:
 
             if proc.returncode != 0:
                 error_msg = stderr.decode() if stderr else "Unknown yt-dlp error"
+                if any(
+                    k in error_msg.lower()
+                    for k in [
+                        "log in for access",
+                        "use --cookies-from-browser",
+                        "use --cookies for the authentication",
+                        "age-restricted",
+                    ]
+                ):
+                    logger.warning(
+                        "⚠️ yt-dlp requires authentication for this URL. Configure VIDEO_COOKIES_FROM_BROWSER or VIDEO_COOKIES_FILE env vars."
+                    )
                 raise VideoIngestError(f"yt-dlp download failed: {error_msg}")
 
             # Get the filepath from output
