@@ -1354,7 +1354,7 @@ class LLMBot(commands.Bot):
         except Exception as e:
             self.logger.debug(f"alert_suppress_check_failed | {e}")
 
-        # SSOT gate: enforce "speak only when spoken to" BEFORE any heavy work or readiness waits
+        # Enhanced SSOT gate: check for meaningful text intent before heavy work [IV]
         try:
             if self.router is not None and not self._is_long_running_admin_command(
                 message
@@ -1374,23 +1374,53 @@ class LLMBot(commands.Bot):
                     # Prefix determination should never break message handling
                     self.logger.debug(f"prefix_check_failed | {e}")
 
+                # Text-first check: if message has any text content, route to text by default
+                # unless user shows explicit media/URL intent (e.g., "analyze this image", "transcribe this video")
+                content = (message.content or "").strip()
+                has_text = bool(content)
+
+                # For tone-first text, only count as "allowable" if we should process it
                 if (not is_command_msg) and (
                     not self.router._should_process_message(message)
                 ):
-                    guild_info = (
-                        "DM"
-                        if isinstance(message.channel, discord.DMChannel)
-                        else f"guild:{getattr(message.guild, 'id', None)}"
-                    )
-                    self.logger.info(
-                        f"gate.block early | msg_id:{message.id} in:{guild_info}",
-                        extra={
-                            "event": "gate.block.early",
-                            "msg_id": message.id,
-                            "guild_id": getattr(message.guild, "id", None),
-                        },
-                    )
-                    return
+                    # Allow through if there's any non-whitespace text to route to text flow
+                    # This prevents link-nagging on short messages like "@Bot yo" or "@Bot thoughts?"
+                    substantive_text = False
+                    if has_text:
+                        # Strip mentions and check for meaningful content (letters/digits)
+                        mention_free = re.sub(r"<@!?{}>\s*".format(self.bot.user.id), "", content).strip()
+                        # Has meaningful text if contains letters/digits after stripping mentions
+                        if mention_free and re.search(r"[A-Za-z0-9]", mention_free.strip()):
+                            substantive_text = True
+                            try:
+                                self.logger.info(
+                                    f"text_default.reason.has_text | has_text={has_text} clean_len={len(mention_free)}",
+                                    extra={
+                                        "event": "text_default",
+                                        "subsys": "gate",
+                                        "msg_id": message.id,
+                                        "user_id": message.author.id,
+                                        "detail": {"reason": "has_text"}
+                                    },
+                                )
+                            except Exception:
+                                pass
+
+                    if not substantive_text:
+                        guild_info = (
+                            "DM"
+                            if isinstance(message.channel, discord.DMChannel)
+                            else f"guild:{getattr(message.guild, 'id', None)}"
+                        )
+                        self.logger.info(
+                            f"gate.block.no_text_intent | msg_id:{message.id} in:{guild_info} text_intent={substantive_text}",
+                            extra={
+                                "event": "gate.block.no_text_intent",
+                                "msg_id": message.id,
+                                "guild_id": getattr(message.guild, "id", None),
+                            },
+                        )
+                        return
         except Exception as e:
             # Never let gate failures crash on_message; fall back to readiness wait and normal flow
             self.logger.warning(f"Gate check failed for msg_id:{message.id}: {e}")

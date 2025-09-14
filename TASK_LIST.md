@@ -1,45 +1,70 @@
-# Multimodal Message Refactor Plan
+# Fix Reply/Mention Routing & Context Task List
 
-## Notes
-- Current on_message/modal processing only handles the first detected modality and returns early, skipping others.
-- Goal: Sequentially process all modalities (attachments, URLs, embeds) in original message order, invoking specialized handlers for each.
-- Introduce InputItem abstraction in modality.py to unify input handling.
-- Implement robust error handling and timeout management for each handler.
-- Enhance logging for stepwise visibility and error/timeout events.
-- Add comprehensive tests for mixed-modality, timeout, error recovery, and no-input scenarios.
-- Confirmed: Current implementation only processes the first detected modality and returns early, skipping others.
-- All multimodal handler/text flow logic and tests are now fixed and passing.
-- Change summaries added to all major modified files.
-- [2025-08-07] Runtime error: process_url returns dict, not str, in _handle_general_url; causes AttributeError when .strip() is called. [REH]
-- [2025-08-07] Fixed: Both _handle_general_url and PDF handler now extract text from result dicts, resolving .strip() AttributeError. [REH]
+## Context Analysis
+- [x] Read and analyze router.py routing logic
+- [x] Review mention_context.py and thread_tail.py modules
+- [x] Identify current reply target resolution mechanisms
+- [x] Map out placeholder/edit flow for replies
+- [x] Understand media-first guards and intent detection
 
-## Task List
-- [x] Audit current message routing and modality handler flow.
-- [x] Catalog all modality handler methods and their firing conditions.
-- [x] Confirm early returns/branching that skip subsequent modalities.
-- [x] Design InputItem dataclass and collection logic in modality.py.
-- [x] Implement collect_input_items(message) to gather all candidate inputs in order.
-- [x] Implement map_item_to_modality(item) for robust modality detection.
-- [x] Refactor Router._process_multimodal_message_internal to sequentially process all items.
-- [x] Refactor each _handle_* method to accept InputItem and return str.
-- [x] Integrate per-item error and timeout handling with user feedback and logging.
-- [x] Ensure _flow_process_text is called for each processed item.
-- [x] Add and validate tests in tests/core/test_multimodal_sequence.py.
-- [x] Fix multimodal handler/text flow logic and test failures.
-- [x] Add Change Summary to top of each modified file.
-- [x] Investigate and fix process_url/_handle_general_url return type bug.
-- [x] Update logging_config.py for improved multimodal logs and close out.
+**Current State Analysis:**
+- Thread reply targets already resolved correctly in `resolve_thread_reply_target()`
+- Reply target resolution for non-threads uses `message.reference.message_id`
+- `collect_thread_tail_context()` already collects thread-only context
+- `_collect_reply_chain()` already builds linear chain without channel bleed
+- Context modules have hard fences and locality-first design
 
-## Screenshot Command (!ss)
-- [x] Implement explicit Discord command `!ss` in `bot/commands/screenshot_commands.py` that:
-  - Parses URL arg or extracts first URL in message
-  - Constructs `InputItem(source_type="url", payload=url, order_index=0)`
-  - Delegates to `Router._handle_screenshot_url()`
-  - Responds with a compact embed
-- [x] Wire cog loading in `bot/core/bot.py` (`load_extensions` includes `screenshot_commands`)
-- [x] Add import smoke test entry in `utils/import_smoke_test.py`
-- [x] Add unit tests in `tests/commands/test_screenshot_cmds.py` for:
-  - Missing URL usage prompt
-  - Delegation to router and embed response
-- [x] Verified with `uv run python -m pytest -q tests/commands/test_screenshot_cmds.py`
-- [x] Security: No hardcoded secrets; uses env vars in `external_screenshot`; screenshots are command-gated only.
+## Root Cause Fixes
+
+### A) Reply Target Resolution
+- [ ] Implement send-time reply target calculation (compute `reply_target_id` before sending)
+- [ ] Fix thread scenarios: newest message ID (or newest human if newest is ours)
+- [ ] Fix reply scenarios: use `message.reference.message_id` (resolve if needed)
+- [ ] Fix plain post scenarios: no `message_reference` (normal message)
+- [ ] Handle placeholder/edit correctly: discard & resend if reference changed
+
+### B) Text Default Intent
+- [ ] Modify media-first guard to check for meaningful text first
+- [ ] Default to text route when any non-whitespace text present (including "yo")
+- [ ] Only ask for links when explicit media intent + no media found in scope
+
+### C) Locality-First Context Scope
+- [ ] Thread scope: collect tail of recent messages from current thread only
+- [ ] Reply scope: build linear chain root→parent→current, take tail near trigger
+- [ ] Plain scope: treat as fresh prompt without unrelated channel memory
+- [ ] Hard fence: never merge memory blocks from outside current scope
+
+### D) In-Scope Media Harvest
+- [ ] Thread scope harvest: previous K messages in thread
+- [ ] Reply scope harvest: parent + minimal chain near trigger
+- [ ] Plain scope harvest: just current message attachments/URLs
+- [ ] Apply existing token/char caps after deduplication
+
+## Implementation
+- [ ] Update dispatch_message method with corrected routing flow
+- [ ] Modify maybe_build_mention_context for locality-first scope
+- [ ] Update collect_thread_tail_context for scope isolation
+- [ ] Fix reply-chain collectors to avoid root drift
+
+## Testing & Validation
+- [ ] Test reply + @mention + minimal text to human message
+- [ ] Test reply to post with link (harvestery correctly)
+- [ ] Test thread trigger at end of thread
+- [ ] Test plain @mention with short text
+- [ ] Test plain message with text (unchanged behavior)
+- [ ] Test media-intent phrase with no links (nagging)
+- [ ] Test placeholder retarget (discard & resend)
+- [ ] Test timeout/archived parent fallback
+
+## Documentation & Logging
+- [ ] Add new logging events: `subsys=route event=reply_target_ok`, `text_default`, `media_intent_missing_link`
+- [ ] Add scope resolution events: `subsys=mem event=scope_resolved`, `local_context`, `drop_stale`
+- [ ] Update DEVNOTES section explaining scope choice, text default, log interpretation
+- [ ] Ensure no extra log noise, keep concise 1-line per event format
+
+## Acceptance Criteria
+- [ ] Replies never attach to bot unless explicitly intended
+- [ ] Plain @mentions with text route to text flow
+- [ ] Context locality-first with hard fences
+- [ ] Normal posts unchanged
+- [ ] Zero regressions in existing flows

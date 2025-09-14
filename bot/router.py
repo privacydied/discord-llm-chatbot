@@ -1625,6 +1625,154 @@ class Router:
         if flow_overrides:
             self._flows.update(flow_overrides)
 
+    async def _resolve_scope_and_target(
+        self, message: Message
+    ) -> Tuple[str, Optional[Message], str]:
+        """
+        Centralized scope resolution following the deterministic decision tree.
+        Returns (scope_case, reply_target, context_str)
+        """
+        try:
+            # THREAD_CASE: message is in a Thread/Forum thread
+            if _is_thread_channel(getattr(message, "channel", None)):
+                rt, reason = await resolve_thread_reply_target(self.bot, message, self.config)
+                tail = await collect_thread_tail_context(self.bot, message, rt, self.config)
+                context_str = ""
+                if tail and isinstance(tail, tuple) and len(tail) == 2:
+                    tail_joined, _ = tail
+                    context_str = tail_joined.strip()
+
+                self.logger.info(
+                    "scope_resolved",
+                    extra={
+                        "subsys": "route",
+                        "event": "scope_resolved",
+                        "case": "thread",
+                        "scope": str(getattr(message.channel, "id", "unknown")),
+                        "reply_target": str(getattr(rt, "id", "none")) if rt else "none",
+                    },
+                )
+                try:
+                    self.logger.info(
+                        "reply_target_ok",
+                        extra={
+                            "subsys": "route",
+                            "event": "reply_target_ok",
+                            "target": str(getattr(rt, "id", "none")) if rt else "none",
+                        },
+                    )
+                except Exception:
+                    pass
+                return "thread", rt, context_str
+
+            # REPLY_CASE: message has a message.reference
+            if getattr(message, "reference", None):
+                ref = getattr(message, "reference", None)
+                ref_msg = getattr(ref, "resolved", None)
+                if ref_msg is None and getattr(ref, "message_id", None):
+                    try:
+                        ref_msg = await message.channel.fetch_message(ref.message_id)
+                    except Exception:
+                        ref_msg = None
+
+                if ref_msg:
+                    # Build reply-tail context near the trigger
+                    mc = await maybe_build_mention_context(self.bot, message, self.config)
+                    context_str = ""
+                    if mc and isinstance(mc, tuple) and len(mc) == 2:
+                        joined_text, _ = mc
+                        context_str = (joined_text or "").strip()
+
+                    self.logger.info(
+                        "scope_resolved",
+                        extra={
+                            "subsys": "route",
+                            "event": "scope_resolved",
+                            "case": "reply",
+                            "scope": str(getattr(ref_msg, "id", "unknown")),
+                            "reply_target": str(getattr(ref_msg, "id", "unknown")),
+                        },
+                    )
+                    try:
+                        self.logger.info(
+                            "reply_target_ok",
+                            extra={
+                                "subsys": "route",
+                                "event": "reply_target_ok",
+                                "target": str(getattr(ref_msg, "id", "unknown")),
+                            },
+                        )
+                    except Exception:
+                        pass
+                    return "reply", ref_msg, context_str
+
+            # LONE_CASE: not thread, no reply
+            # For mentions with minimal text, resolve implicit anchor
+            mentioned_me = self.bot.user in message.mentions
+            if mentioned_me:
+                txt = message.content or ""
+                try:
+                    txt = re.sub(rf"^<@!?{self.bot.user.id}>\s*", "", txt).strip()
+                    txt = re.sub(r"https?://\S+", "", txt).strip()
+                except Exception:
+                    txt = txt.strip()
+
+                if not txt:  # No substantive content after mention removal
+                    anchor, _ = await resolve_implicit_anchor(self.bot, message, self.config)
+                    if anchor:
+                        ia = await collect_implicit_anchor_context(self.bot, message, anchor, self.config)
+                        context_str = ""
+                        if ia and isinstance(ia, tuple) and len(ia) == 2:
+                            ia_joined, _ = ia
+                            context_str = ia_joined.strip()
+
+                        self.logger.info(
+                            "scope_resolved",
+                            extra={
+                                "subsys": "route",
+                                "event": "scope_resolved",
+                                "case": "lone",
+                                "scope": str(getattr(message, "id", "unknown")),
+                                "reply_target": str(getattr(anchor, "id", "none")) if anchor else "none",
+                            },
+                        )
+                        try:
+                            self.logger.info(
+                                "reply_target_ok",
+                                extra={
+                                    "subsys": "route",
+                                    "event": "reply_target_ok",
+                                    "target": str(getattr(anchor, "id", "none")) if anchor else "none",
+                                },
+                            )
+                        except Exception:
+                            pass
+                        return "lone", anchor, context_str
+
+            # Default LONE_CASE with no context
+            self.logger.info(
+                "scope_resolved",
+                extra={
+                    "subsys": "route",
+                    "event": "scope_resolved",
+                    "case": "lone",
+                    "scope": str(getattr(message, "id", "unknown")),
+                    "reply_target": "none",
+                },
+            )
+            try:
+                self.logger.info(
+                    "reply_target_ok",
+                    extra={"subsys": "route", "event": "reply_target_ok", "target": "none"},
+                )
+            except Exception:
+                pass
+            return "lone", None, ""
+
+        except Exception as e:
+            self.logger.error(f"Scope resolution failed: {e}", exc_info=True)
+            return "lone", None, ""
+
     async def dispatch_message(self, message: Message) -> Optional[BotAction]:
         """Process a message and ensure exactly one response is generated (1 IN > 1 OUT rule)."""
         self.logger.info(f"🔄 === ROUTER DISPATCH STARTED: MSG {message.id} ====")
@@ -1728,114 +1876,17 @@ class Router:
                             # Wrap plain string result into BotAction for compatibility
                             return BotAction(content=str(res))
 
-                # Continue with normal flow processing
-                # Mention-aware context: build lightweight thread/reply-chain context before normal memory packer.
-                context_str = ""
-                try:
-                    mc = await maybe_build_mention_context(self.bot, message, self.config)
-                except Exception:
-                    mc = None
-                if mc and isinstance(mc, tuple) and len(mc) == 2:
-                    joined_text, block = mc
-                    try:
-                        context_str = (joined_text or "").strip()
-                    except Exception:
-                        context_str = joined_text or ""
-                    # Telemetry: if we also have enhanced history available, record merge event [mem.ctx]
-                    try:
-                        entries = []
-                        if hasattr(self.bot, "enhanced_context_manager") and self.bot.enhanced_context_manager:
-                            entries = self.bot.enhanced_context_manager.get_context_for_user(message, include_cross_user=True) or []
-                        if entries:
-                            self.logger.info(
-                                "merge_ok",
-                                extra={
-                                    "subsys": self.config.get("MEM_LOG_SUBSYS", "mem.ctx"),
-                                    "event": "merge_ok",
-                                    "guild_id": getattr(getattr(message, "guild", None), "id", None),
-                                    "user_id": getattr(getattr(message, "author", None), "id", None),
-                                    "msg_id": getattr(message, "id", None),
-                                    "detail": {"dedup": 0},
-                                },
-                            )
-                    except Exception:
-                        pass
+                # Centralized scope resolution and context building
+                scope_case, reply_target, context_str = await self._resolve_scope_and_target(message)
 
-                # Thread-tail context: when in a thread, prepend bounded tail context (K previous messages)
-                try:
-                    if _is_thread_channel(getattr(message, "channel", None)):
-                        try:
-                            rt, _ = await resolve_thread_reply_target(self.bot, message, self.config)
-                        except Exception:
-                            rt = None
-                        tail = await collect_thread_tail_context(self.bot, message, rt, self.config)
-                    else:
-                        tail = None
-                except Exception:
-                    tail = None
-                if tail and isinstance(tail, tuple) and len(tail) == 2:
-                    tail_joined, tail_block = tail
-                    if tail_joined:
-                        if context_str:
-                            context_str = f"{tail_joined.strip()}\n\n{context_str}"
-                        else:
-                            context_str = tail_joined.strip()
 
-                # Implicit anchor for LONE_CASE: mention-only in non-thread channels
-                try:
-                    if not _is_thread_channel(getattr(message, "channel", None)):
-                        mentioned_me = self.bot.user in message.mentions
-                        if mentioned_me:
-                            # Detect no substantive content: strip leading mention and URLs
-                            txt = message.content or ""
-                            try:
-                                txt = re.sub(rf"^<@!?{self.bot.user.id}>\\s*", "", txt).strip()
-                                txt = re.sub(r"https?://\\S+", "", txt).strip()
-                            except Exception:
-                                txt = txt.strip()
-                            if not txt:
-                                # Resolve implicit anchor and adopt text if original is empty
-                                anchor, _why = await resolve_implicit_anchor(self.bot, message, self.config)
-                                if anchor:
-                                    # Prepend implicit anchor tail context
-                                    ia = await collect_implicit_anchor_context(self.bot, message, anchor, self.config)
-                                    if ia and isinstance(ia, tuple) and len(ia) == 2:
-                                        ia_joined, ia_block = ia
-                                        if ia_joined:
-                                            if context_str:
-                                                context_str = f"{ia_joined.strip()}\n\n{context_str}"
-                                            else:
-                                                context_str = ia_joined.strip()
-                except Exception:
-                    pass
 
-                # Ensure local-scope extra context for reply mentions even if mention-context returned nothing [REH][IV]
-                try:
-                    if (
-                        not _is_thread_channel(getattr(message, "channel", None))
-                        and getattr(message, "reference", None)
-                        and (self.bot.user in (getattr(message, "mentions", None) or []))
-                        and (not context_str)
-                    ):
-                        ref = getattr(message, "reference", None)
-                        ref_msg = getattr(ref, "resolved", None)
-                        if ref_msg is None and getattr(ref, "message_id", None):
-                            try:
-                                ref_msg = await message.channel.fetch_message(ref.message_id)
-                            except Exception:
-                                ref_msg = None
-                        if ref_msg and getattr(ref_msg, "content", None):
-                            rt_raw = str(ref_msg.content or "")
-                            try:
-                                rt_clean = re.sub(r"<[@#][^>]+>", "", rt_raw)
-                                rt_clean = re.sub(r"https?://\S+", "", rt_clean)
-                                rt_clean = rt_clean.strip()
-                            except Exception:
-                                rt_clean = (ref_msg.content or "").strip()
-                            if rt_clean:
-                                context_str = rt_clean
-                except Exception:
-                    pass
+
+                # Clean mention from content for processing
+                clean_content = content
+                if self.bot.user in message.mentions:
+                    mention_pattern = rf"^<@!?{self.bot.user.id}>\s*"
+                    clean_content = re.sub(mention_pattern, "", content).strip()
 
                 # 5. Check for vision generation intent early (before multi-modal)
                 try:
@@ -1941,7 +1992,7 @@ class Router:
                                 f"🎯 Route: vl_from_x_images | msg_id={message.id}"
                             )
                             return await self._flow_process_text(
-                                content=(message.content or "").strip(),
+                                content=clean_content,
                                 context=context_str,
                                 message=message,
                                 perception_notes=vl_notes or None,
@@ -1973,7 +2024,7 @@ class Router:
                     )
                     return BotAction(
                         content=(
-                            "⏳ This is taking too long to process, so I’ll stop here to avoid hanging. "
+                            "⏳ This is taking too long to process, so I'll stop here to avoid hanging. "
                             "Please try again with a shorter video or later."
                         ),
                         error=True,
@@ -2151,17 +2202,70 @@ class Router:
         # Collect all input items from the message
         items = collect_input_items(message)
 
-        # Helper: check if text is meaningful (letters/digits after stripping whitespace/punct)
+        # Helper: relaxed chat signal check (accepts minimal tokens/emojis/punctuation)
         def _has_meaningful_text(s: str) -> bool:
             try:
                 s = (s or "").strip()
                 if not s:
                     return False
-                # Remove non-alphanumeric characters (keep unicode letters/digits)
-                cleaned = re.sub(r"[^\w]+", "", s, flags=re.UNICODE)
-                return len(cleaned) >= 3
+                # Letters/digits → yes
+                if re.search(r"[A-Za-z0-9]", s):
+                    return True
+                # Common punctuation tokens that imply a chat nudge
+                if s in {"?", "!", "…", "??", "!!"}:
+                    return True
+                # Emoji/pictographs
+                try:
+                    if re.search(r"[\U0001F300-\U0001FAFF\u2600-\u27BF]", s):
+                        return True
+                except re.error:
+                    # Narrow build fallback: any non-space symbol counts
+                    if re.search(r"[^\s\w]", s):
+                        return True
+                # Short word tokens like "ok", "yo", "hm"
+                if len(s) <= 3 and re.match(r"^[^\s]+$", s):
+                    return True
+                return bool(s)
             except Exception:
                 return bool(s and s.strip())
+
+        # Helper: detect explicit media intent in user's words
+        def _explicit_media_intent(s: str) -> bool:
+            try:
+                s = (s or "").lower()
+                if not s:
+                    return False
+                keywords = (
+                    "summarize this video",
+                    "summarise this video",
+                    "summarize the video",
+                    "summarise the video",
+                    "summarize video",
+                    "analyze this video",
+                    "analyse this video",
+                    "analyze video",
+                    "analyse video",
+                    "what's in this pic",
+                    "whats in this pic",
+                    "what is in this pic",
+                    "what's in this image",
+                    "analyze this image",
+                    "analyse this image",
+                    "analyze this picture",
+                    "analyse this picture",
+                    "read this thread",
+                    "analyze this thread",
+                    "analyse this thread",
+                    "summarize this link",
+                    "summarise this link",
+                    "summarize the link",
+                    "summarise the link",
+                    "summarize this post",
+                    "summarise this post",
+                )
+                return any(k in s for k in keywords)
+            except Exception:
+                return False
 
         # Check for reply-image harvesting [VISION_REPLY_IMAGE_HARVEST]
         if message.reference and self.config.get("VISION_REPLY_IMAGE_HARVEST", True):
@@ -2679,17 +2783,21 @@ class Router:
                 self.logger.error(f"Perception→TEXT routing failed: {e}", exc_info=True)
                 # Fall back to normal text flow on error
 
-        # If no items found, process as text-only (with guard for empty replies)
+        # If no items found, process as text-only with text-first default and explicit media-intent nag
         if not items:
-            # Short-circuit empty replies to avoid long LLM paths and typing stalls [REH]
-            if not _has_meaningful_text(original_text):
+            # If user explicitly asked for media analysis but no media/URL is in scope → nag
+            try:
+                wants_media = _explicit_media_intent(original_text)
+            except Exception:
+                wants_media = False
+            if wants_media:
                 try:
                     self.logger.info(
-                        "route.empty | reply had no items and no meaningful text; returning hint",
+                        "media_intent_missing_link",
                         extra={
-                            "event": "route.empty",
+                            "subsys": "route",
+                            "event": "media_intent_missing_link",
                             "msg_id": getattr(message, "id", None),
-                            "guild_id": getattr(getattr(message, "guild", None), "id", None),
                         },
                     )
                 except Exception:
@@ -2701,7 +2809,21 @@ class Router:
                     )
                 )
 
-            # No actionable items but some text present — treat as text-only
+            # Default to TEXT for any minimal chat signal (mentions, punctuation, emoji, short words)
+            try:
+                mentioned_me = self.bot.user in (getattr(message, "mentions", None) or [])
+                self.logger.info(
+                    "text_default",
+                    extra={
+                        "subsys": "route",
+                        "event": "text_default",
+                        "reason": "mention_has_text" if mentioned_me else "ambiguous_intent",
+                        "msg_id": getattr(message, "id", None),
+                    },
+                )
+            except Exception:
+                pass
+
             response_action = await self._invoke_text_flow(
                 original_text, message, context_str
             )
