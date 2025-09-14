@@ -1,4 +1,25 @@
 # Memory and Context Management
+## Thread Tail Replies & Context (Threads/Forum)
+
+- Always enabled in thread channels. No feature flag.
+- Limits (env defaults):
+  - `THREAD_CONTEXT_TAIL_COUNT=5` (number of previous messages to include)
+- Behavior:
+  - At send-time, the bot resolves the reply target to the newest message in the thread. If the newest is the bot and the previous is human, it replies to that human to avoid reply-to-self loops. If no human messages exist, it posts in the thread without a reply reference.
+  - The router prepends a bounded “thread tail” context block built from up to K messages strictly before the reply target (ordered oldest→newest). Humans + the bot are included; other bots/system messages are excluded. Sanitization is applied.
+  - If the triggering thread message contains no meaningful text (e.g., only an @mention), the router uses the resolved reply target’s text as the input content for this hop to avoid empty prompts.
+- Telemetry (JSONL):
+  - `subsys=mem.thread event=tail_ok` with `detail.k`, `detail.reply_target`, `detail.count`.
+  - `subsys=mem.thread event=tail_fallback` with `detail.reason` on timeout/archived/permission errors.
+- Fallbacks: On any failure, the bot falls back to the pre-existing behavior (reply to the triggering message, no tail context).
+
+### Example .env additions
+
+```env
+# Threads: tail context size (always enabled)
+THREAD_CONTEXT_TAIL_COUNT=5
+```
+
 
 This guide explains how the bot manages conversation context (ephemeral), user memory (persistent per user), and server memory (persistent per guild). It also documents related configuration keys and recommended practices.
 

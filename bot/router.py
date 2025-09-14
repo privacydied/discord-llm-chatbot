@@ -63,6 +63,13 @@ from .utils.file_utils import download_file
 from .tts.state import tts_state
 from datetime import datetime, timezone
 from .memory.mention_context import maybe_build_mention_context
+from .memory.thread_tail import (
+    collect_thread_tail_context,
+    _is_thread_channel,
+    resolve_thread_reply_target,
+    resolve_implicit_anchor,
+    collect_implicit_anchor_context,
+)
 
 if TYPE_CHECKING:
     from bot.core.bot import LLMBot as DiscordBot
@@ -1754,6 +1761,82 @@ class Router:
                     except Exception:
                         pass
 
+                # Thread-tail context: when in a thread, prepend bounded tail context (K previous messages)
+                try:
+                    if _is_thread_channel(getattr(message, "channel", None)):
+                        try:
+                            rt, _ = await resolve_thread_reply_target(self.bot, message, self.config)
+                        except Exception:
+                            rt = None
+                        tail = await collect_thread_tail_context(self.bot, message, rt, self.config)
+                    else:
+                        tail = None
+                except Exception:
+                    tail = None
+                if tail and isinstance(tail, tuple) and len(tail) == 2:
+                    tail_joined, tail_block = tail
+                    if tail_joined:
+                        if context_str:
+                            context_str = f"{tail_joined.strip()}\n\n{context_str}"
+                        else:
+                            context_str = tail_joined.strip()
+
+                # Implicit anchor for LONE_CASE: mention-only in non-thread channels
+                try:
+                    if not _is_thread_channel(getattr(message, "channel", None)):
+                        mentioned_me = self.bot.user in message.mentions
+                        if mentioned_me:
+                            # Detect no substantive content: strip leading mention and URLs
+                            txt = message.content or ""
+                            try:
+                                txt = re.sub(rf"^<@!?{self.bot.user.id}>\\s*", "", txt).strip()
+                                txt = re.sub(r"https?://\\S+", "", txt).strip()
+                            except Exception:
+                                txt = txt.strip()
+                            if not txt:
+                                # Resolve implicit anchor and adopt text if original is empty
+                                anchor, _why = await resolve_implicit_anchor(self.bot, message, self.config)
+                                if anchor:
+                                    # Prepend implicit anchor tail context
+                                    ia = await collect_implicit_anchor_context(self.bot, message, anchor, self.config)
+                                    if ia and isinstance(ia, tuple) and len(ia) == 2:
+                                        ia_joined, ia_block = ia
+                                        if ia_joined:
+                                            if context_str:
+                                                context_str = f"{ia_joined.strip()}\n\n{context_str}"
+                                            else:
+                                                context_str = ia_joined.strip()
+                except Exception:
+                    pass
+
+                # Ensure local-scope extra context for reply mentions even if mention-context returned nothing [REH][IV]
+                try:
+                    if (
+                        not _is_thread_channel(getattr(message, "channel", None))
+                        and getattr(message, "reference", None)
+                        and (self.bot.user in (getattr(message, "mentions", None) or []))
+                        and (not context_str)
+                    ):
+                        ref = getattr(message, "reference", None)
+                        ref_msg = getattr(ref, "resolved", None)
+                        if ref_msg is None and getattr(ref, "message_id", None):
+                            try:
+                                ref_msg = await message.channel.fetch_message(ref.message_id)
+                            except Exception:
+                                ref_msg = None
+                        if ref_msg and getattr(ref_msg, "content", None):
+                            rt_raw = str(ref_msg.content or "")
+                            try:
+                                rt_clean = re.sub(r"<[@#][^>]+>", "", rt_raw)
+                                rt_clean = re.sub(r"https?://\S+", "", rt_clean)
+                                rt_clean = rt_clean.strip()
+                            except Exception:
+                                rt_clean = (ref_msg.content or "").strip()
+                            if rt_clean:
+                                context_str = rt_clean
+                except Exception:
+                    pass
+
                 # 5. Check for vision generation intent early (before multi-modal)
                 try:
                     prechecked = await self._prioritized_vision_route(
@@ -2079,6 +2162,86 @@ class Router:
                 # Non-fatal: continue without reply images if fetch fails
                 self.logger.debug(f"Reply image harvest failed: {e}")
 
+        # Reply link/attachment harvest (non-image) so reply chains route correctly [REH][IV]
+        try:
+            if message.reference:
+                try:
+                    ref_message = ref_message  # reuse if available
+                except NameError:
+                    ref_message = await message.channel.fetch_message(
+                        message.reference.message_id
+                    )
+
+                if ref_message:
+                    # Build a set of existing payloads to avoid duplicates
+                    existing_urls = set()
+                    try:
+                        for it in items:
+                            if getattr(it, "source_type", None) == "url":
+                                existing_urls.add(str(getattr(it, "payload", "")).strip())
+                    except Exception:
+                        pass
+
+                    # 1) Harvest URLs from referenced message content
+                    try:
+                        ref_text = getattr(ref_message, "content", "") or ""
+                        ref_urls = re.findall(r"https?://\S+", ref_text)
+                        added = 0
+                        for u in ref_urls:
+                            key = u.strip()
+                            if key and key not in existing_urls:
+                                items.append(
+                                    InputItem(
+                                        source_type="url",
+                                        payload=u,
+                                        order_index=len(items) + 1,
+                                    )
+                                )
+                                existing_urls.add(key)
+                                added += 1
+                        if added:
+                            try:
+                                self.logger.info(
+                                    f"📎 Reply link capture | from_msg={ref_message.id} urls_added={added}"
+                                )
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
+
+                    # 2) Harvest non-image attachments from referenced message (e.g., video, pdf)
+                    try:
+                        ref_atts = getattr(ref_message, "attachments", None) or []
+                        added_atts = 0
+                        for att in ref_atts:
+                            ctype = (getattr(att, "content_type", "") or "").lower()
+                            if ctype.startswith("image/"):
+                                continue  # images already handled by image harvest
+                            # Dedup naive: skip if URL of attachment already present
+                            url = getattr(att, "url", None)
+                            if url and str(url).strip() in existing_urls:
+                                continue
+                            items.append(
+                                InputItem(
+                                    source_type="attachment",
+                                    payload=att,
+                                    order_index=len(items) + 1,
+                                )
+                            )
+                            added_atts += 1
+                        if added_atts:
+                            try:
+                                self.logger.info(
+                                    f"📎 Reply attachment capture | from_msg={ref_message.id} attachments_added={added_atts}"
+                                )
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
+        except Exception:
+            # Non-fatal; continue without reply link harvest
+            pass
+
         # Process original text content (remove URLs that will be processed separately)
         original_text = message.content
         if self.bot.user in message.mentions:
@@ -2099,6 +2262,118 @@ class Router:
                 exc_info=True,
             )
 
+        # Thread-only UX fallback: if the trigger carried no meaningful text, adopt the reply target's text;
+        # if the reply target is also empty (e.g., the mention itself), adopt the nearest previous human text. [REH][IV]
+        try:
+            if _is_thread_channel(getattr(message, "channel", None)):
+                if not original_text or not original_text.strip():
+                    try:
+                        rt, _ = await resolve_thread_reply_target(self.bot, message, self.config)
+                    except Exception:
+                        rt = None
+                    adopted = False
+                    if rt and getattr(rt, "content", None):
+                        rt_raw = str(rt.content or "")
+                        # Strip Discord mentions (<@...>, <@!...>, roles <@&...>, channels <#...>) and URLs
+                        rt_clean = re.sub(r"<[@#][^>]+>", "", rt_raw)
+                        rt_clean = re.sub(r"https?://\S+", "", rt_clean)
+                        rt_clean = rt_clean.strip()
+                        # Require some alphanumeric signal to avoid adopting pure glyphs/whitespace
+                        if rt_clean and re.search(r"[A-Za-z0-9]", rt_clean):
+                            original_text = rt_clean
+                            adopted = True
+                            try:
+                                self.logger.info(
+                                    "adopt_ok",
+                                    extra={
+                                        "subsys": "mem.thread",
+                                        "event": "adopt_ok",
+                                        "guild_id": getattr(getattr(message, "guild", None), "id", None),
+                                        "user_id": getattr(getattr(message, "author", None), "id", None),
+                                        "msg_id": getattr(message, "id", None),
+                                        "detail": {"source": "reply_target", "len": len(original_text)},
+                                    },
+                                )
+                            except Exception:
+                                pass
+                    if not adopted:
+                        anchor = rt or message
+                        try:
+                            async for m in message.channel.history(limit=10, before=anchor):
+                                is_human = not bool(getattr(m.author, "bot", False))
+                                m_text = str(getattr(m, "content", "") or "").strip()
+                                if is_human and m_text:
+                                    original_text = m_text
+                                    adopted = True
+                                    try:
+                                        self.logger.info(
+                                            "adopt_ok",
+                                            extra={
+                                                "subsys": "mem.thread",
+                                                "event": "adopt_ok",
+                                                "guild_id": getattr(getattr(message, "guild", None), "id", None),
+                                                "user_id": getattr(getattr(message, "author", None), "id", None),
+                                                "msg_id": getattr(message, "id", None),
+                                                "detail": {"source": "prev_human", "len": len(original_text)},
+                                            },
+                                        )
+                                    except Exception:
+                                        pass
+                                    break
+                        except Exception:
+                            pass
+        except Exception:
+            pass
+
+        # Reply-case UX fallback (non-thread): mention + reply with minimal text → adopt parent text. [REH][IV]
+        try:
+            if not _is_thread_channel(getattr(message, "channel", None)) and getattr(message, "reference", None):
+                # Only trigger on @mention to avoid hijacking normal replies
+                if self.bot.user in (getattr(message, "mentions", None) or []):
+                    minimal = True
+                    try:
+                        minimal = not bool(re.search(r"[A-Za-z0-9]", original_text or ""))
+                    except Exception:
+                        minimal = not bool(original_text and original_text.strip())
+                    if minimal:
+                        ref = getattr(message, "reference", None)
+                        ref_msg = getattr(ref, "resolved", None)
+                        if ref_msg is None and getattr(ref, "message_id", None):
+                            try:
+                                ref_msg = await message.channel.fetch_message(ref.message_id)
+                            except Exception:
+                                ref_msg = None
+                        if ref_msg and getattr(ref_msg, "content", None):
+                            rt_raw = str(ref_msg.content or "")
+                            try:
+                                # Strip mentions and URLs for better signal
+                                rt_clean = re.sub(r"<[@#][^>]+>", "", rt_raw)
+                                rt_clean = re.sub(r"https?://\S+", "", rt_clean)
+                                rt_clean = rt_clean.strip()
+                            except Exception:
+                                rt_clean = (ref_msg.content or "").strip()
+                            try:
+                                if rt_clean and re.search(r"[A-Za-z0-9]", rt_clean):
+                                    original_text = rt_clean
+                                    try:
+                                        self.logger.info(
+                                            "adopt_ok",
+                                            extra={
+                                                "subsys": "mem.reply",
+                                                "event": "adopt_ok",
+                                                "guild_id": getattr(getattr(message, "guild", None), "id", None),
+                                                "user_id": getattr(getattr(message, "author", None), "id", None),
+                                                "msg_id": getattr(message, "id", None),
+                                                "detail": {"source": "reply_parent", "len": len(original_text)},
+                                            },
+                                        )
+                                    except Exception:
+                                        pass
+                            except Exception:
+                                pass
+        except Exception:
+            pass
+
         # --- Routing precedence gates (feature-flagged) ---
         # 0) Safety: re-run prioritized vision precheck here to catch any triggers/intents that
         #    may have been missed earlier. This is a no-op if none are detected. [CA][REH]
@@ -2116,6 +2391,7 @@ class Router:
         # Check for reply-image → VL routing condition (forced by config)
         is_dm = isinstance(message.channel, discord.DMChannel)
         mentioned_me = self.bot.user in message.mentions
+        is_reply = getattr(message, "reference", None) is not None
 
         # Robust harvest count from referenced and current messages
         bool(self.config.get("VISION_REPLY_IMAGE_FORCE_VL", True))
@@ -2195,7 +2471,7 @@ class Router:
 
         # Route to perception (VL notes) → TEXT when conditions met (but skip for X/Twitter)
         if (
-            (is_dm or mentioned_me)
+            (is_dm or mentioned_me or is_reply)
             and combined_count >= 1
             and bool(self.config.get("HYBRID_FORCE_PERCEPTION_ON_REPLY", True))
             and not has_x_url
@@ -3775,9 +4051,30 @@ class Router:
             except Exception:
                 has_img_attachments = False
 
+            # Include referenced message (reply target) for gating if present [REH][IV]
+            ref_msg = None
+            try:
+                ref = getattr(message, "reference", None)
+                ref_msg = getattr(ref, "resolved", None)
+                if ref_msg is None and getattr(ref, "message_id", None):
+                    ref_msg = await message.channel.fetch_message(ref.message_id)
+            except Exception:
+                ref_msg = None
+
+            try:
+                if ref_msg:
+                    has_img_attachments = has_img_attachments or any(
+                        (getattr(a, "content_type", "") or "").startswith("image/")
+                        for a in (getattr(ref_msg, "attachments", None) or [])
+                    )
+            except Exception:
+                pass
+
             has_twitter_url = False
             try:
                 url_candidates = re.findall(r"https?://\S+", content)
+                if ref_msg:
+                    url_candidates += re.findall(r"https?://\S+", getattr(ref_msg, "content", "") or "")
                 has_twitter_url = any(self._is_twitter_url(u) for u in url_candidates)
             except Exception:
                 has_twitter_url = False
@@ -3946,7 +4243,7 @@ class Router:
         """
         self.logger.info(f"route=text | Routing to text flow. (msg_id: {message.id})")
 
-        # Perception beats generation: suppress gen triggers if images/any-URL present (from original message)
+        # Perception beats generation: suppress gen triggers if images/any-URL present (from original message or referenced message in reply chains)
         perception_guard = False
         try:
             has_img_attachments = any(
@@ -3956,9 +4253,30 @@ class Router:
         except Exception:
             has_img_attachments = False
         try:
-            # IMPORTANT: check URLs on the original message, not sanitized content
+            # IMPORTANT: check URLs on the original and referenced message, not sanitized content
             raw_text = message.content or ""
             url_candidates = re.findall(r"https?://\S+", raw_text)
+            # Bring in URLs/attachments from reply target if present [REH]
+            ref_msg = None
+            try:
+                ref = getattr(message, "reference", None)
+                ref_msg = getattr(ref, "resolved", None)
+                if ref_msg is None and getattr(ref, "message_id", None):
+                    ref_msg = await message.channel.fetch_message(ref.message_id)
+            except Exception:
+                ref_msg = None
+            if ref_msg:
+                try:
+                    url_candidates += re.findall(r"https?://\S+", getattr(ref_msg, "content", "") or "")
+                except Exception:
+                    pass
+                try:
+                    has_img_attachments = has_img_attachments or any(
+                        (getattr(a, "content_type", "") or "").startswith("image/")
+                        for a in (getattr(ref_msg, "attachments", None) or [])
+                    )
+                except Exception:
+                    pass
             has_any_url = bool(url_candidates)
             has_twitter_url = any(self._is_twitter_url(u) for u in url_candidates)
         except Exception:
@@ -4180,8 +4498,14 @@ class Router:
                 text_instruction or ""
             ).strip() or "Analyze this image briefly and provide concise notes."
             try:
-                vision_result = await see_infer(
-                    image_path=downloaded_path, prompt=prompt
+                # Prevent long hangs: cap VL notes time budget with a small timeout [REH][PA]
+                try:
+                    timeout_s = float(self.config.get("VL_NOTES_TIMEOUT_S", 25.0))
+                except Exception:
+                    timeout_s = 25.0
+                vision_result = await asyncio.wait_for(
+                    see_infer(image_path=downloaded_path, prompt=prompt),
+                    timeout=timeout_s,
                 )
                 raw_text = ""
                 if (
@@ -4203,6 +4527,20 @@ class Router:
                     raw_text, max_chars=notes_max, strip_reasoning=strip_reason
                 )
                 return (notes or ""), None
+            except asyncio.TimeoutError:
+                # Provider too slow for perception notes; fall back gracefully
+                try:
+                    self.logger.info(
+                        "perception.timeout",
+                        extra={
+                            "event": "perception.timeout",
+                            "subsys": "vision.perception",
+                            "msg_id": getattr(message, "id", None),
+                        },
+                    )
+                except Exception:
+                    pass
+                return None, "timeout"
             except Exception as e:
                 self.logger.debug(f"perception: see_infer failed | {e}", exc_info=True)
                 return None, "provider_error"

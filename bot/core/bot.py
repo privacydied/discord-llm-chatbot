@@ -21,6 +21,11 @@ from bot.memory.context_manager import ContextManager
 from bot.memory.enhanced_context_manager import EnhancedContextManager
 from bot.events import setup_command_error_handler
 from bot.voice import VoiceMessagePublisher
+from bot.memory.thread_tail import (
+    resolve_thread_reply_target,
+    _is_thread_channel,
+    resolve_implicit_anchor,
+)
 
 if TYPE_CHECKING:
     from bot.router import Router, BotAction
@@ -981,8 +986,100 @@ class LLMBot(commands.Bot):
         async with message.channel.typing():
             try:
                 if content or action.embeds or files:
-                    if target_message and not files:
-                        # Edit the existing streaming message
+                    # Resolve desired reply target up-front so we can decide whether to edit the placeholder
+                    ch = getattr(message, "channel", None)
+                    reply_target = None
+                    try:
+                        if _is_thread_channel(ch):
+                            # Threads: resolve newest (or newest human if newest is bot)
+                            rt, _reason = await resolve_thread_reply_target(self, message, self.config)
+                            reply_target = rt
+                            try:
+                                if reply_target is not None:
+                                    self.logger.info(
+                                        "reply_target_ok",
+                                        extra={
+                                            **base_extra,
+                                            "subsys": self.config.get("MEM_LOG_SUBSYS", "mem.thread"),
+                                            "event": "reply_target_ok",
+                                            "detail": {"id": getattr(reply_target, "id", None)},
+                                        },
+                                    )
+                            except Exception:
+                                pass
+                        elif getattr(message, "reference", None) is not None:
+                            # Reply chain (non-thread): reply to the referenced message (newest target in chain)
+                            ref = getattr(message, "reference", None)
+                            ref_msg = None
+                            try:
+                                ref_msg = getattr(ref, "resolved", None)
+                            except Exception:
+                                ref_msg = None
+                            if ref_msg is None:
+                                try:
+                                    ref_id = int(getattr(ref, "message_id", 0) or 0)
+                                    if ref_id:
+                                        ref_msg = await message.channel.fetch_message(ref_id)
+                                except Exception:
+                                    ref_msg = None
+                            reply_target = ref_msg or message
+                            try:
+                                if reply_target is not None:
+                                    self.logger.info(
+                                        "reply_target_ok",
+                                        extra={
+                                            **base_extra,
+                                            "subsys": self.config.get("MEM_LOG_SUBSYS", "mem.reply"),
+                                            "event": "reply_target_ok",
+                                            "detail": {"id": getattr(reply_target, "id", None)},
+                                        },
+                                    )
+                            except Exception:
+                                pass
+                        else:
+                            # Non-thread, non-reply: mention-only implicit anchor
+                            mentioned_me = False
+                            try:
+                                mentioned_me = self.user in (getattr(message, "mentions", None) or [])
+                            except Exception:
+                                mentioned_me = False
+                            if mentioned_me:
+                                raw = str(message.content or "")
+                                try:
+                                    import re as _re
+                                    raw = _re.sub(rf"^<@!?{self.user.id}>\s*", "", raw)
+                                    raw = _re.sub(r"https?://\\S+", "", raw).strip()
+                                except Exception:
+                                    raw = raw.strip()
+                                if not raw:
+                                    anc, _why = await resolve_implicit_anchor(self, message, self.config)
+                                    reply_target = anc or None
+                    except Exception:
+                        # Fallback: reply to triggering message to preserve original behavior
+                        reply_target = message
+
+                    # Decide whether it's safe to edit the placeholder
+                    # If we must change the reply reference (e.g., threads/implicit anchor), delete placeholder and send anew
+                    must_retarget = False
+                    try:
+                        if _is_thread_channel(ch):
+                            # In threads we either reply to a different message or send without reference
+                            mid = int(getattr(message, "id", 0))
+                            rtid = int(getattr(reply_target, "id", 0)) if reply_target is not None else None
+                            must_retarget = (reply_target is None) or (rtid and rtid != mid)
+                        else:
+                            # For non-threads, retarget if reply target differs from triggering message
+                            if getattr(message, "reference", None) is not None:
+                                rtid = int(getattr(reply_target, "id", 0)) if reply_target is not None else 0
+                                must_retarget = bool(rtid) and (rtid != int(getattr(message, "id", 0)))
+                            else:
+                                rtid = int(getattr(reply_target, "id", 0)) if reply_target is not None else 0
+                                must_retarget = bool(rtid) and (rtid != int(getattr(message, "id", 0)))
+                    except Exception:
+                        must_retarget = False
+
+                    if target_message and not files and not must_retarget:
+                        # Edit the existing streaming message in-place
                         sent_message = target_message
                         await sent_message.edit(content=content, embeds=action.embeds)
                         self.logger.info(
@@ -990,18 +1087,33 @@ class LLMBot(commands.Bot):
                             extra={**base_extra, "event": "dispatch.edit.ok"},
                         )
                     else:
-                        # Remove placeholder if present, then send a proper reply
+                        # Remove placeholder if present, then send a proper reply with desired target
                         if target_message:
                             try:
                                 await target_message.delete()
                             except Exception:
                                 pass
-                        sent_message = await message.reply(
-                            content=content,
-                            embeds=action.embeds,
-                            files=files,
-                            mention_author=True,
-                        )
+
+                        if reply_target is None and _is_thread_channel(ch):
+                            # Send to thread without a reply reference (no reply-to-self loops available)
+                            sent_message = await message.channel.send(
+                                content=content, embeds=action.embeds, files=files
+                            )
+                        elif reply_target is not None:
+                            sent_message = await reply_target.reply(
+                                content=content,
+                                embeds=action.embeds,
+                                files=files,
+                                mention_author=True,
+                            )
+                        else:
+                            # Non-thread or fallback: reply to triggering message
+                            sent_message = await message.reply(
+                                content=content,
+                                embeds=action.embeds,
+                                files=files,
+                                mention_author=True,
+                            )
 
                         self.logger.info(
                             f"dispatch:ok | discord_msg_id={getattr(sent_message, 'id', None)} embeds={embed_count} files={file_count}",

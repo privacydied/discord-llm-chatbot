@@ -103,21 +103,40 @@ async def resolve_anchor(message: discord.Message, case: str, timeout_s: float) 
 
     # REPLY_CASE
     try:
-        cur = message
+        if getattr(message, "reference", None) is None:
+            return None
+        # Prefer immediate parent as a reliable anchor
+        ref = message.reference
+        parent = getattr(ref, "resolved", None)
+        if parent is None:
+            ref_id = getattr(ref, "message_id", None)
+            if ref_id:
+                parent = await _fetch_message_safely(message.channel, ref_id, timeout_s)
+        if parent is None:
+            # No resolvable parent; fail gracefully
+            return None
+
+        # Optionally walk up to the root, but never lose the parent fallback
+        cur = parent
         seen = set()
         while getattr(cur, "reference", None) is not None:
-            ref = cur.reference
-            ref_id = getattr(ref, "message_id", None)
-            if ref_id is None or ref_id in seen:
+            r = cur.reference
+            rid = getattr(r, "message_id", None)
+            if rid is None or rid in seen:
                 break
-            seen.add(ref_id)
-            parent = await _fetch_message_safely(message.channel, ref_id, timeout_s)
-            if not parent:
+            seen.add(rid)
+            p2 = await _fetch_message_safely(message.channel, rid, timeout_s)
+            if not p2:
                 break
-            cur = parent
-        return cur if cur is not message else (await _fetch_message_safely(message.channel, getattr(message.reference, "message_id", 0), timeout_s))
+            cur = p2
+        return cur or parent
     except Exception:
-        return None
+        # Best-effort fallback: use parent if any
+        try:
+            ref = getattr(message, "reference", None)
+            return getattr(ref, "resolved", None)
+        except Exception:
+            return None
 
 
 def _sanitize_mentions(text: str, guild: Optional[discord.Guild]) -> str:
@@ -264,107 +283,67 @@ async def _collect_reply_chain(
     max_age_min: int,
     timeout_s: float,
 ) -> Tuple[List[discord.Message], bool]:
-    """Collect linear reply chain around anchor (root) until current message. Returns (messages, truncated)."""
+    """Collect a bounded tail of the reply chain nearest to the triggering message.
+    Returns (messages in chronological order, truncated)."""
     if not anchor:
         return [], False
 
     now = _now_utc()
-    collected: List[discord.Message] = []
-    total_chars = 0
     truncated = False
 
-    # Upward chain (anchor path) — we already have anchor at root; reconstruct path if available
+    # Reconstruct linear chain from root→…→parent→current (no channel-wide scan)
     try:
-        path: List[discord.Message] = []
+        parents: List[discord.Message] = []
         cur = message
-        # Build path to root (excluding current) then reverse
+        seen: set[int] = set()
         while getattr(cur, "reference", None) is not None:
             ref_id = getattr(cur.reference, "message_id", None)
-            if ref_id is None:
+            if ref_id is None or ref_id in seen:
                 break
+            seen.add(ref_id)
             parent = await _fetch_message_safely(message.channel, ref_id, timeout_s)
             if not parent:
                 break
-            path.append(parent)
-            if getattr(parent, "reference", None) is None:
-                break
+            parents.append(parent)  # newest parent first
             cur = parent
-        # Ensure the top of path is the true root aka anchor
-        if path:
-            if getattr(path[-1], "id", None) != getattr(anchor, "id", None):
-                path.append(anchor)
-        else:
-            path = [anchor]
+        # Oldest→newest parents
+        chain: List[discord.Message] = list(reversed(parents))
+        # Append current trigger at the end
+        chain.append(message)
     except Exception:
-        path = [anchor]
+        # Best-effort fallback: just include anchor and current
+        chain = [anchor, message]
 
-    # Start collected with upward chain (oldest -> newest)
-    for p in reversed(path):
-        if not _include_message(p, int(getattr(bot.user, "id", 0) or 0)):
-            continue
-        if not _within_age(p, max_age_min, now) and getattr(p, "id", None) != getattr(anchor, "id", None):
-            continue
-        txt = (p.content or "")
-        if len(collected) + 1 > max_msgs or (total_chars + len(txt)) > max_chars:
-            truncated = True
-            break
-        collected.append(p)
-        total_chars += len(txt)
-
-    # Downward: follow replies to any already-included message, until we reach the triggering message
+    # Filter by visibility and age, but always allow the anchor
     try:
-        included_ids = {getattr(m, "id", None) for m in collected}
-        reached_trigger = getattr(message, "id", None) in included_ids
-        async def _walk():
-            async for m in message.channel.history(limit=max_msgs * 4, oldest_first=True, after=anchor.created_at):
-                yield m
-        if not reached_trigger:
-            walker = _walk()
-            start_time = time.monotonic()
-            async for m in walker:
-                if time.monotonic() - start_time > max(timeout_s * 2, 5):
-                    truncated = True
-                    break
-                if m.created_at > message.created_at:
-                    # Stop at the point we pass the trigger
-                    break
-                if not _include_message(m, int(getattr(bot.user, "id", 0) or 0)):
-                    continue
-                if not _within_age(m, max_age_min, now) and getattr(m, "id", None) != getattr(anchor, "id", None):
-                    continue
-                ref = getattr(m, "reference", None)
-                if not ref or getattr(ref, "message_id", None) not in included_ids:
-                    continue
-                txt = (m.content or "")
-                if len(collected) + 1 > max_msgs or (total_chars + len(txt)) > max_chars:
-                    truncated = True
-                    break
-                collected.append(m)
-                total_chars += len(txt)
-                included_ids.add(getattr(m, "id", None))
-                if getattr(m, "id", None) == getattr(message, "id", None):
-                    reached_trigger = True
-                    break
+        filtered: List[discord.Message] = []
+        anc_id = getattr(anchor, "id", None)
+        for m in chain:
+            if not _include_message(m, int(getattr(bot.user, "id", 0) or 0)):
+                continue
+            if not _within_age(m, max_age_min, now) and getattr(m, "id", None) != anc_id:
+                continue
+            filtered.append(m)
     except Exception:
-        # ignore; best-effort
-        pass
+        filtered = chain
 
-    # Ensure current message is included
-    ids = {getattr(m, "id", None) for m in collected}
-    if getattr(message, "id", None) not in ids:
-        collected.append(message)
+    # Apply tail window and char budget nearest to the trigger (end of list)
+    kept_rev: List[discord.Message] = []
+    total_chars = 0
+    try:
+        for m in reversed(filtered):  # newest→oldest
+            txt = (m.content or "")
+            if len(kept_rev) >= max_msgs or (total_chars + len(txt)) > max_chars:
+                truncated = True
+                break
+            kept_rev.append(m)
+            total_chars += len(txt)
+    except Exception:
+        # If anything fails, return at least the current message
+        kept_rev = [message]
 
-    # Deduplicate preserving order
-    seen = set()
-    uniq: List[discord.Message] = []
-    for m in collected:
-        mid = getattr(m, "id", None)
-        if mid in seen:
-            continue
-        seen.add(mid)
-        uniq.append(m)
-
-    return uniq, truncated
+    kept = list(reversed(kept_rev))  # oldest→newest for packaging
+    return kept, truncated
 
 
 def _package(
@@ -440,13 +419,20 @@ async def maybe_build_mention_context(
 
     # Caps and limits
     try:
-        max_msgs = int(cfg.get("MEM_MAX_MSGS", 40))
+        # Tail size K for reply/thread context collection
+        tail_k = int(cfg.get("THREAD_CONTEXT_TAIL_COUNT", 5))
+    except Exception:
+        tail_k = 5
+    # Global caps (chars/timeouts)
+    try:
         max_chars = int(cfg.get("MEM_MAX_CHARS", 8000))
         max_age_min = int(cfg.get("MEM_MAX_AGE_MIN", 240))
         timeout_s = float(cfg.get("MEM_FETCH_TIMEOUT_S", 5))
         subsys = str(cfg.get("MEM_LOG_SUBSYS", "mem.ctx"))
     except Exception:
-        max_msgs, max_chars, max_age_min, timeout_s, subsys = 40, 8000, 240, 5.0, "mem.ctx"
+        max_chars, max_age_min, timeout_s, subsys = 8000, 240, 5.0, "mem.ctx"
+    # Enforce sane bounds
+    tail_k = max(0, min(tail_k, 40))
 
     t0 = time.perf_counter()
     case = classify_message_case(message)
@@ -485,7 +471,7 @@ async def maybe_build_mention_context(
                 bot,
                 message,
                 anchor,
-                max_msgs=max_msgs,
+                max_msgs=tail_k,
                 max_chars=max_chars,
                 max_age_min=max_age_min,
                 timeout_s=timeout_s,
@@ -495,7 +481,7 @@ async def maybe_build_mention_context(
                 bot,
                 message,
                 anchor,
-                max_msgs=max_msgs,
+                max_msgs=tail_k,
                 max_chars=max_chars,
                 max_age_min=max_age_min,
                 timeout_s=timeout_s,

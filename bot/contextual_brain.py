@@ -3,6 +3,7 @@
 from typing import TYPE_CHECKING, Any, Dict, Optional
 
 import discord
+import re
 
 from bot.brain import brain_infer
 from bot.utils.logging import get_logger
@@ -84,10 +85,93 @@ async def contextual_brain_infer(
         except Exception:
             include_cross_user_eff = include_cross_user
 
-        # Get conversation context
-        context_entries = bot.enhanced_context_manager.get_context_for_user(
-            message, include_cross_user=include_cross_user_eff
-        )
+        # Determine basic case/scope for logging and locality policy
+        case = "THREAD" if "Thread" in str(type(getattr(message, "channel", None))) else ("REPLY" if getattr(message, "reference", None) is not None else "LONE")
+        try:
+            if case == "THREAD":
+                scope_id = str(getattr(getattr(message, "channel", None), "id", None))
+            elif case == "REPLY":
+                scope_id = str(getattr(getattr(message, "reference", None), "message_id", None))
+            else:
+                scope_id = str(getattr(message, "id", None))
+        except Exception:
+            scope_id = str(getattr(message, "id", None))
+
+        # Locality-first policies
+        try:
+            mentioned_me = bot.user in (getattr(message, "mentions", None) or [])
+        except Exception:
+            mentioned_me = False
+        try:
+            content_has_signal = bool(re.search(r"[A-Za-z0-9]", prompt or ""))
+        except Exception:
+            content_has_signal = bool(prompt and prompt.strip())
+
+        # Skip history if:
+        # - We have an explicit local block (extra_context) for THREAD/REPLY/LONE
+        # - Or LONE @mention has substantive content
+        skip_history = bool(extra_context)
+        if not skip_history:
+            try:
+                if mentioned_me and (case == "LONE") and content_has_signal:
+                    skip_history = True
+            except Exception:
+                pass
+
+        if skip_history:
+            # Optionally compute how many entries would have been dropped for visibility
+            dropped = 0
+            try:
+                _entries = bot.enhanced_context_manager.get_context_for_user(
+                    message, include_cross_user=False
+                )
+                dropped = len(_entries or [])
+            except Exception:
+                dropped = 0
+            # Minimal, same-schema breadcrumbs
+            try:
+                logger.info(
+                    "scope_resolved",
+                    extra={
+                        "subsys": "mem.ctx",
+                        "event": "scope_resolved",
+                        "guild_id": getattr(getattr(message, "guild", None), "id", None),
+                        "user_id": getattr(getattr(message, "author", None), "id", None),
+                        "msg_id": getattr(message, "id", None),
+                        "detail": {"case": case, "scope": scope_id},
+                    },
+                )
+                logger.info(
+                    "local_block",
+                    extra={
+                        "subsys": "mem.ctx",
+                        "event": "local_block",
+                        "guild_id": getattr(getattr(message, "guild", None), "id", None),
+                        "user_id": getattr(getattr(message, "author", None), "id", None),
+                        "msg_id": getattr(message, "id", None),
+                        "detail": {"msgs": 0, "order": "local_first"},
+                    },
+                )
+                if dropped:
+                    logger.info(
+                        "drop_stale",
+                        extra={
+                            "subsys": "mem.ctx",
+                            "event": "drop_stale",
+                            "guild_id": getattr(getattr(message, "guild", None), "id", None),
+                            "user_id": getattr(getattr(message, "author", None), "id", None),
+                            "msg_id": getattr(message, "id", None),
+                            "detail": {"reason": "scope_mismatch", "dropped": dropped},
+                        },
+                    )
+            except Exception:
+                pass
+            context_entries = []
+        else:
+            # Get conversation context normally
+            context_entries = bot.enhanced_context_manager.get_context_for_user(
+                message, include_cross_user=include_cross_user_eff
+            )
 
         # Build contextual prompt with optional perception notes and extra context
         contextual_prompt = prompt

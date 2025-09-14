@@ -311,6 +311,10 @@ def load_config():
             os.getenv("MEM_FETCH_TIMEOUT_S"), "5", "MEM_FETCH_TIMEOUT_S"
         ),
         "MEM_LOG_SUBSYS": os.getenv("MEM_LOG_SUBSYS", "mem.ctx"),
+        # Thread-tail reply + context collector [CMV][REH]
+        "THREAD_CONTEXT_TAIL_COUNT": _safe_int(
+            os.getenv("THREAD_CONTEXT_TAIL_COUNT"), "5", "THREAD_CONTEXT_TAIL_COUNT"
+        ),
         # DIRECTORY SETTINGS
         "USER_PROFILE_DIR": Path(os.getenv("USER_PROFILE_DIR", "user_profiles")),
         "SERVER_PROFILE_DIR": Path(os.getenv("SERVER_PROFILE_DIR", "server_profiles")),
