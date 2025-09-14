@@ -2242,6 +2242,43 @@ class Router:
             # Non-fatal; continue without reply link harvest
             pass
 
+        # Additionally harvest URLs from the referenced message to support reply→video flows [CA][REH]
+        try:
+            ref = getattr(message, "reference", None)
+            ref_msg = getattr(ref, "resolved", None)
+            if ref_msg is None and getattr(ref, "message_id", None):
+                try:
+                    ref_msg = await message.channel.fetch_message(ref.message_id)
+                except Exception:
+                    ref_msg = None
+            if ref_msg and getattr(ref_msg, "content", None):
+                import re as _re
+                # Extract URLs from the referenced message
+                found_urls = _re.findall(r"https?://[^\s<>\"'\[\]{}|\\^`]+", ref_msg.content or "")
+                if found_urls:
+                    # Deduplicate against existing url items
+                    try:
+                        existing_urls = {
+                            str(it.payload)
+                            for it in items
+                            if getattr(it, "source_type", None) == "url"
+                        }
+                    except Exception:
+                        existing_urls = set()
+                    for u in found_urls:
+                        if u and u not in existing_urls:
+                            items.append(
+                                InputItem(
+                                    source_type="url",
+                                    payload=u,
+                                    order_index=len(items) + 1,
+                                )
+                            )
+                            existing_urls.add(u)
+        except Exception:
+            # Do not fail dispatch on URL harvest errors
+            pass
+
         # Process original text content (remove URLs that will be processed separately)
         original_text = message.content
         if self.bot.user in message.mentions:

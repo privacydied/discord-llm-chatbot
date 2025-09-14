@@ -60,7 +60,23 @@ async def hear_infer(audio_path: Path) -> str:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            stdout, stderr = await proc.communicate()
+            # Bound normalization to avoid hangs [REH][PA]
+            try:
+                norm_timeout = float(os.getenv("FFMPEG_NORMALIZE_TIMEOUT_S", "30"))
+            except Exception:
+                norm_timeout = 30.0
+            try:
+                stdout, stderr = await asyncio.wait_for(
+                    proc.communicate(), timeout=norm_timeout
+                )
+            except asyncio.TimeoutError:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+                raise RuntimeError(
+                    f"ffmpeg normalization timed out after {norm_timeout:.0f}s"
+                )
 
             if proc.returncode != 0:
                 error_msg = f"ffmpeg normalization failed with code {proc.returncode}"
@@ -90,7 +106,23 @@ async def hear_infer(audio_path: Path) -> str:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            stdout, stderr = await proc.communicate()
+            # Bound speedup processing to avoid hangs [REH][PA]
+            try:
+                sp_timeout = float(os.getenv("FFMPEG_SPEEDUP_TIMEOUT_S", "30"))
+            except Exception:
+                sp_timeout = 30.0
+            try:
+                stdout, stderr = await asyncio.wait_for(
+                    proc.communicate(), timeout=sp_timeout
+                )
+            except asyncio.TimeoutError:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+                raise RuntimeError(
+                    f"ffmpeg speedup timed out after {sp_timeout:.0f}s"
+                )
 
             if proc.returncode != 0:
                 error_msg = f"ffmpeg speedup failed with code {proc.returncode}"
@@ -100,7 +132,18 @@ async def hear_infer(audio_path: Path) -> str:
 
             # Transcribe the processed audio via orchestrator (falls back if disabled)
             logger.debug(f"Transcribing processed audio (orchestrated): {temp_sped_up}")
-            return await stt_orchestrator.transcribe(temp_sped_up)
+            try:
+                stt_timeout = float(os.getenv("STT_TRANSCRIBE_TIMEOUT_S", "120"))
+            except Exception:
+                stt_timeout = 120.0
+            try:
+                return await asyncio.wait_for(
+                    stt_orchestrator.transcribe(temp_sped_up), timeout=stt_timeout
+                )
+            except asyncio.TimeoutError:
+                raise InferenceError(
+                    f"Transcription timed out after {stt_timeout:.0f}s"
+                )
 
         finally:
             # Clean up temporary files
@@ -173,7 +216,19 @@ async def hear_infer_from_url(
         logger.debug(
             f"Transcribing processed video audio (orchestrated): {processed_audio.audio_path}"
         )
-        transcription = await stt_orchestrator.transcribe(processed_audio.audio_path)
+        try:
+            stt_timeout = float(os.getenv("STT_TRANSCRIBE_TIMEOUT_S", "180"))
+        except Exception:
+            stt_timeout = 180.0
+        try:
+            transcription = await asyncio.wait_for(
+                stt_orchestrator.transcribe(processed_audio.audio_path),
+                timeout=stt_timeout,
+            )
+        except asyncio.TimeoutError:
+            raise InferenceError(
+                f"Video transcription timed out after {stt_timeout:.0f}s"
+            )
 
         # Return transcription with rich metadata
         result = {

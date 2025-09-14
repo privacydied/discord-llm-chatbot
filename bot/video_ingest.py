@@ -295,7 +295,23 @@ class VideoIngestionManager:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            stdout, stderr = await proc.communicate()
+            # Bound metadata probe to avoid long hangs [REH][PA]
+            try:
+                md_timeout = float(os.getenv("YTDLP_METADATA_TIMEOUT_S", "12"))
+            except Exception:
+                md_timeout = 12.0
+            try:
+                stdout, stderr = await asyncio.wait_for(
+                    proc.communicate(), timeout=md_timeout
+                )
+            except asyncio.TimeoutError:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+                raise VideoIngestError(
+                    f"yt-dlp metadata probe timed out after {md_timeout:.0f}s"
+                )
 
             if proc.returncode != 0:
                 error_msg = stderr.decode() if stderr else "Unknown yt-dlp error"
@@ -372,7 +388,23 @@ class VideoIngestionManager:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            stdout, stderr = await proc.communicate()
+            # Bound download to avoid indefinite hangs [REH][PA]
+            try:
+                dl_timeout = float(os.getenv("YTDLP_DOWNLOAD_TIMEOUT_S", "90"))
+            except Exception:
+                dl_timeout = 90.0
+            try:
+                stdout, stderr = await asyncio.wait_for(
+                    proc.communicate(), timeout=dl_timeout
+                )
+            except asyncio.TimeoutError:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+                raise VideoIngestError(
+                    f"yt-dlp download timed out after {dl_timeout:.0f}s"
+                )
 
             if proc.returncode != 0:
                 error_msg = stderr.decode() if stderr else "Unknown yt-dlp error"
@@ -460,7 +492,23 @@ class VideoIngestionManager:
             proc = await asyncio.create_subprocess_exec(
                 *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
-            stdout, stderr = await proc.communicate()
+            # Bound ffmpeg processing to avoid hangs [REH][PA]
+            try:
+                ff_timeout = float(os.getenv("FFMPEG_AUDIO_PROC_TIMEOUT_S", "60"))
+            except Exception:
+                ff_timeout = 60.0
+            try:
+                stdout, stderr = await asyncio.wait_for(
+                    proc.communicate(), timeout=ff_timeout
+                )
+            except asyncio.TimeoutError:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+                raise VideoIngestError(
+                    f"Audio processing timed out after {ff_timeout:.0f}s"
+                )
 
             if proc.returncode != 0:
                 error_msg = stderr.decode() if stderr else "Unknown ffmpeg error"
