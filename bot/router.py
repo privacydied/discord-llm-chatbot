@@ -1954,10 +1954,30 @@ class Router:
                             )
                             # Continue to normal processing (no early return)
 
-                # 6. Sequential multimodal processing
-                result_action = await self._process_multimodal_message_internal(
-                    message, context_str
-                )
+                # 6. Sequential multimodal processing (guarded by a global timeout to avoid hangs)
+                try:
+                    try:
+                        total_budget = float(
+                            self.config.get("MULTIMODAL_TOTAL_BUDGET_S", 90.0)
+                        )
+                    except Exception:
+                        total_budget = 90.0
+                    result_action = await asyncio.wait_for(
+                        self._process_multimodal_message_internal(message, context_str),
+                        timeout=total_budget,
+                    )
+                except asyncio.TimeoutError:
+                    # Fail-fast with user-friendly message; typing context will exit afterwards
+                    self.logger.error(
+                        f"multimodal.total_timeout | msg_id={message.id} budget={total_budget}s"
+                    )
+                    return BotAction(
+                        content=(
+                            "⏳ This is taking too long to process, so I’ll stop here to avoid hanging. "
+                            "Please try again with a shorter video or later."
+                        ),
+                        error=True,
+                    )
                 if router_debug:
                     # Determine what path was taken based on message content
                     has_x_urls = any(
@@ -2131,6 +2151,18 @@ class Router:
         # Collect all input items from the message
         items = collect_input_items(message)
 
+        # Helper: check if text is meaningful (letters/digits after stripping whitespace/punct)
+        def _has_meaningful_text(s: str) -> bool:
+            try:
+                s = (s or "").strip()
+                if not s:
+                    return False
+                # Remove non-alphanumeric characters (keep unicode letters/digits)
+                cleaned = re.sub(r"[^\w]+", "", s, flags=re.UNICODE)
+                return len(cleaned) >= 3
+            except Exception:
+                return bool(s and s.strip())
+
         # Check for reply-image harvesting [VISION_REPLY_IMAGE_HARVEST]
         if message.reference and self.config.get("VISION_REPLY_IMAGE_HARVEST", True):
             try:
@@ -2243,6 +2275,8 @@ class Router:
             pass
 
         # Additionally harvest URLs from the referenced message to support reply→video flows [CA][REH]
+        # Note: This block lives inside the image-harvest section for historical reasons, but URL harvest
+        # must NOT depend on the VISION_REPLY_IMAGE_HARVEST flag. We add an unconditional safety harvest below.
         try:
             ref = getattr(message, "reference", None)
             ref_msg = getattr(ref, "resolved", None)
@@ -2265,6 +2299,7 @@ class Router:
                         }
                     except Exception:
                         existing_urls = set()
+                    added_urls = 0
                     for u in found_urls:
                         if u and u not in existing_urls:
                             items.append(
@@ -2275,8 +2310,90 @@ class Router:
                                 )
                             )
                             existing_urls.add(u)
+                            added_urls += 1
+                    if added_urls:
+                        try:
+                            self.logger.info(
+                                f"📎 Reply URL harvest | from_msg={ref_msg.id} urls_added={added_urls}"
+                            )
+                        except Exception:
+                            pass
         except Exception:
             # Do not fail dispatch on URL harvest errors
+            pass
+
+        # Safety net: Unconditional URL harvest for reply messages (not gated by VISION_REPLY_IMAGE_HARVEST)
+        # Ensures reply→video (YouTube/TikTok/X) routes always collect the URL even when image harvest is disabled. [REH]
+        try:
+            if getattr(message, "reference", None):
+                ref = getattr(message, "reference", None)
+                ref_msg = getattr(ref, "resolved", None)
+                if ref_msg is None and getattr(ref, "message_id", None):
+                    try:
+                        ref_msg = await message.channel.fetch_message(ref.message_id)
+                    except Exception:
+                        ref_msg = None
+                if ref_msg:
+                    import re as _re
+                    # 1) URLs present in the parent's text content
+                    if getattr(ref_msg, "content", None):
+                        found_urls = _re.findall(r"https?://[^\s<>\"'\[\]{}|\\^`]+", ref_msg.content or "")
+                    else:
+                        found_urls = []
+
+                    # 2) URLs present in the parent's embeds (e.g., tweets/YouTube share)
+                    try:
+                        ref_embeds = list(getattr(ref_msg, "embeds", []) or [])
+                    except Exception:
+                        ref_embeds = []
+                    for em in ref_embeds:
+                        try:
+                            em_url = getattr(em, "url", None)
+                            if em_url and em_url not in found_urls:
+                                found_urls.append(em_url)
+                            # Some providers put URLs in video.url or author.url
+                            v = getattr(em, "video", None)
+                            if v and hasattr(v, "url"):
+                                vu = getattr(v, "url", None)
+                                if vu and vu not in found_urls:
+                                    found_urls.append(vu)
+                            a = getattr(em, "author", None)
+                            if a and hasattr(a, "url"):
+                                au = getattr(a, "url", None)
+                                if au and au not in found_urls:
+                                    found_urls.append(au)
+                        except Exception:
+                            continue
+
+                    if found_urls:
+                        try:
+                            existing_urls = {
+                                str(it.payload)
+                                for it in items
+                                if getattr(it, "source_type", None) == "url"
+                            }
+                        except Exception:
+                            existing_urls = set()
+                        added_urls = 0
+                        for u in found_urls:
+                            if u and u not in existing_urls:
+                                items.append(
+                                    InputItem(
+                                        source_type="url",
+                                        payload=u,
+                                        order_index=len(items) + 1,
+                                    )
+                                )
+                                existing_urls.add(u)
+                                added_urls += 1
+                        if added_urls:
+                            try:
+                                self.logger.info(
+                                    f"📎 Reply URL harvest (unconditional) | from_msg={getattr(ref_msg, 'id', 'na')} urls_added={added_urls} now_items={len(items)}"
+                                )
+                            except Exception:
+                                pass
+        except Exception:
             pass
 
         # Process original text content (remove URLs that will be processed separately)
@@ -2298,6 +2415,18 @@ class Router:
                 f"Inline search resolution failed: {e} (msg_id: {message.id})",
                 exc_info=True,
             )
+
+        # Diagnostics: post-harvest item counts [RAT][PA]
+        try:
+            url_ct = sum(1 for it in items if getattr(it, "source_type", None) == "url")
+            att_ct = sum(
+                1 for it in items if getattr(it, "source_type", None) == "attachment"
+            )
+            self.logger.info(
+                f"mm.items.after_harvest | count={len(items)} urls={url_ct} atts={att_ct} msg_id={message.id}"
+            )
+        except Exception:
+            pass
 
         # Thread-only UX fallback: if the trigger carried no meaningful text, adopt the reply target's text;
         # if the reply target is also empty (e.g., the mention itself), adopt the nearest previous human text. [REH][IV]
@@ -2550,9 +2679,29 @@ class Router:
                 self.logger.error(f"Perception→TEXT routing failed: {e}", exc_info=True)
                 # Fall back to normal text flow on error
 
-        # If no items found, process as text-only
+        # If no items found, process as text-only (with guard for empty replies)
         if not items:
-            # No actionable items found, treat as text-only
+            # Short-circuit empty replies to avoid long LLM paths and typing stalls [REH]
+            if not _has_meaningful_text(original_text):
+                try:
+                    self.logger.info(
+                        "route.empty | reply had no items and no meaningful text; returning hint",
+                        extra={
+                            "event": "route.empty",
+                            "msg_id": getattr(message, "id", None),
+                            "guild_id": getattr(getattr(message, "guild", None), "id", None),
+                        },
+                    )
+                except Exception:
+                    pass
+                return BotAction(
+                    content=(
+                        "I didn’t find a link or any text in your reply. If you're replying to a video or image, "
+                        "please include the link or upload the media."
+                    )
+                )
+
+            # No actionable items but some text present — treat as text-only
             response_action = await self._invoke_text_flow(
                 original_text, message, context_str
             )
@@ -2582,18 +2731,6 @@ class Router:
             ]
         except Exception:
             url_items = []
-
-        # Helper: check if text is meaningful (letters/digits after stripping whitespace/punct)
-        def _has_meaningful_text(s: str) -> bool:
-            try:
-                s = (s or "").strip()
-                if not s:
-                    return False
-                # Remove non-alphanumeric characters (keep unicode letters/digits)
-                cleaned = re.sub(r"[^\w]+", "", s, flags=re.UNICODE)
-                return len(cleaned) >= 3
-            except Exception:
-                return bool(s and s.strip())
 
         # 2) Bare image default VL (if enabled): when only images are provided with no meaningful text,
         #    run VL description using the default prompt. We keep the sequential pipeline but scope items
@@ -3306,6 +3443,92 @@ class Router:
             url = item.payload
             self.logger.info(f"🌐 Processing general URL: {url}")
 
+            # Per-operation time budgets and bounded-wait helper [PA][REH][RAT]
+            cfg = self.config
+            try:
+                x_stt_probe_timeout = float(cfg.get("X_STT_PROBE_TIMEOUT_S", 60.0))
+            except Exception:
+                x_stt_probe_timeout = 60.0
+            try:
+                # Prefer seconds; fallback to ms if provided
+                x_api_timeout_s = float(cfg.get("X_API_TIMEOUT_S", 0)) or (
+                    float(cfg.get("X_API_TIMEOUT_MS", 8000)) / 1000.0
+                )
+            except Exception:
+                x_api_timeout_s = 8.0
+            try:
+                x_syn_call_timeout = float(
+                    cfg.get(
+                        "X_SYNDICATION_GROSS_TIMEOUT_S",
+                        max(getattr(self, "_x_syn_timeout_s", 3.0), 3.0) + 0.5,
+                    )
+                )
+            except Exception:
+                x_syn_call_timeout = max(getattr(self, "_x_syn_timeout_s", 3.0), 3.0) + 0.5
+            try:
+                url_process_timeout = float(cfg.get("URL_PROCESS_TIMEOUT_S", 25.0))
+            except Exception:
+                url_process_timeout = 25.0
+            try:
+                web_extract_timeout = float(cfg.get("WEB_EXTRACT_TIMEOUT_S", 30.0))
+            except Exception:
+                web_extract_timeout = 30.0
+
+            async def _bounded(coro, timeout_s: float, tag: str, detail: Optional[dict] = None):
+                """Await coro with a timeout and emit start/ok/timeout/fail breadcrumbs. [REH][PA]"""
+                import time as _t
+                t0 = _t.time()
+                try:
+                    self.logger.debug(
+                        f"{tag}.start",
+                        extra={
+                            "event": f"{tag}.start",
+                            "detail": (detail or {}) | {"timeout_s": timeout_s},
+                        },
+                    )
+                except Exception:
+                    pass
+                try:
+                    res = await asyncio.wait_for(coro, timeout=timeout_s)
+                    try:
+                        dt_ms = int((_t.time() - t0) * 1000)
+                        self.logger.info(
+                            f"{tag}.ok ms={dt_ms}",
+                            extra={
+                                "event": f"{tag}.ok",
+                                "detail": (detail or {}) | {"ms": dt_ms},
+                            },
+                        )
+                    except Exception:
+                        pass
+                    return res, None
+                except asyncio.TimeoutError:
+                    try:
+                        dt_ms = int((_t.time() - t0) * 1000)
+                        self.logger.warning(
+                            f"{tag}.timeout ms={dt_ms}",
+                            extra={
+                                "event": f"{tag}.timeout",
+                                "detail": (detail or {}) | {"ms": dt_ms, "timeout_s": timeout_s},
+                            },
+                        )
+                    except Exception:
+                        pass
+                    return None, "timeout"
+                except Exception as e:
+                    try:
+                        dt_ms = int((_t.time() - t0) * 1000)
+                        self.logger.info(
+                            f"{tag}.fail {e.__class__.__name__}: {e}",
+                            extra={
+                                "event": f"{tag}.fail",
+                                "detail": (detail or {}) | {"ms": dt_ms, "error": str(e)},
+                            },
+                        )
+                    except Exception:
+                        pass
+                    return None, "error"
+
             # Optional: Twitter/X author self-reply thread unroll (feature-gated) [PA][REH]
             try:
                 if bool(self.config.get("TWITTER_UNROLL_ENABLED", False)) and self._is_twitter_status_url(url):
@@ -3389,36 +3612,31 @@ class Router:
                 if bool(cfg.get("X_TWITTER_STT_PROBE_FIRST", True)) and (
                     x_client is None
                 ):
-                    try:
-                        stt_res = await hear_infer_from_url(url)
-                        if stt_res and stt_res.get("transcription"):
-                            base_text = None
-                            if syndication_enabled and tweet_id:
-                                syn = await self._get_tweet_via_syndication(tweet_id)
-                                if syn:
-                                    base_text = self._format_syndication_result(
-                                        syn, url
-                                    )
-                            return self._format_x_tweet_with_transcription(
-                                base_text=base_text,
-                                url=url,
-                                stt_res=stt_res,
+                    stt_res, stt_err = await _bounded(
+                        hear_infer_from_url(url),
+                        x_stt_probe_timeout,
+                        "x.stt_probe",
+                        {"url": url},
+                    )
+                    if stt_res and stt_res.get("transcription"):
+                        base_text = None
+                        if syndication_enabled and tweet_id:
+                            syn, _ = await _bounded(
+                                self._get_tweet_via_syndication(tweet_id),
+                                x_syn_call_timeout,
+                                "x.syndication.probe",
+                                {"tweet_id": tweet_id},
                             )
-                    except Exception as stt_err:
-                        err_str = str(stt_err).lower()
-                        # Only bypass to API/syndication if clearly not video/audio or unsupported URL
-                        if ("no video or audio content" in err_str) or (
-                            "unsupported url" in err_str
-                        ):
-                            pass
-                        else:
-                            self.logger.info(
-                                "X STT probe failed; continuing with API/syndication path",
-                                extra={
-                                    "event": "x.stt_probe.fail",
-                                    "detail": {"url": url, "error": str(stt_err)},
-                                },
-                            )
+                            if syn:
+                                base_text = self._format_syndication_result(syn, url)
+                        return self._format_x_tweet_with_transcription(
+                            base_text=base_text,
+                            url=url,
+                            stt_res=stt_res,
+                        )
+                    if stt_err == "error":
+                        # Non-fatal errors already logged; continue
+                        pass
 
                 # Tier 1: Syndication JSON (cache + concurrency) when allowed and preferred [PA][REH]
                 if (
@@ -3427,7 +3645,12 @@ class Router:
                     and not require_api
                     and (syndication_first or x_client is None)
                 ):
-                    syn = await self._get_tweet_via_syndication(tweet_id)
+                    syn, _ = await _bounded(
+                        self._get_tweet_via_syndication(tweet_id),
+                        x_syn_call_timeout,
+                        "x.syndication",
+                        {"tweet_id": tweet_id},
+                    )
                     if syn:
                         self._metric_inc("x.syndication.hit", None)
                         # Media-first branching: use robust extractor rather than only 'photos' [CA][REH]
@@ -3489,12 +3712,13 @@ class Router:
                             except Exception:
                                 status_id = ""
                             if status_id:
-                                try:
-                                    imgs = await self._probe_twitter_syndication_images(
-                                        url, status_id
-                                    )
-                                except Exception as _img_probe_err:
-                                    imgs = []
+                                imgs, _ = await _bounded(
+                                    self._probe_twitter_syndication_images(url, status_id),
+                                    min(getattr(self, "_x_syn_timeout_s", 3.0) + 1.0, 4.5),
+                                    "x.syndication.image_probe",
+                                    {"tweet_id": status_id},
+                                )
+                                imgs = imgs or []
                                 if imgs:
                                     try:
                                         first_host = urlparse(imgs[0]).netloc
@@ -3538,31 +3762,21 @@ class Router:
                                     return result
 
                             # Attempt STT for potential video tweets; silently fall back if not video [PA][REH]
-                            try:
-                                stt_res = await hear_infer_from_url(url)
-                                if stt_res and stt_res.get("transcription"):
-                                    return self._format_x_tweet_with_transcription(
-                                        base_text=base,
-                                        url=url,
-                                        stt_res=stt_res,
-                                    )
-                            except Exception as stt_err:
-                                err_s = str(stt_err).lower()
-                                if ("no video or audio content" in err_s) or (
-                                    "no video" in err_s
-                                ):
-                                    pass  # text-only tweet; just return base
-                                else:
-                                    self.logger.info(
-                                        "X syndication STT attempt non-fatal error",
-                                        extra={
-                                            "event": "x.syndication.stt.warn",
-                                            "detail": {
-                                                "url": url,
-                                                "error": str(stt_err),
-                                            },
-                                        },
-                                    )
+                            stt_res, stt_err = await _bounded(
+                                hear_infer_from_url(url),
+                                x_stt_probe_timeout,
+                                "x.syndication.stt",
+                                {"url": url},
+                            )
+                            if stt_res and stt_res.get("transcription"):
+                                return self._format_x_tweet_with_transcription(
+                                    base_text=base,
+                                    url=url,
+                                    stt_res=stt_res,
+                                )
+                            if stt_err == "error":
+                                # proceed to return base
+                                pass
                             return base
 
                         # Images are present somewhere; route to unified syndication→VL handler [CA]
@@ -3680,7 +3894,14 @@ class Router:
                 # Tier 2 (optionally before API if syndication_first): X API [SFT]
                 if tweet_id and x_client is not None:
                     try:
-                        api_data = await x_client.get_tweet_by_id(tweet_id)
+                        api_data, apist = await _bounded(
+                            x_client.get_tweet_by_id(tweet_id),
+                            x_api_timeout_s,
+                            "x.api.get_tweet",
+                            {"tweet_id": tweet_id},
+                        )
+                        if apist is not None and api_data is None:
+                            raise APIError(f"X API call failed ({apist})")
                         includes = api_data.get("includes") or {}
                         media_list = includes.get("media") or []
                         media_types = {
@@ -3689,7 +3910,12 @@ class Router:
 
                         if {"video", "animated_gif"} & media_types:
                             try:
-                                stt_res = await hear_infer_from_url(url)
+                                stt_res, _ = await _bounded(
+                                    hear_infer_from_url(url),
+                                    x_stt_probe_timeout,
+                                    "x.api.stt",
+                                    {"url": url},
+                                )
                                 if stt_res and stt_res.get("transcription"):
                                     base = self._format_x_tweet_result(api_data, url)
                                     return self._format_x_tweet_with_transcription(
@@ -3844,14 +4070,21 @@ class Router:
                     # else fall through to generic handling
 
             # Use existing URL processing logic - process_url returns a dict
-            url_result = await process_url(url)
+            url_result, _ = await _bounded(
+                process_url(url), url_process_timeout, "url.process", {"url": url}
+            )
 
             # Handle errors: before giving up, try tiered extractor (A/B) [REH]
             if not url_result or url_result.get("error"):
                 self.logger.info(
                     f"🧭 process_url failed for {url}; falling back to tiered extractor"
                 )
-                extract_res = await web_extractor.extract(url)
+                extract_res, _ = await _bounded(
+                    web_extractor.extract(url),
+                    web_extract_timeout,
+                    "url.extract",
+                    {"url": url},
+                )
                 if extract_res.success:
                     return f"Web content from {extract_res.canonical_url or url}:\n{extract_res.to_message()}"
                 # If tiered extractor also failed, return original error if present
@@ -3869,7 +4102,12 @@ class Router:
                 self.logger.info(
                     f"🧭 No text from process_url; trying tiered extractor for {url}"
                 )
-                extract_res = await web_extractor.extract(url)
+                extract_res, _ = await _bounded(
+                    web_extractor.extract(url),
+                    web_extract_timeout,
+                    "url.extract",
+                    {"url": url},
+                )
                 if extract_res.success:
                     return f"Web content from {extract_res.canonical_url or url}:\n{extract_res.to_message()}"
                 return f"Could not extract content from URL: {url}"
@@ -3909,7 +4147,9 @@ class Router:
             self.logger.info(
                 f"🧭 Falling back to tiered extractor for {url} (no auto-screenshot)"
             )
-            extract_res = await web_extractor.extract(url)
+            extract_res, _ = await _bounded(
+                web_extractor.extract(url), web_extract_timeout, "url.extract", {"url": url}
+            )
             if extract_res.success:
                 return f"Web content from {extract_res.canonical_url or url}:\n{extract_res.to_message()}"
             else:
