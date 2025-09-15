@@ -990,11 +990,13 @@ class LLMBot(commands.Bot):
                     # Resolve desired reply target up-front so we can decide whether to edit the placeholder
                     ch = getattr(message, "channel", None)
                     reply_target = None
+                    scope_case = "plain"
                     try:
                         if _is_thread_channel(ch):
                             # Threads: resolve newest (or newest human if newest is bot)
                             rt, _reason = await resolve_thread_reply_target(self, message, self.config)
                             reply_target = rt
+                            scope_case = "thread"
                             try:
                                 if reply_target is not None:
                                     self.logger.info(
@@ -1024,6 +1026,7 @@ class LLMBot(commands.Bot):
                                 except Exception:
                                     ref_msg = None
                             reply_target = ref_msg or message
+                            scope_case = "reply"
                             try:
                                 if reply_target is not None:
                                     self.logger.info(
@@ -1055,9 +1058,25 @@ class LLMBot(commands.Bot):
                                 if not raw:
                                     anc, _why = await resolve_implicit_anchor(self, message, self.config)
                                     reply_target = anc or None
+                            scope_case = "plain"
                     except Exception:
                         # Fallback: reply to triggering message to preserve original behavior
                         reply_target = message
+                        scope_case = "reply"
+
+                    # Minimal logging for scope resolution
+                    try:
+                        self.logger.info(
+                            "scope_resolved",
+                            extra={
+                                **base_extra,
+                                "subsys": "route",
+                                "event": "scope_resolved",
+                                "detail": {"case": scope_case, "scope": getattr(ch, "id", None)},
+                            },
+                        )
+                    except Exception:
+                        pass
 
                     # Decide whether it's safe to edit the placeholder
                     # If we must change the reply reference (e.g., threads/implicit anchor), delete placeholder and send anew
@@ -1079,6 +1098,94 @@ class LLMBot(commands.Bot):
                     except Exception:
                         must_retarget = False
 
+                    # Resolve recipient to mention and ping strategy (avoid self-mention and double ping)
+                    recipient = None
+                    recipient_reason = "no_target"
+                    try:
+                        if reply_target is not None and hasattr(reply_target, "author"):
+                            recipient = getattr(reply_target, "author", None)
+                            recipient_reason = "target_author"
+                        # Avoid self-mention (bot) and any bot authors
+                        if recipient is not None and (
+                            getattr(recipient, "bot", False) or getattr(recipient, "id", None) == getattr(self.user, "id", None)
+                        ):
+                            # Fallback: latest human speaker in-scope; minimally choose triggering human author
+                            recipient = message.author if not getattr(message.author, "bot", False) else None
+                            recipient_reason = "fallback_human" if recipient else "no_human"
+                    except Exception:
+                        recipient = None
+                        recipient_reason = "no_human"
+
+                    # Decide ping mode
+                    ping_mode = "none"
+                    reply_ping = False
+                    explicit_mention = False
+                    try:
+                        if recipient is not None:
+                            # Preferred: rely on reply ping when the target author is the human recipient
+                            if reply_target is not None and getattr(reply_target, "author", None) is recipient and not getattr(recipient, "bot", False):
+                                ping_mode = "reply_ping"
+                                reply_ping = True
+                            else:
+                                # Use explicit mention when target author is a bot or different; avoid double-ping
+                                ping_mode = "explicit_mention"
+                                explicit_mention = True
+                        else:
+                            ping_mode = "none"
+                    except Exception:
+                        ping_mode = "none"
+                        reply_ping = False
+                        explicit_mention = False
+
+                    # Build AllowedMentions whitelist to enforce single notification path
+                    try:
+                        if ping_mode == "reply_ping":
+                            allowed_mentions = discord.AllowedMentions(
+                                everyone=False, users=[], roles=False, replied_user=True
+                            )
+                        elif ping_mode == "explicit_mention" and recipient is not None:
+                            allowed_mentions = discord.AllowedMentions(
+                                everyone=False, users=[recipient], roles=False, replied_user=False
+                            )
+                        else:
+                            allowed_mentions = discord.AllowedMentions(
+                                everyone=False, users=[], roles=False, replied_user=False
+                            )
+                    except Exception:
+                        allowed_mentions = None
+
+                    # Optionally prefix explicit mention (single path); do not double-ping
+                    try:
+                        if explicit_mention and recipient is not None:
+                            mention_prefix = getattr(recipient, "mention", None)
+                            if mention_prefix and not (content or "").lstrip().startswith(str(mention_prefix)):
+                                content = f"{mention_prefix} {content}" if content else f"{mention_prefix}"
+                    except Exception:
+                        pass
+
+                    # Minimal logging for recipient and ping strategy
+                    try:
+                        self.logger.info(
+                            "recipient_resolved",
+                            extra={
+                                **base_extra,
+                                "subsys": "mention",
+                                "event": "recipient_resolved",
+                                "detail": {"user": getattr(recipient, "id", None), "reason": recipient_reason},
+                            },
+                        )
+                        self.logger.info(
+                            "ping_strategy",
+                            extra={
+                                **base_extra,
+                                "subsys": "mention",
+                                "event": "ping_strategy",
+                                "detail": {"mode": ping_mode},
+                            },
+                        )
+                    except Exception:
+                        pass
+
                     if target_message and not files and not must_retarget:
                         # Edit the existing streaming message in-place
                         sent_message = target_message
@@ -1095,17 +1202,32 @@ class LLMBot(commands.Bot):
                             except Exception:
                                 pass
 
+                        # Log send mode
+                        try:
+                            self.logger.info(
+                                "send",
+                                extra={
+                                    **base_extra,
+                                    "subsys": "route",
+                                    "event": "send",
+                                    "detail": {"mode": "delete_and_resend" if target_message else "direct"},
+                                },
+                            )
+                        except Exception:
+                            pass
+
                         if reply_target is None and _is_thread_channel(ch):
                             # Send to thread without a reply reference (no reply-to-self loops available)
                             sent_message = await message.channel.send(
-                                content=content, embeds=action.embeds, files=files
+                                content=content, embeds=action.embeds, files=files, allowed_mentions=allowed_mentions
                             )
                         elif reply_target is not None:
                             sent_message = await reply_target.reply(
                                 content=content,
                                 embeds=action.embeds,
                                 files=files,
-                                mention_author=True,
+                                mention_author=False,
+                                allowed_mentions=allowed_mentions,
                             )
                         else:
                             # Non-thread or fallback: reply to triggering message
@@ -1113,7 +1235,8 @@ class LLMBot(commands.Bot):
                                 content=content,
                                 embeds=action.embeds,
                                 files=files,
-                                mention_author=True,
+                                mention_author=False,
+                                allowed_mentions=allowed_mentions,
                             )
 
                         self.logger.info(

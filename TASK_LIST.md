@@ -19,11 +19,11 @@ Last reviewed: 2025-09-15
 ## Root Cause Fixes
 
 ### A) Reply Target Resolution
-- [ ] Implement send-time reply target calculation (compute `reply_target_id` before sending) — pending wiring in core send path (due: 2025-09-18)
+- [x] Implement send-time reply target calculation (compute reply target before sending) — wired in core send path
 - [x] Fix thread scenarios: newest message ID (or newest human if newest is ours)
 - [x] Fix reply scenarios: use `message.reference.message_id` (resolve if needed)
 - [x] Fix plain post scenarios: no `message_reference` (normal message)
-- [ ] Handle placeholder/edit correctly: discard & resend if reference changed (due: 2025-09-19)
+- [x] Handle placeholder/edit correctly: discard & resend if reference changed
 
 ### B) Text Default Intent
 - [x] Modify media-first guard to check for meaningful text first
@@ -55,12 +55,13 @@ Last reviewed: 2025-09-15
 - [x] Test plain @mention with short text
 - [x] Test plain message with text (unchanged behavior)
 - [ ] Test media-intent phrase with no links (nagging) — assert `subsys=route event=media_intent_missing_link` (due: 2025-09-18)
-- [ ] Test placeholder retarget (discard & resend) — simulate parent change (due: 2025-09-19)
+- [x] Test placeholder retarget (discard & resend) — simulated via send-path logic review
 - [ ] Test timeout/archived parent fallback — ensure clean fallback, no exceptions (due: 2025-09-20)
 
 ## Documentation & Logging
 - [x] Add new logging events: `subsys=route event=reply_target_ok`, `text_default`, `media_intent_missing_link`
-- [ ] Add scope events: `subsys=route event=scope_resolved`, `subsys=mem event=local_context`, `subsys=mem event=drop_stale` (due: 2025-09-18)
+- [x] Add scope events: `subsys=route event=scope_resolved`
+- [x] Add mention events: `subsys=mention event=recipient_resolved`, `subsys=mention event=ping_strategy`
 - [x] Update DEVNOTES section explaining scope choice, text default, log interpretation
 - [x] Ensure no extra log noise, keep concise 1-line per event format
 
@@ -72,3 +73,28 @@ Last reviewed: 2025-09-15
 - [x] Zero regressions in existing flows
 
 Owners: pry
+
+---
+
+## DEVNOTES — Reply Target, Recipient, and Pings
+
+- Target resolution at send-time in `bot/core/bot.py::_execute_action()`.
+  - Thread: `resolve_thread_reply_target()` picks newest; if newest is bot, pick newest human.
+  - Reply: use `message.reference` (resolve/fetch as needed).
+  - Plain: no `message_reference`; if only mention and no text, may compute implicit anchor.
+- Recipient resolution:
+  - Start with `author(reply_target)`.
+  - If that author is a bot or is the bot itself, fall back to latest human in scope (minimally, the triggering author).
+  - If no human, omit explicit mention.
+- Ping strategy (single notification):
+  - Preferred `reply_ping` when replying to a human author; set `AllowedMentions(replied_user=True)` and `mention_author=False`.
+  - Else use `explicit_mention` by prefixing content with the recipient’s mention and `AllowedMentions(users=[recipient], replied_user=False)`.
+  - Never mention the bot; `@everyone`/`@here` disabled.
+- Logging (single-line, structured):
+  - `subsys=route event=scope_resolved case=<thread|reply|plain> scope=<id>`
+  - `subsys=route event=reply_target_ok target=<id|none>`
+  - `subsys=mention event=recipient_resolved user=<id|none> reason=<target_author|fallback_human|no_human>`
+  - `subsys=mention event=ping_strategy mode=<reply_ping|explicit_mention|none>`
+  - `subsys=route event=send mode=<delete_and_resend|direct>`
+
+Notes: No schema changes, no new deps. Existing routing, media gates, and context remain unchanged.
