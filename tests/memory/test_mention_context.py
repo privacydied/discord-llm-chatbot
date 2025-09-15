@@ -9,9 +9,6 @@ import discord
 
 from bot.memory.mention_context import (
     maybe_build_mention_context,
-    THREAD_CASE,
-    REPLY_CASE,
-    LONE_CASE,
 )
 
 

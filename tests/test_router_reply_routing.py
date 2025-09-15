@@ -9,7 +9,6 @@ import discord
 
 from bot.router import Router, BotAction
 from bot.core.bot import LLMBot
-from bot.memory.thread_tail import _is_thread_channel
 
 
 @pytest.fixture

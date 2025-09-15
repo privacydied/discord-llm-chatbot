@@ -51,7 +51,6 @@ from .search.types import SafeSearch, SearchCategory, SearchQueryParams, SearchR
 from .hear import hear_infer, hear_infer_from_url
 from .see import see_infer
 from .types import Command, ParsedCommand
-from .utils.env import get_bool
 from .vl.postprocess import sanitize_model_output, sanitize_vl_reply_text
 from .web import process_url
 from .threads.x_thread_unroll import unroll_author_thread
