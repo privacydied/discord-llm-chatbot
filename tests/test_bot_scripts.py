@@ -19,28 +19,11 @@ logger = logging.getLogger("test_bot")
 
 # Load environment variables
 load_dotenv()
-
-
-def _running_under_pytest() -> bool:
-    """Return True when the module is imported by pytest collection.
-
-    Pytest sets the ``PYTEST_CURRENT_TEST`` environment variable while it is
-    importing test modules.  The original script called ``sys.exit`` at import
-    time when the ``DISCORD_TOKEN`` environment variable was missing which made
-    the entire test run abort before collection completed.  By detecting the
-    pytest runtime we can keep the helpful error message for manual execution
-    while allowing the module to be imported safely during automated tests.
-    """
-
-    return bool(os.getenv("PYTEST_CURRENT_TEST")) or "pytest" in sys.modules
-
-
 TOKEN = os.getenv("DISCORD_TOKEN")
 
 if not TOKEN:
     logger.error("DISCORD_TOKEN not found in .env file")
-    if not _running_under_pytest():
-        sys.exit(1)
+    sys.exit(1)
 
 # Set up intents
 intents = discord.Intents.default()
