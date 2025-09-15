@@ -1966,11 +1966,62 @@ class Router:
                 )
 
             # 3. Determine if the bot should process this message (DM, mention, or reply).
-            if not self._should_process_message(message):
-                self.logger.debug(
-                    f"Ignoring message {message.id} in guild {message.guild.id if message.guild else 'N/A'}: Not a DM or direct mention."
-                )
-                return None
+            allow_via_gate = self._should_process_message(message)
+            if not allow_via_gate:
+                # Relaxed allowance: mention + minimal meaningful text should route to text
+                # This mirrors the text-default behavior in core bot to avoid dead-ends. [IV][REH]
+                try:
+                    is_mentioned = (
+                        self.bot.user in message.mentions if hasattr(message, "mentions") else False
+                    )
+                except Exception:
+                    is_mentioned = False
+                mention_pattern = rf"^<@!?{self.bot.user.id}>\s*"
+                try:
+                    cleaned = re.sub(mention_pattern, "", (message.content or "")).strip()
+                except Exception:
+                    cleaned = (message.content or "").strip()
+
+                def _has_meaningful_text(s: str) -> bool:
+                    try:
+                        s = (s or "").strip()
+                        if not s:
+                            return False
+                        if re.search(r"[A-Za-z0-9]", s):
+                            return True
+                        if s in {"?", "!", "…", "??", "!!"}:
+                            return True
+                        # Emoji/pictographs fallback
+                        try:
+                            if re.search(r"[\U0001F300-\U0001FAFF\u2600-\u27BF]", s):
+                                return True
+                        except re.error:
+                            if re.search(r"[^\s\w]", s):
+                                return True
+                        if len(s) <= 3 and re.match(r"^[^\s]+$", s):
+                            return True
+                        return bool(s)
+                    except Exception:
+                        return bool(s and s.strip())
+
+                if is_mentioned and _has_meaningful_text(cleaned):
+                    try:
+                        self.logger.info(
+                            "text_default",
+                            extra={
+                                "event": "text_default",
+                                "subsys": "gate",
+                                "msg_id": message.id,
+                                "detail": {"reason": "has_text", "clean_len": len(cleaned)},
+                            },
+                        )
+                    except Exception:
+                        pass
+                else:
+                    self.logger.debug(
+                        f"Ignoring message {message.id} in guild {message.guild.id if message.guild else 'N/A'}: Not addressed."
+                    )
+                    return None
 
             # --- Start of processing for DMs, Mentions, and Replies ---
             async with message.channel.typing():

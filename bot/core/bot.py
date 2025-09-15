@@ -1005,13 +1005,13 @@ class LLMBot(commands.Bot):
                                             **base_extra,
                                             "subsys": self.config.get("MEM_LOG_SUBSYS", "mem.thread"),
                                             "event": "reply_target_ok",
-                                            "detail": {"id": getattr(reply_target, "id", None)},
+                                            "detail": {"id": getattr(reply_target, "id", None), "reason": str(_reason) if _reason else "nearest_human"},
                                         },
                                     )
                             except Exception:
                                 pass
                         elif getattr(message, "reference", None) is not None:
-                            # Reply chain (non-thread): reply to the referenced message (newest target in chain)
+                            # Reply chain (non-thread): anchor to the triggering user message to avoid self-anchor
                             ref = getattr(message, "reference", None)
                             ref_msg = None
                             try:
@@ -1025,7 +1025,8 @@ class LLMBot(commands.Bot):
                                         ref_msg = await message.channel.fetch_message(ref_id)
                                 except Exception:
                                     ref_msg = None
-                            reply_target = ref_msg or message
+                            # Use the triggering user message as the reply target to prevent bot self-anchoring
+                            reply_target = message
                             scope_case = "reply"
                             try:
                                 if reply_target is not None:
@@ -1035,7 +1036,7 @@ class LLMBot(commands.Bot):
                                             **base_extra,
                                             "subsys": self.config.get("MEM_LOG_SUBSYS", "mem.reply"),
                                             "event": "reply_target_ok",
-                                            "detail": {"id": getattr(reply_target, "id", None)},
+                                            "detail": {"id": getattr(reply_target, "id", None), "reason": "trigger_user"},
                                         },
                                     )
                             except Exception:
@@ -1075,6 +1076,17 @@ class LLMBot(commands.Bot):
                                 "detail": {"case": scope_case, "scope": getattr(ch, "id", None)},
                             },
                         )
+                        # Emit reply_target_ok in plain scope for completeness
+                        if scope_case == "plain":
+                            self.logger.info(
+                                "reply_target_ok",
+                                extra={
+                                    **base_extra,
+                                    "subsys": self.config.get("MEM_LOG_SUBSYS", "mem.plain"),
+                                    "event": "reply_target_ok",
+                                    "detail": {"id": getattr(reply_target, "id", None), "reason": "plain"},
+                                },
+                            )
                     except Exception:
                         pass
 

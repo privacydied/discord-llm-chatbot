@@ -16,7 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `contextual_brain_infer` delegates scope resolution to helper, improving observability without altering behavior.
 
 ### Fixed
-- Placeholder for fixes
+- Reply anchoring & mention correctness
+  - Replies now anchor to the human asker: reply parent in replies, newest human in threads; never self-anchor.
+  - Exactly one notification per reply (reply-ping or explicit mention). Uses `AllowedMentions` and `mention_author=False` to avoid double-ping.
+  - Locality-first context preserved; no cross-scope memory bleed. Routing/unroll/media gates unchanged.
+  - Safe fallbacks: archived/missing parent or invalid thread state → plain send with no explicit mention; no crashes.
 
 ## [0.1.0] - 2024-01-01
 ### Added
