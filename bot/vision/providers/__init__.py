@@ -6,11 +6,7 @@ Each adapter normalizes provider APIs to common VisionRequest/VisionResponse int
 """
 
 from .base import BaseVisionProvider
-from .together_adapter import TogetherAdapter  
+from .together_adapter import TogetherAdapter
 from .novita_adapter import NovitaAdapter
 
-__all__ = [
-    'BaseVisionProvider',
-    'TogetherAdapter',
-    'NovitaAdapter'
-]
+__all__ = ["BaseVisionProvider", "TogetherAdapter", "NovitaAdapter"]

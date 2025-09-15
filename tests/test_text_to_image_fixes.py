@@ -2,12 +2,11 @@
 Unit tests for text→image generation routing and file handling fixes.
 Tests the key behaviors fixed in the "Fix This Code" implementation.
 """
+
 import pytest
-from unittest.mock import Mock, AsyncMock, MagicMock, patch
+from unittest.mock import Mock, patch
 import os
-import tempfile
 import re
-from pathlib import Path
 
 
 class TestDirectVisionTriggers:
@@ -15,60 +14,67 @@ class TestDirectVisionTriggers:
 
     def _detect_direct_vision_triggers(self, content: str):
         """Standalone implementation of trigger detection logic for testing."""
-        import re
-        from typing import Optional, Dict, Any
-        
+
         content_clean = content.lower().strip()
-        content_clean = re.sub(r'[!.?]+', '.', content_clean)
-        
+        content_clean = re.sub(r"[!.?]+", ".", content_clean)
+
         trigger_patterns = [
-            r'generate\s+(an?\s+)?(image|picture|pic|photo|art|drawing|render)',
-            r'create\s+(an?\s+)?(image|picture|pic|photo|art|drawing|render)', 
-            r'make\s+(an?\s+)?(image|picture|pic|photo|art|drawing|render)',
-            r'draw\s+(me\s+)?(an?\s+)?',
-            r'imagine\s+(an?\s+)?',
-            r'render\s+(an?\s+)?',
-            r'paint\s+(an?\s+)?',
+            r"generate\s+(an?\s+)?(image|picture|pic|photo|art|drawing|render)",
+            r"create\s+(an?\s+)?(image|picture|pic|photo|art|drawing|render)",
+            r"make\s+(an?\s+)?(image|picture|pic|photo|art|drawing|render)",
+            r"draw\s+(me\s+)?(an?\s+)?",
+            r"imagine\s+(an?\s+)?",
+            r"render\s+(an?\s+)?",
+            r"paint\s+(an?\s+)?",
         ]
-        
+
         for pattern in trigger_patterns:
             match = re.search(pattern, content_clean)
             if match:
                 trigger_end = match.end()
                 prompt_part = content[trigger_end:].strip()
-                
+
                 for prefix in ["of", "a", "an", "some", "the"]:
                     if prompt_part.lower().startswith(prefix + " "):
-                        prompt_part = prompt_part[len(prefix)+1:].strip()
-                
-                final_prompt = prompt_part if prompt_part and len(prompt_part) > 2 else content.strip()
-                
+                        prompt_part = prompt_part[len(prefix) + 1 :].strip()
+
+                final_prompt = (
+                    prompt_part
+                    if prompt_part and len(prompt_part) > 2
+                    else content.strip()
+                )
+
                 return {
                     "use_vision": True,
-                    "task": "text_to_image", 
+                    "task": "text_to_image",
                     "prompt": final_prompt,
                     "confidence": 0.95,
-                    "bypass_reason": f"Direct trigger pattern: '{pattern}'"
+                    "bypass_reason": f"Direct trigger pattern: '{pattern}'",
                 }
-        
+
         return None
 
     def test_generate_image_triggers(self):
         """Test various 'generate image' trigger patterns."""
         test_cases = [
             "generate an image of a puppy",
-            "Generate a picture of a cat", 
+            "Generate a picture of a cat",
             "GENERATE AN ART of mountains",
             "generate image puppy",  # without articles
             "Generate!! a photo. of sunset",  # with punctuation
         ]
-        
+
         for content in test_cases:
             result = self._detect_direct_vision_triggers(content)
             assert result is not None, f"Failed to detect trigger in: {content}"
             assert result["use_vision"] is True
             assert result["task"] == "text_to_image"
-            assert "puppy" in result["prompt"] or "cat" in result["prompt"] or "mountains" in result["prompt"] or "sunset" in result["prompt"]
+            assert (
+                "puppy" in result["prompt"]
+                or "cat" in result["prompt"]
+                or "mountains" in result["prompt"]
+                or "sunset" in result["prompt"]
+            )
 
     def test_create_variations(self):
         """Test 'create' trigger variations."""
@@ -77,7 +83,7 @@ class TestDirectVisionTriggers:
             "Create a picture of space",
             "CREATE AN ART PIECE",
         ]
-        
+
         for content in test_cases:
             result = self._detect_direct_vision_triggers(content)
             assert result is not None, f"Failed to detect trigger in: {content}"
@@ -90,7 +96,7 @@ class TestDirectVisionTriggers:
             "Make an image showing flowers",
             "MAKE A PHOTO of birds",
         ]
-        
+
         for content in test_cases:
             result = self._detect_direct_vision_triggers(content)
             assert result is not None, f"Failed to detect trigger in: {content}"
@@ -103,7 +109,7 @@ class TestDirectVisionTriggers:
             "Draw a landscape",
             "DRAW something cool",
         ]
-        
+
         for content in test_cases:
             result = self._detect_direct_vision_triggers(content)
             assert result is not None, f"Failed to detect trigger in: {content}"
@@ -116,7 +122,7 @@ class TestDirectVisionTriggers:
             "render a 3D scene",
             "paint a portrait",
         ]
-        
+
         for content in test_cases:
             result = self._detect_direct_vision_triggers(content)
             assert result is not None, f"Failed to detect trigger in: {content}"
@@ -126,14 +132,14 @@ class TestDirectVisionTriggers:
         """Test cases that should NOT trigger vision generation."""
         test_cases = [
             "Hello, how are you?",
-            "What's the weather like?", 
+            "What's the weather like?",
             "Can you help me with this code?",
             "Show me the image",  # asking to view, not generate
             "I have an image here",  # referring to existing image
             "This is an image",  # referring to existing image
             "The image is nice",  # referring to existing image
         ]
-        
+
         for content in test_cases:
             result = self._detect_direct_vision_triggers(content)
             assert result is None, f"Incorrectly detected trigger in: {content}"
@@ -142,11 +148,11 @@ class TestDirectVisionTriggers:
         """Test that prompts are correctly extracted after triggers."""
         test_cases = [
             ("generate an image of a red car", "red car"),
-            ("create a picture of mountains", "mountains"), 
+            ("create a picture of mountains", "mountains"),
             ("make an art piece showing the ocean", "piece showing the ocean"),
             ("draw me a cartoon character", "cartoon character"),
         ]
-        
+
         for content, expected_prompt_part in test_cases:
             result = self._detect_direct_vision_triggers(content)
             assert result is not None
@@ -158,48 +164,44 @@ class TestRoutingPrecedence:
 
     def _is_twitter_url(self, url: str) -> bool:
         """Standalone Twitter URL detection for testing."""
-        import re
         twitter_patterns = [
-            r'https?://(www\.)?(twitter|x)\.com/\w+/status/\d+',
-            r'https?://t\.co/\w+'
+            r"https?://(www\.)?(twitter|x)\.com/\w+/status/\d+",
+            r"https?://t\.co/\w+",
         ]
         return any(re.match(pattern, url) for pattern in twitter_patterns)
 
     def test_twitter_url_blocks_generation(self):
         """X/Twitter URLs should route to VL, not image generation."""
-        content = "generate an image https://twitter.com/user/status/123"
-        
+
         # Check that Twitter URL is detected
         has_twitter = self._is_twitter_url("https://twitter.com/user/status/123")
         assert has_twitter is True
-        
+
         # In actual routing, this should NOT trigger vision generation
         # because Twitter URLs have higher precedence
 
     def test_image_attachment_blocks_generation(self):
         """Image attachments should route to VL, not image generation."""
-        content = "generate an image"
-        
+
         # Mock attachment
         attachment = Mock()
         attachment.content_type = "image/png"
         attachments = [attachment]
-        
+
         # Check attachment detection
         has_img_attachments = any(
-            (getattr(a, 'content_type', '') or '').startswith('image/')
+            (getattr(a, "content_type", "") or "").startswith("image/")
             for a in attachments
         )
         assert has_img_attachments is True
-        
+
         # In actual routing, this should NOT trigger vision generation
         # because image attachments have higher precedence
 
     def test_pure_generate_text_triggers_vision(self):
         """Pure generate text (no URLs/attachments) should trigger vision."""
         content = "generate an image of a puppy"
-        attachments = []
-        
+
         # Should detect direct vision trigger
         result = TestDirectVisionTriggers()._detect_direct_vision_triggers(content)
         assert result is not None
@@ -208,80 +210,80 @@ class TestRoutingPrecedence:
 
 class TestMimeTypeDetection:
     """Test MIME type detection and proper file extensions."""
-    
+
     def test_png_detection(self):
         """Test PNG file signature detection."""
         # Mock PNG header
-        png_header = b'\x89PNG\r\n\x1a\n' + b'fake_png_data'
-        
+        png_header = b"\x89PNG\r\n\x1a\n" + b"fake_png_data"
+
         # Test the logic used in VisionGateway._detect_image_type_from_bytes
-        if png_header.startswith(b'\x89PNG\r\n\x1a\n'):
-            detected_mime = 'image/png'
+        if png_header.startswith(b"\x89PNG\r\n\x1a\n"):
+            detected_mime = "image/png"
         else:
-            detected_mime = 'image/png'  # fallback
-            
-        assert detected_mime == 'image/png'
+            detected_mime = "image/png"  # fallback
+
+        assert detected_mime == "image/png"
 
     def test_jpeg_detection(self):
         """Test JPEG file signature detection."""
-        jpeg_header = b'\xff\xd8\xff' + b'fake_jpeg_data'
-        
-        if jpeg_header.startswith(b'\xff\xd8\xff'):
-            detected_mime = 'image/jpeg'
+        jpeg_header = b"\xff\xd8\xff" + b"fake_jpeg_data"
+
+        if jpeg_header.startswith(b"\xff\xd8\xff"):
+            detected_mime = "image/jpeg"
         else:
-            detected_mime = 'image/png'  # fallback
-            
-        assert detected_mime == 'image/jpeg'
+            detected_mime = "image/png"  # fallback
+
+        assert detected_mime == "image/jpeg"
 
     def test_webp_detection(self):
         """Test WebP file signature detection."""
-        webp_header = b'RIFF' + b'1234' + b'WEBP' + b'fake_webp_data'
-        
-        if webp_header.startswith(b'RIFF') and b'WEBP' in webp_header[:12]:
-            detected_mime = 'image/webp'
+        webp_header = b"RIFF" + b"1234" + b"WEBP" + b"fake_webp_data"
+
+        if webp_header.startswith(b"RIFF") and b"WEBP" in webp_header[:12]:
+            detected_mime = "image/webp"
         else:
-            detected_mime = 'image/png'  # fallback
-            
-        assert detected_mime == 'image/webp'
+            detected_mime = "image/png"  # fallback
+
+        assert detected_mime == "image/webp"
 
     def test_gif_detection(self):
         """Test GIF file signature detection."""
-        gif_header = b'GIF89a' + b'fake_gif_data'
-        
-        if gif_header.startswith((b'GIF87a', b'GIF89a')):
-            detected_mime = 'image/gif'
+        gif_header = b"GIF89a" + b"fake_gif_data"
+
+        if gif_header.startswith((b"GIF87a", b"GIF89a")):
+            detected_mime = "image/gif"
         else:
-            detected_mime = 'image/png'  # fallback
-            
-        assert detected_mime == 'image/gif'
+            detected_mime = "image/png"  # fallback
+
+        assert detected_mime == "image/gif"
 
     def test_extension_mapping(self):
         """Test MIME type to extension mapping."""
         mime_map = {
-            'image/png': '.png',
-            'image/jpeg': '.jpg',
-            'image/webp': '.webp', 
-            'image/gif': '.gif'
+            "image/png": ".png",
+            "image/jpeg": ".jpg",
+            "image/webp": ".webp",
+            "image/gif": ".gif",
         }
-        
-        assert mime_map['image/png'] == '.png'
-        assert mime_map['image/jpeg'] == '.jpg'
-        assert mime_map['image/webp'] == '.webp'
-        assert mime_map['image/gif'] == '.gif'
+
+        assert mime_map["image/png"] == ".png"
+        assert mime_map["image/jpeg"] == ".jpg"
+        assert mime_map["image/webp"] == ".webp"
+        assert mime_map["image/gif"] == ".gif"
 
     def test_fallback_extension(self):
         """Test fallback to .png for unknown types."""
         mime_map = {
-            'image/png': '.png',
-            'image/jpeg': '.jpg',
-            'image/webp': '.webp', 
-            'image/gif': '.gif'
+            "image/png": ".png",
+            "image/jpeg": ".jpg",
+            "image/webp": ".webp",
+            "image/gif": ".gif",
         }
-        
+
         # Unknown MIME type should fall back to .png
-        unknown_mime = 'image/unknown'
-        extension = mime_map.get(unknown_mime, '.png')
-        assert extension == '.png'
+        unknown_mime = "image/unknown"
+        extension = mime_map.get(unknown_mime, ".png")
+        assert extension == ".png"
 
 
 class TestDiscordPermissions:
@@ -291,7 +293,7 @@ class TestDiscordPermissions:
     def mock_channel(self):
         """Create a mock Discord channel."""
         channel = Mock()
-        channel.permissions_for = Mock() 
+        channel.permissions_for = Mock()
         return channel
 
     @pytest.fixture
@@ -306,33 +308,35 @@ class TestDiscordPermissions:
         perms = Mock()
         perms.attach_files = True
         perms.send_messages = True
-        
+
         mock_channel.permissions_for.return_value = perms
-        
+
         # Check permissions
         can_attach_files = perms.attach_files and perms.send_messages
         assert can_attach_files is True
 
-    def test_guild_permission_check_missing_attach_files(self, mock_channel, mock_guild_member):
+    def test_guild_permission_check_missing_attach_files(
+        self, mock_channel, mock_guild_member
+    ):
         """Test permission check when missing attach_files."""
         # Mock permissions missing attach_files
         perms = Mock()
         perms.attach_files = False
         perms.send_messages = True
-        
+
         mock_channel.permissions_for.return_value = perms
-        
+
         # Check permissions
         can_attach_files = perms.attach_files and perms.send_messages
         assert can_attach_files is False
-        
+
         # Should generate appropriate error message
         missing_perms = []
         if not perms.attach_files:
             missing_perms.append("Attach Files")
         if not perms.send_messages:
             missing_perms.append("Send Messages")
-            
+
         permission_error = f"Missing permissions: {', '.join(missing_perms)}"
         assert "Attach Files" in permission_error
 
@@ -342,7 +346,7 @@ class TestDiscordPermissions:
         channel = Mock()
         # DM channels don't have permissions_for method
         del channel.permissions_for
-        
+
         # In DM, assume we can attach files
         can_attach_files = True
         assert can_attach_files is True
@@ -351,7 +355,7 @@ class TestDiscordPermissions:
         """Test fallback message format when upload fails."""
         job_id = "test_job_12345"
         num_files = 2
-        
+
         fallback_content = (
             f"✅ **Generation Complete**\n"
             f"Job ID: `{job_id[:8]}`\n"
@@ -359,7 +363,7 @@ class TestDiscordPermissions:
             f"Files saved locally. Contact admin or try in a channel where I can attach files.\n\n"
             f"**Generated Files:** {num_files} image(s)"
         )
-        
+
         assert "Generation Complete" in fallback_content
         assert job_id[:8] in fallback_content
         assert "Upload Issue" in fallback_content
@@ -372,27 +376,37 @@ class TestDebugObservability:
     @patch.dict(os.environ, {"VISION_TRIGGER_DEBUG": "1"})
     def test_debug_logging_enabled(self):
         """Test that debug logging is enabled with env var."""
-        debug_triggers = os.getenv("VISION_TRIGGER_DEBUG", "0").lower() in ("1", "true", "yes", "on")
+        debug_triggers = os.getenv("VISION_TRIGGER_DEBUG", "0").lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        )
         assert debug_triggers is True
 
     @patch.dict(os.environ, {"VISION_TRIGGER_DEBUG": "0"})
     def test_debug_logging_disabled(self):
         """Test that debug logging is disabled by default."""
-        debug_triggers = os.getenv("VISION_TRIGGER_DEBUG", "0").lower() in ("1", "true", "yes", "on")
+        debug_triggers = os.getenv("VISION_TRIGGER_DEBUG", "0").lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        )
         assert debug_triggers is False
 
     def test_debug_message_format(self):
         """Test debug message format structure."""
-        pattern = r'generate\s+(an?\s+)?(image|picture)'
+        pattern = r"generate\s+(an?\s+)?(image|picture)"
         extracted_prompt = "a beautiful sunset"
         original_content = "generate an image of a beautiful sunset"
-        
+
         debug_msg = (
             f"VISION_TRIGGER_DEBUG | matched_pattern='{pattern}' "
             f"extracted_prompt='{extracted_prompt[:50]}...' "
             f"original_content='{original_content[:100]}...'"
         )
-        
+
         assert "VISION_TRIGGER_DEBUG" in debug_msg
         assert "matched_pattern" in debug_msg
         assert "extracted_prompt" in debug_msg
@@ -405,7 +419,7 @@ class TestIntegrationScenarios:
     def test_dm_generate_basic(self):
         """Test: 'generate a picture of a puppy' in DM → calls Vision, not text."""
         content = "generate a picture of a puppy"
-        
+
         # Should detect as direct vision trigger
         trigger_detector = TestDirectVisionTriggers()
         result = trigger_detector._detect_direct_vision_triggers(content)
@@ -416,15 +430,14 @@ class TestIntegrationScenarios:
     def test_guild_generate_with_mention(self):
         """Test: @bot generate an image → Vision (not text)."""
         content = "<@!11111> generate an image of a cat"
-        
+
         # Clean mention prefix
-        import re
         bot_id = 11111
-        mention_pattern = fr'^<@!?{bot_id}>\s*'
-        content_clean = re.sub(mention_pattern, '', content)
-        
+        mention_pattern = rf"^<@!?{bot_id}>\s*"
+        content_clean = re.sub(mention_pattern, "", content)
+
         assert content_clean == "generate an image of a cat"
-        
+
         # Should still trigger vision
         trigger_detector = TestDirectVisionTriggers()
         result = trigger_detector._detect_direct_vision_triggers(content_clean)
@@ -433,32 +446,32 @@ class TestIntegrationScenarios:
 
     def test_x_link_present_routes_to_syndication(self):
         """Test: X link present → routes to Syndication VL (NOT image gen)."""
-        content = "generate an image https://twitter.com/user/status/123"
-        
+
         # Check Twitter URL detection
         url_detector = TestRoutingPrecedence()
-        has_twitter_url = url_detector._is_twitter_url("https://twitter.com/user/status/123")
+        has_twitter_url = url_detector._is_twitter_url(
+            "https://twitter.com/user/status/123"
+        )
         assert has_twitter_url is True
-        
+
         # In actual routing, this should bypass vision generation
         # due to routing precedence rules
 
     def test_image_attachment_no_text_routes_to_vl(self):
         """Test: image attachment + no text → routes to VL (NOT image gen)."""
-        content = ""  # No text content
-        
+
         # Mock image attachment
         attachment = Mock()
         attachment.content_type = "image/png"
         attachments = [attachment]
-        
+
         # Check attachment detection
         has_img_attachments = any(
-            (getattr(a, 'content_type', '') or '').startswith('image/')
+            (getattr(a, "content_type", "") or "").startswith("image/")
             for a in attachments
         )
         assert has_img_attachments is True
-        
+
         # In actual routing, this should route to VL for "Thoughts?"
         # not to image generation
 

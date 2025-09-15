@@ -5,14 +5,16 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 
-from .util.logging import get_logger
+from .utils.logging import get_logger
 from .exceptions import APIError
 from .retry_utils import with_retry, API_RETRY_CONFIG
 
 logger = get_logger(__name__)
 
 # Constants [CMV]
-_X_API_BASE_URL = "https://api.twitter.com/2"  # Official v2 endpoint remains twitter.com domain
+_X_API_BASE_URL = (
+    "https://api.twitter.com/2"  # Official v2 endpoint remains twitter.com domain
+)
 _TWEET_ID_RE = re.compile(r"^\d{8,20}$")
 _X_URL_ID_RE = re.compile(
     r"https?://(?:www\.)?(?:twitter|x|vxtwitter|fxtwitter)\.com/[^/]+/status/(\d{8,20})(?:\D.*)?",
@@ -41,7 +43,9 @@ class XApiClient:
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._timeout = httpx.Timeout(timeout_ms / 1000.0)
-        self._client = httpx.AsyncClient(timeout=self._timeout, headers=self._build_headers(bearer_token))
+        self._client = httpx.AsyncClient(
+            timeout=self._timeout, headers=self._build_headers(bearer_token)
+        )
         self._has_token = bool(bearer_token)
 
         # Defaults for field hydration [CMV]
@@ -154,7 +158,12 @@ class XApiClient:
         Raises APIError with status-specific messages. [REH]
         """
         params = self._build_params(
-            tweet_fields, expansions, media_fields, user_fields, poll_fields, place_fields
+            tweet_fields,
+            expansions,
+            media_fields,
+            user_fields,
+            poll_fields,
+            place_fields,
         )
         url = f"{self._base_url}/tweets/{tweet_id}"
 
@@ -181,7 +190,9 @@ class XApiClient:
             detail = resp.json()
         except Exception:
             detail = {"text": resp.text[:2000]}
-        extra = {"detail": {"status": status, "has_token": self._has_token, "body": detail}}
+        extra = {
+            "detail": {"status": status, "has_token": self._has_token, "body": detail}
+        }
 
         # Strict mapping per spec [REH][SFT]
         if status in (401, 403):
@@ -223,7 +234,8 @@ class XApiClient:
 
 # Convenience helpers [CA]
 
+
 def parse_csv_env(value: Optional[str], default: List[str]) -> List[str]:
     if value is None or not value.strip():
         return default
-    return [s.strip() for s in value.split(',') if s.strip()]
+    return [s.strip() for s in value.split(",") if s.strip()]

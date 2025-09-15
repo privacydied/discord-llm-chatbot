@@ -1,4 +1,25 @@
 # Memory and Context Management
+## Thread Tail Replies & Context (Threads/Forum)
+
+- Always enabled in thread channels. No feature flag.
+- Limits (env defaults):
+  - `THREAD_CONTEXT_TAIL_COUNT=5` (number of previous messages to include)
+- Behavior:
+  - At send-time, the bot resolves the reply target to the newest message in the thread. If the newest is the bot and the previous is human, it replies to that human to avoid reply-to-self loops. If no human messages exist, it posts in the thread without a reply reference.
+  - The router prepends a bounded “thread tail” context block built from up to K messages strictly before the reply target (ordered oldest→newest). Humans + the bot are included; other bots/system messages are excluded. Sanitization is applied.
+  - If the triggering thread message contains no meaningful text (e.g., only an @mention), the router uses the resolved reply target’s text as the input content for this hop to avoid empty prompts.
+- Telemetry (JSONL):
+  - `subsys=mem.thread event=tail_ok` with `detail.k`, `detail.reply_target`, `detail.count`.
+  - `subsys=mem.thread event=tail_fallback` with `detail.reason` on timeout/archived/permission errors.
+- Fallbacks: On any failure, the bot falls back to the pre-existing behavior (reply to the triggering message, no tail context).
+
+### Example .env additions
+
+```env
+# Threads: tail context size (always enabled)
+THREAD_CONTEXT_TAIL_COUNT=5
+```
+
 
 This guide explains how the bot manages conversation context (ephemeral), user memory (persistent per user), and server memory (persistent per guild). It also documents related configuration keys and recommended practices.
 
@@ -115,6 +136,34 @@ MEMORY_SAVE_INTERVAL=30
 #MAX_CONVERSATION_LOG_SIZE=10000
 #DEBUG=false
 ```
+
+## Mention-aware Discord Threads & Reply Chains
+
+- Always enabled. No feature flag required.
+- Limits (env defaults):
+  - `MEM_MAX_MSGS=40`
+  - `MEM_MAX_CHARS=8000`
+  - `MEM_MAX_AGE_MIN=240`
+  - `MEM_FETCH_TIMEOUT_S=5`
+  - `MEM_LOG_SUBSYS=mem.ctx`
+- Behavior: When users @mention the bot, the router builds a bounded context block before normal memory:
+  - Inside a Thread/Forum post: recent thread messages (oldest→newest), includes the thread starter and the triggering message.
+  - Reply in a regular channel: linear reply chain around the root (up/down via references), ending at the triggering message.
+  - Lone mention (no thread, no reply): unchanged.
+- Guardrails: other bots are excluded (except this bot), age/char/message caps enforced; timeouts fall back to current behavior.
+- Telemetry (JSONL):
+  - `collect_ok` with `detail.case`, `detail.msgs`, `detail.chars`, `detail.ms`.
+  - `collect_truncated` when caps hit.
+  - `collect_fallback` on timeout/permission/fetch issues.
+  - `merge_ok` when the new block is prepended before historical memory.
+
+### Manual validation
+
+- Mention inside a thread → context includes the thread’s recent messages in order (bounded by caps).
+- Reply-mention in a regular channel → context includes only the reply chain, not unrelated chatter.
+- Plain mention (no thread/reply) → unchanged behavior.
+- Huge thread → verify truncation and clean answer.
+- Interleaved chat → only reply-chain messages are included.
 
 ## Troubleshooting
 

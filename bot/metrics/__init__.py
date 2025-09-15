@@ -1,11 +1,11 @@
 """Enhanced metrics interface and provider selection with degraded mode support.
 
-Provides a thin metrics interface with safe no-op fallback (NoopMetrics) and 
+Provides a thin metrics interface with safe no-op fallback (NoopMetrics) and
 optional Prometheus-based implementation controlled by environment variables.
 
 Interface methods:
   - increment(name, labels: dict | None = None, value: int = 1)
-  - inc(name, value: int = 1, labels: dict | None = None) 
+  - inc(name, value: int = 1, labels: dict | None = None)
   - observe(name, value: float, labels: dict | None = None)
   - gauge(name, value: float, labels: dict | None = None)
   - timer(name, labels: dict | None = None) -> context manager
@@ -34,8 +34,12 @@ _degraded_reasons = []
 @runtime_checkable
 class Metrics(Protocol):
     def inc(self, name: str, value: int = 1, labels: Optional[dict] = None) -> None: ...
-    def increment(self, name: str, labels: Optional[dict] = None, value: int = 1) -> None: ...
-    def observe(self, name: str, value: float, labels: Optional[dict] = None) -> None: ...
+    def increment(
+        self, name: str, labels: Optional[dict] = None, value: int = 1
+    ) -> None: ...
+    def observe(
+        self, name: str, value: float, labels: Optional[dict] = None
+    ) -> None: ...
     def gauge(self, name: str, value: float, labels: Optional[dict] = None) -> None: ...
     def timer(self, name: str, labels: Optional[dict] = None): ...
 
@@ -46,61 +50,74 @@ def get_metrics() -> Metrics:
     Uses environment variables to determine metrics provider:
     - OBS_ENABLE_PROMETHEUS=true: Attempt Prometheus, fallback to Noop on failure
     - OBS_ENABLE_PROMETHEUS=false (default): Use NoopMetrics for zero overhead
-    
+
     On Prometheus initialization failure: warns, sets degraded_mode, falls back to Noop.
     Thread/async-safe, no blocking on hot paths.
-    
+
     [RAT: PA, REH, CMV] - Performance Awareness, Robust Error Handling, Constants over Magic Values
     """
     global _degraded_mode, _degraded_reasons
-    
+
     logger = logging.getLogger(__name__)
-    
+
     # Check environment flag for Prometheus enablement
     prometheus_enabled = os.getenv("OBS_ENABLE_PROMETHEUS", "false").lower() == "true"
-    
+
     if not prometheus_enabled:
         # Default path: zero-overhead NoopMetrics
-        logger.info("📊 Prometheus disabled by config: using NoopMetrics", extra={"subsys": "metrics"})
+        logger.info(
+            "📊 Prometheus disabled by config: using NoopMetrics",
+            extra={"subsys": "metrics"},
+        )
         return NullMetrics()
-    
+
     # Prometheus enabled: attempt initialization with graceful fallback
     try:
         # Delayed import to avoid hard dependency when not installed
         from .prometheus_metrics import PrometheusMetrics  # type: ignore
-        
+
         # Get optional configuration
         prometheus_port = int(os.getenv("PROMETHEUS_PORT", "8001"))
-        http_server_enabled = os.getenv("PROMETHEUS_HTTP_SERVER", "true").lower() == "true"
-        
-        metrics_instance = PrometheusMetrics(
-            port=prometheus_port,
-            enable_http_server=http_server_enabled
+        http_server_enabled = (
+            os.getenv("PROMETHEUS_HTTP_SERVER", "true").lower() == "true"
         )
-        
-        logger.info("📊 Prometheus metrics initialized successfully", extra={"subsys": "metrics"})
+
+        metrics_instance = PrometheusMetrics(
+            port=prometheus_port, enable_http_server=http_server_enabled
+        )
+
+        logger.info(
+            "📊 Prometheus metrics initialized successfully",
+            extra={"subsys": "metrics"},
+        )
         return metrics_instance
-        
+
     except ImportError as e:
         # Missing prometheus-client dependency
         reason = f"prometheus-client not installed: {e}"
         _degraded_mode = True
         _degraded_reasons.append(reason)
-        logger.warning(f"📊 Prometheus unavailable, falling back to NoopMetrics: {reason}", extra={"subsys": "metrics"})
+        logger.warning(
+            f"📊 Prometheus unavailable, falling back to NoopMetrics: {reason}",
+            extra={"subsys": "metrics"},
+        )
         return NullMetrics()
-        
+
     except Exception as e:
         # Runtime initialization failure (port bind, etc.)
         reason = f"Prometheus init failed: {e}"
         _degraded_mode = True
         _degraded_reasons.append(reason)
-        logger.warning(f"📊 Prometheus failed to initialize, falling back to NoopMetrics: {reason}", extra={"subsys": "metrics"})
+        logger.warning(
+            f"📊 Prometheus failed to initialize, falling back to NoopMetrics: {reason}",
+            extra={"subsys": "metrics"},
+        )
         return NullMetrics()
 
 
 def is_degraded_mode() -> bool:
     """Return True if metrics system is in degraded mode.
-    
+
     Degraded mode indicates that Prometheus was requested but failed to initialize,
     causing fallback to NoopMetrics.
     """
@@ -137,4 +154,3 @@ METRIC_ERRORS_BY_MODULE = "bot_errors_by_module_total"
 
 # Optional module-level singleton that callers may use directly if convenient
 metrics: Metrics = get_metrics()
-

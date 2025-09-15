@@ -235,7 +235,7 @@ Fields:
 | key | required | sensitive | type | default | description |
 |---|:---:|:---:|:---:|---|---|
 | TTS_BACKEND |  |  | unknown | 'kokoro-onnx' |  |
-| TTS_CACHE_DIR |  |  | unknown | 'tts_cache' |  |
+| TTS_CACHE_DIR |  |  | unknown | 'cache/tts' |  |
 | TTS_ENABLED |  |  | unknown | 'false' |  |
 | TTS_ENGINE |  |  | unknown | 'stub' |  |
 | TTS_LANGUAGE |  |  | unknown | 'en' |  |

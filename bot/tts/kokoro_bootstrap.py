@@ -7,7 +7,6 @@ It must be imported before any other kokoro_onnx imports to ensure proper regist
 """
 
 import logging
-from typing import Dict, Type, List, Optional
 
 # Define the list of aliases for the EspeakWrapper tokenizer
 TOKENIZER_ALIASES = {
@@ -19,17 +18,19 @@ logger = logging.getLogger(__name__)
 # We no longer need to register anything for runtime if using the newer Tokenizer,
 # but tests and some legacy code expect a registration function to exist.
 
+
 def register_espeak_wrapper() -> bool:
     """
     Register EspeakWrapper under required aliases in kokoro_onnx tokenizer registry.
-    
+
     This is primarily a compatibility shim for tests expecting this function.
     Returns True if registration appears successful, False otherwise.
     """
     try:
         # Import the registry module via the adapter to isolate direct imports
         from bot.tts.kokoro_adapter import import_kokoro_submodule
-        _reg = import_kokoro_submodule('tokenizer_registry')  # type: ignore
+
+        _reg = import_kokoro_submodule("tokenizer_registry")  # type: ignore
     except Exception as e:
         logger.info(f"kokoro_onnx not available for tokenizer registration: {e}")
         return False

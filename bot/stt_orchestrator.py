@@ -13,17 +13,17 @@ Stubs in place for:
 This module integrates non-invasively: if STT_ENABLE=false or misconfigured, it
 falls back to the existing `stt_manager.transcribe_async()` path.
 """
+
 from __future__ import annotations
 
 import asyncio
 import hashlib
-import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Dict, Any, List, Tuple
 
-from .util.logging import get_logger
+from .utils.logging import get_logger
 from .config import load_config
 from .stt import stt_manager  # Leverage existing local STT
 
@@ -32,7 +32,7 @@ logger = get_logger(__name__)
 # Constants [CMV]
 DEFAULT_MODE = "single"  # single | cascade_primary_then_fallbacks | parallel_first_acceptable | parallel_best_of | hybrid_draft_then_finalize
 CACHE_TTL_DEFAULT = 600  # seconds
-CONF_MIN_DEFAULT = 0.0   # Accept any if provider does not supply confidence
+CONF_MIN_DEFAULT = 0.0  # Accept any if provider does not supply confidence
 
 
 @dataclass
@@ -57,14 +57,18 @@ class AbstractSTTProvider:
     def __init__(self, concurrency: int = 2):
         self._sema = asyncio.Semaphore(concurrency)
 
-    async def transcribe(self, audio_path: Path, deadline_ms: Optional[int], config: Dict[str, Any]) -> TranscriptResult:
+    async def transcribe(
+        self, audio_path: Path, deadline_ms: Optional[int], config: Dict[str, Any]
+    ) -> TranscriptResult:
         raise NotImplementedError
 
 
 class LocalWhisperProvider(AbstractSTTProvider):
     name: str = "local_whisper"
 
-    async def transcribe(self, audio_path: Path, deadline_ms: Optional[int], config: Dict[str, Any]) -> TranscriptResult:
+    async def transcribe(
+        self, audio_path: Path, deadline_ms: Optional[int], config: Dict[str, Any]
+    ) -> TranscriptResult:
         start = time.time()
         try:
             async with self._sema:
@@ -72,11 +76,26 @@ class LocalWhisperProvider(AbstractSTTProvider):
                 text = await stt_manager.transcribe_async(audio_path)
             latency_ms = int((time.time() - start) * 1000)
             # No confidence available from current local path
-            return TranscriptResult(provider=self.name, text=text, latency_ms=latency_ms, confidence=None, cost_usd=0.0, success=True)
+            return TranscriptResult(
+                provider=self.name,
+                text=text,
+                latency_ms=latency_ms,
+                confidence=None,
+                cost_usd=0.0,
+                success=True,
+            )
         except Exception as e:
             latency_ms = int((time.time() - start) * 1000)
             logger.error(f"[{self.name}] transcription failed: {e}")
-            return TranscriptResult(provider=self.name, text="", latency_ms=latency_ms, confidence=None, cost_usd=0.0, success=False, detail=str(e))
+            return TranscriptResult(
+                provider=self.name,
+                text="",
+                latency_ms=latency_ms,
+                confidence=None,
+                cost_usd=0.0,
+                success=False,
+                detail=str(e),
+            )
 
 
 class STTOrchestrator:
@@ -167,9 +186,9 @@ class STTOrchestrator:
                         "latency_ms": cached.latency_ms,
                         "confidence": cached.confidence,
                         "cache_key": cache_key[:16],  # Short hash for logging
-                        "audio_file": str(audio_path.name)
-                    }
-                }
+                        "audio_file": str(audio_path.name),
+                    },
+                },
             )
             # Mark as cache hit and return
             cached.cache_hit = True
@@ -188,9 +207,9 @@ class STTOrchestrator:
                         "detail": {
                             "provider": cached2.provider,
                             "latency_ms": cached2.latency_ms,
-                            "cache_key": cache_key[:16]
-                        }
-                    }
+                            "cache_key": cache_key[:16],
+                        },
+                    },
                 )
                 cached2.cache_hit = True
                 return cached2.text
@@ -205,9 +224,9 @@ class STTOrchestrator:
                         "mode": self.mode,
                         "cache_key": cache_key[:16],
                         "audio_file": str(audio_path.name),
-                        "providers_available": len(self._providers)
-                    }
-                }
+                        "providers_available": len(self._providers),
+                    },
+                },
             )
 
             # Dispatch based on mode
@@ -222,7 +241,9 @@ class STTOrchestrator:
             elif self.mode == "hybrid_draft_then_finalize":
                 res = await self._run_hybrid(audio_path)
             else:
-                logger.warning(f"[STT-Orch] Unknown mode '{self.mode}', defaulting to single")
+                logger.warning(
+                    f"[STT-Orch] Unknown mode '{self.mode}', defaulting to single"
+                )
                 res = await self._run_single(audio_path)
 
             # [PA] Instrumentation: log completion with comprehensive metrics
@@ -241,9 +262,9 @@ class STTOrchestrator:
                         "text_length": len(res.text) if res.text else 0,
                         "cost_usd": res.cost_usd,
                         "cache_key": cache_key[:16],
-                        "cache_hit": False  # This was a cache miss
-                    }
-                }
+                        "cache_hit": False,  # This was a cache miss
+                    },
+                },
             )
 
             if not res.success:
@@ -254,8 +275,10 @@ class STTOrchestrator:
                 self._cache_set(cache_key, res)
                 logger.debug(f"[STT-Orch] Result cached for {self.cache_ttl}s")
             else:
-                logger.warning(f"[STT-Orch] Result not cached (confidence {res.confidence} < {self.min_conf})")
-            
+                logger.warning(
+                    f"[STT-Orch] Result not cached (confidence {res.confidence} < {self.min_conf})"
+                )
+
             return res.text
 
     async def _run_single(self, audio_path: Path) -> TranscriptResult:
@@ -267,12 +290,20 @@ class STTOrchestrator:
         logger.info("[STT-Orch] cascade providers")
         last_error: Optional[TranscriptResult] = None
         for idx, p in enumerate(self._providers):
-            logger.info(f"[STT-Orch] cascade try {idx+1}/{len(self._providers)}: {p.name}")
+            logger.info(
+                f"[STT-Orch] cascade try {idx + 1}/{len(self._providers)}: {p.name}"
+            )
             res = await p.transcribe(audio_path, deadline_ms=None, config={})
             if res.acceptable(self.min_conf):
                 return res
             last_error = res
-        return last_error or TranscriptResult(provider="none", text="", latency_ms=0, success=False, detail="No providers configured")
+        return last_error or TranscriptResult(
+            provider="none",
+            text="",
+            latency_ms=0,
+            success=False,
+            detail="No providers configured",
+        )
 
     async def _run_parallel_first(self, audio_path: Path) -> TranscriptResult:
         logger.info("[STT-Orch] parallel_first_acceptable")

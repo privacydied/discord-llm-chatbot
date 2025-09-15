@@ -1,14 +1,14 @@
 import asyncio
 import os
 import time
-from typing import Optional, Dict
+from typing import Dict
 
 from bot.retry_utils import RetryConfig, retry_async
 from bot.exceptions import APIError
 from bot.x_api_client import XApiClient
 from bot.metrics.prometheus_metrics import PrometheusMetrics
 from bot.router import Router
-from bot.util.logging import init_logging
+from bot.utils.logging import init_logging
 import httpx
 
 
@@ -26,28 +26,32 @@ class _FakeBot:
 async def _always_fails_with_retry_after():
     # Raise APIError with a large Retry-After hint
     err = APIError("synthetic error for retry test")
-    setattr(err, "retry_after_seconds", 5.0)  # 5s hint (will be bounded by config.max_delay)
+    setattr(
+        err, "retry_after_seconds", 5.0
+    )  # 5s hint (will be bounded by config.max_delay)
     raise err
 
 
 async def test_retry_respects_retry_after_bound():
     cfg = RetryConfig(
-        max_attempts=2,      # 1 failure + 1 retry
-        base_delay=0.01,     # base backoff is tiny
-        max_delay=0.2,       # bound any retry-after to 0.2s
+        max_attempts=2,  # 1 failure + 1 retry
+        base_delay=0.01,  # base backoff is tiny
+        max_delay=0.2,  # bound any retry-after to 0.2s
         exponential_base=2.0,
         jitter=False,
-        retryable_exceptions=[APIError, httpx.HTTPStatusError]
+        retryable_exceptions=[APIError, httpx.HTTPStatusError],
     )
 
     start = time.perf_counter()
     try:
         await retry_async(_always_fails_with_retry_after, cfg)
-    except Exception as e:
+    except Exception:
         # Expected to fail after retries exhausted
         elapsed = time.perf_counter() - start
         # We expect at least ~max_delay because Retry-After=5 was bounded to 0.2 and max(delay, 0.2) applies
-        assert elapsed >= 0.18, f"elapsed {elapsed:.3f}s did not respect bounded Retry-After"
+        assert elapsed >= 0.18, (
+            f"elapsed {elapsed:.3f}s did not respect bounded Retry-After"
+        )
     else:
         raise AssertionError("retry_async unexpectedly succeeded")
 
@@ -80,12 +84,24 @@ def test_metrics_and_router_increment():
     metrics = PrometheusMetrics(port=0, enable_http_server=False)
 
     # Define counters exactly as bot.core.bot.setup_hook does
-    metrics.define_counter("x.photo_to_vl.enabled", "X photos routed to VL (feature enabled)")
-    metrics.define_counter("x.photo_to_vl.no_urls", "X photo routing: no photo URLs available")
-    metrics.define_counter("x.photo_to_vl.skipped", "X photo routing skipped", labels=["enabled"]) 
-    metrics.define_counter("x.photo_to_vl.attempt", "X photo routing attempts", labels=["idx"]) 
-    metrics.define_counter("x.photo_to_vl.success", "X photo routing success", labels=["idx"]) 
-    metrics.define_counter("x.photo_to_vl.failure", "X photo routing failure", labels=["idx"]) 
+    metrics.define_counter(
+        "x.photo_to_vl.enabled", "X photos routed to VL (feature enabled)"
+    )
+    metrics.define_counter(
+        "x.photo_to_vl.no_urls", "X photo routing: no photo URLs available"
+    )
+    metrics.define_counter(
+        "x.photo_to_vl.skipped", "X photo routing skipped", labels=["enabled"]
+    )
+    metrics.define_counter(
+        "x.photo_to_vl.attempt", "X photo routing attempts", labels=["idx"]
+    )
+    metrics.define_counter(
+        "x.photo_to_vl.success", "X photo routing success", labels=["idx"]
+    )
+    metrics.define_counter(
+        "x.photo_to_vl.failure", "X photo routing failure", labels=["idx"]
+    )
 
     # Basic presence checks (internal map)
     for name in [

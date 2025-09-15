@@ -20,6 +20,7 @@ __license__ = "MIT"
 # Avoid importing heavy submodules at package import time to keep tests lightweight
 __all__ = []
 
+
 def __getattr__(name: str):
     """Lazy loader for heavy symbols to prevent side effects during tests.
 
@@ -28,5 +29,6 @@ def __getattr__(name: str):
     """
     if name == "LLMBot":
         from .core.bot import LLMBot as _LLMBot
+
         return _LLMBot
     raise AttributeError(name)

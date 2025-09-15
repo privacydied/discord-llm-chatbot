@@ -1,25 +1,37 @@
 """Custom exceptions for TTS system."""
+
 from typing import Optional
+
 
 class TTSError(Exception):
     """Base class for TTS errors"""
+
     pass
+
 
 class EngineLoadError(TTSError):
     """Error loading TTS engine"""
+
     pass
+
 
 class SynthesisError(TTSError):
     """Error during audio synthesis"""
+
     pass
+
 
 class ConfigurationError(TTSError):
     """Invalid TTS configuration"""
+
     pass
+
 
 class TTSWriteError(Exception):
     """Exception raised when TTS fails to write output file."""
+
     pass
+
 
 class TTSGibberishError(Exception):
     """Raised when synthesized audio is detected as gibberish or invalid.
@@ -33,23 +45,27 @@ class TTSGibberishError(Exception):
         # Avoid strict typing import here to keep this a lean errors module
         self.metrics = metrics or {}
 
+
 class TTSSynthesisError(Exception):
     """Exception raised when TTS synthesis fails (e.g., silent audio, model error)."""
+
     pass
+
 
 class MissingTokeniserError(Exception):
     """Exception raised when no suitable tokeniser is found for a language.
-    
+
     This is a critical error that should prevent TTS initialization, as using
     an incorrect tokeniser will result in gibberish output.
     """
+
     def __init__(self, language="en", available=None, required=None):
         self.language = language
         self.available = available or []
         self.required = required or []
         message = f"No suitable tokeniser found for language '{language}'. Required: {required}, Available: {available}"
         super().__init__(message)
-    
+
     @property
     def user_message(self):
         """Get a user-friendly error message with installation instructions."""

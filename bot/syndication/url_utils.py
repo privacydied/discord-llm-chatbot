@@ -1,6 +1,7 @@
 """
 URL utilities for syndication content processing.
 """
+
 from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
 
 
@@ -9,10 +10,10 @@ def upgrade_pbs_to_orig(url: str) -> str:
     Given a pbs.twimg.com URL (media/card/tweet_video_thumb), ensure it points to the highest
     available resolution by setting query param name=orig while preserving any existing 'format'.
     If the host isn't pbs.twimg.com, return url unchanged.
-    
+
     Args:
         url: Input URL to potentially upgrade
-        
+
     Returns:
         URL with name=orig parameter if it's a pbs.twimg.com URL, otherwise unchanged
     """

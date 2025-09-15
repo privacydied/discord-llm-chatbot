@@ -2,11 +2,9 @@ import logging
 import inspect
 import io
 import os
-import wave
 from pathlib import Path
-import array as pyarray
 import asyncio
-from typing import Any, Optional, Tuple
+from typing import Any, Optional
 from bot.tts.kokoro_adapter import Kokoro, import_kokoro_submodule, get_direct_wrapper
 from .base import BaseEngine
 from bot.tts.errors import TTSError
@@ -15,14 +13,22 @@ from bot.tts.helpers import maybe_onnx_session
 
 logger = logging.getLogger(__name__)
 
+
 def _looks_like_ipa(s: str) -> bool:
     """Detect if input text appears to be IPA phonemes rather than plain text."""
     # Minimal heuristic: any "obvious IPA" characters trigger phoneme mode
     ipa_markers = set("ɑɒəɜɪʊθðʃʒŋˈˌːɾʔɹɱ̃")
     return any(ch in ipa_markers for ch in s)
 
+
 class KokoroONNXEngine(BaseEngine):
-    def __init__(self, model_path: Optional[str] = None, voices_path: Optional[str] = None, tokenizer: Optional[str] = None, voice: Optional[str] = None):
+    def __init__(
+        self,
+        model_path: Optional[str] = None,
+        voices_path: Optional[str] = None,
+        tokenizer: Optional[str] = None,
+        voice: Optional[str] = None,
+    ):
         # Resolve defaults lazily so tests can instantiate without arguments
         project_root = Path(__file__).resolve().parents[3]
         env_model = os.getenv("KOKORO_MODEL_PATH", "").strip()
@@ -49,7 +55,11 @@ class KokoroONNXEngine(BaseEngine):
         self.voices_path = voices_path or _first_existing(default_voice_candidates)
         self.language = os.getenv("TTS_LANGUAGE", "en").strip() or "en"
         # Respect explicit tokenizer argument. For English, avoid registry autodiscovery entirely.
-        env_tokenizer = os.environ.get("TTS_TOKENISER", "").strip().lower()
+        env_tokenizer = (
+            (os.environ.get("TTS_TOKENISER") or os.environ.get("TTS_TOKENIZER") or "")
+            .strip()
+            .lower()
+        )
         if tokenizer is not None:
             self.tokenizer = tokenizer
         else:
@@ -58,25 +68,30 @@ class KokoroONNXEngine(BaseEngine):
                 self.tokenizer = "builtin_ipa"
             else:
                 if env_tokenizer:
-                    logger.info("Using environment-specified tokenizer: %s", env_tokenizer)
+                    logger.info(
+                        "Using environment-specified tokenizer: %s", env_tokenizer
+                    )
                 self.tokenizer = select_tokenizer_for_language(self.language)
         self.voice = voice or os.getenv("TTS_VOICE", "af_heart")
         self.engine = None
         # Misaki G2P (only used when registry selects 'misaki')
         self._g2p_initialized = False
         self._g2p = None
-        
+
     def load(self):
         try:
             # Patch EspeakWrapper to avoid Python 3.12 incompatibility
             try:
                 import os as _os
+
                 _os.environ.setdefault("KOKORO_SKIP_TOKENIZER_PROBE", "1")
-                _tok = import_kokoro_submodule('tokenizer')  # type: ignore
+                _tok = import_kokoro_submodule("tokenizer")  # type: ignore
                 _ew = getattr(_tok, "EspeakWrapper", None)
                 if _ew is not None:
                     if not hasattr(_ew, "set_data_path"):
-                        setattr(_ew, "set_data_path", staticmethod(lambda *_, **__: None))
+                        setattr(
+                            _ew, "set_data_path", staticmethod(lambda *_, **__: None)
+                        )
                     if not hasattr(_ew, "set_library"):
                         setattr(_ew, "set_library", staticmethod(lambda *_, **__: None))
                     logger.debug("Patched EspeakWrapper with no-op methods")
@@ -85,8 +100,7 @@ class KokoroONNXEngine(BaseEngine):
                 logger.debug("EspeakWrapper patch not applied", exc_info=True)
 
             self.engine = Kokoro(
-                model_path=self.model_path,
-                voices_path=self.voices_path
+                model_path=self.model_path, voices_path=self.voices_path
             )
             # Back-compat for tests: if tokenizer is a Mock, override to provided string
             try:
@@ -94,6 +108,7 @@ class KokoroONNXEngine(BaseEngine):
                 is_mock = False
                 try:
                     import unittest.mock as _um
+
                     is_mock = isinstance(current_tok, (_um.Mock, _um.MagicMock))  # type: ignore
                 except Exception:
                     is_mock = False
@@ -101,12 +116,15 @@ class KokoroONNXEngine(BaseEngine):
                     setattr(self.engine, "tokenizer", self.tokenizer)
             except Exception:
                 # Non-fatal if underlying object disallows setting attributes
-                logger.debug("Could not set engine.tokenizer attribute; continuing", exc_info=True)
+                logger.debug(
+                    "Could not set engine.tokenizer attribute; continuing",
+                    exc_info=True,
+                )
             logger.info("KokoroEngine loaded successfully")
         except Exception as e:
             logger.error(f"Failed to load KokoroEngine: {e}", exc_info=True)
             raise TTSError(f"Failed to load KokoroEngine: {e}") from e
-            
+
     def synthesize(self, text: str, language: str = "en", **kwargs):
         """
         For English, always use IPA-only path with no fallbacks.
@@ -116,23 +134,30 @@ class KokoroONNXEngine(BaseEngine):
         lang = (language or "en").strip().lower()
         if "-" in lang:
             lang = lang.split("-")[0]
-            
+
         # English: IPA-only path (no tokenizer discovery, no grapheme fallback)
         if lang == "en":
-            logger.debug("English path: phoneme-only; using official model IPA vocabulary.")
-            
+            logger.debug(
+                "English path: phoneme-only; using official model IPA vocabulary."
+            )
+
             # Check timeout configuration
             cold_timeout = float(os.getenv("KOKORO_TTS_TIMEOUT_COLD", "60"))
             warm_timeout = float(os.getenv("KOKORO_TTS_TIMEOUT_WARM", "20"))
-            
+
             # Use cold timeout for first run, warm for subsequent
-            timeout = warm_timeout if getattr(self, '_synthesis_initialized', False) else cold_timeout
-            
+            timeout = (
+                warm_timeout
+                if getattr(self, "_synthesis_initialized", False)
+                else cold_timeout
+            )
+
             try:
                 # 1) Normalize text and convert to IPA using offline G2P
                 from bot.tts.eng_g2p_local import text_to_ipa
+
                 ipa = text_to_ipa(text)
-                
+
                 # 2) If a kd override is present (common in tests), use it unconditionally
                 kd_override = getattr(self, "kd", None)
                 if kd_override is not None and hasattr(kd_override, "create"):
@@ -162,26 +187,27 @@ class KokoroONNXEngine(BaseEngine):
 
                 # 4) Use KokoroDirect with official IPA vocabulary (no autodiscovery, no tokenizer)
                 kd = self._get_kokoro_direct(use_tokenizer=False, force_ipa=True)
-                
+
                 # Log detailed synthesis info for debugging
                 from bot.tts.ipa_vocab_loader import load_vocab
+
                 sess = maybe_onnx_session(kd)
                 vocab = load_vocab(sess) if sess is not None else None
                 vocab_size = vocab.rows if vocab else "unknown"
-                
+
                 logger.debug(
                     f"English path: phoneme-only; using official model IPA vocabulary. "
                     f"ipa_len={len(ipa.split())} vocab_size={vocab_size} oov=0 "
                     f"voice={self.voice} speed={kwargs.get('speed', 1.0)}",
-                    extra={'subsys': 'tts', 'event': 'english_ipa.synthesis'}
+                    extra={"subsys": "tts", "event": "english_ipa.synthesis"},
                 )
-                
+
                 # Apply timeout protection
-                import signal
                 import threading
+
                 result_container = [None]
                 exception_container = [None]
-                
+
                 def synthesis_target():
                     try:
                         wav_path = kd.create(
@@ -197,21 +223,23 @@ class KokoroONNXEngine(BaseEngine):
                         result_container[0] = wav_path
                     except Exception as e:
                         exception_container[0] = e
-                
+
                 synthesis_thread = threading.Thread(target=synthesis_target)
                 synthesis_thread.start()
                 synthesis_thread.join(timeout=timeout)
-                
+
                 if synthesis_thread.is_alive():
                     # Timeout occurred
-                    raise TTSError(f"English IPA synthesis timed out after {timeout}s (cold={cold_timeout}s, warm={warm_timeout}s)")
-                
+                    raise TTSError(
+                        f"English IPA synthesis timed out after {timeout}s (cold={cold_timeout}s, warm={warm_timeout}s)"
+                    )
+
                 if exception_container[0]:
                     raise exception_container[0]
-                    
+
                 if result_container[0] is None:
                     raise TTSError("English IPA synthesis failed: no result returned")
-                    
+
                 wav_path = result_container[0]
 
                 # Read and return WAV bytes via helper (tests may monkeypatch this)
@@ -220,10 +248,11 @@ class KokoroONNXEngine(BaseEngine):
                 # Clean up temp file
                 try:
                     from pathlib import Path as _P
+
                     _p = _P(wav_path)
                     if _p.exists():
                         _p.unlink()
-                except:
+                except Exception:
                     pass
 
                 # Mark as initialized for warm timeout
@@ -231,7 +260,11 @@ class KokoroONNXEngine(BaseEngine):
                 return audio_bytes
 
             except Exception as e:
-                logger.error(f"English IPA synthesis failed: {e}", exc_info=True, extra={'subsys': 'tts', 'event': 'english_ipa.error'})
+                logger.error(
+                    f"English IPA synthesis failed: {e}",
+                    exc_info=True,
+                    extra={"subsys": "tts", "event": "english_ipa.error"},
+                )
                 raise TTSError(f"English IPA synthesis failed: {e}") from e
 
         # Non-English → original flow
@@ -265,19 +298,25 @@ class KokoroONNXEngine(BaseEngine):
                 text = lex_text
         except Exception:
             pass
-        
+
         # Ensure engine is loaded for registry path since tests may construct without calling load()
         if self.engine is None:
             try:
                 self.load()
             except Exception:
-                logger.debug("Lazy load of Kokoro engine failed; continuing with fallbacks", exc_info=True)
-        
+                logger.debug(
+                    "Lazy load of Kokoro engine failed; continuing with fallbacks",
+                    exc_info=True,
+                )
+
         # Preferred: official example path from kokoro-onnx english.py
         try:
             ga = getattr(self.engine, "generate_audio", None)
             if callable(ga):
-                logger.info("Kokoro engine trying 'generate_audio' variants (voice=%s)", self.voice)
+                logger.info(
+                    "Kokoro engine trying 'generate_audio' variants (voice=%s)",
+                    self.voice,
+                )
                 attempts = [
                     # Prefer simplest signature first to satisfy tests and common APIs
                     lambda: ga(text),  # engine default voice
@@ -302,23 +341,29 @@ class KokoroONNXEngine(BaseEngine):
                     wav_bytes = self._normalize_audio_to_wav_bytes(result)
                     if wav_bytes is not None:
                         return wav_bytes
-                logger.debug("generate_audio variants did not yield recognizable audio; continuing to fallbacks")
+                logger.debug(
+                    "generate_audio variants did not yield recognizable audio; continuing to fallbacks"
+                )
         except Exception:
             # Fall through to Misaki/probing
             logger.debug("generate_audio path failed; falling back", exc_info=True)
 
         # Prefer Misaki G2P -> engine.create(is_phonemes=True) only if selected tokenizer is 'misaki'
-        use_misaki = (str(getattr(self, "tokenizer", "")).lower().strip() == "misaki")
+        use_misaki = str(getattr(self, "tokenizer", "")).lower().strip() == "misaki"
         if use_misaki and not self._g2p_initialized:
             try:
                 from misaki import en as misaki_en  # type: ignore
+
                 try:
                     from misaki import espeak as misaki_espeak  # type: ignore
+
                     fallback = misaki_espeak.EspeakFallback(british=False)
                     logger.debug("Misaki espeak fallback available")
                 except Exception:
                     fallback = None
-                    logger.debug("Misaki espeak fallback not available; proceeding without it")
+                    logger.debug(
+                        "Misaki espeak fallback not available; proceeding without it"
+                    )
                 self._g2p = misaki_en.G2P(trf=False, british=False, fallback=fallback)
             except Exception:
                 self._g2p = None
@@ -346,11 +391,15 @@ class KokoroONNXEngine(BaseEngine):
                 except Exception:
                     pass
 
-                empty_or_blank = (not phonemes) or (isinstance(phonemes, str) and not phonemes.strip())
+                empty_or_blank = (not phonemes) or (
+                    isinstance(phonemes, str) and not phonemes.strip()
+                )
                 if not (empty_or_blank or invalid_marker):
                     create = getattr(self.engine, "create", None)
                     if callable(create):
-                        logger.info("Kokoro engine using 'create' with phonemes via Misaki")
+                        logger.info(
+                            "Kokoro engine using 'create' with phonemes via Misaki"
+                        )
                         result = create(phonemes, self.voice, is_phonemes=True)
                         if inspect.isawaitable(result):
                             result = await result
@@ -358,10 +407,15 @@ class KokoroONNXEngine(BaseEngine):
                         if wav_bytes is not None:
                             return wav_bytes
                         else:
-                            logger.debug("create(is_phonemes=True) returned unrecognized audio format; continuing to probing methods")
+                            logger.debug(
+                                "create(is_phonemes=True) returned unrecognized audio format; continuing to probing methods"
+                            )
             except Exception:
                 # Fall through to generic probing quietly
-                logger.debug("Phoneme path failed; falling back to generic probing", exc_info=True)
+                logger.debug(
+                    "Phoneme path failed; falling back to generic probing",
+                    exc_info=True,
+                )
 
         # Probe common method names across versions
         candidates = (
@@ -409,34 +463,61 @@ class KokoroONNXEngine(BaseEngine):
                 if name in ("create", "_create_audio", "create_audio"):
                     # Text-mode create (phoneme path already tried above)
                     # Cover both text-first and voice-first signatures across versions
-                    patterns.extend([
-                        # text-first
-                        lambda: meth(text, self.voice, is_phonemes=False),
-                        lambda: meth(text, self.voice),
-                        lambda: meth(text=text, voice=self.voice, is_phonemes=False),
-                        lambda: meth(text=text, voice=self.voice),
-                        # kwargs-based (safe irrespective of positional order)
-                        lambda: meth(voice=self.voice, text=text, is_phonemes=False),
-                        lambda: meth(voice=self.voice, text=text),
-                        lambda: meth(speaker=self.voice, text=text, is_phonemes=False),
-                        lambda: meth(speaker=self.voice, text=text),
-                        # text-only (engine may use default voice)
-                        lambda: meth(text),
-                    ])
+                    patterns.extend(
+                        [
+                            # text-first
+                            lambda: meth(text, self.voice, is_phonemes=False),
+                            lambda: meth(text, self.voice),
+                            lambda: meth(
+                                text=text, voice=self.voice, is_phonemes=False
+                            ),
+                            lambda: meth(text=text, voice=self.voice),
+                            # kwargs-based (safe irrespective of positional order)
+                            lambda: meth(
+                                voice=self.voice, text=text, is_phonemes=False
+                            ),
+                            lambda: meth(voice=self.voice, text=text),
+                            lambda: meth(
+                                speaker=self.voice, text=text, is_phonemes=False
+                            ),
+                            lambda: meth(speaker=self.voice, text=text),
+                            # text-only (engine may use default voice)
+                            lambda: meth(text),
+                        ]
+                    )
                 else:
-                    patterns.extend([
-                        lambda: meth(text),
-                        lambda: meth(text, self.voice),
-                        lambda: meth(text=text, voice=self.voice),
-                        lambda: meth(text=text, speaker=self.voice),
-                        # voice-first positional (some APIs expect voice before text)
-                        lambda: meth(self.voice, text),
-                    ])
+                    patterns.extend(
+                        [
+                            lambda: meth(text),
+                            lambda: meth(text, self.voice),
+                            lambda: meth(text=text, voice=self.voice),
+                            lambda: meth(text=text, speaker=self.voice),
+                            # voice-first positional (some APIs expect voice before text)
+                            lambda: meth(self.voice, text),
+                        ]
+                    )
 
                 # Signature-aware kwargs attempts (covers alternate arg names)
-                text_keys = [k for k in ("text", "sentence", "input_text", "input", "content", "s") if k in param_names]
-                voice_keys = [k for k in ("voice", "speaker", "spk", "voice_name", "speaker_id", "voice_id") if k in param_names]
-                phoneme_flag_keys = [k for k in ("is_phonemes", "is_phones") if k in param_names]
+                text_keys = [
+                    k
+                    for k in ("text", "sentence", "input_text", "input", "content", "s")
+                    if k in param_names
+                ]
+                voice_keys = [
+                    k
+                    for k in (
+                        "voice",
+                        "speaker",
+                        "spk",
+                        "voice_name",
+                        "speaker_id",
+                        "voice_id",
+                    )
+                    if k in param_names
+                ]
+                phoneme_flag_keys = [
+                    k for k in ("is_phonemes", "is_phones") if k in param_names
+                ]
 
                 # Build combinations while keeping it lightweight
                 if text_keys:
@@ -446,16 +527,27 @@ class KokoroONNXEngine(BaseEngine):
                     # text + voice
                     for tk in text_keys:
                         for vk in voice_keys:
-                            patterns.append(lambda tk=tk, vk=vk: meth(**{tk: text, vk: self.voice}))
+                            patterns.append(
+                                lambda tk=tk, vk=vk: meth(**{tk: text, vk: self.voice})
+                            )
                             # For create-like paths that accept phoneme flag
-                            if name in ("create", "_create_audio", "create_audio") and phoneme_flag_keys:
+                            if (
+                                name in ("create", "_create_audio", "create_audio")
+                                and phoneme_flag_keys
+                            ):
                                 for pk in phoneme_flag_keys:
-                                    patterns.append(lambda tk=tk, vk=vk, pk=pk: meth(**{tk: text, vk: self.voice, pk: False}))
+                                    patterns.append(
+                                        lambda tk=tk, vk=vk, pk=pk: meth(
+                                            **{tk: text, vk: self.voice, pk: False}
+                                        )
+                                    )
                 # voice-only then text if signature exposes names in that order
                 if voice_keys and text_keys:
                     for vk in voice_keys:
                         for tk in text_keys:
-                            patterns.append(lambda vk=vk, tk=tk: meth(**{vk: self.voice, tk: text}))
+                            patterns.append(
+                                lambda vk=vk, tk=tk: meth(**{vk: self.voice, tk: text})
+                            )
             except Exception:
                 # If building patterns fails, skip this method gracefully
                 continue
@@ -482,11 +574,18 @@ class KokoroONNXEngine(BaseEngine):
                 if wav_bytes is not None:
                     return wav_bytes
                 else:
-                    logger.debug("Method '%s' returned unrecognized audio format; trying next pattern", name)
+                    logger.debug(
+                        "Method '%s' returned unrecognized audio format; trying next pattern",
+                        name,
+                    )
 
         # Log available callable attributes to aid debugging
         try:
-            callables = [a for a in dir(self.engine) if callable(getattr(self.engine, a, None)) and not a.startswith('__')]
+            callables = [
+                a
+                for a in dir(self.engine)
+                if callable(getattr(self.engine, a, None)) and not a.startswith("__")
+            ]
             logger.debug(f"Kokoro engine callable methods: {callables}")
         except Exception:
             pass
@@ -495,15 +594,18 @@ class KokoroONNXEngine(BaseEngine):
         try:
             logger.debug("Attempting KokoroDirect fallback with registry decisions")
             from bot.tokenizer_registry import select_for_language
+
             kd_cls = get_direct_wrapper()
             kd = kd_cls(model_path=self.model_path, voices_path=self.voices_path)
-            
+
             # Get registry decision for this text and language
             decision = select_for_language(self.language, text)
-            
+
             if decision.mode == "phonemes":
                 # PHONEME PATH — use registry phonemes directly
-                logger.debug(f"Using registry phonemes from {decision.alphabet} tokenizer")
+                logger.debug(
+                    f"Using registry phonemes from {decision.alphabet} tokenizer"
+                )
                 out_path = kd.create(
                     phonemes=decision.payload,
                     voice=self.voice,
@@ -521,11 +623,12 @@ class KokoroONNXEngine(BaseEngine):
                     disable_autodiscovery=True,
                     logger=logger,
                 )
-            
+
             try:
                 from pathlib import Path as _P
+
                 if isinstance(out_path, _P) and out_path.exists():
-                    with open(out_path, 'rb') as _f:
+                    with open(out_path, "rb") as _f:
                         data = _f.read()
                     try:
                         out_path.unlink(missing_ok=True)  # py3.8+: ok on this runtime
@@ -533,7 +636,10 @@ class KokoroONNXEngine(BaseEngine):
                         pass
                     return data
             except Exception:
-                logger.debug("KokoroDirect returned non-path or read failed; continuing", exc_info=True)
+                logger.debug(
+                    "KokoroDirect returned non-path or read failed; continuing",
+                    exc_info=True,
+                )
         except Exception:
             logger.debug("KokoroDirect fallback unavailable or failed", exc_info=True)
 
@@ -541,11 +647,10 @@ class KokoroONNXEngine(BaseEngine):
 
     def _normalize_audio_to_wav_bytes(self, data: Any) -> bytes | None:
         """Ensure 16-bit PCM WAV regardless of input format.
-        
+
         Converts various audio formats to standardized 16-bit PCM WAV
         with proper peak normalization for clean, consistent output.
         """
-        import io
         import soundfile as sf
         import numpy as np
 
@@ -635,7 +740,7 @@ class KokoroONNXEngine(BaseEngine):
         """Read a WAV file path-like into bytes. Tests may monkeypatch this."""
         try:
             p = Path(wav_path)
-            with open(p, 'rb') as f:
+            with open(p, "rb") as f:
                 return f.read()
         except Exception:
             # If anything goes wrong, return empty bytes to avoid hard failures in tests
@@ -643,11 +748,10 @@ class KokoroONNXEngine(BaseEngine):
 
     def _resample_for_discord_voice(self, wav_bytes: bytes) -> bytes:
         """Resample WAV audio to 48kHz int16 PCM for Discord voice streaming.
-        
+
         Discord voice channels expect 48kHz sample rate. This method
         resamples any WAV audio to 48kHz with proper peak normalization.
         """
-        import io
         import soundfile as sf
         import numpy as np
         from scipy.signal import resample_poly
@@ -655,40 +759,42 @@ class KokoroONNXEngine(BaseEngine):
         try:
             # Read the WAV data
             y, sr = sf.read(io.BytesIO(wav_bytes), always_2d=False, dtype="float32")
-            
+
             if sr == 48000:
                 # Already at correct sample rate
                 return wav_bytes
-            
+
             # Resample to 48kHz
             if sr != 48000:
                 # Calculate resampling ratio
                 up, down = 48000, sr
                 # Simplify the fraction
                 from math import gcd
+
                 g = gcd(up, down)
                 up //= g
                 down //= g
-                
+
                 # Resample using polyphase filter
                 y = resample_poly(y, up, down)
-            
+
             # Light peak normalization to -1 dBFS
             peak = float(np.max(np.abs(y)))
             if peak > 0:
                 y = y * (0.8912509381337456 / peak)
-            
+
             # Convert to int16 PCM
             y_int16 = (np.clip(y, -1.0, 1.0) * 32767.0).astype(np.int16)
-            
+
             # Create new WAV at 48kHz
             buf = io.BytesIO()
             sf.write(buf, y_int16, 48000, format="WAV", subtype="PCM_16")
             return buf.getvalue()
-            
+
         except Exception as e:
             logger.warning(f"Failed to resample audio for Discord voice: {e}")
             return wav_bytes  # Return original if resampling fails
+
 
 # Backward-compatible alias for legacy imports/tests
 # Some tests/modules import KokoroEngine; maintain that name.

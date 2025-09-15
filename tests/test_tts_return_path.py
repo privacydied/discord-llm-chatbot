@@ -16,18 +16,18 @@ from bot.config import load_config
 async def test_tts_returns_path():
     """Test that generate_tts always returns a Path object or raises an exception."""
     print("Testing TTSManager.generate_tts return type...")
-    
+
     # Load config from environment
     config = load_config()
-    
+
     # Initialize TTSManager
     tts_manager = TTSManager(config)
     # TTSManager is initialized in the constructor, no need for explicit initialize() call
-    
+
     if not tts_manager.is_available():
         print("TTS is not available, skipping test")
         return
-    
+
     try:
         # Test with valid text
         result = await tts_manager.generate_tts("Hello world")
@@ -37,14 +37,14 @@ async def test_tts_returns_path():
         assert result.stat().st_size > 0, f"File {result} is empty"
         print(f"Success! TTS returned a valid Path: {result}")
         print(f"File size: {result.stat().st_size} bytes")
-        
+
         # Test with empty text - should raise ValueError
         try:
             await tts_manager.generate_tts("")
             print("ERROR: Empty text did not raise an exception!")
         except ValueError as e:
             print(f"Success! Empty text raised ValueError: {e}")
-            
+
     except Exception as e:
         print(f"Test failed with error: {e}")
     finally:

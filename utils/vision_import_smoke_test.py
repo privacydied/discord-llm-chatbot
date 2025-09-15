@@ -6,11 +6,12 @@ Vision subsystem import and init smoke test.
 - Imports vision commands cog module
 - Prints simple status so CI/logs can assert success quickly
 """
+
 from __future__ import annotations
 
 import sys
 
-from bot.util.logging import get_logger
+from bot.utils.logging import get_logger
 
 logger = get_logger("utils.vision_smoke")
 
@@ -30,6 +31,7 @@ def main() -> int:
     try:
         logger.info("Importing bot.vision exports...")
         from bot.vision import VisionIntentRouter, VisionOrchestrator  # noqa: F401
+
         logger.info("Importing OptimizedRouter...")
         from bot.optimized_router import OptimizedRouter  # noqa: F401
 
@@ -54,7 +56,11 @@ def main() -> int:
         print("VISION_IMPORT_SMOKE_TEST_OK")
         return 0
     except Exception as e:
-        logger.error("Vision smoke test failed", exc_info=True, extra={"event": "router.smoke.fail", "detail": {"error": str(e)}})
+        logger.error(
+            "Vision smoke test failed",
+            exc_info=True,
+            extra={"event": "router.smoke.fail", "detail": {"error": str(e)}},
+        )
         print("VISION_IMPORT_SMOKE_TEST_FAIL", file=sys.stderr)
         return 1
 

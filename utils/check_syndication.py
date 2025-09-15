@@ -28,11 +28,18 @@ class BotStub:
     def __init__(self):
         # Minimal config pulled from env with sensible defaults
         self.config: Dict[str, Any] = {
-            "X_SYNDICATION_ENABLED": os.getenv("X_SYNDICATION_ENABLED", "true").lower() == "true",
-            "X_SYNDICATION_FIRST": os.getenv("X_SYNDICATION_FIRST", "false").lower() == "true",
+            "X_SYNDICATION_ENABLED": os.getenv("X_SYNDICATION_ENABLED", "true").lower()
+            == "true",
+            "X_SYNDICATION_FIRST": os.getenv("X_SYNDICATION_FIRST", "false").lower()
+            == "true",
             "X_SYNDICATION_TTL_S": float(os.getenv("X_SYNDICATION_TTL_S", "900")),
-            "X_SYNDICATION_TIMEOUT_MS": int(os.getenv("X_SYNDICATION_TIMEOUT_MS", "4000")),
-            "X_API_REQUIRE_API_FOR_TWITTER": os.getenv("X_API_REQUIRE_API_FOR_TWITTER", "false").lower() == "true",
+            "X_SYNDICATION_TIMEOUT_MS": int(
+                os.getenv("X_SYNDICATION_TIMEOUT_MS", "4000")
+            ),
+            "X_API_REQUIRE_API_FOR_TWITTER": os.getenv(
+                "X_API_REQUIRE_API_FOR_TWITTER", "false"
+            ).lower()
+            == "true",
         }
         self.metrics = MetricsStub()
         self.loop = asyncio.get_event_loop()
@@ -41,7 +48,10 @@ class BotStub:
 
 async def main():
     if len(sys.argv) < 2:
-        console.print("Usage: uv run python utils/check_syndication.py <tweet_id_or_url>", style="yellow")
+        console.print(
+            "Usage: uv run python utils/check_syndication.py <tweet_id_or_url>",
+            style="yellow",
+        )
         sys.exit(2)
 
     raw = sys.argv[1]

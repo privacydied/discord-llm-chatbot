@@ -1,9 +1,10 @@
 """
 Test Vision System Integration
 
-Basic integration tests to verify all vision components can be imported 
+Basic integration tests to verify all vision components can be imported
 and initialized correctly with the bot configuration.
 """
+
 import asyncio
 import sys
 from pathlib import Path
@@ -19,13 +20,13 @@ from bot.vision import (
     VisionArtifactCache,
     VisionRequest,
     VisionTask,
-    VisionProvider
+    VisionProvider,
 )
 
 
 class TestVisionIntegration:
     """Integration tests for vision system components"""
-    
+
     def setup_method(self):
         """Setup test configuration"""
         self.config = load_config()
@@ -36,7 +37,7 @@ class TestVisionIntegration:
         self.config["VISION_ARTIFACTS_DIR"] = Path("/tmp/vision_test_data/artifacts")
         self.config["VISION_JOBS_DIR"] = Path("/tmp/vision_test_data/jobs")
         self.config["VISION_POLICY_PATH"] = "configs/vision_policy.json"
-    
+
     def test_import_all_components(self):
         """Test that all vision components can be imported"""
         # This test passes if imports work without exception
@@ -47,7 +48,7 @@ class TestVisionIntegration:
         assert VisionSafetyFilter is not None
         assert VisionBudgetManager is not None
         assert VisionArtifactCache is not None
-    
+
     def test_vision_gateway_init(self):
         """Test VisionGateway initialization"""
         try:
@@ -57,7 +58,7 @@ class TestVisionIntegration:
         except Exception as e:
             print(f"❌ VisionGateway initialization failed: {e}")
             raise AssertionError(f"VisionGateway initialization failed: {e}")
-    
+
     def test_job_store_init(self):
         """Test VisionJobStore initialization"""
         try:
@@ -67,7 +68,7 @@ class TestVisionIntegration:
         except Exception as e:
             print(f"❌ VisionJobStore initialization failed: {e}")
             raise AssertionError(f"VisionJobStore initialization failed: {e}")
-    
+
     def test_intent_router_init(self):
         """Test VisionIntentRouter initialization"""
         try:
@@ -77,7 +78,7 @@ class TestVisionIntegration:
         except Exception as e:
             print(f"❌ VisionIntentRouter initialization failed: {e}")
             raise AssertionError(f"VisionIntentRouter initialization failed: {e}")
-    
+
     def test_safety_filter_init(self):
         """Test VisionSafetyFilter initialization"""
         try:
@@ -87,7 +88,7 @@ class TestVisionIntegration:
         except Exception as e:
             print(f"❌ VisionSafetyFilter initialization failed: {e}")
             raise AssertionError(f"VisionSafetyFilter initialization failed: {e}")
-    
+
     def test_budget_manager_init(self):
         """Test VisionBudgetManager initialization"""
         try:
@@ -97,7 +98,7 @@ class TestVisionIntegration:
         except Exception as e:
             print(f"❌ VisionBudgetManager initialization failed: {e}")
             raise AssertionError(f"VisionBudgetManager initialization failed: {e}")
-    
+
     def test_artifact_cache_init(self):
         """Test VisionArtifactCache initialization"""
         try:
@@ -107,7 +108,7 @@ class TestVisionIntegration:
         except Exception as e:
             print(f"❌ VisionArtifactCache initialization failed: {e}")
             raise AssertionError(f"VisionArtifactCache initialization failed: {e}")
-    
+
     def test_vision_request_creation(self):
         """Test VisionRequest creation"""
         try:
@@ -115,7 +116,7 @@ class TestVisionIntegration:
                 task=VisionTask.TEXT_TO_IMAGE,
                 prompt="A beautiful sunset",
                 user_id="test_user_123",
-                preferred_provider=VisionProvider.TOGETHER
+                preferred_provider=VisionProvider.TOGETHER,
             )
             assert request is not None
             assert request.task == VisionTask.TEXT_TO_IMAGE
@@ -125,7 +126,7 @@ class TestVisionIntegration:
         except Exception as e:
             print(f"❌ VisionRequest creation failed: {e}")
             raise AssertionError(f"VisionRequest creation failed: {e}")
-    
+
     async def test_orchestrator_init(self):
         """Test VisionOrchestrator initialization (async)"""
         orchestrator = None
@@ -147,34 +148,35 @@ class TestVisionIntegration:
 def main():
     """Run basic integration test"""
     print("🧪 Running Vision System Integration Tests\n")
-    
+
     try:
         # Test imports
         test = TestVisionIntegration()
         test.setup_method()
-        
+
         print("📦 Testing component imports...")
         test.test_import_all_components()
-        
+
         print("\n🏗️ Testing component initialization...")
         test.test_vision_gateway_init()
-        test.test_job_store_init() 
+        test.test_job_store_init()
         test.test_intent_router_init()
         test.test_safety_filter_init()
         test.test_budget_manager_init()
         test.test_artifact_cache_init()
         test.test_vision_request_creation()
-        
+
         print("\n🔄 Testing async orchestrator...")
         asyncio.run(test.test_orchestrator_init())
-        
+
         print("\n✅ All integration tests passed!")
         print("🎉 Vision system is ready for deployment")
         return 0
-        
+
     except Exception as e:
         print(f"\n❌ Integration test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return 1
 

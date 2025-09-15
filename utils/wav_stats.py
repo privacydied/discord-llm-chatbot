@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 def wav_stats(path: Path) -> None:
-    with wave.open(str(path), 'rb') as wf:
+    with wave.open(str(path), "rb") as wf:
         n_channels = wf.getnchannels()
         sampwidth = wf.getsampwidth()
         framerate = wf.getframerate()
@@ -22,20 +22,20 @@ def wav_stats(path: Path) -> None:
 
     # Interpret as little-endian signed 16-bit
     count = len(frames) // 2
-    samples = struct.unpack('<' + 'h' * count, frames)
+    samples = struct.unpack("<" + "h" * count, frames)
 
     # If stereo, downmix to mono for stats
     if n_channels > 1:
         mono = []
         for i in range(0, len(samples), n_channels):
-            chunk = samples[i:i+n_channels]
+            chunk = samples[i : i + n_channels]
             mono.append(int(sum(chunk) / len(chunk)))
         samples = mono
 
     # Peak and RMS
     peak = max(abs(s) for s in samples) if samples else 0
     if samples:
-        rms = math.sqrt(sum((s*s) for s in samples) / len(samples))
+        rms = math.sqrt(sum((s * s) for s in samples) / len(samples))
     else:
         rms = 0.0
 
@@ -43,11 +43,13 @@ def wav_stats(path: Path) -> None:
     peak_norm = peak / 32767.0 if 32767 else 0.0
     rms_norm = rms / 32767.0 if 32767 else 0.0
 
-    print(f"channels={n_channels} sr={framerate}Hz width={sampwidth*8}bit duration={duration:.3f}s frames={n_frames}")
+    print(
+        f"channels={n_channels} sr={framerate}Hz width={sampwidth * 8}bit duration={duration:.3f}s frames={n_frames}"
+    )
     print(f"peak={peak} ({peak_norm:.3f}) rms={rms:.1f} ({rms_norm:.3f})")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Usage: wav_stats.py <wav_path>")
         sys.exit(2)

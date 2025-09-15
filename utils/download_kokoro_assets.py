@@ -15,6 +15,7 @@ Notes:
 
 [IV][RM][CMV][PA][REH]
 """
+
 from __future__ import annotations
 
 import argparse
@@ -27,7 +28,6 @@ import shutil
 import sys
 import tempfile
 import time
-from typing import Optional
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -49,15 +49,12 @@ DEFAULT_OUT_DIR = Path("tts")
 JSONL_LOG_PATH = Path("logs/download_kokoro_assets.jsonl")
 SUBSYS = "tts.kokoro.assets"
 
-MODEL_URL = (
-    "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx"
-)
-VOICES_URL = (
-    "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin"
-)
+MODEL_URL = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx"
+VOICES_URL = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin"
 
 MODEL_NAME = "kokoro-v1.0.onnx"
 VOICES_NAME = "voices-v1.0.bin"
+
 
 # ------------------------------
 # Logging with Dual Sink [RAT]
@@ -74,7 +71,8 @@ class JsonLineFileHandler(logging.Handler):
     def emit(self, record: logging.LogRecord) -> None:  # [RM]
         try:
             payload = {
-                "ts": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(record.created)) + f".{int(record.msecs):03d}",
+                "ts": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(record.created))
+                + f".{int(record.msecs):03d}",
                 "level": record.levelname,
                 "name": record.name,
                 "subsys": getattr(record, "subsys", SUBSYS),
@@ -123,9 +121,9 @@ def setup_logger(verbosity: int = 0) -> logging.Logger:
 
     # Enforcer: exactly two active handlers (pretty + json) [Style Guide]
     handlers = [h for h in logger.handlers]
-    if not any(isinstance(h, (RichHandler, logging.StreamHandler)) for h in handlers) or not any(
-        isinstance(h, JsonLineFileHandler) for h in handlers
-    ):
+    if not any(
+        isinstance(h, (RichHandler, logging.StreamHandler)) for h in handlers
+    ) or not any(isinstance(h, JsonLineFileHandler) for h in handlers):
         logger.critical("Logging handlers misconfigured; expected pretty + jsonl.")
         sys.exit(2)
 
@@ -136,7 +134,10 @@ def setup_logger(verbosity: int = 0) -> logging.Logger:
 # HTTP session with retries [PA]
 # ------------------------------
 
-def build_session(total_retries: int = 3, backoff_factor: float = 0.5) -> requests.Session:
+
+def build_session(
+    total_retries: int = 3, backoff_factor: float = 0.5
+) -> requests.Session:
     s = requests.Session()
     retries = Retry(
         total=total_retries,
@@ -155,6 +156,7 @@ def build_session(total_retries: int = 3, backoff_factor: float = 0.5) -> reques
 # Helpers
 # ------------------------------
 
+
 def atomic_write(src_fp: str, dest: Path) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
     # Replace existing atomically
@@ -167,13 +169,23 @@ def atomic_write(src_fp: str, dest: Path) -> None:
     os.replace(tmp_final, dest)
 
 
-def download_file(url: str, dest: Path, session: requests.Session, timeout: int, logger: logging.Logger) -> None:
-    extra = {"subsys": SUBSYS, "event": "download_start", "detail": {"url": url, "dest": str(dest)}}
+def download_file(
+    url: str,
+    dest: Path,
+    session: requests.Session,
+    timeout: int,
+    logger: logging.Logger,
+) -> None:
+    extra = {
+        "subsys": SUBSYS,
+        "event": "download_start",
+        "detail": {"url": url, "dest": str(dest)},
+    }
     logger.info("ℹ Starting download", extra=extra)
 
     with session.get(url, stream=True, timeout=timeout) as r:
         r.raise_for_status()
-        total = int(r.headers.get("content-length", 0))
+        int(r.headers.get("content-length", 0))
         hasher = hashlib.sha256()
         with tempfile.NamedTemporaryFile(delete=False) as tmp:
             for chunk in r.iter_content(chunk_size=1024 * 1024):
@@ -201,12 +213,26 @@ def download_file(url: str, dest: Path, session: requests.Session, timeout: int,
 # Main
 # ------------------------------
 
+
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Download Kokoro-ONNX English example assets.")
-    p.add_argument("--out-dir", type=Path, default=DEFAULT_OUT_DIR, help="Output directory for assets.")
-    p.add_argument("--force", action="store_true", help="Re-download even if files exist.")
-    p.add_argument("--timeout", type=int, default=120, help="HTTP timeout per request (seconds).")
-    p.add_argument("-v", "--verbose", action="count", default=0, help="Increase verbosity.")
+    p = argparse.ArgumentParser(
+        description="Download Kokoro-ONNX English example assets."
+    )
+    p.add_argument(
+        "--out-dir",
+        type=Path,
+        default=DEFAULT_OUT_DIR,
+        help="Output directory for assets.",
+    )
+    p.add_argument(
+        "--force", action="store_true", help="Re-download even if files exist."
+    )
+    p.add_argument(
+        "--timeout", type=int, default=120, help="HTTP timeout per request (seconds)."
+    )
+    p.add_argument(
+        "-v", "--verbose", action="count", default=0, help="Increase verbosity."
+    )
     return p.parse_args()
 
 
@@ -234,18 +260,31 @@ def main() -> int:
 
     for url, dest in targets:
         if dest.exists() and not args.force:
-            extra = {"subsys": SUBSYS, "event": "skip_exists", "detail": {"dest": str(dest)}}
+            extra = {
+                "subsys": SUBSYS,
+                "event": "skip_exists",
+                "detail": {"dest": str(dest)},
+            }
             logger.info("ℹ Skipping existing", extra=extra)
             continue
         try:
             download_file(url, dest, session, args.timeout, logger)
         except requests.HTTPError as e:  # [REH]
-            extra = {"subsys": SUBSYS, "event": "http_error", "detail": {"url": url, "status": getattr(e.response, 'status_code', None)}}
+            extra = {
+                "subsys": SUBSYS,
+                "event": "http_error",
+                "detail": {
+                    "url": url,
+                    "status": getattr(e.response, "status_code", None),
+                },
+            }
             logger.error("✖ HTTP error during download", extra=extra, exc_info=True)
             return 1
         except Exception:
             extra = {"subsys": SUBSYS, "event": "error", "detail": {"url": url}}
-            logger.error("✖ Unexpected error during download", extra=extra, exc_info=True)
+            logger.error(
+                "✖ Unexpected error during download", extra=extra, exc_info=True
+            )
             return 1
 
     model_path = (out_dir / MODEL_NAME).resolve()
@@ -254,7 +293,7 @@ def main() -> int:
     # Env hints
     print()
     print("Add these to your .env for kokoro-onnx:")
-    print(f"TTS_ENGINE=kokoro-onnx")
+    print("TTS_ENGINE=kokoro-onnx")
     print(f"TTS_MODEL_PATH={model_path}")
     print(f"TTS_VOICES_PATH={voices_path}")
 

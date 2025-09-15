@@ -46,10 +46,13 @@ async def test_x_api_routes_video_to_stt(monkeypatch):
 
     # Patch STT ingest
     import bot.router as router_mod
+
     stt_mock = AsyncMock(return_value={"transcription": "hello world"})
     monkeypatch.setattr(router_mod, "hear_infer_from_url", stt_mock)
 
-    item = InputItem(source_type="url", payload="https://twitter.com/user/status/1", order_index=0)
+    item = InputItem(
+        source_type="url", payload="https://twitter.com/user/status/1", order_index=0
+    )
     res = await router._handle_general_url(item)
 
     assert "Video/audio content" in res
@@ -82,7 +85,9 @@ async def test_x_api_photo_only_formats_text(monkeypatch):
 
     monkeypatch.setattr(Router, "_get_x_api_client", _get_client)
 
-    item = InputItem(source_type="url", payload="https://x.com/user/status/1", order_index=0)
+    item = InputItem(
+        source_type="url", payload="https://x.com/user/status/1", order_index=0
+    )
     res = await router._handle_general_url(item)
 
     assert "Photos: 2" in res
@@ -111,7 +116,9 @@ async def test_x_api_text_only_formats_default(monkeypatch):
 
     monkeypatch.setattr(Router, "_get_x_api_client", _get_client)
 
-    item = InputItem(source_type="url", payload="https://twitter.com/user/status/1", order_index=0)
+    item = InputItem(
+        source_type="url", payload="https://twitter.com/user/status/1", order_index=0
+    )
     res = await router._handle_general_url(item)
 
     # Should contain the URL and text body formatted
@@ -135,8 +142,16 @@ async def test_x_api_photo_only_routes_to_vl_when_enabled(monkeypatch):
                 "includes": {
                     "users": [{"id": "u1", "username": "user"}],
                     "media": [
-                        {"type": "photo", "media_key": "m1", "url": "https://example.com/p1.jpg"},
-                        {"type": "photo", "media_key": "m2", "url": "https://example.com/p2.jpg"},
+                        {
+                            "type": "photo",
+                            "media_key": "m1",
+                            "url": "https://example.com/p1.jpg",
+                        },
+                        {
+                            "type": "photo",
+                            "media_key": "m2",
+                            "url": "https://example.com/p2.jpg",
+                        },
                     ],
                 },
             }
@@ -152,7 +167,9 @@ async def test_x_api_photo_only_routes_to_vl_when_enabled(monkeypatch):
 
     monkeypatch.setattr(Router, "_vl_describe_image_from_url", _fake_vl, raising=True)
 
-    item = InputItem(source_type="url", payload="https://twitter.com/user/status/1", order_index=0)
+    item = InputItem(
+        source_type="url", payload="https://twitter.com/user/status/1", order_index=0
+    )
     res = await router._handle_general_url(item)
 
     assert "Photos analyzed: 2/2" in res

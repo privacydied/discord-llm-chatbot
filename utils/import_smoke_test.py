@@ -2,10 +2,10 @@
 import sys
 
 mods = [
-    'bot.web_extraction_service',
-    'bot.router',
-    'bot.web',
-    'bot.commands.screenshot_commands',
+    "bot.web_extraction_service",
+    "bot.router",
+    "bot.web",
+    "bot.commands.screenshot_commands",
 ]
 
 failed = False

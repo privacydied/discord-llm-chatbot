@@ -10,29 +10,26 @@ Run at bot startup via TTSManager to prepare assets asynchronously.
 
 [RAT][IV][RM][PA][REH][CMV]
 """
+
 from __future__ import annotations
 
 import asyncio
-import logging
 from pathlib import Path
-from typing import Tuple, Optional
+from typing import Tuple
 
-from bot.util.logging import get_logger
+from bot.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
-MODEL_URL = (
-    "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx"
-)
-VOICES_URL = (
-    "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin"
-)
+MODEL_URL = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx"
+VOICES_URL = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin"
 
 MODEL_NAME = "kokoro-v1.0.onnx"
 VOICES_NAME = "voices-v1.0.bin"
 
 LEGACY_MODEL = Path("tts/onnx/kokoro-v1.0.onnx")
 LEGACY_VOICES = Path("tts/voices/voices-v1.0.bin")
+
 
 async def _download_aiohttp(url: str, dest: Path, timeout: int = 120) -> None:
     import aiohttp  # type: ignore
@@ -66,24 +63,39 @@ def _download_requests(url: str, dest: Path, timeout: int = 120) -> None:
 
 async def _ensure_file(url: str, dest: Path, force: bool) -> None:
     if dest.exists() and not force:
-        logger.info("ℹ Asset present; skip download", extra={"subsys": "tts.assets", "event": "skip", "detail": str(dest)})
+        logger.info(
+            "ℹ Asset present; skip download",
+            extra={"subsys": "tts.assets", "event": "skip", "detail": str(dest)},
+        )
         return
 
     # Try aiohttp first
     try:
         await _download_aiohttp(url, dest)
-        logger.info("✔ Downloaded asset (aiohttp)", extra={"subsys": "tts.assets", "event": "download", "detail": str(dest)})
+        logger.info(
+            "✔ Downloaded asset (aiohttp)",
+            extra={"subsys": "tts.assets", "event": "download", "detail": str(dest)},
+        )
         return
     except Exception:
-        logger.warning("⚠ aiohttp failed; falling back to requests", extra={"subsys": "tts.assets"}, exc_info=True)
+        logger.warning(
+            "⚠ aiohttp failed; falling back to requests",
+            extra={"subsys": "tts.assets"},
+            exc_info=True,
+        )
 
     # Fallback to requests in a thread
     loop = asyncio.get_running_loop()
     await loop.run_in_executor(None, _download_requests, url, dest, 120)
-    logger.info("✔ Downloaded asset (requests)", extra={"subsys": "tts.assets", "event": "download", "detail": str(dest)})
+    logger.info(
+        "✔ Downloaded asset (requests)",
+        extra={"subsys": "tts.assets", "event": "download", "detail": str(dest)},
+    )
 
 
-async def ensure_kokoro_assets(out_dir: Path = Path("tts"), force: bool = False) -> Tuple[Path, Path]:
+async def ensure_kokoro_assets(
+    out_dir: Path = Path("tts"), force: bool = False
+) -> Tuple[Path, Path]:
     """Ensure Kokoro-ONNX model and voices exist under out_dir.
 
     - Deletes legacy paths under tts/onnx and tts/voices.
@@ -95,9 +107,20 @@ async def ensure_kokoro_assets(out_dir: Path = Path("tts"), force: bool = False)
         try:
             if legacy.exists():
                 legacy.unlink()
-                logger.info("ℹ Removed legacy asset", extra={"subsys": "tts.assets", "event": "removed_legacy", "detail": str(legacy)})
+                logger.info(
+                    "ℹ Removed legacy asset",
+                    extra={
+                        "subsys": "tts.assets",
+                        "event": "removed_legacy",
+                        "detail": str(legacy),
+                    },
+                )
         except Exception:
-            logger.warning("⚠ Failed to remove legacy asset", extra={"subsys": "tts.assets", "detail": str(legacy)}, exc_info=True)
+            logger.warning(
+                "⚠ Failed to remove legacy asset",
+                extra={"subsys": "tts.assets", "detail": str(legacy)},
+                exc_info=True,
+            )
 
     model_path = out_dir / MODEL_NAME
     voices_path = out_dir / VOICES_NAME
@@ -108,9 +131,9 @@ async def ensure_kokoro_assets(out_dir: Path = Path("tts"), force: bool = False)
 
     # Concurrent downloads for missing ones
     tasks = []
-    if (force or not model_path.exists()):
+    if force or not model_path.exists():
         tasks.append(_ensure_file(MODEL_URL, model_path, force))
-    if (force or not voices_path.exists()):
+    if force or not voices_path.exists():
         tasks.append(_ensure_file(VOICES_URL, voices_path, force))
 
     if tasks:

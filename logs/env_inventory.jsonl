@@ -1,2 +1,0 @@
-{"ts": "2025-08-09T22:33:51.080+0000", "level": "DEBUG", "name": "utils.env_inventory", "subsys": "env_inventory", "guild_id": null, "user_id": null, "msg_id": null, "event": null, "detail": "Logging configured with Pretty and JSONL sinks"}
-{"ts": "2025-08-09T22:33:53.569+0000", "level": "INFO", "name": "utils.env_inventory", "subsys": "env_inventory", "guild_id": null, "user_id": null, "msg_id": null, "event": null, "detail": "✔ Wrote env inventory to utils/env_inventory.json"}

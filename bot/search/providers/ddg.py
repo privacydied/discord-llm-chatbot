@@ -3,20 +3,27 @@ DuckDuckGo search provider using the official duckduckgo_search (ddgs) client.
 Falls back to legacy HTML parsing if ddgs is unavailable.
 [CA][REH][IV][PA]
 """
+
 from __future__ import annotations
 
 import asyncio
 from typing import List, Optional, Set
-from urllib.parse import urlencode, urlparse, parse_qsl, urlunparse
+from urllib.parse import urlencode
 
 import httpx
 from bs4 import BeautifulSoup  # beautifulsoup4 is in requirements
 import importlib
 import logging
 
-from bot.util.logging import get_logger
+from bot.utils.logging import get_logger
 from bot.config import load_config
-from ..types import SearchQueryParams, SearchResult, SearchResults, SafeSearch, SearchCategory
+from ..types import (
+    SearchQueryParams,
+    SearchResult,
+    SearchResults,
+    SafeSearch,
+    SearchCategory,
+)
 from ..factory import get_search_client
 
 logger = get_logger(__name__)
@@ -41,7 +48,9 @@ class DDGSearchProvider:
 
         timeout_s = max(0.001, params.timeout_ms / 1000.0)
         safesearch = self._map_safesearch(params.safesearch)
-        region = self._map_locale(params.locale or self.cfg.get("SEARCH_LOCALE") or None)
+        region = self._map_locale(
+            params.locale or self.cfg.get("SEARCH_LOCALE") or None
+        )
         category = params.category or SearchCategory.TEXT
 
         # If explicitly requested, use legacy HTML endpoint only. [CMV]
@@ -49,11 +58,14 @@ class DDGSearchProvider:
             force_html = bool(self.cfg.get("DDG_FORCE_HTML"))
         except Exception:
             force_html = False
-        if force_html or (isinstance(self.endpoint, str) and "html.duckduckgo.com" in self.endpoint):
+        if force_html or (
+            isinstance(self.endpoint, str) and "html.duckduckgo.com" in self.endpoint
+        ):
             return await self._search_via_html(query, params, timeout_s)
 
         # Try official client first (non-blocking via thread pool)
         try:
+
             async def _ddgs_call() -> List[dict]:
                 def _worker() -> List[dict]:
                     # Prefer 'ddgs' package first
@@ -63,8 +75,18 @@ class DDGSearchProvider:
                         if DDGS_cls is not None:
                             with DDGS_cls() as client:
                                 method_name = self._map_category_to_method(category)
-                                fn = getattr(client, method_name, None) or getattr(client, "text")
-                                return list(self._invoke_ddgs(fn, query, region, safesearch, params.max_results))
+                                fn = getattr(client, method_name, None) or getattr(
+                                    client, "text"
+                                )
+                                return list(
+                                    self._invoke_ddgs(
+                                        fn,
+                                        query,
+                                        region,
+                                        safesearch,
+                                        params.max_results,
+                                    )
+                                )
                     except Exception:
                         # Try next fallback
                         pass
@@ -76,8 +98,14 @@ class DDGSearchProvider:
                         raise ImportError("duckduckgo_search.DDGS not found")
                     with DDGS_cls() as client:
                         method_name = self._map_category_to_method(category)
-                        fn = getattr(client, method_name, None) or getattr(client, "text")
-                        return list(self._invoke_ddgs(fn, query, region, safesearch, params.max_results))
+                        fn = getattr(client, method_name, None) or getattr(
+                            client, "text"
+                        )
+                        return list(
+                            self._invoke_ddgs(
+                                fn, query, region, safesearch, params.max_results
+                            )
+                        )
 
                 return await asyncio.to_thread(_worker)
 
@@ -91,13 +119,23 @@ class DDGSearchProvider:
                     continue
                 norm_url, _ = self._normalize_url(url)
                 title = title or norm_url or url
-                prelim.append(SearchResult(title=title, url=norm_url or url, snippet=(snippet.strip() or None) if isinstance(snippet, str) else snippet))
+                prelim.append(
+                    SearchResult(
+                        title=title,
+                        url=norm_url or url,
+                        snippet=(snippet.strip() or None)
+                        if isinstance(snippet, str)
+                        else snippet,
+                    )
+                )
 
             return self._dedup_and_rank(prelim, params.max_results)
 
         except ImportError:
             # Fallback to HTML provider if ddgs not installed
-            logger.warning("duckduckgo_search not installed; falling back to HTML parsing provider. Install 'duckduckgo_search' for better results.")
+            logger.warning(
+                "duckduckgo_search not installed; falling back to HTML parsing provider. Install 'duckduckgo_search' for better results."
+            )
             return await self._search_via_html(query, params, timeout_s)
         except asyncio.TimeoutError:
             logger.warning("DDGS call timed out")
@@ -106,7 +144,9 @@ class DDGSearchProvider:
             name = type(e).__name__
             # Compact log for known ddgs exceptions (e.g., DDGSException)
             if "DDGSException" in name or "DDGSException" in repr(e):
-                logger.warning("DDGSException from provider; falling back to HTML parsing")
+                logger.warning(
+                    "DDGSException from provider; falling back to HTML parsing"
+                )
             else:
                 logger.debug(f"DDGS error: {name}: {e}")
             # Fallback path to HTML parsing for resilience
@@ -143,7 +183,9 @@ class DDGSearchProvider:
         except Exception:
             return "text"
 
-    def _invoke_ddgs(self, fn, query: str, region: Optional[str], safesearch: str, max_results: int):
+    def _invoke_ddgs(
+        self, fn, query: str, region: Optional[str], safesearch: str, max_results: int
+    ):
         """Invoke a DDGS method with tolerant signature handling. [REH]"""
         # Try full signature, then progressively simpler fallbacks to avoid TypeError across versions.
         try:
@@ -174,7 +216,9 @@ class DDGSearchProvider:
 
     def _extract_item(self, item: dict) -> tuple[str, str, Optional[str]]:
         """Best-effort field extraction across ddgs variants. [IV][REH]"""
-        title = (item.get("title") or item.get("text") or item.get("name") or "").strip()
+        title = (
+            item.get("title") or item.get("text") or item.get("name") or ""
+        ).strip()
         # Try common URL keys
         url = (
             item.get("href")
@@ -212,7 +256,11 @@ class DDGSearchProvider:
             u = urlparse(url)
 
             # Decode DuckDuckGo redirect links: https://duckduckgo.com/l/?uddg=<target>
-            if (u.netloc.endswith("duckduckgo.com") and u.path.startswith("/l/") and u.query):
+            if (
+                u.netloc.endswith("duckduckgo.com")
+                and u.path.startswith("/l/")
+                and u.query
+            ):
                 qdict = dict(parse_qsl(u.query, keep_blank_values=False))
                 target = qdict.get("uddg")
                 if target:
@@ -251,7 +299,11 @@ class DDGSearchProvider:
                 "oq",
                 "sxsrf",
             }
-            q_pairs = [(k, v) for k, v in parse_qsl(u.query, keep_blank_values=False) if k not in TRACKERS]
+            q_pairs = [
+                (k, v)
+                for k, v in parse_qsl(u.query, keep_blank_values=False)
+                if k not in TRACKERS
+            ]
             q_pairs.sort()
             query = urlencode(q_pairs)
 
@@ -260,7 +312,9 @@ class DDGSearchProvider:
 
             # Dedup key ignores scheme and leading www.
             netloc_key = netloc[4:] if netloc.startswith("www.") else netloc
-            dedup_key = f"{netloc_key}{path}?{query}" if query else f"{netloc_key}{path}"
+            dedup_key = (
+                f"{netloc_key}{path}?{query}" if query else f"{netloc_key}{path}"
+            )
             return norm, dedup_key
         except Exception:
             return url, url
@@ -284,7 +338,9 @@ class DDGSearchProvider:
         except Exception:
             return 0
 
-    def _dedup_and_rank(self, items: List[SearchResult], max_results: int) -> SearchResults:
+    def _dedup_and_rank(
+        self, items: List[SearchResult], max_results: int
+    ) -> SearchResults:
         """Deduplicate by normalized key and rank by heuristic while keeping stability. [CA][REH]"""
         seen: Set[str] = set()
         pruned: List[SearchResult] = []
@@ -294,7 +350,12 @@ class DDGSearchProvider:
             if key and key not in seen:
                 seen.add(key)
                 if norm_url and norm_url != r.url:
-                    r = SearchResult(title=r.title, url=norm_url, snippet=r.snippet, favicon=r.favicon)
+                    r = SearchResult(
+                        title=r.title,
+                        url=norm_url,
+                        snippet=r.snippet,
+                        favicon=r.favicon,
+                    )
                 pruned.append(r)
                 keys.append(key)
         # Rank with stable sort
@@ -303,7 +364,9 @@ class DDGSearchProvider:
         final = [kv[1] for kv in indexed][:max_results]
         return final
 
-    async def _search_via_html(self, query: str, params: SearchQueryParams, timeout_s: float) -> SearchResults:
+    async def _search_via_html(
+        self, query: str, params: SearchQueryParams, timeout_s: float
+    ) -> SearchResults:
         """Legacy HTML parsing fallback using duckduckgo.com/html. [REH]"""
         # Build query params. Keep minimal for robustness.
         q = {"q": query}
@@ -343,11 +406,19 @@ class DDGSearchProvider:
                 snippet = None
                 parent = a.find_parent("div", class_="result__body")
                 if parent:
-                    sn = parent.find("a", class_="result__snippet") or parent.find("div", class_="result__snippet")
+                    sn = parent.find("a", class_="result__snippet") or parent.find(
+                        "div", class_="result__snippet"
+                    )
                     if sn:
                         snippet = sn.get_text(strip=True)
                 norm_url, _ = self._normalize_url(href)
-                results.append(SearchResult(title=title or (norm_url or href), url=(norm_url or href), snippet=snippet))
+                results.append(
+                    SearchResult(
+                        title=title or (norm_url or href),
+                        url=(norm_url or href),
+                        snippet=snippet,
+                    )
+                )
         except Exception as e:
             logger.debug(f"DDG HTML parse error: {e}")
             return []

@@ -1,5 +1,3 @@
-import os
-import copy
 from bot.syndication.extract import extract_text_and_images_from_syndication
 from bot.syndication.url_utils import upgrade_pbs_to_orig
 
@@ -25,7 +23,7 @@ def test_native_over_card_prefers_photos_only(monkeypatch):
                     "image_value": {"url": _pbs("CARD999", size="large")}
                 }
             }
-        }
+        },
     }
     res = extract_text_and_images_from_syndication(tw)
     assert res["source"] == "photos"
@@ -53,14 +51,7 @@ def test_multi_photo_order_and_highres():
 
 def test_quoted_fallback_when_primary_empty(monkeypatch):
     monkeypatch.setenv("SYND_INCLUDE_QUOTED_MEDIA", "1")
-    tw = {
-        "text": "",
-        "quoted_tweet": {
-            "photos": [
-                {"url": _pbs("QQ1")}
-            ]
-        }
-    }
+    tw = {"text": "", "quoted_tweet": {"photos": [{"url": _pbs("QQ1")}]}}
     res = extract_text_and_images_from_syndication(tw)
     assert res["source"] == "quoted_photos"
     assert res["image_urls"] == [upgrade_pbs_to_orig(_pbs("QQ1"))]
@@ -75,7 +66,7 @@ def test_card_fallback_when_no_native():
                     "image_value": {"url": _pbs("CARDX", size="small")}
                 }
             }
-        }
+        },
     }
     res = extract_text_and_images_from_syndication(tw)
     assert res["source"] == "card"
@@ -87,16 +78,12 @@ def test_dedup_when_card_and_native_same_asset():
     base_card = _pbs("SAME1", size="large")
     tw = {
         "text": "",
-        "photos": [
-            {"url": base_native}
-        ],
+        "photos": [{"url": base_native}],
         "card": {
             "binding_values": {
-                "photo_image_full_size": {
-                    "image_value": {"url": base_card}
-                }
+                "photo_image_full_size": {"image_value": {"url": base_card}}
             }
-        }
+        },
     }
     res = extract_text_and_images_from_syndication(tw)
     assert res["image_urls"] == [upgrade_pbs_to_orig(base_native)]
@@ -112,7 +99,7 @@ def test_video_poster_thumbnail_used_from_entities():
                     "thumbnail_url": _pbs("THUMBVID", size="small"),
                 }
             ]
-        }
+        },
     }
     res = extract_text_and_images_from_syndication(tw)
     assert res["image_urls"] == [upgrade_pbs_to_orig(_pbs("THUMBVID", size="small"))]
@@ -127,14 +114,12 @@ def test_regression_wrong_card_previously_selected():
     # Previously picked card image; ensure native photo chosen now
     tw = {
         "text": "A nice picture",
-        "photos": [
-            {"url": _pbs("NATIVEZ", size="small")}
-        ],
+        "photos": [{"url": _pbs("NATIVEZ", size="small")}],
         "card": {
             "binding_values": {
                 "thumbnail_image": {"string_value": _pbs("CARDZ", size="large")}
             }
-        }
+        },
     }
     res = extract_text_and_images_from_syndication(tw)
     assert res["source"] == "photos"

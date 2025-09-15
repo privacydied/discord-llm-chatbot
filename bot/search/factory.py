@@ -2,6 +2,7 @@
 Factory to create search providers and manage shared HTTP client.
 [CA][RM][CMV]
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -9,9 +10,8 @@ from typing import Optional
 
 import httpx
 
-from bot.util.logging import get_logger
+from bot.utils.logging import get_logger
 from bot.config import load_config
-from .types import SearchQueryParams, SearchResults
 from .base import SearchProvider
 
 logger = get_logger(__name__)
@@ -21,7 +21,9 @@ _client: Optional[httpx.AsyncClient] = None
 
 
 def _build_client(max_connections: int) -> httpx.AsyncClient:
-    limits = httpx.Limits(max_connections=max_connections, max_keepalive_connections=max_connections)
+    limits = httpx.Limits(
+        max_connections=max_connections, max_keepalive_connections=max_connections
+    )
     return httpx.AsyncClient(limits=limits, timeout=None)
 
 
@@ -54,11 +56,14 @@ def get_search_provider() -> SearchProvider:
 
     if provider == "ddg":
         from .providers.ddg import DDGSearchProvider  # local import to avoid cycle
+
         return DDGSearchProvider()
     elif provider == "custom":
         from .providers.custom import CustomSearchProvider  # type: ignore
+
         return CustomSearchProvider()  # pragma: no cover (stubbed unless provided)
     else:
         logger.warning(f"Unknown SEARCH_PROVIDER '{provider}', falling back to ddg")
         from .providers.ddg import DDGSearchProvider
+
         return DDGSearchProvider()

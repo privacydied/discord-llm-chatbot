@@ -2,6 +2,7 @@
 Search types and constants.
 [CA][CMV][IV]
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -19,7 +20,8 @@ class SearchCategory(str, Enum):
     """Supported search verticals. Additive and non-breaking.
     [CA][CMV]
     """
-    TEXT = "text"      # general web
+
+    TEXT = "text"  # general web
     NEWS = "news"
     IMAGES = "images"
     VIDEOS = "videos"

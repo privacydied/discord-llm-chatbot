@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from bot.x_api_client import XApiClient
-from bot.util.logging import get_logger
+from bot.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -23,7 +23,9 @@ async def main() -> None:
 
     for val in TEST_INPUTS:
         tid = client.extract_tweet_id(val)
-        logger.info("extract_tweet_id", extra={"detail": {"input": val, "tweet_id": tid}})
+        logger.info(
+            "extract_tweet_id", extra={"detail": {"input": val, "tweet_id": tid}}
+        )
 
     await client.aclose()
 

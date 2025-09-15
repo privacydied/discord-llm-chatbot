@@ -1,6 +1,7 @@
 """
 User and server profile management with persistence.
 """
+
 import json
 import os
 import logging
@@ -25,6 +26,7 @@ modified_servers = set()
 # Track last save times
 user_profiles_last_saved: Dict[str, float] = {}
 server_profiles_last_saved: Dict[str, float] = {}
+
 
 def _safe_backup_file(src: Path, dst: Path) -> None:
     """Create a safe backup of src at dst.
@@ -51,18 +53,21 @@ def _safe_backup_file(src: Path, dst: Path) -> None:
     except Exception as e:
         logging.error(f"Failed to create backup for {src}: {e}")
 
+
 def ensure_dirs():
     """Ensure all required directories exist."""
     from bot.config import load_config
+
     config = load_config()
-    
+
     for dir_path in [
         config["USER_PROFILE_DIR"],
         config["SERVER_PROFILE_DIR"],
         config["USER_LOGS_DIR"],
-        config["TEMP_DIR"]
+        config["TEMP_DIR"],
     ]:
         dir_path.mkdir(parents=True, exist_ok=True)
+
 
 def default_profile(user_id=None, username=None):
     """Create a new user profile with default values."""
@@ -81,56 +86,60 @@ def default_profile(user_id=None, username=None):
         "is_bot": False,
         "tone": "neutral",
         "last_seen": None,
-        "custom_data": {}
+        "custom_data": {},
     }
 
-def ensure_profile_schema(profile: dict, user_id: Optional[str] = None, username: Optional[str] = None) -> dict:
+
+def ensure_profile_schema(
+    profile: dict, user_id: Optional[str] = None, username: Optional[str] = None
+) -> dict:
     """Ensure a user profile has all required fields."""
     if not isinstance(profile, dict):
         profile = {}
-    
+
     # Get user ID from profile or parameters
-    profile_user_id = profile.get('discord_id') or profile.get('user_id') or user_id
+    profile_user_id = profile.get("discord_id") or profile.get("user_id") or user_id
     if not profile_user_id and user_id:
         profile_user_id = user_id
-    
+
     # Create default profile and update with existing values
     default = default_profile(profile_user_id, username)
-    
+
     # Update default values with any existing values
     for key in list(default.keys()):
         if key in profile and profile[key] is not None:
             default[key] = profile[key]
-    
+
     # Ensure username is updated if provided
-    if username and username != default.get('username'):
-        default['username'] = username
-    
+    if username and username != default.get("username"):
+        default["username"] = username
+
     # Ensure discord_id is set correctly
-    if profile_user_id and default.get('discord_id') != profile_user_id:
-        default['discord_id'] = profile_user_id
+    if profile_user_id and default.get("discord_id") != profile_user_id:
+        default["discord_id"] = profile_user_id
     # Keep alias in sync for legacy tests
-    if profile_user_id and default.get('user_id') != profile_user_id:
-        default['user_id'] = profile_user_id
-    
+    if profile_user_id and default.get("user_id") != profile_user_id:
+        default["user_id"] = profile_user_id
+
     # Ensure required lists exist
-    for field in ['memories', 'history']:
+    for field in ["memories", "history"]:
         if not isinstance(default.get(field), list):
             default[field] = []
-    
+
     # Ensure preferences is a dict
-    if not isinstance(default.get('preferences'), dict):
-        default['preferences'] = {}
-    
+    if not isinstance(default.get("preferences"), dict):
+        default["preferences"] = {}
+
     # Ensure timestamps are set
     now = datetime.now().isoformat()
-    if not default.get('created_at'):
-        default['created_at'] = now
-    if not default.get('first_seen'):
-        default['first_seen'] = default.get('created_at', now)
-    default['last_updated'] = now
-    
+    if not default.get("created_at"):
+        default["created_at"] = now
+    if not default.get("first_seen"):
+        default["first_seen"] = default.get("created_at", now)
+    default["last_updated"] = now
+
     return default
+
 
 def get_profile(user_id: str, username: Optional[str] = None) -> dict:
     """Get or create a user profile, ensuring it has all required fields."""
@@ -138,15 +147,16 @@ def get_profile(user_id: str, username: Optional[str] = None) -> dict:
         # Check cache first
         if user_id in user_cache:
             return user_cache[user_id].copy()
-        
+
         # Try to load from disk
         from bot.config import load_config
+
         config = load_config()
         profile_path = config["USER_PROFILE_DIR"] / f"{user_id}.json"
-        
+
         if profile_path.exists():
             try:
-                with open(profile_path, 'r', encoding='utf-8') as f:
+                with open(profile_path, "r", encoding="utf-8") as f:
                     profile = json.load(f)
                 # Ensure the profile has all required fields
                 profile = ensure_profile_schema(profile, user_id, username)
@@ -155,69 +165,78 @@ def get_profile(user_id: str, username: Optional[str] = None) -> dict:
             except (json.JSONDecodeError, IOError) as e:
                 logging.error(f"Error loading profile for user {user_id}: {e}")
                 # Fall through to create new profile
-        
+
         # Create new profile if it doesn't exist or couldn't be loaded
         profile = default_profile(user_id, username)
         user_cache[user_id] = profile
         return profile.copy()
 
+
 def save_profile(profile: dict, force: bool = False) -> bool:
     """Save a user profile to disk."""
     try:
-        user_id = str(profile.get('discord_id') or profile.get('user_id') or "")
+        user_id = str(profile.get("discord_id") or profile.get("user_id") or "")
         if not user_id:
             logging.error("Cannot save profile: missing user_id")
             return False
-            
+
         with user_cache_lock:
             # Update cache
             user_cache[user_id] = profile
-            
+
             # Update last updated timestamp
-            profile['last_updated'] = datetime.now().isoformat()
+            profile["last_updated"] = datetime.now().isoformat()
 
             # Enforce user memory limit (prefer fresh env to avoid cached config)
             try:
-                env_val = os.getenv('MAX_USER_MEMORY')
+                env_val = os.getenv("MAX_USER_MEMORY")
                 if env_val is not None:
-                    max_memories = int(str(env_val).split('#')[0].strip() or '20')
+                    max_memories = int(str(env_val).split("#")[0].strip() or "20")
                 else:
                     from bot.config import load_config
-                    max_memories = int(load_config().get('MAX_USER_MEMORY', 20))
+
+                    max_memories = int(load_config().get("MAX_USER_MEMORY", 20))
             except Exception:
                 max_memories = 20
 
-            if isinstance(profile.get('memories'), list) and len(profile['memories']) > max_memories:
-                profile['memories'] = profile['memories'][-max_memories:]
-            
+            if (
+                isinstance(profile.get("memories"), list)
+                and len(profile["memories"]) > max_memories
+            ):
+                profile["memories"] = profile["memories"][-max_memories:]
+
             # Save to disk
             from bot.config import load_config
+
             config = load_config()
             profile_path = config["USER_PROFILE_DIR"] / f"{user_id}.json"
-            
+
             # Create backup of existing file if it exists
             if profile_path.exists():
-                backup_path = profile_path.with_suffix('.json.bak')
+                backup_path = profile_path.with_suffix(".json.bak")
                 _safe_backup_file(profile_path, backup_path)
-                    
+
             # Save the profile
             try:
-                with open(profile_path, 'w', encoding='utf-8') as f:
+                with open(profile_path, "w", encoding="utf-8") as f:
                     json.dump(profile, f, indent=2, ensure_ascii=False)
                 return True
             except IOError as e:
                 logging.error(f"Failed to save profile for user {user_id}: {e}")
                 # Try to restore from backup if save failed
-                if 'backup_path' in locals() and backup_path.exists():
+                if "backup_path" in locals() and backup_path.exists():
                     try:
                         shutil.copy2(backup_path, profile_path)
                         logging.info(f"Restored profile from backup for user {user_id}")
                     except IOError as restore_error:
-                        logging.error(f"Failed to restore profile from backup: {restore_error}")
+                        logging.error(
+                            f"Failed to restore profile from backup: {restore_error}"
+                        )
                 return False
     except Exception as e:
         logging.error(f"Unexpected error in save_profile: {e}", exc_info=True)
         return False
+
 
 def default_server_profile(guild_id: Optional[str] = None) -> dict:
     """Create a new server profile with default values."""
@@ -231,45 +250,47 @@ def default_server_profile(guild_id: Optional[str] = None) -> dict:
         "total_messages": 0,
         "last_updated": datetime.now().isoformat(),
         "created_at": datetime.now().isoformat(),
-        "custom_data": {}
+        "custom_data": {},
     }
+
 
 def ensure_server_profile_schema(profile: dict, guild_id: Optional[str] = None) -> dict:
     """Ensure a server profile has all required fields."""
     if not isinstance(profile, dict):
         profile = {}
-    
+
     # Create default profile and update with existing values
     default = default_server_profile(guild_id)
-    
+
     # Update default values with any existing values
     for key in list(default.keys()):
         if key in profile and profile[key] is not None:
             default[key] = profile[key]
-    
+
     # Ensure guild_id is set correctly
-    if guild_id and default.get('guild_id') != guild_id:
-        default['guild_id'] = guild_id
+    if guild_id and default.get("guild_id") != guild_id:
+        default["guild_id"] = guild_id
     # Keep alias in sync for legacy tests
-    if guild_id and default.get('server_id') != guild_id:
-        default['server_id'] = guild_id
-    
+    if guild_id and default.get("server_id") != guild_id:
+        default["server_id"] = guild_id
+
     # Ensure required lists exist
-    for field in ['memories', 'history']:
+    for field in ["memories", "history"]:
         if not isinstance(default.get(field), list):
             default[field] = []
-    
+
     # Ensure preferences is a dict
-    if not isinstance(default.get('preferences'), dict):
-        default['preferences'] = {}
-    
+    if not isinstance(default.get("preferences"), dict):
+        default["preferences"] = {}
+
     # Ensure timestamps are set
     now = datetime.now().isoformat()
-    if not default.get('created_at'):
-        default['created_at'] = now
-    default['last_updated'] = now
-    
+    if not default.get("created_at"):
+        default["created_at"] = now
+    default["last_updated"] = now
+
     return default
+
 
 def get_server_profile(guild_id: str, force_reload: bool = False) -> dict:
     """Get or create a server profile."""
@@ -277,15 +298,16 @@ def get_server_profile(guild_id: str, force_reload: bool = False) -> dict:
         # Check cache first
         if guild_id in server_cache and not force_reload:
             return server_cache[guild_id]
-        
+
         # Try to load from disk
         from bot.config import load_config
+
         config = load_config()
         profile_path = config["SERVER_PROFILE_DIR"] / f"{guild_id}.json"
-        
+
         if profile_path.exists():
             try:
-                with open(profile_path, 'r', encoding='utf-8') as f:
+                with open(profile_path, "r", encoding="utf-8") as f:
                     profile = json.load(f)
                 # Ensure the profile has all required fields
                 profile = ensure_server_profile_schema(profile, guild_id)
@@ -294,11 +316,12 @@ def get_server_profile(guild_id: str, force_reload: bool = False) -> dict:
             except (json.JSONDecodeError, IOError) as e:
                 logging.error(f"Error loading server profile for guild {guild_id}: {e}")
                 # Fall through to create new profile
-        
+
         # Create new profile if it doesn't exist or couldn't be loaded
         profile = default_server_profile(guild_id)
         server_cache[guild_id] = profile
         return profile
+
 
 def save_server_profile(guild_id, force: bool = False) -> bool:
     """Save a server profile to disk.
@@ -310,9 +333,11 @@ def save_server_profile(guild_id, force: bool = False) -> bool:
             # Support being passed a full profile dict (legacy tests)
             if isinstance(guild_id, dict):
                 profile = guild_id
-                gid = str(profile.get('guild_id') or profile.get('server_id') or "")
+                gid = str(profile.get("guild_id") or profile.get("server_id") or "")
                 if not gid:
-                    logging.error("Cannot save server profile: missing guild_id/server_id in profile")
+                    logging.error(
+                        "Cannot save server profile: missing guild_id/server_id in profile"
+                    )
                     return False
                 # Ensure schema and cache are updated
                 profile = ensure_server_profile_schema(profile, gid)
@@ -320,65 +345,79 @@ def save_server_profile(guild_id, force: bool = False) -> bool:
             else:
                 gid = str(guild_id)
                 if gid not in server_cache:
-                    logging.error(f"Cannot save server profile: guild {gid} not in cache")
+                    logging.error(
+                        f"Cannot save server profile: guild {gid} not in cache"
+                    )
                     return False
                 profile = server_cache[gid]
 
-            profile['last_updated'] = datetime.now().isoformat()
-            
+            profile["last_updated"] = datetime.now().isoformat()
+
             from bot.config import load_config
+
             config = load_config()
             profile_path = config["SERVER_PROFILE_DIR"] / f"{gid}.json"
-            
+
             # Enforce server memory limit (prefer fresh env to avoid cached config)
             try:
-                env_val = os.getenv('MAX_SERVER_MEMORY')
+                env_val = os.getenv("MAX_SERVER_MEMORY")
                 if env_val is not None:
-                    max_memories = int(str(env_val).split('#')[0].strip() or '100')
+                    max_memories = int(str(env_val).split("#")[0].strip() or "100")
                 else:
                     from bot.config import load_config
-                    max_memories = int(load_config().get('MAX_SERVER_MEMORY', 100))
+
+                    max_memories = int(load_config().get("MAX_SERVER_MEMORY", 100))
             except Exception:
                 max_memories = 100
 
-            if isinstance(profile.get('memories'), list) and len(profile['memories']) > max_memories:
-                profile['memories'] = profile['memories'][-max_memories:]
-            
+            if (
+                isinstance(profile.get("memories"), list)
+                and len(profile["memories"]) > max_memories
+            ):
+                profile["memories"] = profile["memories"][-max_memories:]
+
             # Create directory if it doesn't exist
             profile_path.parent.mkdir(parents=True, exist_ok=True)
-            
+
             # Create backup of existing file if it exists
             if profile_path.exists():
-                backup_path = profile_path.with_suffix('.json.bak')
+                backup_path = profile_path.with_suffix(".json.bak")
                 _safe_backup_file(profile_path, backup_path)
-            
+
             # Save the profile
             try:
-                with open(profile_path, 'w', encoding='utf-8') as f:
+                with open(profile_path, "w", encoding="utf-8") as f:
                     json.dump(profile, f, indent=2, ensure_ascii=False)
                 return True
             except IOError as e:
-                logging.error(f"Failed to save server profile for guild {guild_id}: {e}")
+                logging.error(
+                    f"Failed to save server profile for guild {guild_id}: {e}"
+                )
                 # Try to restore from backup if save failed
-                if 'backup_path' in locals() and backup_path.exists():
+                if "backup_path" in locals() and backup_path.exists():
                     try:
                         shutil.copy2(backup_path, profile_path)
-                        logging.info(f"Restored server profile from backup for guild {guild_id}")
+                        logging.info(
+                            f"Restored server profile from backup for guild {guild_id}"
+                        )
                     except IOError as restore_error:
-                        logging.error(f"Failed to restore server profile from backup: {restore_error}")
+                        logging.error(
+                            f"Failed to restore server profile from backup: {restore_error}"
+                        )
                 return False
     except Exception as e:
         logging.error(f"Unexpected error in save_server_profile: {e}", exc_info=True)
         return False
 
+
 def flush_all_profiles() -> bool:
     """Save all modified profiles to disk."""
     success = True
-    
+
     # Save all modified user profiles
     with user_cache_lock:
         user_ids = list(user_cache.keys())
-    
+
     for user_id in user_ids:
         try:
             profile = get_profile(user_id)
@@ -388,11 +427,11 @@ def flush_all_profiles() -> bool:
         except Exception as e:
             success = False
             logging.error(f"Error saving profile for user {user_id}: {e}")
-    
+
     # Save all modified server profiles
     with server_lock:
         server_ids = list(server_cache.keys())
-    
+
     for guild_id in server_ids:
         try:
             if not save_server_profile(guild_id):
@@ -401,22 +440,25 @@ def flush_all_profiles() -> bool:
         except Exception as e:
             success = False
             logging.error(f"Error saving server profile for guild {guild_id}: {e}")
-    
+
     return success
+
 
 # Global profile stores that main.py expects to import
 user_profiles = user_cache
 server_profiles = server_cache
 
+
 def load_all_profiles():
     """Load all user profiles from disk into memory cache.
-    
+
     Returns:
         tuple: A tuple containing (user_profiles, server_profiles)
     """
     from bot.config import load_config
+
     config = load_config()
-    
+
     # Load user profiles
     profile_dir = config["USER_PROFILE_DIR"]
     if not profile_dir.exists():
@@ -427,35 +469,36 @@ def load_all_profiles():
         for profile_file in profile_dir.glob("*.json"):
             try:
                 user_id = profile_file.stem
-                with open(profile_file, 'r', encoding='utf-8') as f:
+                with open(profile_file, "r", encoding="utf-8") as f:
                     profile = json.load(f)
-                
+
                 # Ensure profile has all required fields
                 profile = ensure_profile_schema(profile, user_id)
-                
+
                 with user_cache_lock:
                     user_cache[user_id] = profile
-                
+
                 loaded_count += 1
-                
+
             except Exception as e:
                 logging.error(f"Error loading user profile {profile_file}: {e}")
-        
+
         logging.info(f"Loaded {loaded_count} user profiles from disk")
-    
+
     # Load server profiles
     load_all_server_profiles()
-    
+
     # Return both caches
     return user_cache, server_cache
+
 
 def save_all_profiles() -> bool:
     """Save all user profiles from memory cache to disk."""
     success = True
-    
+
     with user_cache_lock:
         user_ids = list(user_cache.keys())
-    
+
     for user_id in user_ids:
         try:
             profile = user_cache.get(user_id)
@@ -465,47 +508,50 @@ def save_all_profiles() -> bool:
         except Exception as e:
             success = False
             logging.error(f"Error saving profile for user {user_id}: {e}")
-    
+
     return success
+
 
 def load_all_server_profiles() -> None:
     """Load all server profiles from disk into memory cache."""
     from bot.config import load_config
+
     config = load_config()
-    
+
     profile_dir = config["SERVER_PROFILE_DIR"]
     if not profile_dir.exists():
         logging.info("Server profile directory does not exist, creating it")
         profile_dir.mkdir(parents=True, exist_ok=True)
         return
-    
+
     loaded_count = 0
     for profile_file in profile_dir.glob("*.json"):
         try:
             guild_id = profile_file.stem
-            with open(profile_file, 'r', encoding='utf-8') as f:
+            with open(profile_file, "r", encoding="utf-8") as f:
                 profile = json.load(f)
-            
+
             # Ensure profile has all required fields
             profile = ensure_server_profile_schema(profile, guild_id)
-            
+
             with server_lock:
                 server_cache[guild_id] = profile
-            
+
             loaded_count += 1
-            
+
         except Exception as e:
             logging.error(f"Error loading server profile {profile_file}: {e}")
-    
+
     logging.info(f"Loaded {loaded_count} server profiles from disk")
+
 
 def save_all_server_profiles() -> bool:
     """Save all server profiles from memory cache to disk."""
     success = True
-    
+
     with server_lock:
         guild_ids = list(server_cache.keys())
-    
+
     for guild_id in guild_ids:
         try:
             if not save_server_profile(guild_id, force=True):
@@ -514,97 +560,124 @@ def save_all_server_profiles() -> bool:
         except Exception as e:
             success = False
             logging.error(f"Error saving server profile for guild {guild_id}: {e}")
-    
+
     return success
 
-def add_memory(user_id: str, memory_text: str, guild_id: Optional[str] = None, username: Optional[str] = None) -> bool:
+
+def add_memory(
+    user_id: str,
+    memory_text: str,
+    guild_id: Optional[str] = None,
+    username: Optional[str] = None,
+) -> bool:
     """
     Add a memory for a user and optionally to a server.
-    
+
     Args:
         user_id: Discord user ID
         memory_text: The memory text to add
         guild_id: Optional server ID to also add the memory to
         username: Optional username for server memory context
-        
+
     Returns:
         bool: True if the memory was added successfully, False otherwise
     """
-    if not user_id or not memory_text or not isinstance(memory_text, str) or not memory_text.strip():
-        logging.warning(f"Invalid memory data - user_id: {user_id}, memory_text: {type(memory_text)}")
+    if (
+        not user_id
+        or not memory_text
+        or not isinstance(memory_text, str)
+        or not memory_text.strip()
+    ):
+        logging.warning(
+            f"Invalid memory data - user_id: {user_id}, memory_text: {type(memory_text)}"
+        )
         return False
-    
+
     memory_text = memory_text.strip()
     memory_lower = memory_text.lower()
     success = True
-    
+
     # Add to user memories
     try:
         profile = get_profile(user_id)
         if not profile:
             logging.error(f"Failed to load profile for user {user_id}")
             return False
-        
+
         # Initialize memories list if it doesn't exist
         if "memories" not in profile:
             profile["memories"] = []
-        
+
         # Check for duplicates (case-insensitive)
         if not any(mem.lower() == memory_lower for mem in profile["memories"]):
             profile["memories"].append(memory_text)
-            
+
             # Enforce memory limit
             from bot.config import load_config
+
             config = load_config()
-            max_memories = config.get('MAX_MEMORIES', 100)
+            max_memories = config.get("MAX_MEMORIES", 100)
             if len(profile["memories"]) > max_memories:
                 profile["memories"] = profile["memories"][-max_memories:]
-                
+
             profile["last_updated"] = datetime.now().isoformat()
-            
+
             # Save the updated profile
             if not save_profile(profile):
-                logging.error(f"Failed to save profile after adding memory for user {user_id}")
+                logging.error(
+                    f"Failed to save profile after adding memory for user {user_id}"
+                )
                 success = False
-    
+
     except Exception as e:
         logging.error(f"Error adding user memory: {e}", exc_info=True)
         success = False
-    
+
     # Optionally add to server memories if guild_id is provided
-    if guild_id and username and isinstance(guild_id, str) and isinstance(username, str):
+    if (
+        guild_id
+        and username
+        and isinstance(guild_id, str)
+        and isinstance(username, str)
+    ):
         try:
             server_profile = get_server_profile(guild_id)
             if not server_profile:
                 logging.error(f"Failed to load server profile for guild {guild_id}")
                 return success and False
-            
+
             # Format the memory with timestamp and username
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
             server_memory = f"[{timestamp}] {username}: {memory_text}"
-            
+
             # Check for duplicates in server memories
-            if not any(server_memory.lower() in mem.lower() for mem in server_profile["memories"]):
+            if not any(
+                server_memory.lower() in mem.lower()
+                for mem in server_profile["memories"]
+            ):
                 server_profile["memories"].append(server_memory)
-                
+
                 # Enforce server memory limit
                 from bot.config import load_config
+
                 config = load_config()
-                max_memories = config.get('MAX_SERVER_MEMORY', 100)
+                max_memories = config.get("MAX_SERVER_MEMORY", 100)
                 if len(server_profile["memories"]) > max_memories:
-                    server_profile["memories"] = server_profile["memories"][-max_memories:]
-                
+                    server_profile["memories"] = server_profile["memories"][
+                        -max_memories:
+                    ]
+
                 server_profile["last_updated"] = datetime.now().isoformat()
-                
+
                 # Save the updated server profile
                 if not save_server_profile(guild_id):
                     logging.error(f"Failed to save server profile for guild {guild_id}")
                     success = False
-        
+
         except Exception as e:
             logging.error(f"Error adding server memory: {e}", exc_info=True)
             success = False
-    
+
     return success
 
 

@@ -8,13 +8,14 @@ Vision Orchestrator readiness smoke test (no external API calls).
 Run:
     uv run python -m utils.vision_orchestrator_smoke
 """
+
 from __future__ import annotations
 
 import os
 import asyncio
 from typing import List, Optional
 
-from bot.util.logging import get_logger
+from bot.utils.logging import get_logger
 
 logger = get_logger("utils.vision_orch_smoke")
 

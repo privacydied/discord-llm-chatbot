@@ -15,6 +15,7 @@ if str(PROJECT_ROOT) not in sys.path:
 try:
     import bot.voice.publisher as publisher
     import bot.commands.tts_cmds as tts_cmds
+
     print("OK: Imports succeeded:", publisher.__name__, tts_cmds.__name__)
     sys.exit(0)
 except Exception as e:

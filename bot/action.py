@@ -14,12 +14,12 @@ class BotAction:
     audio_path: Optional[str] = None
     error: bool = False
     meta: Dict[str, Any] = field(default_factory=dict)
-    
+
     def __post_init__(self):
         """Apply final safety net to sanitize content before sending to Discord."""
         if self.content:
             self.content = self._apply_final_sanitization(self.content)
-    
+
     def _apply_final_sanitization(self, content: str) -> str:
         """
         Final safety net to remove any chain-of-thought leakage before Discord send.
@@ -27,32 +27,36 @@ class BotAction:
         """
         try:
             from .vl.postprocess import sanitize_model_output, has_reasoning_content
-            
+
             # Only sanitize if content contains reasoning patterns
             if has_reasoning_content(content):
-                import os
-                from .util.logging import get_logger
-                
+                from .utils.logging import get_logger
+
                 logger = get_logger("bot.action.safety_net")
-                logger.warning(f"Final safety net triggered - sanitizing content with reasoning leakage")
-                
+                logger.warning(
+                    "Final safety net triggered - sanitizing content with reasoning leakage"
+                )
+
                 sanitized = sanitize_model_output(content)
-                
+
                 # Log if significant sanitization occurred
                 if len(sanitized) < len(content) * 0.8:  # More than 20% removed
-                    logger.info(f"Safety net removed {len(content) - len(sanitized)} chars of reasoning content")
-                
+                    logger.info(
+                        f"Safety net removed {len(content) - len(sanitized)} chars of reasoning content"
+                    )
+
                 return sanitized
-            
+
             return content
-            
+
         except Exception as e:
             # If sanitization fails, return original content (fail-safe)
             try:
-                from .util.logging import get_logger
+                from .utils.logging import get_logger
+
                 logger = get_logger("bot.action.safety_net")
                 logger.error(f"Final sanitization failed, using original content: {e}")
-            except:
+            except Exception:
                 pass
             return content
 

@@ -2,6 +2,7 @@
 Search commands for online web search using pluggable providers.
 [CA][REH][IV][PA]
 """
+
 from __future__ import annotations
 
 from typing import Optional, List
@@ -9,7 +10,7 @@ from typing import Optional, List
 import discord
 from discord.ext import commands
 
-from ..util.logging import get_logger
+from ..utils.logging import get_logger
 from ..config import load_config
 from ..search.factory import get_search_provider
 from ..search.types import SearchQueryParams, SafeSearch, SearchResult
@@ -36,7 +37,11 @@ def _format_result_field(result: SearchResult) -> str:
     parts.append(result.url)
     if result.snippet:
         parts.append("")
-        parts.append(_truncate(result.snippet, DISCORD_EMBED_FIELD_VALUE_LIMIT - len(result.url) - 10))
+        parts.append(
+            _truncate(
+                result.snippet, DISCORD_EMBED_FIELD_VALUE_LIMIT - len(result.url) - 10
+            )
+        )
     return "\n".join(parts)
 
 
@@ -72,8 +77,10 @@ class SearchCommands(commands.Cog):
             except Exception:
                 safesearch = SafeSearch.MODERATE
 
-            timeout_ms = int(self.cfg.get("DDG_TIMEOUT_MS", 5000)) if provider_name == "ddg" else int(
-                self.cfg.get("CUSTOM_SEARCH_TIMEOUT_MS", 8000)
+            timeout_ms = (
+                int(self.cfg.get("DDG_TIMEOUT_MS", 5000))
+                if provider_name == "ddg"
+                else int(self.cfg.get("CUSTOM_SEARCH_TIMEOUT_MS", 8000))
             )
 
             params = SearchQueryParams(
@@ -102,13 +109,19 @@ class SearchCommands(commands.Cog):
                 description=f"Query: `{_truncate(query.strip(), 256)}`",
                 color=discord.Color.green(),
             )
-            embed.set_footer(text=f"Provider: {provider_name} • Safe: {safesearch.value}")
+            embed.set_footer(
+                text=f"Provider: {provider_name} • Safe: {safesearch.value}"
+            )
 
             # Add top results as fields
             for idx, r in enumerate(results, start=1):
                 name = _truncate(f"{idx}. {r.title}", 256)
                 value = _format_result_field(r)
-                embed.add_field(name=name, value=_truncate(value, DISCORD_EMBED_FIELD_VALUE_LIMIT), inline=False)
+                embed.add_field(
+                    name=name,
+                    value=_truncate(value, DISCORD_EMBED_FIELD_VALUE_LIMIT),
+                    inline=False,
+                )
 
             await ctx.send(embed=embed)
 
@@ -128,7 +141,9 @@ async def setup(bot: commands.Bot):
         logger.info("[Search Setup] Initializing SearchCommands cog...")
         existing = bot.get_cog("SearchCommands")
         if existing:
-            logger.warning("[Search Setup] SearchCommands already loaded, removing old cog")
+            logger.warning(
+                "[Search Setup] SearchCommands already loaded, removing old cog"
+            )
             await bot.remove_cog("SearchCommands")
 
         cog = SearchCommands(bot)
@@ -140,7 +155,9 @@ async def setup(bot: commands.Bot):
             names = [cmd.name for cmd in loaded.get_commands()]
             logger.info(f"[Search Setup] Registered commands: {names}")
         else:
-            logger.error("❌ SearchCommands failed to load - cog not found after adding")
+            logger.error(
+                "❌ SearchCommands failed to load - cog not found after adding"
+            )
     except Exception as e:
         logger.error(f"❌ Failed to set up SearchCommands cog: {e}", exc_info=True)
         raise

@@ -7,12 +7,11 @@ type-safe patterns for provider-agnostic vision generation.
 
 from __future__ import annotations
 from dataclasses import dataclass, field
-from enum import Enum, auto
+from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union, Literal
 import uuid
 from datetime import datetime, timezone
-import json
 
 # Money type for budgeting [CMV]
 from .money import Money
@@ -40,21 +39,24 @@ def _parse_vision_provider(value) -> Optional["VisionProvider"]:
 
 class VisionTask(Enum):
     """Supported vision generation tasks"""
+
     TEXT_TO_IMAGE = "text_to_image"
     IMAGE_TO_IMAGE = "image_to_image"
-    TEXT_TO_VIDEO = "text_to_video" 
+    TEXT_TO_VIDEO = "text_to_video"
     IMAGE_TO_VIDEO = "image_to_video"
     VIDEO_GENERATION = "video_generation"
 
 
 class VisionProvider(Enum):
     """Supported vision providers"""
+
     TOGETHER = "together"
     NOVITA = "novita"
 
 
 class VisionJobState(Enum):
     """Job state machine for orchestration"""
+
     CREATED = "created"
     QUEUED = "queued"
     VALIDATING = "validating"
@@ -68,6 +70,7 @@ class VisionJobState(Enum):
 
 class VisionErrorType(Enum):
     """Categorized error types for proper handling"""
+
     VALIDATION_ERROR = "validation_error"
     INVALID_REQUEST = "invalid_request"
     UNSUPPORTED_TASK = "unsupported_task"
@@ -87,13 +90,14 @@ class VisionErrorType(Enum):
 @dataclass
 class VisionError(Exception):
     """Structured error with categorization and user-friendly messaging"""
+
     error_type: VisionErrorType
     message: str
     user_message: str
     provider: Optional[VisionProvider] = None
     retry_after_seconds: Optional[int] = None
     details: Dict[str, Any] = field(default_factory=dict)
-    
+
     def __str__(self) -> str:
         return f"{self.error_type.value}: {self.message}"
 
@@ -101,12 +105,13 @@ class VisionError(Exception):
 @dataclass
 class VisionRequest:
     """Normalized request for any vision generation task"""
+
     task: VisionTask
     prompt: str
     user_id: str
     guild_id: Optional[str] = None
     channel_id: str = ""
-    
+
     # Image generation parameters
     width: int = 1024
     height: int = 1024
@@ -115,23 +120,23 @@ class VisionRequest:
     negative_prompt: str = ""
     seed: Optional[int] = None
     batch_size: int = 1
-    
-    # Image editing parameters  
+
+    # Image editing parameters
     input_image: Optional[Path] = None
     input_image_data: Optional[bytes] = None  # Raw image bytes [CA]
-    input_image_url: Optional[str] = None     # Image URL [CA]
+    input_image_url: Optional[str] = None  # Image URL [CA]
     mask_image: Optional[Path] = None
     strength: float = 0.8
-    
+
     # Video generation parameters
     duration_seconds: int = 3
     fps: int = 24
     style: str = "natural"
-    
+
     # Image-to-video parameters
     mode: Literal["image2video", "start_end"] = "image2video"
     end_image: Optional[Path] = None
-    
+
     # Provider preferences
     preferred_provider: Optional[VisionProvider] = None
     preferred_model: Optional[str] = None
@@ -139,14 +144,14 @@ class VisionRequest:
     provider: Optional[VisionProvider] = None
     model: Optional[str] = None
     num_images: Optional[int] = None
-    
+
     # System metadata
     safety_check: bool = True
     # Money-typed estimate; may be None until computed [CMV]
     estimated_cost: Optional[Money] = None
     timeout_seconds: int = 300
     idempotency_key: str = field(default_factory=lambda: str(uuid.uuid4()))
-    
+
     def __post_init__(self) -> None:
         """Map legacy aliases to preferred fields for backward compatibility [REH][CA]"""
         # Provider/model aliases
@@ -159,7 +164,7 @@ class VisionRequest:
             # Only override if batch_size is default or unset
             if not isinstance(self.batch_size, int) or self.batch_size == 1:
                 self.batch_size = int(self.num_images)
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Serialize request for JSON storage [CMV]"""
         data = {
@@ -180,18 +185,25 @@ class VisionRequest:
             "fps": self.fps,
             "style": self.style,
             "mode": self.mode,
-            "preferred_provider": self.preferred_provider.value if self.preferred_provider else None,
+            "preferred_provider": self.preferred_provider.value
+            if self.preferred_provider
+            else None,
             "preferred_model": self.preferred_model,
             "safety_check": self.safety_check,
             # Persist Money as json-safe string for compatibility [REH]
             "estimated_cost": (
-                self.estimated_cost.to_json_value() if isinstance(self.estimated_cost, Money)
-                else (Money(self.estimated_cost).to_json_value() if self.estimated_cost is not None else None)
+                self.estimated_cost.to_json_value()
+                if isinstance(self.estimated_cost, Money)
+                else (
+                    Money(self.estimated_cost).to_json_value()
+                    if self.estimated_cost is not None
+                    else None
+                )
             ),
             "timeout_seconds": self.timeout_seconds,
-            "idempotency_key": self.idempotency_key
+            "idempotency_key": self.idempotency_key,
         }
-        
+
         # Convert Path objects to strings for JSON serialization
         if self.input_image:
             data["input_image"] = str(self.input_image)
@@ -199,9 +211,9 @@ class VisionRequest:
             data["mask_image"] = str(self.mask_image)
         if self.end_image:
             data["end_image"] = str(self.end_image)
-            
+
         return data
-    
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> VisionRequest:
         """Deserialize request from JSON storage [CMV]"""
@@ -212,19 +224,23 @@ class VisionRequest:
             data["mask_image"] = Path(data["mask_image"])
         if "end_image" in data and data["end_image"]:
             data["end_image"] = Path(data["end_image"])
-        
+
         # Convert provider string back to enum (support aliases, tolerant)
         if data.get("preferred_provider") is not None:
-            data["preferred_provider"] = _parse_vision_provider(data["preferred_provider"])
+            data["preferred_provider"] = _parse_vision_provider(
+                data["preferred_provider"]
+            )
         if data.get("provider") is not None:
             data["provider"] = _parse_vision_provider(data["provider"])
-        
+
         # Map legacy aliases prior to construction
         if "model" in data and "preferred_model" not in data:
             data["preferred_model"] = data["model"]
         if "num_images" in data and "batch_size" not in data:
-            data["batch_size"] = int(data["num_images"]) if data["num_images"] is not None else 1
-        
+            data["batch_size"] = (
+                int(data["num_images"]) if data["num_images"] is not None else 1
+            )
+
         # Estimated cost: accept Money JSON string, dict, or legacy numeric [REH]
         try:
             if "estimated_cost" in data:
@@ -241,39 +257,40 @@ class VisionRequest:
             # Tolerant: drop on parse failure
             data["estimated_cost"] = None
 
-        # Convert task string back to enum    
+        # Convert task string back to enum
         data["task"] = VisionTask(data["task"])
-        
+
         return cls(**data)
 
 
-@dataclass 
+@dataclass
 class VisionResponse:
     """Standardized response from vision providers"""
+
     success: bool
     job_id: str
     provider: VisionProvider
     model_used: str
-    
+
     # Generated content
     artifacts: List[Path] = field(default_factory=list)
     thumbnails: List[Path] = field(default_factory=list)
-    
+
     # Execution metadata
     processing_time_seconds: float = 0.0
     # Money-typed actual cost [CMV]
     actual_cost: Optional[Money] = None
     provider_job_id: Optional[str] = None
-    
+
     # Quality metrics
     dimensions: Optional[tuple[int, int]] = None
     duration_seconds: Optional[float] = None
     file_size_bytes: int = 0
-    
+
     # Error information
     error: Optional[VisionError] = None
     warnings: List[str] = field(default_factory=list)
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Serialize response for JSON storage [CMV]"""
         return {
@@ -286,51 +303,59 @@ class VisionResponse:
             "processing_time_seconds": self.processing_time_seconds,
             # Persist Money as json-safe string for compatibility [REH]
             "actual_cost": (
-                self.actual_cost.to_json_value() if isinstance(self.actual_cost, Money)
-                else (Money(self.actual_cost).to_json_value() if self.actual_cost is not None else None)
+                self.actual_cost.to_json_value()
+                if isinstance(self.actual_cost, Money)
+                else (
+                    Money(self.actual_cost).to_json_value()
+                    if self.actual_cost is not None
+                    else None
+                )
             ),
             "provider_job_id": self.provider_job_id,
             "dimensions": self.dimensions,
             "duration_seconds": self.duration_seconds,
             "file_size_bytes": self.file_size_bytes,
             "error": self.error.__dict__ if self.error else None,
-            "warnings": self.warnings
+            "warnings": self.warnings,
         }
 
 
 @dataclass
 class VisionJob:
     """Complete job state for orchestration and persistence"""
+
     job_id: str
     request: VisionRequest
     state: VisionJobState
-    
+
     # Timestamps [CMV]
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     last_updated: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    
+
     # Execution tracking
     provider_assigned: Optional[VisionProvider] = None
-    provider_job_id: Optional[str] = None  # Job ID returned by provider (may differ from orchestrator job_id)
+    provider_job_id: Optional[str] = (
+        None  # Job ID returned by provider (may differ from orchestrator job_id)
+    )
     model_assigned: Optional[str] = None
     retry_count: int = 0
     max_retries: int = 3
-    
+
     # Progress and results
     progress_percentage: int = 0
     response: Optional[VisionResponse] = None
     error: Optional[VisionError] = None
-    
+
     # Discord integration
     discord_interaction_id: Optional[str] = None
     discord_message_id: Optional[str] = None
     progress_message_id: Optional[str] = None
-    
+
     # Audit trail
     log_entries: List[Dict[str, Any]] = field(default_factory=list)
-    
+
     def add_log_entry(self, level: str, message: str, **kwargs) -> None:
         """Add structured log entry with timestamp [REH]"""
         entry = {
@@ -338,52 +363,56 @@ class VisionJob:
             "level": level,
             "message": message,
             "state": self.state.value,
-            **kwargs
+            **kwargs,
         }
         self.log_entries.append(entry)
         self.last_updated = datetime.now(timezone.utc)
-    
+
     def update_progress(self, percentage: int, message: str = "") -> None:
         """Update job progress with optional status message [PA]"""
         self.progress_percentage = max(0, min(100, percentage))
         self.last_updated = datetime.now(timezone.utc)
         if message:
             self.add_log_entry("info", f"Progress {percentage}%: {message}")
-    
+
     def transition_to(self, new_state: VisionJobState, message: str = "") -> None:
         """Transition job state with audit logging [CA]"""
         old_state = self.state
         self.state = new_state
         self.last_updated = datetime.now(timezone.utc)
-        
+
         # Update state-specific timestamps
         if new_state == VisionJobState.RUNNING and not self.started_at:
             self.started_at = datetime.now(timezone.utc)
-        elif new_state in [VisionJobState.COMPLETED, VisionJobState.FAILED, VisionJobState.CANCELLED]:
+        elif new_state in [
+            VisionJobState.COMPLETED,
+            VisionJobState.FAILED,
+            VisionJobState.CANCELLED,
+        ]:
             self.completed_at = datetime.now(timezone.utc)
-        
+
         log_message = f"State transition: {old_state.value} → {new_state.value}"
         if message:
             log_message += f" ({message})"
-        
+
         self.add_log_entry("info", log_message)
-    
+
     def is_terminal_state(self) -> bool:
         """Check if job has reached a terminal state [CMV]"""
         return self.state in [
             VisionJobState.COMPLETED,
-            VisionJobState.FAILED, 
+            VisionJobState.FAILED,
             VisionJobState.CANCELLED,
-            VisionJobState.EXPIRED
+            VisionJobState.EXPIRED,
         ]
-    
+
     def is_expired(self, timeout_seconds: int) -> bool:
         """Check if job has exceeded timeout [CMV]"""
         if not self.started_at:
             return False
         elapsed = (datetime.now(timezone.utc) - self.started_at).total_seconds()
         return elapsed > timeout_seconds
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Serialize job for JSON storage [CMV]"""
         return {
@@ -392,9 +421,13 @@ class VisionJob:
             "state": self.state.value,
             "created_at": self.created_at.isoformat(),
             "started_at": self.started_at.isoformat() if self.started_at else None,
-            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "completed_at": self.completed_at.isoformat()
+            if self.completed_at
+            else None,
             "last_updated": self.last_updated.isoformat(),
-            "provider_assigned": self.provider_assigned.value if self.provider_assigned else None,
+            "provider_assigned": self.provider_assigned.value
+            if self.provider_assigned
+            else None,
             "model_assigned": self.model_assigned,
             "retry_count": self.retry_count,
             "max_retries": self.max_retries,
@@ -404,22 +437,34 @@ class VisionJob:
             "discord_interaction_id": self.discord_interaction_id,
             "discord_message_id": self.discord_message_id,
             "progress_message_id": self.progress_message_id,
-            "log_entries": self.log_entries
+            "log_entries": self.log_entries,
         }
-    
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> VisionJob:
         """Deserialize job from JSON storage [CMV]"""
         # Parse timestamps
         created_at = datetime.fromisoformat(data["created_at"])
-        started_at = datetime.fromisoformat(data["started_at"]) if data.get("started_at") else None
-        completed_at = datetime.fromisoformat(data["completed_at"]) if data.get("completed_at") else None
+        started_at = (
+            datetime.fromisoformat(data["started_at"])
+            if data.get("started_at")
+            else None
+        )
+        completed_at = (
+            datetime.fromisoformat(data["completed_at"])
+            if data.get("completed_at")
+            else None
+        )
         last_updated = datetime.fromisoformat(data["last_updated"])
-        
+
         # Parse enums
         state = VisionJobState(data["state"])
-        provider_assigned = _parse_vision_provider(data.get("provider_assigned")) if data.get("provider_assigned") else None
-        
+        provider_assigned = (
+            _parse_vision_provider(data.get("provider_assigned"))
+            if data.get("provider_assigned")
+            else None
+        )
+
         # Parse nested objects
         request = VisionRequest.from_dict(data["request"])
         response = None
@@ -439,7 +484,9 @@ class VisionJob:
                     ac = response_data.get("actual_cost")
                     if isinstance(ac, dict):
                         amt = ac.get("amount")
-                        response_data["actual_cost"] = Money(amt) if amt is not None else None
+                        response_data["actual_cost"] = (
+                            Money(amt) if amt is not None else None
+                        )
                     elif ac is None:
                         response_data["actual_cost"] = None
                     else:
@@ -447,7 +494,7 @@ class VisionJob:
             except Exception:
                 response_data["actual_cost"] = None
             response = VisionResponse(**response_data)
-        
+
         # Parse error
         error = None
         if data.get("error"):
@@ -460,7 +507,9 @@ class VisionJob:
             elif isinstance(error_type_value, str):
                 # Handle both "SYSTEM_ERROR" and "VisionErrorType.SYSTEM_ERROR" formats
                 if "." in error_type_value:
-                    error_type_value = error_type_value.split(".")[-1]  # Get just the enum name
+                    error_type_value = error_type_value.split(".")[
+                        -1
+                    ]  # Get just the enum name
                 error_data["error_type"] = VisionErrorType[error_type_value]
             else:
                 error_data["error_type"] = VisionErrorType(error_type_value)
@@ -468,7 +517,7 @@ class VisionJob:
                 pv_err = _parse_vision_provider(error_data["provider"])
                 error_data["provider"] = pv_err or VisionProvider.NOVITA
             error = VisionError(**error_data)
-        
+
         return cls(
             job_id=data["job_id"],
             request=request,
@@ -487,21 +536,24 @@ class VisionJob:
             discord_interaction_id=data.get("discord_interaction_id"),
             discord_message_id=data.get("discord_message_id"),
             progress_message_id=data.get("progress_message_id"),
-            log_entries=data.get("log_entries", [])
+            log_entries=data.get("log_entries", []),
         )
 
 
 # Provider-specific request/response types for adapter implementations
 
+
 @dataclass
 class ProviderRequest:
     """Base class for provider-specific requests"""
+
     pass
 
 
 @dataclass
 class ProviderResponse:
     """Base class for provider-specific responses"""
+
     success: bool
     provider_job_id: Optional[str] = None
     error_message: Optional[str] = None
@@ -510,18 +562,21 @@ class ProviderResponse:
 
 # Intent routing types
 
+
 @dataclass
 class IntentScore:
     """Intent classification result"""
+
     task: Optional[VisionTask]
     confidence: float
     extracted_parameters: Dict[str, Any] = field(default_factory=dict)
     reasoning: str = ""
 
 
-@dataclass  
+@dataclass
 class RoutingDecision:
     """Complete routing decision with justification"""
+
     route_to_vision: bool
     task: Optional[VisionTask] = None
     confidence: float = 0.0
@@ -537,6 +592,7 @@ class IntentDecision:
     """Thin wrapper decision used by higher-level router/tests.
     Mirrors key fields from RoutingDecision, but exposes `use_vision` for clarity.
     """
+
     use_vision: bool
     task: Optional[Union[VisionTask, str]] = None
     confidence: float = 0.0
@@ -554,6 +610,7 @@ class IntentResult:
     - extracted_params: attribute-style params for downstream VisionRequest construction
     - confidence: convenience copy of decision.confidence
     """
+
     decision: IntentDecision
     extracted_params: Any
     confidence: float

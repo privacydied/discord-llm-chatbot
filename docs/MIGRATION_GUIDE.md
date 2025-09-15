@@ -30,7 +30,7 @@ discord-llm-chatbot/
 │   └── [other modules...]
 ├── pyproject.toml         # Modern Python packaging
 ├── MANIFEST.in            # Distribution manifest
-├── .env-sample            # Environment documentation
+├── .env.example           # Environment documentation
 ├── CHANGELOG.md           # Change documentation
 └── MIGRATION_GUIDE.md     # This file
 ```
@@ -73,7 +73,7 @@ MEMORY_SAVE_INTERVAL=300
 
 **Key Changes:**
 - Comments in environment variables are now properly handled
-- All configuration is documented in `.env-sample`
+- All configuration is documented in `.env.example`
 - OpenRouter integration is fully configured
 - Robust parsing with `_safe_int()` and `_safe_float()` helpers
 
@@ -314,7 +314,6 @@ tests/
 
 **Files Removed:**
 - `bot/tts.py` (legacy 479-line TTS manager)
-- `bot/tts_manager_fixed.py` (redundant)
 - `bot/tts_utils.py` and `bot/tts_utils_enhanced.py` (functionality moved)
 - `bot/tts_cli.py` (standalone CLI not needed)
 - Duplicate test files and `.disabled` test files

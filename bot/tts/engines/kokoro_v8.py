@@ -3,16 +3,16 @@ Engine adapter for kokoro>=0.8 (KPipeline), which does not require espeak.
 
 [RAT][REH][PA][CMV]
 """
+
 from __future__ import annotations
 
 import io
-import logging
 import os
 import wave
 from typing import Optional
 
 import numpy as np
-from bot.util.logging import get_logger
+from bot.utils.logging import get_logger
 from .base import BaseEngine
 from bot.tts.errors import TTSError
 
@@ -23,12 +23,15 @@ class KokoroV8Engine(BaseEngine):
     def __init__(self, voice: Optional[str] = None, lang_code: Optional[str] = None):
         # Defaults align with common Kokoro-82M examples
         self.voice = voice or os.getenv("TTS_VOICE", "af_heart")
-        self.lang_code = lang_code or os.getenv("TTS_LANG_CODE", "a")  # 'a' American English
+        self.lang_code = lang_code or os.getenv(
+            "TTS_LANG_CODE", "a"
+        )  # 'a' American English
         self._pipeline = None
 
     def load(self):
         try:
             from kokoro import KPipeline  # type: ignore
+
             self._pipeline = KPipeline(lang_code=self.lang_code)
             logger.info("KokoroV8Engine loaded (KPipeline)")
         except Exception as e:
@@ -58,7 +61,9 @@ class KokoroV8Engine(BaseEngine):
             self.load()
         try:
             # KPipeline returns (audio: np.ndarray, sample_rate: int)
-            logger.info("KokoroV8Engine synthesizing via KPipeline (voice=%s)", self.voice)
+            logger.info(
+                "KokoroV8Engine synthesizing via KPipeline (voice=%s)", self.voice
+            )
             audio, sr = self._pipeline(text, voice=self.voice)
             return self._to_wav_bytes(audio, sr)
         except Exception as e:

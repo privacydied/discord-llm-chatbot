@@ -2,6 +2,7 @@
 Extraction utilities for syndication content processing.
 Implements strict media selection policy for X/Twitter syndication payloads.
 """
+
 from typing import List, Dict, Any, Optional
 from .url_utils import upgrade_pbs_to_orig, pbs_base_key
 import logging
@@ -22,11 +23,16 @@ def extract_text_and_images_from_syndication(tw: Dict[str, Any]) -> Dict[str, An
       5) Dedup: compare by base asset (strip query and :size) while preserving order.
     """
     text = tw.get("full_text") or tw.get("text") or ""
-    include_quoted = os.getenv("SYND_INCLUDE_QUOTED_MEDIA", "true").lower() in ("1", "true", "yes", "on")
+    include_quoted = os.getenv("SYND_INCLUDE_QUOTED_MEDIA", "true").lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
 
     def _collect_from_photos(node: Dict[str, Any]) -> List[str]:
         urls: List[str] = []
-        for ph in (node.get("photos") or []):
+        for ph in node.get("photos") or []:
             raw = ph.get("url") or ph.get("media_url_https")
             if raw:
                 urls.append(upgrade_pbs_to_orig(raw))
@@ -36,7 +42,7 @@ def extract_text_and_images_from_syndication(tw: Dict[str, Any]) -> Dict[str, An
         urls: List[str] = []
         ee = (node.get("extended_entities") or {}).get("media") or []
         en = (node.get("entities") or {}).get("media") or []
-        for m in (ee or en):
+        for m in ee or en:
             try:
                 mtype = (m.get("type") or "").lower()
                 raw: Optional[str] = None
@@ -71,10 +77,7 @@ def extract_text_and_images_from_syndication(tw: Dict[str, Any]) -> Dict[str, An
         for k in pref_keys:
             v = bv.get(k)
             if isinstance(v, dict):
-                url = (
-                    (v.get("image_value") or {}).get("url")
-                    or v.get("string_value")
-                )
+                url = (v.get("image_value") or {}).get("url") or v.get("string_value")
                 if url:
                     candidates.append(url)
         # Fallback to top-level 'image'
@@ -90,7 +93,10 @@ def extract_text_and_images_from_syndication(tw: Dict[str, Any]) -> Dict[str, An
             if not c:
                 continue
             lc = c.lower()
-            if any(tok in lc for tok in ("favicon", "apple-touch", "android-chrome", "icon-")):
+            if any(
+                tok in lc
+                for tok in ("favicon", "apple-touch", "android-chrome", "icon-")
+            ):
                 continue
             filtered.append(c)
         if filtered:
@@ -145,13 +151,23 @@ def extract_text_and_images_from_syndication(tw: Dict[str, Any]) -> Dict[str, An
     # Metrics (optional, non-breaking)
     try:
         from bot.metrics import METRICS  # type: ignore
-        METRICS.counter("x.syndication.photos_extracted").inc(len(tw.get("photos") or []))
+
+        METRICS.counter("x.syndication.photos_extracted").inc(
+            len(tw.get("photos") or [])
+        )
         METRICS.counter("x.syndication.photos_highres").inc(len(image_urls))
     except Exception:
         pass
 
     log.debug(
         "Syndication extract: text_len=%d chosen=%d source=%s",
-        len(text), len(image_urls), source,
+        len(text),
+        len(image_urls),
+        source,
     )
-    return {"text": text, "image_urls": image_urls, "source": source, "had_card": had_card}
+    return {
+        "text": text,
+        "image_urls": image_urls,
+        "source": source,
+        "had_card": had_card,
+    }

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from bot.utils.external_api import _normalize_url_for_screenshot
-from bot.util.logging import get_logger
+from bot.utils.logging import get_logger
 
 logger = get_logger(__name__)
 

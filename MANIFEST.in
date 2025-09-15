@@ -13,7 +13,7 @@ recursive-include bot *.yml
 recursive-include bot *.yaml
 
 # Include configuration files
-include .env-sample
+include .env.example
 include *.sh
 
 # Include test files

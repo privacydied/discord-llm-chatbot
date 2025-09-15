@@ -5,9 +5,10 @@ import wave
 import math
 import struct
 from .base import BaseEngine
-from ...util.logging import get_logger
+from ...utils.logging import get_logger
 
 logger = get_logger(__name__)
+
 
 def _generate_stub_wav_bytes(duration: float = 0.25, freq: int = 440) -> bytes:
     """Generates a short sine wave and returns it as WAV bytes."""
@@ -20,11 +21,11 @@ def _generate_stub_wav_bytes(duration: float = 0.25, freq: int = 440) -> bytes:
         amplitude = 32767 * 0.2  # 20% volume to avoid clipping
         angle = 2 * math.pi * freq * i / rate
         value = int(amplitude * math.sin(angle))
-        pcm_data.extend(struct.pack('<h', value))
+        pcm_data.extend(struct.pack("<h", value))
 
     # Create a wave file in memory
     with io.BytesIO() as wav_buffer:
-        with wave.open(wav_buffer, 'wb') as wav_file:
+        with wave.open(wav_buffer, "wb") as wav_file:
             wav_file.setnchannels(1)  # Mono
             wav_file.setsampwidth(2)  # 2 bytes = 16 bits
             wav_file.setframerate(rate)
@@ -48,9 +49,7 @@ class StubEngine(BaseEngine):
             # This is a CPU-bound operation, but it's very fast.
             # We run it in an executor to avoid blocking the event loop just in case.
             loop = asyncio.get_running_loop()
-            audio_data = await loop.run_in_executor(
-                None, _generate_stub_wav_bytes
-            )
+            audio_data = await loop.run_in_executor(None, _generate_stub_wav_bytes)
             logger.info("Successfully generated stub audio bytes.")
             return audio_data
         except Exception as e:
