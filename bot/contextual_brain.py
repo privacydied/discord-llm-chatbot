@@ -7,6 +7,7 @@ import re
 
 from bot.brain import brain_infer
 from bot.utils.logging import get_logger
+from bot.decision_helpers import resolve_scope
 
 if TYPE_CHECKING:  # pragma: no cover - import for type checking only
     from bot.core.bot import LLMBot
@@ -86,16 +87,9 @@ async def contextual_brain_infer(
             include_cross_user_eff = include_cross_user
 
         # Determine basic case/scope for logging and locality policy
-        case = "THREAD" if "Thread" in str(type(getattr(message, "channel", None))) else ("REPLY" if getattr(message, "reference", None) is not None else "LONE")
-        try:
-            if case == "THREAD":
-                scope_id = str(getattr(getattr(message, "channel", None), "id", None))
-            elif case == "REPLY":
-                scope_id = str(getattr(getattr(message, "reference", None), "message_id", None))
-            else:
-                scope_id = str(getattr(message, "id", None))
-        except Exception:
-            scope_id = str(getattr(message, "id", None))
+        _scope = resolve_scope(message)
+        case = _scope.case.upper() if _scope.case else "LONE"
+        scope_id = _scope.scope_id
 
         # Locality-first policies
         try:
@@ -135,8 +129,12 @@ async def contextual_brain_infer(
                     extra={
                         "subsys": "mem.ctx",
                         "event": "scope_resolved",
-                        "guild_id": getattr(getattr(message, "guild", None), "id", None),
-                        "user_id": getattr(getattr(message, "author", None), "id", None),
+                        "guild_id": getattr(
+                            getattr(message, "guild", None), "id", None
+                        ),
+                        "user_id": getattr(
+                            getattr(message, "author", None), "id", None
+                        ),
                         "msg_id": getattr(message, "id", None),
                         "detail": {"case": case, "scope": scope_id},
                     },
@@ -146,8 +144,12 @@ async def contextual_brain_infer(
                     extra={
                         "subsys": "mem.ctx",
                         "event": "local_block",
-                        "guild_id": getattr(getattr(message, "guild", None), "id", None),
-                        "user_id": getattr(getattr(message, "author", None), "id", None),
+                        "guild_id": getattr(
+                            getattr(message, "guild", None), "id", None
+                        ),
+                        "user_id": getattr(
+                            getattr(message, "author", None), "id", None
+                        ),
                         "msg_id": getattr(message, "id", None),
                         "detail": {"msgs": 0, "order": "local_first"},
                     },
@@ -158,8 +160,12 @@ async def contextual_brain_infer(
                         extra={
                             "subsys": "mem.ctx",
                             "event": "drop_stale",
-                            "guild_id": getattr(getattr(message, "guild", None), "id", None),
-                            "user_id": getattr(getattr(message, "author", None), "id", None),
+                            "guild_id": getattr(
+                                getattr(message, "guild", None), "id", None
+                            ),
+                            "user_id": getattr(
+                                getattr(message, "author", None), "id", None
+                            ),
                             "msg_id": getattr(message, "id", None),
                             "detail": {"reason": "scope_mismatch", "dropped": dropped},
                         },
@@ -224,9 +230,11 @@ async def contextual_brain_infer(
         # Get contextual response with metadata
         context_response = await bot.enhanced_context_manager.get_contextual_response(
             message=message,
-            response_text=ai_response.content
-            if hasattr(ai_response, "content")
-            else str(ai_response),
+            response_text=(
+                ai_response.content
+                if hasattr(ai_response, "content")
+                else str(ai_response)
+            ),
             include_cross_user=include_cross_user,
         )
 

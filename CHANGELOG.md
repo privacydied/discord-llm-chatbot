@@ -9,10 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
-- Placeholder for upcoming features
+- Pure helper module for routing decisions with structured breadcrumbs.
+- Documentation files: `AUDIT.md`, `REFACTOR.md`, `LOGGING.md`, `TESTPLAN.md`.
 
 ### Changed
-- Placeholder for changes
+- `contextual_brain_infer` delegates scope resolution to helper, improving observability without altering behavior.
 
 ### Fixed
 - Placeholder for fixes
