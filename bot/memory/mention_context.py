@@ -526,7 +526,7 @@ async def maybe_build_mention_context(
         return None
 
     block = _package(bot, message, case, anchor, messages)
-    block.truncated = bool(block.truncated or (len(messages) >= max_msgs))
+    block.truncated = bool(block.truncated or (len(messages) >= tail_k))
 
     # Telemetry
     try:

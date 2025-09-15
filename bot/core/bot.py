@@ -3,6 +3,7 @@
 from __future__ import annotations
 import asyncio
 import os
+import re
 from typing import TYPE_CHECKING, Optional, Dict, List, Tuple, Any
 
 import discord
