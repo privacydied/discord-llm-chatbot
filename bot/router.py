@@ -262,7 +262,7 @@ class Router:
         self.logger = logger or get_logger(f"discord-bot.{self.__class__.__name__}")
 
         # Bind flow methods to the instance, allowing for test overrides
-        self._bind_flow_methods(flow_overrides)
+        self._bind_flow_methods()
 
         self.pdf_processor = PDFProcessor() if PDF_SUPPORT else None
         if self.pdf_processor:
@@ -848,6 +848,33 @@ class Router:
         except Exception:
             return url
 
+    def _extract_x_status_urls_from_text(self, text: str) -> List[str]:
+        """Extract canonical X/Twitter status URLs from a text blob in-order.
+        Normalizes and de-dupes; emits a small log per normalized URL. [IV][PA]
+        """
+        urls: List[str] = []
+        try:
+            for m in re.finditer(r"https?://[^\s<>\"'\[\]{}|\\^`]+", text or "", re.IGNORECASE):
+                raw = m.group(0)
+                if self._is_twitter_status_url(raw):
+                    cu = self._canonicalize_twitter_status_url(raw)
+                    if cu not in urls:
+                        urls.append(cu)
+                        try:
+                            self.logger.info(
+                                "normalize_ok",
+                                extra={
+                                    "subsys": "tw",
+                                    "event": "normalize_ok",
+                                    "detail": {"url": cu},
+                                },
+                            )
+                        except Exception:
+                            pass
+        except Exception:
+            pass
+        return urls
+
     async def _extract_raw_x_urls(self, message: Message) -> List[str]:
         """Extract raw X/Twitter URLs from the author's message content and replied-to content only.
         Ignores embeds and attachments to avoid picking preview thumbnails.
@@ -894,6 +921,60 @@ class Router:
                 if cu not in out:
                     out.append(cu)
         return out
+
+    async def _gather_prioritized_x_urls(
+        self, scope_case: str, message: Message, reply_target: Optional[Message]
+    ) -> Tuple[str, List[str]]:
+        """Collect X/Twitter status URLs using the priority stack within the active scope.
+        Returns (layer, urls) where layer in {"trigger","parent","tail","none"}. [CA][IV]
+        """
+        try:
+            # 1) Trigger layer
+            trigger_urls = self._extract_x_status_urls_from_text(getattr(message, "content", "") or "")
+            if trigger_urls:
+                return "trigger", trigger_urls
+
+            # 2) Reply-parent layer (REPLY_CASE only)
+            if scope_case == "reply" and reply_target is not None:
+                parent_urls = self._extract_x_status_urls_from_text(getattr(reply_target, "content", "") or "")
+                if parent_urls:
+                    return "parent", parent_urls
+
+            # 3) Thread-tail layer (THREAD_CASE only, near reply_target)
+            if scope_case == "thread":
+                try:
+                    k = int(self.config.get("THREAD_CONTEXT_TAIL_COUNT", 5))
+                except Exception:
+                    k = 5
+                k = max(0, min(k, 40))
+                anchor = reply_target or message
+                tail_urls: List[str] = []
+                try:
+                    # Walk messages strictly before anchor, oldest <- newest later
+                    msgs: List[Message] = []
+                    async for m in message.channel.history(limit=k * 3, before=anchor):
+                        # keep humans + our bot only (mirror of thread_tail policy)
+                        is_bot = bool(getattr(m.author, "bot", False))
+                        is_ours = int(getattr(m.author, "id", 0)) == int(getattr(self.bot.user, "id", 0))
+                        if is_bot and not is_ours:
+                            continue
+                        msgs.append(m)
+                        if len(msgs) >= k:
+                            break
+                    msgs = list(reversed(msgs))
+                    for m in msgs:
+                        u = self._extract_x_status_urls_from_text(getattr(m, "content", "") or "")
+                        for cu in u:
+                            if cu not in tail_urls:
+                                tail_urls.append(cu)
+                except Exception:
+                    tail_urls = []
+                if tail_urls:
+                    return "tail", tail_urls
+
+            return "none", []
+        except Exception:
+            return "none", []
 
     async def _yt_dlp_probe(
         self, url: str, timeout_s: float = 8.0
@@ -954,8 +1035,55 @@ class Router:
                     has_formats = False
                 if duration or has_formats:
                     return {"kind": "video", "url": u, "duration": duration}
+        # If no video detected, attempt bounded image harvest via syndication [REH]
+        images_all: List[str] = []
+        for u in clean:
+            status_id = self._parse_twitter_status_id(u)
+            if not status_id:
+                continue
+            attempt = 0
+            imgs: List[str] = []
+            while attempt < 2 and not imgs:
+                attempt += 1
+                try:
+                    imgs = await asyncio.wait_for(
+                        self._probe_twitter_syndication_images(u, status_id),
+                        timeout=min(getattr(self, "_x_syn_timeout_s", 3.0) + 0.5, 4.0),
+                    )
+                except asyncio.TimeoutError:
+                    try:
+                        self.logger.info(
+                            "timeout_fallback",
+                            extra={
+                                "subsys": "tw",
+                                "event": "timeout_fallback",
+                                "detail": {"reason": "timeout"},
+                            },
+                        )
+                    except Exception:
+                        pass
+                    imgs = []
+                except Exception:
+                    imgs = []
+            for im in imgs:
+                if im not in images_all:
+                    images_all.append(im)
+            if images_all:
+                break
+        if images_all:
+            try:
+                self.logger.info(
+                    "media_found",
+                    extra={
+                        "subsys": "tw",
+                        "event": "media_found",
+                        "detail": {"kind": "photos", "count": len(images_all)},
+                    },
+                )
+            except Exception:
+                pass
+            return {"kind": "image", "images": images_all}
 
-        # If no video detected, we don't try to harvest images here (keep minimal & safe)
         return {"kind": "unknown", "reason": "no-formats"}
 
     # ---- New helpers for targeted syndication image probe on no-formats [REH][PA] ----
@@ -1879,8 +2007,7 @@ class Router:
                 # Centralized scope resolution and context building
                 scope_case, reply_target, context_str = await self._resolve_scope_and_target(message)
 
-
-
+                self.logger.debug(f"Scope resolved: context_str='{context_str[:100]}...'")
 
                 # Clean mention from content for processing
                 clean_content = content
@@ -1906,15 +2033,17 @@ class Router:
                 # 5.5. Deterministic X/Twitter media routing (optional early path; default off)
                 if getattr(self, "_x_early_resolve_enabled", False):
                     try:
-                        x_urls: List[str] = await self._extract_raw_x_urls(message)
+                        layer, x_urls = await self._gather_prioritized_x_urls(
+                            scope_case, message, reply_target
+                        )
                     except Exception:
-                        x_urls = []
+                        layer, x_urls = "none", []
                     if x_urls and not parsed_command:
                         self.logger.info(
-                            f"route.media: x/twitter url(s)={len(x_urls)}",
+                            f"route.media: x/twitter url(s)={len(x_urls)} layer={layer}",
                             extra={
                                 "event": "route.media",
-                                "detail": {"count": len(x_urls)},
+                                "detail": {"count": len(x_urls), "layer": layer},
                             },
                         )
                         try:
@@ -1933,6 +2062,17 @@ class Router:
                             self.logger.info(
                                 f"media.resolve: result=video url={host or url_for_stt} dur={int(dur) if isinstance(dur, (int, float)) else 'NA'}s"
                             )
+                            try:
+                                self.logger.info(
+                                    "route_selected",
+                                    extra={
+                                        "subsys": "route",
+                                        "event": "route_selected",
+                                        "detail": {"kind": "video"},
+                                    },
+                                )
+                            except Exception:
+                                pass
                             # Always prefer STT for X/Twitter video
                             try:
                                 stt_res = await hear_infer_from_url(url_for_stt)
@@ -1975,6 +2115,17 @@ class Router:
                             self.logger.info(
                                 f"media.resolve: result=image count={len(images)}"
                             )
+                            try:
+                                self.logger.info(
+                                    "route_selected",
+                                    extra={
+                                        "subsys": "route",
+                                        "event": "route_selected",
+                                        "detail": {"kind": "vl"},
+                                    },
+                                )
+                            except Exception:
+                                pass
                             # Run silent perception notes on the first image only (budget-friendly)
                             vl_notes = None
                             if images:
@@ -2003,16 +2154,37 @@ class Router:
                             self.logger.info(
                                 f"media.resolve: result=unknown reason={reason}"
                             )
+                            try:
+                                self.logger.info(
+                                    "media_fallback",
+                                    extra={
+                                        "subsys": "tw",
+                                        "event": "media_fallback",
+                                        "detail": {"kind": "none"},
+                                    },
+                                )
+                            except Exception:
+                                pass
                             # Continue to normal processing (no early return)
 
                 # 6. Sequential multimodal processing (guarded by a global timeout to avoid hangs)
                 try:
                     try:
                         total_budget = float(
-                            self.config.get("MULTIMODAL_TOTAL_BUDGET_S", 90.0)
+                            self.config.get("MULTIMODAL_TOTAL_BUDGET_S", 240.0)
                         )
                     except Exception:
-                        total_budget = 90.0
+                        total_budget = 240.0
+                    try:
+                        self.logger.info(
+                            "multimodal.budget",
+                            extra={
+                                "event": "multimodal.budget",
+                                "detail": {"seconds": total_budget},
+                            },
+                        )
+                    except Exception:
+                        pass
                     result_action = await asyncio.wait_for(
                         self._process_multimodal_message_internal(message, context_str),
                         timeout=total_budget,
@@ -3652,8 +3824,10 @@ class Router:
                     return None, "error"
 
             # Optional: Twitter/X author self-reply thread unroll (feature-gated) [PA][REH]
+            # IMPORTANT: For X/Twitter status URLs we now defer unroll until after media detection,
+            # so images/video can take precedence. The early unroll remains available for non-X URLs.
             try:
-                if bool(self.config.get("TWITTER_UNROLL_ENABLED", False)) and self._is_twitter_status_url(url):
+                if bool(self.config.get("TWITTER_UNROLL_ENABLED", False)) and self._is_twitter_status_url(url) and False:
                     # Emit a DEBUG start event so operators can see attempts when LOG_LEVEL=debug
                     try:
                         self.logger.debug(

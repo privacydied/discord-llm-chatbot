@@ -294,7 +294,12 @@ Server Context: {server_context}"""
 
                 return _run
 
-            per_item_budget = float(config.get("TEXT_PER_ITEM_BUDGET", 45.0))
+            per_item_budget = float(config.get("TEXT_PER_ITEM_BUDGET", 75.0))
+            try:
+                logger.info(
+                    f"[OpenAI] text.budget seconds={per_item_budget}")
+            except Exception:
+                pass
             rr = await retry_mgr.run_with_fallback(
                 "text", _coro_factory, per_item_budget=per_item_budget
             )

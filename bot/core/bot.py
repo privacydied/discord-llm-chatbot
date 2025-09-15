@@ -1389,7 +1389,7 @@ class LLMBot(commands.Bot):
                     substantive_text = False
                     if has_text:
                         # Strip mentions and check for meaningful content (letters/digits)
-                        mention_free = re.sub(r"<@!?{}>\s*".format(self.bot.user.id), "", content).strip()
+                        mention_free = re.sub(r"<@!?{}>\s*".format(self.user.id), "", content).strip()
                         # Has meaningful text if contains letters/digits after stripping mentions
                         if mention_free and re.search(r"[A-Za-z0-9]", mention_free.strip()):
                             substantive_text = True
@@ -1776,6 +1776,23 @@ class LLMBot(commands.Bot):
                     self.logger.warning(
                         "Background tasks did not complete within timeout"
                     )
+
+            # Close Vision Orchestrator (if initialized either on bot or via router fallback)
+            try:
+                vo = getattr(self, "vision_orchestrator", None)
+                if not vo and getattr(self, "router", None):
+                    vo = getattr(self.router, "_vision_orchestrator", None)
+                if vo:
+                    try:
+                        await asyncio.wait_for(vo.close(), timeout=5.0)
+                        self.logger.info("VisionOrchestrator: closed")
+                    except asyncio.TimeoutError:
+                        self.logger.warning("VisionOrchestrator close timed out")
+                    except Exception as e:
+                        self.logger.warning(f"VisionOrchestrator close error: {e}")
+            except Exception:
+                # Non-fatal shutdown path
+                pass
 
             # Close TTS manager
             if self.tts_manager:
