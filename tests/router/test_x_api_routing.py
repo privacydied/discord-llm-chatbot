@@ -1,5 +1,7 @@
+import json
 import pytest
 from unittest.mock import AsyncMock
+from urllib.parse import quote
 
 from bot.router import Router, XApiClient
 from bot.modality import InputItem
@@ -175,3 +177,56 @@ async def test_x_api_photo_only_routes_to_vl_when_enabled(monkeypatch):
     assert "Photos analyzed: 2/2" in res
     assert "📷 Photo 1/2" in res and "📷 Photo 2/2" in res
     assert "desc for p1.jpg" in res and "desc for p2.jpg" in res
+
+
+@pytest.mark.asyncio
+async def test_resolve_x_media_unwraps_fx_proxy(monkeypatch):
+    bot = DummyBot()
+    router = Router(bot)
+
+    target_url = "https://video.twimg.com/amplify_video/123/vid/720x1280/sample.mp4"
+    wrapped_url = f"https://api.fxtwitter.com/2/go?url={quote(target_url, safe='')}"
+
+    class DummyResp:
+        def __init__(self, status_code, data):
+            self.status_code = status_code
+            self._data = data
+            self.text = json.dumps(data)
+
+        def json(self):
+            return self._data
+
+    class DummyHttp:
+        async def get(self, url, config=None, headers=None):
+            if "api.vxtwitter.com" in url:
+                return DummyResp(404, {})
+            if "api.fxtwitter.com" in url:
+                data = {
+                    "tweet": {
+                        "media": {
+                            "videos": [
+                                {
+                                    "variants": [
+                                        {
+                                            "url": wrapped_url,
+                                            "content_type": "video/mp4",
+                                            "bitrate": 832000,
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                }
+                return DummyResp(200, data)
+            return DummyResp(404, {})
+
+    async def fake_http_client():
+        return DummyHttp()
+
+    monkeypatch.setattr("bot.router.get_http_client", fake_http_client)
+
+    resolved = await router._resolve_x_media(["https://x.com/user/status/1234567890"])
+
+    assert resolved["kind"] == "video"
+    assert resolved["url"] == target_url

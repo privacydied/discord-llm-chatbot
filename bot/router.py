@@ -29,7 +29,7 @@ from html import unescape
 import json
 from pathlib import Path
 from typing import Awaitable, Callable, Dict, List, Optional, Tuple, TYPE_CHECKING, Any
-from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+from urllib.parse import parse_qs, parse_qsl, urlencode, urlparse, urlunparse, unquote
 
 import discord
 from discord import DMChannel, Message
@@ -1057,6 +1057,24 @@ class Router:
         except Exception:
             return url
 
+    @staticmethod
+    def _unwrap_x_media_url(url: str) -> str:
+        """Unwrap proxy download URLs returned by fx/vx helpers back to the media CDN."""
+        try:
+            parsed = urlparse(url)
+            host = (parsed.netloc or "").lower()
+            if host in {"api.fxtwitter.com", "api.vxtwitter.com"}:
+                params = parse_qs(parsed.query or "")
+                for key in ("url", "media_url", "target", "u"):
+                    values = params.get(key)
+                    if values:
+                        candidate = unquote(values[0])
+                        if candidate.startswith("http"):
+                            return candidate
+            return url
+        except Exception:
+            return url
+
     async def _resolve_x_media(self, urls: List[str]) -> Dict[str, Any]:
         """Resolve X/Twitter URLs into a minimal media shape.
         - kind: video | image | unknown
@@ -1143,7 +1161,13 @@ class Router:
                             except Exception:
                                 pick = variants[0]
                         if pick and pick.get("url"):
-                            return {"kind": "video", "url": pick.get("url"), "duration": duration_s, "src": src_name}
+                            media_url = self._unwrap_x_media_url(str(pick.get("url")))
+                            return {
+                                "kind": "video",
+                                "url": media_url,
+                                "duration": duration_s,
+                                "src": src_name,
+                            }
                     except Exception:
                         continue
             # 2) vx/fx HTML (fast)
@@ -1168,11 +1192,23 @@ class Router:
                         # Look for direct video URLs (mp4/hls)
                         m = re.search(r"https://video\\.twimg\\.com/[^'\"\s]+", text, re.IGNORECASE)
                         if m:
-                            return {"kind": "video", "url": m.group(0), "duration": None, "src": src_name}
+                            media_url = self._unwrap_x_media_url(m.group(0))
+                            return {
+                                "kind": "video",
+                                "url": media_url,
+                                "duration": None,
+                                "src": src_name,
+                            }
                         # Meta tags
                         m2 = re.search(r'<meta[^>]+property=["\']og:video["\'][^>]+content=["\']([^"\']+)["\']', text, re.IGNORECASE)
                         if m2:
-                            return {"kind": "video", "url": m2.group(1), "duration": None, "src": src_name}
+                            media_url = self._unwrap_x_media_url(m2.group(1))
+                            return {
+                                "kind": "video",
+                                "url": media_url,
+                                "duration": None,
+                                "src": src_name,
+                            }
                     except Exception:
                         continue
             # 3) yt-dlp metadata probe (fallback)
@@ -1196,7 +1232,13 @@ class Router:
                 except Exception:
                     has_formats = False
                 if duration or has_formats:
-                    return {"kind": "video", "url": u, "duration": duration, "src": "ytdlp_probe"}
+                    media_url = self._unwrap_x_media_url(u)
+                    return {
+                        "kind": "video",
+                        "url": media_url,
+                        "duration": duration,
+                        "src": "ytdlp_probe",
+                    }
         # If no video detected, attempt bounded image harvest via syndication [REH]
         images_all: List[str] = []
         poster_detected_global = False
