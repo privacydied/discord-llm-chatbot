@@ -54,6 +54,8 @@ SUPPORTED_PATTERNS = [
     # ---------- Twitter / X (try yt-dlp first, fallback to screenshot if no video) ----------
     r"https?://(?:www\.)?(?:twitter|x)\.com/\w{1,15}/status/\d+",  # All tweet status URLs - fallback logic will handle non-video tweets
     r"https?://(?:www\.)?(?:twitter|x)\.com/i/broadcasts/\w+",  # Twitter Spaces/Live broadcasts
+    # ---------- Twitter CDN direct variants (mp4/HLS from vx/fx/native) ----------
+    r"https?://(?:video|mtc)\.twimg\.com/[^\s?#]+\.(?:mp4|m3u8)(?:\?[^\s#]+)?",
     # ---------- Reddit (common variants) ----------
     r"https?://(?:www|m)\.reddit\.com/r/[\w-]+/comments/[0-9A-Za-z]+(?:/[\w-]+)?/?",
     r"https?://(?:www|m)\.reddit\.com/video/[0-9A-Za-z_-]+/?",

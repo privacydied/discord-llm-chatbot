@@ -16,6 +16,7 @@ Centralized router enforcing sequential multimodal message processing.
 from __future__ import annotations
 
 import asyncio
+import collections
 from .utils.logging import get_logger
 import logging
 import os
@@ -75,6 +76,16 @@ if TYPE_CHECKING:
     from .command_parser import ParsedCommand
 
 logger = get_logger(__name__)
+
+try:
+    from .video_ingest import DEFAULT_SPEEDUP as _DEFAULT_VIDEO_SPEEDUP
+except Exception:
+    _DEFAULT_VIDEO_SPEEDUP = 1.5
+
+X_STT_MIN_TIMEOUT_S = 120.0
+X_STT_PADDING_S = 45.0
+X_STT_MAX_TIMEOUT_S = 900.0
+X_STT_RTF_DEFAULT = 1.6
 
 _router_instance: Optional["Router"] | None = None
 
@@ -271,6 +282,12 @@ class Router:
         # Bind flow methods to the instance, allowing for test overrides
         self._bind_flow_methods()
 
+        # Recent-message dedupe to prevent double processing (embed echoes, relays)
+        self._processed_recent = collections.deque(maxlen=512)
+        self._processed_recent_set = set()
+        # Concurrency guard for dedupe to prevent race when two listeners fire simultaneously [REH]
+        self._processing_locks: dict[int, asyncio.Lock] = {}
+
         self.pdf_processor = PDFProcessor() if PDF_SUPPORT else None
         if self.pdf_processor:
             self.pdf_processor.loop = bot.loop
@@ -363,10 +380,10 @@ class Router:
             self._x_syn_probe_enabled = True
         try:
             self._x_syn_order: str = str(
-                self.config.get("X_SYNDICATION_ORDER", "yt_dlp,api,html")
+                self.config.get("X_SYNDICATION_ORDER", "yt_dlp,html,api")
             ).strip()
         except Exception:
-            self._x_syn_order = "yt_dlp,api,html"
+            self._x_syn_order = "yt_dlp,html,api"
         try:
             self._x_syn_timeout_s: float = float(
                 self.config.get("X_SYNDICATION_TIMEOUT_S", 3.0)
@@ -402,13 +419,13 @@ class Router:
                 "vxtwitter.com",
             }
 
-        # Gate for previously added early X-resolve (default off to avoid behavioral change) [KBT]
+        # Gate for previously added early X-resolve (enabled by default for correctness) [KBT]
         try:
             self._x_early_resolve_enabled: bool = bool(
-                self.config.get("X_EARLY_RESOLVE_ENABLED", False)
+                self.config.get("X_EARLY_RESOLVE_ENABLED", True)
             )
         except Exception:
-            self._x_early_resolve_enabled = False
+            self._x_early_resolve_enabled = True
 
     def _append_note_once(self, text: str, note: str) -> str:
         """Append a parenthetical note once, avoiding duplicates and preserving spacing."""
@@ -529,10 +546,10 @@ class Router:
             self._x_syn_probe_enabled = True
         try:
             self._x_syn_order: str = str(
-                self.config.get("X_SYNDICATION_ORDER", "yt_dlp,api,html")
+                self.config.get("X_SYNDICATION_ORDER", "yt_dlp,html,api")
             ).strip()
         except Exception:
-            self._x_syn_order = "yt_dlp,api,html"
+            self._x_syn_order = "yt_dlp,html,api"
         try:
             self._x_syn_timeout_s: float = float(
                 self.config.get("X_SYNDICATION_TIMEOUT_S", 3.0)
@@ -568,13 +585,13 @@ class Router:
                 "vxtwitter.com",
             }
 
-        # Gate for previously added early X-resolve (default off to avoid behavioral change) [KBT]
+        # Gate for early X-resolve (kept on by default to prioritize direct media probes) [KBT]
         try:
             self._x_early_resolve_enabled: bool = bool(
-                self.config.get("X_EARLY_RESOLVE_ENABLED", False)
+                self.config.get("X_EARLY_RESOLVE_ENABLED", True)
             )
         except Exception:
-            self._x_early_resolve_enabled = False
+            self._x_early_resolve_enabled = True
 
     async def _get_x_api_client(self) -> Optional[XApiClient]:
         """Create or return a cached XApiClient based on config. [CA][IV]"""
@@ -1011,6 +1028,35 @@ class Router:
         except Exception:
             return None
 
+    def _normalize_x_url(self, url: str) -> str:
+        """Normalize X/Twitter URLs to a canonical host/path, dropping trackers. [IV][PA]
+        - Map mobile/twitter/fx/vx subdomains to x.com
+        - Trim trailing slashes
+        - Drop query/fragment
+        """
+        try:
+            p = urlparse(url)
+            host = (p.netloc or "").lower()
+            # Known host aliases to normalize
+            aliases = {
+                "mobile.twitter.com",
+                "www.twitter.com",
+                "twitter.com",
+                "www.x.com",
+                "x.com",
+                "fxtwitter.com",
+                "vxtwitter.com",
+            }
+            if host in aliases:
+                host = "x.com"
+            path = p.path or ""
+            if path.endswith("/"):
+                path = path[:-1]
+            # Rebuild without query/fragment to avoid tracker variance
+            return urlunparse(("https", host, path, "", "", ""))
+        except Exception:
+            return url
+
     async def _resolve_x_media(self, urls: List[str]) -> Dict[str, Any]:
         """Resolve X/Twitter URLs into a minimal media shape.
         - kind: video | image | unknown
@@ -1018,11 +1064,120 @@ class Router:
         - duration: seconds or None
         """
         clean = [self._canonicalize_x_url(u) for u in urls or []]
-        # Probe for video first (first success wins)
+        # Prefer vx/fx-first for playable variants before any image probing
+        http = None
+        try:
+            http = await get_http_client()
+        except Exception:
+            http = None
         for u in clean:
-            meta = await self._yt_dlp_probe(u)
+            status_id = self._parse_twitter_status_id(u)
+            # 1) vx/fx JSON (fast)
+            if status_id and http is not None:
+                for src_name, host in (("vx_json", "api.vxtwitter.com"), ("fx_json", "api.fxtwitter.com")):
+                    try:
+                        self.logger.debug(f"x.resolve_try src={src_name} id={status_id}")
+                    except Exception:
+                        pass
+                    try:
+                        cfg = RequestConfig(
+                            connect_timeout=min(self._x_syn_timeout_s, 3.0),
+                            read_timeout=min(self._x_syn_timeout_s, 3.0),
+                            total_timeout=min(self._x_syn_timeout_s, 3.0),
+                            max_retries=0,
+                        )
+                        api_url = f"https://{host}/status/{status_id}"
+                        resp = await http.get(api_url, config=cfg)
+                        if getattr(resp, "status_code", 500) != 200:
+                            continue
+                        try:
+                            data = resp.json()
+                        except Exception:
+                            try:
+                                data = json.loads(resp.text)
+                            except Exception:
+                                data = {}
+                        # Extract playable variants generically
+                        variants = []
+                        duration_s = None
+                        try:
+                            tweet = (data.get("tweet") or data.get("status")) or {}
+                        except Exception:
+                            tweet = {}
+                        media = {}
+                        try:
+                            media = tweet.get("media") or data.get("media") or {}
+                        except Exception:
+                            media = {}
+                        # Common shapes: media.videos[*].variants or media.variants[*]
+                        try:
+                            vids = media.get("videos") or []
+                            for v in vids:
+                                for var in v.get("variants", []) or []:
+                                    variants.append(var)
+                                if not variants and v.get("url"):
+                                    variants.append({"url": v.get("url"), "content_type": v.get("content_type", "")})
+                                if not duration_s:
+                                    dms = v.get("duration_ms") or v.get("duration")
+                                    if isinstance(dms, (int, float)):
+                                        duration_s = float(dms) / (1000.0 if dms > 1000 else 1.0)
+                        except Exception:
+                            pass
+                        try:
+                            for var in media.get("variants", []) or []:
+                                variants.append(var)
+                        except Exception:
+                            pass
+                        # Heuristic: accept mp4/hls/dash
+                        pick = None
+                        if variants:
+                            def _score(v):
+                                ct = str(v.get("content_type", "")).lower()
+                                br = v.get("bitrate") or v.get("bit_rate") or 0
+                                urlv = str(v.get("url", ""))
+                                # Prefer mp4, then hls/dash; higher bitrate first
+                                fmt_score = 2 if "mp4" in ct or urlv.endswith(".mp4") else (1 if "mpegurl" in ct or "m3u8" in urlv or "dash" in ct else 0)
+                                return (fmt_score, int(br) if isinstance(br, (int, float)) else 0)
+                            try:
+                                pick = sorted(variants, key=_score, reverse=True)[0]
+                            except Exception:
+                                pick = variants[0]
+                        if pick and pick.get("url"):
+                            return {"kind": "video", "url": pick.get("url"), "duration": duration_s, "src": src_name}
+                    except Exception:
+                        continue
+            # 2) vx/fx HTML (fast)
+            if status_id and http is not None:
+                for src_name, host in (("vx_html", "vxtwitter.com"), ("fx_html", "fxtwitter.com")):
+                    try:
+                        self.logger.debug(f"x.resolve_try src={src_name} id={status_id}")
+                    except Exception:
+                        pass
+                    try:
+                        cfg = RequestConfig(
+                            connect_timeout=min(self._x_syn_timeout_s, 3.0),
+                            read_timeout=min(self._x_syn_timeout_s, 3.0),
+                            total_timeout=min(self._x_syn_timeout_s, 3.0),
+                            max_retries=0,
+                        )
+                        html_url = f"https://{host}/i/status/{status_id}"
+                        resp = await http.get(html_url, config=cfg)
+                        if getattr(resp, "status_code", 500) != 200 or not resp.text:
+                            continue
+                        text = resp.text
+                        # Look for direct video URLs (mp4/hls)
+                        m = re.search(r"https://video\\.twimg\\.com/[^'\"\s]+", text, re.IGNORECASE)
+                        if m:
+                            return {"kind": "video", "url": m.group(0), "duration": None, "src": src_name}
+                        # Meta tags
+                        m2 = re.search(r'<meta[^>]+property=["\']og:video["\'][^>]+content=["\']([^"\']+)["\']', text, re.IGNORECASE)
+                        if m2:
+                            return {"kind": "video", "url": m2.group(1), "duration": None, "src": src_name}
+                    except Exception:
+                        continue
+            # 3) yt-dlp metadata probe (fallback)
+            meta = await self._yt_dlp_probe(u, timeout_s=min(getattr(self, "_x_syn_timeout_s", 3.0), 6.0))
             if meta:
-                # Heuristics: duration or any format with audio/video codec
                 duration = None
                 try:
                     d = meta.get("duration")
@@ -1041,9 +1196,10 @@ class Router:
                 except Exception:
                     has_formats = False
                 if duration or has_formats:
-                    return {"kind": "video", "url": u, "duration": duration}
+                    return {"kind": "video", "url": u, "duration": duration, "src": "ytdlp_probe"}
         # If no video detected, attempt bounded image harvest via syndication [REH]
         images_all: List[str] = []
+        poster_detected_global = False
         for u in clean:
             status_id = self._parse_twitter_status_id(u)
             if not status_id:
@@ -1072,11 +1228,42 @@ class Router:
                     imgs = []
                 except Exception:
                     imgs = []
+            # Classify posters vs real photos and surface a video hint [IV]
+            poster_prefixes = (
+                "/amplify_video_thumb/",
+                "/ext_tw_video_thumb/",
+                "/tweet_video_thumb/",
+            )
             for im in imgs:
+                try:
+                    pu = urlparse(im)
+                    host = (pu.netloc or "").lower()
+                    path = (pu.path or "").lower()
+                except Exception:
+                    host = ""; path = ""
+                # Detect video poster thumbs from pbs
+                if host.endswith("pbs.twimg.com") and any(pref in path for pref in poster_prefixes):
+                    poster_detected_global = True
+                    # Log detection once per candidate
+                    try:
+                        matched = next((pref for pref in poster_prefixes if pref in path), "poster_thumb")
+                        self.logger.info(
+                            "x.image_probe.video_poster_detected",
+                            extra={
+                                "event": "x.image_probe.video_poster_detected",
+                                "detail": {"domain": host, "path": matched},
+                            },
+                        )
+                    except Exception:
+                        pass
+                    continue  # Do not count as photo
                 if im not in images_all:
                     images_all.append(im)
-            if images_all:
+            # If we have a video poster hint, we can stop probing further
+            if poster_detected_global or images_all:
                 break
+        if poster_detected_global:
+            return {"kind": "video", "src": "pbs_thumb"}
         if images_all:
             try:
                 self.logger.info(
@@ -1089,7 +1276,7 @@ class Router:
                 )
             except Exception:
                 pass
-            return {"kind": "image", "images": images_all}
+            return {"kind": "image", "images": images_all, "src": "pbs_media"}
 
         return {"kind": "unknown", "reason": "no-formats"}
 
@@ -1271,6 +1458,31 @@ class Router:
                             continue
                         if not _allowed(u):
                             continue
+                        # Hard blocklist for X video poster thumbnails
+                        try:
+                            pu = urlparse(u)
+                            host = (pu.netloc or "").lower()
+                            path = (pu.path or "").lower()
+                        except Exception:
+                            host = ""; path = ""
+                        poster_prefixes = (
+                            "/amplify_video_thumb/",
+                            "/ext_tw_video_thumb/",
+                            "/tweet_video_thumb/",
+                        )
+                        if host.endswith("pbs.twimg.com") and any(pref in path for pref in poster_prefixes):
+                            try:
+                                matched = next((pref for pref in poster_prefixes if pref in path), "poster_thumb")
+                                self.logger.info(
+                                    "x.image_probe.video_poster_detected",
+                                    extra={
+                                        "event": "x.image_probe.video_poster_detected",
+                                        "detail": {"domain": host, "path": matched},
+                                    },
+                                )
+                            except Exception:
+                                pass
+                            continue  # do not accept poster as photo
                         if u not in uniq and await _is_image(u):
                             uniq.append(u)
                     if uniq:
@@ -1869,11 +2081,12 @@ class Router:
         except Exception as e:
             self.logger.error(f"Scope resolution failed: {e}", exc_info=True)
             return "lone", None, ""
+
     async def dispatch_message(self, message: Message) -> Optional[BotAction]:
         """Process a message and ensure exactly one response is generated (1 IN > 1 OUT rule)."""
-        self.logger.info(f"🔄 === ROUTER DISPATCH STARTED: MSG {message.id} ====")
+        self.logger.info(f" === ROUTER DISPATCH STARTED: MSG {message.id} ====")
         try:
-            # 1. Quick pre-filter: Only parse commands for messages that start with '!' to avoid unnecessary parsing
+            # 1. Quick pre-filter: Only parse commands for messages that start with '!'
             content = message.content.strip()
 
             # Remove bot mention to check for command pattern
@@ -1885,6 +2098,63 @@ class Router:
                 router_debug = bool(self.config.get("ROUTER_DEBUG", False))
             except Exception:
                 router_debug = False
+
+            # Listener-stage skips: self/bots and duplicates [IV]
+            try:
+                if getattr(message.author, "bot", False) or (
+                    hasattr(self.bot, "user") and message.author.id == self.bot.user.id
+                ):
+                    self.logger.info(
+                        "gate.skip",
+                        extra={
+                            "event": "gate.skip",
+                            "reason": "bot_or_self",
+                            "msg_id": getattr(message, "id", None),
+                        },
+                    )
+                    return None
+            except Exception:
+                pass
+
+            # Concurrency-safe dedupe [REH]
+            try:
+                lock = self._processing_locks.setdefault(message.id, asyncio.Lock())
+            except Exception:
+                lock = asyncio.Lock()
+            async with lock:
+                if getattr(message, "id", None) in self._processed_recent_set:
+                    self.logger.info(
+                        "gate.skip",
+                        extra={
+                            "event": "gate.skip",
+                            "reason": "duplicate",
+                            "msg_id": getattr(message, "id", None),
+                        },
+                    )
+                    return None
+
+                # Mark as processed (dedupe window)
+                try:
+                    if len(self._processed_recent) == self._processed_recent.maxlen:
+                        old_id = self._processed_recent.popleft()
+                        self._processed_recent_set.discard(old_id)
+                    self._processed_recent.append(message.id)
+                    self._processed_recent_set.add(message.id)
+                except Exception:
+                    pass
+
+            # Ingest started marker (single-shot)
+            try:
+                self.logger.info(
+                    "ingest.dispatch_started",
+                    extra={
+                        "event": "ingest.dispatch_started",
+                        "msg_id": message.id,
+                        "channel_id": getattr(getattr(message, "channel", None), "id", None),
+                    },
+                )
+            except Exception:
+                pass
 
             # 1b. Compatibility fast-path for legacy tests: attachments + empty content
             # Run this BEFORE gating and typing() to avoid MagicMock issues in tests
@@ -1988,9 +2258,18 @@ class Router:
                     except Exception:
                         pass
                 else:
-                    self.logger.debug(
-                        f"Ignoring message {message.id} in guild {message.guild.id if message.guild else 'N/A'}: Not addressed."
-                    )
+                    # Not addressed → block once at listener stage semantics
+                    try:
+                        self.logger.info(
+                            "gate.block",
+                            extra={
+                                "event": "gate.block",
+                                "reason": "not_addressed",
+                                "msg_id": message.id,
+                            },
+                        )
+                    except Exception:
+                        pass
                     return None
 
             # --- Start of processing for DMs, Mentions, and Replies ---
@@ -2049,6 +2328,18 @@ class Router:
                         self.logger.info(
                             f"ROUTER_DEBUG | path=t2i reason=vision_intent_detected msg_id={message.id}"
                         )
+                    # Decide final route here for vision
+                    try:
+                        self.logger.info(
+                            "route.final",
+                            extra={
+                                "event": "route.final",
+                                "detail": {"kind": "vision"},
+                                "msg_id": message.id,
+                            },
+                        )
+                    except Exception:
+                        pass
                     return prechecked
 
                 # 5.5. Deterministic X/Twitter media routing (optional early path; default off)
@@ -2067,13 +2358,49 @@ class Router:
                                 "detail": {"count": len(x_urls), "layer": layer},
                             },
                         )
+                        # Normalize URLs first (x.com/twitter.com/mobile variants)
                         try:
-                            resolved = await self._resolve_x_media(x_urls)
+                            norm_urls = []
+                            for u in x_urls:
+                                try:
+                                    nu = self._normalize_x_url(u)
+                                    norm_urls.append(nu)
+                                except Exception:
+                                    norm_urls.append(u)
+                        except Exception:
+                            norm_urls = x_urls
+
+                        # Time-box detection step
+                        t0 = time.perf_counter()
+                        try:
+                            resolved = await asyncio.wait_for(
+                                self._resolve_x_media(norm_urls), timeout=self._x_syn_timeout_s
+                            )
                         except Exception as e:
                             resolved = {"kind": "unknown", "reason": f"exception:{e}"}
+                        dt_ms = int((time.perf_counter() - t0) * 1000)
                         kind = (resolved or {}).get("kind", "unknown")
+                        # Single-shot detection marker
+                        try:
+                            src = (resolved or {}).get("src", "unknown")
+                            detail = {"kind": kind, "src": src, "ms": dt_ms}
+                            if kind == "image":
+                                try:
+                                    detail["count"] = len((resolved or {}).get("images") or [])
+                                except Exception:
+                                    pass
+                            self.logger.info(
+                                "x.detect",
+                                extra={
+                                    "event": "x.detect",
+                                    "detail": detail,
+                                    "msg_id": message.id,
+                                },
+                            )
+                        except Exception:
+                            pass
                         if kind == "video":
-                            url_for_stt = resolved.get("url") or x_urls[0]
+                            url_for_stt = resolved.get("url") or norm_urls[0]
                             dur = resolved.get("duration")
                             host = None
                             try:
@@ -2083,59 +2410,224 @@ class Router:
                             self.logger.info(
                                 f"media.resolve: result=video url={host or url_for_stt} dur={int(dur) if isinstance(dur, (int, float)) else 'NA'}s"
                             )
+                            # URL ok marker
                             try:
                                 self.logger.info(
-                                    "route_selected",
+                                    "x.video.url_ok",
                                     extra={
-                                        "subsys": "route",
-                                        "event": "route_selected",
-                                        "detail": {"kind": "video"},
+                                        "event": "x.video.url_ok",
+                                        "detail": {"src": (resolved.get("src") or "ytdlp"), "ms": dt_ms},
+                                        "msg_id": message.id,
                                     },
                                 )
                             except Exception:
                                 pass
-                            # Always prefer STT for X/Twitter video
                             try:
-                                stt_res = await hear_infer_from_url(url_for_stt)
+                                # STT with bounded budget
+                                timeout_override_raw = None
+                                try:
+                                    timeout_override_raw = self.config.get("X_STT_TIMEOUT_S")
+                                except Exception:
+                                    timeout_override_raw = None
+                                stt_timeout: Optional[float]
+                                stt_timeout = None
+                                if timeout_override_raw not in (None, ""):
+                                    try:
+                                        stt_timeout = float(timeout_override_raw)
+                                    except Exception:
+                                        stt_timeout = None
+                                if stt_timeout is None or stt_timeout <= 0:
+                                    try:
+                                        stt_rtf = float(
+                                            self.config.get(
+                                                "X_STT_TIMEOUT_RTF", X_STT_RTF_DEFAULT
+                                            )
+                                        )
+                                    except Exception:
+                                        stt_rtf = X_STT_RTF_DEFAULT
+                                    try:
+                                        speedup_cfg = float(
+                                            self.config.get("VIDEO_SPEEDUP", _DEFAULT_VIDEO_SPEEDUP)
+                                        )
+                                    except Exception:
+                                        speedup_cfg = _DEFAULT_VIDEO_SPEEDUP
+                                    safe_speedup = speedup_cfg if speedup_cfg > 0 else _DEFAULT_VIDEO_SPEEDUP
+                                    effective_duration = 0.0
+                                    if isinstance(dur, (int, float)):
+                                        effective_duration = max(float(dur), 0.0) / max(safe_speedup, 0.1)
+                                    computed = max(
+                                        X_STT_MIN_TIMEOUT_S,
+                                        effective_duration * stt_rtf + X_STT_PADDING_S,
+                                    )
+                                    stt_timeout = min(computed, X_STT_MAX_TIMEOUT_S)
+                                if stt_timeout is None or stt_timeout <= 0:
+                                    stt_timeout = X_STT_MIN_TIMEOUT_S
+                                # stt.start marker
+                                try:
+                                    mm = int((dur or 0) // 60) if isinstance(dur, (int, float)) else 0
+                                    ss = int((dur or 0) % 60) if isinstance(dur, (int, float)) else 0
+                                    self.logger.info(
+                                        "stt.start",
+                                        extra={
+                                            "event": "stt.start",
+                                            "detail": {
+                                                "dur": f"{mm:02d}:{ss:02d}",
+                                                "timeout_s": int(stt_timeout),
+                                            },
+                                            "msg_id": message.id,
+                                        },
+                                    )
+                                except Exception:
+                                    pass
+                                stt_t0 = time.perf_counter()
+                                stt_res = await asyncio.wait_for(
+                                    hear_infer_from_url(url_for_stt), timeout=stt_timeout
+                                )
                                 formatted = self._format_x_tweet_with_transcription(
                                     base_text=None, url=url_for_stt, stt_res=stt_res
                                 )
+                                # stt.ok marker
+                                try:
+                                    el_ms = int((time.perf_counter() - stt_t0) * 1000)
+                                    chars = len((stt_res or {}).get("transcription", ""))
+                                    self.logger.info(
+                                        "stt.ok",
+                                        extra={
+                                            "event": "stt.ok",
+                                            "detail": {
+                                                "ms": el_ms,
+                                                "chars": chars,
+                                                "timeout_s": int(stt_timeout),
+                                            },
+                                            "msg_id": message.id,
+                                        },
+                                    )
+                                except Exception:
+                                    pass
                                 self.logger.info(
                                     f"🎯 Route: stt_from_x_video | msg_id={message.id}"
                                 )
+                                try:
+                                    self.logger.info(
+                                        "route.final",
+                                        extra={
+                                            "event": "route.final",
+                                            "detail": {"kind": "video"},
+                                            "msg_id": message.id,
+                                        },
+                                    )
+                                except Exception:
+                                    pass
                                 return await self._flow_process_text(
                                     content=formatted,
                                     context=context_str,
                                     message=message,
                                 )
-                            except Exception as e:
-                                em = str(e).lower()
-                                if any(
-                                    p in em
-                                    for p in (
-                                        "no video",
-                                        "no audio",
-                                        "no media",
-                                        "not a video",
-                                        "no video could be found",
-                                    )
-                                ):
+                            except asyncio.TimeoutError:
+                                # Timeout on STT → return early with user-facing failure message
+                                try:
                                     self.logger.info(
-                                        "media.resolve: result=unknown reason=no-formats | falling back"
+                                        "stt.fail",
+                                        extra={
+                                            "event": "stt.fail",
+                                            "detail": {"reason": "timeout"},
+                                            "msg_id": message.id,
+                                        },
                                     )
-                                else:
-                                    self.logger.debug(
-                                        f"❌ STT from X failed | {e} | falling back"
+                                except Exception:
+                                    pass
+                                try:
+                                    self.logger.info(
+                                        "route.final",
+                                        extra={
+                                            "event": "route.final",
+                                            "detail": {"kind": "video_stt_timeout"},
+                                            "msg_id": message.id,
+                                        },
                                     )
-                                # Fall back to existing logic (syndication/VL/text)
-                                return await self._handle_x_twitter_fallback(
-                                    x_urls[0], message, context_str
+                                except Exception:
+                                    pass
+                                return BotAction(
+                                    content=(
+                                        "⚠️ I couldn't transcribe this video before timing out. "
+                                        "Please try again or use a shorter clip."
+                                    ),
+                                    error=True,
+                                )
+                            except Exception as e:
+                                # On any video failure, degrade to text-only (no VL) [REH]
+                                # Classify STT failure reason for clarity
+                                reason = "extract_error"
+                                try:
+                                    es = str(e).lower()
+                                    if "403" in es or "forbidden" in es:
+                                        reason = "403"
+                                    elif "format" in es or "no video formats" in es or "no such format" in es:
+                                        reason = "no_formats"
+                                    elif "timeout" in es:
+                                        reason = "timeout"
+                                    elif "whisper" in es:
+                                        reason = "whisper_error"
+                                except Exception:
+                                    pass
+                                try:
+                                    self.logger.info(
+                                        "x.video.url_fail",
+                                        extra={
+                                            "event": "x.video.url_fail",
+                                            "detail": {"reason": str(e)[:200]},
+                                            "msg_id": message.id,
+                                        },
+                                    )
+                                except Exception:
+                                    pass
+                                try:
+                                    self.logger.info(
+                                        "stt.fail",
+                                        extra={
+                                            "event": "stt.fail",
+                                            "detail": {"reason": reason},
+                                            "msg_id": message.id,
+                                        },
+                                    )
+                                except Exception:
+                                    pass
+                                try:
+                                    self.logger.info(
+                                        "route.final",
+                                        extra={
+                                            "event": "route.final",
+                                            "detail": {"kind": "video_stt_error"},
+                                            "msg_id": message.id,
+                                        },
+                                    )
+                                except Exception:
+                                    pass
+                                return BotAction(
+                                    content=(
+                                        "⚠️ I couldn't transcribe this video. "
+                                        "Please try again later or share a shorter clip."
+                                    ),
+                                    error=True,
                                 )
                         elif kind == "image":
                             images = resolved.get("images") or []
                             self.logger.info(
                                 f"media.resolve: result=image count={len(images)}"
                             )
+                            # photos.ok marker
+                            try:
+                                domain = "pbs.twimg.com" if any("pbs.twimg.com" in (i or "") for i in images) else "unknown"
+                                self.logger.info(
+                                    "x.photos.ok",
+                                    extra={
+                                        "event": "x.photos.ok",
+                                        "detail": {"count": len(images), "domain": domain},
+                                        "msg_id": message.id,
+                                    },
+                                )
+                            except Exception:
+                                pass
                             try:
                                 self.logger.info(
                                     "route_selected",
@@ -2163,6 +2655,17 @@ class Router:
                             self.logger.info(
                                 f"🎯 Route: vl_from_x_images | msg_id={message.id}"
                             )
+                            try:
+                                self.logger.info(
+                                    "route.final",
+                                    extra={
+                                        "event": "route.final",
+                                        "detail": {"kind": "photos"},
+                                        "msg_id": message.id,
+                                    },
+                                )
+                            except Exception:
+                                pass
                             return await self._flow_process_text(
                                 content=clean_content,
                                 context=context_str,
@@ -2254,6 +2757,12 @@ class Router:
                 content="⚠️ An unexpected error occurred while processing your message.",
                 error=True,
             )
+        finally:
+            # Remove the per-message lock to avoid unbounded growth [RM]
+            try:
+                self._processing_locks.pop(getattr(message, "id", None), None)
+            except Exception:
+                pass
 
     def compute_streaming_eligibility(self, message: Message) -> Dict[str, Any]:
         """Preflight: determine if streaming status cards should be enabled for this message.
@@ -3915,14 +4424,14 @@ class Router:
                 except Exception:
                     pass
 
-            # API-first for Twitter/X posts [CA][SFT]
+            # Syndication-first for Twitter/X posts (API as last resort) [CA][SFT]
             if self._is_twitter_url(url):
                 cfg = self.config
                 require_api = bool(cfg.get("X_API_REQUIRE_API_FOR_TWITTER", False))
                 allow_fallback_5xx = bool(cfg.get("X_API_ALLOW_FALLBACK_ON_5XX", True))
                 syndication_enabled = bool(cfg.get("X_SYNDICATION_ENABLED", True))
-                # Keep API-first by default; can opt-in to syndication-first
-                syndication_first = bool(cfg.get("X_SYNDICATION_FIRST", False))
+                # Default to syndication-first unless explicitly disabled
+                syndication_first = bool(cfg.get("X_SYNDICATION_FIRST", True))
                 tweet_id = XApiClient.extract_tweet_id(str(url))
                 x_client = await self._get_x_api_client()
 
