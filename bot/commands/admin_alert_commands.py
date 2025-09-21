@@ -28,8 +28,9 @@ class AlertSessionStatus(Enum):
 
 @dataclass
 class AlertDestination:
-    channel_id: int
-    channel_name: str
+    guild_id: Optional[int]
+    channel_id: Optional[int]
+    channel_name: Optional[str]
     guild_name: Optional[str] = None
     permissions_valid: bool = True
     permission_issues: List[str] = field(default_factory=list)
@@ -229,7 +230,7 @@ class AdminAlertManager:
         self, invoking_user_id: int
     ) -> List[AlertDestination]:
         """Cache-based, permission-aware discovery of available guilds/channels with strict bounds."""
-        destinations = []
+        destinations: List[AlertDestination] = []
         guilds_shown = 0
         channels_shown = 0
         max_guilds = 10  # Hard limit per spec
@@ -263,15 +264,16 @@ class AdminAlertManager:
                         channels_shown += 1
 
                 if eligible_channels:
-                    destinations.append(
-                        AlertDestination(
-                            guild_id=guild.id,
-                            guild_name=guild.name,
-                            channel_id=None,
-                            channel_name=None,
-                        )
-                    )
                     guilds_shown += 1
+                    for channel in eligible_channels:
+                        destinations.append(
+                            AlertDestination(
+                                guild_id=guild.id,
+                                channel_id=channel.id,
+                                channel_name=channel.name,
+                                guild_name=guild.name,
+                            )
+                        )
 
             # Log discovery results per spec
             total_guilds = len(self.bot.guilds)
@@ -309,7 +311,8 @@ class AdminAlertManager:
             dest_text = []
             for dest in session.destinations[:5]:
                 status_emoji = "✅" if dest.permissions_valid else "⚠️"
-                dest_text.append(f"{status_emoji} #{dest.channel_name}")
+                channel_display = dest.channel_name or "unknown-channel"
+                dest_text.append(f"{status_emoji} #{channel_display}")
 
             if len(session.destinations) > 5:
                 dest_text.append(f"... and {len(session.destinations) - 5} more")
@@ -355,14 +358,27 @@ class AdminAlertManager:
         return self._validate_embed_limits(embed)
 
     async def get_accessible_channels(self) -> List[discord.TextChannel]:
-        accessible_channels = []
+        accessible_channels: List[discord.TextChannel] = []
 
         for guild in self.bot.guilds:
-            for channel in guild.channels:
-                if isinstance(channel, discord.TextChannel):
-                    perms = channel.permissions_for(guild.me)
-                    if perms.send_messages and perms.read_messages:
-                        accessible_channels.append(channel)
+            member = getattr(guild, "me", None) or guild.get_member(self.bot.user.id)
+            if member is None:
+                continue
+
+            for channel in guild.text_channels:
+                perms = channel.permissions_for(member)
+                if perms.send_messages and perms.read_messages:
+                    accessible_channels.append(channel)
+
+        # Provide a stable ordering so the numbered list matches follow-up selections
+        accessible_channels.sort(
+            key=lambda channel: (
+                channel.guild.name.lower(),
+                channel.guild.id,
+                channel.position,
+                channel.name.lower(),
+            )
+        )
 
         return accessible_channels
 
@@ -578,8 +594,9 @@ class AdminAlertCommands(commands.Cog):
                         ch = channels[idx - 1]
                         selected.append(
                             AlertDestination(
+                                guild_id=ch.guild.id,
                                 channel_id=ch.id,
-                                channel_name=f"#{ch.name}",
+                                channel_name=ch.name,
                                 guild_name=ch.guild.name,
                             )
                         )
@@ -604,7 +621,11 @@ class AdminAlertCommands(commands.Cog):
                     )
 
                 names = ", ".join(
-                    [f"{d.channel_name} ({d.guild_name})" for d in selected]
+                    [
+                        f"#{d.channel_name or 'unknown-channel'} "
+                        f"({d.guild_name or 'Unknown Guild'})"
+                        for d in selected
+                    ]
                 )
                 await message.channel.send(
                     f"✅ Destinations set: {names}\n\nNow send your alert content, and optionally include `TITLE:` and `DESC:` lines, or react with ✏️."
@@ -706,6 +727,78 @@ class AdminAlertCommands(commands.Cog):
         except Exception as e:
             self.logger.error(f"❌ Failed to update composer embed: {e}")
 
+    async def _handle_channel_selection(self, reaction, user, session):
+        """Present the admin with a numbered list of accessible channels."""
+        session.current_step = "select_channels"
+
+        channels = await self.alert_manager.get_accessible_channels()
+        if not channels:
+            await user.send(
+                "❌ I couldn't find any text channels I can send messages to. "
+                "Check the bot permissions and try again."
+            )
+            return
+
+        max_count = min(20, len(channels))
+        lines = []
+        for idx, channel in enumerate(channels[:max_count], start=1):
+            guild_name = channel.guild.name if channel.guild else "Unknown Guild"
+            lines.append(
+                f"`{idx}` • {channel.mention} ({guild_name})"
+            )
+
+        embed = discord.Embed(
+            title="📋 Select Alert Destinations",
+            description=(
+                "Reply with the numbers of the channels you want to alert. "
+                "Use commas or spaces, for example `1,3,5`."
+            ),
+            color=0x5865F2,
+        )
+
+        embed.add_field(
+            name=(
+                f"Available Channels (showing {max_count} of {len(channels)})"
+                if len(channels) > max_count
+                else "Available Channels"
+            ),
+            value="\n".join(lines),
+            inline=False,
+        )
+
+        if len(channels) > max_count:
+            embed.add_field(
+                name="ℹ️ Tip",
+                value=(
+                    "Only the first 20 channels are shown. Adjust the bot's "
+                    "permissions to narrow the list if needed."
+                ),
+                inline=False,
+            )
+
+        embed.set_footer(
+            text="You can react with ❌ at any time to cancel the alert session."
+        )
+
+        await user.send(embed=embed)
+
+        try:
+            composer_embed = await self.alert_manager.build_composer_embed(session)
+            composer_embed = self.alert_manager._validate_embed_limits(composer_embed)
+            await reaction.message.edit(embed=composer_embed, view=None)
+        except discord.HTTPException as e:
+            self.logger.error(
+                f"❌ Failed to update composer embed during channel selection: "
+                f"status={e.status}, code={e.code}"
+            )
+            raise
+
+        try:
+            await reaction.remove(user)
+        except discord.HTTPException:
+            # Ignore failures (e.g. missing permissions); user can still remove manually
+            pass
+
     async def _handle_content_composition(self, reaction, user, session):
         session.current_step = "compose_content"
 
@@ -753,7 +846,10 @@ class AdminAlertCommands(commands.Cog):
             color=0x5865F2,
         )
 
-        dest_list = [f"• #{dest.channel_name}" for dest in session.destinations[:10]]
+        dest_list = [
+            f"• #{dest.channel_name or 'unknown-channel'}"
+            for dest in session.destinations[:10]
+        ]
         if len(session.destinations) > 10:
             dest_list.append(f"• ... and {len(session.destinations) - 10} more")
 
