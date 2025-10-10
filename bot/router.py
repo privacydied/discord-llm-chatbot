@@ -1857,10 +1857,59 @@ class Router:
             # This is a simplification. For a robust solution, you might need to fetch the message
             # if it's not in the cache, which is an async operation.
             # Here we assume a simple check is enough, or the logic is handled elsewhere.
-            ref_msg = message.reference.resolved
+            ref_msg = getattr(message.reference, "resolved", None) or getattr(
+                message.reference, "cached_message", None
+            )
             if ref_msg and ref_msg.author.id == self.bot.user.id:
                 return True
         return False
+
+    def _mentions_bot(self, message: Message) -> bool:
+        """Return True if the message explicitly mentions this bot."""
+        try:
+            mentions = getattr(message, "mentions", None) or []
+            bot_id = getattr(self.bot.user, "id", None)
+            if bot_id is None:
+                return False
+            for user in mentions:
+                if getattr(user, "id", None) == bot_id:
+                    return True
+        except Exception:
+            pass
+        return False
+
+    def _update_dispatch_metadata(
+        self,
+        message: Message,
+        *,
+        context: str,
+        mention_detected: bool,
+        reply_to_bot: bool,
+    ) -> None:
+        """Attach dispatch metadata used downstream for reply targeting and logging."""
+        trigger = message
+        channel = getattr(trigger, "channel", None) or getattr(message, "channel", None)
+        is_thread = _is_thread_channel(channel)
+        parent_channel_id = getattr(channel, "parent_id", None) if is_thread else None
+        channel_id = parent_channel_id or getattr(channel, "id", None)
+        thread_id = getattr(channel, "id", None) if is_thread else None
+
+        meta = getattr(message, "_llm_dispatch", {}) or {}
+        meta.update(
+            {
+                "context": context,
+                "mention_detected": mention_detected,
+                "reply_to_bot": reply_to_bot,
+                "trigger_message": trigger,
+                "trigger_message_id": getattr(trigger, "id", None),
+                "reply_in_thread": is_thread,
+                "channel_id": channel_id,
+                "thread_id": thread_id,
+                "reply_target_ok": trigger is not None,
+            }
+        )
+        setattr(message, "_llm_dispatch", meta)
+        setattr(message, "_llm_force_reply_target", trigger)
 
     def _should_process_message(self, message: Message) -> bool:
         """Single source-of-truth gate: decide if this message should be processed.
@@ -1873,24 +1922,17 @@ class Router:
             ["dm", "mention", "reply", "bot_threads", "owner", "command_prefix"],
         )
 
-        # Master switch: if disabled, allow everything (legacy behavior)
-        if not cfg.get("BOT_SPEAKS_ONLY_WHEN_SPOKEN_TO", True):
-            self.logger.debug(
-                f"gate.allow | reason=master_switch_off msg_id={message.id}",
-                extra={
-                    "event": "gate.allow",
-                    "reason": "master_switch_off",
-                    "msg_id": message.id,
-                },
-            )
-            self._metric_inc("gate.allowed", {"reason": "master_switch_off"})
-            return True
-
         content = (message.content or "").strip()
         is_dm = isinstance(message.channel, DMChannel)
-        is_mentioned = (
-            self.bot.user in message.mentions if hasattr(message, "mentions") else False
+        context = "dm" if is_dm else "guild"
+
+        require_mention_in_guilds = cfg.get("REQUIRE_MENTION_IN_GUILDS", True)
+        allow_reply_without_mention = cfg.get(
+            "ALLOW_REPLY_TO_BOT_WITHOUT_MENTION", True
         )
+        dm_require_mention = cfg.get("DM_REQUIRE_MENTION", False)
+
+        mention_detected = self._mentions_bot(message)
         is_reply = self._is_reply_to_bot(message)
         is_owner = (
             message.author.id in owners if getattr(message, "author", None) else False
@@ -1899,26 +1941,174 @@ class Router:
         in_bot_thread = False
         try:
             if isinstance(message.channel, discord.Thread):
-                # Cheap ownership check only; do not fetch history here.
                 in_bot_thread = (
                     getattr(message.channel, "owner_id", None) == self.bot.user.id
                 )
         except Exception:
             in_bot_thread = False
 
-        # Prefix command detection (strip leading mention if present)
         command_prefix = cfg.get("COMMAND_PREFIX", "!")
         if content:
-            mention_pattern = rf"^<@!?{self.bot.user.id}>\s*"
-            clean_content = re.sub(mention_pattern, "", content)
+            mention_prefix_pattern = rf"^<@!?{self.bot.user.id}>\s*"
+            try:
+                clean_content = re.sub(mention_prefix_pattern, "", content)
+            except Exception:
+                clean_content = content
         else:
             clean_content = ""
         has_prefix = (
             bool(clean_content.startswith(command_prefix)) if clean_content else False
         )
 
-        # Evaluate triggers
+        # Master switch: if disabled, allow everything (legacy behavior)
+        if not cfg.get("BOT_SPEAKS_ONLY_WHEN_SPOKEN_TO", True):
+            self._update_dispatch_metadata(
+                message,
+                context=context,
+                mention_detected=mention_detected,
+                reply_to_bot=is_reply,
+            )
+            self.logger.debug(
+                f"gate.allow | reason=master_switch_off msg_id={message.id}",
+                extra={
+                    "event": "gate.allow",
+                    "reason": "master_switch_off",
+                    "msg_id": message.id,
+                    "context": context,
+                    "mention_detected": mention_detected,
+                    "reply_to_bot": is_reply,
+                },
+            )
+            self._metric_inc("gate.allowed", {"reason": "master_switch_off"})
+            return True
+
+        # DM handling (mention optional by default)
+        if is_dm:
+            if dm_require_mention and not mention_detected:
+                if allow_reply_without_mention and is_reply:
+                    self._update_dispatch_metadata(
+                        message,
+                        context=context,
+                        mention_detected=mention_detected,
+                        reply_to_bot=is_reply,
+                    )
+                    self.logger.debug(
+                        f"gate.allow | reason=dm_reply_without_mention msg_id={message.id}",
+                        extra={
+                            "event": "gate.allow",
+                            "reason": "dm_reply_without_mention",
+                            "msg_id": message.id,
+                            "context": context,
+                            "mention_detected": mention_detected,
+                            "reply_to_bot": is_reply,
+                        },
+                    )
+                    self._metric_inc(
+                        "gate.allowed", {"reason": "dm_reply_without_mention"}
+                    )
+                    return True
+
+                self.logger.info(
+                    f"gate.block | reason=dm_mention_required msg_id={message.id}",
+                    extra={
+                        "event": "gate.block",
+                        "reason": "dm_mention_required",
+                        "msg_id": message.id,
+                        "context": context,
+                        "mention_detected": mention_detected,
+                        "reply_to_bot": is_reply,
+                    },
+                )
+                self._metric_inc("gate.blocked", {"reason": "dm_mention_required"})
+                return False
+
+            self._update_dispatch_metadata(
+                message,
+                context=context,
+                mention_detected=mention_detected,
+                reply_to_bot=is_reply,
+            )
+            self.logger.debug(
+                f"gate.allow | reason=dm msg_id={message.id}",
+                extra={
+                    "event": "gate.allow",
+                    "reason": "dm",
+                    "msg_id": message.id,
+                    "context": context,
+                    "mention_detected": mention_detected,
+                    "reply_to_bot": is_reply,
+                },
+            )
+            self._metric_inc("gate.allowed", {"reason": "dm"})
+            return True
+
+        # Guild handling with mention requirement
+        if require_mention_in_guilds:
+            if mention_detected:
+                self._update_dispatch_metadata(
+                    message,
+                    context=context,
+                    mention_detected=True,
+                    reply_to_bot=is_reply,
+                )
+                self.logger.debug(
+                    f"gate.allow | reason=mention msg_id={message.id}",
+                    extra={
+                        "event": "gate.allow",
+                        "reason": "mention",
+                        "msg_id": message.id,
+                        "context": context,
+                        "mention_detected": True,
+                        "reply_to_bot": is_reply,
+                    },
+                )
+                self._metric_inc("gate.allowed", {"reason": "mention"})
+                return True
+
+            if allow_reply_without_mention and is_reply:
+                self._update_dispatch_metadata(
+                    message,
+                    context=context,
+                    mention_detected=False,
+                    reply_to_bot=True,
+                )
+                self.logger.debug(
+                    f"gate.allow | reason=reply_to_bot msg_id={message.id}",
+                    extra={
+                        "event": "gate.allow",
+                        "reason": "reply_to_bot",
+                        "msg_id": message.id,
+                        "context": context,
+                        "mention_detected": False,
+                        "reply_to_bot": True,
+                    },
+                )
+                self._metric_inc("gate.allowed", {"reason": "reply_to_bot"})
+                return True
+
+            self.logger.info(
+                f"gate.block | reason=mention_required msg_id={message.id}",
+                extra={
+                    "event": "gate.block",
+                    "reason": "mention_required",
+                    "msg_id": message.id,
+                    "context": context,
+                    "mention_detected": mention_detected,
+                    "reply_to_bot": is_reply,
+                    "guild_id": getattr(message.guild, "id", None),
+                },
+            )
+            self._metric_inc("gate.blocked", {"reason": "mention_required"})
+            return False
+
+        # Legacy trigger-based allowances (mention requirement disabled)
         if is_owner and "owner" in triggers:
+            self._update_dispatch_metadata(
+                message,
+                context=context,
+                mention_detected=mention_detected,
+                reply_to_bot=is_reply,
+            )
             self.logger.info(
                 f"gate.allow | reason=owner_override msg_id={message.id}",
                 extra={
@@ -1926,68 +2116,98 @@ class Router:
                     "reason": "owner_override",
                     "user_id": message.author.id,
                     "msg_id": message.id,
+                    "context": context,
+                    "mention_detected": mention_detected,
+                    "reply_to_bot": is_reply,
                 },
             )
             self._metric_inc("gate.allowed", {"reason": "owner_override"})
             return True
 
-        if is_dm and "dm" in triggers:
-            self.logger.debug(
-                f"gate.allow | reason=dm msg_id={message.id}",
-                extra={"event": "gate.allow", "reason": "dm", "msg_id": message.id},
+        if mention_detected and "mention" in triggers:
+            self._update_dispatch_metadata(
+                message,
+                context=context,
+                mention_detected=True,
+                reply_to_bot=is_reply,
             )
-            self._metric_inc("gate.allowed", {"reason": "dm"})
-            return True
-
-        if is_mentioned and "mention" in triggers:
             self.logger.debug(
                 f"gate.allow | reason=mention msg_id={message.id}",
                 extra={
                     "event": "gate.allow",
                     "reason": "mention",
                     "msg_id": message.id,
+                    "context": context,
+                    "mention_detected": True,
+                    "reply_to_bot": is_reply,
                 },
             )
             self._metric_inc("gate.allowed", {"reason": "mention"})
             return True
 
         if is_reply and "reply" in triggers:
+            self._update_dispatch_metadata(
+                message,
+                context=context,
+                mention_detected=mention_detected,
+                reply_to_bot=True,
+            )
             self.logger.debug(
                 f"gate.allow | reason=reply_to_bot msg_id={message.id}",
                 extra={
                     "event": "gate.allow",
                     "reason": "reply_to_bot",
                     "msg_id": message.id,
+                    "context": context,
+                    "mention_detected": mention_detected,
+                    "reply_to_bot": True,
                 },
             )
             self._metric_inc("gate.allowed", {"reason": "reply_to_bot"})
             return True
 
         if in_bot_thread and "bot_threads" in triggers:
+            self._update_dispatch_metadata(
+                message,
+                context=context,
+                mention_detected=mention_detected,
+                reply_to_bot=is_reply,
+            )
             self.logger.debug(
                 f"gate.allow | reason=bot_thread msg_id={message.id}",
                 extra={
                     "event": "gate.allow",
                     "reason": "bot_thread",
                     "msg_id": message.id,
+                    "context": context,
+                    "mention_detected": mention_detected,
+                    "reply_to_bot": is_reply,
                 },
             )
             self._metric_inc("gate.allowed", {"reason": "bot_thread"})
             return True
 
         if has_prefix and "command_prefix" in triggers:
+            self._update_dispatch_metadata(
+                message,
+                context=context,
+                mention_detected=mention_detected,
+                reply_to_bot=is_reply,
+            )
             self.logger.debug(
                 f"gate.allow | reason=command_prefix msg_id={message.id}",
                 extra={
                     "event": "gate.allow",
                     "reason": "command_prefix",
                     "msg_id": message.id,
+                    "context": context,
+                    "mention_detected": mention_detected,
+                    "reply_to_bot": is_reply,
                 },
             )
             self._metric_inc("gate.allowed", {"reason": "command_prefix"})
             return True
 
-        # Do NOT allow on mere presence of URLs (e.g., twitter) – must be addressed first
         self.logger.info(
             f"gate.block | reason=not_addressed msg_id={message.id}",
             extra={
@@ -1996,6 +2216,9 @@ class Router:
                 "msg_id": message.id,
                 "guild_id": getattr(message.guild, "id", None),
                 "is_dm": is_dm,
+                "context": context,
+                "mention_detected": mention_detected,
+                "reply_to_bot": is_reply,
             },
         )
         self._metric_inc("gate.blocked", {"reason": "not_addressed"})

@@ -315,3 +315,11 @@
 | `X_TWEET_FIELDS` | `id,text,created_at,author_id,public_metrics,possibly_sensitive,lang,attachments,entities,referenced_tweets,conversation_id` | Configuration for x tweet fields. |
 | `X_TWITTER_STT_PROBE_FIRST` | `true` | Fast probe: attempt STT on X URLs before API/syndication (helps video tweets route to STT) |
 | `X_USER_FIELDS` | `id,name,username,profile_image_url,verified,protected` | Configuration for x user fields. |
+
+## Mention/Reply Targeting Toggles
+
+| Name | Default | Description |
+| --- | --- | --- |
+| `REQUIRE_MENTION_IN_GUILDS` | `1` | Require an explicit bot mention before the router processes guild messages. |
+| `ALLOW_REPLY_TO_BOT_WITHOUT_MENTION` | `1` | Permit follow-up replies to the bot without a fresh mention in guilds. |
+| `DM_REQUIRE_MENTION` | `0` | Enforce mention requirements inside DMs (disabled by default). |

@@ -820,14 +820,59 @@ class LLMBot(commands.Bot):
         """
         # Metadata for logging
         guild_id = getattr(message.guild, "id", None)
-        channel_id = getattr(message.channel, "id", None)
+        ingress_channel_id = getattr(message.channel, "id", None)
         user_id = getattr(message.author, "id", None)
         is_dm = isinstance(message.channel, discord.DMChannel)
         debug_token = f"d{message.id}-{uuid.uuid4().hex[:8]}"
 
-        base_extra = {"guild_id": guild_id, "user_id": user_id, "msg_id": message.id}
+        dispatch_meta = getattr(message, "_llm_dispatch", {}) or {}
+        force_reply_target = dispatch_meta.get("trigger_message") or getattr(
+            message, "_llm_force_reply_target", None
+        )
+        if force_reply_target is None:
+            force_reply_target = message
+        trigger_message_id = dispatch_meta.get("trigger_message_id") or getattr(
+            force_reply_target, "id", None
+        )
+        trigger_channel = getattr(force_reply_target, "channel", None) or getattr(
+            message, "channel", None
+        )
+        reply_in_thread = dispatch_meta.get(
+            "reply_in_thread", _is_thread_channel(trigger_channel)
+        )
+        target_channel_id = dispatch_meta.get("channel_id")
+        if target_channel_id is None:
+            if reply_in_thread:
+                target_channel_id = getattr(trigger_channel, "parent_id", None) or getattr(
+                    trigger_channel, "id", None
+                )
+            else:
+                target_channel_id = getattr(trigger_channel, "id", None)
+        target_thread_id = dispatch_meta.get("thread_id")
+        if target_thread_id is None and reply_in_thread:
+            target_thread_id = getattr(trigger_channel, "id", None)
+        mention_detected = dispatch_meta.get("mention_detected", False)
+        reply_target_ok = dispatch_meta.get("reply_target_ok", force_reply_target is not None)
+        context_label = dispatch_meta.get("context", "dm" if is_dm else "guild")
+
+        base_extra = {
+            "guild_id": guild_id,
+            "user_id": user_id,
+            "msg_id": message.id,
+            "context": context_label,
+            "trigger_message_id": trigger_message_id,
+            "reply_target_ok": reply_target_ok,
+            "mention_detected": mention_detected,
+            "reply_in_thread": reply_in_thread,
+            "channel_id": target_channel_id,
+        }
+        if target_thread_id is not None:
+            base_extra["thread_id"] = target_thread_id
+        # Persist target metadata locally for send path
+        message._llm_force_reply_target = force_reply_target  # type: ignore[attr-defined]
+
         self.logger.info(
-            f"dispatch:pre | channel_id={channel_id} is_dm={is_dm} ready={self._is_ready.is_set()} "
+            f"dispatch:pre | channel_id={ingress_channel_id} is_dm={is_dm} ready={self._is_ready.is_set()} "
             f"embeds={len(action.embeds) if action.embeds else 0} meta={action.meta}",
             extra={**base_extra, "event": "dispatch.send.pre"},
         )
@@ -987,85 +1032,37 @@ class LLMBot(commands.Bot):
         async with message.channel.typing():
             try:
                 if content or action.embeds or files:
-                    # Resolve desired reply target up-front so we can decide whether to edit the placeholder
+                    dispatch_meta = getattr(message, "_llm_dispatch", {}) or {}
                     ch = getattr(message, "channel", None)
                     reply_target = None
-                    scope_case = "plain"
-                    try:
-                        if _is_thread_channel(ch):
-                            # Threads: resolve newest (or newest human if newest is bot)
-                            rt, _reason = await resolve_thread_reply_target(self, message, self.config)
-                            reply_target = rt
-                            scope_case = "thread"
-                            try:
-                                if reply_target is not None:
-                                    self.logger.info(
-                                        "reply_target_ok",
-                                        extra={
-                                            **base_extra,
-                                            "subsys": self.config.get("MEM_LOG_SUBSYS", "mem.thread"),
-                                            "event": "reply_target_ok",
-                                            "detail": {"id": getattr(reply_target, "id", None), "reason": str(_reason) if _reason else "nearest_human"},
-                                        },
-                                    )
-                            except Exception:
-                                pass
-                        elif getattr(message, "reference", None) is not None:
-                            # Reply chain (non-thread): anchor to the triggering user message to avoid self-anchor
-                            ref = getattr(message, "reference", None)
-                            ref_msg = None
-                            try:
-                                ref_msg = getattr(ref, "resolved", None)
-                            except Exception:
-                                ref_msg = None
-                            if ref_msg is None:
-                                try:
-                                    ref_id = int(getattr(ref, "message_id", 0) or 0)
-                                    if ref_id:
-                                        ref_msg = await message.channel.fetch_message(ref_id)
-                                except Exception:
-                                    ref_msg = None
-                            # Use the triggering user message as the reply target to prevent bot self-anchoring
+                    scope_case = "forced"
+                    forced_target = dispatch_meta.get("trigger_message") or getattr(
+                        message, "_llm_force_reply_target", None
+                    )
+                    if forced_target is None:
+                        forced_target = message
+                    if forced_target is not None:
+                        reply_target = forced_target
+                        ch = getattr(forced_target, "channel", ch)
+                    else:
+                        scope_case = "fallback"
+                        try:
+                            if _is_thread_channel(ch):
+                                reply_target, _ = await resolve_thread_reply_target(
+                                    self, message, self.config
+                                )
+                                scope_case = "thread"
+                            elif getattr(message, "reference", None) is not None:
+                                reply_target = message
+                                scope_case = "reply"
+                            else:
+                                reply_target = message
+                                scope_case = "plain"
+                        except Exception:
                             reply_target = message
                             scope_case = "reply"
-                            try:
-                                if reply_target is not None:
-                                    self.logger.info(
-                                        "reply_target_ok",
-                                        extra={
-                                            **base_extra,
-                                            "subsys": self.config.get("MEM_LOG_SUBSYS", "mem.reply"),
-                                            "event": "reply_target_ok",
-                                            "detail": {"id": getattr(reply_target, "id", None), "reason": "trigger_user"},
-                                        },
-                                    )
-                            except Exception:
-                                pass
-                        else:
-                            # Non-thread, non-reply: mention-only implicit anchor
-                            mentioned_me = False
-                            try:
-                                mentioned_me = self.user in (getattr(message, "mentions", None) or [])
-                            except Exception:
-                                mentioned_me = False
-                            if mentioned_me:
-                                raw = str(message.content or "")
-                                try:
-                                    import re as _re
-                                    raw = _re.sub(rf"^<@!?{self.user.id}>\s*", "", raw)
-                                    raw = _re.sub(r"https?://\\S+", "", raw).strip()
-                                except Exception:
-                                    raw = raw.strip()
-                                if not raw:
-                                    anc, _why = await resolve_implicit_anchor(self, message, self.config)
-                                    reply_target = anc or None
-                            scope_case = "plain"
-                    except Exception:
-                        # Fallback: reply to triggering message to preserve original behavior
-                        reply_target = message
-                        scope_case = "reply"
 
-                    # Minimal logging for scope resolution
+                    # Scope + target breadcrumbs
                     try:
                         self.logger.info(
                             "scope_resolved",
@@ -1073,42 +1070,52 @@ class LLMBot(commands.Bot):
                                 **base_extra,
                                 "subsys": "route",
                                 "event": "scope_resolved",
-                                "detail": {"case": scope_case, "scope": getattr(ch, "id", None)},
+                                "detail": {
+                                    "case": scope_case,
+                                    "scope": getattr(ch, "id", None),
+                                },
                             },
                         )
-                        # Emit reply_target_ok in plain scope for completeness
-                        if scope_case == "plain":
+                        if reply_target is not None:
                             self.logger.info(
                                 "reply_target_ok",
                                 extra={
                                     **base_extra,
-                                    "subsys": self.config.get("MEM_LOG_SUBSYS", "mem.plain"),
+                                    "subsys": self.config.get(
+                                        "MEM_LOG_SUBSYS", "mem.force"
+                                    ),
                                     "event": "reply_target_ok",
-                                    "detail": {"id": getattr(reply_target, "id", None), "reason": "plain"},
+                                    "detail": {
+                                        "id": getattr(reply_target, "id", None),
+                                        "reason": "trigger_message",
+                                    },
                                 },
                             )
                     except Exception:
                         pass
 
-                    # Decide whether it's safe to edit the placeholder
-                    # If we must change the reply reference (e.g., threads/implicit anchor), delete placeholder and send anew
-                    must_retarget = False
                     try:
-                        if _is_thread_channel(ch):
-                            # In threads we either reply to a different message or send without reference
-                            mid = int(getattr(message, "id", 0))
-                            rtid = int(getattr(reply_target, "id", 0)) if reply_target is not None else None
-                            must_retarget = (reply_target is None) or (rtid and rtid != mid)
-                        else:
-                            # For non-threads, retarget if reply target differs from triggering message
-                            if getattr(message, "reference", None) is not None:
-                                rtid = int(getattr(reply_target, "id", 0)) if reply_target is not None else 0
-                                must_retarget = bool(rtid) and (rtid != int(getattr(message, "id", 0)))
-                            else:
-                                rtid = int(getattr(reply_target, "id", 0)) if reply_target is not None else 0
-                                must_retarget = bool(rtid) and (rtid != int(getattr(message, "id", 0)))
+                        self.logger.info(
+                            "reply.target",
+                            extra={
+                                **base_extra,
+                                "event": "dispatch.reply_target",
+                                "detail": {
+                                    "channel_id": base_extra.get("channel_id"),
+                                    "thread_id": base_extra.get("thread_id"),
+                                    "trigger_message_id": trigger_message_id,
+                                },
+                            },
+                        )
                     except Exception:
-                        must_retarget = False
+                        pass
+
+                    # Decide whether it's safe to edit the placeholder
+                    must_retarget = bool(target_message) and (
+                        reply_target is None
+                        or getattr(reply_target, "id", None)
+                        != getattr(message, "id", None)
+                    )
 
                     # Resolve recipient to mention and ping strategy (avoid self-mention and double ping)
                     recipient = None

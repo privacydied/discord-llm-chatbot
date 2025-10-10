@@ -262,6 +262,15 @@ def load_config():
             "BOT_SPEAKS_ONLY_WHEN_SPOKEN_TO", "True"
         ).lower()
         == "true",
+        "REQUIRE_MENTION_IN_GUILDS": _parse_bool_str(
+            _clean_env_value(os.getenv("REQUIRE_MENTION_IN_GUILDS")), True
+        ),
+        "ALLOW_REPLY_TO_BOT_WITHOUT_MENTION": _parse_bool_str(
+            _clean_env_value(os.getenv("ALLOW_REPLY_TO_BOT_WITHOUT_MENTION")), True
+        ),
+        "DM_REQUIRE_MENTION": _parse_bool_str(
+            _clean_env_value(os.getenv("DM_REQUIRE_MENTION")), False
+        ),
         # Comma-separated list of triggers: dm, mention, reply, bot_threads, owner, command_prefix
         "REPLY_TRIGGERS": [
             s.strip()

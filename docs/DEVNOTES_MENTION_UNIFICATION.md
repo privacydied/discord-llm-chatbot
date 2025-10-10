@@ -41,12 +41,14 @@ Change set touches only router behavior and logging. No new dependencies, schema
 - Do not reach into older channel history; apply existing budgets and mark truncation
 
 6) Send with the final reply target
-- PLAIN: send without a message_reference
+- Guild: always reply directly to the user message that triggered the mention or follow-up reply (no channel-wide fallbacks)
+- DM: reply to the incoming DM message (mention remains optional)
 - THREAD/REPLY: use the resolved target; if a placeholder anchored incorrectly is emitted upstream, prefer delete & resend over editing into the wrong anchor
 
 ## Minimal Logging (one concise line per step)
 - subsys=route event=scope_resolved case=<thread|reply|lone> scope=<id> reply_target=<id|none>
 - subsys=route event=reply_target_ok target=<id|none>
+- subsys=route event=dispatch.reply_target context=<guild|dm> channel_id=<id> thread_id=<id|none> trigger_message_id=<id>
 - subsys=route event=text_default reason=<mention_has_text|ambiguous_intent>
 - subsys=route event=media_intent_missing_link
 - subsys=mem event=local_context count=<n> truncated=<bool>
@@ -62,6 +64,8 @@ Notes:
 - Explicit media‑intent detector (phrase list) for the nag path when scope has no media/URL
 - Text‑first default applied when no media items are harvested
 - Added reply_target_ok breadcrumb when a final target is chosen
+- Added dispatch.reply_target breadcrumb with context + channel/thread IDs
+- Reply target metadata (`context`, `mention_detected`, `reply_target_ok`) bundled into dispatch extras for downstream logging
 
 ## Edge Cases Addressed
 - @Bot yo, @Bot ?, @Bot 👍, hey @Bot → TEXT
@@ -69,7 +73,12 @@ Notes:
 - @Bot summarize this video https://… → media route (no nag)
 - Reply + @Bot yo → reply to parent; use reply‑tail context near the trigger
 - Thread mention → reply to newest (or newest human if newest is ours), with thread‑tail only
-- Sanitizer: handles double spaces, em‑dash, and newline after mention without eating the next token
+- Sanitizer: handles double spaces, em-dash, and newline after mention without eating the next token
+
+## Runtime Flags
+- `REQUIRE_MENTION_IN_GUILDS` (default `1`): require an explicit mention before routing guild messages.
+- `ALLOW_REPLY_TO_BOT_WITHOUT_MENTION` (default `1`): allow guild follow-ups that are direct replies to the bot even without a fresh mention.
+- `DM_REQUIRE_MENTION` (default `0`): enable if you want DMs to require an explicit mention.
 
 ## Tests (described)
 - Mentions (unified): tiny tokens route to TEXT; no nag
