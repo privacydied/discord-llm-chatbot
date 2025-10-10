@@ -287,6 +287,8 @@ class Router:
         self._processed_recent_set = set()
         # Concurrency guard for dedupe to prevent race when two listeners fire simultaneously [REH]
         self._processing_locks: dict[int, asyncio.Lock] = {}
+        # Per-message metadata shared with core dispatch [REH][CA]
+        self._dispatch_metadata: Dict[int, Dict[str, Any]] = {}
 
         self.pdf_processor = PDFProcessor() if PDF_SUPPORT else None
         if self.pdf_processor:
@@ -1894,7 +1896,7 @@ class Router:
         channel_id = parent_channel_id or getattr(channel, "id", None)
         thread_id = getattr(channel, "id", None) if is_thread else None
 
-        meta = getattr(message, "_llm_dispatch", {}) or {}
+        meta = self._dispatch_metadata.get(message.id, {})
         meta.update(
             {
                 "context": context,
@@ -1908,8 +1910,16 @@ class Router:
                 "reply_target_ok": trigger is not None,
             }
         )
-        setattr(message, "_llm_dispatch", meta)
-        setattr(message, "_llm_force_reply_target", trigger)
+        self._dispatch_metadata[message.id] = meta
+
+    def get_dispatch_metadata(self, message_id: int) -> Dict[str, Any]:
+        """Return dispatch metadata for a message (copy to avoid accidental mutation)."""
+        meta = self._dispatch_metadata.get(message_id, {})
+        return dict(meta) if meta else {}
+
+    def clear_dispatch_metadata(self, message_id: int) -> None:
+        """Remove cached dispatch metadata once processing completes."""
+        self._dispatch_metadata.pop(message_id, None)
 
     def _should_process_message(self, message: Message) -> bool:
         """Single source-of-truth gate: decide if this message should be processed.

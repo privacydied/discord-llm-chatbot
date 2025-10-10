@@ -480,49 +480,63 @@ class LLMBot(commands.Bot):
                         self.logger.debug(f"stream:start_failed | {e}")
 
                 action = await self.router.dispatch_message(message)
-                if action:
-                    if action.meta.get("delegated_to_cog"):
-                        self.logger.info(
-                            f"Message {message.id} delegated to command processor."
-                        )
-                        # If streaming was started, clean it up as we hand off to cogs
-                        if stream_ctx and stream_ctx.get("message"):
-                            try:
-                                await stream_ctx["message"].delete()
-                            except Exception:
-                                # Fallback to editing the status message
+                dispatch_meta = (
+                    self.router.get_dispatch_metadata(message.id) if self.router else {}
+                )
+                try:
+                    if action:
+                        if action.meta.get("delegated_to_cog"):
+                            self.logger.info(
+                                f"Message {message.id} delegated to command processor."
+                            )
+                            # If streaming was started, clean it up as we hand off to cogs
+                            if stream_ctx and stream_ctx.get("message"):
                                 try:
-                                    await stream_ctx["message"].edit(
-                                        content="",
-                                        embeds=[
-                                            self._build_stream_embed(
-                                                "ℹ️ Delegated to command…",
-                                                style=self.config.get(
-                                                    "STREAMING_EMBED_STYLE", "compact"
-                                                ),
-                                            )
-                                        ],
-                                    )
+                                    await stream_ctx["message"].delete()
                                 except Exception:
-                                    pass
-                        await self.process_commands(message)
-                    elif action.has_payload:
-                        # Stop streaming and mark as ready before sending the final response
-                        target_msg = None
+                                    # Fallback to editing the status message
+                                    try:
+                                        await stream_ctx["message"].edit(
+                                            content="",
+                                            embeds=[
+                                                self._build_stream_embed(
+                                                    "ℹ️ Delegated to command…",
+                                                    style=self.config.get(
+                                                        "STREAMING_EMBED_STYLE",
+                                                        "compact",
+                                                    ),
+                                                )
+                                            ],
+                                        )
+                                    except Exception:
+                                        pass
+                            await self.process_commands(message)
+                        elif action.has_payload:
+                            # Stop streaming and mark as ready before sending the final response
+                            target_msg = None
+                            if stream_ctx and stream_ctx.get("task"):
+                                await self._stop_streaming_status(stream_ctx)
+                                target_msg = stream_ctx.get("message")
+                            await self._execute_action(
+                                message,
+                                action,
+                                target_message=target_msg,
+                                dispatch_meta=dispatch_meta,
+                            )
+                        # If no payload and not delegated, the router decided to do nothing.
+                    else:
+                        # Fallback for messages that don't trigger the router (e.g. standard commands)
                         if stream_ctx and stream_ctx.get("task"):
-                            await self._stop_streaming_status(stream_ctx)
-                            target_msg = stream_ctx.get("message")
-                        await self._execute_action(
-                            message, action, target_message=target_msg
+                            await self._stop_streaming_status(
+                                stream_ctx, final_label="🚫 No response generated"
+                            )
+                        self.logger.info(
+                            f"Router returned no action for msg {message.id}; falling back to command processing."
                         )
-                    # If no payload and not delegated, the router decided to do nothing.
-                else:
-                    # Fallback for messages that don't trigger the router (e.g. standard commands)
-                    if stream_ctx and stream_ctx.get("task"):
-                        await self._stop_streaming_status(
-                            stream_ctx, final_label="🚫 No response generated"
-                        )
-                    await self.process_commands(message)
+                        await self.process_commands(message)
+                finally:
+                    if self.router:
+                        self.router.clear_dispatch_metadata(message.id)
             else:
                 self.logger.error(
                     "Router not initialized, falling back to command processing."
@@ -813,6 +827,7 @@ class LLMBot(commands.Bot):
         message: discord.Message,
         action: BotAction,
         target_message: discord.Message | None = None,
+        dispatch_meta: Optional[Dict[str, Any]] = None,
     ):
         """Executes a BotAction by sending or editing a message.
         If target_message is provided and there are no files/audio, we edit it to keep 1 IN → 1 OUT.
@@ -825,21 +840,18 @@ class LLMBot(commands.Bot):
         is_dm = isinstance(message.channel, discord.DMChannel)
         debug_token = f"d{message.id}-{uuid.uuid4().hex[:8]}"
 
-        dispatch_meta = getattr(message, "_llm_dispatch", {}) or {}
-        force_reply_target = dispatch_meta.get("trigger_message") or getattr(
-            message, "_llm_force_reply_target", None
-        )
-        if force_reply_target is None:
-            force_reply_target = message
+        dispatch_meta = dispatch_meta or {}
+        force_reply_target = dispatch_meta.get("trigger_message") or message
         trigger_message_id = dispatch_meta.get("trigger_message_id") or getattr(
             force_reply_target, "id", None
         )
         trigger_channel = getattr(force_reply_target, "channel", None) or getattr(
             message, "channel", None
         )
-        reply_in_thread = dispatch_meta.get(
-            "reply_in_thread", _is_thread_channel(trigger_channel)
-        )
+        reply_in_thread = dispatch_meta.get("reply_in_thread")
+        if reply_in_thread is None:
+            reply_in_thread = _is_thread_channel(trigger_channel)
+
         target_channel_id = dispatch_meta.get("channel_id")
         if target_channel_id is None:
             if reply_in_thread:
@@ -847,13 +859,16 @@ class LLMBot(commands.Bot):
                     trigger_channel, "id", None
                 )
             else:
-                target_channel_id = getattr(trigger_channel, "id", None)
+                target_channel_id = getattr(trigger_channel, "id", None) or ingress_channel_id
         target_thread_id = dispatch_meta.get("thread_id")
         if target_thread_id is None and reply_in_thread:
             target_thread_id = getattr(trigger_channel, "id", None)
+
         mention_detected = dispatch_meta.get("mention_detected", False)
-        reply_target_ok = dispatch_meta.get("reply_target_ok", force_reply_target is not None)
-        context_label = dispatch_meta.get("context", "dm" if is_dm else "guild")
+        reply_target_ok = dispatch_meta.get(
+            "reply_target_ok", force_reply_target is not None
+        )
+        context_label = dispatch_meta.get("context") or ("dm" if is_dm else "guild")
 
         base_extra = {
             "guild_id": guild_id,
@@ -868,8 +883,6 @@ class LLMBot(commands.Bot):
         }
         if target_thread_id is not None:
             base_extra["thread_id"] = target_thread_id
-        # Persist target metadata locally for send path
-        message._llm_force_reply_target = force_reply_target  # type: ignore[attr-defined]
 
         self.logger.info(
             f"dispatch:pre | channel_id={ingress_channel_id} is_dm={is_dm} ready={self._is_ready.is_set()} "
@@ -1032,19 +1045,12 @@ class LLMBot(commands.Bot):
         async with message.channel.typing():
             try:
                 if content or action.embeds or files:
-                    dispatch_meta = getattr(message, "_llm_dispatch", {}) or {}
-                    ch = getattr(message, "channel", None)
-                    reply_target = None
-                    scope_case = "forced"
-                    forced_target = dispatch_meta.get("trigger_message") or getattr(
-                        message, "_llm_force_reply_target", None
+                    ch = getattr(force_reply_target, "channel", None) or getattr(
+                        message, "channel", None
                     )
-                    if forced_target is None:
-                        forced_target = message
-                    if forced_target is not None:
-                        reply_target = forced_target
-                        ch = getattr(forced_target, "channel", ch)
-                    else:
+                    reply_target = force_reply_target
+                    scope_case = "forced"
+                    if reply_target is None:
                         scope_case = "fallback"
                         try:
                             if _is_thread_channel(ch):
