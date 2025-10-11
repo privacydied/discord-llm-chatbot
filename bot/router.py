@@ -36,6 +36,7 @@ from discord import DMChannel, Message
 
 from .brain import brain_infer
 from .enhanced_retry import ProviderConfig, get_retry_manager
+from .evidence import EvidenceBundle
 from .exceptions import APIError
 from .http_client import get_http_client, RequestConfig
 from .modality import (
@@ -475,21 +476,88 @@ class Router:
                         "Loaded VL prompt guidelines from prompts/vl-prompt.txt"
                     )
         except Exception:
-            # Non-fatal; handler has built-in defaults
-            self._vl_prompt_guidelines = None
-
+            pass
     def _format_x_tweet_with_transcription(
-        self, tweet_url: str, transcript: str, user_content: str
+        self,
+        *,
+        base_text: Optional[str] = None,
+        url: str,
+        stt_res: Dict[str, Any],
+        tweet_data: Optional[Dict[str, Any]] = None,
     ) -> str:
-        """Format X/Twitter video with transcription header and optional tweet context."""
-        # Simple transcription format with header
-        formatted = f"🎙️ Transcription: {transcript.strip()}"
+        """Assemble a single evidence bundle for a tweet using caption + STT.
+        Returns composed prompt text (string) for downstream flows.
+        [CA][REH][IV]
+        """
+        bundle = EvidenceBundle(source_platform="x", source_url=url)
 
-        # Add user content if present
-        if user_content and user_content.strip():
-            formatted = f"{user_content.strip()}\n\n{formatted}"
+        # Primary ID anchor for deterministic media selection [CMV]
+        try:
+            ptid = self._extract_primary_tweet_id(url)
+            if ptid:
+                bundle.primary_tweet_id = ptid
+        except Exception:
+            pass
 
-        return formatted
+        # Caption population: prefer tweet_data text; fallback to base_text heuristic [IV]
+        try:
+            caption = ""
+            if tweet_data and isinstance(tweet_data, dict):
+                caption = (
+                    tweet_data.get("full_text")
+                    or tweet_data.get("text")
+                    or ""
+                ).strip()
+            if not caption and base_text:
+                # Heuristic: first non-empty line not starting with em-dash author or URL
+                try:
+                    lines = [ln.strip() for ln in str(base_text).splitlines() if ln.strip()]
+                    for ln in lines:
+                        if ln.startswith("— "):
+                            continue
+                        if ln.lower().startswith("http://") or ln.lower().startswith("https://"):
+                            continue
+                        caption = ln
+                        break
+                except Exception:
+                    caption = (base_text or "").strip()
+            if caption:
+                bundle.caption_text = caption
+        except Exception:
+            pass
+
+        # Quoted/retweet text when provided [IV]
+        try:
+            if tweet_data and isinstance(tweet_data, dict):
+                q = tweet_data.get("quoted_status") or {}
+                if isinstance(q, dict):
+                    qt = (q.get("full_text") or q.get("text") or "").strip()
+                    if qt:
+                        bundle.quoted_text = qt
+                if not bundle.quoted_text:
+                    r = tweet_data.get("retweeted_status") or {}
+                    if isinstance(r, dict):
+                        rt = (r.get("full_text") or r.get("text") or "").strip()
+                        if rt:
+                            bundle.quoted_text = rt
+        except Exception:
+            pass
+
+        # STT transcript with low-speech guard [REH]
+        try:
+            transcript = ((stt_res or {}).get("transcription") or "").strip()
+            # If very short/empty, omit transcript but flag stt_no_speech [CMV]
+            min_chars = 16  # small inline threshold
+            if transcript and len(transcript) >= min_chars:
+                bundle.media_transcript = transcript
+            else:
+                bundle.media_transcript = ""
+                bundle.stt_no_speech = True
+        except Exception:
+            bundle.media_transcript = ""
+
+        # Compose into final text (also emits context.assembled breadcrumb in EvidenceBundle)
+        return bundle.compose_prompt_text()
 
     async def _handle_x_twitter_fallback(
         self, tweet_url: str, message: Message, context_str: str
@@ -1359,7 +1427,116 @@ class Router:
             # Normalize host to x.com
             return urlunparse(("https", "x.com", path, "", "", ""))
         except Exception:
-            return url
+            pass
+    def _extract_primary_tweet_id(self, url: str) -> Optional[str]:
+        """Extract the primary tweet ID from a Twitter/X URL."""
+        try:
+            parsed = urlparse(url)
+            path_parts = parsed.path.strip("/").split("/")
+            if len(path_parts) >= 3 and path_parts[0] in ("i", "status"):
+                # Handle /i/status/{id} format
+                if path_parts[0] == "i" and path_parts[1] == "status" and len(path_parts) > 2:
+                    return path_parts[2]
+            elif len(path_parts) >= 2 and path_parts[0] not in ("i", "status"):
+                # Handle /{username}/status/{id} format
+                if "status" in path_parts and len(path_parts) > path_parts.index("status") + 1:
+                    status_idx = path_parts.index("status")
+                    return path_parts[status_idx + 1]
+        except Exception:
+            pass
+        return None
+                # Handle /{username}/status/{id} format
+
+    def _select_twitter_media(self, primary_tweet_id: str, tweet_data: Dict[str, Any]) -> Tuple[Optional[str], int, bool]:
+        """Select the best media URL for the primary tweet using Tier 1/2/3 ranking.
+        
+        Returns: (selected_url, selection_tier, has_audio)
+        """
+        candidates = []
+        
+        # Build candidate list from tweet media
+        extended_entities = tweet_data.get("extended_entities", {})
+        media_items = extended_entities.get("media", [])
+        
+        for media in media_items:
+            if media.get("type") in ("video", "animated_gif"):
+                media_tweet_id = media.get("id_str")
+                variants = media.get("video_info", {}).get("variants", [])
+                
+                for variant in variants:
+                    if variant.get("content_type") == "video/mp4":
+                        candidates.append({
+                            "tweet_id": media_tweet_id,
+                            "url": variant["url"],
+                            "content_type": "video/mp4",
+                            "bitrate": variant.get("bitrate", 0),
+                            "type": media["type"]
+                        })
+        
+        # Add quoted/retweeted candidates if primary has no media
+        if not candidates:
+            # Check quoted tweet
+            quoted = tweet_data.get("quoted_status")
+            if quoted:
+                quoted_extended = quoted.get("extended_entities", {})
+                for media in quoted_extended.get("media", []):
+                    if media.get("type") in ("video", "animated_gif"):
+                        variants = media.get("video_info", {}).get("variants", [])
+                        for variant in variants:
+                            if variant.get("content_type") == "video/mp4":
+                                candidates.append({
+                                    "tweet_id": media.get("id_str"),
+                                    "url": variant["url"],
+                                    "content_type": "video/mp4",
+                                    "bitrate": variant.get("bitrate", 0),
+                                    "type": media["type"]
+                                })
+        
+        # Add retweeted candidates if still no candidates
+        if not candidates:
+            retweeted = tweet_data.get("retweeted_status")
+            if retweeted:
+                retweeted_extended = retweeted.get("extended_entities", {})
+                for media in retweeted_extended.get("media", []):
+                    if media.get("type") in ("video", "animated_gif"):
+                        variants = media.get("video_info", {}).get("variants", [])
+                        for variant in variants:
+                            if variant.get("content_type") == "video/mp4":
+                                candidates.append({
+                                    "tweet_id": media.get("id_str"),
+                                    "url": variant["url"],
+                                    "content_type": "video/mp4",
+                                    "bitrate": variant.get("bitrate", 0),
+                                    "type": media["type"]
+                                })
+        
+        if not candidates:
+            return None, 0, False
+        
+        # Rank candidates: Tier 1 = primary tweet video, Tier 2 = quoted, Tier 3 = retweeted
+        tier1 = [c for c in candidates if c["tweet_id"] == primary_tweet_id and c["type"] == "video"]
+        tier2 = [c for c in candidates if c["tweet_id"] != primary_tweet_id and any(
+            quoted.get("id_str") == c["tweet_id"] for quoted in [tweet_data.get("quoted_status")])]
+        tier3 = [c for c in candidates if c not in tier1 and c not in tier2]
+        
+        # Select from highest tier, preferring highest bitrate
+        selected = None
+        selection_tier = 0
+        
+        if tier1:
+            selected = max(tier1, key=lambda x: x["bitrate"])
+            selection_tier = 1
+        elif tier2:
+            selected = max(tier2, key=lambda x: x["bitrate"])
+            selection_tier = 2
+        elif tier3:
+            selected = max(tier3, key=lambda x: x["bitrate"])
+            selection_tier = 3
+        
+        # Basic audio check (prefer variants with audio streams)
+        has_audio = selected and selected.get("bitrate", 0) > 0  # Higher bitrate often indicates audio
+        
+        return selected["url"] if selected else None, selection_tier, has_audio
 
     async def _probe_twitter_syndication_images(
         self, url: str, status_id: str
@@ -1723,10 +1900,7 @@ class Router:
                 return await self._process_image_from_url(
                     url, model_override=model_override
                 )
-
-            if item.source_type == "embed":
-                embed = item.payload or {}
-                # Try common embed shapes
+                                
                 image_url = None
                 try:
                     if isinstance(embed, dict):
@@ -1774,83 +1948,26 @@ class Router:
     def _format_x_tweet_result(self, api_data: Dict[str, Any], url: str) -> str:
         """Format X API tweet response into concise text. [PA][IV]"""
         try:
-            data = api_data.get("data") or {}
-            text = (data.get("text") or "").strip()
-            created_at = data.get("created_at")
-            author_id = data.get("author_id")
-            username = None
-            includes = api_data.get("includes") or {}
-            for u in includes.get("users", []) or []:
-                if u.get("id") == author_id:
-                    username = u.get("username") or u.get("name")
-                    break
-            # Minimal media hint
-            media = includes.get("media") or []
-            media_hint = f" • media:{len(media)}" if media else ""
-            prefix = f"@{username}" if username else "Tweet"
-            stamp = f" • {created_at}" if created_at else ""
-            body = text if len(text) <= 4000 else (text[:3990] + "…")
-            return f"{prefix}{stamp}{media_hint} → {url}\n{body}"
-        except Exception:
-            # Fallback to raw dump if unexpected structure
-            return f"Tweet → {url}\n{str(api_data)[:4000]}"
+            data = api_data or {}
+            text = (data.get("full_text") or data.get("text") or "").strip()
+            user_obj = data.get("user") or {}
+            user = (user_obj.get("name") or user_obj.get("screen_name") or "").strip()
 
-    def _format_x_tweet_with_transcription(
-        self,
-        *,
-        base_text: Optional[str],
-        url: str,
-        stt_res: Dict[str, Any],
-    ) -> str:
-        """Combine formatted tweet text with STT transcription and lightweight media metadata. [CA][PA]
+            parts: List[str] = []
+            if text:
+                parts.append(text)
+            if user:
+                parts.append(f"— {user}")
+            parts.append(self._canonicalize_twitter_status_url(url))
 
-        base_text: already formatted tweet string (e.g., from _format_x_tweet_result or _format_syndication_result)
-        stt_res: result dict from hear_infer_from_url()
-        """
-        try:
-            transcription = (stt_res or {}).get("transcription") or ""
-            meta = (stt_res or {}).get("metadata") or {}
-            src = meta.get("source") or "media"
-            title = meta.get("title") or ""
-            dur = meta.get("original_duration_s") or meta.get("processed_duration_s")
-            # Derive caption from base_text when available (formatted output contains the tweet body on the last line)
-            caption = ""
+            out = "\n".join(parts).strip()
+            return out or self._canonicalize_twitter_status_url(url)
+        except Exception as e:
             try:
-                bt = (base_text or "").strip()
-                if bt:
-                    # base_text typically resembles "<prefix> → <url>\n<body>"
-                    if "\n" in bt:
-                        caption = bt.split("\n", 1)[1].strip()
-                    else:
-                        caption = bt
+                self.logger.warning(f"Error formatting X tweet: {e}")
             except Exception:
-                caption = ""
-
-            if not caption:
-                caption = "—"
-
-            lines: List[str] = []
-            lines.append("tweet caption:")
-            lines.append(caption)
-            lines.append("")
-            hdr = "stt transcript:"
-            # Keep brief technical hint inline
-            details = []
-            if title:
-                details.append(f"'{title}'")
-            if isinstance(dur, (int, float)):
-                details.append(f"{int(dur)}s")
-            if src:
-                details.append(src)
-            if details:
-                hdr = f"{hdr} ({', '.join(details)})"
-            lines.append(hdr)
-            lines.append(transcription)
-            return "\n".join(lines)
-        except Exception:
-            # Last-resort fallback: just return transcription string
-            transcription = (stt_res or {}).get("transcription") or ""
-            return f"stt transcript:\n{transcription}"
+                pass
+            return self._canonicalize_twitter_status_url(url)
 
     def _is_reply_to_bot(self, message: Message) -> bool:
         """Check if a message is a reply to the bot."""
@@ -3089,6 +3206,7 @@ class Router:
                                 ".bmp",
                                 ".pdf",
                                 ".mp4",
+                                ".opus"
                                 ".mov",
                                 ".mkv",
                                 ".webm",
@@ -4109,21 +4227,13 @@ class Router:
 
         except Exception as e:
             self.logger.error(
-                f"❌ Error in screenshot + vision processing: {e}", exc_info=True
+                f"❌ _process_image_from_url failed: {e}",
+                extra={"detail": {"url": url}},
+                exc_info=True,
             )
-            # Extract user-friendly hints when possible, else generic fallback
-            error_str = str(e)
-            if "temporarily unavailable" in error_str or "provider" in error_str:
-                hint = "🔧 The image analysis service is temporarily unavailable. Please try again shortly."
-            elif "format" in error_str and "supported" in error_str:
-                hint = "🖼️ Unsupported image format. Try JPEG, PNG, or WebP."
-            elif "too large" in error_str:
-                hint = "📏 Image too large. Please upload a smaller image."
-            elif "not be found" in error_str:
-                hint = "📁 Image could not be processed. Please upload it again."
-            else:
-                hint = "❌ Failed to analyze the image. Please try again."
-            return f"⚠️ Failed to process screenshot of URL: {url} ({hint})"
+            return f"⚠️ Failed to process image from URL (error: {e})"
+
+
 
     async def _vl_describe_image_from_url(
         self,
@@ -4293,6 +4403,63 @@ class Router:
                 title = metadata.get("title", "Unknown")
                 return f"Video transcription from {url} ('{title}'): {transcription}"
             else:
+                # No/low speech case: for Twitter, degrade to caption-only evidence and continue [REH]
+                if is_twitter:
+                    base_text = None
+                    try:
+                        cfg = self.config
+                        tweet_id = XApiClient.extract_tweet_id(str(url))
+                        x_client = await self._get_x_api_client()
+                        if tweet_id and x_client is not None:
+                            try:
+                                api_data = await x_client.get_tweet_by_id(tweet_id)
+                                base_text = self._format_x_tweet_result(api_data, url)
+                            except Exception:
+                                base_text = None
+                        if (
+                            base_text is None
+                            and tweet_id
+                            and bool(cfg.get("X_SYNDICATION_ENABLED", True))
+                        ):
+                            try:
+                                syn = await self._get_tweet_via_syndication(tweet_id)
+                                if syn:
+                                    base_text = self._format_syndication_result(syn, url)
+                            except Exception:
+                                base_text = None
+                    except Exception:
+                        base_text = None
+
+                    # Breadcrumbs for dashboards without user-visible failure [CDiP]
+                    try:
+                        self.logger.info(
+                            "stt.fail",
+                            extra={
+                                "event": "stt.fail",
+                                "detail": {"reason": "no_speech"},
+                            },
+                        )
+                    except Exception:
+                        pass
+                    try:
+                        self.logger.info(
+                            "fallback",
+                            extra={
+                                "event": "fallback",
+                                "detail": {"kind": "caption_only"},
+                            },
+                        )
+                    except Exception:
+                        pass
+
+                    composed = self._format_x_tweet_with_transcription(
+                        base_text=base_text,
+                        url=url,
+                        stt_res=(result or {}),
+                    )
+                    return composed
+
+                # Non-Twitter: keep existing concise output
                 return f"Could not transcribe audio from video: {url}"
 
         except VideoIngestError as ve:
@@ -4877,10 +5044,35 @@ class Router:
                                     url=url,
                                     stt_res=stt_res,
                                 )
-                            if stt_err == "error":
-                                # proceed to return base
+                            # No-speech or error: emit breadcrumbs and continue with caption-only evidence [REH]
+                            try:
+                                self.logger.info(
+                                    "stt.fail",
+                                    extra={
+                                        "event": "stt.fail",
+                                        "detail": {"reason": "no_speech" if stt_err != "error" else "error"},
+                                    },
+                                )
+                            except Exception:
                                 pass
-                            return base
+                            try:
+                                self.logger.info(
+                                    "fallback",
+                                    extra={
+                                        "event": "fallback",
+                                        "detail": {"kind": "caption_only"},
+                                    },
+                                )
+                            except Exception:
+                                pass
+                            base_text = (
+                                api_data.get("data", [{}])[0].get("text") or ""
+                            ).strip()
+                            return self._format_x_tweet_with_transcription(
+                                base_text=base_text,
+                                url=url,
+                                stt_res=(stt_res or {}),
+                            )
 
                         # Images are present somewhere; route to unified syndication→VL handler [CA]
                         from .syndication.handler import (
@@ -5026,8 +5218,33 @@ class Router:
                                         url=url,
                                         stt_res=stt_res,
                                     )
+                                # No-speech in API probe: log and continue with caption-only bundle [REH]
+                                try:
+                                    self.logger.info(
+                                        "stt.fail",
+                                        extra={
+                                            "event": "stt.fail",
+                                            "detail": {"reason": "no_speech"},
+                                        },
+                                    )
+                                except Exception:
+                                    pass
+                                try:
+                                    self.logger.info(
+                                        "fallback",
+                                        extra={
+                                            "event": "fallback",
+                                            "detail": {"kind": "caption_only"},
+                                        },
+                                    )
+                                except Exception:
+                                    pass
                                 base = self._format_x_tweet_result(api_data, url)
-                                return f"{base}\n\nDetected media in this tweet but transcription failed."
+                                return self._format_x_tweet_with_transcription(
+                                    base_text=base,
+                                    url=url,
+                                    stt_res=(stt_res or {}),
+                                )
                             except Exception as stt_err:
                                 self.logger.error(
                                     f"X media STT route failed for {url}: {stt_err}",
@@ -5613,7 +5830,7 @@ class Router:
 
     async def _invoke_text_flow(
         self,
-        content: str,
+        content: Union[str, EvidenceBundle],
         message: Message,
         context_str: str,
         perception_notes: Optional[str] = None,
@@ -5622,6 +5839,13 @@ class Router:
         Optionally inject perception notes into the prompt via contextual brain path.
         """
         self.logger.info(f"route=text | Routing to text flow. (msg_id: {message.id})")
+
+        # Convert EvidenceBundle to string for processing
+        if isinstance(content, EvidenceBundle):
+            content_str = content.compose_prompt_text()
+            self.logger.debug(f"📋 Composed evidence bundle for text flow: {len(content_str)} chars")
+        else:
+            content_str = content
 
         # Perception beats generation: suppress gen triggers if images/any-URL present (from original message or referenced message in reply chains)
         perception_guard = False
@@ -5691,8 +5915,8 @@ class Router:
             perception_guard = True
 
         # Check for direct vision triggers first (explicit tokens only)
-        if content.strip() and not perception_guard:
-            direct_vision = self._detect_direct_vision_triggers(content, message)
+        if content_str.strip() and not perception_guard:
+            direct_vision = self._detect_direct_vision_triggers(content_str, message)
             if direct_vision:
                 self.logger.info(
                     f"route=gen | 🎨 Direct vision bypass triggered (reason: {direct_vision['bypass_reason']}) (msg_id: {message.id})"
@@ -5722,11 +5946,11 @@ class Router:
             allow_nlp_triggers
             and (not perception_guard)
             and self._vision_intent_router
-            and content.strip()
+            and content_str.strip()
         ):
             try:
                 intent_result = await self._vision_intent_router.determine_intent(
-                    user_message=content,
+                    user_message=content_str,
                     context=context_str,
                     user_id=str(message.author.id),
                     guild_id=str(message.guild.id) if message.guild else None,
@@ -5937,7 +6161,7 @@ class Router:
 
     async def _flow_process_text(
         self,
-        content: str,
+        content: Union[str, EvidenceBundle],
         context: str = "",
         message: Optional[Message] = None,
         *,
@@ -5945,6 +6169,13 @@ class Router:
     ) -> BotAction:
         """Process text input through the AI model with RAG integration and conversation context."""
         self.logger.info("Processing text with AI model and RAG integration.")
+
+        # Convert EvidenceBundle to string for processing
+        if isinstance(content, EvidenceBundle):
+            content_str = content.compose_prompt_text()
+            self.logger.debug(f"📋 Composed evidence bundle into {len(content_str)} chars")
+        else:
+            content_str = content
 
         enhanced_context = context
 
@@ -5956,7 +6187,7 @@ class Router:
 
                 max_results = int(os.getenv("RAG_MAX_VECTOR_RESULTS", "5"))
                 self.logger.debug(
-                    f"🔍 RAG: Starting concurrent search for: '{content[:50]}...' [msg_id={message.id if message else 'N/A'}]"
+                    f"🔍 RAG: Starting concurrent search for: '{content_str[:50]}...' [msg_id={message.id if message else 'N/A'}]"
                 )
 
                 # Start RAG search concurrently - don't await here
@@ -5964,7 +6195,7 @@ class Router:
                     search_engine = await get_hybrid_search()
                     if search_engine:
                         return await search_engine.search(
-                            query=content, max_results=max_results
+                            query=content_str, max_results=max_results
                         )
                     return None
 
@@ -6049,13 +6280,13 @@ class Router:
                 # Anchor visual analysis when present to avoid "no image" drift while preserving persona [REH][IV]
                 anchored_system: Optional[str] = None
                 try:
-                    content_lower = (content or "").lower()
+                    content_lower = (content_str or "").lower()
                     has_vl_section = (
                         "visual_facts:" in content_lower
                         or "vl prompt output:" in content_lower
                         or bool(
                             re.search(
-                                r"^image\s+\d+:", content, re.IGNORECASE | re.MULTILINE
+                                r"^image\s+\d+:", content_str, re.IGNORECASE | re.MULTILINE
                             )
                         )
                         or "tweet caption:" in content_lower
@@ -6078,12 +6309,13 @@ class Router:
                             self.logger.info("text.anchor | visual_facts_detected=true")
                         except Exception:
                             pass
-                except Exception:
+                except Exception as e:
+                    self.logger.debug(f"Contextual brain inference failed: {e}")
                     anchored_system = None
 
                 response_text = await contextual_brain_infer_simple(
                     message,
-                    content,
+                    content_str,
                     self.bot,
                     perception_notes=perception_notes,
                     extra_context=enhanced_context,
@@ -6155,15 +6387,10 @@ class Router:
                 if anchored_system and contradicts:
                     # Try one more time with a tighter instruction
                     try:
-                        repair_instr = (
-                            content
-                            + "\n\n[REWRITE_TASK]\n"
-                            + "Draft a short reply that uses the VISUAL_FACTS above. "
-                            + "Do not claim the image is missing. Be concise and on-tone."
-                        )
                         second = await contextual_brain_infer_simple(
-                            message,
                             repair_instr,
+                            message,
+                            content_str,
                             self.bot,
                             perception_notes=perception_notes,
                             extra_context=enhanced_context,
@@ -6218,12 +6445,12 @@ class Router:
         # Basic fallback: apply the same visual-analysis anchoring when present
         anchored_system_fallback: Optional[str] = None
         try:
-            content_lower = (content or "").lower()
+            content_lower = (content_str or "").lower()
             has_vl_section = (
                 "visual_facts:" in content_lower
                 or "vl prompt output:" in content_lower
                 or bool(
-                    re.search(r"^image\s+\d+:", content, re.IGNORECASE | re.MULTILINE)
+                    re.search(r"^image\s+\d+:", content_str, re.IGNORECASE | re.MULTILINE)
                 )
                 or "tweet caption:" in content_lower
             )
@@ -6553,6 +6780,8 @@ class Router:
                         video_context,
                         self.bot,
                         extra_context=f"Video metadata:\n{meta_str}",
+                        perception_notes=None,
+                        system_prompt=None,
                     )
                     return BotAction(content=response_text)
 
@@ -6859,7 +7088,7 @@ class Router:
     ) -> str:
         """
         Handle image-only tweets with Vision/OCR pipeline and emoji upgrade support.
-        Returns neutral, concise alt-text with optional OCR snippet. [CA][SFT][REH]
+        Returns composed evidence text using caption + vision/ocr with deterministic ordering. [CA][SFT][REH]
         """
         try:
             cfg = self.config
@@ -6941,25 +7170,43 @@ class Router:
                         "vision.image_only_tweet.error", {"image_idx": str(idx)}
                     )
 
-            # Build minimal response with provenance
-            response_parts = []
+            # Build EvidenceBundle for VL parity [CA]
+            from .evidence import EvidenceBundle
+            bundle = EvidenceBundle(
+                source_platform="x",
+                source_url=url,
+            )
+            try:
+                ptid = self._extract_primary_tweet_id(url)
+                if ptid:
+                    bundle.primary_tweet_id = ptid
+            except Exception:
+                pass
 
-            # Main alt-text (concise, neutral)
-            if len(results) == 1:
-                response_parts.append(results[0])
-            else:
-                response_parts.extend(results)
+            # Caption (tweet text)
+            try:
+                caption = (syn_data.get("text") or "").strip()
+                if caption:
+                    bundle.caption_text = caption
+            except Exception:
+                pass
 
-            # Add brief OCR snippet if found and enabled
-            if ocr_texts and bool(cfg.get("VISION_OCR_ENABLE", True)):
-                max_chars = int(cfg.get("VISION_OCR_MAX_CHARS", 160))
-                combined_ocr = " • ".join(ocr_texts)[:max_chars]
-                if combined_ocr:
-                    response_parts.append(f"Seen text: {combined_ocr}")
+            # Vision notes (aggregate per-image alt-style lines)
+            try:
+                if results:
+                    bundle.media_vision_notes = "\n".join(results).strip()
+            except Exception:
+                pass
 
-            # Add provenance footer
-            timestamp = f" • {created_at}" if created_at else ""
-            response_parts.append(f"@{username}{timestamp} → {url}")
+            # OCR text (bounded)
+            try:
+                if ocr_texts and bool(cfg.get("VISION_OCR_ENABLE", True)):
+                    max_chars = int(cfg.get("VISION_OCR_MAX_CHARS", 160))
+                    combined_ocr = " • ".join(ocr_texts)
+                    if combined_ocr:
+                        bundle.media_ocr_text = combined_ocr[:max_chars]
+            except Exception:
+                pass
 
             # Log successful processing
             self._metric_inc(
@@ -6972,15 +7219,12 @@ class Router:
                 },
             )
 
-            response = "\n".join(response_parts)
-
-            # Note: The upgrade context will be stored after the message is sent
-            # This is handled in dispatch_message where we have access to the Discord message object
+            # Compose final text using EvidenceBundle's deterministic ordering and logging
+            composed = bundle.compose_prompt_text()
             self.logger.info(
                 f"✅ Image-only tweet processed successfully: {len(results)} images analyzed"
             )
-
-            return response
+            return composed
 
         except Exception as e:
             self.logger.error(
