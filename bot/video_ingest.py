@@ -228,12 +228,20 @@ class VideoIngestionManager:
                 json.dump({}, f)
 
     def _get_cache_key(self, url: str) -> str:
-        """Generate deterministic cache key for URL."""
+        """Generate deterministic cache key for URL.
+        Includes URL fragment when present to allow namespacing (e.g., ptid+url_hash). [CMV]
+        """
         return hashlib.sha256(url.encode()).hexdigest()[:16]
 
     def _is_supported_url(self, url: str) -> bool:
-        """Check if URL matches supported patterns."""
-        return any(re.match(pattern, url) for pattern in SUPPORTED_PATTERNS)
+        """Check if URL matches supported patterns.
+        Strips any URL fragment prior to matching (fragment may be used for cache namespacing). [IV]
+        """
+        try:
+            base_url = url.split("#", 1)[0]
+        except Exception:
+            base_url = url
+        return any(re.match(pattern, base_url) for pattern in SUPPORTED_PATTERNS)
 
     def _get_source_type(self, url: str) -> str:
         """Determine source type from URL."""
@@ -285,9 +293,12 @@ class VideoIngestionManager:
                 )
             return cmd
 
+        # Use URL without fragment for actual network operations
+        url_no_fragment = url.split("#", 1)[0]
+
         # First get metadata with JSON output for reliable parsing
-        metadata_cmd = ["yt-dlp", "--dump-json", "--no-playlist", "--quiet", url]
-        metadata_cmd = _maybe_with_cookies(metadata_cmd, url)
+        metadata_cmd = ["yt-dlp", "--dump-json", "--no-playlist", "--quiet", url_no_fragment]
+        metadata_cmd = _maybe_with_cookies(metadata_cmd, url_no_fragment)
         logger.debug("🧰 yt-dlp metadata cmd: %s", " ".join(metadata_cmd[:-1] + ["<URL>"]))
 
         try:
@@ -378,9 +389,9 @@ class VideoIngestionManager:
                 "--print",
                 "after_move:filepath",
                 "--quiet",
-                url,
+                url_no_fragment,
             ]
-            download_cmd = _maybe_with_cookies(download_cmd, url)
+            download_cmd = _maybe_with_cookies(download_cmd, url_no_fragment)
             logger.debug(
                 "🧰 yt-dlp download cmd: %s", " ".join(download_cmd[:-1] + ["<URL>"])
             )

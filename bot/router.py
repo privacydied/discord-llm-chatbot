@@ -496,6 +496,8 @@ class Router:
             ptid = self._extract_primary_tweet_id(url)
             if ptid:
                 bundle.primary_tweet_id = ptid
+                # Default selected to primary unless overridden by selection later
+                bundle.selected_tweet_id = ptid
         except Exception:
             pass
 
@@ -2793,6 +2795,29 @@ class Router:
                             pass
                         if kind == "video":
                             url_for_stt = resolved.get("url") or norm_urls[0]
+                            # Emit deterministic media selection breadcrumb and harden cache key via fragment [CMV][CDiP]
+                            try:
+                                import hashlib as _hl
+                                ptid2 = self._extract_primary_tweet_id(norm_urls[0]) or ""
+                                uhash2 = _hl.sha256(url_for_stt.encode()).hexdigest()[:16]
+                                self.logger.info(
+                                    "media.selected",
+                                    extra={
+                                        "event": "media.selected",
+                                        "detail": {
+                                            "primary": ptid2,
+                                            "selected": ptid2,
+                                            "tier": 1,
+                                            "has_audio": ".mp4" in str(url_for_stt).lower(),
+                                            "url_hash": uhash2,
+                                        },
+                                        "msg_id": message.id,
+                                    },
+                                )
+                                if ptid2 and uhash2:
+                                    url_for_stt = f"{url_for_stt}#ptid={ptid2}&uh={uhash2}"
+                            except Exception:
+                                pass
                             dur = resolved.get("duration")
                             host = None
                             try:
@@ -4368,7 +4393,39 @@ class Router:
 
         try:
             # Try video/audio extraction first
-            result = await hear_infer_from_url(url)
+            stt_target_url = url
+            if is_twitter:
+                # Resolve a playable media URL deterministically for X/Twitter and emit breadcrumb [IV][CDiP]
+                try:
+                    resolved = await self._resolve_x_media([url])
+                except Exception:
+                    resolved = {"kind": "unknown"}
+                if (resolved or {}).get("kind") == "video" and (resolved or {}).get("url"):
+                    stt_target_url = str(resolved.get("url"))
+                    # Breadcrumb before STT
+                    try:
+                        import hashlib as _hl
+                        ptid = self._extract_primary_tweet_id(url) or ""
+                        uhash = _hl.sha256(stt_target_url.encode()).hexdigest()[:16]
+                        self.logger.info(
+                            "media.selected",
+                            extra={
+                                "event": "media.selected",
+                                "detail": {
+                                    "primary": ptid,
+                                    "selected": ptid,
+                                    "tier": 1,
+                                    "has_audio": ".mp4" in stt_target_url.lower(),
+                                    "url_hash": uhash,
+                                },
+                            },
+                        )
+                        if ptid and uhash:
+                            stt_target_url = f"{stt_target_url}#ptid={ptid}&uh={uhash}"
+                    except Exception:
+                        pass
+
+            result = await hear_infer_from_url(stt_target_url)
             if result and result.get("transcription"):
                 if is_twitter:
                     cfg = self.config
@@ -4586,7 +4643,51 @@ class Router:
             return f"⚠️ {str(ve)}"
 
         except InferenceError as ie:
-            # InferenceError already has user-friendly messages
+            # Prefer caption-only degrade for Twitter when available [REH]
+            if is_twitter:
+                try:
+                    # Breadcrumbs: stt.fail + fallback
+                    try:
+                        self.logger.info(
+                            "stt.fail",
+                            extra={"event": "stt.fail", "detail": {"reason": "error"}},
+                        )
+                    except Exception:
+                        pass
+                    try:
+                        self.logger.info(
+                            "fallback",
+                            extra={"event": "fallback", "detail": {"kind": "caption_only"}},
+                        )
+                    except Exception:
+                        pass
+
+                    # Try API then syndication for anchored caption
+                    base_text = None
+                    tweet_id = XApiClient.extract_tweet_id(str(url))
+                    x_client = await self._get_x_api_client()
+                    if tweet_id and x_client is not None:
+                        try:
+                            api_data = await x_client.get_tweet_by_id(tweet_id)
+                            base_text = self._format_x_tweet_result(api_data, url)
+                        except Exception:
+                            base_text = None
+                    if base_text is None and tweet_id and bool(self.config.get("X_SYNDICATION_ENABLED", True)):
+                        try:
+                            syn = await self._get_tweet_via_syndication(tweet_id)
+                            if syn:
+                                base_text = self._format_syndication_result(syn, url)
+                        except Exception:
+                            base_text = None
+                    if base_text:
+                        return self._format_x_tweet_with_transcription(
+                            base_text=base_text,
+                            url=url,
+                            stt_res={"transcription": ""},
+                        )
+                except Exception:
+                    pass
+            # Fallback to existing user-friendly message for non-Twitter or when caption unavailable
             self.logger.info(f"ℹ️ Video inference: {ie}")
             return f"⚠️ {str(ie)}"
 
@@ -7180,6 +7281,7 @@ class Router:
                 ptid = self._extract_primary_tweet_id(url)
                 if ptid:
                     bundle.primary_tweet_id = ptid
+                    bundle.selected_tweet_id = ptid
             except Exception:
                 pass
 

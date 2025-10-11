@@ -46,6 +46,7 @@ class EvidenceBundle:
     source_platform: str = ""
     source_url: str = ""
     primary_tweet_id: Optional[str] = None  # Anchor for deterministic media selection
+    selected_tweet_id: Optional[str] = None  # Actual media host tweet id (may equal primary)
     caption_text: str = ""
     quoted_text: str = ""  # For quote tweets and retweets
     media_transcript: str = ""
@@ -263,6 +264,8 @@ class EvidenceBundle:
                         "chars": len(composed),
                         "lengths": lens,
                         "stt_no_speech": bool(getattr(self, "stt_no_speech", False)),
+                        "primary": self.primary_tweet_id or "",
+                        "selected": (self.selected_tweet_id or self.primary_tweet_id or ""),
                         "sections_kept": kept_sections,
                         "total_sections": len(sections),
                         "token_budget": token_budget,
