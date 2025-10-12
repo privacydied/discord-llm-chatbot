@@ -770,5 +770,24 @@ def load_config():
     return config
 
 
+def invalidate_config_cache() -> None:
+    """Invalidate the in-process config cache to force fresh reads on next load_config().
+    Intended for use by the hot-reload path immediately after .env is reloaded. [REH][CMV]
+    """
+    global _config_cache, _cache_timestamp
+    _config_cache = None
+    _cache_timestamp = 0.0
+    try:
+        logger.info(
+            "config.cache.invalidate",
+            extra={
+                "event": "config.cache.invalidate",
+                "detail": {"reason": "reload_request"},
+            },
+        )
+    except Exception:
+        pass
+
+
 # Force English IPA route (bypass tokenizer env and disable autodiscovery)
 KOKORO_FORCE_IPA_EN = True

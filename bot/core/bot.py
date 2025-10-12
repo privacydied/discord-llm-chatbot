@@ -15,6 +15,8 @@ from rich.tree import Tree
 from rich.panel import Panel
 
 from bot.config import load_system_prompts
+from bot.config_reload import add_reload_callback
+from bot.http_client import cleanup_http_client
 from bot.utils.logging import get_logger
 from bot.metrics import NullMetrics
 from bot.memory import load_all_profiles
@@ -335,6 +337,139 @@ class LLMBot(commands.Bot):
             # Load system prompts
             self.system_prompts = load_system_prompts()
             self.logger.info("✅ Loaded system prompts")
+
+            # Register config hot-reload callback to atomically swap live config and prompts [REH]
+            try:
+                def _on_config_reload(old_cfg: Dict[str, Any], new_cfg: Dict[str, Any]) -> None:
+                    try:
+                        # Swap live config snapshot
+                        self.config = dict(new_cfg)
+                        # Refresh system prompts to follow updated PROMPT_FILE/VL_PROMPT_FILE
+                        self.system_prompts = load_system_prompts()
+                        # Ensure router sees the new snapshot
+                        if getattr(self, "router", None) is not None:
+                            try:
+                                self.router.config = self.config
+                            except Exception:
+                                pass
+                        # Scoped re-init based on changed keys
+                        try:
+                            changed_keys = set()
+                            ok = old_cfg or {}
+                            nk = new_cfg or {}
+                            for k in set(ok.keys()) | set(nk.keys()):
+                                if ok.get(k) != nk.get(k):
+                                    changed_keys.add(str(k))
+                            upper = {k.upper() for k in changed_keys}
+                            # Hot-reload TTS
+                            if any(k.startswith("TTS_") for k in upper):
+                                try:
+                                    if getattr(self, "tts_manager", None) and getattr(self.tts_manager, "_executor", None):
+                                        self.tts_manager._executor.shutdown(wait=False)
+                                except Exception:
+                                    pass
+                                try:
+                                    from bot.tts.interface import TTSManager
+                                    self.tts_manager = TTSManager(self)
+                                    self.logger.info("TTS manager hot-reloaded")
+                                except Exception as e:
+                                    self.logger.error(f"TTS hot-reload failed: {e}")
+                            # Rebind Vision configs
+                            if any(k.startswith("VISION_") or k.startswith("VL_") for k in upper):
+                                vo = getattr(self, "vision_orchestrator", None)
+                                if vo is not None:
+                                    try:
+                                        vo.config = self.config
+                                    except Exception:
+                                        pass
+                                    try:
+                                        if hasattr(vo, "gateway") and vo.gateway is not None:
+                                            vo.gateway.config = self.config
+                                            if hasattr(vo.gateway, "adapter") and vo.gateway.adapter is not None:
+                                                vo.gateway.adapter.config = self.config
+                                        self.logger.info("Vision orchestrator config rebound (hot)")
+                                    except Exception as e:
+                                        self.logger.debug(f"Vision hot-rebind failed: {e}")
+                            # Restart shared HTTP client on HTTP/PROXY/TIMEOUT/RETRY changes
+                            if any(
+                                k.startswith("HTTP_")
+                                or k.startswith("PROXY_")
+                                or k.endswith("_TIMEOUT")
+                                or k.startswith("RETRY_")
+                                for k in upper
+                            ):
+                                try:
+                                    # Best-effort; next get_http_client() will start a new one with fresh config
+                                    self.logger.info(
+                                        "config.reload.http_client_restart",
+                                        extra={
+                                            "event": "config.reload.http_client_restart",
+                                            "detail": {},
+                                        },
+                                    )
+                                    # cleanup function is async; schedule and forget to avoid blocking reload path
+                                    import asyncio as _aio
+
+                                    _aio.create_task(cleanup_http_client())
+                                except Exception as e:
+                                    self.logger.debug(f"HTTP client restart failed: {e}")
+                        except Exception:
+                            pass
+                        # Scoped re-init: rebind TTS when TTS_* keys changed; refresh VO configs when VISION/VL_* changed
+                        try:
+                            changed_keys = set()
+                            ok = old_cfg or {}
+                            nk = new_cfg or {}
+                            for k in set(ok.keys()) | set(nk.keys()):
+                                if ok.get(k) != nk.get(k):
+                                    changed_keys.add(str(k))
+                            upper = {k.upper() for k in changed_keys}
+                            if any(k.startswith("TTS_") for k in upper):
+                                # Best-effort shutdown of prior TTS thread executor
+                                try:
+                                    if getattr(self, "tts_manager", None) and getattr(self.tts_manager, "_executor", None):
+                                        self.tts_manager._executor.shutdown(wait=False)
+                                except Exception:
+                                    pass
+                                try:
+                                    from bot.tts.interface import TTSManager
+
+                                    self.tts_manager = TTSManager(self)
+                                    self.logger.info("TTS manager hot-reloaded")
+                                except Exception as e:
+                                    self.logger.error(f"TTS hot-reload failed: {e}")
+                            if any(k.startswith("VISION_") or k.startswith("VL_") for k in upper):
+                                vo = getattr(self, "vision_orchestrator", None)
+                                if vo is not None:
+                                    try:
+                                        vo.config = self.config
+                                    except Exception:
+                                        pass
+                                    try:
+                                        if hasattr(vo, "gateway") and vo.gateway is not None:
+                                            vo.gateway.config = self.config
+                                            if hasattr(vo.gateway, "adapter") and vo.gateway.adapter is not None:
+                                                vo.gateway.adapter.config = self.config
+                                        self.logger.info("Vision orchestrator config rebound (hot)")
+                                    except Exception as e:
+                                        self.logger.debug(f"Vision hot-rebind failed: {e}")
+                        except Exception:
+                            pass
+                        # Breadcrumb
+                        self.logger.info(
+                            "config.reload.applied.bot",
+                            extra={
+                                "event": "config.reload.applied.bot",
+                                "detail": {"keys": len(new_cfg or {})},
+                            },
+                        )
+                    except Exception as e:
+                        self.logger.error(f"Reload callback failed: {e}")
+
+                add_reload_callback(_on_config_reload)
+            except Exception:
+                # Non-fatal — manual reload command still works
+                pass
 
             # Load user and server profiles
             await self.load_profiles()

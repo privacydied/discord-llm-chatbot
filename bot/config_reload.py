@@ -9,9 +9,10 @@ import asyncio
 import threading
 import time
 from pathlib import Path
-from typing import Dict, Any, Optional, Set, Callable
+from typing import Dict, Any, Optional, Set, Callable, List
 from datetime import datetime
 from dotenv import load_dotenv
+import os
 
 from .config import load_config
 from .utils.logging import get_logger
@@ -25,7 +26,47 @@ _config_lock = threading.RLock()
 _reload_callbacks: Set[Callable[[Dict[str, Any], Dict[str, Any]], None]] = set()
 _file_watcher_task: Optional[asyncio.Task] = None
 _last_reload_time: float = 0
-_env_file_path = Path.cwd() / ".env"
+def _candidate_env_paths() -> List[Path]:
+    """Return list of candidate env files to watch (resolved absolute paths).
+    Order matters; the first existing is used as the preferred .env for default reloads.
+    Includes repo-root variants and yoroi.env for developer workflows. [CMV]
+    """
+    root = Path(__file__).parent.parent.resolve()
+    cwd = Path.cwd().resolve()
+    candidates = [
+        cwd / ".env",
+        root / ".env",
+        cwd / "yoroi.env",
+        root / "yoroi.env",
+    ]
+    # Deduplicate while preserving order
+    seen = set()
+    out: List[Path] = []
+    for p in candidates:
+        rp = p.resolve()
+        if rp not in seen:
+            seen.add(rp)
+            out.append(rp)
+    return out
+
+
+def _preferred_env_path() -> Path:
+    for p in _candidate_env_paths():
+        if p.exists():
+            return p
+    # fallback to cwd/.env
+    return (Path.cwd() / ".env").resolve()
+
+
+_env_file_path = _preferred_env_path()
+_last_env_digest: Optional[str] = None
+
+def _file_digest(p: Path) -> Optional[str]:
+    try:
+        data = p.read_bytes()
+        return hashlib.sha256(data).hexdigest()
+    except Exception:
+        return None
 
 # Sensitive keys that should be redacted in logs
 SENSITIVE_KEYS = {
@@ -94,7 +135,32 @@ def _compare_configs(
     return changes
 
 
-def reload_env() -> Dict[str, Any]:
+def _infer_subsystems(changes: Dict[str, Any]) -> Set[str]:
+    """Infer which subsystems are impacted based on changed keys. [CMV]"""
+    impacted: Set[str] = set()
+    keys: Set[str] = set()
+    keys.update((changes.get("added") or {}).keys())
+    keys.update((changes.get("removed") or {}).keys())
+    keys.update((changes.get("modified") or {}).keys())
+
+    for k in keys:
+        ku = k.upper()
+        if ku.startswith("OPENAI_") or ku.startswith("OLLAMA_") or ku.startswith("TEXT_"):
+            impacted.add("text")
+        if ku.startswith("VL_") or ku.startswith("VISION_"):
+            impacted.add("vision")
+        if ku.startswith("STT_") or ku.startswith("WHISPER_"):
+            impacted.add("stt")
+        if ku.startswith("TTS_"):
+            impacted.add("tts")
+        if ku.startswith("LOG_"):
+            impacted.add("logging")
+        if "PROXY" in ku or ku.startswith("HTTP_"):
+            impacted.add("http")
+    return impacted
+
+
+def reload_env(env_path: Optional[Path] = None) -> Dict[str, Any]:
     """
     Reload environment variables from .env file and update configuration.
 
@@ -105,21 +171,41 @@ def reload_env() -> Dict[str, Any]:
 
     with _config_lock:
         try:
-            logger.info("🔄 Starting configuration reload...")
+            # Compute current env digest (preload) to support idempotency
+            # Choose target path
+            target_path = (env_path or _preferred_env_path()).resolve()
+            env_before = _file_digest(target_path) if target_path.exists() else None
+            logger.info(
+                "config.reload.started",
+                extra={
+                    "event": "config.reload.started",
+                    "detail": {"prev_digest": env_before or "", "path": str(target_path)},
+                },
+            )
 
             # Store old config for comparison
             old_config = _current_config.copy()
             old_version = _config_version
 
             # Reload .env file
-            if _env_file_path.exists():
-                load_dotenv(dotenv_path=_env_file_path, override=True)
-                logger.debug(f"📁 Reloaded .env from {_env_file_path}")
+            if target_path.exists():
+                load_dotenv(dotenv_path=target_path, override=True)
+                logger.debug(f"📁 Reloaded .env from {target_path}")
             else:
-                logger.warning(f"⚠️ .env file not found at {_env_file_path}")
+                logger.warning(f"⚠️ .env file not found at {target_path}")
 
             # Load new configuration
+            try:
+                # Invalidate cached snapshot so load_config reflects new env immediately
+                from .config import invalidate_config_cache
+
+                invalidate_config_cache()
+            except Exception:
+                pass
+
             new_config = load_config()
+
+            env_after = _file_digest(target_path) if target_path.exists() else None
 
             # Validate critical required variables
             required_vars = ["DISCORD_TOKEN"]
@@ -144,6 +230,28 @@ def reload_env() -> Dict[str, Any]:
             _current_config = new_config
             _config_version = new_version
             _last_reload_time = time.time()
+
+            # Diff breadcrumb
+            try:
+                redacted_added = _redact_sensitive_values(changes.get("added", {}))
+                redacted_removed = _redact_sensitive_values(changes.get("removed", {}))
+                redacted_modified = {
+                    k: ("[REDACTED]" if any(s in k.upper() for s in SENSITIVE_KEYS) else v)
+                    for k, v in changes.get("modified", {}).items()
+                }
+                logger.info(
+                    "config.reload.diff",
+                    extra={
+                        "event": "config.reload.diff",
+                        "detail": {
+                            "added": list(redacted_added.keys()),
+                            "removed": list(redacted_removed.keys()),
+                            "modified": list(redacted_modified.keys()),
+                        },
+                    },
+                )
+            except Exception:
+                pass
 
             # Log changes with sensitive values redacted
             if changes["added"] or changes["removed"] or changes["modified"]:
@@ -174,9 +282,24 @@ def reload_env() -> Dict[str, Any]:
             else:
                 logger.info("📊 No configuration changes detected")
 
-            logger.info(
-                f"✅ Configuration reload complete [version: {old_version} → {new_version}]"
-            )
+            # Applied breadcrumb with subsystem inference
+            try:
+                subsystems: Set[str] = _infer_subsystems(changes)
+                logger.info(
+                    "config.reload.applied",
+                    extra={
+                        "event": "config.reload.applied",
+                        "detail": {
+                            "subsystems": sorted(list(subsystems)),
+                            "old_version": old_version,
+                            "new_version": new_version,
+                            "prev_digest": env_before or "",
+                            "new_digest": env_after or "",
+                        },
+                    },
+                )
+            except Exception:
+                pass
 
             # Notify callbacks
             for callback in _reload_callbacks:
@@ -194,6 +317,17 @@ def reload_env() -> Dict[str, Any]:
             }
 
         except Exception as e:
+            # Rollback breadcrumb — we keep prior config active
+            try:
+                logger.info(
+                    "config.reload.rollback",
+                    extra={
+                        "event": "config.reload.rollback",
+                        "detail": {"reason": str(e)[:200]},
+                    },
+                )
+            except Exception:
+                pass
             logger.error(f"❌ Configuration reload failed: {e}", exc_info=True)
             return {"success": False, "error": str(e), "version": _config_version}
 
@@ -246,31 +380,30 @@ def _sighup_handler(signum: int, frame) -> None:
 
 async def _file_watcher_loop() -> None:
     """Main file watcher loop with proper debouncing."""
-    env_file = Path(".env")
-    last_mtime = None
-    last_reload_time = 0
-    debounce_delay = 2.0  # Minimum seconds between reloads
+    env_paths = _candidate_env_paths()
+    last_digests: Dict[Path, Optional[str]] = {p: _file_digest(p) for p in env_paths}
+    last_reload_time = 0.0
+    debounce_delay = 0.5  # debounce to collapse editor burst events
 
     try:
         while True:
-            await asyncio.sleep(1)  # Check every second
+            await asyncio.sleep(0.5)  # Responsive but still light
 
             try:
-                if env_file.exists():
-                    current_mtime = env_file.stat().st_mtime
-                    current_time = time.time()
-
-                    # Check if file changed and enough time passed since last reload
-                    if (
-                        last_mtime is not None
-                        and current_mtime != last_mtime
-                        and current_time - last_reload_time >= debounce_delay
-                    ):
-                        logger.info("📁 .env file changed, reloading configuration...")
-                        reload_env()
-                        last_reload_time = current_time
-
-                    last_mtime = current_mtime
+                current_time = time.time()
+                for p in _candidate_env_paths():
+                    try:
+                        prev = last_digests.get(p)
+                        dig = _file_digest(p) if p.exists() else None
+                        if (
+                            dig != prev and current_time - last_reload_time >= debounce_delay
+                        ):
+                            reload_env(p)
+                            last_reload_time = current_time
+                        last_digests[p] = dig
+                    except Exception as _e:
+                        # Continue checking other paths
+                        last_digests[p] = last_digests.get(p, None)
 
             except Exception as e:
                 logger.error(f"❌ Error in file watcher: {e}")
@@ -310,7 +443,18 @@ async def start_file_watcher() -> None:
     if _file_watcher_task and not _file_watcher_task.done():
         logger.warning("⚠️ File watcher already running")
         return
-
+    try:
+        candidates = [str(p) for p in _candidate_env_paths()]
+        preferred = str(_preferred_env_path())
+        logger.info(
+            "config.watcher.paths",
+            extra={
+                "event": "config.watcher.paths",
+                "detail": {"candidates": candidates, "preferred": preferred},
+            },
+        )
+    except Exception:
+        pass
     _file_watcher_task = asyncio.create_task(_file_watcher_loop())
     logger.info("👁️ Configuration file watcher started")
 

@@ -2594,10 +2594,11 @@ class Router:
                         f"Found command '{parsed_command.command.name}', delegating to cog. (msg_id: {message.id})"
                     )
                     return BotAction(meta={"delegated_to_cog": True})
-                # If it starts with '!' but isn't a known command, let it continue to normal processing
+                # If it starts with '!' but isn't a known command, delegate to cogs to allow third-party/other cogs [REH]
                 self.logger.debug(
-                    f"Unknown command pattern ignored: {clean_content.split()[0] if clean_content else '(empty)'} (msg_id: {message.id})"
+                    f"Delegating unknown '!' command to cogs: {clean_content.split()[0] if clean_content else '(empty)'} (msg_id: {message.id})"
                 )
+                return BotAction(meta={"delegated_to_cog": True})
 
             # 3. Determine if the bot should process this message (DM, mention, or reply).
             allow_via_gate = self._should_process_message(message)
