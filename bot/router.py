@@ -702,12 +702,17 @@ class Router:
         # Check cache
         now = time.time()
         cached = self._syn_cache.get(tweet_id)
-        if cached and (now - float(cached.get("ts", 0))) < self._syn_ttl_s:
+        if cached:
+            ttl = self._syn_ttl_s
             if cached.get("neg"):
-                self._metric_inc("x.syndication.neg_cache_hit", None)
-                return None
-            self._metric_inc("x.syndication.cache_hit", None)
-            return cached.get("data")
+                # Shorter TTL for negative cache entries to reduce long-lived false negatives [REH]
+                ttl = min(self._syn_ttl_s, 300.0)
+            if (now - float(cached.get("ts", 0))) < ttl:
+                if cached.get("neg"):
+                    self._metric_inc("x.syndication.neg_cache_hit", None)
+                    return None
+                self._metric_inc("x.syndication.cache_hit", None)
+                return cached.get("data")
 
         # Per-ID lock to avoid thundering herd
         lock = self._syn_locks.get(tweet_id)
@@ -717,12 +722,16 @@ class Router:
         async with lock:
             # Check cache again inside lock
             cached = self._syn_cache.get(tweet_id)
-            if cached and (now - float(cached.get("ts", 0))) < self._syn_ttl_s:
+            if cached:
+                ttl = self._syn_ttl_s
                 if cached.get("neg"):
-                    self._metric_inc("x.syndication.neg_cache_hit_locked", None)
-                    return None
-                self._metric_inc("x.syndication.cache_hit_locked", None)
-                return cached.get("data")
+                    ttl = min(self._syn_ttl_s, 300.0)
+                if (now - float(cached.get("ts", 0))) < ttl:
+                    if cached.get("neg"):
+                        self._metric_inc("x.syndication.neg_cache_hit_locked", None)
+                        return None
+                    self._metric_inc("x.syndication.cache_hit_locked", None)
+                    return cached.get("data")
 
             int(self.config.get("X_SYNDICATION_TIMEOUT_MS", 4000))
             headers = {
@@ -866,6 +875,16 @@ class Router:
             if not isinstance(data, dict) or not (
                 data.get("text") or data.get("full_text")
             ):
+                try:
+                    self.logger.info(
+                        "x.text.miss",
+                        extra={
+                            "event": "x.text.miss",
+                            "detail": {"primary": tweet_id, "layer": "syndication", "reason": "no_text"},
+                        },
+                    )
+                except Exception:
+                    pass
                 self._metric_inc("x.syndication.invalid", None)
                 # Negative cache to avoid repeated hits for unavailable/blocked tweets
                 self._syn_cache[tweet_id] = {"neg": True, "ts": time.time()}
@@ -875,12 +894,31 @@ class Router:
             # Cache and return
             self._syn_cache[tweet_id] = {"data": data, "ts": time.time()}
             self._metric_inc("x.syndication.success", None)
+            try:
+                txt = (data.get("full_text") or data.get("text") or "").strip()
+                self.logger.info(
+                    "x.text.resolve",
+                    extra={
+                        "event": "x.text.resolve",
+                        "detail": {"primary": tweet_id, "source": "syndication", "chars": len(txt)},
+                    },
+                )
+            except Exception:
+                pass
             return data
 
     def _format_syndication_result(self, syn_data: Dict[str, Any], url: str) -> str:
         """Format Syndication JSON tweet into concise text similar to API format. [PA]"""
         try:
-            text = (syn_data.get("text") or syn_data.get("full_text") or "").strip()
+            # Prefer long-form note tweets, then legacy/full_text, then text
+            note = syn_data.get("note_tweet") or {}
+            text = (
+                (note.get("text") if isinstance(note, dict) else None)
+                or (syn_data.get("legacy", {}) or {}).get("full_text")
+                or syn_data.get("full_text")
+                or syn_data.get("text")
+                or ""
+            ).strip()
             user = syn_data.get("user") or {}
             username = user.get("screen_name") or user.get("name")
             created_at = syn_data.get("created_at") or syn_data.get("date_created")
@@ -888,10 +926,81 @@ class Router:
             media_hint = f" • media:{len(photos)}" if photos else ""
             prefix = f"@{username}" if username else "Tweet"
             stamp = f" • {created_at}" if created_at else ""
-            body = text if len(text) <= 4000 else (text[:3990] + "…")
+            if not text:
+                try:
+                    self.logger.info(
+                        "x.text.miss",
+                        extra={
+                            "event": "x.text.miss",
+                            "detail": {"primary": XApiClient.extract_tweet_id(url) or "", "layer": "format", "reason": "empty_text"},
+                        },
+                    )
+                except Exception:
+                    pass
+            body = text if text and len(text) <= 4000 else ((text[:3990] + "…") if text else "(Tweet text not available. If you want analysis, paste the text or add a screenshot.)")
             return f"{prefix}{stamp}{media_hint} → {url}\n{body}"
         except Exception:
             return f"Tweet → {url}\n{str(syn_data)[:4000]}"
+
+    def _extract_syndication_text(self, node: Dict[str, Any]) -> str:
+        """Extract tweet body text from a syndication-like node with long-form support."""
+        if not isinstance(node, dict):
+            return ""
+        note = node.get("note_tweet") or {}
+        text = (
+            (note.get("text") if isinstance(note, dict) else None)
+            or (node.get("legacy", {}) or {}).get("full_text")
+            or node.get("full_text")
+            or node.get("text")
+            or ""
+        )
+        return (text or "").strip()
+
+    def _compose_text_tweet_evidence(self, url: str, syn: Dict[str, Any]) -> str:
+        """Build EvidenceBundle for a text-only tweet using syndication payload. [CA]"""
+        from .evidence import EvidenceBundle
+        bundle = EvidenceBundle(source_platform="x", source_url=url)
+        try:
+            ptid = self._extract_primary_tweet_id(url)
+            if ptid:
+                bundle.primary_tweet_id = ptid
+                bundle.selected_tweet_id = ptid
+                try:
+                    self.logger.info(
+                        "x.text.canon",
+                        extra={
+                            "event": "x.text.canon",
+                            "detail": {"url": url, "primary": ptid},
+                        },
+                    )
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        caption = self._extract_syndication_text(syn)
+        if caption:
+            bundle.caption_text = caption
+        q = syn.get("quoted_tweet") or syn.get("quoted_status") or {}
+        qtxt = self._extract_syndication_text(q)
+        if qtxt:
+            bundle.quoted_text = qtxt
+        composed = bundle.compose_prompt_text()
+        try:
+            self.logger.info(
+                "x.text.resolve",
+                extra={
+                    "event": "x.text.resolve",
+                    "detail": {
+                        "primary": bundle.primary_tweet_id or "",
+                        "source": "syndication",
+                        "chars": len(bundle.caption_text or ""),
+                    },
+                },
+            )
+        except Exception:
+            pass
+        return composed
 
     @staticmethod
     def _is_twitter_url(url: str) -> bool:
@@ -1405,7 +1514,9 @@ class Router:
         except Exception:
             pass
         try:
-            m = re.search(r"/status/(\d{5,20})(?:\D|$)", str(url))
+            u = str(url)
+            # Support both /{user}/status/<id> and /i/status/<id>
+            m = re.search(r"/(?:[\w_]+/status|i/status)/(\d{5,20})(?:\D|$)", u, re.IGNORECASE)
             if m:
                 return m.group(1)
         except Exception:
@@ -5072,7 +5183,8 @@ class Router:
                                 url, syn, source="syndication"
                             )
 
-                        base = self._format_syndication_result(syn, url)
+                        # Compose evidence for text-only tweets through the standard bundle [CA]
+                        base = self._compose_text_tweet_evidence(url, syn)
 
                         # If we have no images at all (neither native photos nor extracted),
                         # try targeted fx/vx/HTML probe for images before falling back to text. [REH][PA]
@@ -5167,11 +5279,18 @@ class Router:
                                 )
                             except Exception:
                                 pass
-                            base_text = (
-                                api_data.get("data", [{}])[0].get("text") or ""
-                            ).strip()
+                            # Prefer API text if available; otherwise fall back to syndication text or composed evidence [REH]
+                            try:
+                                base_text_api = (
+                                    (api_data.get("data") or [{}])[0].get("text")
+                                    if "api_data" in locals() and isinstance(api_data, dict)
+                                    else ""
+                                )
+                            except Exception:
+                                base_text_api = ""
+                            safe_base_text = (base_text_api or text or base or "").strip()
                             return self._format_x_tweet_with_transcription(
-                                base_text=base_text,
+                                base_text=safe_base_text,
                                 url=url,
                                 stt_res=(stt_res or {}),
                             )

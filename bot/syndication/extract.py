@@ -22,7 +22,15 @@ def extract_text_and_images_from_syndication(tw: Dict[str, Any]) -> Dict[str, An
       4) High-res: upgrade pbs URLs to name=orig; handle legacy :size suffix.
       5) Dedup: compare by base asset (strip query and :size) while preserving order.
     """
-    text = tw.get("full_text") or tw.get("text") or ""
+    # Prefer long-form note tweets when present, then legacy/full_text, then text
+    note = tw.get("note_tweet") or {}
+    text = (
+        (note.get("text") if isinstance(note, dict) else None)
+        or (tw.get("legacy", {}) or {}).get("full_text")
+        or tw.get("full_text")
+        or tw.get("text")
+        or ""
+    )
     include_quoted = os.getenv("SYND_INCLUDE_QUOTED_MEDIA", "true").lower() in (
         "1",
         "true",

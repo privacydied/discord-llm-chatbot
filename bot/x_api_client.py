@@ -17,7 +17,7 @@ _X_API_BASE_URL = (
 )
 _TWEET_ID_RE = re.compile(r"^\d{8,20}$")
 _X_URL_ID_RE = re.compile(
-    r"https?://(?:www\.)?(?:twitter|x|vxtwitter|fxtwitter)\.com/[^/]+/status/(\d{8,20})(?:\D.*)?",
+    r"https?://(?:www\.)?(?:twitter|x|vxtwitter|fxtwitter)\.com/(?:[^/]+/status|i/status)/(\d{8,20})(?:\D.*)?",
     re.IGNORECASE,
 )
 
