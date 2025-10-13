@@ -12,7 +12,6 @@ from pathlib import Path
 from typing import Dict, Any, Optional, Set, Callable, List
 from datetime import datetime
 from dotenv import load_dotenv
-import os
 
 from .config import load_config
 from .utils.logging import get_logger

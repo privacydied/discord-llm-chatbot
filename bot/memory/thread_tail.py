@@ -293,9 +293,6 @@ async def collect_thread_tail_context(
         if not _is_thread_channel(ch):
             return None
 
-        # Hard-enabled per design: always on in thread channels
-        enabled = True
-
         try:
             k = int(cfg.get("THREAD_CONTEXT_TAIL_COUNT", 5))
         except Exception:
