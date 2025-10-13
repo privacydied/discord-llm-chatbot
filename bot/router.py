@@ -28,7 +28,17 @@ from enum import Enum, auto
 from html import unescape
 import json
 from pathlib import Path
-from typing import Awaitable, Callable, Dict, List, Optional, Tuple, TYPE_CHECKING, Any
+from typing import (
+    Any,
+    Awaitable,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Tuple,
+    TYPE_CHECKING,
+    Union,
+)
 from urllib.parse import parse_qs, parse_qsl, urlencode, urlparse, urlunparse, unquote
 
 import discord
@@ -1463,7 +1473,8 @@ class Router:
                     host = (pu.netloc or "").lower()
                     path = (pu.path or "").lower()
                 except Exception:
-                    host = ""; path = ""
+                    host = ""
+                    path = ""
                 # Detect video poster thumbs from pbs
                 if host.endswith("pbs.twimg.com") and any(pref in path for pref in poster_prefixes):
                     poster_detected_global = True
@@ -1798,7 +1809,8 @@ class Router:
                             host = (pu.netloc or "").lower()
                             path = (pu.path or "").lower()
                         except Exception:
-                            host = ""; path = ""
+                            host = ""
+                            path = ""
                         poster_prefixes = (
                             "/amplify_video_thumb/",
                             "/ext_tw_video_thumb/",
@@ -2013,7 +2025,9 @@ class Router:
                 return await self._process_image_from_url(
                     url, model_override=model_override
                 )
-                                
+
+            if item.source_type == "embed":
+                embed = item.payload
                 image_url = None
                 try:
                     if isinstance(embed, dict):
@@ -4955,6 +4969,8 @@ class Router:
             except Exception:
                 web_extract_timeout = 30.0
 
+            api_data: Optional[Dict[str, Any]] = None
+
             async def _bounded(coro, timeout_s: float, tag: str, detail: Optional[dict] = None):
                 """Await coro with a timeout and emit start/ok/timeout/fail breadcrumbs. [REH][PA]"""
                 import time as _t
@@ -6608,10 +6624,17 @@ class Router:
                 if anchored_system and contradicts:
                     # Try one more time with a tighter instruction
                     try:
+                        repair_prompt = (
+                            (content_str or "")
+                            + "\n\n"  # Preserve original prompt context.
+                            + (
+                                "The previous draft incorrectly implied there was no image. "
+                                "Respect the provided visual facts (including any VL prompt output) and answer accordingly."
+                            )
+                        )
                         second = await contextual_brain_infer_simple(
-                            repair_instr,
                             message,
-                            content_str,
+                            repair_prompt,
                             self.bot,
                             perception_notes=perception_notes,
                             extra_context=enhanced_context,
@@ -7326,10 +7349,11 @@ class Router:
             # Extract tweet metadata for provenance
             user = syn_data.get("user") or {}
             username = user.get("screen_name") or user.get("name") or "unknown"
-            created_at = syn_data.get("created_at")
+            created_at = syn_data.get("created_at") or "unknown"
 
             self.logger.info(
                 f"🖼️ Processing {len(photos)} image(s) from image-only tweet: {url}"
+                f" | author={username} | created_at={created_at}"
             )
             self._metric_inc(
                 "vision.image_only_tweet.start",

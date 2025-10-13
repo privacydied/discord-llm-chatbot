@@ -90,13 +90,12 @@ async def resolve_anchor(message: discord.Message, case: str, timeout_s: float) 
         # Best-effort: earliest message in the thread (acts as thread starter)
         try:
             hist = message.channel.history(limit=200, oldest_first=True)
-            # Guard the first fetch with timeout
-            first: Optional[discord.Message] = None
+
             async def _first() -> Optional[discord.Message]:
                 async for m in hist:
-                    first = m
-                    return first
+                    return m
                 return None
+
             return await asyncio.wait_for(_first(), timeout=timeout_s)
         except Exception:
             return None

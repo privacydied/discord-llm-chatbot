@@ -27,7 +27,6 @@ from bot.voice import VoiceMessagePublisher
 from bot.memory.thread_tail import (
     resolve_thread_reply_target,
     _is_thread_channel,
-    resolve_implicit_anchor,
 )
 
 if TYPE_CHECKING:
@@ -1278,14 +1277,12 @@ class LLMBot(commands.Bot):
 
                     # Decide ping mode
                     ping_mode = "none"
-                    reply_ping = False
                     explicit_mention = False
                     try:
                         if recipient is not None:
                             # Preferred: rely on reply ping when the target author is the human recipient
                             if reply_target is not None and getattr(reply_target, "author", None) is recipient and not getattr(recipient, "bot", False):
                                 ping_mode = "reply_ping"
-                                reply_ping = True
                             else:
                                 # Use explicit mention when target author is a bot or different; avoid double-ping
                                 ping_mode = "explicit_mention"
@@ -1294,7 +1291,6 @@ class LLMBot(commands.Bot):
                             ping_mode = "none"
                     except Exception:
                         ping_mode = "none"
-                        reply_ping = False
                         explicit_mention = False
 
                     # Build AllowedMentions whitelist to enforce single notification path
