@@ -71,6 +71,7 @@ from .x_api_client import XApiClient
 from .action import BotAction
 from .command_parser import parse_command
 from .utils.file_utils import download_file
+from .utils.attachment_text import read_attachment_text
 from .tts.state import tts_state
 from datetime import datetime, timezone
 from .memory.mention_context import maybe_build_mention_context
@@ -2688,17 +2689,45 @@ class Router:
                 mention_pattern, "", (message.content or "").strip()
             )
             if has_attachments and cleaned_for_compat == "":
-                handler = self._flows.get("process_attachments")
-                if handler:
-                    self.logger.debug(
-                        "Compat path (pre-gate): delegating to _flows['process_attachments'] with empty text."
-                    )
-                    res = await handler(message, "")
-                    if isinstance(res, BotAction):
-                        return res
-                    else:
-                        # Wrap plain string result into BotAction for compatibility
-                        return BotAction(content=str(res))
+                # If all attachments are plain text (.txt/text/*), skip the legacy
+                # attachment compat path so the text ingestion path can handle them.
+                try:
+                    atts = list(getattr(message, "attachments", []) or [])
+                    def _is_text_att(a) -> bool:
+                        try:
+                            name = (getattr(a, "filename", "") or "").lower()
+                            ctype = (getattr(a, "content_type", "") or "").lower()
+                        except Exception:
+                            name, ctype = "", ""
+                        return name.endswith(".txt") or ctype.startswith("text/")
+
+                    all_text_files = bool(atts) and all(_is_text_att(a) for a in atts)
+                except Exception:
+                    all_text_files = False
+
+                if not all_text_files:
+                    # Prefer the first non-text attachment for processing to avoid
+                    # rejecting .txt files as unsupported in this legacy path.
+                    try:
+                        non_text_atts = [a for a in atts if not _is_text_att(a)]
+                        preferred = non_text_atts[0] if non_text_atts else None
+                    except Exception:
+                        preferred = None
+
+                    handler = self._flows.get("process_attachments")
+                    if handler:
+                        self.logger.debug(
+                            "Compat path (pre-gate): delegating to _flows['process_attachments'] with empty text."
+                        )
+                        if preferred is not None:
+                            res = await handler(message, preferred)
+                        else:
+                            res = await handler(message, "")
+                        if isinstance(res, BotAction):
+                            return res
+                        else:
+                            # Wrap plain string result into BotAction for compatibility
+                            return BotAction(content=str(res))
 
             # Only parse if it looks like a command (starts with '!')
             parsed_command = None
@@ -2812,17 +2841,38 @@ class Router:
                     mention_pattern, "", (message.content or "").strip()
                 )
                 if has_attachments and cleaned_for_compat == "":
-                    handler = self._flows.get("process_attachments")
-                    if handler:
-                        self.logger.debug(
-                            "Compat path: delegating to _flows['process_attachments'] with empty text."
-                        )
-                        res = await handler(message, "")
-                        if isinstance(res, BotAction):
-                            return res
-                        else:
-                            # Wrap plain string result into BotAction for compatibility
-                            return BotAction(content=str(res))
+                    # If all attachments are plain text (.txt/text/*), skip legacy compat path
+                    try:
+                        atts = list(getattr(message, "attachments", []) or [])
+                        def _is_text_att(a) -> bool:
+                            try:
+                                name = (getattr(a, "filename", "") or "").lower()
+                                ctype = (getattr(a, "content_type", "") or "").lower()
+                            except Exception:
+                                name, ctype = "", ""
+                            return name.endswith(".txt") or ctype.startswith("text/")
+                        all_text_files = bool(atts) and all(_is_text_att(a) for a in atts)
+                    except Exception:
+                        all_text_files = False
+
+                    if not all_text_files:
+                        handler = self._flows.get("process_attachments")
+                        if handler:
+                            # Prefer a non-text attachment to avoid rejecting .txt in this legacy path
+                            try:
+                                non_text_atts = [a for a in atts if not _is_text_att(a)]
+                                preferred = non_text_atts[0] if non_text_atts else None
+                            except Exception:
+                                preferred = None
+                            self.logger.debug(
+                                "Compat path: delegating to _flows['process_attachments'] with empty text."
+                            )
+                            res = await handler(message, preferred or "")
+                            if isinstance(res, BotAction):
+                                return res
+                            else:
+                                # Wrap plain string result into BotAction for compatibility
+                                return BotAction(content=str(res))
 
                 # Centralized scope resolution and context building
                 scope_case, reply_target, context_str = await self._resolve_scope_and_target(message)
@@ -3449,6 +3499,27 @@ class Router:
         """
         # Collect all input items from the message
         items = collect_input_items(message)
+        # Treat plain text attachments as prompt extensions, not standalone items
+        try:
+            def _is_text_att(a) -> bool:
+                try:
+                    name = (getattr(a, "filename", "") or "").lower()
+                    ctype = (getattr(a, "content_type", "") or "").lower()
+                except Exception:
+                    name, ctype = "", ""
+                return name.endswith(".txt") or ctype.startswith("text/")
+
+            items = [
+                it
+                for it in (items or [])
+                if not (
+                    getattr(it, "source_type", None) == "attachment"
+                    and _is_text_att(getattr(it, "payload", None))
+                )
+            ]
+        except Exception:
+            # Non-fatal: fallback to original items list on any error
+            pass
 
         # Helper: relaxed chat signal check (accepts minimal tokens/emojis/punctuation)
         def _has_meaningful_text(s: str) -> bool:
@@ -3890,6 +3961,58 @@ class Router:
                             except Exception:
                                 pass
         except Exception:
+            pass
+
+        # Ingest .txt attachments from the triggering message into the text prompt (first match only)
+        try:
+            atts = list(getattr(message, "attachments", []) or [])
+            def _is_text_att2(a) -> bool:
+                try:
+                    name = (getattr(a, "filename", "") or "").lower()
+                    ctype = (getattr(a, "content_type", "") or "").lower()
+                except Exception:
+                    name, ctype = "", ""
+                return name.endswith(".txt") or ctype.startswith("text/")
+
+            txt_atts = [a for a in atts if _is_text_att2(a)]
+            loaded_count = 0
+            bytes_total = 0
+            truncated = False
+            if txt_atts:
+                # Preserve upload order; read the first only (mirror !img)
+                first = txt_atts[0]
+                try:
+                    bytes_total = int(getattr(first, "size", 0) or 0)
+                except Exception:
+                    bytes_total = 0
+                blob = await read_attachment_text(first, 262_144)
+                if blob:
+                    loaded_count = 1
+                    # Append with a simple separator to preserve semantics
+                    if original_text and blob:
+                        original_text = f"{original_text}\n\n{blob}".strip()
+                    elif blob:
+                        original_text = blob.strip()
+                    try:
+                        self.logger.info(
+                            f"attachments.txt_loaded count={loaded_count} bytes_total={bytes_total} truncated={str(truncated).lower()}"
+                        )
+                        if len(txt_atts) > 1:
+                            extra = len(txt_atts) - 1
+                            self.logger.info(
+                                f"attachments.txt_ignored extra={extra}"
+                            )
+                    except Exception:
+                        pass
+                else:
+                    try:
+                        self.logger.info(
+                            "attachments.txt_reject reason=invalid_or_oversize"
+                        )
+                    except Exception:
+                        pass
+        except Exception:
+            # Never break routing on attachment ingestion failure
             pass
 
         # --- Routing precedence gates (feature-flagged) ---
@@ -7078,7 +7201,21 @@ class Router:
             try:
                 attachments = getattr(message, "attachments", None)
                 if attachments and len(attachments) > 0:
-                    attachment = attachments[0]
+                    # Prefer first non-text attachment; skip .txt/text/* so text ingestion can handle them
+                    def _is_text_att(a) -> bool:
+                        try:
+                            name = (getattr(a, "filename", "") or "").lower()
+                            ctype = (getattr(a, "content_type", "") or "").lower()
+                        except Exception:
+                            name, ctype = "", ""
+                        return name.endswith(".txt") or ctype.startswith("text/")
+
+                    non_text = None
+                    for a in attachments:
+                        if not _is_text_att(a):
+                            non_text = a
+                            break
+                    attachment = non_text or attachments[0]
                 else:
                     self.logger.warning(
                         f"No attachments available to process (msg_id: {message.id})"
@@ -7097,6 +7234,29 @@ class Router:
         content_type = getattr(attachment, "content_type", None)
         filename = (getattr(attachment, "filename", "") or "").lower()
 
+        # If this is a .txt/text/* attachment, avoid marking unsupported here.
+        try:
+            ctype_l = (content_type or "").lower()
+            if filename.endswith(".txt") or ctype_l.startswith("text/"):
+                # Try to select a different attachment from the message for processing; otherwise, exit quietly.
+                try:
+                    attachments = list(getattr(message, "attachments", []) or [])
+                    alt = next(
+                        (a for a in attachments if (getattr(a, "filename", "").lower().endswith((".png",".jpg",".jpeg",".webp",".gif",".bmp",".pdf",".mp4",".mov",".mkv",".webm",".avi",".m4v",".mp3",".wav",".ogg",".m4a",".flac")) and a.id != getattr(attachment, "id", None))),
+                        None,
+                    )
+                except Exception:
+                    alt = None
+                if alt is not None:
+                    attachment = alt
+                    filename = (getattr(attachment, "filename", "") or "").lower()
+                    content_type = getattr(attachment, "content_type", None)
+                else:
+                    # Nothing else to process; leave text ingestion to the normal path.
+                    return BotAction(content="I didn't receive a file to process.")
+        except Exception:
+            pass
+
         # Process image attachments
         if (content_type and content_type.startswith("image/")) or any(
             filename.endswith(ext)
@@ -7109,6 +7269,9 @@ class Router:
             return await self._process_pdf_attachment(message, attachment)
 
         else:
+            # Avoid emitting unsupported for plain text attachments; let text path handle them.
+            if filename.endswith(".txt") or (content_type or "").lower().startswith("text/"):
+                return BotAction(content="I didn't receive a file to process.")
             self.logger.warning(
                 f"Unsupported attachment type: {filename} (msg_id: {message.id})"
             )
