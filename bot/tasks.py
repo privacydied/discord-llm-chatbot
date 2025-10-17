@@ -10,6 +10,7 @@ from discord.ext import commands, tasks
 
 from .memory import save_all_profiles, save_all_server_profiles
 from .config import load_config
+from .janitor import start_janitor, stop_janitor
 
 logger = logging.getLogger(__name__)
 config = load_config()
@@ -75,6 +76,9 @@ class TaskManager:
             # Start health check task
             await self._start_health_check()
 
+            # Start janitor task
+            await self._start_janitor()
+
             self.running = True
             logger.info("All background tasks started successfully")
 
@@ -88,6 +92,12 @@ class TaskManager:
             return
 
         logger.info("Stopping all background tasks...")
+
+        # Stop janitor first
+        try:
+            await stop_janitor()
+        except Exception as e:
+            logger.warning(f"Error stopping janitor: {e}")
 
         # Cancel all registered tasks
         for task_name, task in self.tasks.items():
@@ -190,6 +200,14 @@ class TaskManager:
         health_check.start()
         self.tasks["health_check"] = health_check
         logger.info("Health check task started")
+
+    async def _start_janitor(self) -> None:
+        """Start the cache and log janitor task."""
+        try:
+            await start_janitor()
+            logger.info("Janitor task started")
+        except Exception as e:
+            logger.error(f"Error starting janitor: {e}", exc_info=True)
 
 
 # Global task manager instance

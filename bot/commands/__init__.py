@@ -118,6 +118,7 @@ async def setup_commands(bot):
             "memory_cmds": "MemoryCommands",
             "tts_cmds": "TTSCommands",
             "config_commands": "ConfigCommands",
+            "janitor_commands": "JanitorCommands",
             "video_commands": "VideoCommands",
             "rag_commands": "RAGCommands",
             "img_commands": "ImgCommands",

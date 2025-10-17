@@ -1870,6 +1870,7 @@ class LLMBot(commands.Bot):
             ("memory_cmds", "MemoryCommands"),
             ("tts_cmds", "TTSCommands"),
             ("config_commands", "ConfigCommands"),
+            ("janitor_commands", "JanitorCommands"),
             ("video_commands", "VideoCommands"),
             ("rag_commands", "RAGCommands"),
             ("search_commands", "SearchCommands"),

@@ -18,6 +18,14 @@ from .utils.logging import get_logger
 
 logger = get_logger(__name__)
 
+# Import janitor for hot-reload restart
+_janitor_imported = False
+try:
+    from .janitor import restart_janitor
+    _janitor_imported = True
+except ImportError:
+    restart_janitor = None
+
 # Global state for configuration management
 _current_config: Dict[str, Any] = {}
 _config_version: str = ""
@@ -306,6 +314,18 @@ def reload_env(env_path: Optional[Path] = None) -> Dict[str, Any]:
                     callback(old_config, new_config)
                 except Exception as e:
                     logger.error(f"❌ Config reload callback failed: {e}")
+
+            # Restart janitor to pick up new config
+            if _janitor_imported and restart_janitor is not None:
+                try:
+                    import asyncio
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        asyncio.create_task(restart_janitor())
+                    else:
+                        loop.run_until_complete(restart_janitor())
+                except Exception as e:
+                    logger.warning(f"⚠️ Failed to restart janitor on config reload: {e}")
 
             return {
                 "success": True,
