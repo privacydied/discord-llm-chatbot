@@ -150,3 +150,5 @@ tts/*voices*.json
 # Safety: common heavyweight formats (scoped)
 tts/**/*.onnx
 chroma_db/**/*.sqlite3
+cache/stt_pcm/*
+cache/stt_transcripts/*

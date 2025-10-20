@@ -380,6 +380,16 @@ class Janitor:
                 age_ttl_hours=24,  # 24 hours
                 size_cap_mb=1024,  # 1 GB
             ),
+            "stt_pcm": DirectoryPolicy(
+                path=Path(config.get("STT_PCM_CACHE_DIR", "cache/stt_pcm")),
+                age_ttl_hours=12,
+                size_cap_mb=768,
+            ),
+            "stt_transcripts": DirectoryPolicy(
+                path=Path(config.get("STT_TRANSCRIPT_CACHE_DIR", "cache/stt_transcripts")),
+                age_ttl_hours=48,
+                size_cap_mb=256,
+            ),
             "tts": DirectoryPolicy(
                 path=Path("cache/tts"),
                 age_ttl_hours=24,
