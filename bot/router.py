@@ -2708,23 +2708,12 @@ class Router:
                     all_text_files = False
 
                 if not all_text_files:
-                    # Prefer the first non-text attachment for processing to avoid
-                    # rejecting .txt files as unsupported in this legacy path.
-                    try:
-                        non_text_atts = [a for a in atts if not _is_text_att(a)]
-                        preferred = non_text_atts[0] if non_text_atts else None
-                    except Exception:
-                        preferred = None
-
                     handler = self._flows.get("process_attachments")
                     if handler:
                         self.logger.debug(
                             "Compat path (pre-gate): delegating to _flows['process_attachments'] with empty text."
                         )
-                        if preferred is not None:
-                            res = await handler(message, preferred)
-                        else:
-                            res = await handler(message, "")
+                        res = await handler(message)
                         if isinstance(res, BotAction):
                             return res
                         else:
@@ -2860,16 +2849,10 @@ class Router:
                     if not all_text_files:
                         handler = self._flows.get("process_attachments")
                         if handler:
-                            # Prefer a non-text attachment to avoid rejecting .txt in this legacy path
-                            try:
-                                non_text_atts = [a for a in atts if not _is_text_att(a)]
-                                preferred = non_text_atts[0] if non_text_atts else None
-                            except Exception:
-                                preferred = None
                             self.logger.debug(
                                 "Compat path: delegating to _flows['process_attachments'] with empty text."
                             )
-                            res = await handler(message, preferred or "")
+                            res = await handler(message)
                             if isinstance(res, BotAction):
                                 return res
                             else:
