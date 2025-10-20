@@ -125,7 +125,7 @@ class MediaIngestionManager:
 
                 # Extract audio and transcribe
                 result = await asyncio.wait_for(
-                    hear_infer_from_url(url, speedup=MEDIA_SPEEDUP_FACTOR),
+                    hear_infer_from_url(url),
                     timeout=MEDIA_DOWNLOAD_TIMEOUT,
                 )
 

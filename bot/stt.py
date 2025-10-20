@@ -1,15 +1,20 @@
 """
-Speech-to-text module for Discord bot using faster-whisper and whisper.cpp
+Speech-to-text runtime primitives built around faster-whisper.
+
+Provides lazy model loading with CPU-friendly defaults and utilities that higher-level
+pipelines (hear.py) use to orchestrate preprocessing, adaptive model selection, and
+chunked inference.
 """
 
-import os
-import json
+from __future__ import annotations
+
 import asyncio
-import subprocess
-import tempfile
-from pathlib import Path
-from functools import lru_cache
+import os
 import threading
+from dataclasses import dataclass
+from functools import lru_cache
+from pathlib import Path
+from typing import Dict, Optional, Tuple
 
 import torch
 from faster_whisper import WhisperModel
@@ -18,292 +23,277 @@ from .utils.logging import get_logger
 
 logger = get_logger(__name__)
 
-# Get environment variables
+# ---------------------------------------------------------------------------
+# Environment controls — keep numeric libraries single-threaded on CPU
+# ---------------------------------------------------------------------------
+
+_THREAD_LOCK = threading.Lock()
+_CPU_THREADS = 2
+_THREAD_ENVS = (
+    "OPENBLAS_NUM_THREADS",
+    "OMP_NUM_THREADS",
+    "MKL_NUM_THREADS",
+    "NUMEXPR_NUM_THREADS",
+)
+
+with _THREAD_LOCK:
+    for _env in _THREAD_ENVS:
+        if not os.getenv(_env):
+            os.environ[_env] = "1"
+    if not os.getenv("CT_NUM_THREADS"):
+        os.environ["CT_NUM_THREADS"] = str(_CPU_THREADS)
+    try:
+        torch.set_num_threads(_CPU_THREADS)
+    except Exception:
+        # Some Torch builds may not expose set_num_threads; ignore
+        pass
+
+
+# ---------------------------------------------------------------------------
+# Configuration from environment (kept minimal to avoid new env surface area)
+# ---------------------------------------------------------------------------
+
 _ENGINE = os.getenv("STT_ENGINE", "faster-whisper")
-_FALLBACK = os.getenv("STT_FALLBACK", "whispercpp")
-_SIZE = os.getenv("WHISPER_MODEL_SIZE", "base")
-# Optional performance/network controls
-_FW_CACHE_DIR = os.getenv("STT_CACHE_DIR", "stt/cache")
-_FW_LOCAL_ONLY = os.getenv("STT_LOCAL_ONLY", "0").lower() in ("1", "true", "yes", "y")
-_FW_COMPUTE_TYPE = os.getenv("STT_COMPUTE_TYPE", "int8")
-_FW_INIT_TIMEOUT = float(os.getenv("STT_INIT_TIMEOUT", "8"))
-
-# Accept common patterns like "base-int8" -> (size=base, compute_type=int8)
-_ALLOWED_CT = {"int8", "int8_float16", "int8_float32", "int16", "float16", "float32"}
+_DEFAULT_MODEL_DECL = os.getenv("WHISPER_MODEL_SIZE", "base")
+_CACHE_DIR = os.getenv("STT_CACHE_DIR", "stt/cache")
+_LOCAL_ONLY = os.getenv("STT_LOCAL_ONLY", "0").lower() in ("1", "true", "yes", "y")
+_COMPUTE_TYPE_DECL = os.getenv("STT_COMPUTE_TYPE", "int8")
+_INIT_TIMEOUT = float(os.getenv("STT_INIT_TIMEOUT", "8"))
 
 
-def _resolve_size_and_ct(size_str: str, default_ct: str) -> tuple[str, str]:
-    s = (size_str or "").strip()
-    ct = default_ct
-    if "-" in s:
-        cand_size, cand_ct = s.split("-", 1)
-        if cand_ct in _ALLOWED_CT:
-            s = cand_size
-            ct = cand_ct
-    return s, ct
+@dataclass(frozen=True)
+class ModelSpec:
+    """Resolved model configuration."""
+
+    size: str
+    compute_type: str
+
+
+def _normalize_compute_type(ct: str) -> str:
+    allowed = {
+        "int8",
+        "int8_float16",
+        "int8_float32",
+        "int16",
+        "float16",
+        "float32",
+    }
+    candidate = (ct or "").strip()
+    return candidate if candidate in allowed else "int8"
 
 
 @lru_cache
-def _load_fw():
-    """Load faster-whisper model with caching"""
-    model_name, compute_type = _resolve_size_and_ct(_SIZE, _FW_COMPUTE_TYPE)
-    logger.info(
-        f"Loading faster-whisper model={model_name} compute_type={compute_type} "
-        f"local_only={_FW_LOCAL_ONLY} cache={_FW_CACHE_DIR}"
+def _resolve_spec(declaration: str, default_compute: str) -> ModelSpec:
+    """
+    Resolve a declaration like 'base-int8' into a ModelSpec.
+    """
+    decl = (declaration or "").strip()
+    compute_type = _normalize_compute_type(default_compute)
+    if "-" in decl:
+        size_candidate, ct_candidate = decl.split("-", 1)
+        size_candidate = size_candidate.strip()
+        ct_candidate = _normalize_compute_type(ct_candidate.strip())
+        if size_candidate:
+            return ModelSpec(size_candidate, ct_candidate)
+    if decl:
+        return ModelSpec(decl, compute_type)
+    return ModelSpec("base", compute_type)
+
+
+def _device_for_runtime() -> str:
+    # Even though optimised for CPU, keep CUDA detection for environments that may supply GPUs.
+    if torch.cuda.is_available():
+        try:
+            return "cuda"
+        except Exception:
+            pass
+    return "cpu"
+
+
+def _model_ladder() -> Tuple[str, ...]:
+    # Prioritise smaller CPU-friendly variants for downgrade logic.
+    return (
+        "large-v3",
+        "large-v2",
+        "large",
+        "medium",
+        "small",
+        "base",
+        "tiny",
+        "tiny.en",
     )
-    # Prefer local CPU/GPU auto-detect but keep compute type configurable
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+
+
+def _downgrade(size: str) -> Optional[str]:
+    ladder = _model_ladder()
     try:
-        return WhisperModel(
-            model_name,
-            device=device,
-            compute_type=compute_type,
-            download_root=_FW_CACHE_DIR,
-            local_files_only=_FW_LOCAL_ONLY,
-        )
-    except Exception:
-        # Fallback without download options to preserve legacy behavior
-        return WhisperModel(
-            model_name,
-            device=device,
-            compute_type=compute_type,
-        )
+        idx = ladder.index(size)
+    except ValueError:
+        return None
+    if idx == len(ladder) - 1:
+        return None
+    return ladder[idx + 1]
 
 
 class STTManager:
-    """Manages STT operations with support for multiple backends."""
+    """Lazy-loading faster-whisper manager with light concurrency controls."""
 
-    def __init__(self):
-        self.available = False
+    def __init__(self) -> None:
         self.engine = _ENGINE
-        self.model = None
-        # Background init thread/event to avoid blocking startup [REH]
-        self._init_thread: threading.Thread | None = None
+        self._model_cache: Dict[ModelSpec, WhisperModel] = {}
+        self._model_locks: Dict[ModelSpec, threading.Lock] = {}
         self._ready_event = threading.Event()
-        self._init_model()
+        self._default_spec = _resolve_spec(_DEFAULT_MODEL_DECL, _COMPUTE_TYPE_DECL)
+        self._available = False
+        self._init_thread: Optional[threading.Thread] = None
+        self._warm_default_async()
 
-    def _init_model(self):
-        """Initialize the STT model."""
-        try:
-            if self.engine == "faster-whisper":
-                # Initialize in a background thread to prevent startup hangs
-                def _bg_init():
-                    try:
-                        mdl = _load_fw()
-                        self.model = mdl
-                        self.available = True
-                        logger.info("✅ Initialized faster-whisper STT model")
-                    except Exception as e:
-                        logger.error(f"Failed to initialize STT: {str(e)}")
-                        self.available = False
-                    finally:
-                        self._ready_event.set()
+    # ------------------------------------------------------------------ Utils
 
-                self._init_thread = threading.Thread(
-                    target=_bg_init, name="stt-fw-init", daemon=True
-                )
-                self._init_thread.start()
-            else:
-                logger.warning(f"Unsupported STT engine: {self.engine}")
-                self.available = False
-                self._ready_event.set()
-        except Exception as e:
-            logger.error(f"Failed to initialize STT: {str(e)}")
-            self.available = False
+    def _get_lock_for(self, spec: ModelSpec) -> threading.Lock:
+        lock = self._model_locks.get(spec)
+        if lock is None:
+            lock = threading.Lock()
+            self._model_locks[spec] = lock
+        return lock
+
+    # --------------------------------------------------------------- Warm load
+
+    def _warm_default_async(self) -> None:
+        if self.engine != "faster-whisper":
+            logger.warning("Unsupported STT engine: %s", self.engine)
+            self._available = False
             self._ready_event.set()
+            return
 
-    def is_available(self) -> bool:
-        """Check if STT is available."""
-        return self.available
+        def _loader() -> None:
+            try:
+                self._load_model(self._default_spec)
+                self._available = True
+                logger.info(
+                    "✅ Initialized faster-whisper model=%s compute_type=%s device=%s",
+                    self._default_spec.size,
+                    self._default_spec.compute_type,
+                    _device_for_runtime(),
+                )
+            except Exception as exc:  # pragma: no cover - defensive logging
+                logger.error("Failed to initialize STT: %s", exc)
+                self._available = False
+            finally:
+                self._ready_event.set()
+
+        self._init_thread = threading.Thread(
+            target=_loader, name="stt-fw-init", daemon=True
+        )
+        self._init_thread.start()
+
+    def _load_model(self, spec: ModelSpec) -> WhisperModel:
+        lock = self._get_lock_for(spec)
+        with lock:
+            model = self._model_cache.get(spec)
+            if model:
+                return model
+            device = _device_for_runtime()
+            try:
+                model = WhisperModel(
+                    spec.size,
+                    device=device,
+                    compute_type=spec.compute_type,
+                    download_root=_CACHE_DIR,
+                    local_files_only=_LOCAL_ONLY,
+                )
+            except Exception as exc:
+                # retry without cache hints for parity with legacy path
+                logger.warning(
+                    "Primary model load failed (size=%s compute=%s): %s. Retrying without cache hints.",
+                    spec.size,
+                    spec.compute_type,
+                    exc,
+                )
+                model = WhisperModel(
+                    spec.size,
+                    device=device,
+                    compute_type=spec.compute_type,
+                )
+            self._model_cache[spec] = model
+            return model
+
+    # -------------------------------------------------------------- Public API
+
+    @property
+    def available(self) -> bool:
+        return self._available
+
+    @property
+    def default_spec(self) -> ModelSpec:
+        return self._default_spec
+
+    @property
+    def cpu_threads(self) -> int:
+        return _CPU_THREADS
+
+    async def ensure_ready(self, timeout: Optional[float] = None) -> bool:
+        """
+        Await readiness of the default model. Returns True if ready.
+        """
+        timeout = timeout if timeout is not None else _INIT_TIMEOUT
+        loop = asyncio.get_running_loop()
+        ready = await loop.run_in_executor(None, self._ready_event.wait, timeout)
+        return bool(ready and self.available)
+
+    async def ensure_model(self, spec: ModelSpec) -> WhisperModel:
+        """
+        Ensure model for the given spec exists, loading lazily via executor.
+        """
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, self._load_model, spec)
+
+    def downgrade_spec(self, spec: ModelSpec) -> Optional[ModelSpec]:
+        nxt = _downgrade(spec.size)
+        if not nxt:
+            return None
+        return ModelSpec(nxt, spec.compute_type)
+
+    # Backwards-compatible helpers -------------------------------------------------
 
     async def transcribe_async(self, audio_path: Path) -> str:
-        """Transcribe audio file asynchronously."""
-        # Wait briefly for background init if needed to avoid false negatives [REH]
-        if self.engine == "faster-whisper" and not self.available:
-            logger.info(
-                "ℹ [STT] Waiting up to %.1fs for faster-whisper to initialize",
-                _FW_INIT_TIMEOUT,
+        """
+        Legacy compatibility: transcribe from a file path using default CPU-friendly params.
+        Newer code should orchestrate preprocessing + chunking explicitly (see hear.py).
+        """
+        if self.engine != "faster-whisper":
+            raise RuntimeError(f"Unsupported STT engine: {self.engine}")
+
+        ready = await self.ensure_ready()
+        if not ready:
+            raise RuntimeError("STT engine not ready after init timeout")
+
+        model = await self.ensure_model(self.default_spec)
+        loop = asyncio.get_running_loop()
+
+        def _transcribe() -> str:
+            segments, _info = model.transcribe(
+                str(audio_path),
+                beam_size=1,
+                best_of=1,
+                temperature=0.0,
+                vad_filter=True,
+                word_timestamps=False,
+                task="transcribe",
+                language=None,
+                cpu_threads=_CPU_THREADS,
             )
-            loop = asyncio.get_running_loop()
-            ready = await loop.run_in_executor(
-                None, self._ready_event.wait, _FW_INIT_TIMEOUT
-            )
-            if not ready or not self.available:
-                raise RuntimeError("STT engine not ready after init timeout")
+            return " ".join(segment.text for segment in segments)
 
-        try:
-            loop = asyncio.get_running_loop()
-            return await loop.run_in_executor(
-                None,  # Use default executor
-                self._transcribe_sync,
-                audio_path,
-            )
-        except Exception as e:
-            logger.error(f"STT transcription failed: {str(e)}")
-            raise
-
-    def _transcribe_sync(self, audio_path: Path) -> str:
-        """Synchronous transcription wrapper."""
-        if not audio_path.exists():
-            raise FileNotFoundError(f"Audio file not found: {audio_path}")
-
-        try:
-            if self.engine == "faster-whisper" and self.model:
-                segments, _ = self.model.transcribe(
-                    str(audio_path), beam_size=5, language="en"
-                )
-                return " ".join(segment.text for segment in segments)
-            else:
-                raise RuntimeError(f"Unsupported STT engine: {self.engine}")
-        except Exception as e:
-            logger.error(f"STT transcription error: {str(e)}")
-            raise
+        return await loop.run_in_executor(None, _transcribe)
 
 
-# Create a single instance of STTManager
+# Global singleton used throughout the bot
 stt_manager = STTManager()
 
 
+# Convenience shim maintained for backwards compatibility -----------------------
+
 async def transcribe_wav(path: Path) -> str:
-    """Transcribe WAV file using configured STT engine"""
-    loop = asyncio.get_running_loop()
-
-    if _ENGINE == "faster-whisper":
-        try:
-            # Prefer the manager's background-initialized model to avoid blocking here
-            if not stt_manager.available:
-                await loop.run_in_executor(
-                    None, stt_manager._ready_event.wait, _FW_INIT_TIMEOUT
-                )
-            if stt_manager.available and stt_manager.model:
-                segments, _ = await loop.run_in_executor(
-                    None,
-                    lambda: stt_manager.model.transcribe(str(path), vad_filter=True),
-                )
-                return " ".join(seg.text for seg in segments)
-            else:
-                logger.error("✖ [STT] faster-whisper not ready after init timeout")
-                if _FALLBACK == "none":
-                    raise RuntimeError(
-                        "faster-whisper not ready and no fallback enabled"
-                    )
-        except Exception as e:
-            logger.error(f"faster-whisper failed: {e}")
-            if _FALLBACK == "none":
-                raise
-
-    # Fallback to whisper.cpp binary
-    if _FALLBACK == "whispercpp":
-        model_path = Path(os.getenv("WHISPER_CPP_MODEL", "models/ggml-medium.bin"))
-        if not model_path.exists():
-            logger.error(f"whisper.cpp model not found: {model_path}")
-            raise FileNotFoundError(f"whisper.cpp model not found: {model_path}")
-
-        cmd = ["whisper.cpp", "-m", str(model_path), "-f", str(path), "-of", "json"]
-        proc = await asyncio.create_subprocess_exec(
-            *cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-        )
-        out, err = await proc.communicate()
-
-        if proc.returncode != 0:
-            logger.error(f"whisper.cpp failed: {err.decode()}")
-            raise RuntimeError(f"whisper.cpp failed: {err.decode()}")
-
-        try:
-            result = json.loads(out)
-            return result["text"]
-        except json.JSONDecodeError:
-            logger.error("Failed to parse whisper.cpp output")
-            raise
-
-    raise RuntimeError("No valid STT engine available")
-
-
-async def normalise_to_wav(attachment) -> Path:
-    """Normalize audio attachment to 16kHz mono WAV with smart preprocessing"""
-    try:
-        # Save original attachment to temp file
-        with tempfile.NamedTemporaryFile(suffix=".tmp", delete=False) as tmp:
-            await attachment.save(tmp.name)
-            orig_path = Path(tmp.name)
-
-        logger.debug(f"[STT] Starting smart preprocessing for: {orig_path.name}")
-
-        # Create output WAV file
-        wav_path = orig_path.with_suffix(".wav")
-
-        # Smart preprocessing pipeline:
-        # 1. loudnorm - normalize audio levels first to prevent distortion
-        # 2. atempo=1.5 - increase speed by 50% for faster processing
-        # 3. silenceremove - cut silence so Whisper doesn't waste cycles on dead air
-        # 4. Convert to 16kHz mono WAV format required by Whisper
-        audio_filters = [
-            "loudnorm=I=-16:TP=-1.5:LRA=11",  # Normalize loudness (EBU R128)
-            "atempo=1.5",  # Speed up by 50%
-            "silenceremove=start_periods=1:start_duration=0.1:start_threshold=-40dB:detection=peak,aformat=sample_fmts=s16:sample_rates=16000:channel_layouts=mono",  # Remove silence + format
-        ]
-
-        cmd = [
-            "ffmpeg",
-            "-y",
-            "-i",
-            str(orig_path),
-            "-af",
-            ",".join(audio_filters),
-            "-acodec",
-            "pcm_s16le",
-            str(wav_path),
-        ]
-
-        logger.debug(f"[STT] Running ffmpeg with filters: {','.join(audio_filters)}")
-
-        proc = await asyncio.create_subprocess_exec(
-            *cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-        )
-        stdout, stderr = await proc.communicate()
-
-        if proc.returncode != 0:
-            logger.error(f"[STT] ffmpeg preprocessing failed: {stderr.decode()}")
-            # Fallback to basic conversion if smart preprocessing fails
-            logger.warning("[STT] Falling back to basic audio conversion")
-            return await _basic_normalise_to_wav(orig_path, wav_path)
-
-        logger.debug("[STT] Smart preprocessing completed successfully")
-
-        # Clean up original file
-        orig_path.unlink()
-
-        return wav_path
-    except Exception as e:
-        logger.error(f"[STT] Audio normalization failed: {e}")
-        raise
-
-
-async def _basic_normalise_to_wav(orig_path: Path, wav_path: Path) -> Path:
-    """Fallback basic audio conversion without smart preprocessing"""
-    try:
-        cmd = [
-            "ffmpeg",
-            "-y",
-            "-i",
-            str(orig_path),
-            "-ar",
-            "16000",
-            "-ac",
-            "1",
-            "-acodec",
-            "pcm_s16le",
-            str(wav_path),
-        ]
-        proc = await asyncio.create_subprocess_exec(
-            *cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-        )
-        await proc.wait()
-
-        # Clean up original file
-        orig_path.unlink()
-
-        return wav_path
-    except Exception as e:
-        logger.error(f"[STT] Basic audio conversion failed: {e}")
-        raise
+    """Alias to stt_manager.transcribe_async for historical callers."""
+    return await stt_manager.transcribe_async(path)

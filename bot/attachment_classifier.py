@@ -113,16 +113,18 @@ def _determine_bucket(
     
     First matching rule wins.
     """
+    mime_root = content_type.split(";", 1)[0].strip()
+
     # AUDIO bucket (broadest audio support including voice messages)
     if is_voice_message:
         return AttachmentBucket.AUDIO
     
     # Audio MIME types (including Opus containers)
-    if content_type.startswith("audio/"):
+    if mime_root.startswith("audio/"):
         return AttachmentBucket.AUDIO
     
     # Opus in ogg/webm containers (Discord voice notes)
-    if content_type in {
+    if mime_root in {
         "application/ogg",
         "audio/ogg",
         "audio/webm",
@@ -139,7 +141,7 @@ def _determine_bucket(
         return AttachmentBucket.AUDIO
     
     # VIDEO bucket
-    if content_type.startswith("video/"):
+    if mime_root.startswith("video/"):
         return AttachmentBucket.VIDEO
     
     video_exts = {
@@ -151,7 +153,7 @@ def _determine_bucket(
     
     # DOC bucket (documents for text extraction)
     # PDF
-    if filename.endswith(".pdf") or content_type == "application/pdf":
+    if filename.endswith(".pdf") or mime_root == "application/pdf":
         return AttachmentBucket.DOC
     
     # Microsoft Office formats
@@ -161,15 +163,15 @@ def _determine_bucket(
         "application/vnd.ms-excel",  # .xls
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",  # .xlsx
     }
-    if content_type in doc_mimes_ms:
+    if mime_root in doc_mimes_ms:
         return AttachmentBucket.DOC
     
     # RTF
-    if filename.endswith(".rtf") or content_type in {"text/rtf", "application/rtf"}:
+    if filename.endswith(".rtf") or mime_root in {"text/rtf", "application/rtf"}:
         return AttachmentBucket.DOC
     
     # Markdown
-    if filename.endswith((".md", ".markdown")) or content_type == "text/markdown":
+    if filename.endswith((".md", ".markdown")) or mime_root == "text/markdown":
         return AttachmentBucket.DOC
     
     # Office extensions (case-insensitive handled by .lower() on filename)
@@ -180,7 +182,7 @@ def _determine_bucket(
         return AttachmentBucket.DOC
     
     # IMAGE bucket
-    if content_type.startswith("image/"):
+    if mime_root.startswith("image/"):
         return AttachmentBucket.IMAGE
     
     image_exts = {
@@ -195,7 +197,7 @@ def _determine_bucket(
         return AttachmentBucket.TXT_PROMPT
     
     # text/plain but not .txt (might be misidentified; safer to treat as doc)
-    if content_type.startswith("text/plain") and not filename.endswith(".txt"):
+    if mime_root.startswith("text/plain") and not filename.endswith(".txt"):
         # Check if it's actually an audio/video file with wrong MIME
         if any(filename.endswith(ext) for ext in {".mp3", ".wav", ".ogg", ".mp4", ".webm"}):
             # Re-classify based on extension
@@ -206,11 +208,11 @@ def _determine_bucket(
         return AttachmentBucket.TXT_PROMPT
     
     # text/* (but not text/plain, which was handled above)
-    if content_type.startswith("text/"):
+    if mime_root.startswith("text/"):
         return AttachmentBucket.DOC
     
     # application/octet-stream is ambiguous; use extension
-    if content_type == "application/octet-stream":
+    if mime_root == "application/octet-stream":
         # Try to infer from extension
         if any(filename.endswith(ext) for ext in audio_exts):
             return AttachmentBucket.AUDIO

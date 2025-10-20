@@ -10,13 +10,16 @@ import hashlib
 import json
 import shutil
 import tempfile
+import urllib.request
 from pathlib import Path
 from typing import Dict, Any, Optional, Tuple
+from urllib.parse import ParseResult, urlparse
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from .utils.logging import get_logger
 from .exceptions import InferenceError
+from .config import load_config
 
 logger = get_logger(__name__)
 
@@ -24,7 +27,6 @@ logger = get_logger(__name__)
 MAX_DURATION_SECONDS = int(os.getenv("VIDEO_MAX_DURATION", "600"))  # 10 minutes default
 MAX_CONCURRENT_DOWNLOADS = int(os.getenv("VIDEO_MAX_CONCURRENT", "3"))
 CACHE_DIR = Path(os.getenv("VIDEO_CACHE_DIR", "cache/video_audio"))
-DEFAULT_SPEEDUP = float(os.getenv("VIDEO_SPEEDUP", "1.5"))
 CACHE_EXPIRY_DAYS = int(os.getenv("VIDEO_CACHE_EXPIRY_DAYS", "7"))
 
 # Optional cookies support for yt-dlp to access age/region gated content (e.g., TikTok)
@@ -192,14 +194,17 @@ class VideoMetadata:
 
 
 @dataclass
-class ProcessedAudio:
-    """Result of video audio processing."""
+class DownloadedAudio:
+    """Raw audio artifact fetched via yt-dlp prior to preprocessing."""
 
-    audio_path: Path
+    raw_path: Path
     metadata: VideoMetadata
-    processed_duration_seconds: float
-    speedup_factor: float
+    download_key: str
+    format_id: str
+    resolved_url: str
+    content_length: Optional[int]
     cache_hit: bool
+    ext: str
     timestamp: datetime
 
 
@@ -210,483 +215,587 @@ class VideoIngestError(InferenceError):
 
 
 class VideoIngestionManager:
-    """Manages video URL ingestion, caching, and audio processing."""
+    """Manages video URL ingestion, caching, and raw audio acquisition."""
 
     def __init__(self):
         self.cache_dir = CACHE_DIR
         self.cache_dir.mkdir(parents=True, exist_ok=True)
-        self._setup_cache_index()
+        self.cache_index_path = self.cache_dir / "index.json"
+        self._index: Dict[str, Dict[str, Any]] = self._load_cache_index()
+        cfg = load_config()
+        try:
+            max_mb = int(cfg.get("MAX_ATTACHMENT_SIZE_MB", 25))
+        except Exception:
+            max_mb = 25
+        self._size_guard_bytes = max_mb * 1024 * 1024
         logger.info(
-            f"🎥 VideoIngestionManager initialized with cache: {self.cache_dir}"
+            f"🎥 VideoIngestionManager initialized with cache={self.cache_dir} "
+            f"size_guard={self._size_guard_bytes // (1024 * 1024)}MB"
         )
 
-    def _setup_cache_index(self):
-        """Initialize cache index file."""
-        self.cache_index_path = self.cache_dir / "index.json"
+    def _load_cache_index(self) -> Dict[str, Dict[str, Any]]:
         if not self.cache_index_path.exists():
+            return {}
+        try:
+            with open(self.cache_index_path, "r") as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                return data
+        except Exception as exc:
+            logger.warning(f"⚠️ Failed to load video cache index: {exc}")
+        return {}
+
+    def _save_cache_index(self) -> None:
+        try:
             with open(self.cache_index_path, "w") as f:
-                json.dump({}, f)
+                json.dump(self._index, f, indent=2)
+        except Exception as exc:
+            logger.warning(f"⚠️ Failed to persist video cache index: {exc}")
 
-    def _get_cache_key(self, url: str) -> str:
-        """Generate deterministic cache key for URL.
-        Includes URL fragment when present to allow namespacing (e.g., ptid+url_hash). [CMV]
-        """
-        return hashlib.sha256(url.encode()).hexdigest()[:16]
+    def _purge_if_stale(self, key: str) -> Optional[Dict[str, Any]]:
+        entry = self._index.get(key)
+        if not entry:
+            return None
 
-    def _is_supported_url(self, url: str) -> bool:
-        """Check if URL matches supported patterns.
-        Strips any URL fragment prior to matching (fragment may be used for cache namespacing). [IV]
-        """
+        raw_path = Path(entry.get("raw_path", ""))
+        if not raw_path.exists():
+            self._index.pop(key, None)
+            self._save_cache_index()
+            logger.debug("🧹 Removed missing cache artifact for key=%s", key)
+            return None
+
+        cached_at = entry.get("cached_at")
+        if cached_at:
+            try:
+                cached_dt = datetime.fromisoformat(cached_at)
+                age_days = (datetime.now(timezone.utc) - cached_dt).days
+                if age_days > CACHE_EXPIRY_DAYS:
+                    logger.info(
+                        "🗑️ Cache entry expired key=%s age_days=%s", key, age_days
+                    )
+                    try:
+                        raw_path.unlink(missing_ok=True)
+                    except Exception as exc:
+                        logger.debug(
+                            "⚠️ Failed to delete expired cache file %s: %s",
+                            raw_path,
+                            exc,
+                        )
+                    self._index.pop(key, None)
+                    self._save_cache_index()
+                    return None
+            except Exception as exc:
+                logger.debug("⚠️ Cache entry parse failed key=%s err=%s", key, exc)
+        return entry
+
+    @staticmethod
+    def _is_supported_url(url: str) -> bool:
         try:
             base_url = url.split("#", 1)[0]
         except Exception:
             base_url = url
         return any(re.match(pattern, base_url) for pattern in SUPPORTED_PATTERNS)
 
-    def _get_source_type(self, url: str) -> str:
-        """Determine source type from URL."""
+    @staticmethod
+    def _get_source_type(url: str) -> str:
         if "youtube.com" in url or "youtu.be" in url:
             return "youtube"
-        elif "tiktok.com" in url:
+        if "tiktok.com" in url:
             return "tiktok"
-        else:
-            return "unknown"
+        return "unknown"
 
-    async def _download_with_ytdlp(
-        self, url: str, output_path: Path
-    ) -> Tuple[VideoMetadata, Path]:
-        """Download video audio using yt-dlp."""
-        logger.info(f"📥 Downloading audio from: {url}")
+    @staticmethod
+    def _ext_rank(ext: str) -> int:
+        preference = ["opus", "webm", "m4a", "mp3", "aac"]
+        try:
+            return preference.index((ext or "").lower())
+        except ValueError:
+            return len(preference)
 
-        def _should_apply_cookies(u: str) -> bool:
-            source = self._get_source_type(u)
-            return (
-                bool(YTDLP_COOKIES_FROM_BROWSER or YTDLP_COOKIES_FILE)
-                and (not YTDLP_COOKIES_SITES or source in YTDLP_COOKIES_SITES)
+    def _select_audio_format(self, metadata: Dict[str, Any], url: str) -> Dict[str, Any]:
+        formats = metadata.get("requested_downloads") or metadata.get("formats") or []
+        audio_formats = []
+        for fmt in formats:
+            vcodec = (fmt.get("vcodec") or "").lower()
+            acodec = (fmt.get("acodec") or "").lower()
+            if vcodec not in ("", "none"):
+                continue
+            if not acodec or acodec == "none":
+                continue
+            audio_formats.append(fmt)
+
+        if not audio_formats:
+            raise VideoIngestError(
+                f"No audio-only formats available for URL: {url}"
             )
 
-        def _maybe_with_cookies(base_cmd: list, u: str) -> list:
-            """Append cookies args if configured and within scope.
+        def _key(fmt: Dict[str, Any]) -> tuple:
+            abr = fmt.get("abr") or fmt.get("tbr") or float("inf")
+            if isinstance(abr, str):
+                try:
+                    abr = float(abr)
+                except Exception:
+                    abr = float("inf")
+            abr_pref_penalty = 0 if abr <= 96 else abr
+            size = fmt.get("filesize") or fmt.get("filesize_approx") or float("inf")
+            return (
+                abr_pref_penalty,
+                self._ext_rank(fmt.get("ext") or ""),
+                abr,
+                size,
+            )
 
-            Returns a new list (does not mutate the input).
-            """
-            cmd = list(base_cmd)
-            if _should_apply_cookies(u):
-                if YTDLP_COOKIES_FROM_BROWSER:
-                    cmd += ["--cookies-from-browser", YTDLP_COOKIES_FROM_BROWSER]
-                    logger.debug(
-                        "🔑 Applying cookies from browser for yt-dlp (site scope: %s)",
-                        ",".join(sorted(YTDLP_COOKIES_SITES)) or "<all>",
-                    )
-                elif YTDLP_COOKIES_FILE:
-                    cmd += ["--cookies", YTDLP_COOKIES_FILE]
-                    logger.debug(
-                        "🔑 Applying cookies from file for yt-dlp (site scope: %s)",
-                        ",".join(sorted(YTDLP_COOKIES_SITES)) or "<all>",
-                    )
-            else:
-                logger.debug(
-                    "ℹ️ Not applying cookies (configured: %s, site: %s, scope: %s)",
-                    bool(YTDLP_COOKIES_FROM_BROWSER or YTDLP_COOKIES_FILE),
-                    self._get_source_type(u),
-                    ",".join(sorted(YTDLP_COOKIES_SITES)) or "<all>",
-                )
+        selected = min(audio_formats, key=_key)
+        return selected
+
+    @staticmethod
+    def _hash_resolved_url(resolved_url: str) -> str:
+        h = hashlib.sha256((resolved_url or "").encode("utf-8")).hexdigest()
+        return h[:16]
+
+    def _compute_download_key(
+        self, resolved_url: str, fmt_id: str, content_length: Optional[int]
+    ) -> str:
+        length_part = str(content_length) if content_length is not None else "na"
+        return f"{self._hash_resolved_url(resolved_url)}-{fmt_id}-{length_part}"
+
+    def _get_cache_entry(
+        self, download_key: str
+    ) -> Optional[Tuple[Dict[str, Any], Path]]:
+        entry = self._purge_if_stale(download_key)
+        if not entry:
+            return None
+        raw_path = Path(entry.get("raw_path"))
+        if not raw_path.exists():
+            return None
+        return entry, raw_path
+
+    def _should_apply_cookies(self, url: str) -> bool:
+        source = self._get_source_type(url)
+        return (
+            bool(YTDLP_COOKIES_FROM_BROWSER or YTDLP_COOKIES_FILE)
+            and (not YTDLP_COOKIES_SITES or source in YTDLP_COOKIES_SITES)
+        )
+
+    def _augment_with_cookies(self, cmd: list, url: str) -> list:
+        cmd = list(cmd)
+        if not self._should_apply_cookies(url):
             return cmd
+        if YTDLP_COOKIES_FROM_BROWSER:
+            cmd += ["--cookies-from-browser", YTDLP_COOKIES_FROM_BROWSER]
+            logger.debug("🔑 Applying browser cookies for yt-dlp")
+        elif YTDLP_COOKIES_FILE:
+            cmd += ["--cookies", YTDLP_COOKIES_FILE]
+            logger.debug("🔑 Applying cookies file for yt-dlp")
+        return cmd
 
-        # Use URL without fragment for actual network operations
-        url_no_fragment = url.split("#", 1)[0]
+    async def _run_subprocess(
+        self, cmd: list, timeout_s: float, label: str
+    ) -> Tuple[bytes, bytes]:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        try:
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout_s)
+        except asyncio.TimeoutError:
+            try:
+                proc.kill()
+            except Exception:
+                pass
+            logger.error("stt.fail reason=download_timeout stage=%s", label)
+            raise VideoIngestError(f"{label} timed out after {timeout_s:.0f}s")
+        if proc.returncode != 0:
+            err = stderr.decode(errors="replace").strip()
+            raise VideoIngestError(f"{label} failed: {err or 'unknown error'}")
+        return stdout, stderr
 
-        # First get metadata with JSON output for reliable parsing
-        metadata_cmd = ["yt-dlp", "--dump-json", "--no-playlist", "--quiet", url_no_fragment]
-        metadata_cmd = _maybe_with_cookies(metadata_cmd, url_no_fragment)
-        logger.debug("🧰 yt-dlp metadata cmd: %s", " ".join(metadata_cmd[:-1] + ["<URL>"]))
+    @staticmethod
+    def _is_direct_media_url(url: str) -> bool:
+        parsed = urlparse(url)
+        suffix = Path(parsed.path).suffix.lower()
+        return suffix in {".mp4", ".m4a", ".aac", ".opus", ".ogg", ".mp3", ".webm"}
+
+    async def _download_direct_media(
+        self,
+        url: str,
+        ext: str,
+        timeout_s: float,
+    ) -> Tuple[Path, Optional[int]]:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=f".{ext}") as tmp:
+            temp_path = Path(tmp.name)
+
+        def _worker() -> Optional[int]:
+            req = urllib.request.Request(url, method="GET")
+            with urllib.request.urlopen(req, timeout=timeout_s) as resp:
+                content_length = resp.headers.get("Content-Length")
+                with open(temp_path, "wb") as fh:
+                    shutil.copyfileobj(resp, fh)
+            try:
+                return int(content_length) if content_length else None
+            except Exception:
+                return None
 
         try:
-            # Get metadata first
-            proc = await asyncio.create_subprocess_exec(
-                *metadata_cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            # Bound metadata probe to avoid long hangs [REH][PA]
+            content_length = await asyncio.to_thread(_worker)
+        except Exception as exc:
             try:
-                md_timeout = float(os.getenv("YTDLP_METADATA_TIMEOUT_S", "12"))
+                temp_path.unlink(missing_ok=True)
             except Exception:
-                md_timeout = 12.0
+                pass
+            raise VideoIngestError(f"Direct media download failed: {exc}") from exc
+
+        return temp_path, content_length
+
+    async def _probe_metadata(self, url: str, timeout_s: float) -> Dict[str, Any]:
+        cmd = ["yt-dlp", "--dump-json", "--no-playlist", "--quiet", url]
+        cmd = self._augment_with_cookies(cmd, url)
+        stdout, _ = await self._run_subprocess(cmd, timeout_s, "yt-dlp metadata probe")
+        try:
+            return json.loads(stdout.decode())
+        except json.JSONDecodeError as exc:
+            raise VideoIngestError(f"Failed to parse yt-dlp metadata: {exc}")
+
+    async def _download_audio(
+        self,
+        source_url: str,
+        format_id: str,
+        ext: str,
+        output_dir: Path,
+        timeout_s: float,
+    ) -> Path:
+        out_template = output_dir / "%(id)s.%(ext)s"
+        cmd = [
+            "yt-dlp",
+            "--no-playlist",
+            "--quiet",
+            "--no-warnings",
+            "--no-progress",
+            "--concurrent-fragments",
+            "1",
+            "--retries",
+            "1",
+            "--fragment-retries",
+            "1",
+            "--retry-sleep",
+            "1",
+            "--socket-timeout",
+            "5",
+            "--connect-timeout",
+            "5",
+            "--format",
+            format_id,
+            "--output",
+            str(out_template),
+            "--paths",
+            f"temp:{output_dir}",
+            "--no-part",
+            "--print",
+            "after_move:filepath",
+            source_url,
+        ]
+        cmd = self._augment_with_cookies(cmd, source_url)
+        stdout, _ = await self._run_subprocess(cmd, timeout_s, "yt-dlp download")
+        filepath = stdout.decode().strip()
+        if not filepath:
+            raise VideoIngestError("yt-dlp did not emit output filepath")
+        path = Path(filepath)
+        if not path.exists():
+            raise VideoIngestError(f"Downloaded file missing: {filepath}")
+        if path.suffix.lower() != f".{ext.lower()}":
+            # Ensure suffix matches expectation for consistent caching
+            target = path.with_suffix(f".{ext.lower()}")
             try:
-                stdout, stderr = await asyncio.wait_for(
-                    proc.communicate(), timeout=md_timeout
-                )
-            except asyncio.TimeoutError:
-                try:
-                    proc.kill()
-                except Exception:
-                    pass
-                raise VideoIngestError(
-                    f"yt-dlp metadata probe timed out after {md_timeout:.0f}s"
-                )
-
-            if proc.returncode != 0:
-                error_msg = stderr.decode() if stderr else "Unknown yt-dlp error"
-
-                # Handle specific cases where no video/audio content is found
-                if any(
-                    phrase in error_msg.lower()
-                    for phrase in [
-                        "no video could be found",
-                        "no video formats found",
-                        "no audio could be found",
-                        "no extractors found",
-                        "unable to extract video info",
-                        "private video",
-                        "video not available",
-                        "no video",
-                        "no audio",
-                    ]
-                ):
-                    logger.info(f"ℹ️ No video/audio content found in URL: {url}")
-                    raise VideoIngestError(
-                        "No video or audio content found in this URL. This might be a text-only post or unavailable content."
-                    )
-
-                # Provide targeted guidance for authentication-gated content
-                if any(
-                    k in error_msg.lower()
-                    for k in [
-                        "log in for access",
-                        "use --cookies-from-browser",
-                        "use --cookies for the authentication",
-                        "age-restricted",
-                    ]
-                ):
-                    logger.warning(
-                        "⚠️ yt-dlp requires authentication for this URL. Configure VIDEO_COOKIES_FROM_BROWSER or VIDEO_COOKIES_FILE env vars."
-                    )
-                raise VideoIngestError(
-                    f"yt-dlp metadata extraction failed: {error_msg}"
-                )
-
-            # Parse JSON metadata
-            metadata_json = json.loads(stdout.decode())
-
-            # Extract metadata with safe defaults
-            title = metadata_json.get("title", "Unknown Title")
-            duration = float(metadata_json.get("duration", 0.0) or 0.0)
-            uploader = metadata_json.get("uploader", "Unknown")
-            upload_date = metadata_json.get("upload_date", "")
-
-            # Now download the audio
-            download_cmd = [
-                "yt-dlp",
-                "--extract-audio",
-                "--audio-format",
-                "wav",
-                "--audio-quality",
-                "0",  # Best quality
-                "--no-playlist",
-                "--output",
-                str(output_path / "%(title)s.%(ext)s"),
-                "--print",
-                "after_move:filepath",
-                "--quiet",
-                url_no_fragment,
-            ]
-            download_cmd = _maybe_with_cookies(download_cmd, url_no_fragment)
-            logger.debug(
-                "🧰 yt-dlp download cmd: %s", " ".join(download_cmd[:-1] + ["<URL>"])
-            )
-
-            proc = await asyncio.create_subprocess_exec(
-                *download_cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            # Bound download to avoid indefinite hangs [REH][PA]
-            try:
-                dl_timeout = float(os.getenv("YTDLP_DOWNLOAD_TIMEOUT_S", "90"))
+                path.rename(target)
+                path = target
             except Exception:
-                dl_timeout = 90.0
+                pass
+        return path
+
+    async def fetch_and_prepare_url_audio(
+        self, url: str, force_refresh: bool = False
+    ) -> DownloadedAudio:
+        """
+        Fetch raw audio for URL via yt-dlp using audio-only formats.
+
+        Returns a DownloadedAudio artifact that downstream preprocessing can consume.
+        """
+        if not self._is_supported_url(url):
+            raise VideoIngestError(f"Unsupported URL format: {url}")
+
+        async with _download_semaphore:
+            url_no_fragment = url.split("#", 1)[0]
+            metadata_timeout = float(os.getenv("YTDLP_METADATA_TIMEOUT_S", "10"))
+            download_timeout = float(os.getenv("YTDLP_DOWNLOAD_TIMEOUT_S", "25"))
+            parsed_url = urlparse(url_no_fragment)
+            direct_candidate = self._is_direct_media_url(url_no_fragment)
+
             try:
-                stdout, stderr = await asyncio.wait_for(
-                    proc.communicate(), timeout=dl_timeout
-                )
-            except asyncio.TimeoutError:
-                try:
-                    proc.kill()
-                except Exception:
-                    pass
-                raise VideoIngestError(
-                    f"yt-dlp download timed out after {dl_timeout:.0f}s"
-                )
-
-            if proc.returncode != 0:
-                error_msg = stderr.decode() if stderr else "Unknown yt-dlp error"
-                if any(
-                    k in error_msg.lower()
-                    for k in [
-                        "log in for access",
-                        "use --cookies-from-browser",
-                        "use --cookies for the authentication",
-                        "age-restricted",
-                    ]
-                ):
-                    logger.warning(
-                        "⚠️ yt-dlp requires authentication for this URL. Configure VIDEO_COOKIES_FROM_BROWSER or VIDEO_COOKIES_FILE env vars."
+                metadata = await self._probe_metadata(url_no_fragment, metadata_timeout)
+                selected = self._select_audio_format(metadata, url_no_fragment)
+            except VideoIngestError as exc:
+                if direct_candidate or "NumericString value expected" in str(exc):
+                    logger.info(
+                        "yt-dlp metadata failed (%s); attempting direct media fallback",
+                        exc,
                     )
-                raise VideoIngestError(f"yt-dlp download failed: {error_msg}")
+                    return await self._direct_media_fallback(
+                        original_url=url,
+                        media_url=url_no_fragment,
+                        parsed=parsed_url,
+                        force_refresh=force_refresh,
+                        timeout_s=download_timeout,
+                    )
+                raise
 
-            # Get the filepath from output
-            filepath = stdout.decode().strip()
-            if not filepath:
-                raise VideoIngestError("No filepath returned from yt-dlp")
+            resolved_url = selected.get("url") or metadata.get("url") or url_no_fragment
+            fmt_id = str(selected.get("format_id") or selected.get("format"))
+            ext = (selected.get("ext") or "m4a").lower()
+            duration = float(metadata.get("duration") or 0.0)
+            if duration and duration > MAX_DURATION_SECONDS:
+                raise VideoIngestError(
+                    f"Video too long: {duration:.1f}s (max {MAX_DURATION_SECONDS}s)"
+                )
+            title = metadata.get("title", "Unknown Title")
+            uploader = metadata.get("uploader", "Unknown")
+            upload_date = metadata.get("upload_date", "")
+            content_length = selected.get("filesize") or selected.get("filesize_approx")
+            try:
+                if isinstance(content_length, str):
+                    content_length = float(content_length)
+            except Exception:
+                content_length = None
+            if isinstance(content_length, float):
+                content_length = int(content_length)
 
-            return VideoMetadata(
+            if content_length and content_length > self._size_guard_bytes:
+                raise VideoIngestError(
+                    f"Audio payload too large: {content_length} bytes "
+                    f"(limit {self._size_guard_bytes})"
+                )
+
+            download_key = self._compute_download_key(
+                resolved_url, fmt_id, content_length
+            )
+            cache_entry = None if force_refresh else self._get_cache_entry(download_key)
+
+            cache_hit = False
+            if cache_entry:
+                entry, raw_path = cache_entry
+                stat_size = raw_path.stat().st_size
+                expected = entry.get("content_length")
+                if expected and abs(stat_size - expected) > max(65536, expected * 0.1):
+                    logger.debug(
+                        "⚠️ Cached artifact size mismatch key=%s expected=%s actual=%s",
+                        download_key,
+                        expected,
+                        stat_size,
+                    )
+                else:
+                    cache_hit = True
+                    logger.info(
+                        "cache.hit stage=download key=%s ext=%s size=%s",
+                        download_key[:12],
+                        ext,
+                        stat_size,
+                    )
+                    return DownloadedAudio(
+                        raw_path=raw_path,
+                        metadata=VideoMetadata(
+                            url=url,
+                            title=title,
+                            duration_seconds=duration,
+                            uploader=uploader,
+                            upload_date=upload_date,
+                            source_type=self._get_source_type(url),
+                        ),
+                        download_key=download_key,
+                        format_id=fmt_id,
+                        resolved_url=resolved_url,
+                        content_length=content_length,
+                        cache_hit=True,
+                        ext=ext,
+                        timestamp=datetime.now(timezone.utc),
+                    )
+
+            with tempfile.TemporaryDirectory() as temp_dir:
+                temp_path = Path(temp_dir)
+                attempts = 2
+                for attempt in range(1, attempts + 1):
+                    try:
+                        raw_download = await self._download_audio(
+                            url_no_fragment,
+                            fmt_id,
+                            ext,
+                            temp_path,
+                            download_timeout,
+                        )
+                        break
+                    except VideoIngestError as exc:
+                        logger.warning(
+                            "⚠️ yt-dlp attempt %s/%s failed: %s",
+                            attempt,
+                            attempts,
+                            exc,
+                        )
+                        if attempt == attempts:
+                            logger.error(
+                                "stt.fail reason=download_timeout stage=yt-dlp retries=%s",
+                                attempts,
+                            )
+                            raise VideoIngestError(
+                                "Failed to download audio after retries"
+                            ) from exc
+                else:
+                    raise VideoIngestError("yt-dlp retry loop exhausted")
+
+                raw_cache_path = self.cache_dir / f"{download_key}.{ext}"
+                raw_cache_path.parent.mkdir(parents=True, exist_ok=True)
+                try:
+                    shutil.move(str(raw_download), raw_cache_path)
+                except Exception as exc:
+                    logger.warning(
+                        "⚠️ Failed to move download into cache (%s → %s): %s",
+                        raw_download,
+                        raw_cache_path,
+                        exc,
+                    )
+                    try:
+                        shutil.copy2(str(raw_download), raw_cache_path)
+                    except Exception as copy_exc:
+                        raise VideoIngestError(
+                            f"Failed to persist downloaded audio: {copy_exc}"
+                        ) from copy_exc
+
+            stat_size = raw_cache_path.stat().st_size if raw_cache_path.exists() else 0
+            self._index[download_key] = {
+                "raw_path": str(raw_cache_path),
+                "content_length": content_length,
+                "format_id": fmt_id,
+                "ext": ext,
+                "source_url": url,
+                "cached_at": datetime.now(timezone.utc).isoformat(),
+            }
+            self._save_cache_index()
+            logger.info(
+                "cache.store stage=download key=%s ext=%s size=%s",
+                download_key[:12],
+                ext,
+                stat_size,
+            )
+
+            metadata_obj = VideoMetadata(
                 url=url,
                 title=title,
                 duration_seconds=duration,
                 uploader=uploader,
                 upload_date=upload_date,
                 source_type=self._get_source_type(url),
-            ), Path(filepath)
-
-        except json.JSONDecodeError as e:
-            logger.error(f"❌ Failed to parse yt-dlp JSON metadata: {e}")
-            raise VideoIngestError(f"Failed to parse video metadata: {str(e)}")
-        except Exception as e:
-            # Log at INFO level for expected "no video content" errors to avoid scary tracebacks
-            error_str = str(e).lower()
-            if any(
-                expected_error in error_str
-                for expected_error in [
-                    "no video could be found",
-                    "no video formats found",
-                    "no audio could be found",
-                    "no extractors found",
-                    "unable to extract video info",
-                    "private video",
-                    "video not available",
-                    "no video",
-                    "no audio",
-                ]
-            ):
-                logger.info(f"ℹ️ yt-dlp: {e}")
-            else:
-                # Only log unexpected errors with tracebacks
-                logger.error(f"❌ yt-dlp download failed: {e}", exc_info=True)
-            raise VideoIngestError(f"Failed to download video: {str(e)}")
-
-    async def _process_audio(
-        self, raw_audio_path: Path, speedup: float = DEFAULT_SPEEDUP
-    ) -> Path:
-        """Process raw audio with same normalization as hear_infer()."""
-        logger.info(f"🔄 Processing audio with {speedup}x speedup")
-
-        # Create processed audio path
-        processed_path = raw_audio_path.with_suffix(".processed.wav")
-
-        # FFmpeg command matching hear_infer() logic
-        cmd = [
-            "ffmpeg",
-            "-y",
-            "-i",
-            str(raw_audio_path),
-            "-ar",
-            "16000",  # 16kHz sample rate
-            "-ac",
-            "1",  # Mono
-            "-acodec",
-            "pcm_s16le",  # 16-bit PCM
-            "-af",
-            f"atempo={speedup},aresample=async=1:first_pts=0",  # Speed + resample
-            str(processed_path),
-        ]
-
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
-            # Bound ffmpeg processing to avoid hangs [REH][PA]
-            try:
-                ff_timeout = float(os.getenv("FFMPEG_AUDIO_PROC_TIMEOUT_S", "60"))
-            except Exception:
-                ff_timeout = 60.0
-            try:
-                stdout, stderr = await asyncio.wait_for(
-                    proc.communicate(), timeout=ff_timeout
-                )
-            except asyncio.TimeoutError:
-                try:
-                    proc.kill()
-                except Exception:
-                    pass
-                raise VideoIngestError(
-                    f"Audio processing timed out after {ff_timeout:.0f}s"
-                )
 
-            if proc.returncode != 0:
-                error_msg = stderr.decode() if stderr else "Unknown ffmpeg error"
-                raise VideoIngestError(f"Audio processing failed: {error_msg}")
+            return DownloadedAudio(
+                raw_path=raw_cache_path,
+                metadata=metadata_obj,
+                download_key=download_key,
+                format_id=fmt_id,
+                resolved_url=resolved_url,
+                content_length=content_length,
+                cache_hit=cache_hit,
+                ext=ext,
+                timestamp=datetime.now(timezone.utc),
+            )
 
-            logger.info(f"✅ Audio processed: {processed_path}")
-            return processed_path
-
-        except Exception as e:
-            logger.error(f"❌ Audio processing failed: {e}")
-            raise VideoIngestError(f"Failed to process audio: {str(e)}")
-
-    def _update_cache_index(
-        self, cache_key: str, metadata: VideoMetadata, processed_path: Path
-    ):
-        """Update cache index with new entry."""
-        try:
-            with open(self.cache_index_path, "r") as f:
-                index = json.load(f)
-
-            index[cache_key] = {
-                "url": metadata.url,
-                "title": metadata.title,
-                "duration_seconds": metadata.duration_seconds,
-                "uploader": metadata.uploader,
-                "upload_date": metadata.upload_date,
-                "source_type": metadata.source_type,
-                "processed_path": str(processed_path),
-                "cached_at": datetime.now(timezone.utc).isoformat(),
-                "speedup_factor": DEFAULT_SPEEDUP,
-            }
-
-            with open(self.cache_index_path, "w") as f:
-                json.dump(index, f, indent=2)
-
-        except Exception as e:
-            logger.warning(f"⚠️ Failed to update cache index: {e}")
-
-    def _get_cached_entry(self, cache_key: str) -> Optional[Dict[str, Any]]:
-        """Get cached entry if it exists and is valid."""
-        try:
-            with open(self.cache_index_path, "r") as f:
-                index = json.load(f)
-
-            if cache_key not in index:
-                return None
-
-            entry = index[cache_key]
-            processed_path = Path(entry["processed_path"])
-
-            # Check if cached file exists
-            if not processed_path.exists():
-                logger.warning(f"⚠️ Cached file missing: {processed_path}")
-                return None
-
-            # Check cache expiry
-            cached_at = datetime.fromisoformat(entry["cached_at"])
-            age_days = (datetime.now(timezone.utc) - cached_at).days
-
-            if age_days > CACHE_EXPIRY_DAYS:
-                logger.info(f"🗑️ Cache entry expired ({age_days} days old)")
-                return None
-
-            return entry
-
-        except Exception as e:
-            logger.warning(f"⚠️ Failed to read cache index: {e}")
-            return None
-
-    async def fetch_and_prepare_url_audio(
-        self, url: str, speedup: float = DEFAULT_SPEEDUP, force_refresh: bool = False
-    ) -> ProcessedAudio:
-        """
-        Main entry point: fetch video URL and prepare audio for STT pipeline.
-
-        Args:
-            url: YouTube or TikTok URL
-            speedup: Audio speedup factor (default 1.5x)
-            force_refresh: Force re-download even if cached
-
-        Returns:
-            ProcessedAudio object ready for hear_infer()
-        """
-        if not self._is_supported_url(url):
-            raise VideoIngestError(f"Unsupported URL format: {url}")
-
-        cache_key = self._get_cache_key(url)
-
-        # Check cache first (unless force refresh)
+    async def _direct_media_fallback(
+        self,
+        original_url: str,
+        media_url: str,
+        parsed: ParseResult,
+        force_refresh: bool,
+        timeout_s: float,
+    ) -> DownloadedAudio:
+        ext = Path(parsed.path).suffix.lstrip(".") or "mp4"
+        download_key = f"{self._hash_resolved_url(media_url)}-direct"
         if not force_refresh:
-            cached_entry = self._get_cached_entry(cache_key)
-            if cached_entry:
-                logger.info(f"💾 Cache hit for: {url}")
-
-                metadata = VideoMetadata(
-                    url=cached_entry["url"],
-                    title=cached_entry["title"],
-                    duration_seconds=cached_entry["duration_seconds"],
-                    uploader=cached_entry["uploader"],
-                    upload_date=cached_entry["upload_date"],
-                    source_type=cached_entry["source_type"],
+            cache_entry = self._get_cache_entry(download_key)
+            if cache_entry:
+                entry, raw_path = cache_entry
+                stat_size = raw_path.stat().st_size
+                logger.info(
+                    "cache.hit stage=download key=%s ext=%s size=%s",
+                    download_key[:12],
+                    ext,
+                    stat_size,
                 )
-
-                return ProcessedAudio(
-                    audio_path=Path(cached_entry["processed_path"]),
-                    metadata=metadata,
-                    processed_duration_seconds=cached_entry["duration_seconds"]
-                    / speedup,
-                    speedup_factor=speedup,
+                metadata_obj = VideoMetadata(
+                    url=original_url,
+                    title=Path(parsed.path).name or "direct-media",
+                    duration_seconds=float(entry.get("duration_seconds", 0.0) or 0.0),
+                    uploader="",
+                    upload_date="",
+                    source_type=self._get_source_type(original_url),
+                )
+                return DownloadedAudio(
+                    raw_path=raw_path,
+                    metadata=metadata_obj,
+                    download_key=download_key,
+                    format_id="direct",
+                    resolved_url=media_url,
+                    content_length=entry.get("content_length"),
                     cache_hit=True,
+                    ext=ext,
                     timestamp=datetime.now(timezone.utc),
                 )
 
-        # Download and process new content
-        async with _download_semaphore:
-            logger.info(f"🔄 Processing new URL: {url}")
+        temp_path, content_length = await self._download_direct_media(
+            media_url, ext, timeout_s
+        )
 
-            # Create temporary directory for this download
-            with tempfile.TemporaryDirectory() as temp_dir:
-                temp_path = Path(temp_dir)
+        raw_cache_path = self.cache_dir / f"{download_key}.{ext}"
+        raw_cache_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            shutil.move(str(temp_path), raw_cache_path)
+        except Exception:
+            shutil.copy2(str(temp_path), raw_cache_path)
+            Path(temp_path).unlink(missing_ok=True)
 
-                try:
-                    # Download with yt-dlp
-                    metadata, raw_audio_path = await self._download_with_ytdlp(
-                        url, temp_path
-                    )
+        stat_size = raw_cache_path.stat().st_size if raw_cache_path.exists() else 0
+        metadata_obj = VideoMetadata(
+            url=original_url,
+            title=Path(parsed.path).name or "direct-media",
+            duration_seconds=0.0,
+            uploader="",
+            upload_date="",
+            source_type=self._get_source_type(original_url),
+        )
+        self._index[download_key] = {
+            "raw_path": str(raw_cache_path),
+            "content_length": content_length or stat_size,
+            "format_id": "direct",
+            "ext": ext,
+            "source_url": original_url,
+            "cached_at": datetime.now(timezone.utc).isoformat(),
+            "duration_seconds": 0.0,
+        }
+        self._save_cache_index()
+        logger.info(
+            "cache.store stage=download key=%s ext=%s size=%s",
+            download_key[:12],
+            ext,
+            stat_size,
+        )
 
-                    # Validate duration
-                    if metadata.duration_seconds > MAX_DURATION_SECONDS:
-                        raise VideoIngestError(
-                            f"Video too long: {metadata.duration_seconds:.1f}s "
-                            f"(max: {MAX_DURATION_SECONDS}s)"
-                        )
-
-                    # Process audio (normalize + speedup)
-                    processed_path = await self._process_audio(raw_audio_path, speedup)
-
-                    # Move to cache directory (handle cross-filesystem moves)
-                    cache_audio_path = self.cache_dir / f"{cache_key}.wav"
-                    shutil.move(str(processed_path), str(cache_audio_path))
-
-                    # Update cache index
-                    self._update_cache_index(cache_key, metadata, cache_audio_path)
-
-                    logger.info(f"✅ Successfully processed: {metadata.title}")
-
-                    return ProcessedAudio(
-                        audio_path=cache_audio_path,
-                        metadata=metadata,
-                        processed_duration_seconds=metadata.duration_seconds / speedup,
-                        speedup_factor=speedup,
-                        cache_hit=False,
-                        timestamp=datetime.now(timezone.utc),
-                    )
-
-                except Exception as e:
-                    # Check if this is an expected VideoIngestError or unexpected error
-                    if isinstance(e, VideoIngestError):
-                        # Don't log VideoIngestError again - it was already logged appropriately in _download_with_ytdlp
-                        logger.debug(f"VideoIngestError propagating: {e}")
-                    else:
-                        logger.error(
-                            f"❌ Failed to process URL {url}: {e}", exc_info=True
-                        )
-                    raise
+        return DownloadedAudio(
+            raw_path=raw_cache_path,
+            metadata=metadata_obj,
+            download_key=download_key,
+            format_id="direct",
+            resolved_url=media_url,
+            content_length=content_length or stat_size,
+            cache_hit=False,
+            ext=ext,
+            timestamp=datetime.now(timezone.utc),
+        )
 
 
 # Global instance
@@ -694,17 +803,9 @@ video_manager = VideoIngestionManager()
 
 
 async def fetch_and_prepare_url_audio(
-    url: str, speedup: float = DEFAULT_SPEEDUP, force_refresh: bool = False
-) -> ProcessedAudio:
+    url: str, force_refresh: bool = False
+) -> DownloadedAudio:
     """
-    Convenience function to fetch and prepare URL audio.
-
-    Args:
-        url: YouTube or TikTok URL
-        speedup: Audio speedup factor (default 1.5x)
-        force_refresh: Force re-download even if cached
-
-    Returns:
-        ProcessedAudio object ready for STT pipeline
+    Convenience wrapper returning a DownloadedAudio artifact.
     """
-    return await video_manager.fetch_and_prepare_url_audio(url, speedup, force_refresh)
+    return await video_manager.fetch_and_prepare_url_audio(url, force_refresh)
