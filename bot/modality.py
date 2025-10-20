@@ -257,30 +257,60 @@ async def map_item_to_modality(item: InputItem) -> InputModality:
 
 
 async def _map_attachment_to_modality(attachment: discord.Attachment) -> InputModality:
-    """Map attachment to modality based on content type and filename."""
+    """Map attachment to modality based on content type, filename, and voice message flag."""
     # Cache string operations [PA]
     content_type = attachment.content_type or ""
     filename_lower = attachment.filename.lower()
+    
+    # Check for Discord voice message flag [IV]
+    is_voice_message = getattr(attachment, "voice_message", False) or getattr(
+        attachment, "is_voice_message", False
+    )
 
     # Image attachments
     if content_type.startswith("image/"):
         return InputModality.SINGLE_IMAGE
 
     # PDF documents
-    if filename_lower.endswith(".pdf"):
+    if filename_lower.endswith(".pdf") or content_type == "application/pdf":
         # For now, assume all PDFs are text-based
         # TODO: Implement OCR detection logic
         return InputModality.PDF_DOCUMENT
 
-    # Audio/video files
-    if content_type.startswith(("audio/", "video/")) or filename_lower.endswith(
-        (".mp3", ".wav", ".mp4", ".avi", ".mov", ".mkv", ".webm")
-    ):
+    # Audio/video files (broadened to include voice messages and Opus containers) [REH]
+    # Voice message flag takes precedence
+    if is_voice_message:
+        return InputModality.AUDIO_VIDEO_FILE
+    
+    # Audio MIME types including Opus in ogg/webm containers
+    if content_type.startswith("audio/") or content_type in {
+        "application/ogg",  # Discord voice notes
+        "audio/ogg",
+        "audio/webm",
+        "video/webm",  # Can contain Opus audio
+    }:
+        return InputModality.AUDIO_VIDEO_FILE
+    
+    # Video MIME types
+    if content_type.startswith("video/"):
+        return InputModality.AUDIO_VIDEO_FILE
+    
+    # Audio/video extensions (comprehensive list) [CMV]
+    audio_video_exts = {
+        ".mp3", ".wav", ".ogg", ".opus", ".m4a", ".aac", ".flac",
+        ".mp4", ".avi", ".mov", ".mkv", ".webm", ".m4v", ".oga"
+    }
+    if any(filename_lower.endswith(ext) for ext in audio_video_exts):
         return InputModality.AUDIO_VIDEO_FILE
 
-    # Document files (future expansion)
-    if filename_lower.endswith((".docx", ".txt", ".rtf")):
+    # Document files (DOCX, RTF, MD) [CA]
+    doc_exts = {".docx", ".doc", ".rtf", ".md", ".markdown", ".odt"}
+    if any(filename_lower.endswith(ext) for ext in doc_exts):
         return InputModality.PDF_DOCUMENT  # Reuse document processing
+    
+    # .txt files should be handled separately for prompt extension
+    if filename_lower.endswith(".txt") or content_type.startswith("text/plain"):
+        return InputModality.UNKNOWN  # Let router handle .txt specially
 
     logger.warning(f"Unrecognized attachment type: {filename_lower} ({content_type})")
     return InputModality.UNKNOWN

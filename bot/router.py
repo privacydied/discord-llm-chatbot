@@ -72,6 +72,8 @@ from .action import BotAction
 from .command_parser import parse_command
 from .utils.file_utils import download_file
 from .utils.attachment_text import read_attachment_text
+from .attachment_classifier import classify_attachments, AttachmentBucket, get_by_bucket
+from .document_ingest import ingest_document_attachment
 from .tts.state import tts_state
 from datetime import datetime, timezone
 from .memory.mention_context import maybe_build_mention_context
@@ -2485,7 +2487,7 @@ class Router:
             "process_text": self._flow_process_text,
             "process_url": self._flow_process_url,
             "process_audio": self._flow_process_audio,
-            "process_attachments": self._flow_process_attachments,
+            "process_attachments": self._flow_process_attachments_multimodal,
             "generate_tts": self._flow_generate_tts,
         }
 
@@ -7194,8 +7196,8 @@ class Router:
                     error=True,
                 )
 
-    async def _flow_process_attachments(self, message: Message, attachment=None) -> BotAction:
-        """Process image/document attachments."""
+    async def _flow_process_attachments_legacy(self, message: Message, attachment=None) -> BotAction:
+        """DEPRECATED: Legacy attachment processor (has .txt short-circuit bug). Use _flow_process_attachments_multimodal instead."""
         # Accept either a Discord Attachment object or a placeholder (e.g., "" from compat path)
         if not hasattr(attachment, "filename"):
             try:
@@ -7489,6 +7491,133 @@ class Router:
         finally:
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)
+
+    async def _flow_process_attachments_multimodal(self, message: Message) -> BotAction:
+        """
+        Process all attachments with per-file classification (no .txt short-circuit).
+        
+        Handles mixed attachments: .txt + PDF + voice + image in a single message.
+        Each attachment is classified independently and processed by its bucket.
+        """
+        attachments = list(getattr(message, "attachments", []) or [])
+        if not attachments:
+            self.logger.warning(f"No attachments to process (msg_id: {message.id})")
+            return BotAction(content="I didn't receive any files to process.")
+        
+        self.logger.info(
+            f"Processing {len(attachments)} attachments multimodally (msg_id: {message.id})"
+        )
+        
+        # Classify all attachments independently (no short-circuit)
+        classified = classify_attachments(attachments)
+        
+        # Aggregate results by bucket
+        evidence_parts = []
+        user_caption = (message.content or "").strip()
+        
+        # 1. TXT_PROMPT: Append first .txt to evidence
+        txt_atts = get_by_bucket(classified, AttachmentBucket.TXT_PROMPT)
+        if txt_atts:
+            try:
+                txt_content = await read_attachment_text(txt_atts[0].attachment, max_bytes=50000)
+                if txt_content:
+                    evidence_parts.append(f"[TXT FILE]\n{txt_content}")
+                    self.logger.info(f"Loaded .txt file: {len(txt_content)} chars")
+            except Exception as e:
+                self.logger.warning(f"Failed to read .txt file: {e}")
+        
+        # 2. DOC: Extract text from documents (PDF, DOCX, RTF, MD)
+        doc_atts = get_by_bucket(classified, AttachmentBucket.DOC)
+        for doc_att in doc_atts:
+            try:
+                result = await ingest_document_attachment(doc_att.attachment)
+                if result.get("text"):
+                    text_preview = result["text"][:200].replace("\n", " ")
+                    evidence_parts.append(f"[DOCUMENT: {doc_att.filename}]\n{result['text']}")
+                    self.logger.info(
+                        f"Extracted document: {doc_att.filename} → {len(result['text'])} chars"
+                    )
+                elif result.get("error"):
+                    self.logger.warning(
+                        f"Document extraction failed for {doc_att.filename}: {result['error']}"
+                    )
+            except Exception as e:
+                self.logger.error(f"Document ingestion error for {doc_att.filename}: {e}", exc_info=True)
+        
+        # 3. AUDIO/VIDEO: Transcribe via STT (including voice messages)
+        audio_atts = get_by_bucket(classified, AttachmentBucket.AUDIO)
+        video_atts = get_by_bucket(classified, AttachmentBucket.VIDEO)
+        
+        for av_att in audio_atts + video_atts:
+            try:
+                self.logger.info(f"stt.enqueue kind={av_att.bucket.name.lower()} name={av_att.filename}")
+                
+                # Save attachment to temp file for STT
+                import tempfile
+                ext = Path(av_att.filename).suffix or ".tmp"
+                with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp_file:
+                    tmp_path = Path(tmp_file.name)
+                
+                try:
+                    await av_att.attachment.save(tmp_path)
+                    transcript = await hear_infer(tmp_path)
+                    
+                    if transcript and transcript.strip():
+                        evidence_parts.append(f"[TRANSCRIPT: {av_att.filename}]\n{transcript}")
+                        self.logger.info(
+                            f"STT success: {av_att.filename} → {len(transcript)} chars"
+                        )
+                    else:
+                        self.logger.warning(f"STT returned empty transcript for {av_att.filename}")
+                
+                finally:
+                    if tmp_path.exists():
+                        tmp_path.unlink()
+            
+            except Exception as e:
+                self.logger.warning(f"STT failed for {av_att.filename}: {e}")
+                # Continue processing other attachments
+        
+        # 4. IMAGE: Process via VL (use first image only for backward compat)
+        img_atts = get_by_bucket(classified, AttachmentBucket.IMAGE)
+        if img_atts:
+            # If we have text evidence from docs/audio, combine with image
+            if evidence_parts:
+                # Process image and combine
+                img_result = await self._process_image_attachment(message, img_atts[0].attachment)
+                if img_result and img_result.content:
+                    evidence_parts.append(f"[IMAGE ANALYSIS]\n{img_result.content}")
+            else:
+                # Image-only message, use existing VL flow
+                return await self._process_image_attachment(message, img_atts[0].attachment)
+        
+        # 5. Aggregate all evidence
+        if evidence_parts:
+            combined_evidence = "\n\n".join(evidence_parts)
+            
+            # Build final prompt: user caption + evidence
+            if user_caption:
+                final_prompt = f"{user_caption}\n\n{combined_evidence}"
+            else:
+                final_prompt = combined_evidence
+            
+            self.logger.info(
+                f"Multimodal aggregation complete: {len(evidence_parts)} sources, "
+                f"{len(final_prompt)} total chars"
+            )
+            
+            # Send to brain for final processing
+            return await brain_infer(final_prompt)
+        
+        # No processable attachments found
+        other_count = len(get_by_bucket(classified, AttachmentBucket.OTHER))
+        if other_count > 0:
+            return BotAction(
+                content=f"I couldn't process {other_count} unsupported file type(s). "
+                "I support images, audio/video, PDFs, and documents (DOCX/RTF/MD)."
+            )
+        
+        return BotAction(content="I couldn't process any of the attachments.")
 
     async def _handle_image_only_tweet(
         self, url: str, syn_data: Dict[str, Any], source: str = "syndication"
