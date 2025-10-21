@@ -6,7 +6,7 @@ This module should contain NO business logic, only orchestration.
 import asyncio
 import os
 import sys
-from typing import NoReturn
+from typing import Dict, NoReturn, Optional
 
 import aiohttp
 import discord
@@ -22,7 +22,7 @@ from bot.utils.logging import init_logging, get_logger, shutdown_logging_and_exi
 from bot.shutdown import setup_signal_handlers
 
 
-async def main() -> NoReturn:
+async def main(bot_ref: Optional[Dict[str, LLMBot]] = None) -> NoReturn:
     """Main bot execution function with enhanced error handling and CLI support."""
     init_logging()
     logger = get_logger(__name__)
@@ -63,6 +63,8 @@ async def main() -> NoReturn:
     bot = LLMBot(
         config=config, command_prefix=get_prefix, intents=intents, help_command=None
     )
+    if bot_ref is not None:
+        bot_ref["bot"] = bot
 
     try:
         setup_signal_handlers(bot)
@@ -125,16 +127,17 @@ def run_bot() -> None:
 
 async def main_with_cleanup() -> NoReturn:
     """Main function with proper resource cleanup."""
-    bot_instance = None
+    bot_state: Dict[str, LLMBot] = {}
     try:
         # Run the main bot logic
-        await main()
+        await main(bot_state)
     except Exception as e:
         logger = get_logger(__name__)
         logger.error(f"Error in main: {e}", exc_info=True)
         raise
     finally:
         # Ensure proper cleanup even if main() fails
+        bot_instance = bot_state.get("bot")
         if bot_instance:
             try:
                 await bot_instance.close()

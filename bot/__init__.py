@@ -32,3 +32,12 @@ def __getattr__(name: str):
 
         return _LLMBot
     raise AttributeError(name)
+
+
+try:
+    from .utils.torch_compat import ensure_reduce_op_alias
+
+    ensure_reduce_op_alias()
+except Exception:
+    # Fail-open: compatibility shim should never block package import
+    pass

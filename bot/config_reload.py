@@ -33,6 +33,7 @@ _config_lock = threading.RLock()
 _reload_callbacks: Set[Callable[[Dict[str, Any], Dict[str, Any]], None]] = set()
 _file_watcher_task: Optional[asyncio.Task] = None
 _last_reload_time: float = 0
+_watcher_lock: Optional[asyncio.Lock] = None
 def _candidate_env_paths() -> List[Path]:
     """Return list of candidate env files to watch (resolved absolute paths).
     Order matters; the first existing is used as the preferred .env for default reloads.
@@ -404,6 +405,7 @@ async def _file_watcher_loop() -> None:
     last_reload_time = 0.0
     debounce_delay = 0.5  # debounce to collapse editor burst events
 
+    status = "completed"
     try:
         while True:
             await asyncio.sleep(0.5)  # Responsive but still light
@@ -429,10 +431,23 @@ async def _file_watcher_loop() -> None:
                 await asyncio.sleep(5)  # Wait longer on error
 
     except asyncio.CancelledError:
+        status = "cancelled"
         logger.info("🛑 File watcher cancelled")
         raise
     except Exception as e:
+        status = "errored"
         logger.error(f"💥 File watcher crashed: {e}", exc_info=True)
+    finally:
+        try:
+            logger.info(
+                "config.watcher.exit",
+                extra={
+                    "event": "config.watcher.exit",
+                    "detail": {"status": status},
+                },
+            )
+        except Exception:
+            pass
 
 
 def setup_config_reload() -> None:
@@ -457,38 +472,85 @@ def setup_config_reload() -> None:
 
 async def start_file_watcher() -> None:
     """Start file watcher task to monitor .env changes."""
-    global _file_watcher_task
+    global _file_watcher_task, _watcher_lock
 
-    if _file_watcher_task and not _file_watcher_task.done():
-        logger.warning("⚠️ File watcher already running")
-        return
-    try:
-        candidates = [str(p) for p in _candidate_env_paths()]
-        preferred = str(_preferred_env_path())
+    if _watcher_lock is None:
+        _watcher_lock = asyncio.Lock()
+
+    async with _watcher_lock:
+        if _file_watcher_task and not _file_watcher_task.done():
+            logger.info(
+                "config.watcher.reused",
+                extra={
+                    "event": "config.watcher.reused",
+                    "detail": {"task_id": id(_file_watcher_task)},
+                },
+            )
+            return
+
+        if _file_watcher_task and _file_watcher_task.done():
+            try:
+                _file_watcher_task.result()
+            except asyncio.CancelledError:
+                logger.info("Previous file watcher task had been cancelled")
+            except Exception:
+                logger.info(
+                    "Previous file watcher task ended with error",
+                    exc_info=True,
+                )
+
+        try:
+            candidates = [str(p) for p in _candidate_env_paths()]
+            preferred = str(_preferred_env_path())
+            logger.info(
+                "config.watcher.paths",
+                extra={
+                    "event": "config.watcher.paths",
+                    "detail": {"candidates": candidates, "preferred": preferred},
+                },
+            )
+        except Exception:
+            pass
+
+        _file_watcher_task = asyncio.create_task(
+            _file_watcher_loop(), name="config_file_watcher"
+        )
         logger.info(
-            "config.watcher.paths",
+            "config.watcher.started",
             extra={
-                "event": "config.watcher.paths",
-                "detail": {"candidates": candidates, "preferred": preferred},
+                "event": "config.watcher.started",
+                "detail": {"task_id": id(_file_watcher_task)},
             },
         )
-    except Exception:
-        pass
-    _file_watcher_task = asyncio.create_task(_file_watcher_loop())
-    logger.info("👁️ Configuration file watcher started")
 
 
 async def stop_file_watcher() -> None:
     """Stop the file watcher background task."""
-    global _file_watcher_task
+    global _file_watcher_task, _watcher_lock
 
-    if _file_watcher_task and not _file_watcher_task.done():
-        _file_watcher_task.cancel()
-        try:
-            await _file_watcher_task
-        except asyncio.CancelledError:
-            pass
-        logger.info("👁️ File watcher task stopped")
+    if _watcher_lock is None:
+        _watcher_lock = asyncio.Lock()
+
+    async with _watcher_lock:
+        if _file_watcher_task and not _file_watcher_task.done():
+            task_id = id(_file_watcher_task)
+            _file_watcher_task.cancel()
+            try:
+                await _file_watcher_task
+            except asyncio.CancelledError:
+                pass
+            finally:
+                _file_watcher_task = None
+
+            logger.info(
+                "config.watcher.stopped",
+                extra={
+                    "event": "config.watcher.stopped",
+                    "detail": {"task_id": task_id},
+                },
+            )
+        else:
+            logger.debug("config.watcher.stop.noop")
 
 
 def manual_reload_command() -> str:

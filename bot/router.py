@@ -309,6 +309,25 @@ class Router:
             self.pdf_processor.loop = bot.loop
 
         self.logger.info("✔ Router initialized.")
+        try:
+            routing_flags = {
+                "speak_only_when_spoken": self.config.get(
+                    "BOT_SPEAKS_ONLY_WHEN_SPOKEN_TO", True
+                ),
+                "vision_enabled": self.config.get("VISION_ENABLED", True),
+                "vision_t2i_enabled": self.config.get("VISION_T2I_ENABLED", True),
+                "voice_native": self.config.get("VOICE_ENABLE_NATIVE", False),
+            }
+            type_map = {k: type(v).__name__ for k, v in routing_flags.items()}
+            self.logger.debug(
+                "router.flags",
+                extra={
+                    "event": "router.flags",
+                    "detail": {"values": routing_flags, "types": type_map},
+                },
+            )
+        except Exception:
+            pass
         # Lazy-initialized X API client
         self._x_api_client: Optional[XApiClient] = None
         # Image upgrade manager for emoji-driven expansions [CA]

@@ -208,18 +208,6 @@ def load_config():
     if _config_cache and (current_time - _cache_timestamp) < CACHE_TTL:
         return _config_cache
 
-    def _safe_int(value, default, var_name):
-        """Safely convert environment variable to int, handling malformed values."""
-        try:
-            # Clean value by removing comments and whitespace
-            clean_value = value.split("#")[0].strip() if value else default
-            return int(clean_value)
-        except (ValueError, AttributeError):
-            print(
-                f"Warning: Invalid {var_name} value '{value}', using default {default}"
-            )
-            return int(default)
-
     # Centralized VISION flags with robust parsing and defaults [CA]
     _ve_raw = _clean_env_value(os.getenv("VISION_ENABLED"))
     _t2i_raw = _clean_env_value(os.getenv("VISION_T2I_ENABLED"))
@@ -244,7 +232,9 @@ def load_config():
         # BOT BEHAVIOR / CONTEXT / MEMORY
         "TEMPERATURE": _safe_float(os.getenv("TEMPERATURE"), "0.7", "TEMPERATURE"),
         "TIMEOUT": _safe_float(os.getenv("TIMEOUT"), "120.0", "TIMEOUT"),
-        "CHANGE_NICKNAME": os.getenv("CHANGE_NICKNAME", "False").lower() == "true",
+        "CHANGE_NICKNAME": _parse_bool_str(
+            _clean_env_value(os.getenv("CHANGE_NICKNAME")), False
+        ),
         "MAX_CONVERSATION_LENGTH": _safe_int(
             os.getenv("MAX_CONVERSATION_LENGTH"), "1000", "MAX_CONVERSATION_LENGTH"
         ),
@@ -258,10 +248,9 @@ def load_config():
             os.getenv("MAX_ATTACHMENT_SIZE_MB"), "25", "MAX_ATTACHMENT_SIZE_MB"
         ),
         # SILENCE GATE - SPEAK ONLY WHEN SPOKEN TO
-        "BOT_SPEAKS_ONLY_WHEN_SPOKEN_TO": os.getenv(
-            "BOT_SPEAKS_ONLY_WHEN_SPOKEN_TO", "True"
-        ).lower()
-        == "true",
+        "BOT_SPEAKS_ONLY_WHEN_SPOKEN_TO": _parse_bool_str(
+            _clean_env_value(os.getenv("BOT_SPEAKS_ONLY_WHEN_SPOKEN_TO")), True
+        ),
         "REQUIRE_MENTION_IN_GUILDS": _parse_bool_str(
             _clean_env_value(os.getenv("REQUIRE_MENTION_IN_GUILDS")), True
         ),
@@ -350,8 +339,9 @@ def load_config():
             "TTS_TIMEOUT_WARM_S",
         ),
         # Native Discord voice messages toggle [CMV]
-        "VOICE_ENABLE_NATIVE": os.getenv("VOICE_ENABLE_NATIVE", "false").lower()
-        == "true",
+        "VOICE_ENABLE_NATIVE": _parse_bool_str(
+            _clean_env_value(os.getenv("VOICE_ENABLE_NATIVE")), False
+        ),
         # Voice Publisher HTTP timeouts (aiohttp) [CMV][IV]
         # Global fallback if specific values are unset
         "VOICE_PUBLISHER_TIMEOUT_S": _safe_float(
@@ -384,7 +374,7 @@ def load_config():
         ),
         # OPTIONAL SETTINGS
         "TTS_PREFS_FILE": os.getenv("TTS_PREFS_FILE"),
-        "DEBUG": os.getenv("DEBUG", "False").lower() == "true",
+        "DEBUG": _parse_bool_str(_clean_env_value(os.getenv("DEBUG")), False),
         "MAX_CONVERSATION_LOG_SIZE": _safe_int(
             os.getenv("MAX_CONVERSATION_LOG_SIZE"), "1000", "MAX_CONVERSATION_LOG_SIZE"
         ),
@@ -441,7 +431,9 @@ def load_config():
             "DDG_API_ENDPOINT", "https://html.duckduckgo.com/html/"
         ),
         # Force legacy HTML endpoint instead of ddgs client. [CMV]
-        "DDG_FORCE_HTML": os.getenv("DDG_FORCE_HTML", "true").lower() == "true",
+        "DDG_FORCE_HTML": _parse_bool_str(
+            _clean_env_value(os.getenv("DDG_FORCE_HTML")), True
+        ),
         "DDG_API_KEY": os.getenv("DDG_API_KEY"),
         "DDG_TIMEOUT_MS": _safe_int(
             os.getenv("DDG_TIMEOUT_MS"), "5000", "DDG_TIMEOUT_MS"
@@ -478,35 +470,34 @@ def load_config():
         ),
         # X (Twitter) API Integration [CA][CMV][SFT]
         # Feature flag and auth
-        "X_API_ENABLED": os.getenv("X_API_ENABLED", "false").lower() == "true",
+        "X_API_ENABLED": _parse_bool_str(
+            _clean_env_value(os.getenv("X_API_ENABLED")), False
+        ),
         "X_API_AUTH_MODE": os.getenv("X_API_AUTH_MODE", "oauth2_app"),
         "X_API_BEARER_TOKEN": _clean_env_value(
             os.getenv("X_API_BEARER_TOKEN")
         ),  # never log token
         # Fallback rules
-        "X_API_REQUIRE_API_FOR_TWITTER": os.getenv(
-            "X_API_REQUIRE_API_FOR_TWITTER", "false"
-        ).lower()
-        == "true",
-        "X_API_ALLOW_FALLBACK_ON_5XX": os.getenv(
-            "X_API_ALLOW_FALLBACK_ON_5XX", "true"
-        ).lower()
-        == "true",
+        "X_API_REQUIRE_API_FOR_TWITTER": _parse_bool_str(
+            _clean_env_value(os.getenv("X_API_REQUIRE_API_FOR_TWITTER")), False
+        ),
+        "X_API_ALLOW_FALLBACK_ON_5XX": _parse_bool_str(
+            _clean_env_value(os.getenv("X_API_ALLOW_FALLBACK_ON_5XX")), True
+        ),
         # X Syndication Tier [CMV]
         # Hardcoded default: enabled unless explicitly disabled
-        "X_SYNDICATION_ENABLED": os.getenv("X_SYNDICATION_ENABLED", "true").lower()
-        == "true",
+        "X_SYNDICATION_ENABLED": _parse_bool_str(
+            _clean_env_value(os.getenv("X_SYNDICATION_ENABLED")), True
+        ),
         # Fast probe: attempt STT on X URLs before API/syndication [CMV][PA]
-        "X_TWITTER_STT_PROBE_FIRST": os.getenv(
-            "X_TWITTER_STT_PROBE_FIRST", "true"
-        ).lower()
-        == "true",
+        "X_TWITTER_STT_PROBE_FIRST": _parse_bool_str(
+            _clean_env_value(os.getenv("X_TWITTER_STT_PROBE_FIRST")), True
+        ),
         # Routing: enable photo media to VL analysis path [CMV]
         # Hardcoded default: enabled (route photos to VL)
-        "X_API_ROUTE_PHOTOS_TO_VL": os.getenv(
-            "X_API_ROUTE_PHOTOS_TO_VL", "true"
-        ).lower()
-        == "true",
+        "X_API_ROUTE_PHOTOS_TO_VL": _parse_bool_str(
+            _clean_env_value(os.getenv("X_API_ROUTE_PHOTOS_TO_VL")), True
+        ),
         # Networking and resilience knobs
         "X_API_TIMEOUT_MS": _safe_int(
             os.getenv("X_API_TIMEOUT_MS"), "8000", "X_API_TIMEOUT_MS"
@@ -591,7 +582,9 @@ def load_config():
         "TWITTER_ROUTE_DEFAULT": os.getenv("TWITTER_ROUTE_DEFAULT", "api_first"),
         # STREAMING STATUS CARDS [CA][CMV]
         # Global enable for streaming card UX (text-only remains non-streaming)
-        "STREAMING_ENABLE": os.getenv("STREAMING_ENABLE", "true").lower() == "true",
+        "STREAMING_ENABLE": _parse_bool_str(
+            _clean_env_value(os.getenv("STREAMING_ENABLE")), True
+        ),
         # Style preset: 'compact' | 'detailed'
         "STREAMING_EMBED_STYLE": os.getenv("STREAMING_EMBED_STYLE", "compact"),
         # Edit throttle and max step count
@@ -603,17 +596,23 @@ def load_config():
         ),
         # Domain-specific eligibility gates [CMV]
         # Defaults: text/search/rag disabled, media enabled
-        "STREAMING_ENABLE_TEXT": os.getenv("STREAMING_ENABLE_TEXT", "false").lower()
-        == "true",
-        "STREAMING_ENABLE_SEARCH": os.getenv("STREAMING_ENABLE_SEARCH", "false").lower()
-        == "true",
-        "STREAMING_ENABLE_RAG": os.getenv("STREAMING_ENABLE_RAG", "false").lower()
-        == "true",
-        "STREAMING_ENABLE_MEDIA": os.getenv("STREAMING_ENABLE_MEDIA", "true").lower()
-        == "true",
+        "STREAMING_ENABLE_TEXT": _parse_bool_str(
+            _clean_env_value(os.getenv("STREAMING_ENABLE_TEXT")), False
+        ),
+        "STREAMING_ENABLE_SEARCH": _parse_bool_str(
+            _clean_env_value(os.getenv("STREAMING_ENABLE_SEARCH")), False
+        ),
+        "STREAMING_ENABLE_RAG": _parse_bool_str(
+            _clean_env_value(os.getenv("STREAMING_ENABLE_RAG")), False
+        ),
+        "STREAMING_ENABLE_MEDIA": _parse_bool_str(
+            _clean_env_value(os.getenv("STREAMING_ENABLE_MEDIA")), True
+        ),
         # STT ORCHESTRATION [CA][CMV] =====
         # Global toggle for STT orchestrator (falls back to legacy path when disabled)
-        "STT_ENABLE": os.getenv("STT_ENABLE", "true").lower() == "true",
+        "STT_ENABLE": _parse_bool_str(
+            _clean_env_value(os.getenv("STT_ENABLE")), True
+        ),
         # ===== VISION GENERATION SYSTEM [CA][CMV][SFT][REH] =====
         # Master toggles (parsed via robust tokens; default ON when unset)
         "VISION_ENABLED": _ve,
@@ -701,8 +700,9 @@ def load_config():
         ),
         # Logging and observability
         "VISION_LOG_LEVEL": os.getenv("VISION_LOG_LEVEL", "INFO"),
-        "VISION_AUDIT_ENABLED": os.getenv("VISION_AUDIT_ENABLED", "true").lower()
-        == "true",
+        "VISION_AUDIT_ENABLED": _parse_bool_str(
+            _clean_env_value(os.getenv("VISION_AUDIT_ENABLED")), True
+        ),
         # Provider-specific timeouts and retries
         "VISION_PROVIDER_TIMEOUT_MS": _safe_int(
             os.getenv("VISION_PROVIDER_TIMEOUT_MS"),
@@ -723,13 +723,13 @@ def load_config():
             "10",
             "VISION_PROGRESS_UPDATE_INTERVAL_S",
         ),
-        "VISION_EPHEMERAL_RESPONSES": os.getenv(
-            "VISION_EPHEMERAL_RESPONSES", "true"
-        ).lower()
-        == "true",
+        "VISION_EPHEMERAL_RESPONSES": _parse_bool_str(
+            _clean_env_value(os.getenv("VISION_EPHEMERAL_RESPONSES")), True
+        ),
         # Dry run mode for testing routing and cost decisions
-        "VISION_DRY_RUN_MODE": os.getenv("VISION_DRY_RUN_MODE", "false").lower()
-        == "true",
+        "VISION_DRY_RUN_MODE": _parse_bool_str(
+            _clean_env_value(os.getenv("VISION_DRY_RUN_MODE")), False
+        ),
         # Orchestration mode: single | cascade_primary_then_fallbacks | parallel_first_acceptable | parallel_best_of | hybrid_draft_then_finalize
         "STT_MODE": os.getenv("STT_MODE", "single"),
         # Active providers (comma-separated). Supported now: local_whisper

@@ -13,8 +13,6 @@ from .config import load_config
 from .janitor import start_janitor, stop_janitor
 
 logger = logging.getLogger(__name__)
-config = load_config()
-
 # Global task registry
 _background_tasks: Dict[str, tasks.Loop] = {}
 _running_tasks: List[asyncio.Task] = []
@@ -31,9 +29,26 @@ def setup_memory_save_task(bot: commands.Bot) -> tasks.Loop:
         The task loop that can be started/stopped
     """
 
-    @tasks.loop(minutes=config.get("PROFILE_AUTOSAVE_INTERVAL", 10))
+    initial_config = load_config()
+    interval_minutes = initial_config.get("PROFILE_AUTOSAVE_INTERVAL", 10)
+
+    @tasks.loop(minutes=interval_minutes)
     async def memory_save_task():
         try:
+            current_config = load_config()
+            target_interval = current_config.get("PROFILE_AUTOSAVE_INTERVAL", 10)
+            if target_interval != memory_save_task.current_interval:
+                memory_save_task.change_interval(minutes=target_interval)
+                memory_save_task.current_interval = target_interval
+                logger.debug(
+                    "Updated memory save interval",
+                    extra={
+                        "subsys": "memory",
+                        "event": "autosave_interval_update",
+                        "detail": {"minutes": target_interval},
+                    },
+                )
+
             save_all_profiles()
             save_all_server_profiles()
             logger.debug(
@@ -45,6 +60,8 @@ def setup_memory_save_task(bot: commands.Bot) -> tasks.Loop:
                 f"Error during profile autosave: {e}",
                 extra={"subsys": "memory", "event": "autosave_error"},
             )
+
+    memory_save_task.current_interval = interval_minutes
 
     # Register the task
     _background_tasks["memory_save"] = memory_save_task
@@ -117,16 +134,34 @@ class TaskManager:
     async def _start_profile_autosave(self) -> None:
         """Start the profile auto-save task."""
 
-        @tasks.loop(minutes=config.get("PROFILE_AUTOSAVE_INTERVAL", 10))
+        cfg = load_config()
+        interval_minutes = cfg.get("PROFILE_AUTOSAVE_INTERVAL", 10)
+
+        @tasks.loop(minutes=interval_minutes)
         async def profile_autosave():
             """Automatically save user and server profiles."""
             try:
+                current_cfg = load_config()
+                target_minutes = current_cfg.get("PROFILE_AUTOSAVE_INTERVAL", 10)
+                if target_minutes != profile_autosave.current_interval:
+                    profile_autosave.change_interval(minutes=target_minutes)
+                    profile_autosave.current_interval = target_minutes
+                    logger.debug(
+                        "Updated profile autosave interval",
+                        extra={
+                            "subsys": "memory",
+                            "event": "autosave_interval_update",
+                            "detail": {"minutes": target_minutes},
+                        },
+                    )
+
                 save_all_profiles()
                 save_all_server_profiles()
                 logger.debug("Auto-saved all profiles")
             except Exception as e:
                 logger.error(f"Error during profile autosave: {e}", exc_info=True)
 
+        profile_autosave.current_interval = interval_minutes
         profile_autosave.start()
         self.tasks["profile_autosave"] = profile_autosave
         logger.info("Profile auto-save task started")
@@ -134,14 +169,31 @@ class TaskManager:
     async def _start_cleanup_tasks(self) -> None:
         """Start cleanup tasks."""
 
-        @tasks.loop(hours=config.get("CLEANUP_INTERVAL_HOURS", 24))
+        cfg = load_config()
+        interval_hours = cfg.get("CLEANUP_INTERVAL_HOURS", 24)
+
+        @tasks.loop(hours=interval_hours)
         async def cleanup_old_logs():
             """Clean up old log files."""
             try:
                 from pathlib import Path
                 import time
 
-                logs_dir = config.get("USER_LOGS_DIR")
+                current_cfg = load_config()
+                target_hours = current_cfg.get("CLEANUP_INTERVAL_HOURS", 24)
+                if target_hours != cleanup_old_logs.current_interval:
+                    cleanup_old_logs.change_interval(hours=target_hours)
+                    cleanup_old_logs.current_interval = target_hours
+                    logger.debug(
+                        "Updated cleanup interval",
+                        extra={
+                            "subsys": "maintenance",
+                            "event": "cleanup_interval_update",
+                            "detail": {"hours": target_hours},
+                        },
+                    )
+
+                logs_dir = current_cfg.get("USER_LOGS_DIR")
                 if not logs_dir or not Path(logs_dir).exists():
                     return
 
@@ -161,6 +213,7 @@ class TaskManager:
             except Exception as e:
                 logger.error(f"Error during log cleanup: {e}", exc_info=True)
 
+        cleanup_old_logs.current_interval = interval_hours
         cleanup_old_logs.start()
         self.tasks["cleanup_old_logs"] = cleanup_old_logs
         logger.info("Cleanup tasks started")
@@ -168,10 +221,27 @@ class TaskManager:
     async def _start_health_check(self) -> None:
         """Start health check task."""
 
-        @tasks.loop(minutes=config.get("HEALTH_CHECK_INTERVAL", 5))
+        cfg = load_config()
+        interval_minutes = cfg.get("HEALTH_CHECK_INTERVAL", 5)
+
+        @tasks.loop(minutes=interval_minutes)
         async def health_check():
             """Perform health checks."""
             try:
+                current_cfg = load_config()
+                target_minutes = current_cfg.get("HEALTH_CHECK_INTERVAL", 5)
+                if target_minutes != health_check.current_interval:
+                    health_check.change_interval(minutes=target_minutes)
+                    health_check.current_interval = target_minutes
+                    logger.debug(
+                        "Updated health check interval",
+                        extra={
+                            "subsys": "healthcheck",
+                            "event": "health_interval_update",
+                            "detail": {"minutes": target_minutes},
+                        },
+                    )
+
                 # Check bot connection
                 if not self.bot.is_ready():
                     logger.warning("Bot is not ready")
@@ -187,7 +257,7 @@ class TaskManager:
                 process = psutil.Process()
                 memory_mb = process.memory_info().rss / 1024 / 1024
 
-                if memory_mb > config.get("MEMORY_WARNING_THRESHOLD", 500):
+                if memory_mb > current_cfg.get("MEMORY_WARNING_THRESHOLD", 500):
                     logger.warning(f"High memory usage: {memory_mb:.1f}MB")
 
                 # Update bot status if needed
@@ -197,6 +267,7 @@ class TaskManager:
             except Exception as e:
                 logger.error(f"Error during health check: {e}", exc_info=True)
 
+        health_check.current_interval = interval_minutes
         health_check.start()
         self.tasks["health_check"] = health_check
         logger.info("Health check task started")

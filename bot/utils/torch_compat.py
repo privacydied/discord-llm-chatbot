@@ -1,0 +1,49 @@
+"""
+Compatibility helpers for PyTorch usage across the codebase.
+
+These helpers intentionally avoid importing heavy subsystems at module import time.
+"""
+
+from __future__ import annotations
+
+import logging
+import warnings
+from typing import Any
+
+logger = logging.getLogger(__name__)
+
+
+def ensure_reduce_op_alias() -> None:
+    """
+    Rebind torch.distributed.reduce_op to ReduceOp to silence deprecation warnings.
+
+    PyTorch 2.3+ emits a warning whenever the legacy attribute is accessed.
+    Some third-party libraries still rely on the legacy name, so we replace it
+    with the modern enum to avoid the warning while preserving behaviour.
+    """
+
+    warnings.filterwarnings(
+        "ignore",
+        message="torch.distributed.reduce_op is deprecated",
+        category=UserWarning,
+    )
+
+    try:
+        import torch.distributed as dist  # type: ignore
+    except Exception:
+        return
+
+    try:
+        reduce_enum: Any = dist.ReduceOp  # type: ignore[attr-defined]
+    except AttributeError:
+        return
+    except Exception:
+        return
+
+    try:
+        # Rebind without reading dist.reduce_op first; getattr would re-trigger the warning.
+        setattr(dist, "reduce_op", reduce_enum)
+        logger.debug("torch.compat.reduce_op_rebound")
+    except Exception:
+        # Safety-first: avoid failing import-time logic because of torch internals.
+        pass

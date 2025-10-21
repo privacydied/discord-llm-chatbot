@@ -20,8 +20,12 @@ import torch
 from faster_whisper import WhisperModel
 
 from .utils.logging import get_logger
+from .utils.torch_compat import ensure_reduce_op_alias
 
 logger = get_logger(__name__)
+
+# Ensure third-party whisper dependencies do not trigger torch distributed warnings.
+ensure_reduce_op_alias()
 
 # ---------------------------------------------------------------------------
 # Environment controls — keep numeric libraries single-threaded on CPU
