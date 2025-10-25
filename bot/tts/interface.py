@@ -658,11 +658,20 @@ class TTSManager:
                 action.content = ""  # files-only message allowed
 
             return action
+        except SynthesisError as exc:
+            logger.error(
+                f"tts.process.failed | {exc}",
+                extra={"subsys": "tts", "event": "process_failed"},
+                exc_info=True,
+            )
+            raise
         except Exception as e:
             logger.error(
-                f"tts.process.failed | {e}", extra={"subsys": "tts"}, exc_info=True
+                f"tts.process.failed_unexpected | {e}",
+                extra={"subsys": "tts", "event": "process_failed_unexpected"},
+                exc_info=True,
             )
-            return action
+            raise SynthesisError("TTS processing failed") from e
 
     # --- Legacy/Test compatibility transcoder ---
     async def _to_ogg_opus_ffmpegpy(

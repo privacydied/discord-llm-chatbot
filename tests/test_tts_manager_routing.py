@@ -188,3 +188,26 @@ def test_runtime_engine_error_propagates(monkeypatch, tmp_path):
             asyncio.run(manager.synthesize("general kenobi"))
     finally:
         asyncio.run(manager.close())
+
+
+def test_process_propagates_synthesis_error(monkeypatch):
+    monkeypatch.setenv("TTS_ENGINE", "stub")
+
+    manager = TTSManager()
+    try:
+        async def failing_generate(self, text: str, out_path=None, timeout=None):
+            raise SynthesisError("forced failure")
+
+        monkeypatch.setattr(
+            TTSManager, "generate_tts", failing_generate, raising=False
+        )
+
+        action = bot_action_stub.BotAction(content="hello world")
+
+        async def _invoke():
+            await manager.process(action)
+
+        with pytest.raises(SynthesisError):
+            asyncio.run(_invoke())
+    finally:
+        asyncio.run(manager.close())
