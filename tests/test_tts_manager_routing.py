@@ -92,6 +92,7 @@ sys.modules.setdefault("bot.action", bot_action_stub)
 
 from bot.tts.interface import TTSManager
 from bot.tts.errors import SynthesisError
+from bot.tts.engines.kokoro import KokoroONNXEngine
 
 
 class _DummyKokoro:
@@ -188,6 +189,31 @@ def test_runtime_engine_error_propagates(monkeypatch, tmp_path):
             asyncio.run(manager.synthesize("general kenobi"))
     finally:
         asyncio.run(manager.close())
+
+
+def test_kokoro_english_falls_back_when_g2p_missing(monkeypatch, tmp_path):
+    model_file = tmp_path / "model.onnx"
+    voices_file = tmp_path / "voices.bin"
+    model_file.write_bytes(b"m")
+    voices_file.write_bytes(b"v")
+
+    from bot.tts.eng_g2p_local import G2PUnavailableError
+
+    def raising_text_to_ipa(_text: str) -> str:
+        raise G2PUnavailableError("cmudict missing")
+
+    async def fake_registry(self, text: str) -> bytes:
+        return b"registry"
+
+    monkeypatch.setattr("bot.tts.eng_g2p_local.text_to_ipa", raising_text_to_ipa)
+    monkeypatch.setattr(KokoroONNXEngine, "_synthesize_with_registry", fake_registry)
+
+    engine = KokoroONNXEngine(
+        model_path=str(model_file), voices_path=str(voices_file)
+    )
+
+    audio = engine.synthesize("hello world")
+    assert audio == b"registry"
 
 
 def test_process_propagates_synthesis_error(monkeypatch):

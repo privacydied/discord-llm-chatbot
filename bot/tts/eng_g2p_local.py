@@ -24,6 +24,10 @@ IPA_REWRITE_TABLE: Dict[str, str] = {}
 _LEXICON_CACHE = None
 
 
+class G2PUnavailableError(RuntimeError):
+    """Raised when the deterministic G2P pipeline cannot be used."""
+
+
 def _load_lexicon() -> Dict[str, str]:
     """Load lexicon from lexicon_en.json file."""
     global _LEXICON_CACHE
@@ -1017,8 +1021,10 @@ def text_to_ipa(text: str) -> str:
         import cmudict
 
         cmudict_dict = cmudict.dict()
-    except Exception:
-        cmudict_dict = None
+    except Exception as exc:
+        raise G2PUnavailableError(
+            "CMU Pronouncing Dictionary is not available for English IPA synthesis"
+        ) from exc
 
     # 1. Normalize text and apply lexicon
     text = normalize_text(text)
