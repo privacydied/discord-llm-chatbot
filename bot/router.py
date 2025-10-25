@@ -339,6 +339,14 @@ class Router:
             self._syn_ttl_s: float = float(self.config.get("X_SYNDICATION_TTL_S", 900))
         except Exception:
             self._syn_ttl_s = 900.0
+        # Canonical fx/vx context cache to share frontend + primary mappings downstream [REH]
+        self._x_frontend_canon: "collections.OrderedDict[str, Dict[str, str]]" = (
+            collections.OrderedDict()
+        )
+        # Track canonical mappings for fx/vx front-ends so downstream probes share context [REH]
+        self._x_frontend_canon: "collections.OrderedDict[str, Dict[str, str]]" = (
+            collections.OrderedDict()
+        )
 
         # Vision generation system [CA][SFT]
         self._vision_intent_router: Optional[VisionIntentRouter] = None
@@ -1045,8 +1053,138 @@ class Router:
             for d in ["twitter.com/", "x.com/", "vxtwitter.com/", "fxtwitter.com/"]
         )
 
-    @staticmethod
-    def _canonicalize_x_url(url: str) -> str:
+    def _register_x_frontend_context(
+        self, url: str, frontend: Optional[str], primary: Optional[str]
+    ) -> None:
+        if not url or not frontend or not primary:
+            return
+        try:
+            keys = [url, self._normalize_x_url(url)]
+        except Exception:
+            keys = [url]
+        for key in keys:
+            if not key:
+                continue
+            self._x_frontend_canon[key] = {"frontend": frontend, "primary": primary}
+        # Bound size of the mapping to avoid unbounded growth
+        try:
+            while len(self._x_frontend_canon) > 256:
+                self._x_frontend_canon.popitem(last=False)
+        except Exception:
+            pass
+
+    def _log_x_media_probe(
+        self,
+        primary: Optional[str],
+        video: bool,
+        image_count: int,
+        frontend: Optional[str],
+    ) -> None:
+        msg = (
+            f"x.media.probe primary={primary or ''} "
+            f"video={str(video).lower()} image_count={int(image_count)}"
+        )
+        detail = {
+            "primary": primary or "",
+            "video": bool(video),
+            "image_count": int(image_count),
+        }
+        if frontend:
+            detail["frontend"] = frontend
+        try:
+            self.logger.info(
+                msg,
+                extra={
+                    "event": "x.media.probe",
+                    "detail": detail,
+                },
+            )
+        except Exception:
+            pass
+
+    async def _verify_media_kind(
+        self, url: str, default: str = "unknown"
+    ) -> Tuple[str, str]:
+        decided = default
+        content_type = ""
+        try:
+            path = Path(urlparse(url).path or "")
+            ext = path.suffix.lower()
+        except Exception:
+            ext = ""
+        http = None
+        try:
+            http = await get_http_client()
+        except Exception:
+            http = None
+        if http is not None:
+            cfg = RequestConfig(
+                connect_timeout=2.5,
+                read_timeout=2.5,
+                total_timeout=3.5,
+                max_retries=0,
+            )
+            try:
+                resp = await http.head(url, config=cfg)
+                content_type = (resp.headers.get("content-type") or "").lower()
+                if resp.status_code in (403, 405) or not content_type:
+                    resp = await http.get(
+                        url,
+                        config=cfg,
+                        headers={"Range": "bytes=0-0"},
+                    )
+                    content_type = (resp.headers.get("content-type") or "").lower()
+            except Exception:
+                try:
+                    resp = await http.get(
+                        url,
+                        config=cfg,
+                        headers={"Range": "bytes=0-0"},
+                    )
+                    content_type = (resp.headers.get("content-type") or "").lower()
+                except Exception:
+                    content_type = ""
+        if content_type.startswith("video/") or ext in {
+            ".mp4",
+            ".m4v",
+            ".mov",
+            ".m3u8",
+            ".ts",
+            ".mpd",
+            ".mkv",
+        }:
+            decided = "video"
+        elif content_type.startswith("image/"):
+            decided = "image"
+        return decided, content_type
+
+    def _log_media_kind_checked(
+        self, url: str, content_type: str, decided: str
+    ) -> None:
+        try:
+            host = urlparse(url).netloc.lower()
+        except Exception:
+            host = ""
+        msg = (
+            f"media.kind_checked url_host={host or ''} "
+            f"ctype={content_type or ''} decided={decided or ''}"
+        )
+        try:
+            self.logger.info(
+                msg,
+                extra={
+                    "event": "media.kind_checked",
+                    "detail": {
+                        "url_host": host or "",
+                        "ctype": content_type or "",
+                        "decided": decided or "",
+                    },
+                },
+            )
+        except Exception:
+            pass
+
+    def _canonicalize_x_url(self, url: str) -> str:
         """Canonicalize X/Twitter URLs: lowercase host and strip non-essential params.
         Keeps path untouched; removes params like s=, utm_*, t=.
         """
@@ -1056,6 +1194,23 @@ class Router:
             # Normalize common hosts
             if host.startswith("www."):
                 host = host[4:]
+            frontend = None
+            host_core = host
+            if host in {"fxtwitter.com", "vxtwitter.com"}:
+                frontend = "fx" if host.startswith("fx") else "vx"
+                primary = self._parse_twitter_status_id(url)
+                if primary:
+                    canonical = f"https://x.com/i/status/{primary}"
+                    self._register_x_frontend_context(canonical, frontend, primary)
+                    try:
+                        self.logger.info(
+                            "url.canon kind=x_frontend src_host=%s primary=%s",
+                            host_core,
+                            primary,
+                        )
+                    except Exception:
+                        pass
+                    return canonical
             # Allowed hosts only: leave as-is but lowercased
             qs = dict(parse_qsl(p.query, keep_blank_values=True))
             # Drop noise params
@@ -1288,21 +1443,38 @@ class Router:
         except Exception:
             return url
 
-    async def _resolve_x_media(self, urls: List[str]) -> Dict[str, Any]:
+    async def _resolve_x_media(
+        self,
+        urls: List[str],
+        *,
+        frontend_hints: Optional[Dict[str, str]] = None,
+        primary_hints: Optional[Dict[str, str]] = None,
+    ) -> Dict[str, Any]:
         """Resolve X/Twitter URLs into a minimal media shape.
         - kind: video | image | unknown
         - url/images: best guess URL(s)
         - duration: seconds or None
         """
         clean = [self._canonicalize_x_url(u) for u in urls or []]
-        # Prefer vx/fx-first for playable variants before any image probing
+        frontend_hints = frontend_hints or {}
+        primary_hints = primary_hints or {}
         http = None
         try:
             http = await get_http_client()
         except Exception:
             http = None
+        primary_for_log: Optional[str] = None
+        frontend_for_log: Optional[str] = None
         for u in clean:
             status_id = self._parse_twitter_status_id(u)
+            lookup = self._normalize_x_url(u)
+            ctx = self._x_frontend_canon.get(lookup) or self._x_frontend_canon.get(u) or {}
+            frontend = frontend_hints.get(lookup) or ctx.get('frontend')
+            primary = primary_hints.get(lookup) or ctx.get('primary') or status_id
+            if primary and not primary_for_log:
+                primary_for_log = primary
+            if frontend and not frontend_for_log:
+                frontend_for_log = frontend
             # 1) vx/fx JSON (fast)
             if status_id and http is not None:
                 for src_name, host in (("vx_json", "api.vxtwitter.com"), ("fx_json", "api.fxtwitter.com")):
@@ -1328,7 +1500,6 @@ class Router:
                                 data = json.loads(resp.text)
                             except Exception:
                                 data = {}
-                        # Extract playable variants generically
                         variants = []
                         duration_s = None
                         try:
@@ -1340,7 +1511,6 @@ class Router:
                             media = tweet.get("media") or data.get("media") or {}
                         except Exception:
                             media = {}
-                        # Common shapes: media.videos[*].variants or media.variants[*]
                         try:
                             vids = media.get("videos") or []
                             for v in vids:
@@ -1359,14 +1529,12 @@ class Router:
                                 variants.append(var)
                         except Exception:
                             pass
-                        # Heuristic: accept mp4/hls/dash
                         pick = None
                         if variants:
                             def _score(v):
                                 ct = str(v.get("content_type", "")).lower()
                                 br = v.get("bitrate") or v.get("bit_rate") or 0
                                 urlv = str(v.get("url", ""))
-                                # Prefer mp4, then hls/dash; higher bitrate first
                                 fmt_score = 2 if "mp4" in ct or urlv.endswith(".mp4") else (1 if "mpegurl" in ct or "m3u8" in urlv or "dash" in ct else 0)
                                 return (fmt_score, int(br) if isinstance(br, (int, float)) else 0)
                             try:
@@ -1375,11 +1543,14 @@ class Router:
                                 pick = variants[0]
                         if pick and pick.get("url"):
                             media_url = self._unwrap_x_media_url(str(pick.get("url")))
+                            self._log_x_media_probe(primary, True, 0, frontend or frontend_for_log)
                             return {
                                 "kind": "video",
                                 "url": media_url,
                                 "duration": duration_s,
                                 "src": src_name,
+                                "primary": primary,
+                                "frontend": frontend or frontend_for_log,
                             }
                     except Exception:
                         continue
@@ -1401,31 +1572,35 @@ class Router:
                         resp = await http.get(html_url, config=cfg)
                         if getattr(resp, "status_code", 500) != 200 or not resp.text:
                             continue
-                        text = resp.text
-                        # Look for direct video URLs (mp4/hls)
-                        m = re.search(r"https://video\\.twimg\\.com/[^'\"\s]+", text, re.IGNORECASE)
+                        text_html = resp.text
+                        m = re.search(r"https://video\.twimg\.com/[^\'\"\s]+", text_html, re.IGNORECASE)
                         if m:
                             media_url = self._unwrap_x_media_url(m.group(0))
+                            self._log_x_media_probe(primary, True, 0, frontend or frontend_for_log)
                             return {
                                 "kind": "video",
                                 "url": media_url,
                                 "duration": None,
                                 "src": src_name,
+                                "primary": primary,
+                                "frontend": frontend or frontend_for_log,
                             }
-                        # Meta tags
-                        m2 = re.search(r'<meta[^>]+property=["\']og:video["\'][^>]+content=["\']([^"\']+)["\']', text, re.IGNORECASE)
+                        m2 = re.search(r"<meta[^>]+property=[\'\"]og:video[\'\"][^>]+content=[\'\"]([^\"\']+)[\'\"]", text_html, re.IGNORECASE)
                         if m2:
                             media_url = self._unwrap_x_media_url(m2.group(1))
+                            self._log_x_media_probe(primary, True, 0, frontend or frontend_for_log)
                             return {
                                 "kind": "video",
                                 "url": media_url,
                                 "duration": None,
                                 "src": src_name,
+                                "primary": primary,
+                                "frontend": frontend or frontend_for_log,
                             }
                     except Exception:
                         continue
             # 3) yt-dlp metadata probe (fallback)
-            meta = await self._yt_dlp_probe(u, timeout_s=min(getattr(self, "_x_syn_timeout_s", 3.0), 6.0))
+            meta = await self._yt_dlp_probe(u, timeout_s=min(getattr(self, '_x_syn_timeout_s', 3.0), 6.0))
             if meta:
                 duration = None
                 try:
@@ -1446,17 +1621,27 @@ class Router:
                     has_formats = False
                 if duration or has_formats:
                     media_url = self._unwrap_x_media_url(u)
+                    self._log_x_media_probe(primary, True, 0, frontend or frontend_for_log)
                     return {
                         "kind": "video",
                         "url": media_url,
                         "duration": duration,
                         "src": "ytdlp_probe",
+                        "primary": primary,
+                        "frontend": frontend or frontend_for_log,
                     }
-        # If no video detected, attempt bounded image harvest via syndication [REH]
         images_all: List[str] = []
         poster_detected_global = False
         for u in clean:
             status_id = self._parse_twitter_status_id(u)
+            lookup = self._normalize_x_url(u)
+            ctx = self._x_frontend_canon.get(lookup) or self._x_frontend_canon.get(u) or {}
+            frontend = frontend_hints.get(lookup) or ctx.get('frontend')
+            primary = primary_hints.get(lookup) or ctx.get('primary') or status_id
+            if primary and not primary_for_log:
+                primary_for_log = primary
+            if frontend and not frontend_for_log:
+                frontend_for_log = frontend
             if not status_id:
                 continue
             attempt = 0
@@ -1466,7 +1651,7 @@ class Router:
                 try:
                     imgs = await asyncio.wait_for(
                         self._probe_twitter_syndication_images(u, status_id),
-                        timeout=min(getattr(self, "_x_syn_timeout_s", 3.0) + 0.5, 4.0),
+                        timeout=min(getattr(self, '_x_syn_timeout_s', 3.0) + 0.5, 4.0),
                     )
                 except asyncio.TimeoutError:
                     try:
@@ -1483,7 +1668,6 @@ class Router:
                     imgs = []
                 except Exception:
                     imgs = []
-            # Classify posters vs real photos and surface a video hint [IV]
             poster_prefixes = (
                 "/amplify_video_thumb/",
                 "/ext_tw_video_thumb/",
@@ -1497,10 +1681,8 @@ class Router:
                 except Exception:
                     host = ""
                     path = ""
-                # Detect video poster thumbs from pbs
                 if host.endswith("pbs.twimg.com") and any(pref in path for pref in poster_prefixes):
                     poster_detected_global = True
-                    # Log detection once per candidate
                     try:
                         matched = next((pref for pref in poster_prefixes if pref in path), "poster_thumb")
                         self.logger.info(
@@ -1512,14 +1694,19 @@ class Router:
                         )
                     except Exception:
                         pass
-                    continue  # Do not count as photo
+                    continue
                 if im not in images_all:
                     images_all.append(im)
-            # If we have a video poster hint, we can stop probing further
             if poster_detected_global or images_all:
                 break
         if poster_detected_global:
-            return {"kind": "video", "src": "pbs_thumb"}
+            self._log_x_media_probe(primary_for_log, True, 0, frontend_for_log)
+            return {
+                "kind": "video",
+                "src": "pbs_thumb",
+                "primary": primary_for_log,
+                "frontend": frontend_for_log,
+            }
         if images_all:
             try:
                 self.logger.info(
@@ -1532,9 +1719,21 @@ class Router:
                 )
             except Exception:
                 pass
-            return {"kind": "image", "images": images_all, "src": "pbs_media"}
-
-        return {"kind": "unknown", "reason": "no-formats"}
+            self._log_x_media_probe(primary_for_log, False, len(images_all), frontend_for_log)
+            return {
+                "kind": "image",
+                "images": images_all,
+                "src": "pbs_media",
+                "primary": primary_for_log,
+                "frontend": frontend_for_log,
+            }
+        self._log_x_media_probe(primary_for_log, False, 0, frontend_for_log)
+        return {
+            "kind": "unknown",
+            "reason": "no-formats",
+            "primary": primary_for_log,
+            "frontend": frontend_for_log,
+        }
 
     # ---- New helpers for targeted syndication image probe on no-formats [REH][PA] ----
     @staticmethod
@@ -2935,25 +3134,57 @@ class Router:
                         # Normalize URLs first (x.com/twitter.com/mobile variants)
                         try:
                             norm_urls = []
+                            frontend_hints: Dict[str, str] = {}
+                            primary_hints: Dict[str, str] = {}
                             for u in x_urls:
                                 try:
-                                    nu = self._normalize_x_url(u)
-                                    norm_urls.append(nu)
+                                    canonical_u = self._canonicalize_x_url(u)
                                 except Exception:
-                                    norm_urls.append(u)
+                                    canonical_u = u
+                                try:
+                                    normalized_u = self._normalize_x_url(canonical_u)
+                                except Exception:
+                                    normalized_u = canonical_u
+                                norm_urls.append(normalized_u)
+                                ctx = (
+                                    self._x_frontend_canon.get(normalized_u)
+                                    or self._x_frontend_canon.get(canonical_u)
+                                    or {}
+                                )
+                                frontend = ctx.get("frontend")
+                                primary = ctx.get("primary") or self._parse_twitter_status_id(normalized_u)
+                                if frontend:
+                                    frontend_hints[normalized_u] = frontend
+                                if primary:
+                                    primary_hints[normalized_u] = primary
                         except Exception:
                             norm_urls = x_urls
+                            frontend_hints = {}
+                            primary_hints = {}
 
                         # Time-box detection step
                         t0 = time.perf_counter()
                         try:
                             resolved = await asyncio.wait_for(
-                                self._resolve_x_media(norm_urls), timeout=self._x_syn_timeout_s
+                                self._resolve_x_media(
+                                    norm_urls,
+                                    frontend_hints=frontend_hints,
+                                    primary_hints=primary_hints,
+                                ),
+                                timeout=self._x_syn_timeout_s,
                             )
                         except Exception as e:
                             resolved = {"kind": "unknown", "reason": f"exception:{e}"}
                         dt_ms = int((time.perf_counter() - t0) * 1000)
                         kind = (resolved or {}).get("kind", "unknown")
+                        base_context_url = norm_urls[0] if norm_urls else (x_urls[0] if x_urls else "")
+                        primary_selected = (
+                            (resolved or {}).get("primary")
+                            or primary_hints.get(base_context_url)
+                            or self._parse_twitter_status_id(base_context_url)
+                            or ""
+                        )
+                        frontend_selected = (resolved or {}).get("frontend") or frontend_hints.get(base_context_url)
                         # Single-shot detection marker
                         try:
                             src = (resolved or {}).get("src", "unknown")
@@ -2963,6 +3194,10 @@ class Router:
                                     detail["count"] = len((resolved or {}).get("images") or [])
                                 except Exception:
                                     pass
+                            if primary_selected:
+                                detail["primary"] = primary_selected
+                            if frontend_selected:
+                                detail["frontend"] = frontend_selected
                             self.logger.info(
                                 "x.detect",
                                 extra={
@@ -2973,32 +3208,56 @@ class Router:
                             )
                         except Exception:
                             pass
-                        if kind == "video":
-                            url_for_stt = resolved.get("url") or norm_urls[0]
+
+                        url_for_stt = (resolved or {}).get("url") or base_context_url
+                        final_kind = kind
+                        if url_for_stt and kind == "video":
+                            verify_kind, verify_ct = await self._verify_media_kind(url_for_stt, default="video")
+                            self._log_media_kind_checked(url_for_stt, verify_ct, verify_kind or "video")
+                            if verify_kind == "image":
+                                final_kind = "image"
+                        elif kind == "image":
+                            images_probe = (resolved or {}).get("images") or []
+                            if images_probe:
+                                verify_kind, verify_ct = await self._verify_media_kind(images_probe[0], default="image")
+                                self._log_media_kind_checked(images_probe[0], verify_ct, verify_kind or "image")
+                                if verify_kind == "video":
+                                    final_kind = "video"
+                                    url_for_stt = (resolved or {}).get("url") or images_probe[0]
+
+                        if final_kind == "video":
+                            url_for_stt = url_for_stt or base_context_url
+                            self.logger.info("route.select kind=video reason=resolved_direct_media")
                             # Emit deterministic media selection breadcrumb and harden cache key via fragment [CMV][CDiP]
                             try:
                                 import hashlib as _hl
-                                ptid2 = self._extract_primary_tweet_id(norm_urls[0]) or ""
+
+                                ptid2 = primary_selected or self._extract_primary_tweet_id(url_for_stt) or ""
                                 uhash2 = _hl.sha256(url_for_stt.encode()).hexdigest()[:16]
+                                detail = {
+                                    "primary": ptid2,
+                                    "selected": ptid2,
+                                    "tier": 1,
+                                    "has_audio": ".mp4" in str(url_for_stt).lower(),
+                                    "url_hash": uhash2,
+                                }
+                                if frontend_selected:
+                                    detail["frontend"] = frontend_selected
                                 self.logger.info(
                                     "media.selected",
                                     extra={
                                         "event": "media.selected",
-                                        "detail": {
-                                            "primary": ptid2,
-                                            "selected": ptid2,
-                                            "tier": 1,
-                                            "has_audio": ".mp4" in str(url_for_stt).lower(),
-                                            "url_hash": uhash2,
-                                        },
+                                        "detail": detail,
                                         "msg_id": message.id,
                                     },
                                 )
                                 if ptid2 and uhash2:
                                     url_for_stt = f"{url_for_stt}#ptid={ptid2}&uh={uhash2}"
+                                    if frontend_selected:
+                                        url_for_stt = f"{url_for_stt}&fe={frontend_selected}"
                             except Exception:
                                 pass
-                            dur = resolved.get("duration")
+                            dur = (resolved or {}).get("duration")
                             host = None
                             try:
                                 host = urlparse(url_for_stt).netloc
@@ -3007,20 +3266,21 @@ class Router:
                             self.logger.info(
                                 f"media.resolve: result=video url={host or url_for_stt} dur={int(dur) if isinstance(dur, (int, float)) else 'NA'}s"
                             )
-                            # URL ok marker
                             try:
                                 self.logger.info(
                                     "x.video.url_ok",
                                     extra={
                                         "event": "x.video.url_ok",
-                                        "detail": {"src": (resolved.get("src") or "ytdlp"), "ms": dt_ms},
+                                        "detail": {
+                                            "src": ((resolved or {}).get("src") or "ytdlp"),
+                                            "ms": dt_ms,
+                                        },
                                         "msg_id": message.id,
                                     },
                                 )
                             except Exception:
                                 pass
                             try:
-                                # STT with bounded budget
                                 timeout_override_raw = None
                                 try:
                                     timeout_override_raw = self.config.get("X_STT_TIMEOUT_S")
@@ -3059,7 +3319,6 @@ class Router:
                                     stt_timeout = min(computed, X_STT_MAX_TIMEOUT_S)
                                 if stt_timeout is None or stt_timeout <= 0:
                                     stt_timeout = X_STT_MIN_TIMEOUT_S
-                                # stt.start marker
                                 try:
                                     mm = int((dur or 0) // 60) if isinstance(dur, (int, float)) else 0
                                     ss = int((dur or 0) % 60) if isinstance(dur, (int, float)) else 0
@@ -3083,7 +3342,6 @@ class Router:
                                 formatted = self._format_x_tweet_with_transcription(
                                     base_text=None, url=url_for_stt, stt_res=stt_res
                                 )
-                                # stt.ok marker
                                 try:
                                     el_ms = int((time.perf_counter() - stt_t0) * 1000)
                                     chars = len((stt_res or {}).get("transcription", ""))
@@ -3121,7 +3379,6 @@ class Router:
                                     message=message,
                                 )
                             except asyncio.TimeoutError:
-                                # Timeout on STT → return early with user-facing failure message
                                 try:
                                     self.logger.info(
                                         "stt.fail",
@@ -3152,8 +3409,6 @@ class Router:
                                     error=True,
                                 )
                             except Exception as e:
-                                # On any video failure, degrade to text-only (no VL) [REH]
-                                # Classify STT failure reason for clarity
                                 reason = "extract_error"
                                 try:
                                     es = str(e).lower()
@@ -3207,12 +3462,12 @@ class Router:
                                     ),
                                     error=True,
                                 )
-                        elif kind == "image":
-                            images = resolved.get("images") or []
+                        elif final_kind == "image":
+                            images = (resolved or {}).get("images") or []
+                            self.logger.info("route.select kind=image reason=resolved_syndication_photos")
                             self.logger.info(
                                 f"media.resolve: result=image count={len(images)}"
                             )
-                            # photos.ok marker
                             try:
                                 domain = "pbs.twimg.com" if any("pbs.twimg.com" in (i or "") for i in images) else "unknown"
                                 self.logger.info(
@@ -3236,7 +3491,6 @@ class Router:
                                 )
                             except Exception:
                                 pass
-                            # Run silent perception notes on the first image only (budget-friendly)
                             vl_notes = None
                             if images:
                                 try:
@@ -3270,7 +3524,6 @@ class Router:
                                 perception_notes=vl_notes or None,
                             )
                         else:
-                            # Unknown → fall back to existing logic
                             reason = (resolved or {}).get("reason", "unknown")
                             self.logger.info(
                                 f"media.resolve: result=unknown reason={reason}"
@@ -4650,33 +4903,78 @@ class Router:
             if is_twitter:
                 # Resolve a playable media URL deterministically for X/Twitter and emit breadcrumb [IV][CDiP]
                 try:
-                    resolved = await self._resolve_x_media([url])
+                    canonical_url = self._canonicalize_x_url(url)
+                    normalized_url = self._normalize_x_url(canonical_url)
+                except Exception:
+                    canonical_url = url
+                    normalized_url = url
+                frontend_hint: Dict[str, str] = {}
+                primary_hint: Dict[str, str] = {}
+                ctx = (
+                    self._x_frontend_canon.get(normalized_url)
+                    or self._x_frontend_canon.get(canonical_url)
+                    or {}
+                )
+                frontend_ctx = ctx.get("frontend")
+                primary_ctx = ctx.get("primary") or self._parse_twitter_status_id(normalized_url)
+                if frontend_ctx:
+                    frontend_hint[normalized_url] = frontend_ctx
+                if primary_ctx:
+                    primary_hint[normalized_url] = primary_ctx
+                try:
+                    resolved = await self._resolve_x_media(
+                        [normalized_url],
+                        frontend_hints=frontend_hint,
+                        primary_hints=primary_hint,
+                    )
                 except Exception:
                     resolved = {"kind": "unknown"}
+                primary_selected = (
+                    (resolved or {}).get("primary")
+                    or primary_ctx
+                    or self._parse_twitter_status_id(normalized_url)
+                    or ""
+                )
+                frontend_selected = (resolved or {}).get("frontend") or frontend_ctx
                 if (resolved or {}).get("kind") == "video" and (resolved or {}).get("url"):
-                    stt_target_url = str(resolved.get("url"))
-                    # Breadcrumb before STT
-                    try:
-                        import hashlib as _hl
-                        ptid = self._extract_primary_tweet_id(url) or ""
-                        uhash = _hl.sha256(stt_target_url.encode()).hexdigest()[:16]
-                        self.logger.info(
-                            "media.selected",
-                            extra={
-                                "event": "media.selected",
-                                "detail": {
-                                    "primary": ptid,
-                                    "selected": ptid,
-                                    "tier": 1,
-                                    "has_audio": ".mp4" in stt_target_url.lower(),
-                                    "url_hash": uhash,
+                    candidate_url = str(resolved.get("url"))
+                    verify_kind, verify_ct = await self._verify_media_kind(candidate_url, default="video")
+                    self._log_media_kind_checked(candidate_url, verify_ct, verify_kind or "video")
+                    if verify_kind == "video":
+                        self.logger.info("route.select kind=video reason=resolved_direct_media")
+                        stt_target_url = candidate_url
+                        try:
+                            import hashlib as _hl
+
+                            uhash = _hl.sha256(stt_target_url.encode()).hexdigest()[:16]
+                            detail = {
+                                "primary": primary_selected,
+                                "selected": primary_selected,
+                                "tier": 1,
+                                "has_audio": ".mp4" in stt_target_url.lower(),
+                                "url_hash": uhash,
+                            }
+                            if frontend_selected:
+                                detail["frontend"] = frontend_selected
+                            self.logger.info(
+                                "media.selected",
+                                extra={
+                                    "event": "media.selected",
+                                    "detail": detail,
                                 },
-                            },
-                        )
-                        if ptid and uhash:
-                            stt_target_url = f"{stt_target_url}#ptid={ptid}&uh={uhash}"
-                    except Exception:
-                        pass
+                            )
+                            if primary_selected and uhash:
+                                stt_target_url = f"{stt_target_url}#ptid={primary_selected}&uh={uhash}"
+                                if frontend_selected:
+                                    stt_target_url = f"{stt_target_url}&fe={frontend_selected}"
+                        except Exception:
+                            pass
+                    else:
+                        # Poster hint or misclassification: fall back to original URL so downstream can degrade gracefully
+                        stt_target_url = url
+                else:
+                    stt_target_url = url
+
 
             result = await hear_infer_from_url(stt_target_url)
             if result and result.get("transcription"):
@@ -5063,6 +5361,9 @@ class Router:
                 return f"URL handler received non-URL item: {item.source_type}"
 
             url = item.payload
+            canon_candidate = self._canonicalize_x_url(url)
+            if canon_candidate and canon_candidate != url:
+                url = canon_candidate
             self.logger.info(f"🌐 Processing general URL: {url}")
 
             # Per-operation time budgets and bounded-wait helper [PA][REH][RAT]
