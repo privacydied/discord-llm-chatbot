@@ -343,10 +343,9 @@ class Router:
         self._x_frontend_canon: "collections.OrderedDict[str, Dict[str, str]]" = (
             collections.OrderedDict()
         )
-        # Track canonical mappings for fx/vx front-ends so downstream probes share context [REH]
-        self._x_frontend_canon: "collections.OrderedDict[str, Dict[str, str]]" = (
-            collections.OrderedDict()
-        )
+        # Gate tracking to coordinate pre-dispatch decisions with router execution
+        self._gate_denied: Dict[int, str] = {}
+        self._prefilter_gate: Dict[int, bool] = {}
 
         # Vision generation system [CA][SFT]
         self._vision_intent_router: Optional[VisionIntentRouter] = None
@@ -1072,6 +1071,56 @@ class Router:
                 self._x_frontend_canon.popitem(last=False)
         except Exception:
             pass
+
+    def pop_gate_denied_reason(self, message_id: int) -> Optional[str]:
+        """Return and clear the recorded gate-denied reason for a message."""
+        return self._gate_denied.pop(message_id, None)
+
+    def record_gate_hint(self, message_id: int, allowed: bool) -> None:
+        """Record a pre-dispatch gate decision to avoid double-checking."""
+        self._prefilter_gate[message_id] = allowed
+
+    def pop_gate_hint(self, message_id: int) -> Optional[bool]:
+        """Retrieve and clear any pre-dispatch gate decision."""
+        return self._prefilter_gate.pop(message_id, None)
+
+    async def _run_stt_job(
+        self, task: Awaitable[Any], message: Message, kind: str = "stt"
+    ) -> Any:
+        """Run an STT coroutine with standardized start/end breadcrumbs."""
+        msg_id = getattr(message, "id", None) if message else None
+        status = "ok"
+        start_detail = {"msg_id": msg_id, "kind": kind}
+        try:
+            self.logger.info(
+                f"router.job.start msg_id={msg_id} kind={kind}",
+                extra={"event": "router.job.start", "detail": start_detail},
+            )
+        except Exception:
+            pass
+        try:
+            result = await task
+            if isinstance(result, dict):
+                if result.get("partial"):
+                    status = "partial"
+                elif result.get("error"):
+                    status = "fail"
+            return result
+        except Exception:
+            status = "fail"
+            raise
+        finally:
+            try:
+                self.logger.info(
+                    f"router.job.end msg_id={msg_id} kind={kind} status={status}",
+                    extra={
+                        "event": "router.job.end",
+                        "detail": {"msg_id": msg_id, "kind": kind, "status": status},
+                    },
+                )
+            except Exception:
+                pass
+
 
     def _log_x_media_probe(
         self,
@@ -2218,7 +2267,7 @@ class Router:
                 pass
 
     async def _handle_image_with_model(
-        self, item: InputItem, model_override: Optional[str] = None
+        self, item: InputItem, model_override: Optional[str] = None, message: Optional[Message] = None
     ) -> str:
         """Handle image item with explicit model override. [CA][IV][REH]
         - Attachments: direct VL on file
@@ -2289,7 +2338,7 @@ class Router:
             )
             return f"⚠️ Failed to process image item (error: {e})"
 
-    async def _handle_image(self, item: InputItem) -> str:
+    async def _handle_image(self, item: InputItem, message: Optional[Message] = None) -> str:
         """Handle image without explicit model override, using default VL model. [CA]"""
         return await self._handle_image_with_model(item, model_override=None)
 
@@ -2385,11 +2434,14 @@ class Router:
     def clear_dispatch_metadata(self, message_id: int) -> None:
         """Remove cached dispatch metadata once processing completes."""
         self._dispatch_metadata.pop(message_id, None)
+        self._prefilter_gate.pop(message_id, None)
+        self._gate_denied.pop(message_id, None)
 
     def _should_process_message(self, message: Message) -> bool:
         """Single source-of-truth gate: decide if this message should be processed.
         Cheap, synchronous, and config-driven. No network or heavy CPU allowed here.
         """
+        self._gate_denied.pop(getattr(message, "id", None), None)
         cfg = self.config
         owners: list[int] = cfg.get("OWNER_IDS", [])
         triggers: list[str] = cfg.get(
@@ -2483,6 +2535,7 @@ class Router:
                     )
                     return True
 
+                self._gate_denied[message.id] = "dm_mention_required"
                 self.logger.info(
                     f"gate.block | reason=dm_mention_required msg_id={message.id}",
                     extra={
@@ -2561,6 +2614,7 @@ class Router:
                 self._metric_inc("gate.allowed", {"reason": "reply_to_bot"})
                 return True
 
+            self._gate_denied[message.id] = "mention_required"
             self.logger.info(
                 f"gate.block | reason=mention_required msg_id={message.id}",
                 extra={
@@ -2964,7 +3018,11 @@ class Router:
                 return BotAction(meta={"delegated_to_cog": True})
 
             # 3. Determine if the bot should process this message (DM, mention, or reply).
-            allow_via_gate = self._should_process_message(message)
+            gate_hint = self.pop_gate_hint(getattr(message, "id", None))
+            if gate_hint is not None:
+                allow_via_gate = gate_hint
+            else:
+                allow_via_gate = self._should_process_message(message)
             if not allow_via_gate:
                 # Relaxed allowance: mention + minimal meaningful text should route to text
                 # This mirrors the text-default behavior in core bot to avoid dead-ends. [IV][REH]
@@ -3336,8 +3394,11 @@ class Router:
                                 except Exception:
                                     pass
                                 stt_t0 = time.perf_counter()
-                                stt_res = await asyncio.wait_for(
-                                    hear_infer_from_url(url_for_stt), timeout=stt_timeout
+                                stt_res = await self._run_stt_job(
+                                    asyncio.wait_for(
+                                        hear_infer_from_url(url_for_stt), timeout=stt_timeout
+                                    ),
+                                    message,
                                 )
                                 formatted = self._format_x_tweet_with_transcription(
                                     base_text=None, url=url_for_stt, stt_res=stt_res
@@ -4600,7 +4661,7 @@ class Router:
             def create_handler_coro(provider_config: ProviderConfig):
                 async def handler_coro():
                     return await self._handle_item_with_provider(
-                        item, modality, provider_config
+                        item, modality, provider_config, message=message
                     )
 
                 return handler_coro
@@ -4682,7 +4743,11 @@ class Router:
             return None
 
     async def _handle_item_with_provider(
-        self, item: InputItem, modality: InputModality, provider_config: ProviderConfig
+        self,
+        item: InputItem,
+        modality: InputModality,
+        provider_config: ProviderConfig,
+        message: Optional[Message] = None,
     ) -> str:
         """
         Handle a single input item with specific provider configuration.
@@ -4703,11 +4768,11 @@ class Router:
         # Vision modalities need model override from provider ladder
         if modality in (InputModality.SINGLE_IMAGE, InputModality.MULTI_IMAGE):
             return await self._handle_image_with_model(
-                item, model_override=provider_config.model
+                item, model_override=provider_config.model, message=message
             )
 
         handler = handlers.get(modality, self._handle_unknown)
-        return await handler(item)
+        return await handler(item, message=message)
 
     async def _process_image_from_url(
         self, url: str, model_override: Optional[str] = None
@@ -4880,7 +4945,7 @@ class Router:
             except Exception:
                 pass
 
-    async def _handle_video_url(self, item: InputItem) -> str:
+    async def _handle_video_url(self, item: InputItem, message: Optional[Message] = None) -> str:
         """
         Handle video URL input items (YouTube, TikTok, etc.).
         For Twitter/X URLs: tries yt-dlp first, routes non-video posts to the tiered WebExtractionService (no auto-screenshot).
@@ -4976,7 +5041,10 @@ class Router:
                     stt_target_url = url
 
 
-            result = await hear_infer_from_url(stt_target_url)
+            result = await self._run_stt_job(
+                hear_infer_from_url(stt_target_url),
+                message,
+            )
             if result and result.get("transcription"):
                 if is_twitter:
                     cfg = self.config
@@ -5262,7 +5330,7 @@ class Router:
 
             return f"⚠️ Video processing failed: {str(e)}"
 
-    async def _handle_audio_video_file(self, item: InputItem) -> str:
+    async def _handle_audio_video_file(self, item: InputItem, message: Optional[Message] = None) -> str:
         """
         Handle audio/video file attachments.
         Returns transcribed text for further processing.
@@ -5274,7 +5342,7 @@ class Router:
         self.logger.info(f"🎵 Processing audio/video file: {attachment.filename}")
 
         try:
-            result = await hear_infer(attachment)
+            result = await self._run_stt_job(hear_infer(attachment), message)
             return result
         except VideoIngestError as ve:
             self.logger.error(f"❌ Audio/video file ingestion failed: {ve}")
@@ -5288,7 +5356,7 @@ class Router:
             )
             return f"⚠️ Could not process this audio/video file: {str(e)}"
 
-    async def _handle_pdf(self, item: InputItem) -> str:
+    async def _handle_pdf(self, item: InputItem, message: Optional[Message] = None) -> str:
         """
         Handle PDF document input items.
         Returns extracted text for further processing.
@@ -5341,7 +5409,7 @@ class Router:
         """Process PDF from URL."""
         return f"PDF URL detected: {url}. PDF processing from URLs not yet implemented."
 
-    async def _handle_pdf_ocr(self, item: InputItem) -> str:
+    async def _handle_pdf_ocr(self, item: InputItem, message: Optional[Message] = None) -> str:
         """
         Handle PDF documents that require OCR processing.
         Returns extracted text for further processing.
@@ -5350,7 +5418,7 @@ class Router:
         # TODO: Implement OCR-specific logic
         return await self._handle_pdf(item)
 
-    async def _handle_general_url(self, item: InputItem) -> str:
+    async def _handle_general_url(self, item: InputItem, message: Optional[Message] = None) -> str:
         """
         Handle general URL input items.
         Returns extracted content for further processing.
@@ -6215,7 +6283,7 @@ class Router:
             self.logger.error(f"Error taking screenshot of URL: {e}", exc_info=True)
             return f"Failed to screenshot URL: {item.payload}"
 
-    async def _handle_unknown(self, item: InputItem) -> str:
+    async def _handle_unknown(self, item: InputItem, message: Optional[Message] = None) -> str:
         """
         Handle unknown or unsupported input items.
         Returns appropriate fallback message.
@@ -7863,7 +7931,7 @@ class Router:
                 
                 try:
                     await av_att.attachment.save(tmp_path)
-                    transcript = await hear_infer(tmp_path)
+                    transcript = await self._run_stt_job(hear_infer(tmp_path), message)
                     
                     if transcript and transcript.strip():
                         evidence_parts.append(f"[TRANSCRIPT: {av_att.filename}]\n{transcript}")

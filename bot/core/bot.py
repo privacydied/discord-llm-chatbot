@@ -660,15 +660,46 @@ class LLMBot(commands.Bot):
                             )
                         # If no payload and not delegated, the router decided to do nothing.
                     else:
-                        # Fallback for messages that don't trigger the router (e.g. standard commands)
                         if stream_ctx and stream_ctx.get("task"):
                             await self._stop_streaming_status(
                                 stream_ctx, final_label="🚫 No response generated"
                             )
-                        self.logger.info(
-                            f"Router returned no action for msg {message.id}; falling back to command processing."
+                        gate_reason = (
+                            self.router.pop_gate_denied_reason(message.id)
+                            if self.router
+                            else None
                         )
-                        await self.process_commands(message)
+                        if gate_reason:
+                            try:
+                                self.logger.info(
+                                    f"gate.drop | reason={gate_reason} msg_id:{message.id}",
+                                    extra={
+                                        "event": "gate.drop",
+                                        "reason": gate_reason,
+                                        "msg_id": message.id,
+                                        "user_id": getattr(message.author, 'id', None),
+                                    },
+                                )
+                            except Exception:
+                                pass
+                            return
+                        if await self._message_is_command(message):
+                            self.logger.info(
+                                f"Router returned no action for msg {message.id}; falling back to command processing."
+                            )
+                            await self.process_commands(message)
+                        else:
+                            try:
+                                self.logger.info(
+                                    f"router.noop | reason=no_route msg_id:{message.id}",
+                                    extra={
+                                        "event": "router.noop",
+                                        "reason": "no_route",
+                                        "msg_id": message.id,
+                                    },
+                                )
+                            except Exception:
+                                pass
                 finally:
                     if self.router:
                         self.router.clear_dispatch_metadata(message.id)
@@ -1485,6 +1516,21 @@ class LLMBot(commands.Bot):
 
         return False
 
+    async def _message_is_command(self, message: discord.Message) -> bool:
+        """Determine if a message should be treated as a command fallback candidate."""
+        if not message.content:
+            return False
+
+        try:
+            prefixes = await self.get_prefix(message)
+            if isinstance(prefixes, (list, tuple)):
+                return any(prefix and message.content.startswith(prefix) for prefix in prefixes)
+            if prefixes:
+                return message.content.startswith(prefixes)
+        except Exception as e:
+            self.logger.debug(f"command_prefix_check_failed | {e}")
+        return False
+
     def _generate_task_id(self, message: discord.Message) -> str:
         """Generate a unique task ID for tracking."""
         return f"{message.author.id}_{message.id}_{message.content.split()[0] if message.content else 'unknown'}"
@@ -1659,12 +1705,11 @@ class LLMBot(commands.Bot):
         except Exception as e:
             self.logger.debug(f"alert_suppress_check_failed | {e}")
 
-        # Enhanced SSOT gate: check for meaningful text intent before heavy work [IV]
+        # Enhanced SSOT gate: check gating before enqueuing heavy work [IV]
         try:
             if self.router is not None and not self._is_long_running_admin_command(
                 message
             ):
-                # Allow command-prefixed messages to bypass the router gate so cogs always see commands [CA][REH]
                 is_command_msg = False
                 try:
                     prefixes = await self.get_prefix(message)
@@ -1676,55 +1721,28 @@ class LLMBot(commands.Bot):
                     elif prefixes:
                         is_command_msg = message.content.startswith(prefixes)
                 except Exception as e:
-                    # Prefix determination should never break message handling
                     self.logger.debug(f"prefix_check_failed | {e}")
 
-                # Text-first check: if message has any text content, route to text by default
-                # unless user shows explicit media/URL intent (e.g., "analyze this image", "transcribe this video")
-                content = (message.content or "").strip()
-                has_text = bool(content)
-
-                # For tone-first text, only count as "allowable" if we should process it
-                if (not is_command_msg) and (
-                    not self.router._should_process_message(message)
-                ):
-                    # Allow through if there's any non-whitespace text to route to text flow
-                    # This prevents link-nagging on short messages like "@Bot yo" or "@Bot thoughts?"
-                    substantive_text = False
-                    if has_text:
-                        # Strip mentions and check for meaningful content (letters/digits)
-                        mention_free = re.sub(r"<@!?{}>\s*".format(self.user.id), "", content).strip()
-                        # Has meaningful text if contains letters/digits after stripping mentions
-                        if mention_free and re.search(r"[A-Za-z0-9]", mention_free.strip()):
-                            substantive_text = True
-                            try:
-                                self.logger.info(
-                                    f"text_default.reason.has_text | has_text={has_text} clean_len={len(mention_free)}",
-                                    extra={
-                                        "event": "text_default",
-                                        "subsys": "gate",
-                                        "msg_id": message.id,
-                                        "user_id": message.author.id,
-                                        "detail": {"reason": "has_text"}
-                                    },
-                                )
-                            except Exception:
-                                pass
-
-                    if not substantive_text:
-                        guild_info = (
-                            "DM"
-                            if isinstance(message.channel, discord.DMChannel)
-                            else f"guild:{getattr(message.guild, 'id', None)}"
+                if not is_command_msg:
+                    gate_allowed = self.router._should_process_message(message)
+                    if gate_allowed:
+                        self.router.record_gate_hint(message.id, True)
+                    else:
+                        reason = (
+                            self.router.pop_gate_denied_reason(message.id) or "blocked"
                         )
-                        self.logger.info(
-                            f"gate.block.no_text_intent | msg_id:{message.id} in:{guild_info} text_intent={substantive_text}",
-                            extra={
-                                "event": "gate.block.no_text_intent",
-                                "msg_id": message.id,
-                                "guild_id": getattr(message.guild, "id", None),
-                            },
-                        )
+                        try:
+                            self.logger.info(
+                                f"gate.drop | reason={reason} msg_id:{message.id}",
+                                extra={
+                                    "event": "gate.drop",
+                                    "reason": reason,
+                                    "msg_id": message.id,
+                                    "user_id": getattr(message.author, "id", None),
+                                },
+                            )
+                        except Exception:
+                            pass
                         return
         except Exception as e:
             # Never let gate failures crash on_message; fall back to readiness wait and normal flow

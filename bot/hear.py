@@ -13,6 +13,7 @@ Instrumentation emits stt.span and stt.summary breadcrumbs to keep visibility ti
 from __future__ import annotations
 
 import asyncio
+import gc
 import hashlib
 import json
 import math
@@ -73,6 +74,9 @@ SLOW_DECODE_THRESHOLD_S = 8.0
 NO_SPEECH_PROB_THRESHOLD = 0.65
 STREAM_FRAME_S = 0.25
 _JOB_SEMAPHORE = asyncio.Semaphore(1)
+MAX_CHUNK_MULTIPLIER = 1.25
+MAX_CHUNK_ABS_LIMIT = 512
+MEMORY_ABORT_THRESHOLD_MB = 900
 
 try:
     _MAX_RAM_MB_ENV = os.getenv("STT_MAX_RAM_MB")
@@ -125,6 +129,8 @@ class TranscriptResult:
     model_spec: ModelSpec
     cache_hit: bool
     first_chunk_runtime: float
+    aborted: bool = False
+    abort_reason: Optional[str] = None
 
 
 class RAMGuardExceeded(RuntimeError):
@@ -862,7 +868,7 @@ async def _run_whisper(
             raise
 
         try:
-            await pre.stream.finalize(success=True)
+            await pre.stream.finalize(success=not transcript.aborted)
         except Exception:
             logger.debug("⚠️ Stream finalization failed", exc_info=True)
 
@@ -907,6 +913,7 @@ async def _transcribe_with_model(
     chunk_records: List[Dict[str, Any]] = []
     segments_accum: List[Dict[str, Any]] = []
     first_chunk_runtime = 0.0
+    aborted_reason: Optional[str] = None
     sample_rate = pre.sample_rate
     chunk_samples = int(CHUNK_WINDOW_S * sample_rate)
     overlap_samples = int(CHUNK_OVERLAP_S * sample_rate)
@@ -917,6 +924,14 @@ async def _transcribe_with_model(
     start_sample = 0
     whisper_budget = min(180.0, max(20.0, pre.duration_in * 2.5 + 10.0))
     start_time = time.perf_counter()
+    estimated_chunks = (
+        pre.duration_out / max(CHUNK_WINDOW_S - CHUNK_OVERLAP_S, 1e-3)
+        if pre.duration_out > 0
+        else 1.0
+    )
+    dynamic_limit = int(math.ceil(estimated_chunks * MAX_CHUNK_MULTIPLIER) + 1)
+    max_chunks = max(1, min(dynamic_limit, MAX_CHUNK_ABS_LIMIT))
+    process = psutil.Process()
 
     async def _decode_chunk(chunk_audio: np.ndarray) -> Tuple[List[Any], Any, float]:
         chunk_begin = time.perf_counter()
@@ -959,6 +974,21 @@ async def _transcribe_with_model(
             samples_buffered += frame.shape[0]
 
             while samples_buffered >= chunk_samples:
+                remaining_ms = int(max(0.0, (whisper_budget - (time.perf_counter() - start_time)) * 1000))
+                try:
+                    logger.info(
+                        "stt.budget remaining_ms=%s next_chunk_idx=%s",
+                        remaining_ms,
+                        chunk_idx,
+                    )
+                except Exception:
+                    pass
+                if remaining_ms <= 0:
+                    aborted_reason = "time_budget"
+                    break
+                if chunk_idx >= max_chunks:
+                    aborted_reason = "chunk_limit"
+                    break
                 chunk_audio = _pop_samples(frames, chunk_samples)
                 if chunk_audio.size == 0:
                     break
@@ -998,51 +1028,97 @@ async def _transcribe_with_model(
                     else None
                 )
                 ram_guard.check("whisper-chunk")
-                if (time.perf_counter() - start_time) > whisper_budget:
-                    spans.end("whisper", ok=False, reason="timeout")
-                    logger.error("stt.fail reason=whisper_timeout")
-                    raise InferenceError("Transcription timed out")
-                await asyncio.sleep(0)
-
-        # Drain any remaining audio (short clips).
-        if chunk_idx == 0 or frames:
-            remainder = _drain_frames(frames)
-            if chunk_idx == 0 and tail is not None and remainder.size == 0:
-                remainder = tail
-            tail = None
-            if remainder.size > 0:
-                chunk_start_s = start_sample / sample_rate
-                chunk_end_s = chunk_start_s + remainder.shape[0] / sample_rate
-                segments, info, runtime = await _decode_chunk(remainder)
-                if chunk_idx == 0:
-                    first_chunk_runtime = runtime
-                    if not segments and info.no_speech_prob >= NO_SPEECH_PROB_THRESHOLD:
-                        spans.end("whisper", ok=False, reason="no_speech")
-                        logger.info("stt.no_speech_fast_exit")
-                        raise InferenceError(
-                            f"No speech detected (prob={info.no_speech_prob:.3f})"
+                try:
+                    rss_mb = process.memory_info().rss / (1024 * 1024)
+                except Exception:
+                    rss_mb = 0.0
+                if rss_mb >= MEMORY_ABORT_THRESHOLD_MB:
+                    try:
+                        logger.info(
+                            "stt.guard.memory rss_mb=%.1f action=abort_partial",
+                            rss_mb,
                         )
-                logger.info(
-                    "whisper.chunk idx=%s len_s=%.2f",
-                    chunk_idx,
-                    chunk_end_s - chunk_start_s,
-                )
-                seg_dicts = _segments_to_dict(segments, offset=chunk_start_s)
-                segments_accum.extend(seg_dicts)
-                chunk_records.append(
-                    {
-                        "idx": chunk_idx,
-                        "start": chunk_start_s,
-                        "end": chunk_end_s,
-                        "segments": seg_dicts,
-                    }
-                )
-                chunk_idx += 1
-                ram_guard.check("whisper-chunk")
+                    except Exception:
+                        pass
+                    frames.clear()
+                    samples_buffered = 0
+                    tail = None
+                    aborted_reason = "memory_guard"
+                    gc.collect()
+                    break
                 if (time.perf_counter() - start_time) > whisper_budget:
-                    spans.end("whisper", ok=False, reason="timeout")
-                    logger.error("stt.fail reason=whisper_timeout")
-                    raise InferenceError("Transcription timed out")
+                    aborted_reason = "time_budget"
+                    break
+                await asyncio.sleep(0)
+            if aborted_reason:
+                break
+
+        if not aborted_reason and (chunk_idx == 0 or frames):
+            remaining_ms = int(max(0.0, (whisper_budget - (time.perf_counter() - start_time)) * 1000))
+            try:
+                logger.info(
+                    "stt.budget remaining_ms=%s next_chunk_idx=%s",
+                    remaining_ms,
+                    chunk_idx,
+                )
+            except Exception:
+                pass
+            if remaining_ms <= 0:
+                aborted_reason = "time_budget"
+            elif chunk_idx >= max_chunks:
+                aborted_reason = "chunk_limit"
+            else:
+                remainder = _drain_frames(frames)
+                if chunk_idx == 0 and tail is not None and remainder.size == 0:
+                    remainder = tail
+                tail = None
+                if remainder.size > 0:
+                    chunk_start_s = start_sample / sample_rate
+                    chunk_end_s = chunk_start_s + remainder.shape[0] / sample_rate
+                    segments, info, runtime = await _decode_chunk(remainder)
+                    if chunk_idx == 0:
+                        first_chunk_runtime = runtime
+                        if not segments and info.no_speech_prob >= NO_SPEECH_PROB_THRESHOLD:
+                            spans.end("whisper", ok=False, reason="no_speech")
+                            logger.info("stt.no_speech_fast_exit")
+                            raise InferenceError(
+                                f"No speech detected (prob={info.no_speech_prob:.3f})"
+                            )
+                    logger.info(
+                        "whisper.chunk idx=%s len_s=%.2f",
+                        chunk_idx,
+                        chunk_end_s - chunk_start_s,
+                    )
+                    seg_dicts = _segments_to_dict(segments, offset=chunk_start_s)
+                    segments_accum.extend(seg_dicts)
+                    chunk_records.append(
+                        {
+                            "idx": chunk_idx,
+                            "start": chunk_start_s,
+                            "end": chunk_end_s,
+                            "segments": seg_dicts,
+                        }
+                    )
+                    chunk_idx += 1
+                    ram_guard.check("whisper-chunk")
+                    try:
+                        rss_mb = process.memory_info().rss / (1024 * 1024)
+                    except Exception:
+                        rss_mb = 0.0
+                    if rss_mb >= MEMORY_ABORT_THRESHOLD_MB:
+                        try:
+                            logger.info(
+                                "stt.guard.memory rss_mb=%.1f action=abort_partial",
+                                rss_mb,
+                            )
+                        except Exception:
+                            pass
+                        frames.clear()
+                        tail = None
+                        aborted_reason = "memory_guard"
+                        gc.collect()
+                    if aborted_reason is None and (time.perf_counter() - start_time) > whisper_budget:
+                        aborted_reason = "time_budget"
     except InferenceError:
         raise
     except RAMGuardExceeded:
@@ -1061,9 +1137,29 @@ async def _transcribe_with_model(
         spans.end("whisper", ok=False, reason="error")
         raise InferenceError(f"Transcription failed: {exc}") from exc
 
-    spans.end("whisper", ok=True, reason="ok")
+    if aborted_reason:
+        try:
+            await pre.stream.abort()
+        except Exception:
+            logger.debug("⚠️ Stream abort failed", exc_info=True)
+    if aborted_reason:
+        spans.end("whisper", ok=False, reason=aborted_reason)
+    else:
+        spans.end("whisper", ok=True, reason="ok")
     ram_guard.check("whisper-complete")
     text = _join_segments(segments_accum)
+    if aborted_reason:
+        chunks_done = len(chunk_records)
+        dur_done_s = chunk_records[-1]["end"] if chunk_records else 0.0
+        try:
+            logger.info(
+                "stt.abort reason=%s chunks_done=%s dur_done_s=%.2f",
+                aborted_reason,
+                chunks_done,
+                dur_done_s,
+            )
+        except Exception:
+            pass
     result = TranscriptResult(
         text=text,
         segments=segments_accum,
@@ -1072,13 +1168,16 @@ async def _transcribe_with_model(
         model_spec=spec,
         cache_hit=False,
         first_chunk_runtime=first_chunk_runtime,
+        aborted=aborted_reason is not None,
+        abort_reason=aborted_reason,
     )
-    _store_transcript_cache(cache_key, result)
-    logger.info(
-        "cache.store stage=transcript key=%s segments=%s",
-        cache_key[:12],
-        len(segments_accum),
-    )
+    if not aborted_reason:
+        _store_transcript_cache(cache_key, result)
+        logger.info(
+            "cache.store stage=transcript key=%s segments=%s",
+            cache_key[:12],
+            len(segments_accum),
+        )
     return result
 
 
@@ -1206,6 +1305,14 @@ async def hear_infer(audio: Union[Path, "discord.Attachment"]) -> str:
                 result_text = transcript.text
                 spans.end("stitch", ok=True)
                 _log_summary(spans, pre, transcript, cache_hit=transcript.cache_hit)
+                if transcript.aborted:
+                    try:
+                        logger.info(
+                            "stt.partial_ok chars=%s",
+                            len(result_text),
+                        )
+                    except Exception:
+                        pass
                 return result_text
             except RAMGuardExceeded as exc:
                 raise InferenceError(str(exc)) from exc
@@ -1278,6 +1385,8 @@ async def hear_infer_from_url(
                 metadata = download.metadata
                 result = {
                     "transcription": transcript.text,
+                    "partial": transcript.aborted,
+                    "abort_reason": transcript.abort_reason or "",
                     "metadata": {
                         "source": metadata.source_type,
                         "url": metadata.url,
@@ -1293,6 +1402,14 @@ async def hear_infer_from_url(
                 }
                 spans.end("stitch", ok=True)
                 _log_summary(spans, pre, transcript, cache_hit=transcript.cache_hit)
+                if transcript.aborted:
+                    try:
+                        logger.info(
+                            "stt.partial_ok chars=%s",
+                            len(result["transcription"]),
+                        )
+                    except Exception:
+                        pass
                 return result
             except RAMGuardExceeded as exc:
                 raise InferenceError(str(exc)) from exc
