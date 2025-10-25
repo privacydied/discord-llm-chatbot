@@ -13,6 +13,7 @@ Instrumentation emits stt.span and stt.summary breadcrumbs to keep visibility ti
 from __future__ import annotations
 
 import asyncio
+import gc
 import hashlib
 import json
 import math
@@ -75,6 +76,7 @@ STREAM_FRAME_S = 0.25
 _JOB_SEMAPHORE = asyncio.Semaphore(1)
 MAX_CHUNK_MULTIPLIER = 1.25
 MAX_CHUNK_ABS_LIMIT = 512
+MEMORY_ABORT_THRESHOLD_MB = 900
 
 try:
     _MAX_RAM_MB_ENV = os.getenv("STT_MAX_RAM_MB")
@@ -929,6 +931,7 @@ async def _transcribe_with_model(
     )
     dynamic_limit = int(math.ceil(estimated_chunks * MAX_CHUNK_MULTIPLIER) + 1)
     max_chunks = max(1, min(dynamic_limit, MAX_CHUNK_ABS_LIMIT))
+    process = psutil.Process()
 
     async def _decode_chunk(chunk_audio: np.ndarray) -> Tuple[List[Any], Any, float]:
         chunk_begin = time.perf_counter()
@@ -1025,6 +1028,24 @@ async def _transcribe_with_model(
                     else None
                 )
                 ram_guard.check("whisper-chunk")
+                try:
+                    rss_mb = process.memory_info().rss / (1024 * 1024)
+                except Exception:
+                    rss_mb = 0.0
+                if rss_mb >= MEMORY_ABORT_THRESHOLD_MB:
+                    try:
+                        logger.info(
+                            "stt.guard.memory rss_mb=%.1f action=abort_partial",
+                            rss_mb,
+                        )
+                    except Exception:
+                        pass
+                    frames.clear()
+                    samples_buffered = 0
+                    tail = None
+                    aborted_reason = "memory_guard"
+                    gc.collect()
+                    break
                 if (time.perf_counter() - start_time) > whisper_budget:
                     aborted_reason = "time_budget"
                     break
@@ -1080,7 +1101,23 @@ async def _transcribe_with_model(
                     )
                     chunk_idx += 1
                     ram_guard.check("whisper-chunk")
-                    if (time.perf_counter() - start_time) > whisper_budget:
+                    try:
+                        rss_mb = process.memory_info().rss / (1024 * 1024)
+                    except Exception:
+                        rss_mb = 0.0
+                    if rss_mb >= MEMORY_ABORT_THRESHOLD_MB:
+                        try:
+                            logger.info(
+                                "stt.guard.memory rss_mb=%.1f action=abort_partial",
+                                rss_mb,
+                            )
+                        except Exception:
+                            pass
+                        frames.clear()
+                        tail = None
+                        aborted_reason = "memory_guard"
+                        gc.collect()
+                    if aborted_reason is None and (time.perf_counter() - start_time) > whisper_budget:
                         aborted_reason = "time_budget"
     except InferenceError:
         raise
