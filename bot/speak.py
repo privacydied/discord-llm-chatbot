@@ -5,6 +5,7 @@ Centralized TTS inference module (speak)
 import logging
 from pathlib import Path
 from .tts.interface import TTSManager
+from .tts.errors import SynthesisError
 from .exceptions import TTSAudioError
 
 logger = logging.getLogger(__name__)
@@ -20,10 +21,11 @@ async def speak_infer(text: str) -> Path:
     try:
         logger.info("🔊 TTS inference started")
 
-        if not manager.is_available():
-            # Proceed anyway; manager will fall back to StubEngine internally
+        status = manager.get_status()
+        if status.get("degraded") and not status.get("explicit_stub"):
             logger.warning(
-                "TTS primary engine unavailable; using stub fallback where applicable"
+                "TTS engine degraded: %s",
+                status.get("degraded_reason") or "unknown",
             )
 
         # Ask the manager to generate a WAV file (non-blocking APIs internally)
@@ -47,6 +49,11 @@ async def speak_infer(text: str) -> Path:
             f"TTS synthesis successful: {out_path}, size: {out_path.stat().st_size} bytes, type: {content_type}"
         )
         return out_path
+    except SynthesisError as exc:
+        status = manager.get_status()
+        reason = status.get("degraded_reason") or str(exc)
+        logger.error(f"🔊 TTS inference failed: {reason}")
+        raise TTSAudioError(f"Speech synthesis failed: {reason}")
     except Exception as e:
         logger.error(f"🔊 TTS inference failed: {str(e)}")
         raise TTSAudioError(f"Speech synthesis failed: {str(e)}")

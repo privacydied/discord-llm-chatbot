@@ -237,7 +237,7 @@ Fields:
 | TTS_BACKEND |  |  | unknown | 'kokoro-onnx' |  |
 | TTS_CACHE_DIR |  |  | unknown | 'cache/tts' |  |
 | TTS_ENABLED |  |  | unknown | 'false' |  |
-| TTS_ENGINE |  |  | unknown | 'stub' |  |
+| TTS_ENGINE |  |  | unknown | 'kokoro-onnx' |  |
 | TTS_LANGUAGE |  |  | unknown | 'en' |  |
 | TTS_MODEL_FILE |  |  | unknown | 'tts/kokoro-v1.0.onnx' |  |
 | TTS_MODEL_PATH |  |  | unknown | 'tts/onnx/kokoro-v1.0.onnx' |  |

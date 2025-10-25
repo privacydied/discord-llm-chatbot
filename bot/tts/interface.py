@@ -18,7 +18,7 @@ from ..utils.logging import get_logger
 from .assets import ensure_kokoro_assets
 from ..action import BotAction
 import hashlib
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, Tuple
 
 logger = get_logger(__name__)
 
@@ -88,7 +88,15 @@ class TTSManager:
         self._executor = ThreadPoolExecutor(
             max_workers=1, thread_name_prefix="tts-worker"
         )
-        self._engine_name = os.getenv("TTS_ENGINE", "stub")
+        raw_engine = os.getenv("TTS_ENGINE", "").strip().lower()
+        self._engine_name = raw_engine or "kokoro-onnx"
+        self._explicit_stub = self._engine_name == "stub"
+        self._degraded = False
+        self._degraded_reason: Optional[str] = None
+        self._asset_lock = asyncio.Lock()
+        self._assets_ready = False
+        self._asset_paths: Optional[Tuple[Path, Path]] = None
+        self._assets_error: Optional[Exception] = None
         # In-memory file cache keyed by text hash [PA]
         self._file_cache: Dict[str, Path] = {}
         self._cache_order: List[str] = []
@@ -101,8 +109,47 @@ class TTSManager:
         self._warmed_up: bool = False
         self.load()
 
+    def _record_degraded(self, reason: str) -> None:
+        self._degraded = not self._explicit_stub
+        self._degraded_reason = reason
+        logger.warning(
+            "tts.engine.degraded",
+            extra={
+                "subsys": "tts",
+                "event": "engine_degraded",
+                "engine": self._engine_name,
+                "reason": reason,
+            },
+        )
+
+    def _clear_degraded(self) -> None:
+        self._degraded = False
+        self._degraded_reason = None
+
+    def _set_asset_env(self, model_path: Path, voices_path: Path) -> None:
+        mp = str(model_path)
+        vp = str(voices_path)
+        for key in ("TTS_MODEL_PATH", "KOKORO_MODEL_PATH"):
+            os.environ[key] = mp
+        for key in ("TTS_VOICES_PATH", "KOKORO_VOICES_PATH"):
+            os.environ[key] = vp
+
+    def _hydrate_asset_state(self) -> None:
+        model_candidate = os.getenv("TTS_MODEL_PATH") or os.getenv("KOKORO_MODEL_PATH")
+        voices_candidate = os.getenv("TTS_VOICES_PATH") or os.getenv("KOKORO_VOICES_PATH")
+        if model_candidate and voices_candidate:
+            model_path = Path(model_candidate)
+            voices_path = Path(voices_candidate)
+            if model_path.exists() and voices_path.exists():
+                self._assets_ready = True
+                self._asset_paths = (model_path, voices_path)
+                self._assets_error = None
+                return
+        self._assets_ready = False
+        self._asset_paths = None
+
     def load(self):
-        """Loads the primary TTS engine, falling back to the StubEngine on any error."""
+        """Loads the primary TTS engine, falling back to StubEngine only when explicit or degraded."""
         engine_name = self._engine_name
         logger.info(f"Attempting to load TTS engine: {engine_name}")
 
@@ -112,55 +159,50 @@ class TTSManager:
                 raise ValueError(f"Unsupported TTS engine: {engine_name}")
 
             if engine_name == "kokoro-onnx":
-                # Best-effort prepare assets at startup if we're not already inside a running event loop
-                # Accept both legacy and new env var names for compatibility
-                model_path = os.getenv("TTS_MODEL_PATH") or os.getenv(
-                    "KOKORO_MODEL_PATH"
-                )
-                voices_path = os.getenv("TTS_VOICES_PATH") or os.getenv(
-                    "KOKORO_VOICES_PATH"
-                )
-                model_exists = Path(model_path).exists() if model_path else False
-                voices_exist = Path(voices_path).exists() if voices_path else False
-                if not (model_path and voices_path and model_exists and voices_exist):
+                self._hydrate_asset_state()
+                if not self._assets_ready:
                     try:
-                        # If no running loop, prepare synchronously
                         asyncio.get_running_loop()
                         in_loop = True
                     except RuntimeError:
                         in_loop = False
                     if not in_loop:
                         try:
-                            mp, vp = asyncio.run(ensure_kokoro_assets(Path("tts")))
-                            model_path, voices_path = str(mp), str(vp)
-                            # Set both env variants to keep all components in sync
-                            os.environ["TTS_MODEL_PATH"] = model_path
-                            os.environ["TTS_VOICES_PATH"] = voices_path
-                            os.environ["KOKORO_MODEL_PATH"] = model_path
-                            os.environ["KOKORO_VOICES_PATH"] = voices_path
-                            model_exists, voices_exist = True, True
+                            model_path, voices_path = asyncio.run(
+                                ensure_kokoro_assets(Path("tts"))
+                            )
+                            self._assets_ready = True
+                            self._asset_paths = (model_path, voices_path)
+                            self._assets_error = None
+                            self._set_asset_env(model_path, voices_path)
                             logger.info(
                                 "Prepared Kokoro assets at startup",
                                 extra={"subsys": "tts", "event": "assets_ready"},
                             )
-                        except Exception:
+                        except Exception as exc:
+                            self._assets_error = exc
                             logger.warning(
                                 "Startup asset prepare failed; will ensure on demand",
-                                extra={"subsys": "tts"},
+                                extra={"subsys": "tts", "event": "asset_prepare_deferred"},
                                 exc_info=True,
                             )
-                if model_path and voices_path and model_exists and voices_exist:
+                if self._assets_ready and self._asset_paths:
+                    model_path, voices_path = self._asset_paths
                     self.engine = engine_class(
-                        model_path=model_path, voices_path=voices_path
+                        model_path=str(model_path), voices_path=str(voices_path)
                     )
+                    self._clear_degraded()
                 else:
-                    # Defer to on-demand preparation in synthesize, use stub for now
+                    # Defer initialization; mark degraded until assets are present
                     self.engine = StubEngine()
+                    self._record_degraded("kokoro assets unavailable")
             elif engine_name == "kokoro":
                 # New kokoro pipeline (no espeak, no assets)
                 self.engine = KokoroV8Engine()
+                self._clear_degraded()
             else:
                 self.engine = engine_class()
+                self._clear_degraded()
 
             logger.info(f"Successfully loaded TTS engine: {engine_name}")
 
@@ -170,10 +212,50 @@ class TTSManager:
                 exc_info=True,
             )
             self.engine = StubEngine()
+            self._record_degraded(str(e))
 
     def is_available(self) -> bool:
         """Checks if the primary TTS engine is loaded (and not the stub)."""
-        return self.engine is not None and not isinstance(self.engine, StubEngine)
+        if self.engine is None:
+            return False
+        if isinstance(self.engine, StubEngine):
+            return False
+        return not self._degraded
+
+    def get_status(self) -> dict:
+        """Expose engine status for callers that surface diagnostics."""
+        return {
+            "engine": self._engine_name,
+            "available": self.is_available(),
+            "explicit_stub": self._explicit_stub,
+            "degraded": self._degraded,
+            "degraded_reason": self._degraded_reason,
+            "assets_ready": self._assets_ready,
+        }
+
+    async def _ensure_kokoro_assets(self) -> Tuple[Path, Path]:
+        if self._assets_ready and self._asset_paths:
+            return self._asset_paths
+        async with self._asset_lock:
+            if self._assets_ready and self._asset_paths:
+                return self._asset_paths
+            try:
+                model_path, voices_path = await ensure_kokoro_assets(Path("tts"))
+            except Exception as exc:
+                self._assets_error = exc
+                logger.error(
+                    "Failed to ensure Kokoro assets", extra={"subsys": "tts"}, exc_info=True
+                )
+                raise
+            self._assets_ready = True
+            self._asset_paths = (model_path, voices_path)
+            self._assets_error = None
+            self._set_asset_env(model_path, voices_path)
+            logger.info(
+                "Assets ensured on-demand",
+                extra={"subsys": "tts", "event": "assets_ready"},
+            )
+            return self._asset_paths
 
     async def synthesize(self, text: str, timeout: float = 25.0) -> bytes:
         """Generates audio from text using the loaded TTS engine.
@@ -181,62 +263,34 @@ class TTSManager:
         """
         if self.engine is None:
             logger.error("TTS engine not loaded, cannot synthesize.")
-            return b""
+            raise SynthesisError("TTS engine not loaded")
 
         try:
             # On-demand asset preparation and engine upgrade if configured for kokoro-onnx
             if self._engine_name == "kokoro-onnx":
-                # Accept both legacy and new env var names for compatibility
-                model_path = os.getenv("TTS_MODEL_PATH") or os.getenv(
-                    "KOKORO_MODEL_PATH"
-                )
-                voices_path = os.getenv("TTS_VOICES_PATH") or os.getenv(
-                    "KOKORO_VOICES_PATH"
-                )
-                model_exists = Path(model_path).exists() if model_path else False
-                voices_exist = Path(voices_path).exists() if voices_path else False
-                if not (model_path and voices_path and model_exists and voices_exist):
-                    try:
-                        mp, vp = await ensure_kokoro_assets(Path("tts"))
-                        model_path, voices_path = str(mp), str(vp)
-                        # Set both env variants to keep all components in sync
-                        os.environ["TTS_MODEL_PATH"] = model_path
-                        os.environ["TTS_VOICES_PATH"] = voices_path
-                        os.environ["KOKORO_MODEL_PATH"] = model_path
-                        os.environ["KOKORO_VOICES_PATH"] = voices_path
-                        model_exists, voices_exist = True, True
-                        logger.info(
-                            "Assets ensured on-demand",
-                            extra={"subsys": "tts", "event": "assets_ready"},
-                        )
-                    except Exception:
-                        logger.warning(
-                            "Failed to ensure Kokoro assets on-demand",
-                            extra={"subsys": "tts"},
-                            exc_info=True,
-                        )
-                # If we have assets and current engine is stub, upgrade to Kokoro lazily
-                if (
-                    model_path
-                    and voices_path
-                    and model_exists
-                    and voices_exist
-                    and isinstance(self.engine, StubEngine)
-                ):
+                try:
+                    model_path, voices_path = await self._ensure_kokoro_assets()
+                except Exception as exc:
+                    self._record_degraded(f"kokoro assets unavailable: {exc}")
+                    raise SynthesisError("Kokoro assets unavailable") from exc
+
+                if isinstance(self.engine, StubEngine) and not self._explicit_stub:
                     try:
                         self.engine = KokoroONNXEngine(
-                            model_path=model_path, voices_path=voices_path
+                            model_path=str(model_path), voices_path=str(voices_path)
                         )
+                        self._clear_degraded()
                         logger.info(
                             "Switched to KokoroONNXEngine after assets ready",
                             extra={"subsys": "tts"},
                         )
-                    except Exception:
-                        logger.warning(
-                            "Kokoro engine init failed; continue with stub for this call",
-                            extra={"subsys": "tts"},
-                            exc_info=True,
-                        )
+                    except Exception as exc:
+                        self._record_degraded(f"kokoro init failed: {exc}")
+                        raise SynthesisError("Failed to initialize Kokoro engine") from exc
+
+            if isinstance(self.engine, StubEngine) and not self._explicit_stub:
+                reason = self._degraded_reason or "Primary TTS engine unavailable"
+                raise SynthesisError(reason)
 
             loop = asyncio.get_running_loop()
             # If engine exposes an async synthesize, await it directly; otherwise run in executor.
@@ -275,39 +329,16 @@ class TTSManager:
                 self._warmed_up = True
             return audio_bytes
 
-        except concurrent.futures.TimeoutError:
+        except concurrent.futures.TimeoutError as exc:
             logger.error(
                 f"TTS synthesis timed out after {timeout}s.", extra={"subsys": "tts"}
             )
-            # Fallback to stub on timeout as a resiliency measure
-            try:
-                logger.warning(
-                    "Falling back to StubEngine due to timeout", extra={"subsys": "tts"}
-                )
-                stub = StubEngine()
-                audio_bytes = await asyncio.wait_for(
-                    stub.synthesize(text), timeout=timeout
-                )
-                return audio_bytes
-            except Exception:
-                raise SynthesisError(f"TTS synthesis timed out after {timeout} seconds")
+            raise SynthesisError(f"TTS synthesis timed out after {timeout} seconds") from exc
         except Exception as e:
             logger.error(
                 f"TTS synthesis failed: {e}", extra={"subsys": "tts"}, exc_info=True
             )
-            # Fallback to stub if primary engine fails unexpectedly (e.g., missing kokoro API)
-            try:
-                logger.warning(
-                    "Primary engine failed, using StubEngine for this request",
-                    extra={"subsys": "tts"},
-                )
-                stub = StubEngine()
-                audio_bytes = await asyncio.wait_for(
-                    stub.synthesize(text), timeout=timeout
-                )
-                return audio_bytes
-            except Exception:
-                raise SynthesisError(f"Synthesis failed: {e}") from e
+            raise SynthesisError(f"Synthesis failed: {e}") from e
 
     async def close(self):
         """Cleans up TTS resources."""

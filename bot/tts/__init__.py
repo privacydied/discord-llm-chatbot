@@ -10,6 +10,7 @@ from pathlib import Path
 
 from .kokoro_bootstrap import TOKENIZER_ALIASES, register_espeak_wrapper
 from .stub import generate_stub_wav
+from .errors import SynthesisError
 
 
 async def generate_tts(text: str, user_id: str) -> Path:
@@ -38,10 +39,14 @@ async def generate_tts(text: str, user_id: str) -> Path:
         else:
             final_path = result
         return Path(final_path)
+    except SynthesisError:
+        raise
     except Exception:
-        # Robust fallback in constrained test environments
-        generate_stub_wav(str(out_path))
-        return out_path
+        if (os.getenv("TTS_ENGINE", "").strip().lower() or "kokoro-onnx") == "stub":
+            # Robust fallback when stub explicitly configured
+            generate_stub_wav(str(out_path))
+            return out_path
+        raise
 
 
 async def cleanup_tts() -> None:
