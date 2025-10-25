@@ -137,135 +137,20 @@ class KokoroONNXEngine(BaseEngine):
 
         # English: IPA-only path (no tokenizer discovery, no grapheme fallback)
         if lang == "en":
-            logger.debug(
-                "English path: phoneme-only; using official model IPA vocabulary."
-            )
-
-            # Check timeout configuration
-            cold_timeout = float(os.getenv("KOKORO_TTS_TIMEOUT_COLD", "60"))
-            warm_timeout = float(os.getenv("KOKORO_TTS_TIMEOUT_WARM", "20"))
-
-            # Use cold timeout for first run, warm for subsequent
-            timeout = (
-                warm_timeout
-                if getattr(self, "_synthesis_initialized", False)
-                else cold_timeout
-            )
-
             try:
-                # 1) Normalize text and convert to IPA using offline G2P
-                from bot.tts.eng_g2p_local import text_to_ipa
-
-                ipa = text_to_ipa(text)
-
-                # 2) If a kd override is present (common in tests), use it unconditionally
-                kd_override = getattr(self, "kd", None)
-                if kd_override is not None and hasattr(kd_override, "create"):
-                    result = kd_override.create(
-                        phonemes=ipa,
-                        voice=self.voice,
-                        lang="en",
-                        speed=kwargs.get("speed", 1.0),
-                        use_tokenizer=False,
-                        force_ipa=True,
-                        disable_autodiscovery=True,
-                    )
-                    self._synthesis_initialized = True
-                    return result
-
-                # 3) Enforce IPA-only: require local ONNX assets when no kd override is present
-                have_assets = bool(
-                    self.model_path
-                    and self.voices_path
-                    and Path(self.model_path).exists()
-                    and Path(self.voices_path).exists()
+                return self._synthesize_english_ipa(text, **kwargs)
+            except TTSError as exc:
+                logger.warning(
+                    "English IPA pipeline unavailable: %s; falling back to registry path",
+                    exc,
+                    extra={"subsys": "tts", "event": "english_ipa.fallback"},
                 )
-                if not have_assets:
-                    raise TTSError(
-                        "Kokoro ONNX assets missing; English requires IPA-only path with official vocabulary."
-                    )
-
-                # 4) Use KokoroDirect with official IPA vocabulary (no autodiscovery, no tokenizer)
-                kd = self._get_kokoro_direct(use_tokenizer=False, force_ipa=True)
-
-                # Log detailed synthesis info for debugging
-                from bot.tts.ipa_vocab_loader import load_vocab
-
-                sess = maybe_onnx_session(kd)
-                vocab = load_vocab(sess) if sess is not None else None
-                vocab_size = vocab.rows if vocab else "unknown"
-
-                logger.debug(
-                    f"English path: phoneme-only; using official model IPA vocabulary. "
-                    f"ipa_len={len(ipa.split())} vocab_size={vocab_size} oov=0 "
-                    f"voice={self.voice} speed={kwargs.get('speed', 1.0)}",
-                    extra={"subsys": "tts", "event": "english_ipa.synthesis"},
-                )
-
-                # Apply timeout protection
-                import threading
-
-                result_container = [None]
-                exception_container = [None]
-
-                def synthesis_target():
-                    try:
-                        wav_path = kd.create(
-                            phonemes=ipa,
-                            voice=self.voice,
-                            lang="en",
-                            speed=kwargs.get("speed", 1.0),
-                            use_tokenizer=False,
-                            force_ipa=True,
-                            use_official_vocab=True,  # Enforce official vocabulary
-                            disable_autodiscovery=True,
-                        )
-                        result_container[0] = wav_path
-                    except Exception as e:
-                        exception_container[0] = e
-
-                synthesis_thread = threading.Thread(target=synthesis_target)
-                synthesis_thread.start()
-                synthesis_thread.join(timeout=timeout)
-
-                if synthesis_thread.is_alive():
-                    # Timeout occurred
-                    raise TTSError(
-                        f"English IPA synthesis timed out after {timeout}s (cold={cold_timeout}s, warm={warm_timeout}s)"
-                    )
-
-                if exception_container[0]:
-                    raise exception_container[0]
-
-                if result_container[0] is None:
-                    raise TTSError("English IPA synthesis failed: no result returned")
-
-                wav_path = result_container[0]
-
-                # Read and return WAV bytes via helper (tests may monkeypatch this)
-                audio_bytes = self._wav_to_bytes(wav_path)
-
-                # Clean up temp file
-                try:
-                    from pathlib import Path as _P
-
-                    _p = _P(wav_path)
-                    if _p.exists():
-                        _p.unlink()
-                except Exception:
-                    pass
-
-                # Mark as initialized for warm timeout
-                self._synthesis_initialized = True
-                return audio_bytes
-
-            except Exception as e:
-                logger.error(
-                    f"English IPA synthesis failed: {e}",
+            except Exception:
+                logger.warning(
+                    "English IPA pipeline crashed; falling back to registry path",
+                    extra={"subsys": "tts", "event": "english_ipa.fallback"},
                     exc_info=True,
-                    extra={"subsys": "tts", "event": "english_ipa.error"},
                 )
-                raise TTSError(f"English IPA synthesis failed: {e}") from e
 
         # Non-English → original flow
         # If there's no running loop, run the coroutine to completion.
@@ -278,6 +163,145 @@ class KokoroONNXEngine(BaseEngine):
         else:
             # Running loop present; schedule and return awaitable
             return asyncio.create_task(self._synthesize_with_registry(text))
+
+    def _synthesize_english_ipa(self, text: str, **kwargs) -> bytes:
+        logger.debug(
+            "English path: phoneme-only; using official model IPA vocabulary."
+        )
+
+        # Check timeout configuration
+        cold_timeout = float(os.getenv("KOKORO_TTS_TIMEOUT_COLD", "60"))
+        warm_timeout = float(os.getenv("KOKORO_TTS_TIMEOUT_WARM", "20"))
+
+        timeout = (
+            warm_timeout if getattr(self, "_synthesis_initialized", False) else cold_timeout
+        )
+
+        try:
+            from bot.tts.eng_g2p_local import G2PUnavailableError, text_to_ipa
+
+            ipa = text_to_ipa(text)
+        except Exception as exc:
+            logger.error(
+                "English IPA synthesis failed during G2P: %s",
+                exc,
+                exc_info=True,
+                extra={"subsys": "tts", "event": "english_ipa.error"},
+            )
+            if isinstance(exc, G2PUnavailableError):
+                raise TTSError(f"English IPA unavailable: {exc}") from exc
+            raise TTSError(f"English IPA synthesis failed: {exc}") from exc
+
+        # If a kd override is present (common in tests), use it unconditionally
+        kd_override = getattr(self, "kd", None)
+        if kd_override is not None and hasattr(kd_override, "create"):
+            result = kd_override.create(
+                phonemes=ipa,
+                voice=self.voice,
+                lang="en",
+                speed=kwargs.get("speed", 1.0),
+                use_tokenizer=False,
+                force_ipa=True,
+                disable_autodiscovery=True,
+            )
+            self._synthesis_initialized = True
+            return result
+
+        have_assets = bool(
+            self.model_path
+            and self.voices_path
+            and Path(self.model_path).exists()
+            and Path(self.voices_path).exists()
+        )
+        if not have_assets:
+            raise TTSError(
+                "Kokoro ONNX assets missing; English requires IPA-only path with official vocabulary."
+            )
+
+        # Use KokoroDirect with official IPA vocabulary (no autodiscovery, no tokenizer)
+        kd = self._get_kokoro_direct(use_tokenizer=False, force_ipa=True)
+
+        from bot.tts.ipa_vocab_loader import load_vocab
+
+        sess = maybe_onnx_session(kd)
+        vocab = load_vocab(sess) if sess is not None else None
+        vocab_size = vocab.rows if vocab else "unknown"
+
+        logger.debug(
+            f"English path: phoneme-only; using official model IPA vocabulary. "
+            f"ipa_len={len(ipa.split())} vocab_size={vocab_size} oov=0 "
+            f"voice={self.voice} speed={kwargs.get('speed', 1.0)}",
+            extra={"subsys": "tts", "event": "english_ipa.synthesis"},
+        )
+
+        import threading
+
+        result_container = [None]
+        exception_container = [None]
+
+        def synthesis_target():
+            try:
+                wav_path = kd.create(
+                    phonemes=ipa,
+                    voice=self.voice,
+                    lang="en",
+                    speed=kwargs.get("speed", 1.0),
+                    use_tokenizer=False,
+                    force_ipa=True,
+                    use_official_vocab=True,
+                    disable_autodiscovery=True,
+                )
+                result_container[0] = wav_path
+            except Exception as exc:
+                exception_container[0] = exc
+
+        synthesis_thread = threading.Thread(target=synthesis_target)
+        synthesis_thread.start()
+        synthesis_thread.join(timeout=timeout)
+
+        if synthesis_thread.is_alive():
+            msg = (
+                f"English IPA synthesis timed out after {timeout}s "
+                f"(cold={cold_timeout}s, warm={warm_timeout}s)"
+            )
+            logger.error(
+                msg,
+                extra={"subsys": "tts", "event": "english_ipa.error"},
+            )
+            raise TTSError(msg)
+
+        if exception_container[0]:
+            logger.error(
+                "English IPA synthesis failed: %s",
+                exception_container[0],
+                exc_info=True,
+                extra={"subsys": "tts", "event": "english_ipa.error"},
+            )
+            raise TTSError(
+                f"English IPA synthesis failed: {exception_container[0]}"
+            ) from exception_container[0]
+
+        if result_container[0] is None:
+            logger.error(
+                "English IPA synthesis failed: no result returned",
+                extra={"subsys": "tts", "event": "english_ipa.error"},
+            )
+            raise TTSError("English IPA synthesis failed: no result returned")
+
+        wav_path = result_container[0]
+        audio_bytes = self._wav_to_bytes(wav_path)
+
+        try:
+            from pathlib import Path as _P
+
+            _p = _P(wav_path)
+            if _p.exists():
+                _p.unlink()
+        except Exception:
+            pass
+
+        self._synthesis_initialized = True
+        return audio_bytes
 
     def _get_kokoro_direct(self, use_tokenizer: bool = False, force_ipa: bool = True):
         kd_cls = get_direct_wrapper()

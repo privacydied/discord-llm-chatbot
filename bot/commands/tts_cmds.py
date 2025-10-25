@@ -13,6 +13,7 @@ from discord.ext import commands
 
 from bot.action import BotAction
 from bot.tts.state import tts_state
+from bot.tts.errors import SynthesisError
 
 try:
     from bot.voice.publisher import VoiceMessagePublisher  # type: ignore
@@ -271,15 +272,22 @@ class TTSCommands(commands.Cog):
                         mime_type = "audio/ogg"
                     elif audio_path.endswith(".wav"):
                         mime_type = "audio/wav"
+            except SynthesisError:
+                raise
             except Exception:
                 # Fallback to legacy direct calls if process not available or failed
                 try:
                     audio_path, mime_type = await self.bot.tts_manager.generate_tts(
                         text, output_format="ogg"
                     )
+                except SynthesisError:
+                    raise
                 except Exception:
-                    audio_bytes = await self.bot.tts_manager.synthesize(text)
-                    mime_type = "audio/wav"
+                    try:
+                        audio_bytes = await self.bot.tts_manager.synthesize(text)
+                        mime_type = "audio/wav"
+                    except SynthesisError:
+                        raise
 
             # 6) Try native voice message first (guild only)
             guild_obj = getattr(ctx, "guild", None)

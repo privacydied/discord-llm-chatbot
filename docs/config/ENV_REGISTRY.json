@@ -1334,9 +1334,9 @@
       "required": false,
       "sensitive": false,
       "type": "unknown",
-      "default": "'stub'",
+      "default": "'kokoro-onnx'",
       "all_defaults": [
-        "'stub'"
+        "'kokoro-onnx'"
       ],
       "valid_values": null
     },
