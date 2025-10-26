@@ -23,6 +23,14 @@ IPA_REWRITE_TABLE: Dict[str, str] = {}
 # Load lexicon from external JSON file
 _LEXICON_CACHE = None
 
+# Optional shared tokenizer instance from kokoro_onnx when available.
+_OFFICIAL_TOKENIZER_STATE = "uninitialized"
+_OFFICIAL_TOKENIZER = None
+
+
+class G2PUnavailableError(RuntimeError):
+    """Raised when the deterministic G2P pipeline cannot be used."""
+
 
 def _load_lexicon() -> Dict[str, str]:
     """Load lexicon from lexicon_en.json file."""
@@ -662,10 +670,10 @@ ARPABET_TO_IPA = {
     "EH0": "ɛ",
     "EH1": "ɛ",
     "EH2": "ɛ",
-    "ER": "ɜr",
-    "ER0": "ər",
-    "ER1": "ɜr",
-    "ER2": "ɜr",
+    "ER": "ɚ",
+    "ER0": "ɚ",
+    "ER1": "ɚ",
+    "ER2": "ɚ",
     "EY": "eɪ",
     "EY0": "eɪ",
     "EY1": "eɪ",
@@ -992,6 +1000,32 @@ def _word_to_ipa(word: str, cmudict_dict: Optional[Dict[str, List[str]]]) -> str
     return _arpabet_to_ipa_seq(arpabet_phones)
 
 
+def _get_official_tokenizer():
+    """Return a cached kokoro_onnx Tokenizer instance when available."""
+
+    global _OFFICIAL_TOKENIZER_STATE, _OFFICIAL_TOKENIZER
+
+    if _OFFICIAL_TOKENIZER_STATE == "failed":
+        return None
+    if _OFFICIAL_TOKENIZER_STATE == "ready":
+        return _OFFICIAL_TOKENIZER
+
+    try:  # pragma: no cover - exercised via tests through monkeypatch
+        from kokoro_onnx.tokenizer import Tokenizer  # type: ignore
+
+        _OFFICIAL_TOKENIZER = Tokenizer()
+        _OFFICIAL_TOKENIZER_STATE = "ready"
+        logger.debug("Initialized official Kokoro tokenizer for IPA phonemization")
+    except Exception as exc:  # pragma: no cover - dependency may be missing
+        _OFFICIAL_TOKENIZER = None
+        _OFFICIAL_TOKENIZER_STATE = "failed"
+        logger.debug(
+            "Official Kokoro tokenizer unavailable; falling back to CMU pipeline",
+            exc_info=True,
+        )
+    return _OFFICIAL_TOKENIZER
+
+
 def text_to_ipa(text: str) -> str:
     """
     Convert English text to IPA phonemes with deterministic normalization.
@@ -1012,13 +1046,33 @@ def text_to_ipa(text: str) -> str:
     if not text or not text.strip():
         return text
 
+    tokenizer = _get_official_tokenizer()
+    if tokenizer is not None:
+        try:
+            ipa = tokenizer.phonemize(text, lang="en-us", norm=True)
+            ipa = " ".join(str(ipa).split())
+            if ipa:
+                logger.debug(
+                    "Official Kokoro tokenizer converted '%s' to IPA: %s",
+                    text,
+                    ipa,
+                )
+                return ipa
+        except Exception:
+            logger.warning(
+                "Official Kokoro tokenizer failed; reverting to CMU pipeline",
+                exc_info=True,
+            )
+
     # Load CMU dictionary if available
     try:
         import cmudict
 
         cmudict_dict = cmudict.dict()
-    except Exception:
-        cmudict_dict = None
+    except Exception as exc:
+        raise G2PUnavailableError(
+            "CMU Pronouncing Dictionary is not available for English IPA synthesis"
+        ) from exc
 
     # 1. Normalize text and apply lexicon
     text = normalize_text(text)

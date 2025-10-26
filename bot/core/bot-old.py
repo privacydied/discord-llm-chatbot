@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Optional
 import discord
 import io
 from discord.ext import commands
+from bot.tts.errors import SynthesisError
 
 from bot.config import load_system_prompts
 from bot.utils.logging import get_logger
@@ -129,7 +130,32 @@ class LLMBot(commands.Bot):
                     "I tried to respond with voice, but the TTS service is not working."
                 )
             else:
-                action = await self.tts_manager.process(action)
+                try:
+                    action = await self.tts_manager.process(action)
+                except SynthesisError as exc:
+                    status = {}
+                    try:
+                        status = self.tts_manager.get_status() if self.tts_manager else {}
+                    except Exception:
+                        status = {}
+                    reason = status.get("degraded_reason") or str(exc)
+                    self.logger.error(
+                        "tts.process.failed",
+                        extra={
+                            "event": "tts.process.failed",
+                            "reason": reason,
+                            "engine": status.get("engine"),
+                            "msg_id": message.id,
+                            "channel_id": getattr(message.channel, "id", None),
+                        },
+                        exc_info=True,
+                    )
+                    action.audio_path = None
+                    action.meta["tts_error"] = reason
+                    action.meta["tts_failed"] = True
+                    action.content = (
+                        "I tried to respond with voice, but the TTS service is not working."
+                    )
 
         # If action has an audio path after processing, prepare it for sending.
         if action.audio_path:

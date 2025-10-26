@@ -14,7 +14,11 @@ except ImportError:
     # For testing without onnxruntime
     InferenceSession = object
 
-from bot.tts.ipa_vocab_kokoro_v1 import PHONEME_TO_ID, EXPECTED_VOCAB_SIZE
+from bot.tts.ipa_vocab_kokoro_v1 import (
+    PHONEME_TO_ID,
+    EXPECTED_VOCAB_SIZE,
+    IS_PLACEHOLDER,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +73,9 @@ def load_vocab(session: Optional[InferenceSession]) -> Vocab:
     Raises:
         RuntimeError: If vocabulary doesn't match model
     """
+    if IS_PLACEHOLDER or not PHONEME_TO_ID:
+        raise RuntimeError("Official Kokoro IPA vocabulary is unavailable")
+
     # Use hardcoded mapping - no external file hunting
     p2i = dict(PHONEME_TO_ID)
     rows = _get_embedding_rows(session)
@@ -96,7 +103,9 @@ def load_vocab(session: Optional[InferenceSession]) -> Vocab:
         id_to_phoneme[id_val] = phoneme
 
     logger.debug(
-        f"Hardcoded IPA vocab loaded: {len(p2i)} symbols, max_id={max(p2i.values())}"
+        "Hardcoded IPA vocab loaded: %s symbols, max_id=%s",
+        len(p2i),
+        max(p2i.values()),
     )
 
     return Vocab(phoneme_to_id=p2i, id_to_phoneme=id_to_phoneme, rows=rows)
@@ -104,10 +113,12 @@ def load_vocab(session: Optional[InferenceSession]) -> Vocab:
 
 # Guarded rewrites: only perform if replacement exists in table AND source isn't already valid
 GUARDED_REWRITES = (
-    ("ɡ", "g"),  # Alternative g symbol
-    ("r", "ɹ"),  # English rhotic
-    ("ɚ", "ɝ"),  # Unify rhotics to ɝ
-    ("a", "ɑ"),  # Fix 'a' OOV: only if 'ɑ' exists and 'a' not in table
+    ("dʒ", "ʤ"),
+    ("tʃ", "ʧ"),
+    ("ɝ", "ɚ"),
+    ("ɜr", "ɚ"),
+    ("ər", "ɚ"),
+    ("g", "ɡ"),
 )
 
 
@@ -123,8 +134,22 @@ def normalize_ipa(ipa: str) -> str:
     """
     from .ipa_vocab_kokoro_v1 import PHONEME_TO_ID
 
-    ipa = ipa.replace("ː", "").replace("ɚ", "ɝ").replace("r", "ɹ").replace("ɡ", "g")
-    ipa = _strip_unknowns(ipa, allowed=set(PHONEME_TO_ID.keys()))
+    if not PHONEME_TO_ID:
+        return ipa
+
+    allowed = set(PHONEME_TO_ID.keys())
+
+    for source, replacement in GUARDED_REWRITES:
+        if source == replacement:
+            continue
+        if source in allowed:
+            continue
+        if replacement not in allowed:
+            continue
+        if source in ipa:
+            ipa = ipa.replace(source, replacement)
+
+    ipa = _strip_unknowns(ipa, allowed=allowed)
     return ipa
 
 

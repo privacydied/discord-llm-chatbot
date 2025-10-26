@@ -265,11 +265,15 @@ class KokoroDirect:
                     raise ValueError("Either text or phonemes must be provided")
                 # Convert to IPA using the built-in G2P
                 try:
-                    from bot.tts.eng_g2p_local import text_to_ipa
+                    from bot.tts.eng_g2p_local import G2PUnavailableError, text_to_ipa
 
                     phonemes = text_to_ipa(text)
+                except G2PUnavailableError as exc:
+                    raise ValueError(
+                        f"English IPA conversion unavailable: {exc}"
+                    ) from exc
                 except Exception as e:
-                    raise ValueError(f"Failed to convert text to IPA: {e}")
+                    raise ValueError(f"Failed to convert text to IPA: {e}") from e
             if logger:
                 # Compatibility log line expected by tests
                 logger.debug("Using pre-tokenized tokens")
@@ -926,8 +930,9 @@ class KokoroDirect:
             ("ɔ̃", "ɔ"),
             ("œ̃", "œ"),
             # R-colored vowels to base + r sequence (no hyphen)
-            ("ɝ", "ɜr"),
-            ("ɚ", "ər"),
+            ("ɝ", "ɚ"),
+            ("ɜr", "ɚ"),
+            ("ər", "ɚ"),
         ]
 
         s = str(ipa)
