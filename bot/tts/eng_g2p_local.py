@@ -6,7 +6,9 @@ IPA-focused for Kokoro TTS model compatibility.
 
 import json
 import logging
+import os
 import re
+import tempfile
 import unicodedata
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -26,6 +28,18 @@ _LEXICON_CACHE = None
 # Optional shared tokenizer instance from kokoro_onnx when available.
 _OFFICIAL_TOKENIZER_STATE = "uninitialized"
 _OFFICIAL_TOKENIZER = None
+_ESPEAK_TMPDIR_CONFIGURED = False
+_ESPEAK_TMPDIR_PATH: Optional[Path] = None
+
+
+def get_kokoro_tempdir() -> Path:
+    """Return the directory used for espeak temp artifacts."""
+    override = os.environ.get("KOKORO_ESPEAK_TMPDIR") or os.environ.get(
+        "KOKORO_PHONEMIZER_TMPDIR"
+    )
+    if override:
+        return Path(override).expanduser()
+    return Path(__file__).resolve().parents[2] / ".kokoro_espeak_tmp"
 
 
 class G2PUnavailableError(RuntimeError):
@@ -1030,6 +1044,108 @@ def _get_official_tokenizer():
     return _OFFICIAL_TOKENIZER
 
 
+def _should_retry_official_tokenizer(exc: Exception) -> bool:
+    """Return True when the failure looks like an espeak tempdir issue."""
+    message = str(exc).lower()
+    retry_signatures = (
+        "failed to map segment from shared object",
+        "cannot allocate memory in static tls block",
+    )
+    if any(signature in message for signature in retry_signatures):
+        return True
+
+    cause = getattr(exc, "__cause__", None)
+    if isinstance(cause, Exception) and _should_retry_official_tokenizer(cause):
+        return True
+
+    context = getattr(exc, "__context__", None)
+    if isinstance(context, Exception) and _should_retry_official_tokenizer(context):
+        return True
+
+    return False
+
+
+def _configure_official_tokenizer_tmpdir() -> Optional[Path]:
+    """Route espeak temp files to an executable-safe location."""
+    global _ESPEAK_TMPDIR_CONFIGURED, _ESPEAK_TMPDIR_PATH
+
+    if _ESPEAK_TMPDIR_CONFIGURED:
+        return _ESPEAK_TMPDIR_PATH
+
+    candidate = get_kokoro_tempdir()
+
+    try:
+        candidate.mkdir(parents=True, exist_ok=True)
+    except Exception as dir_error:  # pragma: no cover - defensive
+        logger.warning(
+            "Unable to prepare espeak temporary directory %s: %s",
+            candidate,
+            dir_error,
+        )
+        _ESPEAK_TMPDIR_CONFIGURED = True
+        _ESPEAK_TMPDIR_PATH = None
+        return None
+
+    tempfile.tempdir = str(candidate)
+    os.environ["TMPDIR"] = str(candidate)
+    os.environ["TEMP"] = str(candidate)
+    os.environ["TMP"] = str(candidate)
+
+    _ESPEAK_TMPDIR_CONFIGURED = True
+    _ESPEAK_TMPDIR_PATH = candidate
+    logger.debug("Configured Kokoro espeak temp directory: %s", candidate)
+    return candidate
+
+
+def _phonemize_with_official(tokenizer, text: str) -> str:
+    ipa = tokenizer.phonemize(text, lang="en-us", norm=True)
+    return " ".join(str(ipa).split())
+
+
+def _attempt_official_tokenizer(tokenizer, text: str) -> Optional[str]:
+    """Try the official tokenizer with a safe retry for tempdir failures."""
+    for attempt in range(2):
+        try:
+            ipa = _phonemize_with_official(tokenizer, text)
+        except Exception as exc:  # pragma: no cover - depends on runtime setup
+            logger.debug(
+                "Official Kokoro tokenizer attempt %d for '%s' failed: %s",
+                attempt + 1,
+                text,
+                exc,
+            )
+            should_retry = attempt == 0 and _should_retry_official_tokenizer(exc)
+            if should_retry:
+                tmpdir = _configure_official_tokenizer_tmpdir()
+                if tmpdir is not None:
+                    logger.info(
+                        "Official Kokoro tokenizer retrying with safe temp directory %s",
+                        tmpdir,
+                    )
+                    continue
+            logger.warning(
+                "Official Kokoro tokenizer failed; reverting to CMU pipeline",
+                exc_info=True,
+            )
+            return None
+
+        if ipa:
+            logger.debug(
+                "Official Kokoro tokenizer converted '%s' to IPA: %s",
+                text,
+                ipa,
+            )
+            return ipa
+
+        logger.debug(
+            "Official Kokoro tokenizer returned empty IPA for '%s'; falling back.",
+            text,
+        )
+        return None
+
+    return None
+
+
 def text_to_ipa(text: str) -> str:
     """
     Convert English text to IPA phonemes with deterministic normalization.
@@ -1052,21 +1168,9 @@ def text_to_ipa(text: str) -> str:
 
     tokenizer = _get_official_tokenizer()
     if tokenizer is not None:
-        try:
-            ipa = tokenizer.phonemize(text, lang="en-us", norm=True)
-            ipa = " ".join(str(ipa).split())
-            if ipa:
-                logger.debug(
-                    "Official Kokoro tokenizer converted '%s' to IPA: %s",
-                    text,
-                    ipa,
-                )
-                return ipa
-        except Exception:
-            logger.warning(
-                "Official Kokoro tokenizer failed; reverting to CMU pipeline",
-                exc_info=True,
-            )
+        ipa = _attempt_official_tokenizer(tokenizer, text)
+        if ipa:
+            return ipa
 
     # Load CMU dictionary if available
     try:
