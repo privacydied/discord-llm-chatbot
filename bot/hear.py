@@ -13,6 +13,7 @@ Instrumentation emits stt.span and stt.summary breadcrumbs to keep visibility ti
 from __future__ import annotations
 
 import asyncio
+import ctypes
 import gc
 import hashlib
 import json
@@ -131,6 +132,220 @@ class TranscriptResult:
     first_chunk_runtime: float
     aborted: bool = False
     abort_reason: Optional[str] = None
+
+
+class STTJob:
+    """Track STT job lifecycle to guarantee exactly-once finalization."""
+
+    __slots__ = (
+        "kind",
+        "spans",
+        "ram_guard",
+        "state",
+        "_finalized",
+        "_cleanup_done",
+        "_lock",
+        "pre",
+        "download",
+        "temp_handle",
+        "temp_path",
+        "transcript",
+        "status",
+        "abort_reason",
+        "chunks_done",
+        "dur_done_s",
+        "result_payload",
+        "_error",
+        "_rss_snapshot",
+        "_rss_cleanup_before",
+        "_rss_cleanup_after",
+        "_ps_process",
+    )
+
+    def __init__(self, kind: str, spans: SpanRecorder, ram_guard: STTRAMGuard) -> None:
+        self.kind = kind
+        self.spans = spans
+        self.ram_guard = ram_guard
+        self.state = "running"
+        self._finalized = False
+        self._cleanup_done = False
+        self._lock = asyncio.Lock()
+        self.pre: Optional[PreprocessResult] = None
+        self.download: Optional[DownloadedAudio] = None
+        self.temp_handle: Optional[tempfile.NamedTemporaryFile] = None
+        self.temp_path: Optional[Path] = None
+        self.transcript: Optional[TranscriptResult] = None
+        self.status = "ok"
+        self.abort_reason: Optional[str] = None
+        self.chunks_done = 0
+        self.dur_done_s = 0.0
+        self.result_payload: Any = None
+        self._error: Optional[BaseException] = None
+        self._ps_process = psutil.Process()
+        try:
+            self._rss_snapshot = self._ps_process.memory_info().rss
+        except Exception:
+            self._rss_snapshot = 0
+        self._rss_cleanup_before = self._rss_snapshot
+        self._rss_cleanup_after = self._rss_snapshot
+
+    def register_pre(self, pre: PreprocessResult) -> None:
+        self.pre = pre
+
+    def register_download(self, download: Optional[DownloadedAudio]) -> None:
+        self.download = download
+
+    def register_temp(
+        self,
+        temp_handle: Optional[tempfile.NamedTemporaryFile],
+        path: Optional[Path],
+    ) -> None:
+        self.temp_handle = temp_handle
+        self.temp_path = path
+
+    def enter_aborting(self, reason: str, chunks_done: int = 0, dur_done: float = 0.0) -> None:
+        if self.state == "running":
+            self.state = "aborting"
+        self.abort_reason = reason or self.abort_reason
+        if chunks_done > self.chunks_done:
+            self.chunks_done = chunks_done
+        if dur_done > self.dur_done_s:
+            self.dur_done_s = dur_done
+
+    def register_transcript(self, transcript: TranscriptResult) -> None:
+        self.transcript = transcript
+        if transcript.aborted:
+            self.enter_aborting(
+                transcript.abort_reason or "abort",
+                len(transcript.chunks),
+                transcript.chunks[-1]["end"] if transcript.chunks else 0.0,
+            )
+        else:
+            self.chunks_done = len(transcript.chunks)
+            if transcript.chunks:
+                self.dur_done_s = transcript.chunks[-1]["end"]
+
+    async def finish_success(self, payload: Any) -> Any:
+        async with self._lock:
+            self.result_payload = payload
+            if self.transcript and self.transcript.aborted:
+                self.status = "partial"
+            else:
+                self.status = "ok"
+            await self._finalize_locked()
+        return payload
+
+    async def finish_failure(self, exc: BaseException) -> None:
+        async with self._lock:
+            self.status = "fail"
+            self._error = exc
+            await self._finalize_locked()
+
+    async def ensure_finalized(self) -> None:
+        async with self._lock:
+            if not self._finalized:
+                if self.status not in ("ok", "partial", "fail"):
+                    self.status = "fail"
+                await self._finalize_locked()
+
+    async def _finalize_locked(self) -> None:
+        if self._finalized:
+            return
+        self._finalized = True
+        self.state = "finalized"
+        if self.status == "partial":
+            transcript_text = (self.transcript.text if self.transcript else "") if self.transcript else ""
+            try:
+                logger.info(
+                    "stt.partial_ok chars=%s reason=%s",
+                    len(transcript_text),
+                    (self.abort_reason or ""),
+                )
+            except Exception:
+                pass
+        elif self.status == "ok":
+            try:
+                logger.info("stt.ok")
+            except Exception:
+                pass
+        else:
+            reason = self.abort_reason or (
+                str(self._error)[:80] if self._error else "unknown"
+            )
+            try:
+                logger.info("stt.fail reason=%s", reason)
+            except Exception:
+                pass
+        await self._cleanup_resources()
+
+    async def _cleanup_resources(self) -> None:
+        if self._cleanup_done:
+            return
+        self._cleanup_done = True
+        try:
+            self._rss_cleanup_before = self._ps_process.memory_info().rss
+        except Exception:
+            self._rss_cleanup_before = 0
+
+        stream = self.pre.stream if self.pre else None
+        success = (
+            bool(self.transcript)
+            and not self.transcript.aborted
+            and self.status == "ok"
+        )
+        if stream is not None:
+            try:
+                await stream.finalize(success=success)
+            except Exception:
+                logger.debug("⚠️ Failed to finalize stream after job", exc_info=True)
+
+        removed_temp: Optional[Path] = None
+        if self.temp_handle is not None:
+            try:
+                temp_name = self.temp_handle.name
+                os.unlink(temp_name)
+                removed_temp = Path(temp_name)
+            except FileNotFoundError:
+                pass
+            except Exception:
+                logger.debug("⚠️ Failed to remove temp attachment", exc_info=True)
+            self.temp_handle = None
+        if self.temp_path is not None and (removed_temp is None or self.temp_path != removed_temp):
+            try:
+                os.unlink(self.temp_path)
+            except FileNotFoundError:
+                pass
+            except Exception:
+                logger.debug("⚠️ Failed to remove temp path %s", self.temp_path, exc_info=True)
+            self.temp_path = None
+        else:
+            self.temp_path = None
+
+        # Drop large references
+        self.pre = None
+        self.download = None
+        self.transcript = None
+
+        gc.collect()
+        try:
+            libc = ctypes.CDLL("libc.so.6")
+            libc.malloc_trim(0)
+        except Exception:
+            pass
+
+        try:
+            self._rss_cleanup_after = self._ps_process.memory_info().rss
+        except Exception:
+            self._rss_cleanup_after = self._rss_cleanup_before
+        freed_bytes = max(0, self._rss_cleanup_before - self._rss_cleanup_after)
+        freed_mb = freed_bytes / (1024 * 1024)
+        try:
+            logger.info("stt.cleanup freed_mb=%.1f", freed_mb)
+        except Exception:
+            pass
+
+    async def close(self) -> None:
+        await self.ensure_finalized()
 
 
 class RAMGuardExceeded(RuntimeError):
@@ -846,6 +1061,7 @@ async def _run_whisper(
     spans: SpanRecorder,
     initial_spec: ModelSpec,
     ram_guard: STTRAMGuard,
+    job: Optional[STTJob] = None,
 ) -> TranscriptResult:
     spec = initial_spec
     attempted_slow_downgrade = False
@@ -859,6 +1075,7 @@ async def _run_whisper(
                 pre=pre,
                 spans=spans,
                 ram_guard=ram_guard,
+                job=job,
             )
         except Exception:
             try:
@@ -889,6 +1106,8 @@ async def _run_whisper(
                 attempted_slow_downgrade = True
                 _reset_stream_from_cache(pre)
                 continue
+        if job:
+            job.register_transcript(transcript)
         return transcript
 
 
@@ -898,6 +1117,7 @@ async def _transcribe_with_model(
     pre: PreprocessResult,
     spans: SpanRecorder,
     ram_guard: STTRAMGuard,
+    job: Optional[STTJob] = None,
 ) -> TranscriptResult:
     cache_key = _transcript_cache_key(pre.cache_key, spec, vad_enabled=True)
     cached = _load_transcript_cache(cache_key)
@@ -932,6 +1152,75 @@ async def _transcribe_with_model(
     dynamic_limit = int(math.ceil(estimated_chunks * MAX_CHUNK_MULTIPLIER) + 1)
     max_chunks = max(1, min(dynamic_limit, MAX_CHUNK_ABS_LIMIT))
     process = psutil.Process()
+    confirm_memory_abort = pre.duration_in <= 90.0
+    pending_memory_abort = False
+    memory_probe_started = 0.0
+    MEMORY_CONFIRM_DELAY = 0.3
+
+    async def _should_abort_for_memory(rss_mb: float) -> bool:
+        nonlocal pending_memory_abort, memory_probe_started
+        if rss_mb < MEMORY_ABORT_THRESHOLD_MB:
+            if pending_memory_abort:
+                try:
+                    logger.info(
+                        "stt.guard.memory rss_mb=%.1f action=continue",
+                        rss_mb,
+                    )
+                except Exception:
+                    pass
+            pending_memory_abort = False
+            return False
+
+        if not confirm_memory_abort:
+            try:
+                logger.info(
+                    "stt.guard.memory rss_mb=%.1f action=abort_partial",
+                    rss_mb,
+                )
+            except Exception:
+                pass
+            return True
+
+        if not pending_memory_abort:
+            pending_memory_abort = True
+            memory_probe_started = time.perf_counter()
+            try:
+                logger.info(
+                    "stt.guard.memory rss_mb=%.1f action=confirm_abort",
+                    rss_mb,
+                )
+            except Exception:
+                pass
+            await asyncio.sleep(MEMORY_CONFIRM_DELAY)
+            return False
+
+        elapsed = time.perf_counter() - memory_probe_started
+        if elapsed < MEMORY_CONFIRM_DELAY:
+            await asyncio.sleep(max(0.0, MEMORY_CONFIRM_DELAY - elapsed))
+        try:
+            rss_second = process.memory_info().rss / (1024 * 1024)
+        except Exception:
+            rss_second = rss_mb
+
+        if rss_second >= MEMORY_ABORT_THRESHOLD_MB:
+            try:
+                logger.info(
+                    "stt.guard.memory rss_mb=%.1f action=abort_partial",
+                    rss_second,
+                )
+            except Exception:
+                pass
+            return True
+
+        try:
+            logger.info(
+                "stt.guard.memory rss_mb=%.1f action=continue",
+                rss_second,
+            )
+        except Exception:
+            pass
+        pending_memory_abort = False
+        return False
 
     async def _decode_chunk(chunk_audio: np.ndarray) -> Tuple[List[Any], Any, float]:
         chunk_begin = time.perf_counter()
@@ -1032,18 +1321,14 @@ async def _transcribe_with_model(
                     rss_mb = process.memory_info().rss / (1024 * 1024)
                 except Exception:
                     rss_mb = 0.0
-                if rss_mb >= MEMORY_ABORT_THRESHOLD_MB:
-                    try:
-                        logger.info(
-                            "stt.guard.memory rss_mb=%.1f action=abort_partial",
-                            rss_mb,
-                        )
-                    except Exception:
-                        pass
+                if rss_mb > 0.0 and await _should_abort_for_memory(rss_mb):
                     frames.clear()
                     samples_buffered = 0
                     tail = None
                     aborted_reason = "memory_guard"
+                    if job:
+                        current_end = chunk_records[-1]["end"] if chunk_records else chunk_end_s
+                        job.enter_aborting("memory_guard", len(chunk_records), current_end)
                     gc.collect()
                     break
                 if (time.perf_counter() - start_time) > whisper_budget:
@@ -1105,17 +1390,13 @@ async def _transcribe_with_model(
                         rss_mb = process.memory_info().rss / (1024 * 1024)
                     except Exception:
                         rss_mb = 0.0
-                    if rss_mb >= MEMORY_ABORT_THRESHOLD_MB:
-                        try:
-                            logger.info(
-                                "stt.guard.memory rss_mb=%.1f action=abort_partial",
-                                rss_mb,
-                            )
-                        except Exception:
-                            pass
+                    if rss_mb > 0.0 and await _should_abort_for_memory(rss_mb):
                         frames.clear()
                         tail = None
                         aborted_reason = "memory_guard"
+                        if job:
+                            current_end = chunk_records[-1]["end"] if chunk_records else chunk_end_s
+                            job.enter_aborting("memory_guard", len(chunk_records), current_end)
                         gc.collect()
                     if aborted_reason is None and (time.perf_counter() - start_time) > whisper_budget:
                         aborted_reason = "time_budget"
@@ -1151,6 +1432,8 @@ async def _transcribe_with_model(
     if aborted_reason:
         chunks_done = len(chunk_records)
         dur_done_s = chunk_records[-1]["end"] if chunk_records else 0.0
+        if job:
+            job.enter_aborting(aborted_reason, chunks_done, dur_done_s)
         try:
             logger.info(
                 "stt.abort reason=%s chunks_done=%s dur_done_s=%.2f",
@@ -1266,68 +1549,60 @@ async def hear_infer(audio: Union[Path, "discord.Attachment"]) -> str:
     """
     spans = SpanRecorder()
     ram_guard = STTRAMGuard(STT_MAX_RAM_MB)
-    temp_handle = None
-    pre: Optional[PreprocessResult] = None
     attachment = audio if not isinstance(audio, Path) else None
+    job = STTJob(kind="attachment", spans=spans, ram_guard=ram_guard)
 
     try:
         async with _JOB_SEMAPHORE:
+            local_path, temp_handle, created_temp = await _ensure_local_audio(audio)
+            job.register_temp(temp_handle, local_path if created_temp else None)
+            voice_note = _is_voice_note(attachment) if attachment is not None else False
+            pre = await _preprocess_audio(
+                source_path=local_path,
+                spans=spans,
+                download=None,
+                voice_note=voice_note,
+                ram_guard=ram_guard,
+            )
+            job.register_pre(pre)
+            ram_guard.check("pre-stage")
+
+            spec = stt_manager.default_spec
+            if pre.duration_in > 120:
+                downgraded = stt_manager.downgrade_spec(spec)
+                if downgraded:
+                    logger.info(
+                        "whisper.model_downgrade from=%s to=%s reason=long_audio",
+                        spec.size,
+                        downgraded.size,
+                    )
+                    spec = downgraded
+
+            transcript = await _run_whisper(pre, spans, spec, ram_guard, job=job)
+
+            spans.start("stitch")
+            result_text = transcript.text
+            spans.end("stitch", ok=True)
+            _log_summary(spans, pre, transcript, cache_hit=transcript.cache_hit)
+            return await job.finish_success(result_text)
+    except RAMGuardExceeded as exc:
+        if job.pre and job.pre.stream:
             try:
-                local_path, temp_handle, _ = await _ensure_local_audio(audio)
-                voice_note = _is_voice_note(attachment) if attachment is not None else False
-                pre = await _preprocess_audio(
-                    source_path=local_path,
-                    spans=spans,
-                    download=None,
-                    voice_note=voice_note,
-                    ram_guard=ram_guard,
-                )
-                try:
-                    ram_guard.check("pre-stage")
-                except RAMGuardExceeded:
-                    await pre.stream.abort()
-                    raise
-
-                spec = stt_manager.default_spec
-                if pre.duration_in > 120:
-                    downgraded = stt_manager.downgrade_spec(spec)
-                    if downgraded:
-                        logger.info(
-                            "whisper.model_downgrade from=%s to=%s reason=long_audio",
-                            spec.size,
-                            downgraded.size,
-                        )
-                        spec = downgraded
-
-                transcript = await _run_whisper(pre, spans, spec, ram_guard)
-
-                spans.start("stitch")
-                result_text = transcript.text
-                spans.end("stitch", ok=True)
-                _log_summary(spans, pre, transcript, cache_hit=transcript.cache_hit)
-                if transcript.aborted:
-                    try:
-                        logger.info(
-                            "stt.partial_ok chars=%s",
-                            len(result_text),
-                        )
-                    except Exception:
-                        pass
-                return result_text
-            except RAMGuardExceeded as exc:
-                raise InferenceError(str(exc)) from exc
-
+                await job.pre.stream.abort()
+            except Exception:
+                logger.debug("⚠️ Stream abort failed after RAM guard trigger", exc_info=True)
+        await job.finish_failure(exc)
+        raise InferenceError(str(exc)) from exc
+    except Exception as exc:
+        if job.pre and job.pre.stream:
+            try:
+                await job.pre.stream.abort()
+            except Exception:
+                logger.debug("⚠️ Stream abort failed after error", exc_info=True)
+        await job.finish_failure(exc)
+        raise
     finally:
-        if pre is not None:
-            try:
-                await pre.stream.finalize(success=False)
-            except Exception:
-                logger.debug("⚠️ Stream cleanup failed in hear_infer", exc_info=True)
-        if temp_handle is not None:
-            try:
-                os.unlink(temp_handle.name)
-            except Exception:
-                pass
+        await job.close()
 
 
 async def hear_infer_from_url(
@@ -1338,86 +1613,86 @@ async def hear_infer_from_url(
     """
     spans = SpanRecorder()
     ram_guard = STTRAMGuard(STT_MAX_RAM_MB)
-    pre: Optional[PreprocessResult] = None
+    job = STTJob(kind="url", spans=spans, ram_guard=ram_guard)
     download: Optional[DownloadedAudio] = None
     try:
         async with _JOB_SEMAPHORE:
+            spans.start("yt-dlp")
             try:
-                spans.start("yt-dlp")
-                try:
-                    download = await fetch_and_prepare_url_audio(
-                        url, force_refresh=force_refresh
-                    )
-                    spans.end("yt-dlp", ok=True)
-                except VideoIngestError as exc:
-                    spans.end("yt-dlp", ok=False, reason="error")
-                    raise InferenceError(str(exc)) from exc
-
-                ram_guard.check("yt-dlp")
-
-                pre = await _preprocess_audio(
-                    source_path=download.raw_path,
-                    spans=spans,
-                    download=download,
-                    voice_note=False,
-                    ram_guard=ram_guard,
+                download = await fetch_and_prepare_url_audio(
+                    url, force_refresh=force_refresh
                 )
-                try:
-                    ram_guard.check("pre-stage")
-                except RAMGuardExceeded:
-                    await pre.stream.abort()
-                    raise
-
-                spec = stt_manager.default_spec
-                if pre.duration_in > 120:
-                    downgraded = stt_manager.downgrade_spec(spec)
-                    if downgraded:
-                        logger.info(
-                            "whisper.model_downgrade from=%s to=%s reason=long_audio",
-                            spec.size,
-                            downgraded.size,
-                        )
-                        spec = downgraded
-
-                transcript = await _run_whisper(pre, spans, spec, ram_guard)
-
-                spans.start("stitch")
-                metadata = download.metadata
-                result = {
-                    "transcription": transcript.text,
-                    "partial": transcript.aborted,
-                    "abort_reason": transcript.abort_reason or "",
-                    "metadata": {
-                        "source": metadata.source_type,
-                        "url": metadata.url,
-                        "title": metadata.title,
-                        "uploader": metadata.uploader,
-                        "upload_date": metadata.upload_date,
-                        "original_duration_s": metadata.duration_seconds,
-                        "processed_duration_s": pre.duration_out,
-                        "speedup_factor": ATEMPO_FACTOR if pre.atempo_applied else 1.0,
-                        "cache_hit": download.cache_hit or transcript.cache_hit,
-                        "timestamp": download.timestamp.isoformat(),
-                    },
-                }
-                spans.end("stitch", ok=True)
-                _log_summary(spans, pre, transcript, cache_hit=transcript.cache_hit)
-                if transcript.aborted:
-                    try:
-                        logger.info(
-                            "stt.partial_ok chars=%s",
-                            len(result["transcription"]),
-                        )
-                    except Exception:
-                        pass
-                return result
-            except RAMGuardExceeded as exc:
+                spans.end("yt-dlp", ok=True)
+            except VideoIngestError as exc:
+                spans.end("yt-dlp", ok=False, reason="error")
+                await job.finish_failure(exc)
                 raise InferenceError(str(exc)) from exc
-    finally:
-        if pre is not None:
+
+            job.register_download(download)
+            ram_guard.check("yt-dlp")
+
+            pre = await _preprocess_audio(
+                source_path=download.raw_path,
+                spans=spans,
+                download=download,
+                voice_note=False,
+                ram_guard=ram_guard,
+            )
+            job.register_pre(pre)
+            ram_guard.check("pre-stage")
+
+            spec = stt_manager.default_spec
+            if pre.duration_in > 120:
+                downgraded = stt_manager.downgrade_spec(spec)
+                if downgraded:
+                    logger.info(
+                        "whisper.model_downgrade from=%s to=%s reason=long_audio",
+                        spec.size,
+                        downgraded.size,
+                    )
+                    spec = downgraded
+
+            transcript = await _run_whisper(pre, spans, spec, ram_guard, job=job)
+
+            spans.start("stitch")
+            metadata = download.metadata
+            result = {
+                "transcription": transcript.text,
+                "partial": transcript.aborted,
+                "abort_reason": transcript.abort_reason or "",
+                "metadata": {
+                    "source": metadata.source_type,
+                    "url": metadata.url,
+                    "title": metadata.title,
+                    "uploader": metadata.uploader,
+                    "upload_date": metadata.upload_date,
+                    "original_duration_s": metadata.duration_seconds,
+                    "processed_duration_s": pre.duration_out,
+                    "speedup_factor": ATEMPO_FACTOR if pre.atempo_applied else 1.0,
+                    "cache_hit": download.cache_hit or transcript.cache_hit,
+                    "timestamp": download.timestamp.isoformat(),
+                },
+            }
+            spans.end("stitch", ok=True)
+            _log_summary(spans, pre, transcript, cache_hit=transcript.cache_hit)
+            return await job.finish_success(result)
+    except RAMGuardExceeded as exc:
+        if job.pre and job.pre.stream:
             try:
-                await pre.stream.finalize(success=False)
+                await job.pre.stream.abort()
+            except Exception:
+                logger.debug("⚠️ Stream abort failed after RAM guard trigger", exc_info=True)
+        await job.finish_failure(exc)
+        raise InferenceError(str(exc)) from exc
+    except Exception as exc:
+        if job.pre and job.pre.stream:
+            try:
+                await job.pre.stream.abort()
             except Exception:
                 logger.debug(
-                    "⚠️ Stream cleanup failed in hear_infer_from_url", exc_info=True
+                    "⚠️ Stream abort failed in hear_infer_from_url", exc_info=True
                 )
+        await job.finish_failure(exc)
+        raise
+    finally:
+        await job.close()

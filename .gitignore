@@ -152,3 +152,4 @@ tts/**/*.onnx
 chroma_db/**/*.sqlite3
 cache/stt_pcm/*
 cache/stt_transcripts/*
+.kokoro_espeak_tmp/*
