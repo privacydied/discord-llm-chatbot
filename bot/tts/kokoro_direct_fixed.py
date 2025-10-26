@@ -930,8 +930,9 @@ class KokoroDirect:
             ("ɔ̃", "ɔ"),
             ("œ̃", "œ"),
             # R-colored vowels to base + r sequence (no hyphen)
-            ("ɝ", "ɜr"),
-            ("ɚ", "ər"),
+            ("ɝ", "ɚ"),
+            ("ɜr", "ɚ"),
+            ("ər", "ɚ"),
         ]
 
         s = str(ipa)
