@@ -2,6 +2,7 @@ import logging
 import inspect
 import io
 import os
+import re
 from pathlib import Path
 import asyncio
 from typing import Any, Optional
@@ -128,14 +129,12 @@ class KokoroONNXEngine(BaseEngine):
     def synthesize(self, text: str, language: str = "en", **kwargs):
         """
         For English, always use IPA-only path with no fallbacks.
-        Non-English languages use the original registry-based approach.
+        Non-English languages use the registry-based approach.
         """
-        # Canonicalize language
         lang = (language or "en").strip().lower()
         if "-" in lang:
             lang = lang.split("-")[0]
 
-        # English: IPA-only path (no tokenizer discovery, no grapheme fallback)
         if lang == "en":
             try:
                 return self._synthesize_english_ipa(text, **kwargs)
@@ -152,17 +151,7 @@ class KokoroONNXEngine(BaseEngine):
                     exc_info=True,
                 )
 
-        # Non-English → original flow
-        # If there's no running loop, run the coroutine to completion.
-        # If there is a running loop (e.g., in async tests), return a Task to be awaited by the caller.
-        try:
-            asyncio.get_running_loop()
-        except RuntimeError:
-            # No running loop
-            return asyncio.run(self._synthesize_with_registry(text))
-        else:
-            # Running loop present; schedule and return awaitable
-            return asyncio.create_task(self._synthesize_with_registry(text))
+        return self._synthesize_with_registry_sync(text)
 
     def _synthesize_english_ipa(self, text: str, **kwargs) -> bytes:
         logger.debug(
@@ -236,59 +225,95 @@ class KokoroONNXEngine(BaseEngine):
 
         import threading
 
-        result_container = [None]
-        exception_container = [None]
+        def _normalize_token(token: str) -> str:
+            return re.sub(r"[ˈˌ]", "", token or "")
 
-        def synthesis_target():
-            try:
-                wav_path = kd.create(
-                    phonemes=ipa,
-                    voice=self.voice,
-                    lang="en",
-                    speed=kwargs.get("speed", 1.0),
-                    use_tokenizer=False,
-                    force_ipa=True,
-                    use_official_vocab=True,
-                    disable_autodiscovery=True,
+        first_token = ipa.split()[0] if ipa.split() else ""
+        attempt = 0
+        max_attempts = 2
+        wav_path: Optional[str] = None
+        while attempt < max_attempts:
+            attempt += 1
+            result_container = [None]
+            exception_container = [None]
+
+            def synthesis_target():
+                try:
+                    path = kd.create(
+                        phonemes=ipa,
+                        voice=self.voice,
+                        lang="en",
+                        speed=kwargs.get("speed", 1.0),
+                        use_tokenizer=False,
+                        force_ipa=True,
+                        use_official_vocab=True,
+                        disable_autodiscovery=True,
+                    )
+                    result_container[0] = path
+                except Exception as exc:
+                    exception_container[0] = exc
+
+            synthesis_thread = threading.Thread(target=synthesis_target)
+            synthesis_thread.start()
+            synthesis_thread.join(timeout=timeout)
+
+            if synthesis_thread.is_alive():
+                msg = (
+                    f"English IPA synthesis timed out after {timeout}s "
+                    f"(cold={cold_timeout}s, warm={warm_timeout}s)"
                 )
-                result_container[0] = wav_path
-            except Exception as exc:
-                exception_container[0] = exc
+                logger.error(
+                    msg,
+                    extra={"subsys": "tts", "event": "english_ipa.error"},
+                )
+                raise TTSError(msg)
 
-        synthesis_thread = threading.Thread(target=synthesis_target)
-        synthesis_thread.start()
-        synthesis_thread.join(timeout=timeout)
+            if exception_container[0]:
+                logger.error(
+                    "English IPA synthesis failed: %s",
+                    exception_container[0],
+                    exc_info=True,
+                    extra={"subsys": "tts", "event": "english_ipa.error"},
+                )
+                raise TTSError(
+                    f"English IPA synthesis failed: {exception_container[0]}"
+                ) from exception_container[0]
 
-        if synthesis_thread.is_alive():
-            msg = (
-                f"English IPA synthesis timed out after {timeout}s "
-                f"(cold={cold_timeout}s, warm={warm_timeout}s)"
-            )
-            logger.error(
-                msg,
-                extra={"subsys": "tts", "event": "english_ipa.error"},
-            )
-            raise TTSError(msg)
+            if result_container[0] is None:
+                logger.error(
+                    "English IPA synthesis failed: no result returned",
+                    extra={"subsys": "tts", "event": "english_ipa.error"},
+                )
+                raise TTSError("English IPA synthesis failed: no result returned")
 
-        if exception_container[0]:
-            logger.error(
-                "English IPA synthesis failed: %s",
-                exception_container[0],
-                exc_info=True,
-                extra={"subsys": "tts", "event": "english_ipa.error"},
+            wav_path = result_container[0]
+            matched_symbols = getattr(kd, "_last_matched_symbols", [])
+            normalized_first = _normalize_token(first_token)
+            normalized_match = _normalize_token(matched_symbols[0]) if matched_symbols else ""
+            first_token_ok = not normalized_first or (
+                normalized_match and normalized_first.startswith(normalized_match)
             )
-            raise TTSError(
-                f"English IPA synthesis failed: {exception_container[0]}"
-            ) from exception_container[0]
+            logger.info(
+                "tts.phoneme_guard first_token_ok=%s retry=%s",
+                str(first_token_ok).lower(),
+                str(attempt > 1).lower(),
+                extra={
+                    "subsys": "tts",
+                    "event": "phoneme_guard",
+                    "first_token_ok": first_token_ok,
+                    "retry": attempt > 1,
+                },
+            )
+            if first_token_ok or attempt >= max_attempts:
+                break
+            ipa = kd._sanitize_ipa(ipa)
+            tokens = ipa.split()
+            if tokens:
+                first_token = tokens[0]
 
-        if result_container[0] is None:
-            logger.error(
-                "English IPA synthesis failed: no result returned",
-                extra={"subsys": "tts", "event": "english_ipa.error"},
-            )
+        if wav_path is None:
             raise TTSError("English IPA synthesis failed: no result returned")
 
-        wav_path = result_container[0]
         audio_bytes = self._wav_to_bytes(wav_path)
 
         try:
@@ -313,7 +338,25 @@ class KokoroONNXEngine(BaseEngine):
             force_ipa=force_ipa,
         )
 
-    async def _synthesize_with_registry(self, text: str) -> bytes:
+    def _synthesize_with_registry_sync(self, text: str) -> bytes:
+        """Run the registry synthesis coroutine synchronously in this thread."""
+        loop = asyncio.new_event_loop()
+        prev_loop: Optional[asyncio.AbstractEventLoop]
+        try:
+            try:
+                prev_loop = asyncio.get_event_loop()
+            except RuntimeError:
+                prev_loop = None
+            asyncio.set_event_loop(loop)
+            return loop.run_until_complete(self._synthesize_with_registry_async(text))
+        finally:
+            if prev_loop is not None:
+                asyncio.set_event_loop(prev_loop)
+            else:
+                asyncio.set_event_loop(None)
+            loop.close()
+
+    async def _synthesize_with_registry_async(self, text: str) -> bytes:
         """Synthesize using the existing registry-based approach (for non-English)."""
         # Apply lexicon overrides via registry (do not duplicate registry logs)
         try:
@@ -587,15 +630,20 @@ class KokoroONNXEngine(BaseEngine):
                     continue
 
                 if inspect.isawaitable(call_result):
-                    logger.info(f"Kokoro engine using async method '{name}'")
+                    async_used = True
                     result = await call_result
                 else:
-                    logger.info(f"Kokoro engine using sync method '{name}'")
+                    async_used = False
                     result = call_result
 
                 # Normalize output to WAV bytes
                 wav_bytes = self._normalize_audio_to_wav_bytes(result)
                 if wav_bytes is not None:
+                    logger.info(
+                        "kokoro.registry.found name=%s mode=engine async=%s",
+                        name,
+                        str(async_used).lower(),
+                    )
                     return wav_bytes
                 else:
                     logger.debug(
@@ -614,7 +662,7 @@ class KokoroONNXEngine(BaseEngine):
         except Exception:
             pass
 
-        # Final fallback: use our direct integration wrapper with registry decisions
+        direct_candidates = ["generate_waveform", "create"]
         try:
             logger.debug("Attempting KokoroDirect fallback with registry decisions")
             from bot.tokenizer_registry import select_for_language
@@ -622,52 +670,78 @@ class KokoroONNXEngine(BaseEngine):
             kd_cls = get_direct_wrapper()
             kd = kd_cls(model_path=self.model_path, voices_path=self.voices_path)
 
-            # Get registry decision for this text and language
             decision = select_for_language(self.language, text)
+            ipa_mode = "ipa" if decision.mode == "phonemes" else "auto"
+            logger.info(
+                "kokoro.decision mode=%s alphabet=%s ipa_mode=%s text_len=%d",
+                decision.mode,
+                decision.alphabet,
+                ipa_mode,
+                len(text or ""),
+            )
 
+            generate_waveform = getattr(kd, "generate_waveform", None)
+            if not callable(generate_waveform):
+                logger.error(
+                    "kokoro.registry.none engine=%s mode=direct candidates=%s",
+                    kd_cls.__name__,
+                    direct_candidates,
+                )
+                raise TTSError(
+                    f"engine_missing_callable: {kd_cls.__name__} missing generate_waveform"
+                )
+
+            gw_kwargs = {
+                "voice": self.voice,
+                "lang": self.language,
+                "logger": logger,
+            }
             if decision.mode == "phonemes":
-                # PHONEME PATH — use registry phonemes directly
-                logger.debug(
-                    f"Using registry phonemes from {decision.alphabet} tokenizer"
-                )
-                out_path = kd.create(
-                    phonemes=decision.payload,
-                    voice=self.voice,
-                    lang=self.language,
-                    disable_autodiscovery=True,
-                    logger=logger,
-                )
+                payload = {"phonemes": decision.payload}
             else:
-                # GRAPHEME PATH — use quiet grapheme tokenization
-                logger.debug(f"Using grapheme path with {decision.alphabet} text")
-                out_path = kd.create(
-                    text=decision.payload,
-                    voice=self.voice,
-                    lang=self.language,
-                    disable_autodiscovery=True,
-                    logger=logger,
-                )
+                payload = {"text": decision.payload}
 
             try:
-                from pathlib import Path as _P
-
-                if isinstance(out_path, _P) and out_path.exists():
-                    with open(out_path, "rb") as _f:
-                        data = _f.read()
-                    try:
-                        out_path.unlink(missing_ok=True)  # py3.8+: ok on this runtime
-                    except Exception:
-                        pass
-                    return data
-            except Exception:
-                logger.debug(
-                    "KokoroDirect returned non-path or read failed; continuing",
-                    exc_info=True,
+                audio_candidate = generate_waveform(**payload, **gw_kwargs)
+            except Exception as exc:
+                logger.error(
+                    "kokoro.registry.none engine=%s mode=direct candidates=%s",
+                    kd_cls.__name__,
+                    direct_candidates,
                 )
+                raise TTSError(
+                    f"engine_missing_callable: direct pipeline failed: {exc}"
+                ) from exc
+
+            audio_bytes = self._normalize_audio_to_wav_bytes(audio_candidate)
+            if audio_bytes is None:
+                logger.error(
+                    "kokoro.registry.none engine=%s mode=direct candidates=%s",
+                    kd_cls.__name__,
+                    direct_candidates,
+                )
+                raise TTSError(
+                    "engine_missing_callable: direct pipeline returned unsupported format"
+                )
+
+            logger.info(
+                "kokoro.registry.found name=generate_waveform mode=direct async=false"
+            )
+            return audio_bytes
+        except TTSError:
+            raise
         except Exception:
             logger.debug("KokoroDirect fallback unavailable or failed", exc_info=True)
 
-        raise TTSError("No compatible synthesis method found on Kokoro engine")
+        logger.error(
+            "kokoro.registry.none engine=%s mode=engine candidates=%s",
+            type(self.engine).__name__,
+            list(candidates),
+        )
+        raise TTSError(
+            f"engine_missing_callable: no compatible synthesis method found on {type(self.engine).__name__} "
+            f"(language={self.language}, candidates={list(candidates)})"
+        )
 
     def _normalize_audio_to_wav_bytes(self, data: Any) -> bytes | None:
         """Ensure 16-bit PCM WAV regardless of input format.

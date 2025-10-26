@@ -1,4 +1,5 @@
 import asyncio
+import io
 import os
 import re
 import tempfile
@@ -8,6 +9,8 @@ import inspect
 import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor
 from utils.opus import transcode_to_ogg_opus
+import numpy as np
+import soundfile as sf
 
 from .engines.base import BaseEngine
 from .engines.stub import StubEngine
@@ -18,7 +21,7 @@ from ..utils.logging import get_logger
 from .assets import ensure_kokoro_assets
 from ..action import BotAction
 import hashlib
-from typing import Dict, Optional, List, Tuple
+from typing import Dict, Optional, List, Tuple, Any
 
 logger = get_logger(__name__)
 
@@ -39,11 +42,12 @@ class TTSResult:
     This reconciles mixed test expectations without breaking existing code.
     """
 
-    __slots__ = ("path", "mime")
+    __slots__ = ("path", "mime", "meta")
 
-    def __init__(self, path: Path, mime: str) -> None:
+    def __init__(self, path: Path, mime: str, meta: Optional[dict] = None) -> None:
         self.path = Path(path)
         self.mime = str(mime)
+        self.meta = meta or {}
 
     # Tuple-unpack protocol
     def __iter__(self):
@@ -88,6 +92,7 @@ class TTSManager:
         self._executor = ThreadPoolExecutor(
             max_workers=1, thread_name_prefix="tts-worker"
         )
+        self._rng = np.random.default_rng()
         raw_engine = os.getenv("TTS_ENGINE", "").strip().lower()
         self._engine_name = raw_engine or "kokoro-onnx"
         self._explicit_stub = self._engine_name == "stub"
@@ -100,6 +105,7 @@ class TTSManager:
         # In-memory file cache keyed by text hash [PA]
         self._file_cache: Dict[str, Path] = {}
         self._cache_order: List[str] = []
+        self._cache_meta: Dict[str, Dict[str, Any]] = {}
         try:
             self._cache_max = int(os.getenv("TTS_CACHE_MAX_ITEMS", "100"))
         except Exception:
@@ -107,7 +113,335 @@ class TTSManager:
         # Track whether the primary (non-stub) engine has successfully synthesized at least once
         # Used to decide cold vs warm timeout selection. [CMV][PA]
         self._warmed_up: bool = False
+        self._warmup_done: bool = False
+        self._warmup_lock: asyncio.Lock = asyncio.Lock()
+        self._head_rms_threshold = 5e-4
+        self._preroll_lead_ms = 80
+        self._preroll_xfade_ms = 6
+        self._preroll_attenuation_db = 9
+        self._noise_dbfs = -45
+        self._tail_pad_ms = 60
         self.load()
+
+    async def _ensure_warmup(self) -> None:
+        """Run one-time tokenizer and engine warmup to avoid clipped onset."""
+        if self._warmup_done or isinstance(self.engine, StubEngine):
+            return
+        async with self._warmup_lock:
+            if self._warmup_done or isinstance(self.engine, StubEngine):
+                return
+            tokenizer_ready = False
+            engine_ready = False
+            try:
+                from bot.tts.eng_g2p_local import _configure_official_tokenizer_tmpdir
+
+                _configure_official_tokenizer_tmpdir()
+                tokenizer_ready = True
+            except Exception:
+                logger.debug(
+                    "tts.warmup.tokenizer_failed",
+                    extra={"subsys": "tts"},
+                    exc_info=True,
+                )
+            try:
+                warm_text = "tts warmup"
+                warmup_callable = getattr(self.engine, "warmup", None)
+                if callable(warmup_callable):
+                    maybe = warmup_callable(warm_text)
+                    if inspect.isawaitable(maybe):
+                        await maybe
+                else:
+                    synth_attr = getattr(self.engine, "synthesize", None)
+                    if asyncio.iscoroutinefunction(synth_attr):
+                        await asyncio.wait_for(synth_attr(warm_text), timeout=5.0)
+                    elif callable(synth_attr):
+                        loop = asyncio.get_running_loop()
+                        try:
+                            await asyncio.wait_for(
+                                loop.run_in_executor(self._executor, lambda: synth_attr(warm_text)),
+                                timeout=5.0,
+                            )
+                        except asyncio.TimeoutError:
+                            logger.debug(
+                                "tts.warmup.engine_timeout",
+                                extra={"subsys": "tts"},
+                            )
+                        except asyncio.CancelledError:
+                            logger.debug(
+                                "tts.warmup.engine_cancelled",
+                                extra={"subsys": "tts"},
+                            )
+                            raise
+                engine_ready = True
+            except Exception:
+                logger.debug(
+                    "tts.warmup.engine_failed",
+                    extra={"subsys": "tts"},
+                    exc_info=True,
+                )
+            self._warmup_done = True
+            logger.info(
+                "tts.warmup tokenizer=%s engine=%s",
+                str(tokenizer_ready).lower(),
+                str(engine_ready).lower(),
+                extra={
+                    "subsys": "tts",
+                    "event": "warmup",
+                    "tokenizer": tokenizer_ready,
+                    "engine": engine_ready,
+                },
+            )
+
+    def _resample_audio(self, audio: np.ndarray, from_sr: int, to_sr: int) -> np.ndarray:
+        if from_sr == to_sr:
+            return audio
+        try:
+            import librosa  # type: ignore
+
+            return librosa.resample(audio, orig_sr=from_sr, target_sr=to_sr).astype(
+                np.float32
+            )
+        except Exception:
+            try:
+                from scipy.signal import resample_poly  # type: ignore
+
+                return resample_poly(audio, to_sr, from_sr).astype(np.float32)
+            except Exception:
+                ratio = float(to_sr) / float(from_sr)
+                new_len = max(1, int(round(audio.shape[0] * ratio)))
+                x_old = np.linspace(0.0, 1.0, audio.shape[0], endpoint=False)
+                x_new = np.linspace(0.0, 1.0, new_len, endpoint=False)
+                return np.interp(x_new, x_old, audio).astype(np.float32)
+
+    def _apply_fade(
+        self, audio: np.ndarray, sr: int, fade_in_ms: int = 3, fade_out_ms: int = 6
+    ) -> np.ndarray:
+        result = audio.copy()
+        fade_in_samples = max(0, int(sr * fade_in_ms / 1000))
+        fade_out_samples = max(0, int(sr * fade_out_ms / 1000))
+        if fade_in_samples > 0 and fade_in_samples < result.shape[0]:
+            fade_curve = np.linspace(0.0, 1.0, fade_in_samples, endpoint=True)
+            result[:fade_in_samples] *= fade_curve
+        if fade_out_samples > 0 and fade_out_samples < result.shape[0]:
+            fade_curve = np.linspace(1.0, 0.0, fade_out_samples, endpoint=True)
+            result[-fade_out_samples:] *= fade_curve
+        return result
+
+    def _pad_audio(
+        self, audio: np.ndarray, sr: int, head_ms: int, tail_ms: int
+    ) -> np.ndarray:
+        head_samples = max(0, int(sr * head_ms / 1000))
+        tail_samples = max(0, int(sr * tail_ms / 1000))
+        if head_samples == 0 and tail_samples == 0:
+            return audio
+        head_pad = np.zeros(head_samples, dtype=np.float32)
+        tail_pad = np.zeros(tail_samples, dtype=np.float32)
+        return np.concatenate((head_pad, audio, tail_pad))
+
+    def _self_check_first_rms(self, path: Path, window_ms: int = 200) -> tuple[float, bool]:
+        try:
+            with sf.SoundFile(str(path)) as f:
+                frames = min(int(window_ms * f.samplerate / 1000), len(f))
+                if frames <= 0:
+                    return 0.0, False
+                first = f.read(frames, dtype="float32", always_2d=False)
+            if isinstance(first, np.ndarray) and first.ndim > 1:
+                first = first.mean(axis=1)
+            rms = float(np.sqrt(np.mean(np.square(first)))) if first.size else 0.0
+            return rms, rms < 1e-4
+        except Exception:
+            logger.debug(
+                "tts.selfcheck.decode_failed", extra={"subsys": "tts"}, exc_info=True
+            )
+            return 0.0, False
+
+    def _compute_ipa_length(self, text: str) -> int:
+        try:
+            from bot.tts.eng_g2p_local import text_to_ipa
+
+            lang = str(getattr(self.engine, "language", "en")).lower()
+            if lang.startswith("en"):
+                return len(text_to_ipa(text))
+        except Exception:
+            logger.debug(
+                "tts.summary.ipa_failed", extra={"subsys": "tts"}, exc_info=True
+            )
+        return 0
+
+    def _collect_audio_stats(self, audio_path: Path) -> tuple[int, float]:
+        try:
+            with sf.SoundFile(str(audio_path)) as f:
+                frames = len(f)
+                sr = f.samplerate
+            duration = frames / sr if sr else 0.0
+            return sr, duration
+        except Exception:
+            logger.debug(
+                "tts.summary.read_failed", extra={"subsys": "tts"}, exc_info=True
+            )
+            return 48000, 0.0
+
+    def _compute_rms(self, audio: np.ndarray) -> float:
+        if audio.size == 0:
+            return 0.0
+        return float(np.sqrt(np.mean(np.square(audio, dtype=np.float64))))
+
+    def _apply_head_boost(
+        self, audio: np.ndarray, sr: int, gain_db: float = 2.0, window_ms: int = 100
+    ) -> np.ndarray:
+        samples = min(audio.size, max(0, int(sr * window_ms / 1000)))
+        if samples <= 0:
+            return audio
+        boost = 10 ** (gain_db / 20.0)
+        ramp = np.linspace(1.0, boost, samples, dtype=np.float32)
+        boosted = audio.copy()
+        boosted[:samples] *= ramp
+        return boosted
+
+    def _generate_pink_noise(self, samples: int) -> np.ndarray:
+        if samples <= 0:
+            return np.zeros(0, dtype=np.float32)
+        white = self._rng.standard_normal(samples + 5).astype(np.float32)
+        kernel = np.array([1.0, 0.5, 0.25, 0.125, 0.0625], dtype=np.float32)
+        noise = np.convolve(white, kernel, mode="valid")
+        if noise.size < samples:
+            noise = np.pad(noise, (0, samples - noise.size))
+        noise = noise[:samples]
+        peak = float(np.max(np.abs(noise))) or 1.0
+        noise = noise / peak
+        target = 10 ** (self._noise_dbfs / 20.0)
+        return (noise * target).astype(np.float32)
+
+    def _apply_preroll(
+        self,
+        audio: np.ndarray,
+        sr: int,
+        lead_ms: Optional[int] = None,
+    ) -> tuple[np.ndarray, Dict[str, Any]]:
+        lead_ms = self._preroll_lead_ms if lead_ms is None else lead_ms
+        lead_samples = min(audio.size, int(sr * lead_ms / 1000))
+        xfade_samples = min(
+            int(sr * self._preroll_xfade_ms / 1000),
+            max(lead_samples // 2, 0),
+        )
+        attenuation = 10 ** (-self._preroll_attenuation_db / 20.0)
+        meta: Dict[str, Any] = {
+            "kind": "copy",
+            "lead_ms": lead_ms,
+            "xfade_ms": self._preroll_xfade_ms,
+            "attenuation_db": self._preroll_attenuation_db,
+        }
+
+        if lead_samples > 0:
+            lead_segment = audio[:lead_samples].copy()
+            if np.max(np.abs(lead_segment)) > 0:
+                lead_segment *= attenuation
+                body = audio.copy()
+                if xfade_samples > 0:
+                    ramp = np.linspace(0.0, 1.0, xfade_samples, endpoint=False, dtype=np.float32)
+                    inv_ramp = 1.0 - ramp
+                    lead_segment[-xfade_samples:] *= inv_ramp
+                    body[:xfade_samples] *= ramp
+                merged = np.concatenate([lead_segment, body])
+                logger.info(
+                    "tts.preroll kind=%s ramp_db=-%d lead_ms=%d xfade_ms=%d",
+                    meta["kind"],
+                    self._preroll_attenuation_db,
+                    lead_ms,
+                    self._preroll_xfade_ms,
+                    extra={
+                        "subsys": "tts",
+                        "event": "preroll",
+                        "kind": meta["kind"],
+                        "lead_ms": lead_ms,
+                        "xfade_ms": self._preroll_xfade_ms,
+                        "ramp_db": -self._preroll_attenuation_db,
+                    },
+                )
+                return merged.astype(np.float32, copy=False), meta
+
+        # Fallback to low-level noise preroll
+        noise_samples = max(1, int(sr * lead_ms / 1000))
+        noise = self._generate_pink_noise(noise_samples)
+        meta.update(
+            {
+                "kind": "noise",
+                "noise_dbfs": self._noise_dbfs,
+                "lead_ms": lead_ms,
+            }
+        )
+        body = audio.copy()
+        xfade_samples = min(int(sr * self._preroll_xfade_ms / 1000), noise.size)
+        if xfade_samples > 0:
+            ramp = np.linspace(0.0, 1.0, xfade_samples, endpoint=False, dtype=np.float32)
+            inv_ramp = 1.0 - ramp
+            noise[-xfade_samples:] *= inv_ramp
+            body[:xfade_samples] *= ramp
+        merged = np.concatenate([noise, body])
+        logger.info(
+            "tts.preroll kind=%s dbfs=%d lead_ms=%d",
+            meta["kind"],
+            self._noise_dbfs,
+            lead_ms,
+            extra={
+                "subsys": "tts",
+                "event": "preroll",
+                "kind": meta["kind"],
+                "lead_ms": lead_ms,
+                "dbfs": self._noise_dbfs,
+            },
+        )
+        return merged.astype(np.float32, copy=False), meta
+
+    def _decode_audio_bytes(self, audio_bytes: bytes) -> tuple[np.ndarray, int]:
+        with sf.SoundFile(io.BytesIO(audio_bytes)) as f:
+            pcm = f.read(dtype="float32", always_2d=False)
+            sr = f.samplerate
+        if isinstance(pcm, np.ndarray) and pcm.ndim > 1:
+            pcm = pcm.mean(axis=1)
+        return pcm.astype(np.float32, copy=False), sr
+
+    def _emit_summary(
+        self,
+        *,
+        text_chars: int,
+        ipa_len: int,
+        head_pad_ms: int,
+        tail_pad_ms: int,
+        lead_preroll_ms: int,
+        sr: int,
+        duration_s: float,
+        cached: bool,
+    ) -> None:
+        logger.info(
+            "tts.summary text_chars=%d ipa_len=%d lead_preroll_ms=%d tail_pad_ms=%d head_pad_ms=%d sr=%d dur_s=%.3f cached=%s",
+            text_chars,
+            ipa_len,
+            lead_preroll_ms,
+            tail_pad_ms,
+            head_pad_ms,
+            sr,
+            duration_s,
+            str(cached).lower(),
+            extra={
+                "subsys": "tts",
+                "event": "summary",
+                "text_chars": text_chars,
+                "ipa_len": ipa_len,
+                "lead_preroll_ms": lead_preroll_ms,
+                "head_pad_ms": head_pad_ms,
+                "tail_pad_ms": tail_pad_ms,
+                "sr": sr,
+                "duration_s": duration_s,
+                "cached": cached,
+            },
+        )
+
+    def _build_cache_key(
+        self, text: str, voice: str, speed: float, mode: str
+    ) -> str:
+        seed = f"v3|{voice}|{speed:.3f}|{mode}|{text}"
+        return hashlib.sha256(seed.encode("utf-8")).hexdigest()
 
     def _record_degraded(self, reason: str) -> None:
         self._degraded = not self._explicit_stub
@@ -257,7 +591,7 @@ class TTSManager:
             )
             return self._asset_paths
 
-    async def synthesize(self, text: str, timeout: float = 25.0) -> bytes:
+    async def synthesize(self, text: str, timeout: float = 25.0, **engine_kwargs) -> bytes:
         """Generates audio from text using the loaded TTS engine.
         Supports both async and sync engine implementations.
         """
@@ -293,28 +627,16 @@ class TTSManager:
                 raise SynthesisError(reason)
 
             loop = asyncio.get_running_loop()
-            # If engine exposes an async synthesize, await it directly; otherwise run in executor.
-            # Some engines may have a sync method that returns an awaitable; handle that as well. [REH]
-            is_async = asyncio.iscoroutinefunction(
-                getattr(self.engine, "synthesize", None)
+            result = await asyncio.wait_for(
+                loop.run_in_executor(
+                    self._executor, lambda: self.engine.synthesize(text, **engine_kwargs)
+                ),
+                timeout=timeout,
             )
-            if is_async:
-                audio_bytes = await asyncio.wait_for(
-                    self.engine.synthesize(text), timeout=timeout
-                )
+            if inspect.isawaitable(result):
+                audio_bytes = await asyncio.wait_for(result, timeout=timeout)
             else:
-                # Execute the sync call in a background thread to avoid blocking the event loop
-                result = await asyncio.wait_for(
-                    loop.run_in_executor(
-                        self._executor, lambda: self.engine.synthesize(text)
-                    ),
-                    timeout=timeout,
-                )
-                # If the sync call returned an awaitable, await it to completion
-                if inspect.isawaitable(result):
-                    audio_bytes = await asyncio.wait_for(result, timeout=timeout)
-                else:
-                    audio_bytes = result
+                audio_bytes = result
 
             logger.info(
                 f"TTS synthesis successful (engine: {self.engine.__class__.__name__})",
@@ -335,9 +657,16 @@ class TTSManager:
             )
             raise SynthesisError(f"TTS synthesis timed out after {timeout} seconds") from exc
         except Exception as e:
+            message = str(e)
+            reason = "engine_missing_callable" if "engine_missing_callable" in message else "runtime"
             logger.error(
-                f"TTS synthesis failed: {e}", extra={"subsys": "tts"}, exc_info=True
+                "tts.process.failed engine=%s reason=%s",
+                self.engine.__class__.__name__,
+                reason,
+                extra={"subsys": "tts"},
             )
+            if reason == "engine_missing_callable":
+                raise SynthesisError("engine_missing_callable") from e
             raise SynthesisError(f"Synthesis failed: {e}") from e
 
     async def close(self):
@@ -373,6 +702,7 @@ class TTSManager:
                     else:
                         # Remove dead entry
                         self._file_cache.pop(key, None)
+                        self._cache_meta.pop(key, None)
                 except Exception:
                     # On any unexpected error, drop the entry to keep cache healthy
                     self._file_cache.pop(key, None)
@@ -385,6 +715,7 @@ class TTSManager:
                     old_key = self._cache_order.pop(0)
                     try:
                         self._file_cache.pop(old_key, None)
+                        self._cache_meta.pop(old_key, None)
                     except Exception:
                         pass
         except Exception:
@@ -459,15 +790,142 @@ class TTSManager:
                     "timeout_s": selected_timeout,
                 },
             )
-            audio_bytes = await self.synthesize(cleaned, timeout=selected_timeout)
         else:
-            audio_bytes = await self.synthesize(cleaned, timeout=timeout)
+            selected_timeout = timeout
+
+        await self._ensure_warmup()
+        speed = 1.0
+        respeed_attempted = False
+        duration_action = "ok"
+        head_action = "ok"
+        head_rms = 0.0
+        boosted_rms = 0.0
+
+        while True:
+            audio_bytes = await self.synthesize(
+                cleaned, timeout=selected_timeout, speed=speed
+            )
+            try:
+                raw_pcm, source_sr = self._decode_audio_bytes(audio_bytes)
+            except Exception as exc:
+                raise SynthesisError(f"Failed to decode TTS audio: {exc}") from exc
+
+            if source_sr != 48000:
+                raw_pcm = self._resample_audio(raw_pcm, source_sr, 48000)
+            sr = 48000
+
+            raw_duration_ms = raw_pcm.size * 1000.0 / sr if sr else 0.0
+            word_count = max(1, len(cleaned.split()))
+            min_len_ms = 200.0 + 220.0 * word_count
+
+            if raw_duration_ms < min_len_ms:
+                if not respeed_attempted:
+                    duration_action = "respeed"
+                    logger.info(
+                        "tts.duration_check words=%d dur_ms=%.1f min_ms=%.1f action=%s",
+                        word_count,
+                        raw_duration_ms,
+                        min_len_ms,
+                        duration_action,
+                        extra={
+                            "subsys": "tts",
+                            "event": "duration_check",
+                            "words": word_count,
+                            "dur_ms": raw_duration_ms,
+                            "min_ms": min_len_ms,
+                            "action": duration_action,
+                        },
+                    )
+                    speed = round(speed * 0.90, 3)
+                    respeed_attempted = True
+                    continue
+                duration_action = "accept_short"
+            else:
+                duration_action = "ok"
+
+            logger.info(
+                "tts.duration_check words=%d dur_ms=%.1f min_ms=%.1f action=%s",
+                word_count,
+                raw_duration_ms,
+                min_len_ms,
+                duration_action,
+                extra={
+                    "subsys": "tts",
+                    "event": "duration_check",
+                    "words": word_count,
+                    "dur_ms": raw_duration_ms,
+                    "min_ms": min_len_ms,
+                    "action": duration_action,
+                },
+            )
+            if duration_action == "accept_short":
+                logger.info(
+                    "tts.short_audio words=%d dur_ms=%.1f min_ms=%.1f",
+                    word_count,
+                    raw_duration_ms,
+                    min_len_ms,
+                    extra={
+                        "subsys": "tts",
+                        "event": "short_audio",
+                        "words": word_count,
+                        "dur_ms": raw_duration_ms,
+                        "min_ms": min_len_ms,
+                    },
+                )
+
+            head_window_samples = min(raw_pcm.size, int(sr * 0.05))
+            head_rms = self._compute_rms(raw_pcm[:head_window_samples])
+            boosted_rms = head_rms
+            head_action = "ok"
+            if head_rms < self._head_rms_threshold:
+                raw_pcm = self._apply_head_boost(raw_pcm, sr)
+                boosted_rms = self._compute_rms(raw_pcm[:head_window_samples])
+                head_action = "boost_resynth"
+
+            logger.info(
+                "tts.head_rms rms=%.6e boosted_rms=%.6e action=%s",
+                head_rms,
+                boosted_rms,
+                head_action,
+                extra={
+                    "subsys": "tts",
+                    "event": "head_rms",
+                    "rms": head_rms,
+                    "boosted_rms": boosted_rms,
+                    "action": head_action,
+                },
+            )
+            break
+
+        preroll_audio, preroll_meta = self._apply_preroll(raw_pcm, sr)
+        final_audio = self._pad_audio(preroll_audio, sr, 0, self._tail_pad_ms)
+        duration_s = final_audio.size / sr if sr else 0.0
+
+        window_100 = min(final_audio.size, int(sr * 0.1))
+        window_200 = min(final_audio.size, int(sr * 0.2))
+        rms0_100 = self._compute_rms(final_audio[:window_100])
+        rms100_200 = self._compute_rms(final_audio[window_100:window_200])
+        needs_retry = (
+            rms0_100 < self._head_rms_threshold
+            and rms100_200 < self._head_rms_threshold
+        )
+
+        if needs_retry:
+            extended_audio, preroll_meta = self._apply_preroll(
+                raw_pcm, sr, lead_ms=preroll_meta["lead_ms"] + 60
+            )
+            final_audio = self._pad_audio(extended_audio, sr, 0, self._tail_pad_ms)
+            duration_s = final_audio.size / sr if sr else duration_s
+            window_100 = min(final_audio.size, int(sr * 0.1))
+            window_200 = min(final_audio.size, int(sr * 0.2))
+            rms0_100 = self._compute_rms(final_audio[:window_100])
+            rms100_200 = self._compute_rms(final_audio[window_100:window_200])
 
         # Always write to intermediate WAV first
         fd, wav_tmp_name = tempfile.mkstemp(prefix="tts_", suffix=".wav")
         os.close(fd)
         wav_path = Path(wav_tmp_name)
-        wav_path.write_bytes(audio_bytes)
+        sf.write(str(wav_path), final_audio, sr, subtype="PCM_16")
 
         # Determine effective format. Suffix (when provided) takes precedence over argument.
         effective_format = output_format
@@ -484,7 +942,18 @@ class TTSManager:
                 if Path(out_path).parent:
                     Path(out_path).parent.mkdir(parents=True, exist_ok=True)
                 shutil.move(str(wav_path), str(final_path))
-            return TTSResult(Path(final_path), "audio/wav")
+            meta = {
+                "sr": sr,
+                "duration_s": duration_s,
+                "head_pad_ms": 0,
+                "tail_pad_ms": self._tail_pad_ms,
+                "lead_preroll_ms": preroll_meta.get("lead_ms", self._preroll_lead_ms),
+                "cached": False,
+                "ipa_len": self._compute_ipa_length(cleaned),
+                "text_chars": len(cleaned),
+                "speed": speed,
+            }
+            return TTSResult(Path(final_path), "audio/wav", meta=meta)
 
         # OGG/Opus (48k mono) using async ffmpeg subprocess
         ogg_out = (
@@ -508,13 +977,56 @@ class TTSManager:
                 vbr=vbr,
                 compression_level=compression_level,
             )
+            preskip_samples = 312
+            logger.info(
+                "tts.encode format=opus sr=%d preskip=%d dur_s=%.3f",
+                sr,
+                preskip_samples,
+                duration_s,
+                extra={
+                    "subsys": "tts",
+                    "event": "encode",
+                    "format": "opus",
+                    "sr": sr,
+                    "preskip": preskip_samples,
+                    "duration_s": duration_s,
+                },
+            )
+            logger.info(
+                "tts.selfcheck rms0_100=%.6e rms100_200=%.6e reencode=%s",
+                rms0_100,
+                rms100_200,
+                str(needs_retry).lower(),
+                extra={
+                    "subsys": "tts",
+                    "event": "selfcheck",
+                    "rms0_100": rms0_100,
+                    "rms100_200": rms100_200,
+                    "reencode": needs_retry,
+                },
+            )
         finally:
-            # Best-effort cleanup of intermediate WAV
             try:
                 wav_path.unlink()
             except Exception:
                 pass
-        return TTSResult(Path(ogg_path), "audio/ogg")
+
+        meta = {
+            "sr": sr,
+            "duration_s": duration_s,
+            "head_pad_ms": 0,
+            "tail_pad_ms": self._tail_pad_ms,
+            "lead_preroll_ms": preroll_meta.get("lead_ms", self._preroll_lead_ms),
+            "cached": False,
+            "ipa_len": self._compute_ipa_length(cleaned),
+            "text_chars": len(cleaned),
+            "speed": speed,
+            "duration_action": duration_action,
+            "head_rms": head_rms,
+            "boosted_rms": boosted_rms,
+            "preroll_kind": preroll_meta.get("kind", "copy"),
+        }
+        return TTSResult(Path(ogg_path), "audio/ogg", meta=meta)
 
     # --- High-level processing helper used by bot._execute_action() ---
     async def process(self, action: BotAction) -> BotAction:
@@ -594,23 +1106,48 @@ class TTSManager:
             synth_text = cleaned_for_cache[:max_chars]
             truncated = len(cleaned_for_cache) > len(synth_text)
 
-            # Cache lookup
-            key = hashlib.sha256(synth_text.encode("utf-8")).hexdigest()
-            cached_path: Optional[Path] = self._file_cache.get(key)
-            if cached_path and cached_path.exists():
-                logger.info(
-                    "tts.cache.hit",
-                    extra={
-                        "subsys": "tts",
-                        "event": "cache_hit",
-                        "text_len": len(synth_text),
-                    },
-                )
-                action.audio_path = str(cached_path)
-            else:
-                # Generate new file (accept Path, (Path, mime), TTSResult, or str)
+            voice_name = str(getattr(self.engine, "voice", "default"))
+            try:
+                base_speed = float(action.meta.get("tts_speed", 1.0))
+            except Exception:
+                base_speed = 1.0
+            language = str(getattr(self.engine, "language", "en")).lower()
+            ipa_mode = "ipa" if language.startswith("en") else "text"
+
+            candidate_speeds = [round(base_speed, 3)]
+            respeed_candidate = round(candidate_speeds[0] * 0.90, 3)
+            if abs(respeed_candidate - candidate_speeds[0]) > 1e-6:
+                candidate_speeds.append(respeed_candidate)
+
+            cached_flag = False
+            meta_info: Dict[str, Any] = {}
+            cache_key = None
+            audio_path: Optional[Path] = None
+            speed_value = candidate_speeds[0]
+
+            for cand_speed in candidate_speeds:
+                candidate_key = self._build_cache_key(synth_text, voice_name, cand_speed, ipa_mode)
+                candidate_path = self._file_cache.get(candidate_key)
+                if candidate_path and candidate_path.exists():
+                    cache_key = candidate_key
+                    audio_path = candidate_path
+                    meta_info = dict(self._cache_meta.get(candidate_key, {}))
+                    speed_value = cand_speed
+                    cached_flag = True
+                    logger.info(
+                        "tts.cache.hit key=%s",
+                        candidate_key[:12],
+                        extra={
+                            "subsys": "tts",
+                            "event": "cache_hit",
+                            "text_len": len(synth_text),
+                            "key": candidate_key[:12],
+                        },
+                    )
+                    break
+
+            if not cached_flag:
                 result = await self.generate_tts(synth_text, timeout=timeout_s)
-                audio_path: Path
                 mime_type: str = "audio/ogg"
                 if isinstance(result, tuple) and len(result) >= 2:
                     audio_path, mime_type = result[0], result[1]  # type: ignore[assignment]
@@ -619,35 +1156,73 @@ class TTSManager:
                 elif isinstance(result, str):
                     audio_path = Path(result)
                 else:
-                    # Try tuple-like unpack (e.g., TTSResult implements __iter__)
                     try:
                         audio_path, mime_type = result  # type: ignore[misc]
                     except Exception:
                         try:
-                            # Try os.fspath protocol
                             audio_path = Path(os.fspath(result))  # type: ignore[arg-type]
                             mime_type = getattr(result, "mime", mime_type)
                         except Exception:
                             audio_path = Path(str(result))
+
                 action.audio_path = str(audio_path)
-                # Insert into cache
-                self._file_cache[key] = audio_path
-                self._cache_order.append(key)
+                meta_info = {}
+                if isinstance(result, TTSResult):
+                    meta_info = dict(getattr(result, "meta", {}) or {})
+                if audio_path.exists():
+                    sr_meta, dur_meta = self._collect_audio_stats(audio_path)
+                    meta_info.setdefault("sr", sr_meta)
+                    meta_info.setdefault("duration_s", dur_meta)
+                meta_info.setdefault("text_chars", len(synth_text))
+                meta_info.setdefault("ipa_len", self._compute_ipa_length(synth_text))
+                meta_info.setdefault("lead_preroll_ms", self._preroll_lead_ms)
+                meta_info.setdefault("tail_pad_ms", self._tail_pad_ms)
+                meta_info.setdefault("head_pad_ms", 0)
+                meta_info.setdefault("cached", False)
+                meta_info.setdefault("speed", speed_value)
+                speed_value = float(meta_info.get("speed", speed_value))
+                cache_key = self._build_cache_key(synth_text, voice_name, speed_value, ipa_mode)
+                cache_key_short = cache_key[:12]
+                self._file_cache[cache_key] = audio_path
+                self._cache_meta[cache_key] = dict(meta_info)
+                self._cache_order.append(cache_key)
                 if len(self._cache_order) > self._cache_max:
                     old_key = self._cache_order.pop(0)
                     try:
                         self._file_cache.pop(old_key, None)
-                        # Don't delete files on disk; keep ephemeral tmp files managed by OS
+                        self._cache_meta.pop(old_key, None)
                     except Exception:
                         pass
+                try:
+                    size_bytes = audio_path.stat().st_size if audio_path.exists() else 0
+                except Exception:
+                    size_bytes = 0
                 logger.info(
-                    "tts.cache.store",
+                    "tts.cache.store key=%s bytes=%s",
+                    cache_key_short,
+                    size_bytes,
                     extra={
                         "subsys": "tts",
                         "event": "cache_store",
+                        "key": cache_key_short,
                         "text_len": len(synth_text),
+                        "bytes": size_bytes,
                     },
                 )
+            else:
+                cache_key_short = cache_key[:12] if cache_key else ""
+                action.audio_path = str(audio_path)
+                meta_info.setdefault("lead_preroll_ms", self._preroll_lead_ms)
+                meta_info.setdefault("tail_pad_ms", self._tail_pad_ms)
+                meta_info.setdefault("head_pad_ms", 0)
+                meta_info.setdefault("ipa_len", self._compute_ipa_length(synth_text))
+                meta_info.setdefault("text_chars", len(synth_text))
+                meta_info.setdefault("sr", 48000)
+                meta_info.setdefault("duration_s", 0.0)
+                meta_info["cached"] = True
+                meta_info.setdefault("speed", speed_value)
+                speed_value = float(meta_info.get("speed", speed_value))
+
 
             # Annotate meta
             if truncated:
@@ -656,6 +1231,48 @@ class TTSManager:
             # Keep or drop transcript content
             if not include_transcript:
                 action.content = ""  # files-only message allowed
+
+            try:
+                audio_path_obj = Path(action.audio_path) if action.audio_path else None
+                if cached_flag:
+                    sr, duration = self._collect_audio_stats(audio_path_obj) if audio_path_obj else (48000, 0.0)
+                    ipa_len = meta_info.get("ipa_len") if "ipa_len" in meta_info else self._compute_ipa_length(synth_text)
+                    meta_info.setdefault("sr", sr)
+                    meta_info.setdefault("duration_s", duration)
+                    if cache_key:
+                        self._cache_meta[cache_key] = dict(meta_info)
+                    self._emit_summary(
+                        text_chars=len(synth_text),
+                        ipa_len=ipa_len or 0,
+                        lead_preroll_ms=int(meta_info.get("lead_preroll_ms", self._preroll_lead_ms)),
+                        head_pad_ms=int(meta_info.get("head_pad_ms", 0)),
+                        tail_pad_ms=int(meta_info.get("tail_pad_ms", self._tail_pad_ms)),
+                        sr=sr or 48000,
+                        duration_s=duration,
+                        cached=True,
+                    )
+                else:
+                    sr = int(meta_info.get("sr", 48000))
+                    duration = float(meta_info.get("duration_s", 0.0))
+                    ipa_len = int(
+                        meta_info.get(
+                            "ipa_len", self._compute_ipa_length(synth_text)
+                        )
+                    )
+                    self._emit_summary(
+                        text_chars=int(meta_info.get("text_chars", len(synth_text))),
+                        ipa_len=ipa_len,
+                        lead_preroll_ms=int(meta_info.get("lead_preroll_ms", self._preroll_lead_ms)),
+                        head_pad_ms=int(meta_info.get("head_pad_ms", 0)),
+                        tail_pad_ms=int(meta_info.get("tail_pad_ms", self._tail_pad_ms)),
+                        sr=sr,
+                        duration_s=duration,
+                        cached=bool(meta_info.get("cached", False)),
+                    )
+                    if cache_key:
+                        self._cache_meta[cache_key] = dict(meta_info)
+            except Exception:
+                logger.debug("tts.summary.emit_failed", extra={"subsys": "tts"}, exc_info=True)
 
             return action
         except SynthesisError as exc:

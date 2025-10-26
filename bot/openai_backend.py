@@ -2,7 +2,7 @@
 OpenAI/OpenRouter Backend - Handles OpenAI API calls including OpenRouter.
 """
 
-from typing import Any, AsyncGenerator, Dict, Union
+from typing import Any, AsyncGenerator, Dict, List, Union
 import base64
 import os
 import time
@@ -10,12 +10,13 @@ import time
 import aiohttp
 import openai
 
-from .config import load_config
+from .config import load_config, get_vl_model_ladder
 from .exceptions import APIError
 from .memory import get_profile, get_server_profile
 from .retry_utils import (
     API_RETRY_CONFIG,
     VISION_RETRY_CONFIG,
+    classify_vl_error,
     is_retryable_error,
     with_retry,
 )
@@ -417,6 +418,7 @@ Server Context: {server_context}"""
         # Already normalized, don't double-wrap or spam error-level logs
         logger.warning(f"[OpenAI] Retriable APIError: {e}")
         raise
+
     except Exception as e:
         # Get detailed error information
         error_type = type(e).__name__
@@ -515,7 +517,6 @@ async def get_base64_image(image_url: str) -> str:
         raise APIError(error_msg)
 
 
-@with_retry(VISION_RETRY_CONFIG)
 async def _generate_vl_response_with_retry(
     image_url: str,
     user_prompt: str = "",
@@ -525,285 +526,242 @@ async def _generate_vl_response_with_retry(
     max_tokens: int = None,
     **kwargs,
 ) -> Dict[str, Any]:
-    """
-    Generate a vision-language response using the VL model and VL_PROMPT_FILE.
-    CHANGE: Enhanced VL model support with comprehensive debug logging for hybrid multimodal inference.
+    """Attempt VL inference across a deterministic ladder of provider models."""
+    config = load_config()
 
-    Args:
-        image_url: URL or path to the image
-        user_prompt: Optional additional user prompt
-        user_id: Optional user ID for personalization
-        guild_id: Optional guild ID for server-specific context
-        temperature: Controls randomness (0.0 to 1.0)
-        max_tokens: Maximum number of tokens to generate
-        **kwargs: Additional parameters to pass to the API
+    model_override = kwargs.pop("model_override", None)
+    ladder = get_vl_model_ladder()
+    if model_override:
+        override_clean = model_override.strip()
+        if override_clean:
+            ladder = [override_clean] + [model for model in ladder if model != override_clean]
 
-    Returns:
-        Dictionary with the generated VL analysis and metadata
-    """
+    if not ladder:
+        raise APIError("No VL models configured")
+
+    base_url = str(config.get("OPENAI_API_BASE", "https://api.openai.com/v1") or "")
+    stream_flag = bool(kwargs.get("stream", False))
+
+    import httpx
+
     try:
-        # Load configuration
-        config = load_config()
-
-        # Extract custom kwargs that should NOT be forwarded to OpenAI client
-        model_override = kwargs.pop("model_override", None)
-
-        # Get VL model configuration (honor override) - MUST be defined before logging
-        vl_model = model_override or config.get("VL_MODEL")
-        if not vl_model:
-            logger.error("❌ VL_MODEL not configured in environment variables")
-            raise APIError("VL_MODEL not configured in environment variables")
-
-        logger.info("🎨 === VL RESPONSE GENERATION STARTED ===")
-        logger.info(f"🎨 Processing with model: {vl_model}")
-
-        if model_override:
-            logger.info(f"🎨 Using VL model OVERRIDE from ladder: {vl_model}")
-        else:
-            logger.info(f"🎨 Using VL model: {vl_model}")
-
-        logger.debug("🎨 Configuring OpenAI client for VL")
-
-        # Configure timeout to prevent hanging requests
-        import httpx
-
         timeout_seconds = float(config.get("VL_REQUEST_TIMEOUT", "30"))
+    except Exception:
+        timeout_seconds = 30.0
 
-        client = openai.AsyncOpenAI(
-            api_key=config.get("OPENAI_API_KEY"),
-            base_url=config.get("OPENAI_API_BASE", "https://api.openai.com/v1"),
-            timeout=httpx.Timeout(timeout_seconds),
-            max_retries=0,  # Let our retry system handle retries
-        )
-        logger.debug(
-            f"🎨 Using API base: {config.get('OPENAI_API_BASE', 'https://api.openai.com/v1')}"
-        )
+    client = openai.AsyncOpenAI(
+        api_key=config.get("OPENAI_API_KEY"),
+        base_url=base_url or "https://api.openai.com/v1",
+        timeout=httpx.Timeout(timeout_seconds),
+        max_retries=0,
+    )
 
-        # CHANGE: Load VL prompt from VL_PROMPT_FILE with enhanced logging
-        vl_prompt_file_path = config.get("VL_PROMPT_FILE")
-        if not vl_prompt_file_path:
-            logger.error("❌ VL_PROMPT_FILE not configured in environment variables")
-            raise APIError("VL_PROMPT_FILE not configured in environment variables")
+    vl_prompt_file_path = config.get("VL_PROMPT_FILE")
+    if not vl_prompt_file_path:
+        raise APIError("VL_PROMPT_FILE not configured in environment variables")
 
-        logger.debug(f"🎨 Loading VL prompt from: {vl_prompt_file_path}")
+    try:
+        with open(vl_prompt_file_path, "r", encoding="utf-8") as vpf:
+            vl_system_prompt = vpf.read().strip()
+    except FileNotFoundError as exc:
+        raise APIError(f"VL prompt file not found: {vl_prompt_file_path}") from exc
+    except Exception as exc:
+        raise APIError(f"Error reading VL prompt file {vl_prompt_file_path}: {exc}") from exc
+
+    if user_id:
+        profile = get_profile(str(user_id))
+        user_prefs = profile.get("preferences", {}) if profile else {}
+        if temperature is None:
+            temperature = user_prefs.get("temperature", config.get("TEMPERATURE", 0.7))
+    else:
+        temperature = temperature or config.get("TEMPERATURE", 0.7)
+
+    system_prompt = vl_system_prompt
+    user_message_text = user_prompt if user_prompt else "Analyze this image."
+
+    if isinstance(image_url, str) and image_url.startswith("data:"):
+        image_content = image_url
+    else:
         try:
-            with open(vl_prompt_file_path, "r", encoding="utf-8") as vpf:
-                vl_system_prompt = vpf.read().strip()
-                logger.info(f"✅ VL prompt loaded: {len(vl_system_prompt)} characters")
-                logger.debug(
-                    f"🎨 VL prompt preview: {vl_system_prompt[:100]}{'...' if len(vl_system_prompt) > 100 else ''}"
-                )
-        except FileNotFoundError:
-            logger.error(f"❌ VL prompt file not found: {vl_prompt_file_path}")
-            raise APIError(f"VL prompt file not found: {vl_prompt_file_path}")
-        except Exception as e:
-            logger.error(f"❌ Error reading VL prompt file {vl_prompt_file_path}: {e}")
-            raise APIError(f"Error reading VL prompt file {vl_prompt_file_path}: {e}")
+            image_content = await get_base64_image(image_url)
+        except Exception as exc:
+            raise APIError(f"Image processing failed: {exc}") from exc
 
-        # Get user preferences if user_id is provided
-        if user_id:
-            profile = get_profile(str(user_id))
-            user_prefs = profile.get("preferences", {}) if profile else {}
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": user_message_text},
+                {"type": "image_url", "image_url": {"url": image_content}},
+            ],
+        },
+    ]
 
-            # Apply user preferences if not overridden
-            if temperature is None:
-                temperature = user_prefs.get(
-                    "temperature", config.get("TEMPERATURE", 0.7)
-                )
-        else:
-            temperature = temperature or config.get("TEMPERATURE", 0.7)
+    if max_tokens is None:
+        max_tokens = config.get("MAX_RESPONSE_TOKENS", 1000)
 
-        logger.debug(f"🎨 Temperature: {temperature}")
+    base_payload = {
+        "messages": messages,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+        **kwargs,
+    }
 
-        # Move VL rules to system role, keep user message clean
-        system_prompt = vl_system_prompt
-        user_message_text = user_prompt if user_prompt else "Analyze this image."
+    OPENROUTER_ALLOWED_PARAMS = {
+        "model",
+        "messages",
+        "temperature",
+        "max_tokens",
+        "top_p",
+        "presence_penalty",
+        "frequency_penalty",
+        "stop",
+        "stream",
+    }
 
-        if user_prompt:
-            logger.debug(
-                f"🎨 Enhanced prompt with user context: +{len(user_prompt)} chars"
-            )
+    failures: List[Dict[str, Any]] = []
+    last_error: Exception | None = None
+    attempt_counter = 0
 
-        # Handle data URLs directly, otherwise try to download and encode
-        if isinstance(image_url, str) and image_url.startswith("data:"):
-            logger.info("✅ Using provided data URL for image")
-            image_content = image_url
-        else:
-            try:
-                image_content = await get_base64_image(image_url)
-                logger.info("✅ Image downloaded and converted to base64 data URI")
-            except Exception as img_error:
-                logger.error(f"❌ Failed to process image: {img_error}")
-                raise APIError(f"Image processing failed: {str(img_error)}")
+    for idx, model_name in enumerate(ladder):
+        attempt_counter += 1
+        logger.info(
+            "vl.attempt model=%s idx=%d attempt=%d provider_base=%s stream=%s",
+            model_name,
+            idx,
+            attempt_counter,
+            base_url,
+            stream_flag,
+        )
 
-        logger.debug(f"🎨 Base64 data length: {len(image_content)} chars")
-        logger.debug(f"🎨 Base64 preview: {image_content[:100]}...")
-
-        # Prepare the messages for vision model with system/user role separation
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": user_message_text},
-                    {"type": "image_url", "image_url": {"url": image_content}},
-                ],
-            },
-        ]
-
-        # Set default max_tokens if not provided
-        if max_tokens is None:
-            max_tokens = config.get("MAX_RESPONSE_TOKENS", 1000)
-
-        logger.debug(f"🎨 Max tokens: {max_tokens}")
-        logger.info(f"🎨 Calling OpenAI VL API with model: {vl_model}")
-
-        # Build initial params with all potential values (filter later for OpenRouter)
-        raw_params = {
-            "model": vl_model,
-            "messages": messages,
-            "temperature": temperature,
-            "max_tokens": max_tokens,
-            **kwargs,
-        }
-
-        # OpenRouter allow-list: only supported parameters for /chat/completions
-        OPENROUTER_ALLOWED_PARAMS = {
-            "model",
-            "messages",
-            "temperature",
-            "max_tokens",
-            "top_p",
-            "presence_penalty",
-            "frequency_penalty",
-            "stop",
-            "stream",
-        }
-
-        # Filter to only allowed parameters for OpenRouter compatibility
+        attempt_payload = base_payload.copy()
+        attempt_payload["model"] = model_name
         api_params = {
-            k: v for k, v in raw_params.items() if k in OPENROUTER_ALLOWED_PARAMS
+            key: value
+            for key, value in attempt_payload.items()
+            if key in OPENROUTER_ALLOWED_PARAMS
         }
 
-        # Log filtered parameters for debugging
         if config.get("VL_DEBUG_FLOW", "0") == "1":
-            logger.debug(f"🎨 VL payload keys: {list(api_params.keys())}")
-            filtered_out = set(raw_params.keys()) - set(api_params.keys())
-            if filtered_out:
-                logger.debug(f"🎨 Filtered out unsupported params: {filtered_out}")
+            removed = sorted(set(attempt_payload.keys()) - OPENROUTER_ALLOWED_PARAMS)
+            if removed:
+                logger.debug(
+                    "vl.debug filtered_params model=%s removed=%s",
+                    model_name,
+                    removed,
+                )
 
-        # Generate the VL response
-        logger.debug(f"🎨 Sending request with messages: {len(messages)} messages")
+        async def _invoke_current():
+            return await client.chat.completions.create(**api_params)
+
+        call_with_retry = with_retry(VISION_RETRY_CONFIG)(_invoke_current)
+        start = time.monotonic()
+        try:
+            response = await call_with_retry()
+            if response is None:
+                raise APIError("VL API returned None response")
+            if not (
+                hasattr(response, "choices")
+                and response.choices
+                and hasattr(response.choices[0], "message")
+                and response.choices[0].message
+            ):
+                raise APIError("Invalid VL API response structure")
+        except Exception as exc:
+            elapsed_ms = int((time.monotonic() - start) * 1000)
+            classification = classify_vl_error(exc)
+            code = classification.get("code") or "none"
+            reason = classification.get("kind", "unknown")
+            logger.warning(
+                "vl.fail model=%s idx=%d attempt=%d code=%s reason=%s permanent=%s transient=%s latency_ms=%d",
+                model_name,
+                idx,
+                attempt_counter,
+                code,
+                reason,
+                classification.get("provider_permanent", False),
+                classification.get("retryable", False),
+                elapsed_ms,
+            )
+            failures.append(
+                {
+                    "model": model_name,
+                    "idx": idx,
+                    "reason": reason,
+                    "code": code,
+                    "permanent": classification.get("provider_permanent", False),
+                    "transient": classification.get("retryable", False),
+                }
+            )
+            last_error = exc
+            if idx + 1 < len(ladder):
+                next_model = ladder[idx + 1]
+                logger.info(
+                    "vl.fallback from=%s to=%s idx_next=%d",
+                    model_name,
+                    next_model,
+                    idx + 1,
+                )
+            continue
+
+        elapsed_ms = int((time.monotonic() - start) * 1000)
+        usage = getattr(response, "usage", None)
+        total_tokens = getattr(usage, "total_tokens", None)
+        tokens_total = total_tokens if total_tokens is not None else "na"
+
+        logger.info(
+            "vl.ok model=%s idx=%d attempt=%d ms=%d tokens_total=%s",
+            model_name,
+            idx,
+            attempt_counter,
+            elapsed_ms,
+            tokens_total,
+        )
 
         try:
-            response = await client.chat.completions.create(**api_params)
-        except Exception as e:
-            # Try VL model fallbacks on parameter or image errors
-            if (
-                "unexpected keyword" in str(e).lower()
-                or "not supported" in str(e).lower()
-            ):
-                logger.warning(
-                    f"🎨 VL call failed with param error, trying fallbacks: {e}"
-                )
-                response = await _try_vl_fallback_models(
-                    client, api_params, vl_model, str(e)
-                )
-            else:
-                raise
+            response_text = response.choices[0].message.content or ""
+        except Exception:
+            response_text = ""
 
-        # CHANGE: Enhanced error handling with detailed response logging
-        if response is None:
-            logger.error("❌ VL API returned None response")
-            raise APIError("VL API returned None response")
-
-        # Fast validation with minimal logging
-        if not (
-            hasattr(response, "choices")
-            and response.choices
-            and hasattr(response.choices[0], "message")
-            and response.choices[0].message
-        ):
-            logger.error("❌ Invalid VL API response structure")
-            raise APIError("Invalid VL API response structure")
-
-        # Removed redundant log message for performance
-
-        # Extract the response text
-        response_text = response.choices[0].message.content
-
-        if not response_text:
-            logger.warning("⚠️  VL model returned empty response")
-        else:
-            logger.info(f"✅ VL response: {len(response_text)} chars")
+        if response_text:
+            logger.debug("vl.ok text_len=%d", len(response_text))
 
         usage_info = {
-            "prompt_tokens": response.usage.prompt_tokens if response.usage else 0,
-            "completion_tokens": response.usage.completion_tokens
-            if response.usage
-            else 0,
-            "total_tokens": response.usage.total_tokens if response.usage else 0,
+            "prompt_tokens": getattr(usage, "prompt_tokens", 0),
+            "completion_tokens": getattr(usage, "completion_tokens", 0),
+            "total_tokens": total_tokens or 0,
         }
 
-        logger.info("✅ VL response completed")
+        telemetry = {
+            "ladder_idx": idx,
+            "ladder_attempts": attempt_counter,
+            "provider_base": base_url,
+        }
 
         return {
             "text": response_text,
-            "model": vl_model,
+            "model": model_name,
             "usage": usage_info,
             "backend": "openai",
+            "telemetry": telemetry,
         }
 
-    except Exception as e:
-        logger.error(
-            f"❌ Error in _generate_vl_response_with_retry: {e}", exc_info=True
-        )
-        # Re-raise as APIError to ensure proper retry handling
-        if not isinstance(e, APIError):
-            raise APIError(f"Failed to generate VL response: {str(e)}")
-        raise e
-
-
-async def _try_vl_fallback_models(client, api_params, failed_model, error_msg):
-    """Try VL model fallbacks when primary model fails with param/image errors."""
-    from .config import load_config
-
-    config = load_config()
-
-    fallback_models = config.get(
-        "VL_MODEL_FALLBACKS", "openai/gpt-4o-mini,anthropic/claude-3.5-sonnet"
-    ).split(",")
-    fallback_models = [
-        m.strip() for m in fallback_models if m.strip() and m.strip() != failed_model
+    summary_parts = [
+        f"{item['model']}:{item['reason']}:{item['code']}"
+        for item in failures
     ]
+    ladder_summary = ",".join(summary_parts) if summary_parts else "none"
 
-    if not fallback_models:
-        logger.error(
-            f"❌ No VL fallback models configured, original error: {error_msg}"
-        )
-        raise APIError(
-            f"VL model {failed_model} failed and no fallbacks available: {error_msg}"
-        )
-
-    for fallback_model in fallback_models:
-        try:
-            logger.info(f"🎨 Trying VL fallback model: {fallback_model}")
-            fallback_params = api_params.copy()
-            fallback_params["model"] = fallback_model
-
-            response = await client.chat.completions.create(**fallback_params)
-            logger.info(f"✅ VL fallback successful with: {fallback_model}")
-            return response
-
-        except Exception as fallback_error:
-            logger.warning(
-                f"🎨 VL fallback {fallback_model} also failed: {fallback_error}"
-            )
-            continue
-
-    # All fallbacks failed
-    logger.error(f"❌ All VL fallbacks exhausted, original error: {error_msg}")
-    raise APIError(f"VL model {failed_model} and all fallbacks failed: {error_msg}")
+    exhaustion_error = APIError("Vision ladder exhausted")
+    exhaustion_error.vl_exhausted = True
+    exhaustion_error.vl_ladder_summary = ladder_summary
+    exhaustion_error.vl_attempts = attempt_counter
+    exhaustion_error.vl_provider_base = base_url
+    exhaustion_error.vl_failures = failures
+    if last_error is not None:
+        raise exhaustion_error from last_error
+    raise exhaustion_error
 
 
 async def generate_vl_response(
@@ -815,33 +773,11 @@ async def generate_vl_response(
     max_tokens: int = None,
     **kwargs,
 ) -> Dict[str, Any]:
-    """
-    Generate a vision-language response with robust error handling and retry logic.
+    """Generate a VL response with laddered fallback and user-friendly failures."""
+    logger.info("🎨 Starting VL response generation with ladder fallback")
+    logger.debug(f"🎨 User: {user_id}, Guild: {guild_id}")
 
-    This function wraps the core VL generation with retry logic for transient errors
-    and provides fallback mechanisms for better user experience.
-
-    Args:
-        image_url: URL or file path to the image
-        user_prompt: Text prompt for the vision model
-        user_id: Discord user ID for logging
-        guild_id: Discord guild ID for logging
-        temperature: Sampling temperature (0.0-2.0)
-        max_tokens: Maximum tokens in response
-        **kwargs: Additional arguments for the API call
-
-    Returns:
-        Dict containing the response text, model info, and usage stats
-
-    Raises:
-        APIError: For API-related errors after all retries are exhausted
-        InferenceError: For inference-specific errors
-    """
     try:
-        logger.info("🎨 Starting VL response generation with retry logic")
-        logger.debug(f"🎨 User: {user_id}, Guild: {guild_id}")
-
-        # Call the retry-wrapped function
         result = await _generate_vl_response_with_retry(
             image_url=image_url,
             user_prompt=user_prompt,
@@ -852,23 +788,40 @@ async def generate_vl_response(
             **kwargs,
         )
 
-        logger.info("✅ VL response generation completed successfully")
+        telemetry = result.get("telemetry", {}) or {}
+        logger.info(
+            "vl.final status=ok exhausted=false model=%s idx=%s attempts=%s provider_base=%s",
+            result.get("model"),
+            telemetry.get("ladder_idx"),
+            telemetry.get("ladder_attempts"),
+            telemetry.get("provider_base"),
+        )
         return result
 
-    except Exception as e:
-        logger.error(f"❌ VL response generation failed after all retries: {e}")
-
-        # Check if this was a retryable error that exhausted retries
-        if is_retryable_error(e, VISION_RETRY_CONFIG):
+    except APIError as api_error:
+        if getattr(api_error, "vl_exhausted", False):
+            ladder_summary = getattr(api_error, "vl_ladder_summary", "none")
+            attempts = getattr(api_error, "vl_attempts", 0)
+            provider_base = getattr(api_error, "vl_provider_base", "unknown")
             logger.warning(
-                "⚠️ Provider appears to be experiencing issues. This may be temporary."
+                "vl.final status=error exhausted=true ladder=%s attempts=%s provider_base=%s",
+                ladder_summary,
+                attempts,
+                provider_base,
             )
-            # Provide a more user-friendly error message for transient issues
-            raise APIError(
-                "The vision service is temporarily unavailable due to provider issues. "
-                "Please try again in a few minutes. If the problem persists, the provider "
-                "may be experiencing extended downtime."
+            friendly_message = (
+                "🔧 The vision service is temporarily unavailable. Please try again in a few minutes."
             )
-
-        # For non-retryable errors, re-raise as-is
-        raise e
+            return {
+                "text": friendly_message,
+                "model": None,
+                "usage": None,
+                "backend": "openai",
+                "ladder_exhausted": True,
+                "telemetry": {
+                    "ladder_summary": ladder_summary,
+                    "ladder_attempts": attempts,
+                    "provider_base": provider_base,
+                },
+            }
+        raise

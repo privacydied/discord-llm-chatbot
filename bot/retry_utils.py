@@ -6,7 +6,8 @@ Implements robust error handling patterns for external API calls.
 import asyncio
 import logging
 import random
-from typing import Any, Callable, List, Type, Optional
+import re
+from typing import Any, Callable, Dict, List, Type, Optional
 from functools import wraps
 from .exceptions import APIError, InferenceError
 import httpx
@@ -93,6 +94,108 @@ def is_retryable_error(error: Exception, config: RetryConfig) -> bool:
         return True
 
     return False
+
+
+def classify_vl_error(exc: Exception) -> Dict[str, Any]:
+    """
+    Classify VL provider errors to drive retry and fallback behavior.
+    Returns a dict with keys: kind, code, retryable, provider_permanent, retry_after_hint.
+    """
+    reason = "unknown"
+    status_code = None
+    retryable = False
+    provider_permanent = False
+    retry_after_hint = getattr(exc, "retry_after_seconds", None)
+
+    # Extract HTTP status when available
+    if isinstance(exc, httpx.HTTPStatusError):
+        if exc.response is not None:
+            status_code = exc.response.status_code
+            if retry_after_hint is None:
+                ra = exc.response.headers.get("Retry-After") or exc.response.headers.get(
+                    "retry-after"
+                )
+                if ra:
+                    try:
+                        retry_after_hint = float(ra)
+                    except Exception:
+                        retry_after_hint = None
+    elif isinstance(exc, aiohttp.ClientResponseError):
+        status_code = exc.status
+        if retry_after_hint is None:
+            ra = exc.headers.get("Retry-After") if exc.headers else None
+            if ra:
+                try:
+                    retry_after_hint = float(ra)
+                except Exception:
+                    retry_after_hint = None
+    else:
+        status_attr = getattr(exc, "status", None)
+        if isinstance(status_attr, int):
+            status_code = status_attr
+
+    message = str(exc) if exc else ""
+    lower_msg = message.lower()
+
+    timeout_types = (
+        asyncio.TimeoutError,
+        TimeoutError,
+        httpx.ReadTimeout,
+        httpx.ConnectTimeout,
+        httpx.WriteTimeout,
+        httpx.PoolTimeout,
+        aiohttp.ServerTimeoutError,
+    )
+    if isinstance(exc, timeout_types):
+        reason = "timeout"
+        retryable = True
+    elif status_code in (408, 409, 429):
+        reason = "rate_limited"
+        retryable = True
+    elif status_code and 500 <= status_code < 600:
+        reason = "server_error"
+        retryable = True
+    elif status_code in (401, 403):
+        if "moderation" in lower_msg or "requires moderation" in lower_msg:
+            reason = "moderation"
+        else:
+            reason = "forbidden"
+        provider_permanent = True
+    elif status_code == 404:
+        reason = "unsupported"
+        provider_permanent = True
+    elif "requires moderation" in lower_msg or "content moderated" in lower_msg:
+        reason = "moderation"
+        provider_permanent = True
+    elif any(
+        token in lower_msg
+        for token in (
+            "unsupported image format",
+            "unsupported modality",
+            "image too large",
+            "data url not allowed",
+            "unsupported content type",
+        )
+    ):
+        reason = "unsupported"
+        provider_permanent = True
+    elif status_code and 400 <= status_code < 500:
+        reason = "bad_request"
+        provider_permanent = True
+    elif re.search(r"timeout|timed out", lower_msg):
+        reason = "timeout"
+        retryable = True
+    elif re.search(r"rate limit", lower_msg):
+        reason = "rate_limited"
+        retryable = True
+
+    return {
+        "kind": reason,
+        "code": status_code,
+        "retryable": retryable,
+        "provider_permanent": provider_permanent,
+        "retry_after_hint": retry_after_hint,
+    }
 
 
 def calculate_delay(attempt: int, config: RetryConfig) -> float:

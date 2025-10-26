@@ -197,6 +197,18 @@ _cache_timestamp: float = 0
 CACHE_TTL = 300  # 5 minute cache TTL
 
 
+def _parse_model_list(raw: Optional[str]) -> list[str]:
+    if not raw:
+        return []
+    return [part.strip() for part in raw.split(",") if part.strip()]
+
+
+_DEFAULT_VL_MODEL_LADDER = [
+    "moonshotai/kimi-vl-a3b-thinking:free",
+    "mistralai/mistral-small-3.2-24b-instruct:free",
+]
+
+
 def load_config():
     """
     Load configuration from environment variables with intelligent caching.
@@ -768,6 +780,23 @@ def load_config():
     logger.debug(f"✅ Configuration cached for {CACHE_TTL}s")
 
     return config
+
+
+def get_vl_model_ladder() -> list[str]:
+    """
+    Return the configured VL model ladder. Supports comma-separated VL_MODEL.
+    Falls back to a safe default ladder when unset.
+    """
+    config = load_config()
+    raw = config.get("VL_MODEL")
+    models = _parse_model_list(raw)
+    if models:
+        return models
+    if raw:
+        cleaned = raw.strip()
+        if cleaned:
+            return [cleaned]
+    return _DEFAULT_VL_MODEL_LADDER.copy()
 
 
 def invalidate_config_cache() -> None:

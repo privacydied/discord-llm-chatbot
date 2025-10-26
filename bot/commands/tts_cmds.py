@@ -463,6 +463,39 @@ class TTSCommands(commands.Cog):
                         },
                     )
 
+        except SynthesisError as exc:
+            reason = str(exc)
+            if reason == "engine_missing_callable":
+                logging.error(
+                    "tts.process.failed command=say reason=engine_missing_callable",
+                    extra={
+                        "subsys": "tts_cmds",
+                        "event": "say.synthesis_failed",
+                        "guild_id": guild_id,
+                        "channel_id": channel_id,
+                        "user_id": user_id,
+                    },
+                )
+                message = (
+                    "❌ The TTS engine does not support this request right now. Please try again later."
+                )
+            else:
+                logging.error(
+                    "tts.process.failed command=say reason=runtime",
+                    extra={
+                        "subsys": "tts_cmds",
+                        "event": "say.synthesis_failed",
+                        "guild_id": guild_id,
+                        "channel_id": channel_id,
+                        "user_id": user_id,
+                    },
+                )
+                message = f"❌ An error occurred while generating TTS: {reason}"
+            try:
+                await maybe_call(ctx.send, message)
+            except Exception:
+                pass
+            return
         except Exception as e:
             logging.error(f"Error in say command: {e}", exc_info=True)
             try:

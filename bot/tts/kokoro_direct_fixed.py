@@ -1,3 +1,4 @@
+import io
 import numpy as np
 import logging
 import tempfile
@@ -8,6 +9,7 @@ from enum import Enum
 import shutil
 import importlib
 import onnxruntime as ort
+import soundfile as sf
 from bot.tts.helpers import maybe_onnx_session
 
 logger = logging.getLogger(__name__)
@@ -65,6 +67,7 @@ class KokoroDirect:
         self.official_vocab = None  # Cache for loaded official vocabulary
         # Methods available for tokenization/phonemization discovery
         self.available_tokenization_methods: set[TokenizationMethod] = set()
+        self._last_matched_symbols: List[str] = []
 
         # Initialize ONNX session and official vocabulary
         self._init_session()
@@ -339,7 +342,7 @@ class KokoroDirect:
         # Apply audio hygiene: highpass, limiter, fade, resample to 48kHz
         pcm = self._highpass(audio, sr=sr, cutoff_hz=20.0)
         pcm = self._soft_limiter(pcm, ceiling_db=-1.0)
-        pcm = self._fade(pcm, sr=sr, ms=5)
+        pcm = self._fade(pcm, sr=sr, ms=3)
         if sr != 48000:
             pcm = self._resample(pcm, from_sr=sr, to_sr=48000)
             sr = 48000
@@ -348,6 +351,72 @@ class KokoroDirect:
             logger.debug("Created audio with length=%d samples", int(pcm.size))
 
         return pcm, sr
+
+    def generate_waveform(
+        self,
+        *,
+        text: Optional[str] = None,
+        phonemes: Optional[str] = None,
+        voice: Optional[object] = None,
+        lang: str = "en",
+        speed: float = 1.0,
+        logger: Optional[logging.Logger] = None,
+        **kwargs: Any,
+    ) -> bytes:
+        """Return WAV bytes using the quiet KokoroDirect pipeline."""
+        result = self.create(
+            text=text,
+            phonemes=phonemes,
+            voice=voice,
+            lang=lang,
+            speed=speed,
+            disable_autodiscovery=True,
+            logger=logger,
+            **kwargs,
+        )
+
+        if isinstance(result, (bytes, bytearray)):
+            return bytes(result)
+
+        if isinstance(result, Path):
+            data = result.read_bytes()
+            try:
+                result.unlink(missing_ok=True)
+            except Exception:
+                pass
+            return data
+
+        if isinstance(result, str):
+            candidate = Path(result)
+            data = candidate.read_bytes()
+            try:
+                candidate.unlink(missing_ok=True)
+            except Exception:
+                pass
+            return data
+
+        if isinstance(result, tuple) and len(result) == 2:
+            audio, sr = result
+            buffer = io.BytesIO()
+            sf.write(
+                buffer,
+                np.asarray(audio, dtype=np.float32),
+                int(sr),
+                format="WAV",
+            )
+            return buffer.getvalue()
+
+        if isinstance(result, np.ndarray):
+            buffer = io.BytesIO()
+            sf.write(
+                buffer,
+                result.astype(np.float32),
+                24000,
+                format="WAV",
+            )
+            return buffer.getvalue()
+
+        raise RuntimeError("generate_waveform received unsupported output type")
 
     def _ensure_model_loaded(self) -> None:
         if maybe_onnx_session(self) is None or self.voice_embeddings is None:
@@ -397,13 +466,14 @@ class KokoroDirect:
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_file:
                 temp_path = temp_file.name
 
+        self._last_matched_symbols = []
         try:
             # Convert IPA phonemes to token IDs using the OFFICIAL Kokoro vocabulary (strict)
             from bot.tts.ipa_vocab_loader import (
                 UnsupportedIPASymbolError,
             )
 
-            def _encode_official(ipa_text: str) -> List[int]:
+            def _encode_official(ipa_text: str) -> Tuple[List[int], List[str]]:
                 """Greedy longest-match encoding against official IPA vocab.
 
                 Splits on spaces (word boundaries) and scans each word left-to-right,
@@ -426,6 +496,7 @@ class KokoroDirect:
                 # Normalize whitespace to single spaces and split into words
                 words = " ".join(str(ipa_text).split()).split(" ")
                 ids: List[int] = []
+                matched_symbols: List[str] = []
 
                 # Optional: insert space token between words if supported
                 space_id = None
@@ -448,26 +519,28 @@ class KokoroDirect:
                             cand = w[i : i + L]
                             if cand in p2i:
                                 ids.append(p2i[cand])
+                                matched_symbols.append(cand)
                                 i += L
                                 matched = True
                                 break
                         if not matched:
                             # Unknown symbol at this position; raise strict error
                             raise UnsupportedIPASymbolError([w[i]])
-                return ids
+                return ids, matched_symbols
 
             try:
-                token_ids = _encode_official(str(phonemes))
+                token_ids, matched_symbols = _encode_official(str(phonemes))
                 if not token_ids:
                     raise ValueError("Failed to encode IPA to token IDs (empty)")
             except UnsupportedIPASymbolError:
                 # Sanitize/normalize unsupported IPA and retry strictly
                 cleaned = self._sanitize_ipa(str(phonemes))
-                token_ids = _encode_official(cleaned)
+                token_ids, matched_symbols = _encode_official(cleaned)
                 if not token_ids:
                     raise ValueError(
                         "Failed to encode sanitized IPA to token IDs (empty)"
                     )
+            self._last_matched_symbols = matched_symbols
 
             # Build inputs and run using the same path as text synthesis
             self._init_session()  # Ensure sess respects any test patches
@@ -755,7 +828,7 @@ class KokoroDirect:
             audio = self._soft_limiter(audio, ceiling_db=-1.0)
 
             # Apply fade-in/out (5ms)
-            audio = self._apply_fade(audio, sample_rate, fade_ms=5)
+            audio = self._apply_fade(audio, sample_rate, fade_ms=3)
 
             return audio
         except Exception as e:
@@ -785,7 +858,7 @@ class KokoroDirect:
             audio = audio * (ceiling_linear / peak)
         return audio
 
-    def _apply_fade(self, audio: np.ndarray, sr: int, fade_ms: int = 5) -> np.ndarray:
+    def _apply_fade(self, audio: np.ndarray, sr: int, fade_ms: int = 3) -> np.ndarray:
         """Apply fade-in and fade-out."""
         fade_samples = int(fade_ms * sr / 1000)
         if fade_samples >= len(audio) // 2:
@@ -824,7 +897,7 @@ class KokoroDirect:
             audio = audio * (ceiling_linear / peak)
         return audio
 
-    def _fade(self, audio: np.ndarray, sr: int, ms: int = 5) -> np.ndarray:
+    def _fade(self, audio: np.ndarray, sr: int, ms: int = 3) -> np.ndarray:
         """Apply fade-in and fade-out."""
         fade_samples = int(ms * sr / 1000)
         if fade_samples >= len(audio) // 2:
