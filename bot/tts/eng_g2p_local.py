@@ -32,6 +32,10 @@ class G2PUnavailableError(RuntimeError):
     """Raised when the deterministic G2P pipeline cannot be used."""
 
 
+class G2PUnavailableError(RuntimeError):
+    """Raised when the deterministic G2P pipeline cannot be used."""
+
+
 def _load_lexicon() -> Dict[str, str]:
     """Load lexicon from lexicon_en.json file."""
     global _LEXICON_CACHE
