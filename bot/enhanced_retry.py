@@ -11,7 +11,7 @@ from typing import Any, Callable, Dict, List, Optional
 from enum import Enum
 import logging
 import os
-from .config import load_config
+from .config import load_config, get_vl_model_ladder
 
 logger = logging.getLogger(__name__)
 
@@ -173,6 +173,8 @@ class EnhancedRetryManager:
             media_models, media_timeouts, default_media
         )
 
+        self._apply_vl_override()
+
         # Log parsed ladders
         try:
             v = ", ".join(
@@ -198,6 +200,90 @@ class EnhancedRetryManager:
             )
         except Exception:
             pass
+
+    def _apply_vl_override(self) -> None:
+        """Ensure the configured VL ladder head (VL_MODEL) is reflected in the vision provider order."""
+        try:
+            override_entries = get_vl_model_ladder()
+        except Exception:
+            override_entries = []
+
+        if not override_entries:
+            return
+
+        vision_providers = self.provider_configs.get("vision", [])
+        if not vision_providers and not override_entries:
+            return
+
+        # Helper to parse optional provider prefix (provider|model)
+        def _parse_entry(entry: str) -> tuple[str, str]:
+            if "|" in entry:
+                provider, model = entry.split("|", 1)
+                return (provider.strip() or "openrouter", model.strip())
+            return "openrouter", entry.strip()
+
+        base_by_model: Dict[str, ProviderConfig] = {
+            provider.model: provider for provider in vision_providers
+        }
+        ordered: List[ProviderConfig] = []
+        seen_models: set[str] = set()
+
+        for idx, raw_entry in enumerate(override_entries):
+            provider_name, model_name = _parse_entry(raw_entry)
+            if not model_name or model_name in seen_models:
+                continue
+
+            existing = base_by_model.get(model_name)
+            if existing:
+                ordered.append(existing)
+            else:
+                # Derive timeout from existing ladder when possible, otherwise fallback to sane defaults
+                if idx < len(vision_providers):
+                    timeout = vision_providers[idx].timeout
+                elif vision_providers:
+                    timeout = vision_providers[-1].timeout
+                else:
+                    timeout = 8.0 + (idx * 2.0)
+                ordered.append(
+                    ProviderConfig(
+                        provider_name,
+                        model_name,
+                        timeout=timeout,
+                    )
+                )
+            seen_models.add(model_name)
+
+        for provider in vision_providers:
+            if provider.model not in seen_models:
+                ordered.append(provider)
+                seen_models.add(provider.model)
+
+        if ordered:
+            self.provider_configs["vision"] = ordered
+
+    def refresh_from_env(self) -> Dict[str, List[str]]:
+        """Rebuild provider ladders from the current environment while preserving breaker state."""
+        old_breakers = dict(self.circuit_breakers)
+        self._load_default_configs()
+
+        new_breakers: Dict[str, CircuitBreakerState] = {}
+        all_provider_keys: set[str] = set()
+        for providers in self.provider_configs.values():
+            for provider in providers:
+                key = f"{provider.name}:{provider.model}"
+                all_provider_keys.add(key)
+                if key in old_breakers:
+                    new_breakers[key] = old_breakers[key]
+                else:
+                    new_breakers[key] = CircuitBreakerState()
+
+        self.circuit_breakers = new_breakers
+
+        summary: Dict[str, List[str]] = {}
+        for modality, providers in self.provider_configs.items():
+            summary[modality] = [provider.model for provider in providers]
+
+        return summary
 
     def _get_circuit_breaker(self, provider_key: str) -> CircuitBreakerState:
         """Get or create circuit breaker for provider."""

@@ -658,16 +658,26 @@ class TTSManager:
             raise SynthesisError(f"TTS synthesis timed out after {timeout} seconds") from exc
         except Exception as e:
             message = str(e)
-            reason = "engine_missing_callable" if "engine_missing_callable" in message else "runtime"
+            if "engine_missing_callable" in message:
+                reason = "engine_missing_callable"
+            elif "engine_input_error" in message:
+                reason = "engine_input_error"
+            else:
+                reason = "runtime"
+            log_extra = {"subsys": "tts"}
+            if reason == "engine_input_error":
+                log_extra["detail"] = message
             logger.error(
                 "tts.process.failed engine=%s reason=%s",
                 self.engine.__class__.__name__,
                 reason,
-                extra={"subsys": "tts"},
+                extra=log_extra,
             )
             if reason == "engine_missing_callable":
                 raise SynthesisError("engine_missing_callable") from e
-            raise SynthesisError(f"Synthesis failed: {e}") from e
+            if reason == "engine_input_error":
+                raise SynthesisError(message) from e
+            raise SynthesisError(f"Synthesis failed: {message}") from e
 
     async def close(self):
         """Cleans up TTS resources."""

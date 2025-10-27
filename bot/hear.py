@@ -1671,6 +1671,7 @@ async def hear_infer_from_url(
                     "speedup_factor": ATEMPO_FACTOR if pre.atempo_applied else 1.0,
                     "cache_hit": download.cache_hit or transcript.cache_hit,
                     "timestamp": download.timestamp.isoformat(),
+                    "demux_fallback": bool(getattr(download, "demux_fallback", False)),
                 },
             }
             spans.end("stitch", ok=True)

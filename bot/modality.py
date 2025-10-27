@@ -128,6 +128,7 @@ def collect_input_items(message: Message) -> List[InputItem]:
                     "x.com",
                     "fxtwitter.com",
                     "vxtwitter.com",
+                    "fixupx.com",
                 )
 
                 def _host_match(u: str) -> bool:
@@ -337,7 +338,10 @@ async def _map_url_to_modality(url: str) -> InputModality:
 
     # Twitter/X status posts should go through API-first general URL path [SFT][CA]
     # but allow broadcasts (Spaces/live) to be handled as video-capable URLs.
-    if re.search(r"https?://(?:www\.)?(?:twitter|x)\.com/.+/status/\d+", url):
+    if re.search(
+        r"https?://(?:www\.)?(?:twitter|x|fxtwitter|vxtwitter|fixupx)\.com/.+/status/\d+",
+        url,
+    ):
         logger.info(
             f"➡️ Routing Twitter/X status URL to GENERAL_URL for API-first: {url}"
         )

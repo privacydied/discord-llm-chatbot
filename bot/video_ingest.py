@@ -54,8 +54,8 @@ SUPPORTED_PATTERNS = [
     r"https?://(?:www\.)?tiktok\.com/t/[\w-]+",  # share links
     r"https?://(?:m|vm)\.tiktok\.com/[\w-]+",
     # ---------- Twitter / X (try yt-dlp first, fallback to screenshot if no video) ----------
-    r"https?://(?:www\.)?(?:twitter|x)\.com/\w{1,15}/status/\d+",  # All tweet status URLs - fallback logic will handle non-video tweets
-    r"https?://(?:www\.)?(?:twitter|x)\.com/i/broadcasts/\w+",  # Twitter Spaces/Live broadcasts
+    r"https?://(?:www\.)?(?:twitter|x|fxtwitter|vxtwitter|fixupx)\.com/\w{1,15}/status/\d+",  # All tweet status URLs - fallback logic will handle non-video tweets
+    r"https?://(?:www\.)?(?:twitter|x|fxtwitter|vxtwitter|fixupx)\.com/i/broadcasts/\w+",  # Twitter Spaces/Live broadcasts
     # ---------- Twitter CDN direct variants (mp4/HLS from vx/fx/native) ----------
     r"https?://(?:video|mtc)\.twimg\.com/[^\s?#]+\.(?:mp4|m3u8)(?:\?[^\s#]+)?",
     # ---------- Reddit (common variants) ----------
@@ -206,6 +206,7 @@ class DownloadedAudio:
     cache_hit: bool
     ext: str
     timestamp: datetime
+    demux_fallback: bool = False
 
 
 class VideoIngestError(InferenceError):
@@ -312,22 +313,19 @@ class VideoIngestionManager:
         except ValueError:
             return len(preference)
 
-    def _select_audio_format(self, metadata: Dict[str, Any], url: str) -> Dict[str, Any]:
+    def _select_audio_format(self, metadata: Dict[str, Any], url: str) -> Tuple[Dict[str, Any], bool]:
         formats = metadata.get("requested_downloads") or metadata.get("formats") or []
         audio_formats = []
+        muxed_formats = []
         for fmt in formats:
             vcodec = (fmt.get("vcodec") or "").lower()
             acodec = (fmt.get("acodec") or "").lower()
-            if vcodec not in ("", "none"):
-                continue
             if not acodec or acodec == "none":
                 continue
-            audio_formats.append(fmt)
-
-        if not audio_formats:
-            raise VideoIngestError(
-                f"No audio-only formats available for URL: {url}"
-            )
+            if vcodec in ("", "none"):
+                audio_formats.append(fmt)
+            else:
+                muxed_formats.append(fmt)
 
         def _key(fmt: Dict[str, Any]) -> tuple:
             abr = fmt.get("abr") or fmt.get("tbr") or float("inf")
@@ -345,8 +343,38 @@ class VideoIngestionManager:
                 size,
             )
 
-        selected = min(audio_formats, key=_key)
-        return selected
+        if audio_formats:
+            selected_audio = min(audio_formats, key=_key)
+            return selected_audio, False
+
+        if not muxed_formats:
+            raise VideoIngestError(
+                f"No audio-capable formats available for URL: {url}"
+            )
+
+        def _mux_key(fmt: Dict[str, Any]) -> tuple:
+            abr = fmt.get("abr") or fmt.get("tbr") or float("inf")
+            if isinstance(abr, str):
+                try:
+                    abr = float(abr)
+                except Exception:
+                    abr = float("inf")
+            abr_pref_penalty = 0 if abr <= 128 else abr
+            height = fmt.get("height")
+            try:
+                height_val = int(height) if height is not None else 0
+            except Exception:
+                height_val = 0
+            size = fmt.get("filesize") or fmt.get("filesize_approx") or float("inf")
+            return (
+                abr_pref_penalty,
+                height_val,
+                size,
+                self._ext_rank(fmt.get("ext") or ""),
+            )
+
+        selected_mux = min(muxed_formats, key=_mux_key)
+        return selected_mux, True
 
     @staticmethod
     def _hash_resolved_url(resolved_url: str) -> str:
@@ -528,12 +556,23 @@ class VideoIngestionManager:
             url_no_fragment = url.split("#", 1)[0]
             metadata_timeout = float(os.getenv("YTDLP_METADATA_TIMEOUT_S", "10"))
             download_timeout = float(os.getenv("YTDLP_DOWNLOAD_TIMEOUT_S", "25"))
+            budget_limit_env = os.environ.get("MEDIA_PER_ITEM_BUDGET")
+            if budget_limit_env:
+                try:
+                    budget_s = max(15.0, float(budget_limit_env))
+                    metadata_timeout = min(metadata_timeout, max(5.0, budget_s * 0.25))
+                    download_timeout = min(download_timeout, max(15.0, budget_s - 5.0))
+                except Exception:
+                    pass
             parsed_url = urlparse(url_no_fragment)
             direct_candidate = self._is_direct_media_url(url_no_fragment)
 
+            demux_required = False
             try:
                 metadata = await self._probe_metadata(url_no_fragment, metadata_timeout)
-                selected = self._select_audio_format(metadata, url_no_fragment)
+                selected, demux_required = self._select_audio_format(
+                    metadata, url_no_fragment
+                )
             except VideoIngestError as exc:
                 if direct_candidate or "NumericString value expected" in str(exc):
                     logger.info(
@@ -617,6 +656,7 @@ class VideoIngestionManager:
                         cache_hit=True,
                         ext=ext,
                         timestamp=datetime.now(timezone.utc),
+                        demux_fallback=demux_required,
                     )
 
             with tempfile.TemporaryDirectory() as temp_dir:
@@ -676,6 +716,7 @@ class VideoIngestionManager:
                 "ext": ext,
                 "source_url": url,
                 "cached_at": datetime.now(timezone.utc).isoformat(),
+                "demux_fallback": demux_required,
             }
             self._save_cache_index()
             logger.info(
@@ -704,6 +745,7 @@ class VideoIngestionManager:
                 cache_hit=cache_hit,
                 ext=ext,
                 timestamp=datetime.now(timezone.utc),
+                demux_fallback=demux_required,
             )
 
     async def _direct_media_fallback(
@@ -715,6 +757,8 @@ class VideoIngestionManager:
         timeout_s: float,
     ) -> DownloadedAudio:
         ext = Path(parsed.path).suffix.lstrip(".") or "mp4"
+        audio_exts = {"aac", "m4a", "mp3", "opus", "ogg", "flac", "wav"}
+        demux_flag = ext.lower() not in audio_exts
         download_key = f"{self._hash_resolved_url(media_url)}-direct"
         if not force_refresh:
             cache_entry = self._get_cache_entry(download_key)
@@ -745,6 +789,7 @@ class VideoIngestionManager:
                     cache_hit=True,
                     ext=ext,
                     timestamp=datetime.now(timezone.utc),
+                    demux_fallback=demux_flag,
                 )
 
         temp_path, content_length = await self._download_direct_media(
@@ -776,6 +821,7 @@ class VideoIngestionManager:
             "source_url": original_url,
             "cached_at": datetime.now(timezone.utc).isoformat(),
             "duration_seconds": 0.0,
+            "demux_fallback": demux_flag,
         }
         self._save_cache_index()
         logger.info(
@@ -795,6 +841,7 @@ class VideoIngestionManager:
             cache_hit=False,
             ext=ext,
             timestamp=datetime.now(timezone.utc),
+            demux_fallback=demux_flag,
         )
 
 

@@ -122,128 +122,107 @@ class ResponseMessage:
 
 
 def _detect_x_twitter_media(message: Message) -> XTwitterMediaInfo:
-    """Detect X/Twitter links and conservatively classify media type from Discord embeds.
-    Rules:
-    - If a tweet has an explicit embed.video → classify as "video" and point at the tweet URL.
-    - If a tweet only has a thumbnail/image and no embed.video → classify as "unknown" and point at the tweet URL (STT-first probe).
-    - Only classify as "image" when the URL itself is a direct image (e.g., pbs.twimg.com) without a tweet URL.
-    """
-    x_hosts = {"x.com", "twitter.com", "fxtwitter.com"}
+    """Detect X/Twitter links and conservatively classify media type from Discord embeds."""
+    canonical_hosts = {
+        "x.com",
+        "www.x.com",
+        "twitter.com",
+        "www.twitter.com",
+        "mobile.twitter.com",
+        "fxtwitter.com",
+        "www.fxtwitter.com",
+        "vxtwitter.com",
+        "www.vxtwitter.com",
+        "fixupx.com",
+        "www.fixupx.com",
+    }
+    thumbnail_hosts = {
+        "pbs.twimg.com",
+        "pbs-0.twimg.com",
+        "pbs-1.twimg.com",
+        "pbs-2.twimg.com",
+        "pbs-3.twimg.com",
+    }
 
-    # Check message content for X/Twitter URLs
-    content = message.content or ""
-    has_x_link = any(host in content.lower() for host in x_hosts)
-
-    # Collect actual tweet URLs from content for STT fallback
-    import re
+    content_lower = (message.content or "").lower()
+    has_x_link = any(host in content_lower for host in canonical_hosts)
 
     tweet_urls: List[str] = []
-    url_pattern = r"https?://(?:www\.)?(x\.com|twitter\.com|fxtwitter\.com)/\S+"
-    for match in re.finditer(url_pattern, content, re.IGNORECASE):
+    url_pattern = r"https?://(?:www\.)?(?:x|twitter|fxtwitter|vxtwitter|fixupx)\.com/\S+"
+    for match in re.finditer(url_pattern, message.content or "", re.IGNORECASE):
         u = match.group(0)
         if u not in tweet_urls:
             tweet_urls.append(u)
 
     media_kind = "none"
     media_urls: List[str] = []
-
-    # Track direct image URLs that are not associated with a tweet URL
     direct_image_urls: List[str] = []
 
     for embed in message.embeds:
-        # Check embed URLs and provider info
         embed_url = getattr(embed, "url", "") or ""
+        embed_url_l = embed_url.lower()
         provider = getattr(embed, "provider", None)
-        provider_name = getattr(provider, "name", "") if provider else ""
+        provider_name = (getattr(provider, "name", "") or "").lower()
         author = getattr(embed, "author", None)
-        author_url = getattr(author, "url", "") if author else ""
+        author_url = (getattr(author, "url", "") or "").lower()
 
-        embed_url_l = (embed_url or "").lower()
+        is_x_embed = any(host in embed_url_l for host in canonical_hosts)
+        is_x_embed = (
+            is_x_embed
+            or any(host in author_url for host in canonical_hosts)
+            or "twitter" in provider_name
+        )
 
-        # Detect X/Twitter from embed metadata
-        if (
-            any(host in embed_url_l for host in x_hosts)
-            or "twitter" in (provider_name or "").lower()
-            or "x.com" in (provider_name or "").lower()
-            or any(host in (author_url or "").lower() for host in x_hosts)
-        ):
+        if is_x_embed:
             has_x_link = True
-            # Add embed URL to tweet URLs if it's a tweet URL
-            if (
-                embed_url
-                and any(host in embed_url_l for host in x_hosts)
-                and embed_url not in tweet_urls
-            ):
+            if embed_url and embed_url not in tweet_urls:
                 tweet_urls.append(embed_url)
 
-            # Classify based on embed structure
             if getattr(embed, "video", None):
-                # Explicit video → treat as video, point to tweet URL
                 media_kind = "video"
-                if embed_url:
-                    if embed_url not in media_urls:
-                        media_urls.append(embed_url)
+                if embed_url and embed_url not in media_urls:
+                    media_urls.append(embed_url)
             elif getattr(embed, "image", None):
-                # Photo-only tweets often expose embed.image. Treat as image (no STT),
-                # and prefer the tweet URL so downstream routing uses the syndication/VL path.
-                media_kind = "image"
-                if tweet_urls:
-                    media_urls = list(tweet_urls)
-                elif embed_url:
-                    media_urls = [embed_url]
-                else:
-                    # Last resort, point at the image itself
-                    try:
-                        if getattr(embed.image, "url", None):
-                            media_urls = [embed.image.url]
-                    except Exception:
-                        pass
-            else:
-                # If only thumbnail present without embed.video, mark as unknown and point to the tweet URL
-                if media_kind == "none" and tweet_urls:
-                    media_kind = "unknown"
-                    media_urls = list(tweet_urls)
-                elif media_kind == "none" and embed_url:
-                    media_kind = "unknown"
-                    media_urls = [embed_url]
+                if media_kind != "video":
+                    media_kind = "images"
+                    if tweet_urls:
+                        media_urls = list(tweet_urls)
+                    elif embed_url:
+                        media_urls = [embed_url]
+                    else:
+                        try:
+                            image_url = getattr(embed.image, "url", None)
+                            if image_url:
+                                media_urls = [image_url]
+                        except Exception:
+                            pass
 
-        # Also capture direct image URLs (pbs.twimg.com etc.) that are not tied to a tweet URL
         try:
-            # Some embed shapes expose image/thumbnail URLs even when embed.url is unrelated
             image_url = None
-            if (
-                hasattr(embed, "image")
-                and getattr(embed, "image")
-                and getattr(embed.image, "url", None)
-            ):
+            if getattr(embed, "image", None) and getattr(embed.image, "url", None):
                 image_url = embed.image.url
-            elif (
-                hasattr(embed, "thumbnail")
-                and getattr(embed, "thumbnail")
-                and getattr(embed.thumbnail, "url", None)
+            elif getattr(embed, "thumbnail", None) and getattr(
+                embed.thumbnail, "url", None
             ):
                 image_url = embed.thumbnail.url
+
             if image_url:
-                u_l = str(image_url).lower()
-                # Only treat as direct image if it's clearly a twimg (not a tweet URL)
-                if "twimg.com" in u_l and not any(host in u_l for host in x_hosts):
-                    if image_url not in direct_image_urls:
-                        direct_image_urls.append(image_url)
+                host = urlparse(image_url).netloc.lower()
+                if host in thumbnail_hosts and image_url not in direct_image_urls:
+                    direct_image_urls.append(image_url)
         except Exception:
             pass
 
-    # If we couldn't determine from embeds, but have tweet URLs → unknown for STT-first
-    if has_x_link and media_kind == "none" and tweet_urls:
-        media_kind = "unknown"
+    if media_kind == "none" and direct_image_urls and not tweet_urls:
+        media_kind = "images"
+        media_urls = list(direct_image_urls)
+    elif media_kind == "none" and tweet_urls:
         media_urls = list(tweet_urls)
 
-    # Only classify as image when we only have direct images without tweet URLs
-    if media_kind == "none" and direct_image_urls and not tweet_urls:
-        media_kind = "image"
-        media_urls = list(direct_image_urls)
-
     return XTwitterMediaInfo(
-        has_x_link=has_x_link, media_kind=media_kind, media_urls=media_urls
+        has_x_link=has_x_link,
+        media_kind=media_kind,
+        media_urls=media_urls,
     )
 
 
@@ -1049,7 +1028,13 @@ class Router:
             return False
         return any(
             d in u
-            for d in ["twitter.com/", "x.com/", "vxtwitter.com/", "fxtwitter.com/"]
+            for d in [
+                "twitter.com/",
+                "x.com/",
+                "vxtwitter.com/",
+                "fxtwitter.com/",
+                "fixupx.com/",
+            ]
         )
 
     def _register_x_frontend_context(
@@ -1454,7 +1439,6 @@ class Router:
         try:
             p = urlparse(url)
             host = (p.netloc or "").lower()
-            # Known host aliases to normalize
             aliases = {
                 "mobile.twitter.com",
                 "www.twitter.com",
@@ -1462,7 +1446,11 @@ class Router:
                 "www.x.com",
                 "x.com",
                 "fxtwitter.com",
+                "www.fxtwitter.com",
                 "vxtwitter.com",
+                "www.vxtwitter.com",
+                "fixupx.com",
+                "www.fixupx.com",
             }
             if host in aliases:
                 host = "x.com"
@@ -1491,6 +1479,68 @@ class Router:
             return url
         except Exception:
             return url
+
+    @staticmethod
+    def _collect_x_candidate_urls(item: InputItem) -> List[str]:
+        urls: List[str] = []
+        try:
+            if item.source_type == "url":
+                urls.append(str(item.payload))
+            elif item.source_type == "embed":
+                embed = item.payload
+                primary_url = getattr(embed, "url", None)
+                if primary_url:
+                    urls.append(primary_url)
+                video = getattr(embed, "video", None)
+                if video and getattr(video, "url", None):
+                    urls.append(video.url)
+                image = getattr(embed, "image", None)
+                if image and getattr(image, "url", None):
+                    urls.append(image.url)
+                thumb = getattr(embed, "thumbnail", None)
+                if thumb and getattr(thumb, "url", None):
+                    urls.append(thumb.url)
+            elif item.source_type == "attachment":
+                attachment = item.payload
+                url = getattr(attachment, "url", None)
+                if url:
+                    urls.append(url)
+                proxy = getattr(attachment, "proxy_url", None)
+                if proxy:
+                    urls.append(proxy)
+        except Exception:
+            pass
+        return [u for u in urls if u]
+
+    @staticmethod
+    def _is_twitter_thumbnail_url(url: str) -> bool:
+        try:
+            host = urlparse(url).netloc.lower()
+        except Exception:
+            return False
+        return host in {
+            "pbs.twimg.com",
+            "pbs-0.twimg.com",
+            "pbs-1.twimg.com",
+            "pbs-2.twimg.com",
+            "pbs-3.twimg.com",
+        }
+
+    @staticmethod
+    def _is_twitter_media_cdn(url: str) -> bool:
+        try:
+            host = urlparse(url).netloc.lower()
+        except Exception:
+            return False
+        return host in {
+            "pbs.twimg.com",
+            "pbs-0.twimg.com",
+            "pbs-1.twimg.com",
+            "pbs-2.twimg.com",
+            "pbs-3.twimg.com",
+            "video.twimg.com",
+            "ton.twimg.com",
+        }
 
     async def _resolve_x_media(
         self,
@@ -4395,10 +4445,36 @@ class Router:
             x_info_for_gate = _detect_x_twitter_media(message)
         except Exception:
             x_info_for_gate = None
+        x_hosts_for_gate = [
+            "x.com",
+            "twitter.com",
+            "fxtwitter.com",
+            "vxtwitter.com",
+            "fixupx.com",
+        ]
         has_x_url = any(
-            host in (message.content or "").lower()
-            for host in ["x.com", "twitter.com", "fxtwitter.com"]
+            host in (message.content or "").lower() for host in x_hosts_for_gate
         ) or (x_info_for_gate.has_x_link if x_info_for_gate else False)
+
+        x_media_kind = "none"
+        if x_info_for_gate:
+            x_media_kind = x_info_for_gate.media_kind or "none"
+        try:
+            self.logger.info(f"x.media.kind {x_media_kind}")
+        except Exception:
+            pass
+
+        x_media_state = {
+            "kind": x_media_kind,
+            "processed": {},
+            "allow_vision": x_media_kind != "video",
+        }
+        if x_info_for_gate and x_info_for_gate.media_urls:
+            x_media_state["primary_urls"] = {
+                self._normalize_x_url(u) for u in x_info_for_gate.media_urls if u
+            }
+        else:
+            x_media_state["primary_urls"] = set()
 
         # Filter out Twitter thumbnails from image count if X URLs present
         if has_x_url and heuristic_image_items:
@@ -4406,21 +4482,13 @@ class Router:
             suppressed = 0
             for item in heuristic_image_items:
                 try:
-                    if item.source_type == "url":
-                        from urllib.parse import urlparse
-
-                        raw = str(item.payload)
-                        parsed = urlparse(raw)
-                        host = (parsed.netloc or "").lower()
-                        (parsed.path or "").lower()
-                        # Ignore common Twitter image thumbnail hosts and paths
-                        if host.endswith("twimg.com") or host in {
-                            "pbs.twimg.com",
-                            "video.twimg.com",
-                        }:
-                            suppressed += 1
-                            self._metric_inc("routing.twitter.thumb_suppressed", None)
-                            continue
+                    candidate_urls = self._collect_x_candidate_urls(item)
+                    if candidate_urls and all(
+                        self._is_twitter_thumbnail_url(u) for u in candidate_urls
+                    ):
+                        suppressed += 1
+                        self._metric_inc("routing.twitter.thumb_suppressed", None)
+                        continue
                 except Exception:
                     # On parse errors, keep the item
                     pass
@@ -4611,6 +4679,34 @@ class Router:
         start_time = time.time()
         for i, item in enumerate(items, start=1):
             modality = await map_item_to_modality(item)
+
+            x_candidate_urls: List[str] = []
+            status_keys: set[str] = set()
+            is_twitter_thumbnail = False
+            if has_x_url:
+                x_candidate_urls = self._collect_x_candidate_urls(item)
+                status_keys = {
+                    self._normalize_x_url(u)
+                    for u in x_candidate_urls
+                    if self._is_twitter_status_url(u)
+                }
+                if not status_keys and x_candidate_urls:
+                    for u in x_candidate_urls:
+                        normalized = self._normalize_x_url(u)
+                        if normalized in x_media_state["primary_urls"]:
+                            status_keys.add(normalized)
+                if x_candidate_urls and all(
+                    self._is_twitter_thumbnail_url(u) for u in x_candidate_urls
+                ):
+                    is_twitter_thumbnail = True
+
+            if (
+                x_media_state["kind"] == "video"
+                and modality == InputModality.GENERAL_URL
+                and status_keys
+            ):
+                modality = InputModality.VIDEO_URL
+
             # Create description for logging
             if item.source_type == "attachment":
                 description = f"{item.payload.filename}"
@@ -4622,6 +4718,28 @@ class Router:
                 description = f"{item.source_type}"
 
             self.logger.info(f"📋 Starting item {i}: {modality.name} - {description}")
+
+            skip_reason: Optional[str] = None
+            if status_keys:
+                for key in status_keys:
+                    existing = x_media_state["processed"].get(key)
+                    if existing:
+                        skip_reason = f"duplicate:{existing}"
+                        break
+            if (
+                skip_reason is None
+                and x_media_state["kind"] == "video"
+                and not x_media_state["allow_vision"]
+                and is_twitter_thumbnail
+            ):
+                skip_reason = "thumbnail_blocked"
+
+            if skip_reason:
+                try:
+                    self.logger.info(f"x.media.skip reason={skip_reason}")
+                except Exception:
+                    pass
+                continue
 
             # Determine modality type for retry manager and per-item budget
             if modality in [InputModality.SINGLE_IMAGE, InputModality.MULTI_IMAGE]:
@@ -4692,12 +4810,29 @@ class Router:
                     result_text = msg
                     duration = result.total_time
                     attempts = result.attempts
+
+                if status_keys:
+                    status_label = "consumed" if success else "failed"
+                    for key in status_keys:
+                        x_media_state["processed"][key] = status_label
+                    if success and modality == InputModality.VIDEO_URL:
+                        x_media_state["allow_vision"] = False
+                        try:
+                            self.logger.info("x.media.consumed by=stt")
+                        except Exception:
+                            pass
+                    elif not success:
+                        x_media_state["allow_vision"] = True
             except Exception as e:
                 self.logger.error(f"❌ Item {i} exception: {e}")
                 success = False
                 result_text = f"❌ Exception: {e}"
                 duration = 0.0
                 attempts = 0
+                if status_keys:
+                    for key in status_keys:
+                        x_media_state["processed"][key] = "failed"
+                    x_media_state["allow_vision"] = True
 
             aggregator.add_result(
                 item_index=i,
@@ -4959,7 +5094,7 @@ class Router:
 
         # For Twitter/X URLs, implement fallback logic
         is_twitter = re.match(
-            r"https?://(?:www\.)?(?:twitter|x|fxtwitter|vxtwitter)\.com/", url
+            r"https?://(?:www\.)?(?:twitter|x|fxtwitter|vxtwitter|fixupx)\.com/", url
         )
 
         try:
@@ -5045,6 +5180,13 @@ class Router:
                 hear_infer_from_url(stt_target_url),
                 message,
             )
+            if result:
+                try:
+                    metadata = result.get("metadata") or {}
+                    if metadata.get("demux_fallback"):
+                        self.logger.info("x.media.demux_fallback used=true")
+                except Exception:
+                    pass
             if result and result.get("transcription"):
                 if is_twitter:
                     cfg = self.config

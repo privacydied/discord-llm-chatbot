@@ -479,6 +479,27 @@ class TTSCommands(commands.Cog):
                 message = (
                     "❌ The TTS engine does not support this request right now. Please try again later."
                 )
+            elif "engine_input_error" in reason:
+                logging.error(
+                    "tts.process.failed command=say reason=engine_input_error",
+                    extra={
+                        "subsys": "tts_cmds",
+                        "event": "say.synthesis_failed",
+                        "guild_id": guild_id,
+                        "channel_id": channel_id,
+                        "user_id": user_id,
+                    },
+                )
+                detail = reason.split("engine_input_error", 1)[-1].lstrip(": ").strip()
+                if detail:
+                    message = (
+                        "❌ The TTS engine could not process the request: "
+                        f"{detail}"
+                    )
+                else:
+                    message = (
+                        "❌ The TTS engine could not process the request because the input phonemes are unsupported."
+                    )
             else:
                 logging.error(
                     "tts.process.failed command=say reason=runtime",

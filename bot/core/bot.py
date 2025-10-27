@@ -16,6 +16,7 @@ from rich.panel import Panel
 
 from bot.config import load_system_prompts
 from bot.config_reload import add_reload_callback
+from bot.enhanced_retry import get_retry_manager
 from bot.http_client import cleanup_http_client
 from bot.utils.logging import get_logger
 from bot.metrics import NullMetrics
@@ -390,6 +391,19 @@ class LLMBot(commands.Bot):
                                         self.logger.info("Vision orchestrator config rebound (hot)")
                                     except Exception as e:
                                         self.logger.debug(f"Vision hot-rebind failed: {e}")
+                                try:
+                                    retry_mgr = get_retry_manager()
+                                    summary = retry_mgr.refresh_from_env()
+                                    vision_order = summary.get("vision", [])
+                                    head = vision_order[0] if vision_order else ""
+                                    order_repr = "[" + ",".join(vision_order) + "]"
+                                    self.logger.info(
+                                        "vision.ladder.rebound head=%s order=%s source=env_hot",
+                                        head,
+                                        order_repr,
+                                    )
+                                except Exception as rebound_exc:
+                                    self.logger.debug(f"Vision ladder rebound failed: {rebound_exc}")
                             # Restart shared HTTP client on HTTP/PROXY/TIMEOUT/RETRY changes
                             if any(
                                 k.startswith("HTTP_")

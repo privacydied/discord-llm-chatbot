@@ -4,13 +4,13 @@ import io
 import os
 import re
 from pathlib import Path
-import asyncio
-from typing import Any, Optional
+from typing import Any, Dict, Optional, Tuple
 from bot.tts.kokoro_adapter import Kokoro, import_kokoro_submodule, get_direct_wrapper
 from .base import BaseEngine
 from bot.tts.errors import TTSError
 from bot.tokenizer_registry import select_tokenizer_for_language, apply_lexicon
 from bot.tts.helpers import maybe_onnx_session
+from bot.tts.ipa_vocab_loader import UnsupportedIPASymbolError
 
 logger = logging.getLogger(__name__)
 
@@ -151,7 +151,7 @@ class KokoroONNXEngine(BaseEngine):
                     exc_info=True,
                 )
 
-        return self._synthesize_with_registry_sync(text)
+        return self._synthesize_with_registry(text)
 
     def _synthesize_english_ipa(self, text: str, **kwargs) -> bytes:
         logger.debug(
@@ -170,6 +170,9 @@ class KokoroONNXEngine(BaseEngine):
             from bot.tts.eng_g2p_local import G2PUnavailableError, text_to_ipa
 
             ipa = text_to_ipa(text)
+        except UnsupportedIPASymbolError as exc:
+            message = str(exc).strip()
+            raise TTSError(f"engine_input_error: unsupported_ipa {message}") from exc
         except Exception as exc:
             logger.error(
                 "English IPA synthesis failed during G2P: %s",
@@ -180,6 +183,16 @@ class KokoroONNXEngine(BaseEngine):
             if isinstance(exc, G2PUnavailableError):
                 raise TTSError(f"English IPA unavailable: {exc}") from exc
             raise TTSError(f"English IPA synthesis failed: {exc}") from exc
+
+        ipa, replacements = self._normalize_ipa_symbols(ipa)
+        if replacements:
+            replaced_repr = "[" + ",".join(f"'{k}'" for k in replacements.keys()) + "]"
+            total = sum(replacements.values())
+            logger.info(
+                "kokoro.ipa.normalize replaced=%s count=%d",
+                replaced_repr,
+                total,
+            )
 
         # If a kd override is present (common in tests), use it unconditionally
         kd_override = getattr(self, "kd", None)
@@ -338,25 +351,16 @@ class KokoroONNXEngine(BaseEngine):
             force_ipa=force_ipa,
         )
 
-    def _synthesize_with_registry_sync(self, text: str) -> bytes:
-        """Run the registry synthesis coroutine synchronously in this thread."""
-        loop = asyncio.new_event_loop()
-        prev_loop: Optional[asyncio.AbstractEventLoop]
-        try:
-            try:
-                prev_loop = asyncio.get_event_loop()
-            except RuntimeError:
-                prev_loop = None
-            asyncio.set_event_loop(loop)
-            return loop.run_until_complete(self._synthesize_with_registry_async(text))
-        finally:
-            if prev_loop is not None:
-                asyncio.set_event_loop(prev_loop)
-            else:
-                asyncio.set_event_loop(None)
-            loop.close()
+    @staticmethod
+    def _normalize_ipa_symbols(ipa: str) -> Tuple[str, Dict[str, int]]:
+        replacements: Dict[str, int] = {}
+        if "g" in ipa:
+            count = ipa.count("g")
+            ipa = ipa.replace("g", "ɡ")
+            replacements["g->ɡ"] = count
+        return ipa, replacements
 
-    async def _synthesize_with_registry_async(self, text: str) -> bytes:
+    def _synthesize_with_registry(self, text: str) -> bytes:
         """Synthesize using the existing registry-based approach (for non-English)."""
         # Apply lexicon overrides via registry (do not duplicate registry logs)
         try:
@@ -404,9 +408,16 @@ class KokoroONNXEngine(BaseEngine):
                     except Exception:
                         continue
                     if inspect.isawaitable(result):
-                        result = await result
+                        logger.debug(
+                            "kokoro.registry.async_unsupported name=%s",
+                            "generate_audio",
+                        )
+                        continue
                     wav_bytes = self._normalize_audio_to_wav_bytes(result)
                     if wav_bytes is not None:
+                        logger.info(
+                            "kokoro.registry.found name=generate_audio mode=engine async=false"
+                        )
                         return wav_bytes
                 logger.debug(
                     "generate_audio variants did not yield recognizable audio; continuing to fallbacks"
@@ -469,14 +480,20 @@ class KokoroONNXEngine(BaseEngine):
                         )
                         result = create(phonemes, self.voice, is_phonemes=True)
                         if inspect.isawaitable(result):
-                            result = await result
-                        wav_bytes = self._normalize_audio_to_wav_bytes(result)
-                        if wav_bytes is not None:
-                            return wav_bytes
-                        else:
                             logger.debug(
-                                "create(is_phonemes=True) returned unrecognized audio format; continuing to probing methods"
+                                "kokoro.registry.async_unsupported name=create"
                             )
+                        else:
+                            wav_bytes = self._normalize_audio_to_wav_bytes(result)
+                            if wav_bytes is not None:
+                                logger.info(
+                                    "kokoro.registry.found name=create mode=engine async=false"
+                                )
+                                return wav_bytes
+                            else:
+                                logger.debug(
+                                    "create(is_phonemes=True) returned unrecognized audio format; continuing to probing methods"
+                                )
             except Exception:
                 # Fall through to generic probing quietly
                 logger.debug(
@@ -630,19 +647,20 @@ class KokoroONNXEngine(BaseEngine):
                     continue
 
                 if inspect.isawaitable(call_result):
-                    async_used = True
-                    result = await call_result
-                else:
-                    async_used = False
-                    result = call_result
+                    logger.debug(
+                        "kokoro.registry.async_unsupported name=%s",
+                        name,
+                    )
+                    continue
+
+                result = call_result
 
                 # Normalize output to WAV bytes
                 wav_bytes = self._normalize_audio_to_wav_bytes(result)
                 if wav_bytes is not None:
                     logger.info(
-                        "kokoro.registry.found name=%s mode=engine async=%s",
+                        "kokoro.registry.found name=%s mode=engine async=false",
                         name,
-                        str(async_used).lower(),
                     )
                     return wav_bytes
                 else:
@@ -671,7 +689,8 @@ class KokoroONNXEngine(BaseEngine):
             kd = kd_cls(model_path=self.model_path, voices_path=self.voices_path)
 
             decision = select_for_language(self.language, text)
-            ipa_mode = "ipa" if decision.mode == "phonemes" else "auto"
+            lang_lower = (self.language or "en").lower()
+            ipa_mode = "ipa" if lang_lower.startswith("en") else "auto"
             logger.info(
                 "kokoro.decision mode=%s alphabet=%s ipa_mode=%s text_len=%d",
                 decision.mode,
@@ -679,6 +698,8 @@ class KokoroONNXEngine(BaseEngine):
                 ipa_mode,
                 len(text or ""),
             )
+            if lang_lower.startswith("en") and decision.mode != "phonemes":
+                raise TTSError("engine_input_error: english_requires_phonemes")
 
             generate_waveform = getattr(kd, "generate_waveform", None)
             if not callable(generate_waveform):
@@ -703,6 +724,8 @@ class KokoroONNXEngine(BaseEngine):
 
             try:
                 audio_candidate = generate_waveform(**payload, **gw_kwargs)
+            except UnsupportedIPASymbolError as exc:
+                raise TTSError(f"engine_input_error: unsupported_ipa {exc}") from exc
             except Exception as exc:
                 logger.error(
                     "kokoro.registry.none engine=%s mode=direct candidates=%s",
