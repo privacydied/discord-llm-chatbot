@@ -5,10 +5,17 @@ Combines per-item results into a single coherent response for the text flow.
 
 from dataclasses import dataclass
 from typing import List, Optional
+
 from .modality import InputModality, InputItem
 from .utils.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+IMPLICIT_ACK_THOUGHTS_PROMPT = (
+    "The user provided media without explicit text. Acknowledge the media, then share thoughtful "
+    "observations grounded in the processed evidence below."
+)
 
 
 @dataclass
@@ -73,6 +80,12 @@ class ResultAggregator:
 
         # Build the aggregated prompt
         parts = []
+
+        include_ack_prompt = not (original_text and original_text.strip())
+        if include_ack_prompt:
+            parts.append(IMPLICIT_ACK_THOUGHTS_PROMPT)
+            parts.append("")
+            logger.debug("Implicit ack+thoughts prompt injected for media-only aggregation.")
 
         # Add header with summary
         total_items = len(self.results)
