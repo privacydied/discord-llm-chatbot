@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import os
 import re
+import sys
 from typing import TYPE_CHECKING, Optional, Dict, List, Tuple, Any
 
 import discord
@@ -2140,11 +2141,23 @@ class LLMBot(commands.Bot):
 
             # Close global ollama client first
             try:
-                from .ollama import ollama_client
+                ollama_client = None
+                for module_name in ("bot.ollama", "bot.core.ollama"):
+                    module = sys.modules.get(module_name)
+                    if not module:
+                        continue
+                    candidate = getattr(module, "ollama_client", None)
+                    if candidate:
+                        ollama_client = candidate
+                        break
 
                 if ollama_client and hasattr(ollama_client, "close"):
                     self.logger.debug("Closing global ollama client")
                     await asyncio.wait_for(ollama_client.close(), timeout=2.0)
+                else:
+                    self.logger.debug(
+                        "No global ollama client to close (module not loaded or disabled)"
+                    )
             except Exception as e:
                 self.logger.debug(f"Error closing global ollama client: {e}")
 
