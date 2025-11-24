@@ -32,6 +32,8 @@ from bot.memory.thread_tail import (
     _is_thread_channel,
 )
 
+_DISCORD_MAX_CONTENT_LEN = 1900
+
 if TYPE_CHECKING:
     from bot.router import Router, BotAction
     from bot.tts import TTSManager
@@ -1208,7 +1210,55 @@ class LLMBot(commands.Bot):
         embed_count = len(action.embeds) if action.embeds else 0
         file_count = len(files) if files else 0
 
-        # Discord has a 2000 character limit: attach overflow as file
+        # Pre-split content into Discord-safe chunks; most replies will be a single chunk.
+        max_len = _DISCORD_MAX_CONTENT_LEN
+        if content and len(content) > max_len:
+            chunks = self._chunk_message_content(content)
+        else:
+            chunks = [content]
+        needs_chunking = len(chunks) > 1
+        if needs_chunking:
+            try:
+                joined = "".join(chunks)
+                if joined != (content or ""):
+                    self.logger.warning(
+                        "dispatch.chunk.mismatch",
+                        extra={
+                            **base_extra,
+                            "event": "dispatch.send.chunk_mismatch",
+                            "content_len": len(content or ""),
+                            "joined_len": len(joined or ""),
+                            "parts": len(chunks),
+                        },
+                    )
+
+                max_part_len = max(len(c) for c in chunks) if chunks else 0
+                if max_part_len > max_len:
+                    self.logger.warning(
+                        "dispatch.chunk.oversize",
+                        extra={
+                            **base_extra,
+                            "event": "dispatch.send.chunk_oversize",
+                            "max_part_len": max_part_len,
+                            "max_len": max_len,
+                            "parts": len(chunks),
+                        },
+                    )
+
+                self.logger.info(
+                    "dispatch.chunked",
+                    extra={
+                        **base_extra,
+                        "event": "dispatch.send.chunked",
+                        "parts": len(chunks),
+                        "content_len": len(content or ""),
+                    },
+                )
+            except Exception:
+                pass
+
+        # Discord has a 2000 character limit: attach overflow as file for operators while
+        # still sending the full content via multi-part messages when needed.
         if content and len(content) > 2000:
             self.logger.warning(
                 f"dispatch:overflow | length={len(content)}",
@@ -1220,12 +1270,6 @@ class LLMBot(commands.Bot):
                 files = []
             files.append(text_file)
             file_count = len(files)
-
-            # The message becomes a notification about the attached file.
-            if action.meta.get("is_reply"):
-                content = f"{message.author.mention}\n\nThe response was too long to post directly. The full content is attached as a file."
-            else:
-                content = "The response was too long to post directly. The full content is attached as a file."
 
         # Guardrail: if everything is empty, synthesize a fallback message
         if (not content.strip()) and embed_count == 0 and file_count == 0:
@@ -1249,7 +1293,19 @@ class LLMBot(commands.Bot):
         # Show typing indicator while sending the message
         async with message.channel.typing():
             try:
-                if content or action.embeds or files:
+                if needs_chunking and (content or action.embeds or files):
+                    sent_message = await self._send_chunked_reply(
+                        message=message,
+                        action=action,
+                        base_extra=base_extra,
+                        force_reply_target=force_reply_target,
+                        target_message=target_message,
+                        dispatch_meta=dispatch_meta,
+                        content=content,
+                        files=files,
+                        chunks=chunks,
+                    )
+                elif content or action.embeds or files:
                     ch = getattr(force_reply_target, "channel", None) or getattr(
                         message, "channel", None
                     )
@@ -1337,10 +1393,16 @@ class LLMBot(commands.Bot):
                             recipient_reason = "target_author"
                         # Avoid self-mention (bot) and any bot authors
                         if recipient is not None and (
-                            getattr(recipient, "bot", False) or getattr(recipient, "id", None) == getattr(self.user, "id", None)
+                            getattr(recipient, "bot", False)
+                            or getattr(recipient, "id", None)
+                            == getattr(self.user, "id", None)
                         ):
                             # Fallback: latest human speaker in-scope; minimally choose triggering human author
-                            recipient = message.author if not getattr(message.author, "bot", False) else None
+                            recipient = (
+                                message.author
+                                if not getattr(message.author, "bot", False)
+                                else None
+                            )
                             recipient_reason = "fallback_human" if recipient else "no_human"
                     except Exception:
                         recipient = None
@@ -1352,7 +1414,11 @@ class LLMBot(commands.Bot):
                     try:
                         if recipient is not None:
                             # Preferred: rely on reply ping when the target author is the human recipient
-                            if reply_target is not None and getattr(reply_target, "author", None) is recipient and not getattr(recipient, "bot", False):
+                            if (
+                                reply_target is not None
+                                and getattr(reply_target, "author", None) is recipient
+                                and not getattr(recipient, "bot", False)
+                            ):
                                 ping_mode = "reply_ping"
                             else:
                                 # Use explicit mention when target author is a bot or different; avoid double-ping
@@ -1372,7 +1438,10 @@ class LLMBot(commands.Bot):
                             )
                         elif ping_mode == "explicit_mention" and recipient is not None:
                             allowed_mentions = discord.AllowedMentions(
-                                everyone=False, users=[recipient], roles=False, replied_user=False
+                                everyone=False,
+                                users=[recipient],
+                                roles=False,
+                                replied_user=False,
                             )
                         else:
                             allowed_mentions = discord.AllowedMentions(
@@ -1385,8 +1454,14 @@ class LLMBot(commands.Bot):
                     try:
                         if explicit_mention and recipient is not None:
                             mention_prefix = getattr(recipient, "mention", None)
-                            if mention_prefix and not (content or "").lstrip().startswith(str(mention_prefix)):
-                                content = f"{mention_prefix} {content}" if content else f"{mention_prefix}"
+                            if mention_prefix and not (content or "").lstrip().startswith(
+                                str(mention_prefix)
+                            ):
+                                content = (
+                                    f"{mention_prefix} {content}"
+                                    if content
+                                    else f"{mention_prefix}"
+                                )
                     except Exception:
                         pass
 
@@ -1398,7 +1473,10 @@ class LLMBot(commands.Bot):
                                 **base_extra,
                                 "subsys": "mention",
                                 "event": "recipient_resolved",
-                                "detail": {"user": getattr(recipient, "id", None), "reason": recipient_reason},
+                                "detail": {
+                                    "user": getattr(recipient, "id", None),
+                                    "reason": recipient_reason,
+                                },
                             },
                         )
                         self.logger.info(
@@ -1421,6 +1499,11 @@ class LLMBot(commands.Bot):
                             f"dispatch:edit.ok | discord_msg_id={getattr(sent_message, 'id', None)} embeds={embed_count} files={file_count}",
                             extra={**base_extra, "event": "dispatch.edit.ok"},
                         )
+                        # Track bot response in enhanced context manager
+                        if self.enhanced_context_manager and sent_message:
+                            await self.enhanced_context_manager.append_message(
+                                sent_message, role="bot"
+                            )
                     else:
                         # Remove placeholder if present, then send a proper reply with desired target
                         if target_message:
@@ -1437,7 +1520,11 @@ class LLMBot(commands.Bot):
                                     **base_extra,
                                     "subsys": "route",
                                     "event": "send",
-                                    "detail": {"mode": "delete_and_resend" if target_message else "direct"},
+                                    "detail": {
+                                        "mode": "delete_and_resend"
+                                        if target_message
+                                        else "direct"
+                                    },
                                 },
                             )
                         except Exception:
@@ -1446,7 +1533,10 @@ class LLMBot(commands.Bot):
                         if reply_target is None and _is_thread_channel(ch):
                             # Send to thread without a reply reference (no reply-to-self loops available)
                             sent_message = await message.channel.send(
-                                content=content, embeds=action.embeds, files=files, allowed_mentions=allowed_mentions
+                                content=content,
+                                embeds=action.embeds,
+                                files=files,
+                                allowed_mentions=allowed_mentions,
                             )
                         elif reply_target is not None:
                             sent_message = await reply_target.reply(
@@ -1508,6 +1598,391 @@ class LLMBot(commands.Bot):
                     f"dispatch:finalize | sent={(sent_message is not None)}",
                     extra={**base_extra, "event": "dispatch.send.finalize"},
                 )
+
+    async def _send_chunked_reply(
+        self,
+        message: discord.Message,
+        action: "BotAction",
+        *,
+        base_extra: Dict[str, Any],
+        force_reply_target: discord.Message | None,
+        target_message: discord.Message | None,
+        dispatch_meta: Dict[str, Any],
+        content: str,
+        files,
+        chunks: List[str],
+    ) -> Optional[discord.Message]:
+        """Send a long text reply as multiple Discord messages while preserving reply targeting."""
+        guild_id = getattr(message.guild, "id", None)
+        is_dm = isinstance(message.channel, discord.DMChannel)
+        ingress_channel_id = getattr(message.channel, "id", None)
+        _ = guild_id, is_dm, ingress_channel_id  # already present in base_extra
+
+        if not chunks:
+            return None
+
+        ch = getattr(force_reply_target, "channel", None) or getattr(
+            message, "channel", None
+        )
+        reply_target = force_reply_target
+        scope_case = "forced"
+        if reply_target is None:
+            scope_case = "fallback"
+            try:
+                if _is_thread_channel(ch):
+                    reply_target, _ = await resolve_thread_reply_target(
+                        self, message, self.config
+                    )
+                    scope_case = "thread"
+                elif getattr(message, "reference", None) is not None:
+                    reply_target = message
+                    scope_case = "reply"
+                else:
+                    reply_target = message
+                    scope_case = "plain"
+            except Exception:
+                reply_target = message
+                scope_case = "reply"
+
+        # Scope + target breadcrumbs
+        try:
+            self.logger.info(
+                "scope_resolved",
+                extra={
+                    **base_extra,
+                    "subsys": "route",
+                    "event": "scope_resolved",
+                    "detail": {"case": scope_case, "scope": getattr(ch, "id", None)},
+                },
+            )
+            if reply_target is not None:
+                self.logger.info(
+                    "reply_target_ok",
+                    extra={
+                        **base_extra,
+                        "subsys": self.config.get("MEM_LOG_SUBSYS", "mem.force"),
+                        "event": "reply_target_ok",
+                        "detail": {
+                            "id": getattr(reply_target, "id", None),
+                            "reason": "trigger_message",
+                        },
+                    },
+                )
+        except Exception:
+            pass
+
+        try:
+            self.logger.info(
+                "reply.target",
+                extra={
+                    **base_extra,
+                    "event": "dispatch.reply_target",
+                    "detail": {
+                        "channel_id": base_extra.get("channel_id"),
+                        "thread_id": base_extra.get("thread_id"),
+                        "trigger_message_id": dispatch_meta.get("trigger_message_id"),
+                    },
+                },
+            )
+        except Exception:
+            pass
+
+        # Any existing placeholder should be removed; multi-part replies always target the user message directly.
+        if target_message is not None:
+            try:
+                await target_message.delete()
+            except Exception:
+                pass
+
+        # Resolve recipient and ping strategy once, then fan out to chunks.
+        recipient = None
+        recipient_reason = "no_target"
+        try:
+            if reply_target is not None and hasattr(reply_target, "author"):
+                recipient = getattr(reply_target, "author", None)
+                recipient_reason = "target_author"
+            if recipient is not None and (
+                getattr(recipient, "bot", False)
+                or getattr(recipient, "id", None) == getattr(self.user, "id", None)
+            ):
+                recipient = (
+                    message.author
+                    if not getattr(message.author, "bot", False)
+                    else None
+                )
+                recipient_reason = "fallback_human" if recipient else "no_human"
+        except Exception:
+            recipient = None
+            recipient_reason = "no_human"
+
+        ping_mode = "none"
+        explicit_mention = False
+        try:
+            if recipient is not None:
+                if (
+                    reply_target is not None
+                    and getattr(reply_target, "author", None) is recipient
+                    and not getattr(recipient, "bot", False)
+                ):
+                    ping_mode = "reply_ping"
+                else:
+                    ping_mode = "explicit_mention"
+                    explicit_mention = True
+            else:
+                ping_mode = "none"
+        except Exception:
+            ping_mode = "none"
+            explicit_mention = False
+
+        try:
+            self.logger.info(
+                "recipient_resolved",
+                extra={
+                    **base_extra,
+                    "subsys": "mention",
+                    "event": "recipient_resolved",
+                    "detail": {
+                        "user": getattr(recipient, "id", None),
+                        "reason": recipient_reason,
+                    },
+                },
+            )
+            self.logger.info(
+                "ping_strategy",
+                extra={
+                    **base_extra,
+                    "subsys": "mention",
+                    "event": "ping_strategy",
+                    "detail": {"mode": ping_mode},
+                },
+            )
+        except Exception:
+            pass
+
+        try:
+            if ping_mode == "reply_ping":
+                allowed_first = discord.AllowedMentions(
+                    everyone=False, users=[], roles=False, replied_user=True
+                )
+                allowed_followups = discord.AllowedMentions(
+                    everyone=False, users=[], roles=False, replied_user=False
+                )
+            elif ping_mode == "explicit_mention" and recipient is not None:
+                allowed_first = discord.AllowedMentions(
+                    everyone=False,
+                    users=[recipient],
+                    roles=False,
+                    replied_user=False,
+                )
+                allowed_followups = discord.AllowedMentions(
+                    everyone=False, users=[], roles=False, replied_user=False
+                )
+            else:
+                allowed_first = discord.AllowedMentions(
+                    everyone=False, users=[], roles=False, replied_user=False
+                )
+                allowed_followups = allowed_first
+        except Exception:
+            allowed_first = None
+            allowed_followups = None
+
+        mention_prefix = None
+        try:
+            if explicit_mention and recipient is not None:
+                mention_prefix = getattr(recipient, "mention", None)
+        except Exception:
+            mention_prefix = None
+
+        total_parts = len(chunks)
+        last_sent: Optional[discord.Message] = None
+
+        for part_idx, base_chunk in enumerate(chunks, start=1):
+            is_first_part = part_idx == 1
+            chunk_content = base_chunk
+
+            # Apply explicit mention only to the first part.
+            try:
+                if (
+                    is_first_part
+                    and mention_prefix
+                    and not (chunk_content or "").lstrip().startswith(
+                        str(mention_prefix)
+                    )
+                ):
+                    chunk_content = (
+                        f"{mention_prefix} {chunk_content}"
+                        if chunk_content
+                        else f"{mention_prefix}"
+                    )
+            except Exception:
+                pass
+
+            part_embeds = action.embeds if is_first_part else []
+            part_files = files if (is_first_part and files) else None
+            part_allowed_mentions = (
+                allowed_first if is_first_part else allowed_followups
+            )
+
+            if not (chunk_content or part_embeds or part_files):
+                continue
+
+            # Per-part attempt logging
+            try:
+                part_preview = (chunk_content or "").replace("\n", " ")[:120]
+                self.logger.info(
+                    f'dispatch:attempt | part={part_idx}/{total_parts} content_len={len(chunk_content or "")} preview="{part_preview}" embeds={len(part_embeds)} files={len(part_files) if part_files else 0}',
+                    extra={
+                        **base_extra,
+                        "event": "dispatch.send.attempt",
+                        "part": part_idx,
+                        "parts": total_parts,
+                    },
+                )
+            except Exception:
+                pass
+
+            try:
+                if reply_target is None and _is_thread_channel(ch):
+                    sent = await message.channel.send(
+                        content=chunk_content,
+                        embeds=part_embeds,
+                        files=part_files,
+                        allowed_mentions=part_allowed_mentions,
+                    )
+                elif reply_target is not None:
+                    sent = await reply_target.reply(
+                        content=chunk_content,
+                        embeds=part_embeds,
+                        files=part_files,
+                        mention_author=False,
+                        allowed_mentions=part_allowed_mentions,
+                    )
+                else:
+                    sent = await message.reply(
+                        content=chunk_content,
+                        embeds=part_embeds,
+                        files=part_files,
+                        mention_author=False,
+                        allowed_mentions=part_allowed_mentions,
+                    )
+
+                last_sent = sent
+                try:
+                    self.logger.info(
+                        f"dispatch:ok | part={part_idx}/{total_parts} discord_msg_id={getattr(sent, 'id', None)} embeds={len(part_embeds)} files={len(part_files) if part_files else 0}",
+                        extra={
+                            **base_extra,
+                            "event": "dispatch.send.ok",
+                            "part": part_idx,
+                            "parts": total_parts,
+                        },
+                    )
+                except Exception:
+                    pass
+
+                if self.enhanced_context_manager and sent:
+                    await self.enhanced_context_manager.append_message(
+                        sent, role="bot"
+                    )
+            except discord.errors.HTTPException as e:
+                try:
+                    self.logger.error(
+                        f"dispatch:error | part={part_idx}/{total_parts} code={e.code} status={getattr(e, 'status', 'n/a')} details={str(e)}",
+                        extra={
+                            **base_extra,
+                            "event": "dispatch.send.error",
+                            "part": part_idx,
+                            "parts": total_parts,
+                        },
+                        exc_info=True,
+                    )
+                except Exception:
+                    pass
+                break
+
+        return last_sent
+
+    def _chunk_message_content(self, content: str) -> List[str]:
+        """Split a text payload into Discord-safe chunks.
+
+        This is a best-effort splitter that prefers paragraph and line boundaries, then
+        spaces, and finally falls back to hard cuts. It is intentionally simple and
+        does not attempt full Markdown parsing; occasional splits inside code fences
+        are acceptable.
+        """
+        try:
+            if content is None:
+                return [""]
+            text = str(content)
+        except Exception:
+            # Fallback: treat as opaque string.
+            text = content or ""
+
+        max_len = _DISCORD_MAX_CONTENT_LEN
+        if len(text) <= max_len:
+            return [text]
+
+        chunks: List[str] = []
+        n = len(text)
+        start = 0
+
+        while start < n:
+            remaining = n - start
+            if remaining <= max_len:
+                chunks.append(text[start:])
+                break
+
+            window = text[start : start + max_len]
+
+            candidates: List[int] = []
+            # Prefer paragraph boundaries first.
+            para_idx = window.rfind("\n\n")
+            if para_idx != -1:
+                candidates.append(para_idx + 2)
+            # Then single newlines.
+            line_idx = window.rfind("\n")
+            if line_idx != -1:
+                candidates.append(line_idx + 1)
+            # Then spaces or tabs.
+            space_idx = max(window.rfind(" "), window.rfind("\t"))
+            if space_idx != -1:
+                candidates.append(space_idx + 1)
+
+            # Deduplicate while preserving order.
+            seen: set[int] = set()
+            uniq_candidates: List[int] = []
+            for c in candidates:
+                if c not in seen and c > 0:
+                    seen.add(c)
+                    uniq_candidates.append(c)
+
+            best_break: int | None = None
+            # Prefer boundaries that keep us outside of fenced code blocks when possible.
+            for candidate in sorted(uniq_candidates, reverse=True):
+                segment = text[start : start + candidate]
+                try:
+                    if segment.count("```") % 2 == 0:
+                        best_break = candidate
+                        break
+                except Exception:
+                    # If anything goes wrong, fall back to naive behaviour.
+                    best_break = candidate
+                    break
+
+            if best_break is None:
+                if uniq_candidates:
+                    best_break = max(uniq_candidates)
+                else:
+                    best_break = max_len
+
+            if best_break <= 0:
+                best_break = max_len
+
+            chunk = text[start : start + best_break]
+            chunks.append(chunk)
+            start += best_break
+
+        return chunks
 
     def _is_long_running_admin_command(self, message: discord.Message) -> bool:
         """Check if this is a long-running admin command that should run out-of-band."""

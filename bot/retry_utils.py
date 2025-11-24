@@ -62,6 +62,13 @@ def is_retryable_error(error: Exception, config: RetryConfig) -> bool:
     """
     error_str = str(error).lower()
 
+    try:
+        retryable_flag = getattr(error, "retryable", True)
+        if retryable_flag is False:
+            return False
+    except Exception:
+        pass
+
     # 1) Direct type match
     if any(isinstance(error, exc_type) for exc_type in config.retryable_exceptions):
         return True
@@ -334,6 +341,22 @@ VISION_RETRY_CONFIG = RetryConfig(
 
 API_RETRY_CONFIG = RetryConfig(
     max_attempts=3,
+    base_delay=1.0,
+    max_delay=60.0,
+    exponential_base=1.5,
+    jitter=True,
+    retryable_exceptions=[
+        APIError,
+        ConnectionError,
+        TimeoutError,
+        httpx.HTTPStatusError,
+        aiohttp.ClientResponseError,
+    ],
+    retryable_status_codes=[500, 502, 503, 504, 429],
+)
+
+API_SINGLE_ATTEMPT_CONFIG = RetryConfig(
+    max_attempts=1,
     base_delay=1.0,
     max_delay=60.0,
     exponential_base=1.5,

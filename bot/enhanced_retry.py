@@ -89,6 +89,13 @@ class EnhancedRetryManager:
                     ]
                 except Exception:
                     timeouts = []
+            # Allow env overrides to inherit tuned defaults (timeout, attempts, backoff)
+            # when the provider+model pair matches an entry in the default ladder. This
+            # keeps TEXT_FALLBACK_MODELS aligned with default_text/default_vision even
+            # when TEXT_FALLBACK_TIMEOUTS is omitted or partially specified.
+            default_by_key: Dict[tuple[str, str], ProviderConfig] = {
+                (pc.name, pc.model): pc for pc in default
+            }
             ladder: List[ProviderConfig] = []
             for idx, entry in enumerate(models):
                 if "|" in entry:
@@ -97,12 +104,33 @@ class EnhancedRetryManager:
                     model = model.strip()
                 else:
                     provider, model = "openrouter", entry
-                timeout = (
-                    timeouts[idx]
-                    if idx < len(timeouts)
-                    else (15.0 if provider == "openrouter" else 20.0)
-                )
-                ladder.append(ProviderConfig(provider, model, timeout=timeout))
+                base_cfg = default_by_key.get((provider, model))
+
+                # Determine timeout priority: explicit env timeout → default ladder timeout
+                # for this provider+model (if any) → legacy generic fallback (15/20s).
+                if idx < len(timeouts):
+                    timeout = timeouts[idx]
+                elif base_cfg is not None:
+                    timeout = base_cfg.timeout
+                else:
+                    timeout = 15.0 if provider == "openrouter" else 20.0
+
+                if base_cfg is not None:
+                    # Preserve tuned retry/backoff parameters from the default ladder
+                    ladder.append(
+                        ProviderConfig(
+                            provider,
+                            model,
+                            timeout=timeout,
+                            max_attempts=base_cfg.max_attempts,
+                            base_delay=base_cfg.base_delay,
+                            max_delay=base_cfg.max_delay,
+                            exponential_base=base_cfg.exponential_base,
+                            jitter=base_cfg.jitter,
+                        )
+                    )
+                else:
+                    ladder.append(ProviderConfig(provider, model, timeout=timeout))
             return ladder
 
         # Optimized defaults with faster timeouts
@@ -120,13 +148,25 @@ class EnhancedRetryManager:
             ),
         ]
         default_text = [
+            # Prefer chat-style model first for latency and robustness
             ProviderConfig(
-                "openrouter", "deepseek/deepseek-r1-0528:free", timeout=15.0
+                "openrouter",
+                "deepseek/deepseek-chat-v3-0324:free",
+                timeout=25.0,
+                max_attempts=2,
             ),
             ProviderConfig(
-                "openrouter", "deepseek/deepseek-chat-v3-0324:free", timeout=20.0
+                "openrouter",
+                "deepseek/deepseek-r1-0528:free",
+                timeout=25.0,
+                max_attempts=1,
             ),
-            ProviderConfig("openrouter", "z-ai/glm-4.5-air:free", timeout=25.0),
+            ProviderConfig(
+                "openrouter",
+                "z-ai/glm-4.5-air:free",
+                timeout=30.0,
+                max_attempts=1,
+            ),
         ]
         # Media tasks (e.g., video/audio downloads) are not LLM calls; they often need longer timeouts
         # and fewer attempts. Use an internal single-step "provider" to reuse the retry harness.
@@ -179,19 +219,19 @@ class EnhancedRetryManager:
         try:
             v = ", ".join(
                 [
-                    f"{pc.name}|{pc.model}(t={pc.timeout}s)"
+                    f"{pc.name}|{pc.model}(t={pc.timeout}s,a={pc.max_attempts})"
                     for pc in self.provider_configs["vision"]
                 ]
             )
             t = ", ".join(
                 [
-                    f"{pc.name}|{pc.model}(t={pc.timeout}s)"
+                    f"{pc.name}|{pc.model}(t={pc.timeout}s,a={pc.max_attempts})"
                     for pc in self.provider_configs["text"]
                 ]
             )
             m = ", ".join(
                 [
-                    f"{pc.name}|{pc.model}(t={pc.timeout}s)"
+                    f"{pc.name}|{pc.model}(t={pc.timeout}s,a={pc.max_attempts})"
                     for pc in self.provider_configs["media"]
                 ]
             )
@@ -350,6 +390,14 @@ class EnhancedRetryManager:
             "client error",
         ]
 
+        # Hard non-retryable 404 / no-endpoints patterns (provider permanently unavailable)
+        if "404" in error_str and "no endpoints found" in error_str:
+            return False
+        if "404" in error_str and "no endpoint" in error_str and "openrouter" in error_str:
+            return False
+        if "404" in error_str and "model not found" in error_str:
+            return False
+
         # Check both error message and error type name
         return any(pattern in error_str for pattern in retryable_patterns) or any(
             pattern in error_type for pattern in retryable_patterns
@@ -456,6 +504,18 @@ class EnhancedRetryManager:
                             e = te
                     except Exception:
                         pass
+                    # Treat OpenRouter 404 / no-endpoints as permanent provider unavailability [REH]
+                    msg_lower = f"{type(e).__name__}: {e}".lower()
+                    if "404" in msg_lower and "no endpoints found" in msg_lower:
+                        logger.error(
+                            f"❌ Provider unavailable (404 no endpoints) for {provider_key}: {type(e).__name__}: {e}"
+                        )
+                        last_exception = e
+                        self._record_failure(provider_key)
+                        breaker = self._get_circuit_breaker(provider_key)
+                        breaker.status = ProviderStatus.CIRCUIT_OPEN
+                        break
+
                     logger.warning(
                         f"⚠️ Attempt {attempt + 1} failed with {provider_key}: {type(e).__name__}: {e}"
                     )

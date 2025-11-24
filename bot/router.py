@@ -8682,8 +8682,6 @@ class Router:
                     if instr_lc in expand_tokens:
                         final_text = raw_text
                         # Soft guard: Discord 2000 char limit
-                        if len(final_text) > 1900:
-                            final_text = final_text[:1900].rstrip() + "…"
                         return BotAction(content=final_text)
 
                     # Concise path: sanitize and truncate per config

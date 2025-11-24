@@ -1086,8 +1086,11 @@ async def _run_whisper(
 
         try:
             await pre.stream.finalize(success=not transcript.aborted)
-        except Exception:
-            logger.debug("⚠️ Stream finalization failed", exc_info=True)
+        except Exception as exc:
+            if isinstance(exc, InferenceError) and "Audio preprocessing timed out" in str(exc):
+                logger.debug("⚠️ Stream finalization failed: %s", exc)
+            else:
+                logger.debug("⚠️ Stream finalization failed", exc_info=True)
 
         pre.update_from_stream()
 
@@ -1104,7 +1107,21 @@ async def _run_whisper(
                 )
                 spec = next_spec
                 attempted_slow_downgrade = True
-                _reset_stream_from_cache(pre)
+                try:
+                    _reset_stream_from_cache(pre)
+                except InferenceError as exc:
+                    # PCM cache is unavailable for retry; keep the existing transcript
+                    # and treat this as a soft failure rather than aborting STT. [REH]
+                    try:
+                        logger.info(
+                            "stt.fail reason=PCM cache unavailable for STT retry; using existing transcript (%s)",
+                            str(exc),
+                        )
+                    except Exception:
+                        pass
+                    if job:
+                        job.register_transcript(transcript)
+                    return transcript
                 continue
         if job:
             job.register_transcript(transcript)

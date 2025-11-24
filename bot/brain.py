@@ -73,6 +73,24 @@ async def brain_infer(
             user_message = "🔐 There's an authentication issue with the AI service. Please contact an administrator."
         elif "rate limit" in error_str or "quota" in error_str:
             user_message = "⏱️ The AI service is currently rate-limited. Please wait a moment and try again."
+        elif "providers unavailable via openrouter" in error_str or (
+            "404" in error_str and "no endpoints" in error_str
+        ) or ("404" in error_str and "endpoint" in error_str and "openrouter" in error_str):
+            try:
+                logger.info(
+                    "text.model_pool_unavailable",
+                    extra={
+                        "event": "text.model_pool_unavailable",
+                        "detail": {"reason": "provider_unavailable_openrouter"},
+                    },
+                )
+            except Exception:
+                pass
+            user_message = (
+                "🤖 The AI model pool I'm using is temporarily unavailable. "
+                "This is an issue with the upstream provider, not your message. "
+                "Please try again in a little while."
+            )
         elif "timeout" in error_str:
             user_message = (
                 "⏰ The AI service timed out. Please try again with a shorter message."

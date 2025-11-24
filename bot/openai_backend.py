@@ -15,6 +15,7 @@ from .exceptions import APIError
 from .memory import get_profile, get_server_profile
 from .retry_utils import (
     API_RETRY_CONFIG,
+    API_SINGLE_ATTEMPT_CONFIG,
     VISION_RETRY_CONFIG,
     classify_vl_error,
     is_retryable_error,
@@ -26,7 +27,7 @@ from bot.enhanced_retry import get_retry_manager
 logger = get_logger(__name__)
 
 
-@with_retry(API_RETRY_CONFIG)
+@with_retry(API_SINGLE_ATTEMPT_CONFIG)
 async def generate_openai_response(
     prompt: str,
     context: str = "",
@@ -295,7 +296,7 @@ Server Context: {server_context}"""
 
                 return _run
 
-            per_item_budget = float(config.get("TEXT_PER_ITEM_BUDGET", 75.0))
+            per_item_budget = float(config.get("TEXT_PER_ITEM_BUDGET", 120.0))
             try:
                 logger.info(
                     f"[OpenAI] text.budget seconds={per_item_budget}")
@@ -307,19 +308,47 @@ Server Context: {server_context}"""
             if not rr.success:
                 # Enrich error with ladder context for better observability [REH]
                 if rr.error:
+                    base_err = rr.error
                     try:
                         prov = (
                             getattr(rr, "provider_used", None)
-                            or getattr(rr.error, "provider_key", None)
+                            or getattr(base_err, "provider_key", None)
                             or "unknown"
                         )
                         attempts = getattr(rr, "attempts", 0)
                         total_time = getattr(rr, "total_time", 0.0)
-                        msg = f"Text fallback ladder failed after {attempts} attempt(s) in {total_time:.2f}s (last_provider={prov}): {type(rr.error).__name__}: {rr.error}"
-                        raise APIError(msg)
+                        err_str = str(base_err).lower()
+                        if "no endpoints found" in err_str or (
+                            "404" in err_str and "endpoint" in err_str
+                        ):
+                            msg = (
+                                "Text providers unavailable via OpenRouter (404 / no endpoints) "
+                                f"after {attempts} attempt(s) in {total_time:.2f}s "
+                                f"(last_provider={prov}). Last error: {type(base_err).__name__}: {base_err}"
+                            )
+                        elif "timeout" in err_str:
+                            msg = (
+                                f"Text generation timeout after {total_time:.2f}s across "
+                                f"{attempts} attempt(s) (last_provider={prov}). "
+                                f"Last error: {type(base_err).__name__}: {base_err}"
+                            )
+                        else:
+                            msg = (
+                                f"Text fallback ladder failed after {attempts} attempt(s) in "
+                                f"{total_time:.2f}s (last_provider={prov}): {type(base_err).__name__}: {base_err}"
+                            )
+                        api_err = APIError(msg)
+                        try:
+                            if "no endpoints found" in err_str or (
+                                "404" in err_str and "endpoint" in err_str
+                            ):
+                                setattr(api_err, "retryable", False)
+                        except Exception:
+                            pass
+                        raise api_err
                     except Exception:
                         # Fallback to original error if wrapping fails
-                        raise rr.error
+                        raise base_err
                 raise APIError("All text providers exhausted")
             return rr.result
 
