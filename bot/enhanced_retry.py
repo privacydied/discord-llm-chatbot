@@ -433,6 +433,7 @@ class EnhancedRetryManager:
 
         for provider_idx, provider_config in enumerate(providers):
             provider_key = f"{provider_config.name}:{provider_config.model}"
+            has_next_provider = provider_idx < len(providers) - 1
 
             # Check circuit breaker
             if not self._is_provider_available(provider_key):
@@ -570,9 +571,14 @@ class EnhancedRetryManager:
 
             # If we get here, all attempts for this provider failed
             fallback_occurred = True
-            logger.warning(
-                f"❌ All attempts failed for {provider_key}, trying next provider"
-            )
+            if has_next_provider:
+                logger.warning(
+                    f"❌ All attempts failed for {provider_key}, trying next provider"
+                )
+            else:
+                logger.warning(
+                    f"❌ All attempts failed for {provider_key}, last provider in ladder"
+                )
 
         # All providers exhausted
         total_time = time.time() - start_time
