@@ -19,6 +19,7 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+commit_message.txt
 
 # Virtual Environment
 venv/

@@ -345,10 +345,12 @@ Server Context: {server_context}"""
                                 setattr(api_err, "retryable", False)
                         except Exception:
                             pass
-                        raise api_err
                     except Exception:
                         # Fallback to original error if wrapping fails
                         raise base_err
+                    # Normal path: propagate a clean APIError up to the caller so it can be
+                    # handled without dumping a full traceback in logs. [REH]
+                    raise api_err
                 raise APIError("All text providers exhausted")
             return rr.result
 
@@ -455,7 +457,10 @@ Server Context: {server_context}"""
         error_details = f"{error_type}: {error_msg}"
 
         logger.error(
-            f"Unexpected error in generate_openai_response: {error_details}",
+            f"Unexpected error in generate_openai_response: {error_details}"
+        )
+        logger.debug(
+            "Traceback for unexpected error in generate_openai_response",
             exc_info=True,
         )
         raise APIError(f"Failed to generate OpenAI response: {error_details}")

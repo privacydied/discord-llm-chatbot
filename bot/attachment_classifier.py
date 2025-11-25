@@ -276,3 +276,176 @@ def get_by_bucket(
 ) -> List[ClassifiedAttachment]:
     """Filter classified attachments by bucket."""
     return [c for c in classified if c.bucket == bucket]
+
+
+# ---------------------------------------------------------------------------
+# Unified MIME classification for both attachments and URLs [CA][CMV]
+# ---------------------------------------------------------------------------
+
+# MIME type → bucket mappings (first match wins within category)
+_AUDIO_MIMES = frozenset({
+    "audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav", "audio/flac",
+    "audio/x-flac", "audio/webm", "audio/ogg", "audio/opus", "audio/aac",
+    "audio/m4a", "audio/x-m4a", "audio/mp4", "application/ogg",
+})
+
+_VIDEO_MIMES = frozenset({
+    "video/mp4", "video/webm", "video/x-matroska", "video/quicktime",
+    "video/x-msvideo", "video/avi", "video/x-flv", "video/x-ms-wmv",
+    "video/mpeg", "video/ogg",
+})
+
+_IMAGE_MIMES = frozenset({
+    "image/png", "image/jpeg", "image/jpg", "image/webp", "image/gif",
+    "image/bmp", "image/tiff", "image/svg+xml", "image/x-icon",
+})
+
+_DOC_MIMES = frozenset({
+    "application/pdf",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/rtf", "text/rtf",
+    "text/markdown", "text/x-markdown",
+    "application/vnd.oasis.opendocument.text",
+})
+
+_WEB_PAGE_MIMES = frozenset({
+    "text/html", "application/xhtml+xml",
+})
+
+# Extension → bucket mappings (lowercase, with leading dot)
+_AUDIO_EXTS = frozenset({
+    ".mp3", ".wav", ".ogg", ".opus", ".m4a", ".aac", ".flac", ".wma", ".webm", ".oga",
+})
+
+_VIDEO_EXTS = frozenset({
+    ".mp4", ".mov", ".mkv", ".webm", ".avi", ".m4v", ".flv", ".wmv", ".mpg", ".mpeg",
+})
+
+_IMAGE_EXTS = frozenset({
+    ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg", ".ico", ".tiff", ".tif",
+})
+
+_DOC_EXTS = frozenset({
+    ".pdf", ".doc", ".docx", ".odt", ".rtf", ".md", ".markdown", ".xls", ".xlsx",
+})
+
+_TXT_EXTS = frozenset({".txt"})
+
+
+def classify_mime_and_extension(
+    content_type: str | None,
+    filename_or_path: str | None,
+) -> AttachmentBucket:
+    """
+    Classify content into a processing bucket based on MIME type and/or filename extension.
+    
+    This is a unified helper for both Discord attachments and URL-fetched content.
+    
+    Args:
+        content_type: MIME type string (may include charset, e.g. "text/html; charset=utf-8")
+        filename_or_path: Filename or URL path for extension-based fallback
+        
+    Returns:
+        AttachmentBucket indicating the appropriate processing pipeline
+        
+    Rules (first matching wins):
+    - WEB_PAGE: text/html or application/xhtml+xml → handled by web scraper (not attachment pipeline)
+    - AUDIO: audio/* MIME or known audio extensions
+    - VIDEO: video/* MIME or known video extensions
+    - DOC: PDF, DOCX, etc. MIME or document extensions
+    - IMAGE: image/* MIME or image extensions
+    - TXT_PROMPT: .txt files
+    - OTHER: Everything else
+    """
+    # Normalize inputs
+    mime_root = ""
+    if content_type:
+        mime_root = content_type.split(";", 1)[0].strip().lower()
+    
+    ext = ""
+    if filename_or_path:
+        # Extract extension from filename or URL path
+        path_lower = filename_or_path.lower()
+        # Handle query strings in URLs
+        if "?" in path_lower:
+            path_lower = path_lower.split("?", 1)[0]
+        # Find last dot for extension
+        dot_idx = path_lower.rfind(".")
+        if dot_idx != -1:
+            ext = path_lower[dot_idx:]
+    
+    # 1. Web page detection (special case - not an "attachment" bucket but useful for routing)
+    if mime_root in _WEB_PAGE_MIMES:
+        return AttachmentBucket.OTHER  # Signal to use web scraper, not attachment pipeline
+    
+    # 2. Audio detection
+    if mime_root in _AUDIO_MIMES or mime_root.startswith("audio/"):
+        return AttachmentBucket.AUDIO
+    if ext in _AUDIO_EXTS:
+        return AttachmentBucket.AUDIO
+    
+    # 3. Video detection (but not video/webm which might be audio-only)
+    if mime_root in _VIDEO_MIMES or mime_root.startswith("video/"):
+        # video/webm could be audio-only (Opus), check extension
+        if mime_root == "video/webm" and ext in _AUDIO_EXTS:
+            return AttachmentBucket.AUDIO
+        return AttachmentBucket.VIDEO
+    if ext in _VIDEO_EXTS:
+        # .webm could be audio
+        if ext == ".webm" and mime_root and mime_root.startswith("audio/"):
+            return AttachmentBucket.AUDIO
+        return AttachmentBucket.VIDEO
+    
+    # 4. Document detection
+    if mime_root in _DOC_MIMES:
+        return AttachmentBucket.DOC
+    if ext in _DOC_EXTS:
+        return AttachmentBucket.DOC
+    
+    # 5. Image detection
+    if mime_root in _IMAGE_MIMES or mime_root.startswith("image/"):
+        return AttachmentBucket.IMAGE
+    if ext in _IMAGE_EXTS:
+        return AttachmentBucket.IMAGE
+    
+    # 6. Plain text (.txt) for prompt extension
+    if ext in _TXT_EXTS:
+        return AttachmentBucket.TXT_PROMPT
+    if mime_root == "text/plain":
+        # text/plain without .txt extension - treat as doc
+        return AttachmentBucket.DOC
+    
+    # 7. application/octet-stream - rely on extension
+    if mime_root == "application/octet-stream":
+        if ext in _AUDIO_EXTS:
+            return AttachmentBucket.AUDIO
+        if ext in _VIDEO_EXTS:
+            return AttachmentBucket.VIDEO
+        if ext in _IMAGE_EXTS:
+            return AttachmentBucket.IMAGE
+        if ext in _DOC_EXTS:
+            return AttachmentBucket.DOC
+        if ext in _TXT_EXTS:
+            return AttachmentBucket.TXT_PROMPT
+    
+    # 8. Default: unsupported
+    return AttachmentBucket.OTHER
+
+
+def is_web_page_mime(content_type: str | None) -> bool:
+    """
+    Check if the content type indicates an HTML web page.
+    
+    Args:
+        content_type: MIME type string (may include charset)
+        
+    Returns:
+        True if this is an HTML page that should go through web scraping
+    """
+    if not content_type:
+        return False
+    mime_root = content_type.split(";", 1)[0].strip().lower()
+    return mime_root in _WEB_PAGE_MIMES

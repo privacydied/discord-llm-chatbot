@@ -13,8 +13,8 @@ logger = get_logger(__name__)
 
 
 IMPLICIT_ACK_THOUGHTS_PROMPT = (
-    "The user provided media without explicit text. Acknowledge the media, then share thoughtful "
-    "observations grounded in the processed evidence below."
+    "The user provided a file or media item without explicit text. Acknowledge the content, then "
+    "share thoughtful observations grounded in the processed evidence below."
 )
 
 
@@ -81,11 +81,56 @@ class ResultAggregator:
         # Build the aggregated prompt
         parts = []
 
-        include_ack_prompt = not (original_text and original_text.strip())
+        # Determine when to inject the implicit ack+thoughts prompt. Reserve this for
+        # true "media-only" cases: at least one visual item, no documents, and no
+        # successful STT-derived text results. [CA][REH]
+        has_original_text = bool(original_text and original_text.strip())
+
+        has_visual_media = any(
+            r.modality
+            in (
+                InputModality.SINGLE_IMAGE,
+                InputModality.MULTI_IMAGE,
+                InputModality.SCREENSHOT_URL,
+            )
+            for r in self.results
+        )
+
+        has_document_modality = any(
+            r.modality in (InputModality.PDF_DOCUMENT, InputModality.PDF_OCR)
+            for r in self.results
+        )
+
+        # Heuristic: treat GENERAL_URL results that start with a [DOCUMENT: header
+        # as document-like content (used by URL-based document ingestion). [CA]
+        has_document_like_url = any(
+            r.modality == InputModality.GENERAL_URL
+            and r.result_text.lstrip().startswith("[DOCUMENT:")
+            for r in self.results
+        )
+
+        has_document = has_document_modality or has_document_like_url
+
+        has_stt_text = any(
+            r.modality in (InputModality.AUDIO_VIDEO_FILE, InputModality.VIDEO_URL)
+            and r.success
+            and bool(r.result_text.strip())
+            for r in self.results
+        )
+
+        include_ack_prompt = (
+            not has_original_text
+            and has_visual_media
+            and not has_document
+            and not has_stt_text
+        )
+
         if include_ack_prompt:
             parts.append(IMPLICIT_ACK_THOUGHTS_PROMPT)
             parts.append("")
-            logger.debug("Implicit ack+thoughts prompt injected for media-only aggregation.")
+            logger.debug(
+                "Implicit ack+thoughts prompt injected for media-only aggregation."
+            )
 
         # Add header with summary
         total_items = len(self.results)

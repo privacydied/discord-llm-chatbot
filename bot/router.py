@@ -73,7 +73,8 @@ from .command_parser import parse_command
 from .utils.file_utils import download_file
 from .utils.attachment_text import read_attachment_text
 from .attachment_classifier import classify_attachments, AttachmentBucket, get_by_bucket
-from .document_ingest import ingest_document_attachment
+from .document_ingest import ingest_document_attachment, ingest_document_from_url
+from .url_classifier import ClassifiedURL
 from .tts.state import tts_state
 from datetime import datetime, timezone
 from .memory.mention_context import maybe_build_mention_context
@@ -5548,8 +5549,36 @@ class Router:
                 os.unlink(tmp_path)
 
     async def _process_pdf_from_url(self, url: str) -> str:
-        """Process PDF from URL."""
-        return f"PDF URL detected: {url}. PDF processing from URLs not yet implemented."
+        """Process PDF from URL using the unified document ingestion pipeline."""
+        try:
+            # Reuse the same document ingestion path as attachments so that
+            # URL-based PDFs behave like uploaded documents. [CA][REH]
+            result = await ingest_document_from_url(url)
+
+            if result.get("error"):
+                err = str(result["error"])
+                self.logger.warning(
+                    f"PDF URL ingestion failed url={url[:80]} error={err[:100]}"
+                )
+                return f"Could not extract text from PDF URL: {url} (Error: {err})"
+
+            text = (result.get("text") or "").strip()
+            if not text:
+                self.logger.warning(
+                    f"PDF URL ingestion produced no text url={url[:80]}"
+                )
+                return f"Could not extract text from PDF URL: {url}"
+
+            # Use a generic label; the aggregator already includes per-item headers
+            # with a human-readable name, so this mirrors the attachment path.
+            return f"PDF content from URL {url}: {text}"
+
+        except Exception as e:
+            self.logger.error(
+                f"PDF URL ingestion exception url={url[:80]} error={e}",
+                exc_info=True,
+            )
+            return "Failed to process PDF document from URL."
 
     async def _handle_pdf_ocr(self, item: InputItem, message: Optional[Message] = None) -> str:
         """
@@ -5565,6 +5594,9 @@ class Router:
         Handle general URL input items.
         Returns extracted content for further processing.
         No auto-screenshot fallback here; screenshots require explicit !ss command.
+        
+        Enhanced: Classifies URLs by MIME type and routes document/audio/video/image
+        URLs to their respective pipelines instead of web scraping. [CA][REH]
         """
         try:
             if item.source_type != "url":
@@ -5575,6 +5607,81 @@ class Router:
             if canon_candidate and canon_candidate != url:
                 url = canon_candidate
             self.logger.info(f"🌐 Processing general URL: {url}")
+            
+            # --- URL MIME classification for media/document routing [CA][REH] ---
+            # Skip classification for known platform URLs (Twitter/X, YouTube, etc.)
+            # which have their own specialized handling below.
+            skip_mime_classification = self._is_twitter_url(url)
+            
+            if not skip_mime_classification:
+                try:
+                    from .url_classifier import classify_url, ClassifiedURL
+                    from .attachment_classifier import AttachmentBucket
+                    
+                    classified = await classify_url(url)
+                    
+                    # Route based on classification bucket
+                    if classified.bucket == AttachmentBucket.DOC:
+                        # Document URL → document ingestion pipeline
+                        self.logger.info(
+                            f"url.route bucket=DOC url={url[:80]}",
+                            extra={
+                                "subsys": "url",
+                                "event": "url.route",
+                                "detail": {"bucket": "DOC", "url": url[:200]},
+                            },
+                        )
+                        return await self._handle_document_url(url, classified, message)
+                    
+                    elif classified.bucket == AttachmentBucket.AUDIO:
+                        # Audio URL → STT pipeline
+                        self.logger.info(
+                            f"url.route bucket=AUDIO url={url[:80]}",
+                            extra={
+                                "subsys": "url",
+                                "event": "url.route",
+                                "detail": {"bucket": "AUDIO", "url": url[:200]},
+                            },
+                        )
+                        return await self._handle_audio_url(url, classified, message)
+                    
+                    elif classified.bucket == AttachmentBucket.VIDEO:
+                        # Video URL → media/STT pipeline
+                        self.logger.info(
+                            f"url.route bucket=VIDEO url={url[:80]}",
+                            extra={
+                                "subsys": "url",
+                                "event": "url.route",
+                                "detail": {"bucket": "VIDEO", "url": url[:200]},
+                            },
+                        )
+                        return await self._handle_video_file_url(url, classified, message)
+                    
+                    elif classified.bucket == AttachmentBucket.IMAGE:
+                        # Image URL → VL pipeline
+                        self.logger.info(
+                            f"url.route bucket=IMAGE url={url[:80]}",
+                            extra={
+                                "subsys": "url",
+                                "event": "url.route",
+                                "detail": {"bucket": "IMAGE", "url": url[:200]},
+                            },
+                        )
+                        return await self._handle_image_url(url, classified, message)
+                    
+                    # OTHER bucket or TXT_PROMPT → fall through to web scraping
+                    self.logger.info(
+                        f"url.route bucket={classified.bucket.name} → web_scrape url={url[:80]}",
+                        extra={
+                            "subsys": "url",
+                            "event": "url.route",
+                            "detail": {"bucket": classified.bucket.name, "url": url[:200], "action": "web_scrape"},
+                        },
+                    )
+                    
+                except Exception as e:
+                    # Classification failed - fall through to existing web scraping [REH]
+                    self.logger.debug(f"url.classify.failed url={url[:80]} error={e}")
 
             # Per-operation time budgets and bounded-wait helper [PA][REH][RAT]
             cfg = self.config
@@ -6353,6 +6460,231 @@ class Router:
         except Exception as e:
             self.logger.error(f"Error processing general URL: {e}", exc_info=True)
             return f"Failed to process URL: {item.payload}"
+
+    # ---------------------------------------------------------------------------
+    # URL-based media/document handlers (routes URLs through attachment pipelines) [CA][REH]
+    # ---------------------------------------------------------------------------
+
+    async def _handle_document_url(
+        self,
+        url: str,
+        classified: "ClassifiedURL",
+        message: Optional[Message] = None,
+    ) -> str:
+        """
+        Handle document URLs (PDF, DOCX, etc.) by downloading and processing through
+        the document ingestion pipeline.
+        
+        Args:
+            url: The document URL
+            classified: Classification result with MIME type and filename
+            message: Optional Discord message for context
+            
+        Returns:
+            Extracted document text or error message
+        """
+        try:
+            from .document_ingest import ingest_document_from_url
+            
+            self.logger.info(
+                f"doc.url.start url={url[:80]} content_type={classified.content_type}",
+                extra={
+                    "subsys": "doc",
+                    "event": "doc.url.start",
+                    "detail": {
+                        "url": url[:200],
+                        "content_type": classified.content_type,
+                        "filename": classified.filename,
+                    },
+                },
+            )
+            
+            result = await ingest_document_from_url(url)
+            
+            if result.get("error"):
+                self.logger.warning(
+                    f"doc.url.failed url={url[:80]} error={result['error'][:100]}"
+                )
+                # Fall through to web scraping silently - don't surface error to user
+                return ""
+            
+            text = result.get("text", "")
+            if text:
+                filename = classified.filename or "document"
+                self.logger.info(
+                    f"doc.url.success url={url[:80]} chars={len(text)}"
+                )
+                return f"[DOCUMENT: {filename}]\n{text}"
+            
+            # No text extracted - fall through silently
+            return ""
+            
+        except Exception as e:
+            self.logger.error(f"doc.url.exception url={url[:80]} error={e}", exc_info=True)
+            return ""
+
+    async def _handle_audio_url(
+        self,
+        url: str,
+        classified: "ClassifiedURL",
+        message: Optional[Message] = None,
+    ) -> str:
+        """
+        Handle audio URLs by downloading and processing through the STT pipeline.
+        
+        Args:
+            url: The audio URL
+            classified: Classification result with MIME type and filename
+            message: Optional Discord message for context
+            
+        Returns:
+            Transcription text or error message
+        """
+        try:
+            self.logger.info(
+                f"audio.url.start url={url[:80]} content_type={classified.content_type}",
+                extra={
+                    "subsys": "stt",
+                    "event": "audio.url.start",
+                    "detail": {
+                        "url": url[:200],
+                        "content_type": classified.content_type,
+                        "filename": classified.filename,
+                    },
+                },
+            )
+            
+            # Use existing hear_infer_from_url which handles URL audio
+            result = await hear_infer_from_url(url)
+            
+            transcription = result.get("transcription", "")
+            if transcription:
+                filename = classified.filename or "audio"
+                metadata = result.get("metadata", {})
+                duration = metadata.get("original_duration_s", 0)
+                
+                self.logger.info(
+                    f"audio.url.success url={url[:80]} chars={len(transcription)} duration={duration:.1f}s"
+                )
+                
+                return f"[AUDIO TRANSCRIPT: {filename}]\n{transcription}"
+            
+            # No transcription - fall through silently
+            self.logger.warning(f"audio.url.empty url={url[:80]}")
+            return ""
+            
+        except Exception as e:
+            self.logger.error(f"audio.url.exception url={url[:80]} error={e}", exc_info=True)
+            return ""
+
+    async def _handle_video_file_url(
+        self,
+        url: str,
+        classified: "ClassifiedURL",
+        message: Optional[Message] = None,
+    ) -> str:
+        """
+        Handle video file URLs by downloading and processing through the STT pipeline.
+        
+        This is for direct video file URLs (e.g., .mp4, .webm files), not video
+        platform URLs (YouTube, TikTok) which have their own handlers.
+        
+        Args:
+            url: The video file URL
+            classified: Classification result with MIME type and filename
+            message: Optional Discord message for context
+            
+        Returns:
+            Transcription text or error message
+        """
+        try:
+            self.logger.info(
+                f"video.url.start url={url[:80]} content_type={classified.content_type}",
+                extra={
+                    "subsys": "stt",
+                    "event": "video.url.start",
+                    "detail": {
+                        "url": url[:200],
+                        "content_type": classified.content_type,
+                        "filename": classified.filename,
+                    },
+                },
+            )
+            
+            # Use existing hear_infer_from_url which handles video URLs via yt-dlp
+            result = await hear_infer_from_url(url)
+            
+            transcription = result.get("transcription", "")
+            if transcription:
+                filename = classified.filename or "video"
+                metadata = result.get("metadata", {})
+                duration = metadata.get("original_duration_s", 0)
+                
+                self.logger.info(
+                    f"video.url.success url={url[:80]} chars={len(transcription)} duration={duration:.1f}s"
+                )
+                
+                return f"[VIDEO TRANSCRIPT: {filename}]\n{transcription}"
+            
+            # No transcription - fall through silently
+            self.logger.warning(f"video.url.empty url={url[:80]}")
+            return ""
+            
+        except Exception as e:
+            self.logger.error(f"video.url.exception url={url[:80]} error={e}", exc_info=True)
+            return ""
+
+    async def _handle_image_url(
+        self,
+        url: str,
+        classified: "ClassifiedURL",
+        message: Optional[Message] = None,
+    ) -> str:
+        """
+        Handle image URLs by downloading and processing through the VL pipeline.
+        
+        Args:
+            url: The image URL
+            classified: Classification result with MIME type and filename
+            message: Optional Discord message for context
+            
+        Returns:
+            Image analysis text or error message
+        """
+        try:
+            self.logger.info(
+                f"image.url.start url={url[:80]} content_type={classified.content_type}",
+                extra={
+                    "subsys": "vl",
+                    "event": "image.url.start",
+                    "detail": {
+                        "url": url[:200],
+                        "content_type": classified.content_type,
+                        "filename": classified.filename,
+                    },
+                },
+            )
+            
+            # Use existing VL describe method
+            analysis = await self._vl_describe_image_from_url(
+                url,
+                prompt="Describe this image in detail. Focus on salient objects, text, and context.",
+            )
+            
+            if analysis:
+                filename = classified.filename or "image"
+                self.logger.info(
+                    f"image.url.success url={url[:80]} chars={len(analysis)}"
+                )
+                return f"[IMAGE: {filename}]\n{analysis}"
+            
+            # No analysis - fall through silently
+            self.logger.warning(f"image.url.empty url={url[:80]}")
+            return ""
+            
+        except Exception as e:
+            self.logger.error(f"image.url.exception url={url[:80]} error={e}", exc_info=True)
+            return ""
 
     async def _handle_screenshot_url(
         self,

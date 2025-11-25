@@ -267,3 +267,130 @@ async def _ingest_as_text(tmp_path: Path, filename: str) -> Dict[str, Any]:
         },
         "error": None,
     }
+
+
+# ---------------------------------------------------------------------------
+# URL-based document ingestion [CA][REH]
+# ---------------------------------------------------------------------------
+
+async def ingest_document_from_url(url: str) -> Dict[str, Any]:
+    """
+    Ingest a document from a URL and extract its text content.
+    
+    Downloads the document to a temp file and processes it using the same
+    pipeline as Discord attachments.
+    
+    Supports: PDF (with OCR fallback), DOCX, DOC, RTF, MD, ODT
+    
+    Args:
+        url: HTTP(S) URL pointing to a document file
+        
+    Returns:
+        Dict with keys: text, metadata, error (if any)
+    """
+    from .url_classifier import download_url_to_temp, _extract_filename_from_url
+    
+    filename = _extract_filename_from_url(url) or "document"
+    ext = Path(filename).suffix.lower()
+    
+    # Ensure we have a valid extension for temp file
+    if not ext:
+        ext = ".tmp"
+    
+    logger.info(
+        f"doc.url.parse kind={ext} url={url[:80]}",
+        extra={
+            "subsys": "doc",
+            "event": "doc.url.parse.start",
+            "detail": {"url": url[:200], "extension": ext},
+        },
+    )
+    
+    # Download to temp file
+    tmp_path, error = await download_url_to_temp(url, suffix=ext)
+    
+    if error:
+        logger.warning(
+            f"doc.url.download.failed url={url[:80]} error={error[:100]}",
+            extra={
+                "subsys": "doc",
+                "event": "doc.url.download.failed",
+                "detail": {"url": url[:200], "error": error[:200]},
+            },
+        )
+        return {
+            "text": "",
+            "metadata": {"source_url": url},
+            "error": f"Failed to download document: {error}",
+        }
+    
+    try:
+        # Route to appropriate parser based on extension
+        if ext == ".pdf":
+            result = await _ingest_pdf(tmp_path, filename)
+        elif ext in {".docx", ".doc", ".odt"}:
+            result = await _ingest_docx(tmp_path, filename)
+        elif ext in {".rtf"}:
+            result = await _ingest_rtf(tmp_path, filename)
+        elif ext in {".md", ".markdown"}:
+            result = await _ingest_markdown(tmp_path, filename)
+        elif ext == ".txt":
+            result = await _ingest_as_text(tmp_path, filename)
+        else:
+            result = {
+                "text": "",
+                "metadata": {},
+                "error": f"Unsupported document type: {ext}",
+            }
+        
+        # Add source URL to metadata
+        result.setdefault("metadata", {})
+        result["metadata"]["source_url"] = url
+        
+        # Log result
+        if result.get("text"):
+            chars = len(result["text"])
+            pages = result.get("metadata", {}).get("page_count", "-")
+            ocr_used = result.get("metadata", {}).get("extraction_method") == "ocr"
+            
+            logger.info(
+                f"doc.url.parse kind={ext} pages={pages} chars={chars} ocr_used={ocr_used}",
+                extra={
+                    "subsys": "doc",
+                    "event": "doc.url.parse.success",
+                    "detail": {
+                        "kind": ext,
+                        "pages": pages,
+                        "chars": chars,
+                        "ocr_used": ocr_used,
+                        "url": url[:200],
+                    },
+                },
+            )
+        elif result.get("error"):
+            logger.warning(
+                f"doc.url.parse.failed kind={ext} error={result['error'][:100]}",
+                extra={
+                    "subsys": "doc",
+                    "event": "doc.url.parse.failed",
+                    "detail": {"kind": ext, "error": result["error"][:200], "url": url[:200]},
+                },
+            )
+        
+        return result
+    
+    except Exception as e:
+        logger.error(f"Document URL ingestion failed for {url}: {e}", exc_info=True)
+        return {
+            "text": "",
+            "metadata": {"source_url": url},
+            "error": f"Failed to process document: {str(e)}",
+        }
+    
+    finally:
+        # Cleanup temp file
+        try:
+            if tmp_path and tmp_path.exists():
+                tmp_path.unlink()
+        except Exception as e:
+            logger.debug(f"Failed to cleanup temp file {tmp_path}: {e}")
