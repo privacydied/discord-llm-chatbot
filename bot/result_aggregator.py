@@ -118,8 +118,80 @@ class ResultAggregator:
             for r in self.results
         )
 
+        # Treat successful GENERAL_URL text as an additional text source so that
+        # scraped link/tweet/document text prevents media-only ack injection. [CA][REH]
+        has_scraped_text = any(
+            r.modality == InputModality.GENERAL_URL
+            and bool(r.result_text.strip())
+            for r in self.results
+        )
+
+        has_text_sources = has_original_text or has_document or has_stt_text or has_scraped_text
+
+        # Media items include visual media plus audio/video sources for logging. [RAT]
+        has_media_items = has_visual_media or any(
+            r.modality in (InputModality.AUDIO_VIDEO_FILE, InputModality.VIDEO_URL)
+            for r in self.results
+        )
+
+        # Low-noise debug snapshot for multimodal aggregation state. [RAT]
+        try:
+            text_snippets = []
+            if original_text and original_text.strip():
+                text_snippets.append(original_text.strip())
+            for r in self.results:
+                if r.modality in (
+                    InputModality.GENERAL_URL,
+                    InputModality.PDF_DOCUMENT,
+                    InputModality.PDF_OCR,
+                    InputModality.AUDIO_VIDEO_FILE,
+                    InputModality.VIDEO_URL,
+                ) and r.result_text.strip():
+                    text_snippets.append(r.result_text.strip())
+
+            media_snippets = [
+                r.result_text.strip()
+                for r in self.results
+                if r.modality
+                in (
+                    InputModality.SINGLE_IMAGE,
+                    InputModality.MULTI_IMAGE,
+                    InputModality.SCREENSHOT_URL,
+                )
+                and r.result_text.strip()
+            ]
+
+            def _join_and_truncate(parts_list, limit: int = 120) -> str:
+                if not parts_list:
+                    return ""
+                joined = " | ".join(parts_list)
+                return joined[:limit]
+
+            text_preview = _join_and_truncate(text_snippets)
+            media_preview = _join_and_truncate(media_snippets)
+
+            logger.debug(
+                "mm.aggregation.summary",
+                extra={
+                    "event": "mm.aggregation.summary",
+                    "detail": {
+                        "has_text_sources": has_text_sources,
+                        "has_original_text": has_original_text,
+                        "has_scraped_text": has_scraped_text,
+                        "has_document": has_document,
+                        "has_stt_text": has_stt_text,
+                        "has_media_items": has_media_items,
+                        "has_visual_media": has_visual_media,
+                        "text_preview": text_preview,
+                        "media_preview": media_preview,
+                    },
+                },
+            )
+        except Exception:
+            pass
+
         include_ack_prompt = (
-            not has_original_text
+            not has_text_sources
             and has_visual_media
             and not has_document
             and not has_stt_text

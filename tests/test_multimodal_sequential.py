@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 from discord import Message, Attachment, Embed
 from bot.router import Router
 from bot.modality import InputModality, InputItem, collect_input_items
-from bot.result_aggregator import ResultAggregator
+from bot.result_aggregator import ResultAggregator, IMPLICIT_ACK_THOUGHTS_PROMPT
 from bot.multimodal_retry import run_with_retries
 
 
@@ -302,6 +302,70 @@ def test_result_aggregator_formatting():
     assert "Document contains technical specs." in prompt
     assert "### Original Message Text:" in prompt
     assert "Original message text" in prompt
+
+
+def test_result_aggregator_injects_ack_for_media_only_image():
+    """Media-only SINGLE_IMAGE with no other text sources should inject implicit ack+thoughts prompt."""
+    aggregator = ResultAggregator()
+
+    mock_item = InputItem(
+        "attachment",
+        MagicMock(spec=Attachment, filename="doom.jpg", content_type="image/jpeg"),
+        0,
+    )
+
+    aggregator.add_result(
+        0,
+        mock_item,
+        InputModality.SINGLE_IMAGE,
+        "Image 1: A Doomguy screenshot with demons in the background.",
+        True,
+        1.2,
+        1,
+    )
+
+    prompt = aggregator.get_aggregated_prompt("")
+
+    assert IMPLICIT_ACK_THOUGHTS_PROMPT in prompt
+    assert "doom.jpg" in prompt
+    assert "Doomguy" in prompt
+
+
+def test_result_aggregator_uses_scraped_general_url_text_as_text_source():
+    """Scraped GENERAL_URL text (e.g., tweet caption + VL analysis) should prevent media-only ack injection."""
+    aggregator = ResultAggregator()
+
+    mock_item = InputItem(
+        "url",
+        "https://twitter.com/user/status/123",
+        0,
+    )
+
+    tweet_vl_block = """VISUAL_FACTS:
+tweet caption:
+This is a Doom tweet with an image of Doomguy.
+
+vl prompt output:
+[image 1/1]
+Doomguy stands in front of a horde of demons in a fiery arena."""
+
+    aggregator.add_result(
+        0,
+        mock_item,
+        InputModality.GENERAL_URL,
+        tweet_vl_block,
+        True,
+        2.0,
+        1,
+    )
+
+    prompt = aggregator.get_aggregated_prompt("")
+
+    # Scraped GENERAL_URL text should count as a text source and disable implicit media-only ack.
+    assert IMPLICIT_ACK_THOUGHTS_PROMPT not in prompt
+    assert "VISUAL_FACTS:" in prompt
+    assert "tweet caption:" in prompt
+    assert "This is a Doom tweet with an image of Doomguy." in prompt
 
 
 def test_collect_input_items_order():
