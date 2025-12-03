@@ -1628,6 +1628,13 @@ async def hear_infer_from_url(
     """
     Transcribe audio fetched via yt-dlp for the given URL.
     """
+    # Log the exact URL being processed for STT job identity tracking [REH]
+    logger.info(
+        "stt.job.start kind=url url=%s force_refresh=%s",
+        url[:120] if url else "none",
+        force_refresh,
+    )
+    
     spans = SpanRecorder()
     ram_guard = STTRAMGuard(STT_MAX_RAM_MB)
     job = STTJob(kind="url", spans=spans, ram_guard=ram_guard)
@@ -1693,6 +1700,16 @@ async def hear_infer_from_url(
             }
             spans.end("stitch", ok=True)
             _log_summary(spans, pre, transcript, cache_hit=transcript.cache_hit)
+            
+            # Log transcript completion with URL identity for debugging [REH]
+            transcript_preview = (transcript.text[:60] + "...") if len(transcript.text) > 60 else transcript.text
+            logger.info(
+                "stt.job.complete url=%s chars=%d preview=%s",
+                url[:80] if url else "none",
+                len(transcript.text),
+                repr(transcript_preview),
+            )
+            
             return await job.finish_success(result)
     except RAMGuardExceeded as exc:
         if job.pre and job.pre.stream:

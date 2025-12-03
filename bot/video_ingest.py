@@ -381,11 +381,83 @@ class VideoIngestionManager:
         h = hashlib.sha256((resolved_url or "").encode("utf-8")).hexdigest()
         return h[:16]
 
+    @staticmethod
+    def _normalize_tiktok_url(url: str) -> str:
+        """
+        Normalize TikTok URLs to a canonical form for consistent cache keying.
+        Strips tracking params and normalizes scheme/host variations.
+        Also extracts video ID from player/embed URLs to map them to canonical identity.
+        [REH][CA]
+        """
+        if not url:
+            return url
+        try:
+            parsed = urlparse(url)
+            # Normalize TikTok host variations
+            host = parsed.netloc.lower()
+            if host in ("vm.tiktok.com", "m.tiktok.com", "www.tiktok.com", "tiktok.com"):
+                path = parsed.path.rstrip("/")
+                
+                # Handle /player/v1/<video_id> embed URLs - extract video ID for identity
+                player_match = re.match(r"^/player(?:/v\d+)?/(\d+)", path)
+                if player_match:
+                    video_id = player_match.group(1)
+                    return f"tiktok://video/{video_id}"
+                
+                # Handle /@user/video/<video_id> canonical URLs - extract video ID
+                video_match = re.match(r"^/@[\w\.-]+/video/(\d+)", path)
+                if video_match:
+                    video_id = video_match.group(1)
+                    return f"tiktok://video/{video_id}"
+                
+                # For short URLs like /t/ZP8UxRTSU, the path is the key
+                return f"tiktok://{path}"
+        except Exception:
+            pass
+        return url
+
+    @staticmethod
+    def _is_tiktok_player_url(url: str) -> bool:
+        """
+        Check if URL is a TikTok player/embed URL that yt-dlp cannot handle directly.
+        These URLs should be skipped for STT or deduplicated against the canonical URL.
+        [REH][IV]
+        """
+        if not url:
+            return False
+        try:
+            parsed = urlparse(url)
+            host = parsed.netloc.lower()
+            if host in ("vm.tiktok.com", "m.tiktok.com", "www.tiktok.com", "tiktok.com"):
+                path = parsed.path or ""
+                # /player/ or /player/v1/ URLs are embed URLs
+                if path.startswith("/player"):
+                    return True
+        except Exception:
+            pass
+        return False
+
     def _compute_download_key(
-        self, resolved_url: str, fmt_id: str, content_length: Optional[int]
+        self, resolved_url: str, fmt_id: str, content_length: Optional[int],
+        original_url: Optional[str] = None,
     ) -> str:
+        """
+        Compute a unique cache key for a download job.
+        
+        Incorporates both the resolved CDN URL and the original user URL to ensure
+        cache uniqueness even if CDN URLs are reused across different videos.
+        [REH][CA]
+        """
         length_part = str(content_length) if content_length is not None else "na"
-        return f"{self._hash_resolved_url(resolved_url)}-{fmt_id}-{length_part}"
+        base_key = f"{self._hash_resolved_url(resolved_url)}-{fmt_id}-{length_part}"
+        
+        # Include original URL hash for TikTok to prevent cross-contamination [REH]
+        if original_url and "tiktok" in (original_url or "").lower():
+            orig_normalized = self._normalize_tiktok_url(original_url)
+            orig_hash = self._hash_resolved_url(orig_normalized)[:8]
+            base_key = f"{base_key}-o{orig_hash}"
+        
+        return base_key
 
     def _get_cache_entry(
         self, download_key: str
@@ -477,13 +549,28 @@ class VideoIngestionManager:
         return temp_path, content_length
 
     async def _probe_metadata(self, url: str, timeout_s: float) -> Dict[str, Any]:
+        # Log the exact URL being probed for STT debugging [REH]
+        logger.info(
+            "stt.ytdlp.probe url=%s",
+            url[:120] if url else "none",
+        )
         cmd = ["yt-dlp", "--dump-json", "--no-playlist", "--quiet", url]
         cmd = self._augment_with_cookies(cmd, url)
         stdout, _ = await self._run_subprocess(cmd, timeout_s, "yt-dlp metadata probe")
         try:
-            return json.loads(stdout.decode())
+            metadata = json.loads(stdout.decode())
         except json.JSONDecodeError as exc:
             raise VideoIngestError(f"Failed to parse yt-dlp metadata: {exc}")
+        
+        # Log the resolved URL from yt-dlp for debugging [REH]
+        resolved_id = metadata.get("id") or "unknown"
+        resolved_webpage = metadata.get("webpage_url") or metadata.get("url") or "none"
+        logger.info(
+            "stt.ytdlp.resolved id=%s webpage_url=%s",
+            resolved_id[:40] if resolved_id else "none",
+            resolved_webpage[:80] if resolved_webpage else "none",
+        )
+        return metadata
 
     async def _download_audio(
         self,
@@ -493,6 +580,12 @@ class VideoIngestionManager:
         output_dir: Path,
         timeout_s: float,
     ) -> Path:
+        # Log the exact URL being downloaded for STT debugging [REH]
+        logger.info(
+            "stt.ytdlp.download url=%s format=%s",
+            source_url[:120] if source_url else "none",
+            format_id,
+        )
         out_template = output_dir / "%(id)s.%(ext)s"
         cmd = [
             "yt-dlp",
@@ -509,9 +602,7 @@ class VideoIngestionManager:
             "--retry-sleep",
             "1",
             "--socket-timeout",
-            "5",
-            "--connect-timeout",
-            "5",
+            "10",
             "--format",
             format_id,
             "--output",
@@ -588,6 +679,21 @@ class VideoIngestionManager:
                     )
                 raise
 
+            # Validate that yt-dlp returned metadata for a TikTok video when we expect one [REH]
+            if "tiktok" in url_no_fragment.lower():
+                webpage_url = metadata.get("webpage_url") or ""
+                extractor = metadata.get("extractor") or metadata.get("extractor_key") or ""
+                if webpage_url and "tiktok" not in webpage_url.lower():
+                    logger.warning(
+                        "stt.ytdlp.mismatch expected=tiktok got=%s webpage_url=%s original=%s",
+                        extractor,
+                        webpage_url[:80],
+                        url_no_fragment[:80],
+                    )
+                    raise VideoIngestError(
+                        f"yt-dlp returned unexpected content: expected TikTok, got {extractor}"
+                    )
+
             resolved_url = selected.get("url") or metadata.get("url") or url_no_fragment
             fmt_id = str(selected.get("format_id") or selected.get("format"))
             ext = (selected.get("ext") or "m4a").lower()
@@ -615,9 +721,17 @@ class VideoIngestionManager:
                 )
 
             download_key = self._compute_download_key(
-                resolved_url, fmt_id, content_length
+                resolved_url, fmt_id, content_length, original_url=url
             )
             cache_entry = None if force_refresh else self._get_cache_entry(download_key)
+            
+            # Log cache lookup for STT debugging [REH]
+            logger.debug(
+                "stt.cache.lookup key=%s original_url=%s resolved_url=%s",
+                download_key[:20],
+                url[:60] if url else "none",
+                resolved_url[:60] if resolved_url else "none",
+            )
 
             cache_hit = False
             if cache_entry:

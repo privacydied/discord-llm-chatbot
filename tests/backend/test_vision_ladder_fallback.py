@@ -1,0 +1,183 @@
+"""
+Tests for vision ladder fallback via EnhancedRetryManager.
+Verifies that VISION_FALLBACK_MODELS ladder is used for VL calls.
+"""
+
+import pytest
+import httpx
+
+from bot.enhanced_retry import get_retry_manager, ProviderConfig
+
+
+def make_httpx_429(retry_after: float = 1.0) -> httpx.HTTPStatusError:
+    request = httpx.Request("POST", "https://example.com/v1/chat/completions")
+    response = httpx.Response(
+        429, headers={"Retry-After": str(retry_after)}, request=request
+    )
+    return httpx.HTTPStatusError(
+        "429 Too Many Requests", request=request, response=response
+    )
+
+
+@pytest.mark.asyncio
+async def test_enhanced_retry_manager_vision_ladder_fallback():
+    """Test that vision ladder falls back from first to second provider."""
+    mgr = get_retry_manager()
+    mgr.circuit_breakers.clear()
+    
+    # Configure vision ladder: first fails, second succeeds
+    mgr.provider_configs["vision"] = [
+        ProviderConfig("openrouter", "vision-fail-a", timeout=2.0, max_attempts=1),
+        ProviderConfig("openrouter", "vision-ok-b", timeout=2.0, max_attempts=1),
+    ]
+
+    def factory(pc: ProviderConfig):
+        async def run():
+            if pc.model == "vision-fail-a":
+                raise Exception("429 Too Many Requests")
+            return {
+                "text": "Vision OK",
+                "model": pc.model,
+                "usage": {"total_tokens": 100},
+                "backend": "openai",
+            }
+
+        return run
+
+    res = await mgr.run_with_fallback("vision", factory, per_item_budget=10.0)
+    
+    assert res.success is True
+    assert res.provider_used.endswith(":vision-ok-b")
+    assert res.attempts == 2
+    assert res.fallback_occurred is True
+    assert res.result["text"] == "Vision OK"
+    assert res.result["model"] == "vision-ok-b"
+
+
+@pytest.mark.asyncio
+async def test_enhanced_retry_manager_vision_ladder_all_fail():
+    """Test that vision ladder exhaustion is properly reported."""
+    mgr = get_retry_manager()
+    mgr.circuit_breakers.clear()
+    
+    # Configure vision ladder: both providers fail
+    mgr.provider_configs["vision"] = [
+        ProviderConfig("openrouter", "vision-fail-a", timeout=1.0, max_attempts=1),
+        ProviderConfig("openrouter", "vision-fail-b", timeout=1.0, max_attempts=1),
+    ]
+
+    def factory(pc: ProviderConfig):
+        async def run():
+            raise Exception("503 Service Unavailable")
+
+        return run
+
+    res = await mgr.run_with_fallback("vision", factory, per_item_budget=5.0)
+    
+    assert res.success is False
+    assert res.error is not None
+    assert res.fallback_occurred is True
+    assert res.attempts >= 2
+
+
+@pytest.mark.asyncio
+async def test_enhanced_retry_manager_vision_single_provider_success():
+    """Test that vision ladder works with a single provider that succeeds."""
+    mgr = get_retry_manager()
+    mgr.circuit_breakers.clear()
+    
+    mgr.provider_configs["vision"] = [
+        ProviderConfig("openrouter", "vision-single", timeout=5.0, max_attempts=2),
+    ]
+
+    def factory(pc: ProviderConfig):
+        async def run():
+            return {
+                "text": "Single provider OK",
+                "model": pc.model,
+                "usage": {"total_tokens": 50},
+                "backend": "openai",
+            }
+
+        return run
+
+    res = await mgr.run_with_fallback("vision", factory, per_item_budget=10.0)
+    
+    assert res.success is True
+    assert res.provider_used.endswith(":vision-single")
+    assert res.attempts == 1
+    assert res.fallback_occurred is False
+
+
+@pytest.mark.asyncio
+async def test_vision_ladder_respects_per_provider_timeouts():
+    """Test that per-provider timeouts from ladder config are respected."""
+    mgr = get_retry_manager()
+    mgr.circuit_breakers.clear()
+    
+    # Configure with different timeouts
+    mgr.provider_configs["vision"] = [
+        ProviderConfig("openrouter", "fast-model", timeout=2.0, max_attempts=1),
+        ProviderConfig("openrouter", "slow-model", timeout=10.0, max_attempts=1),
+    ]
+
+    timeouts_observed = []
+
+    def factory(pc: ProviderConfig):
+        timeouts_observed.append(pc.timeout)
+        
+        async def run():
+            if pc.model == "fast-model":
+                raise Exception("429 Too Many Requests")
+            return {"text": "OK", "model": pc.model}
+
+        return run
+
+    res = await mgr.run_with_fallback("vision", factory, per_item_budget=20.0)
+    
+    assert res.success is True
+    # Both providers should have been attempted
+    assert 2.0 in timeouts_observed
+    assert 10.0 in timeouts_observed
+
+
+@pytest.mark.asyncio
+async def test_vision_ladder_circuit_breaker_skips_failed_provider():
+    """Test that circuit breaker skips providers that have recently failed."""
+    mgr = get_retry_manager()
+    mgr.circuit_breakers.clear()
+    
+    mgr.provider_configs["vision"] = [
+        ProviderConfig("openrouter", "flaky-model", timeout=2.0, max_attempts=1),
+        ProviderConfig("openrouter", "stable-model", timeout=2.0, max_attempts=1),
+    ]
+
+    call_count = {"flaky": 0, "stable": 0}
+
+    def factory(pc: ProviderConfig):
+        async def run():
+            if pc.model == "flaky-model":
+                call_count["flaky"] += 1
+                raise Exception("500 Internal Server Error")
+            call_count["stable"] += 1
+            return {"text": "OK", "model": pc.model}
+
+        return run
+
+    # First call: flaky fails, stable succeeds
+    res1 = await mgr.run_with_fallback("vision", factory, per_item_budget=10.0)
+    assert res1.success is True
+    assert call_count["flaky"] == 1
+    assert call_count["stable"] == 1
+
+    # Force circuit breaker to open by recording more failures
+    flaky_key = "openrouter:flaky-model"
+    mgr._record_failure(flaky_key)
+    mgr._record_failure(flaky_key)  # Should trigger circuit open
+
+    # Second call: should skip flaky (circuit open) and go directly to stable
+    res2 = await mgr.run_with_fallback("vision", factory, per_item_budget=10.0)
+    assert res2.success is True
+    # flaky should not have been called again (circuit open)
+    assert call_count["flaky"] == 1
+    assert call_count["stable"] == 2

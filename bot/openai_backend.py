@@ -16,8 +16,6 @@ from .memory import get_profile, get_server_profile
 from .retry_utils import (
     API_RETRY_CONFIG,
     API_SINGLE_ATTEMPT_CONFIG,
-    VISION_RETRY_CONFIG,
-    classify_vl_error,
     is_retryable_error,
     with_retry,
 )
@@ -560,35 +558,16 @@ async def _generate_vl_response_with_retry(
     max_tokens: int = None,
     **kwargs,
 ) -> Dict[str, Any]:
-    """Attempt VL inference across a deterministic ladder of provider models."""
+    """Attempt VL inference using EnhancedRetryManager vision ladder with fallback."""
     config = load_config()
 
+    # Handle model_override from kwargs (for backward compatibility with see_infer)
     model_override = kwargs.pop("model_override", None)
-    ladder = get_vl_model_ladder()
-    if model_override:
-        override_clean = model_override.strip()
-        if override_clean:
-            ladder = [override_clean] + [model for model in ladder if model != override_clean]
-
-    if not ladder:
-        raise APIError("No VL models configured")
 
     base_url = str(config.get("OPENAI_API_BASE", "https://api.openai.com/v1") or "")
     stream_flag = bool(kwargs.get("stream", False))
 
     import httpx
-
-    try:
-        timeout_seconds = float(config.get("VL_REQUEST_TIMEOUT", "30"))
-    except Exception:
-        timeout_seconds = 30.0
-
-    client = openai.AsyncOpenAI(
-        api_key=config.get("OPENAI_API_KEY"),
-        base_url=base_url or "https://api.openai.com/v1",
-        timeout=httpx.Timeout(timeout_seconds),
-        max_retries=0,
-    )
 
     vl_prompt_file_path = config.get("VL_PROMPT_FILE")
     if not vl_prompt_file_path:
@@ -635,13 +614,6 @@ async def _generate_vl_response_with_retry(
     if max_tokens is None:
         max_tokens = config.get("MAX_RESPONSE_TOKENS", 1000)
 
-    base_payload = {
-        "messages": messages,
-        "temperature": temperature,
-        "max_tokens": max_tokens,
-        **kwargs,
-    }
-
     OPENROUTER_ALLOWED_PARAMS = {
         "model",
         "messages",
@@ -654,148 +626,290 @@ async def _generate_vl_response_with_retry(
         "stream",
     }
 
-    failures: List[Dict[str, Any]] = []
-    last_error: Exception | None = None
-    attempt_counter = 0
+    # Use EnhancedRetryManager for vision ladder fallback (mirrors text flow) [CA][REH]
+    # Skip ladder if model_override is explicitly provided (caller wants specific model)
+    use_openrouter_fallback = "openrouter" in base_url.lower() and not model_override
 
-    for idx, model_name in enumerate(ladder):
-        attempt_counter += 1
+    if use_openrouter_fallback:
         logger.info(
-            "vl.attempt model=%s idx=%d attempt=%d provider_base=%s stream=%s",
-            model_name,
-            idx,
-            attempt_counter,
-            base_url,
-            stream_flag,
+            "[VL] Using EnhancedRetryManager vision fallback ladder (OpenRouter)"
         )
+        retry_mgr = get_retry_manager()
 
-        attempt_payload = base_payload.copy()
-        attempt_payload["model"] = model_name
-        api_params = {
-            key: value
-            for key, value in attempt_payload.items()
-            if key in OPENROUTER_ALLOWED_PARAMS
-        }
+        def _coro_factory(provider_config):
+            selected_model = provider_config.model
 
-        if config.get("VL_DEBUG_FLOW", "0") == "1":
-            removed = sorted(set(attempt_payload.keys()) - OPENROUTER_ALLOWED_PARAMS)
-            if removed:
-                logger.debug(
-                    "vl.debug filtered_params model=%s removed=%s",
-                    model_name,
-                    removed,
+            async def _run():
+                # Create client with per-provider timeout from ladder config
+                client = openai.AsyncOpenAI(
+                    api_key=config.get("OPENAI_API_KEY"),
+                    base_url=base_url or "https://api.openai.com/v1",
+                    timeout=httpx.Timeout(provider_config.timeout),
+                    max_retries=0,
                 )
 
-        async def _invoke_current():
-            return await client.chat.completions.create(**api_params)
-
-        call_with_retry = with_retry(VISION_RETRY_CONFIG)(_invoke_current)
-        start = time.monotonic()
-        try:
-            response = await call_with_retry()
-            if response is None:
-                raise APIError("VL API returned None response")
-            if not (
-                hasattr(response, "choices")
-                and response.choices
-                and hasattr(response.choices[0], "message")
-                and response.choices[0].message
-            ):
-                raise APIError("Invalid VL API response structure")
-        except Exception as exc:
-            elapsed_ms = int((time.monotonic() - start) * 1000)
-            classification = classify_vl_error(exc)
-            code = classification.get("code") or "none"
-            reason = classification.get("kind", "unknown")
-            logger.warning(
-                "vl.fail model=%s idx=%d attempt=%d code=%s reason=%s permanent=%s transient=%s latency_ms=%d",
-                model_name,
-                idx,
-                attempt_counter,
-                code,
-                reason,
-                classification.get("provider_permanent", False),
-                classification.get("retryable", False),
-                elapsed_ms,
-            )
-            failures.append(
-                {
-                    "model": model_name,
-                    "idx": idx,
-                    "reason": reason,
-                    "code": code,
-                    "permanent": classification.get("provider_permanent", False),
-                    "transient": classification.get("retryable", False),
+                api_params = {
+                    "model": selected_model,
+                    "messages": messages,
+                    "temperature": temperature,
+                    "max_tokens": max_tokens,
                 }
-            )
-            last_error = exc
-            if idx + 1 < len(ladder):
-                next_model = ladder[idx + 1]
-                logger.info(
-                    "vl.fallback from=%s to=%s idx_next=%d",
-                    model_name,
-                    next_model,
-                    idx + 1,
-                )
-            continue
+                # Filter to allowed params
+                api_params = {
+                    k: v for k, v in api_params.items() if k in OPENROUTER_ALLOWED_PARAMS
+                }
 
-        elapsed_ms = int((time.monotonic() - start) * 1000)
-        usage = getattr(response, "usage", None)
-        total_tokens = getattr(usage, "total_tokens", None)
-        tokens_total = total_tokens if total_tokens is not None else "na"
+                t0 = time.monotonic()
+                try:
+                    logger.debug(
+                        f"[VL] 🔄 Sending request to API with model: {selected_model}"
+                    )
+                    response = await client.chat.completions.create(**api_params)
 
-        logger.info(
-            "vl.ok model=%s idx=%d attempt=%d ms=%d tokens_total=%s",
-            model_name,
-            idx,
-            attempt_counter,
-            elapsed_ms,
-            tokens_total,
+                    if response is None:
+                        raise APIError("VL API returned None response")
+                    if not (
+                        hasattr(response, "choices")
+                        and response.choices
+                        and hasattr(response.choices[0], "message")
+                        and response.choices[0].message
+                    ):
+                        raise APIError("Invalid VL API response structure")
+
+                    logger.debug("[VL] ✅ Received response from API")
+
+                    # Extract response content
+                    try:
+                        response_text = response.choices[0].message.content or ""
+                    except Exception:
+                        response_text = ""
+
+                    usage = getattr(response, "usage", None)
+                    usage_info = {
+                        "prompt_tokens": getattr(usage, "prompt_tokens", 0),
+                        "completion_tokens": getattr(usage, "completion_tokens", 0),
+                        "total_tokens": getattr(usage, "total_tokens", 0),
+                    }
+
+                    return {
+                        "text": response_text,
+                        "model": selected_model,
+                        "usage": usage_info,
+                        "backend": "openai",
+                        "telemetry": {"provider_base": base_url},
+                    }
+
+                except httpx.HTTPStatusError as he:
+                    status_code = (
+                        he.response.status_code
+                        if getattr(he, "response", None) is not None
+                        else "unknown"
+                    )
+                    retry_after = None
+                    try:
+                        if getattr(he, "response", None) is not None:
+                            hdrs = he.response.headers
+                            ra = hdrs.get("retry-after") or hdrs.get("Retry-After")
+                            if ra is not None:
+                                retry_after = float(ra)
+                    except Exception:
+                        retry_after = None
+                    extra = (
+                        f" (retry-after={retry_after}s)"
+                        if retry_after is not None
+                        else ""
+                    )
+                    logger.warning(
+                        f"VL HTTP error during fallback attempt: {status_code} {he}{extra}"
+                    )
+                    err = APIError(f"HTTP {status_code}: {str(he)}{extra}")
+                    try:
+                        if retry_after is not None:
+                            setattr(err, "retry_after_seconds", retry_after)
+                    except Exception:
+                        pass
+                    raise err
+                except Exception as e:
+                    elapsed_ms = int((time.monotonic() - t0) * 1000)
+                    etype = type(e).__name__
+                    if "timeout" in str(e).lower() or "timeout" in etype.lower():
+                        logger.warning(
+                            f"VL timeout (model {selected_model}): {elapsed_ms}ms"
+                        )
+                        raise APIError(
+                            f"Request timeout after ~{elapsed_ms}ms for model {selected_model}"
+                        )
+                    raise
+
+            return _run
+
+        # Use default per-item budget of 45s for vision (consistent with EnhancedRetryManager default)
+        per_item_budget = 45.0
+        try:
+            logger.info(f"[VL] vision.budget seconds={per_item_budget}")
+        except Exception:
+            pass
+
+        rr = await retry_mgr.run_with_fallback(
+            "vision", _coro_factory, per_item_budget=per_item_budget
         )
 
-        try:
-            response_text = response.choices[0].message.content or ""
-        except Exception:
-            response_text = ""
+        if not rr.success:
+            # Enrich error with ladder context for better observability [REH]
+            if rr.error:
+                base_err = rr.error
+                try:
+                    prov = (
+                        getattr(rr, "provider_used", None)
+                        or getattr(base_err, "provider_key", None)
+                        or "unknown"
+                    )
+                    attempts = getattr(rr, "attempts", 0)
+                    total_time = getattr(rr, "total_time", 0.0)
+                    err_str = str(base_err).lower()
 
-        if response_text:
-            logger.debug("vl.ok text_len=%d", len(response_text))
+                    if "no endpoints found" in err_str or (
+                        "404" in err_str and "endpoint" in err_str
+                    ):
+                        msg = (
+                            "Vision providers unavailable via OpenRouter (404 / no endpoints) "
+                            f"after {attempts} attempt(s) in {total_time:.2f}s "
+                            f"(last_provider={prov}). Last error: {type(base_err).__name__}: {base_err}"
+                        )
+                    elif "timeout" in err_str:
+                        msg = (
+                            f"Vision generation timeout after {total_time:.2f}s across "
+                            f"{attempts} attempt(s) (last_provider={prov}). "
+                            f"Last error: {type(base_err).__name__}: {base_err}"
+                        )
+                    else:
+                        msg = (
+                            f"Vision fallback ladder failed after {attempts} attempt(s) in "
+                            f"{total_time:.2f}s (last_provider={prov}): {type(base_err).__name__}: {base_err}"
+                        )
 
-        usage_info = {
-            "prompt_tokens": getattr(usage, "prompt_tokens", 0),
-            "completion_tokens": getattr(usage, "completion_tokens", 0),
-            "total_tokens": total_tokens or 0,
-        }
+                    api_err = APIError(msg)
+                    api_err.vl_exhausted = True
+                    api_err.vl_ladder_summary = f"attempts={attempts},time={total_time:.2f}s,last={prov}"
+                    api_err.vl_attempts = attempts
+                    api_err.vl_provider_base = base_url
+                    try:
+                        if "no endpoints found" in err_str or (
+                            "404" in err_str and "endpoint" in err_str
+                        ):
+                            setattr(api_err, "retryable", False)
+                    except Exception:
+                        pass
+                except Exception:
+                    raise base_err
+                raise api_err
+            exhaustion_error = APIError("All vision providers exhausted")
+            exhaustion_error.vl_exhausted = True
+            raise exhaustion_error
 
-        telemetry = {
-            "ladder_idx": idx,
-            "ladder_attempts": attempt_counter,
-            "provider_base": base_url,
-        }
+        # Success - add telemetry
+        result = rr.result
+        if isinstance(result, dict):
+            result["telemetry"] = result.get("telemetry", {})
+            result["telemetry"]["ladder_attempts"] = rr.attempts
+            result["telemetry"]["fallback_occurred"] = rr.fallback_occurred
+            result["telemetry"]["provider_used"] = rr.provider_used
+        return result
 
-        return {
-            "text": response_text,
-            "model": model_name,
-            "usage": usage_info,
-            "backend": "openai",
-            "telemetry": telemetry,
-        }
+    # Fallback: single-provider path (non-OpenRouter base or model_override specified)
+    # Use model_override if provided, else first model from VL_MODEL ladder or default
+    if model_override:
+        model_name = model_override.strip()
+        logger.info(f"[VL] Using model_override={model_name} (single-provider mode)")
+    else:
+        ladder = get_vl_model_ladder()
+        if not ladder:
+            raise APIError("No VL models configured")
+        model_name = ladder[0]
 
-    summary_parts = [
-        f"{item['model']}:{item['reason']}:{item['code']}"
-        for item in failures
-    ]
-    ladder_summary = ",".join(summary_parts) if summary_parts else "none"
+    try:
+        timeout_seconds = float(config.get("VL_REQUEST_TIMEOUT", "30"))
+    except Exception:
+        timeout_seconds = 30.0
 
-    exhaustion_error = APIError("Vision ladder exhausted")
-    exhaustion_error.vl_exhausted = True
-    exhaustion_error.vl_ladder_summary = ladder_summary
-    exhaustion_error.vl_attempts = attempt_counter
-    exhaustion_error.vl_provider_base = base_url
-    exhaustion_error.vl_failures = failures
-    if last_error is not None:
-        raise exhaustion_error from last_error
-    raise exhaustion_error
+    client = openai.AsyncOpenAI(
+        api_key=config.get("OPENAI_API_KEY"),
+        base_url=base_url or "https://api.openai.com/v1",
+        timeout=httpx.Timeout(timeout_seconds),
+        max_retries=0,
+    )
+
+    logger.info(
+        "vl.attempt model=%s provider_base=%s stream=%s (single-provider mode)",
+        model_name,
+        base_url,
+        stream_flag,
+    )
+
+    api_params = {
+        "model": model_name,
+        "messages": messages,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+    }
+    api_params = {k: v for k, v in api_params.items() if k in OPENROUTER_ALLOWED_PARAMS}
+
+    start = time.monotonic()
+    try:
+        response = await client.chat.completions.create(**api_params)
+        if response is None:
+            raise APIError("VL API returned None response")
+        if not (
+            hasattr(response, "choices")
+            and response.choices
+            and hasattr(response.choices[0], "message")
+            and response.choices[0].message
+        ):
+            raise APIError("Invalid VL API response structure")
+    except Exception as exc:
+        elapsed_ms = int((time.monotonic() - start) * 1000)
+        logger.warning(
+            "vl.fail model=%s latency_ms=%d error=%s",
+            model_name,
+            elapsed_ms,
+            str(exc)[:200],
+        )
+        exhaustion_error = APIError("Vision request failed")
+        exhaustion_error.vl_exhausted = True
+        exhaustion_error.vl_ladder_summary = f"{model_name}:fail"
+        exhaustion_error.vl_attempts = 1
+        exhaustion_error.vl_provider_base = base_url
+        raise exhaustion_error from exc
+
+    elapsed_ms = int((time.monotonic() - start) * 1000)
+    usage = getattr(response, "usage", None)
+    total_tokens = getattr(usage, "total_tokens", None)
+
+    logger.info(
+        "vl.ok model=%s ms=%d tokens_total=%s",
+        model_name,
+        elapsed_ms,
+        total_tokens if total_tokens is not None else "na",
+    )
+
+    try:
+        response_text = response.choices[0].message.content or ""
+    except Exception:
+        response_text = ""
+
+    usage_info = {
+        "prompt_tokens": getattr(usage, "prompt_tokens", 0),
+        "completion_tokens": getattr(usage, "completion_tokens", 0),
+        "total_tokens": total_tokens or 0,
+    }
+
+    return {
+        "text": response_text,
+        "model": model_name,
+        "usage": usage_info,
+        "backend": "openai",
+        "telemetry": {"provider_base": base_url, "ladder_attempts": 1},
+    }
 
 
 async def generate_vl_response(

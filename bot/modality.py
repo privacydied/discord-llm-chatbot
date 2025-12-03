@@ -336,6 +336,16 @@ async def _map_url_to_modality(url: str) -> InputModality:
         logger.info(f"modality.guard: nytimes non-video → GENERAL_URL (path={path})")
         return InputModality.GENERAL_URL
 
+    # --- TikTok player/embed guard: skip STT for unsupported embed URLs [REH][IV]
+    # These URLs (e.g., /player/v1/<id>) cannot be processed by yt-dlp and should
+    # not trigger STT jobs. Route them to GENERAL_URL so they're skipped gracefully.
+    if host in {"tiktok.com", "www.tiktok.com", "m.tiktok.com", "vm.tiktok.com"}:
+        if path.startswith("/player"):
+            logger.info(
+                f"stt.tiktok.skip kind=player_embed url={url[:80]}"
+            )
+            return InputModality.GENERAL_URL
+
     # Twitter/X status posts should go through API-first general URL path [SFT][CA]
     # but allow broadcasts (Spaces/live) to be handled as video-capable URLs.
     if re.search(
