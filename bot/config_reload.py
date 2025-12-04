@@ -316,6 +316,25 @@ def reload_env(env_path: Optional[Path] = None) -> Dict[str, Any]:
                 except Exception as e:
                     logger.error(f"❌ Config reload callback failed: {e}")
 
+            # Refresh retry manager ladders (text/vision/media) from updated env [REH]
+            try:
+                from .enhanced_retry import get_retry_manager
+                retry_mgr = get_retry_manager()
+                ladder_summary = retry_mgr.refresh_from_env()
+                logger.info(
+                    "config.reload.ladders",
+                    extra={
+                        "event": "config.reload.ladders",
+                        "detail": {
+                            "text": ladder_summary.get("text", [])[:3],
+                            "vision": ladder_summary.get("vision", [])[:3],
+                            "media": ladder_summary.get("media", [])[:1],
+                        },
+                    },
+                )
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to refresh retry ladders on config reload: {e}")
+
             # Restart janitor to pick up new config
             if _janitor_imported and restart_janitor is not None:
                 try:

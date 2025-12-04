@@ -83,7 +83,16 @@ async def generate_response(
             raise ValueError(f"Unknown backend: {backend}")
 
     except Exception as e:
-        logger.error(f"❌ Error in generate_response: {e}", exc_info=True)
+        # Suppress traceback for expected "all providers unavailable" errors [REH]
+        err_str = str(e).lower()
+        is_expected_failure = (
+            "404" in err_str and ("endpoint" in err_str or "no endpoints" in err_str)
+        ) or "providers unavailable" in err_str or "all text providers exhausted" in err_str
+        
+        if is_expected_failure:
+            logger.warning(f"⚠️ Text generation failed (all providers unavailable): {e}")
+        else:
+            logger.error(f"❌ Error in generate_response: {e}", exc_info=True)
         raise Exception(f"Failed to generate response: {str(e)}")
 
 
@@ -159,7 +168,17 @@ async def generate_vl_response(
             return result
 
     except Exception as e:
-        logger.error(f"❌ Error in generate_vl_response: {e}", exc_info=True)
+        # Suppress traceback for expected "all providers unavailable" errors [REH]
+        err_str = str(e).lower()
+        is_expected_failure = (
+            "404" in err_str and ("endpoint" in err_str or "no endpoints" in err_str)
+        ) or "providers unavailable" in err_str or "all vision providers exhausted" in err_str
+        
+        if is_expected_failure:
+            logger.warning(f"⚠️ VL generation failed (all providers unavailable): {e}")
+        else:
+            logger.error(f"❌ Error in generate_vl_response: {e}", exc_info=True)
+        
         # Provide more user-friendly error messages for common issues
         if is_retryable_error(e, VISION_RETRY_CONFIG):
             logger.warning("⚠️ Detected transient provider error in AI backend")
