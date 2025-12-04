@@ -180,6 +180,44 @@ SUPPORTED_PATTERNS = [
 # Global semaphore for download concurrency
 _download_semaphore = asyncio.Semaphore(MAX_CONCURRENT_DOWNLOADS)
 
+# Domain-to-extractor mapping for metadata validation and identity canonicalization [CMV]
+_DOMAIN_EXTRACTOR_MAP: Dict[str, str] = {
+    "youtube.com": "youtube",
+    "youtu.be": "youtube",
+    "www.youtube.com": "youtube",
+    "m.youtube.com": "youtube",
+    "tiktok.com": "tiktok",
+    "www.tiktok.com": "tiktok",
+    "vm.tiktok.com": "tiktok",
+    "m.tiktok.com": "tiktok",
+    "twitter.com": "twitter",
+    "www.twitter.com": "twitter",
+    "x.com": "twitter",
+    "www.x.com": "twitter",
+    "fxtwitter.com": "twitter",
+    "vxtwitter.com": "twitter",
+    "fixupx.com": "twitter",
+    "instagram.com": "instagram",
+    "www.instagram.com": "instagram",
+    "reddit.com": "reddit",
+    "www.reddit.com": "reddit",
+    "v.redd.it": "reddit",
+    "vimeo.com": "vimeo",
+    "www.vimeo.com": "vimeo",
+    "twitch.tv": "twitch",
+    "www.twitch.tv": "twitch",
+    "dailymotion.com": "dailymotion",
+    "www.dailymotion.com": "dailymotion",
+    "facebook.com": "facebook",
+    "www.facebook.com": "facebook",
+    "fb.watch": "facebook",
+    "soundcloud.com": "soundcloud",
+    "www.soundcloud.com": "soundcloud",
+    "bilibili.com": "bilibili",
+    "www.bilibili.com": "bilibili",
+    "b23.tv": "bilibili",
+}
+
 
 @dataclass
 class VideoMetadata:
@@ -437,25 +475,124 @@ class VideoIngestionManager:
             pass
         return False
 
+    @staticmethod
+    def _normalize_youtube_url(url: str) -> str:
+        """
+        Normalize YouTube URLs to a canonical form for consistent cache keying.
+        Extracts video ID from all URL variants: watch, shorts, embed, live, youtu.be.
+        Returns canonical form: youtube://video/{VIDEO_ID}
+        [REH][CA]
+        """
+        if not url:
+            return url
+        try:
+            parsed = urlparse(url)
+            host = parsed.netloc.lower()
+            path = parsed.path or ""
+            
+            # youtu.be/VIDEO_ID
+            if host in ("youtu.be", "www.youtu.be"):
+                video_id = path.lstrip("/").split("/")[0].split("?")[0]
+                if video_id and len(video_id) >= 6:
+                    return f"youtube://video/{video_id}"
+            
+            # youtube.com variants
+            if host in ("youtube.com", "www.youtube.com", "m.youtube.com"):
+                # /watch?v=VIDEO_ID
+                if path.startswith("/watch"):
+                    from urllib.parse import parse_qs
+                    query = parse_qs(parsed.query)
+                    video_id = query.get("v", [""])[0]
+                    if video_id and len(video_id) >= 6:
+                        return f"youtube://video/{video_id}"
+                
+                # /shorts/VIDEO_ID, /embed/VIDEO_ID, /live/VIDEO_ID, /v/VIDEO_ID
+                for prefix in ("/shorts/", "/embed/", "/live/", "/v/"):
+                    if path.startswith(prefix):
+                        video_id = path[len(prefix):].split("/")[0].split("?")[0]
+                        if video_id and len(video_id) >= 6:
+                            return f"youtube://video/{video_id}"
+        except Exception:
+            pass
+        return url
+
+    @staticmethod
+    def _get_expected_extractor(url: str) -> Optional[str]:
+        """
+        Get expected yt-dlp extractor for a URL based on domain.
+        Returns None if domain is unknown (allows generic extractor).
+        [IV]
+        """
+        try:
+            parsed = urlparse(url)
+            host = parsed.netloc.lower()
+            return _DOMAIN_EXTRACTOR_MAP.get(host)
+        except Exception:
+            return None
+
+    @staticmethod
+    def _canonicalize_video_identity(
+        original_url: str,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        """
+        Canonicalize video identity for cache keying across all providers.
+        Uses yt-dlp metadata (extractor + id) when available, falls back to
+        provider-specific URL normalization for known domains.
+        [REH][CA]
+        """
+        # If we have yt-dlp metadata, use extractor:id as the canonical identity
+        if metadata:
+            extractor = metadata.get("extractor_key") or metadata.get("extractor") or ""
+            video_id = metadata.get("id") or ""
+            if extractor and video_id:
+                return f"{extractor.lower()}:{video_id}"
+        
+        # Fallback: use provider-specific URL normalization
+        if not original_url:
+            return ""
+        
+        url_lower = original_url.lower()
+        
+        # YouTube normalization
+        if "youtube.com" in url_lower or "youtu.be" in url_lower:
+            normalized = VideoIngestionManager._normalize_youtube_url(original_url)
+            if normalized.startswith("youtube://"):
+                return normalized.replace("://", ":")
+        
+        # TikTok normalization
+        if "tiktok.com" in url_lower:
+            normalized = VideoIngestionManager._normalize_tiktok_url(original_url)
+            if normalized.startswith("tiktok://"):
+                return normalized.replace("://", ":")
+        
+        # Generic fallback: hash of original URL
+        return f"generic:{hashlib.sha256(original_url.encode()).hexdigest()[:16]}"
+
     def _compute_download_key(
         self, resolved_url: str, fmt_id: str, content_length: Optional[int],
         original_url: Optional[str] = None,
+        video_identity: Optional[str] = None,
     ) -> str:
         """
         Compute a unique cache key for a download job.
         
-        Incorporates both the resolved CDN URL and the original user URL to ensure
-        cache uniqueness even if CDN URLs are reused across different videos.
+        ALWAYS includes video identity to prevent cross-contamination across
+        different videos that may share CDN URLs or similar resolved paths.
         [REH][CA]
         """
         length_part = str(content_length) if content_length is not None else "na"
         base_key = f"{self._hash_resolved_url(resolved_url)}-{fmt_id}-{length_part}"
         
-        # Include original URL hash for TikTok to prevent cross-contamination [REH]
-        if original_url and "tiktok" in (original_url or "").lower():
-            orig_normalized = self._normalize_tiktok_url(original_url)
-            orig_hash = self._hash_resolved_url(orig_normalized)[:8]
-            base_key = f"{base_key}-o{orig_hash}"
+        # Always include video identity hash to prevent cross-contamination [REH]
+        if video_identity:
+            identity_hash = self._hash_resolved_url(video_identity)[:10]
+            base_key = f"{base_key}-v{identity_hash}"
+        elif original_url:
+            # Fallback: compute identity from original URL if not provided
+            fallback_identity = self._canonicalize_video_identity(original_url)
+            identity_hash = self._hash_resolved_url(fallback_identity)[:10]
+            base_key = f"{base_key}-v{identity_hash}"
         
         return base_key
 
@@ -679,20 +816,34 @@ class VideoIngestionManager:
                     )
                 raise
 
-            # Validate that yt-dlp returned metadata for a TikTok video when we expect one [REH]
-            if "tiktok" in url_no_fragment.lower():
-                webpage_url = metadata.get("webpage_url") or ""
-                extractor = metadata.get("extractor") or metadata.get("extractor_key") or ""
-                if webpage_url and "tiktok" not in webpage_url.lower():
+            # Validate yt-dlp metadata matches expected provider for known domains [REH][IV]
+            expected_extractor = self._get_expected_extractor(url_no_fragment)
+            actual_extractor = (metadata.get("extractor_key") or metadata.get("extractor") or "").lower()
+            webpage_url = metadata.get("webpage_url") or ""
+            
+            if expected_extractor and actual_extractor:
+                # Check for obvious mismatches (e.g., YouTube URL returning TikTok extractor)
+                if expected_extractor != actual_extractor:
                     logger.warning(
-                        "stt.ytdlp.mismatch expected=tiktok got=%s webpage_url=%s original=%s",
-                        extractor,
-                        webpage_url[:80],
+                        "stt.ytdlp.mismatch expected=%s got=%s webpage_url=%s original=%s",
+                        expected_extractor,
+                        actual_extractor,
+                        webpage_url[:80] if webpage_url else "none",
                         url_no_fragment[:80],
                     )
                     raise VideoIngestError(
-                        f"yt-dlp returned unexpected content: expected TikTok, got {extractor}"
+                        f"yt-dlp returned unexpected content: expected {expected_extractor}, got {actual_extractor}"
                     )
+
+            # Compute canonical video identity for cache keying [REH]
+            video_identity = self._canonicalize_video_identity(url, metadata)
+            logger.debug(
+                "stt.video.identity original=%s identity=%s extractor=%s id=%s",
+                url[:60] if url else "none",
+                video_identity[:40] if video_identity else "none",
+                actual_extractor,
+                metadata.get("id", "none")[:20],
+            )
 
             resolved_url = selected.get("url") or metadata.get("url") or url_no_fragment
             fmt_id = str(selected.get("format_id") or selected.get("format"))
@@ -721,7 +872,9 @@ class VideoIngestionManager:
                 )
 
             download_key = self._compute_download_key(
-                resolved_url, fmt_id, content_length, original_url=url
+                resolved_url, fmt_id, content_length,
+                original_url=url,
+                video_identity=video_identity,
             )
             cache_entry = None if force_refresh else self._get_cache_entry(download_key)
             

@@ -15,6 +15,7 @@ describe the attached image in exhaustive detail, prioritizing:
 4. **text/objects:**  
    - transcribe legible text (e.g., posters, signage) verbatim.  
    - highlight symbolic items (e.g., "holds a microphone with 'grammys 2023' engraving").  
+   - Screenshots of memes are often posted so do not ignore the text of the meme.
 
 **rules:**  
 - no speculation unless context is visually undeniable (e.g., a white house podium).  
@@ -23,7 +24,5 @@ describe the attached image in exhaustive detail, prioritizing:
 * When content originates from visual-first platforms (e.g., Twitter, Instagram, Facebook, TikTok), focus on describing the screenshot itself: what’s visually present—layout, text in images, key visual elements, and any embedded media or captions.
 * Do not include:
 ** Cookie banners/consent notices
-** Login/sign-up status or prompts
-** Timestamps or dates
 ** Engagement metrics (likes, shares, views, etc.) unless explicitly requested
 * Keep descriptions factual, compact, and about the content shown.
