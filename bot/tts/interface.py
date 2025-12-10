@@ -31,6 +31,113 @@ ENGINES = {
     "kokoro": KokoroV8Engine,
 }
 
+# ──────────────────────────────────────────────────────────────────────────────
+# Sentence-aware chunking for natural prosody [CA][REH]
+# ──────────────────────────────────────────────────────────────────────────────
+
+# Minimum chars to consider a chunk worthwhile; shorter chunks get merged
+_MIN_CHUNK_CHARS = 20
+# Maximum chars per chunk before we force a split at nearest boundary
+_MAX_CHUNK_CHARS = 400
+# Sample rate for silence insertion between chunks
+_CHUNK_SAMPLE_RATE = 24000
+# Silence duration between sentences (in seconds)
+_INTER_SENTENCE_PAUSE_S = 0.25
+
+
+def _split_into_sentences(text: str) -> List[str]:
+    """Split text into sentences at natural boundaries for prosodic chunking.
+    
+    Uses sentence-ending punctuation (. ! ?) as primary split points,
+    falling back to comma/semicolon boundaries for very long sentences.
+    Merges short fragments to avoid choppy output.
+    [REH][CA]
+    
+    Args:
+        text: Cleaned text to split
+        
+    Returns:
+        List of sentence chunks, each suitable for TTS synthesis
+    """
+    if not text or not text.strip():
+        return []
+    
+    # Split at sentence boundaries (. ! ?) followed by space or end
+    # This regex keeps the punctuation with the preceding sentence
+    raw_sentences = re.split(r'(?<=[.!?])\s+', text.strip())
+    
+    chunks = []
+    current_chunk = ""
+    
+    for sent in raw_sentences:
+        sent = sent.strip()
+        if not sent:
+            continue
+        
+        # If adding this sentence exceeds max, split at comma if possible
+        if len(current_chunk) + len(sent) + 1 > _MAX_CHUNK_CHARS:
+            # Save current chunk if non-empty
+            if current_chunk:
+                chunks.append(current_chunk.strip())
+                current_chunk = ""
+            
+            # If single sentence is too long, split at commas
+            if len(sent) > _MAX_CHUNK_CHARS:
+                parts = re.split(r'(?<=[,;])\s+', sent)
+                for part in parts:
+                    part = part.strip()
+                    if len(current_chunk) + len(part) + 1 > _MAX_CHUNK_CHARS:
+                        if current_chunk:
+                            chunks.append(current_chunk.strip())
+                        current_chunk = part
+                    else:
+                        current_chunk = (current_chunk + " " + part).strip() if current_chunk else part
+            else:
+                current_chunk = sent
+        else:
+            # Merge short sentences together
+            if len(current_chunk) + len(sent) + 1 < _MIN_CHUNK_CHARS:
+                current_chunk = (current_chunk + " " + sent).strip() if current_chunk else sent
+            elif current_chunk:
+                chunks.append(current_chunk.strip())
+                current_chunk = sent
+            else:
+                current_chunk = sent
+    
+    # Don't forget the last chunk
+    if current_chunk:
+        chunks.append(current_chunk.strip())
+    
+    # Final pass: merge any remaining tiny chunks
+    if len(chunks) > 1:
+        merged = []
+        buffer = ""
+        for chunk in chunks:
+            if len(buffer) + len(chunk) < _MIN_CHUNK_CHARS:
+                buffer = (buffer + " " + chunk).strip() if buffer else chunk
+            else:
+                if buffer:
+                    merged.append(buffer)
+                buffer = chunk
+        if buffer:
+            merged.append(buffer)
+        chunks = merged
+    
+    return chunks
+
+
+def _generate_inter_sentence_silence(duration_s: float = _INTER_SENTENCE_PAUSE_S) -> bytes:
+    """Generate silence audio bytes for inter-sentence pause.
+    
+    Returns WAV-compatible silence at the standard sample rate.
+    [REH]
+    """
+    num_samples = int(_CHUNK_SAMPLE_RATE * duration_s)
+    silence = np.zeros(num_samples, dtype=np.float32)
+    buf = io.BytesIO()
+    sf.write(buf, silence, _CHUNK_SAMPLE_RATE, format="WAV", subtype="PCM_16")
+    return buf.getvalue()
+
 
 class TTSResult:
     """Tuple-and-path compatible return type for generate_tts.
@@ -591,9 +698,88 @@ class TTSManager:
             )
             return self._asset_paths
 
+    async def _synthesize_single_chunk(
+        self, text: str, timeout: float, **engine_kwargs
+    ) -> bytes:
+        """Synthesize a single text chunk via the engine (no chunking).
+        
+        Internal helper used by synthesize() for each sentence chunk.
+        [REH][CA]
+        """
+        loop = asyncio.get_running_loop()
+        result = await asyncio.wait_for(
+            loop.run_in_executor(
+                self._executor, lambda: self.engine.synthesize(text, **engine_kwargs)
+            ),
+            timeout=timeout,
+        )
+        if inspect.isawaitable(result):
+            return await asyncio.wait_for(result, timeout=timeout)
+        return result
+    
+    def _concatenate_audio_chunks(self, audio_chunks: List[bytes]) -> bytes:
+        """Concatenate multiple WAV audio chunks with inter-sentence pauses.
+        
+        Reads each WAV chunk, inserts brief silence between them, and returns
+        a single WAV byte stream.
+        [REH][CA]
+        """
+        if not audio_chunks:
+            return b""
+        if len(audio_chunks) == 1:
+            return audio_chunks[0]
+        
+        # Read all audio arrays
+        arrays = []
+        sample_rate = _CHUNK_SAMPLE_RATE
+        
+        for i, chunk in enumerate(audio_chunks):
+            try:
+                buf = io.BytesIO(chunk)
+                data, sr = sf.read(buf, dtype="float32")
+                if sr != sample_rate:
+                    # Resample if needed (rare case)
+                    logger.debug(
+                        "tts.chunk.resample from=%d to=%d",
+                        sr, sample_rate,
+                        extra={"subsys": "tts", "event": "chunk_resample"},
+                    )
+                    # Simple linear interpolation resample
+                    duration = len(data) / sr
+                    new_length = int(duration * sample_rate)
+                    indices = np.linspace(0, len(data) - 1, new_length)
+                    data = np.interp(indices, np.arange(len(data)), data).astype(np.float32)
+                arrays.append(data)
+                
+                # Add inter-sentence silence (except after last chunk)
+                if i < len(audio_chunks) - 1:
+                    silence_samples = int(sample_rate * _INTER_SENTENCE_PAUSE_S)
+                    arrays.append(np.zeros(silence_samples, dtype=np.float32))
+            except Exception as e:
+                logger.warning(
+                    "tts.chunk.read_failed idx=%d error=%s",
+                    i, str(e),
+                    extra={"subsys": "tts", "event": "chunk_read_error"},
+                )
+                continue
+        
+        if not arrays:
+            return audio_chunks[0] if audio_chunks else b""
+        
+        # Concatenate all arrays
+        combined = np.concatenate(arrays)
+        
+        # Write to WAV buffer
+        buf = io.BytesIO()
+        sf.write(buf, combined, sample_rate, format="WAV", subtype="PCM_16")
+        return buf.getvalue()
+
     async def synthesize(self, text: str, timeout: float = 25.0, **engine_kwargs) -> bytes:
-        """Generates audio from text using the loaded TTS engine.
-        Supports both async and sync engine implementations.
+        """Generates audio from text using sentence-aware chunking for natural prosody.
+        
+        For texts with multiple sentences, splits at natural boundaries,
+        synthesizes each chunk separately, and concatenates with brief pauses.
+        [REH][CA]
         """
         if self.engine is None:
             logger.error("TTS engine not loaded, cannot synthesize.")
@@ -626,24 +812,102 @@ class TTSManager:
                 reason = self._degraded_reason or "Primary TTS engine unavailable"
                 raise SynthesisError(reason)
 
-            loop = asyncio.get_running_loop()
-            result = await asyncio.wait_for(
-                loop.run_in_executor(
-                    self._executor, lambda: self.engine.synthesize(text, **engine_kwargs)
-                ),
-                timeout=timeout,
-            )
-            if inspect.isawaitable(result):
-                audio_bytes = await asyncio.wait_for(result, timeout=timeout)
+            # Split text into sentence chunks for natural prosody [CA]
+            chunks = _split_into_sentences(text)
+            
+            # Log chunking for debug visibility [REH]
+            if len(chunks) > 1:
+                logger.debug(
+                    "tts.chunk.split count=%d chars=[%s]",
+                    len(chunks),
+                    ", ".join(str(len(c)) for c in chunks),
+                    extra={
+                        "subsys": "tts",
+                        "event": "chunk_split",
+                        "chunk_count": len(chunks),
+                    },
+                )
+            
+            # If only one chunk (or empty), synthesize directly
+            if len(chunks) <= 1:
+                audio_bytes = await self._synthesize_single_chunk(
+                    text, timeout, **engine_kwargs
+                )
             else:
-                audio_bytes = result
+                # Synthesize each chunk and concatenate
+                # Give each chunk enough time - minimum 15s or proportional share [REH]
+                per_chunk_timeout = max(timeout * 0.8 / len(chunks), 15.0)
+                
+                logger.debug(
+                    "tts.chunk.plan count=%d timeout_each=%.1fs total=%.1fs",
+                    len(chunks), per_chunk_timeout, timeout,
+                    extra={"subsys": "tts", "event": "chunk_plan"},
+                )
+                
+                audio_parts = []
+                chunk_errors = []
+                
+                for i, chunk in enumerate(chunks):
+                    try:
+                        chunk_audio = await self._synthesize_single_chunk(
+                            chunk, per_chunk_timeout, **engine_kwargs
+                        )
+                        audio_parts.append(chunk_audio)
+                        logger.debug(
+                            "tts.chunk.done idx=%d/%d chars=%d bytes=%d",
+                            i + 1, len(chunks), len(chunk), len(chunk_audio),
+                            extra={
+                                "subsys": "tts",
+                                "event": "chunk_synthesized",
+                                "chunk_idx": i,
+                            },
+                        )
+                    except asyncio.TimeoutError:
+                        err_msg = f"timeout after {per_chunk_timeout:.1f}s"
+                        chunk_errors.append(f"chunk[{i}]: {err_msg}")
+                        logger.warning(
+                            "tts.chunk.timeout idx=%d/%d timeout=%.1fs chars=%d",
+                            i, len(chunks), per_chunk_timeout, len(chunk),
+                            extra={"subsys": "tts", "event": "chunk_timeout"},
+                        )
+                        continue
+                    except Exception as e:
+                        err_msg = str(e) or repr(e) or type(e).__name__
+                        chunk_errors.append(f"chunk[{i}]: {err_msg}")
+                        logger.warning(
+                            "tts.chunk.failed idx=%d/%d error=%s",
+                            i, len(chunks), err_msg,
+                            extra={"subsys": "tts", "event": "chunk_failed", "error": err_msg},
+                        )
+                        # Continue with remaining chunks rather than failing entirely
+                        continue
+                
+                # If all chunks failed, try single-pass synthesis as fallback [REH]
+                if not audio_parts:
+                    logger.warning(
+                        "tts.chunk.all_failed count=%d falling_back_to_single_pass errors=%s",
+                        len(chunks), "; ".join(chunk_errors[:3]),
+                        extra={"subsys": "tts", "event": "chunk_fallback"},
+                    )
+                    # Fallback: synthesize entire text without chunking
+                    audio_bytes = await self._synthesize_single_chunk(
+                        text, timeout, **engine_kwargs
+                    )
+                else:
+                    # Concatenate with inter-sentence pauses
+                    audio_bytes = self._concatenate_audio_chunks(audio_parts)
 
             logger.info(
-                f"TTS synthesis successful (engine: {self.engine.__class__.__name__})",
+                "tts.synthesis.complete engine=%s chunks=%d chars=%d bytes=%d",
+                self.engine.__class__.__name__,
+                max(len(chunks), 1),
+                len(text),
+                len(audio_bytes),
                 extra={
                     "subsys": "tts",
                     "event": "synthesis_complete",
                     "text_length": len(text),
+                    "chunk_count": len(chunks),
                 },
             )
             # Mark engine as warmed only if we're not using the stub. [CMV]
@@ -735,23 +999,69 @@ class TTSManager:
             )
 
     def _clean_text(self, text: str) -> str:
-        """Remove simple markdown and URLs for cleaner TTS input.
-        Matches tests by converting "**Hello** _world_ `code` https://example.com" -> "Hello world code".
+        """Clean text for TTS while preserving prosody-relevant punctuation.
+        
+        Removes Discord-specific markup (mentions, custom emoji) and web content
+        while keeping sentence structure and punctuation intact for natural speech.
+        [REH][CA]
         """
         if not text:
             return ""
-        # Strip URLs
-        text = re.sub(r"https?://\S+", "", text)
-        # Remove basic markdown symbols and code backticks
-        text = (
-            text.replace("**", "")
-            .replace("__", "")
-            .replace("*", "")
-            .replace("_", "")
-            .replace("`", "")
-        )
-        # Normalize whitespace
-        text = re.sub(r"\s+", " ", text).strip()
+        
+        # 1. Replace Discord mentions with speakable alternatives or drop
+        # User mentions: <@123456> or <@!123456>
+        text = re.sub(r"<@!?\d+>", "", text)
+        # Role mentions: <@&123456>
+        text = re.sub(r"<@&\d+>", "", text)
+        # Channel mentions: <#123456>
+        text = re.sub(r"<#\d+>", "", text)
+        
+        # 2. Remove custom Discord emoji: <:name:123456> or <a:name:123456>
+        text = re.sub(r"<a?:\w+:\d+>", "", text)
+        
+        # 3. Remove code blocks (triple backticks with optional language)
+        text = re.sub(r"```[\s\S]*?```", " code block ", text)
+        # Remove inline code (single backticks)
+        text = re.sub(r"`[^`]+`", "", text)
+        
+        # 4. Strip URLs but preserve surrounding punctuation
+        text = re.sub(r"https?://\S+", " link ", text)
+        
+        # 5. Remove markdown formatting while keeping content
+        # Bold: **text** or __text__
+        text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)
+        text = re.sub(r"__(.+?)__", r"\1", text)
+        # Italic: *text* or _text_ (be careful not to strip underscores in words)
+        text = re.sub(r"(?<!\w)\*([^*]+)\*(?!\w)", r"\1", text)
+        text = re.sub(r"(?<!\w)_([^_]+)_(?!\w)", r"\1", text)
+        # Strikethrough: ~~text~~
+        text = re.sub(r"~~(.+?)~~", r"\1", text)
+        # Spoilers: ||text||
+        text = re.sub(r"\|\|(.+?)\|\|", r"\1", text)
+        
+        # 6. Clean up leftover markdown symbols
+        text = text.replace("**", "").replace("__", "").replace("~~", "").replace("||", "")
+        
+        # 7. Normalize Unicode quotes and dashes to ASCII for consistent TTS
+        text = text.replace(""", '"').replace(""", '"')
+        text = text.replace("'", "'").replace("'", "'")
+        text = text.replace("—", ", ").replace("–", ", ")  # Em/en dash → comma pause
+        text = text.replace("…", "...")
+        
+        # 8. Normalize whitespace but preserve sentence structure
+        text = re.sub(r"[ \t]+", " ", text)  # Collapse horizontal whitespace
+        text = re.sub(r"\n+", " ", text)  # Newlines → space (preserves sentence flow)
+        text = text.strip()
+        
+        # 9. Log cleaned text at debug level for pipeline visibility [REH]
+        if len(text) > 0:
+            logger.debug(
+                "tts.clean_text chars=%d preview=%s",
+                len(text),
+                repr(text[:60]) if len(text) > 60 else repr(text),
+                extra={"subsys": "tts", "event": "clean_text", "chars": len(text)},
+            )
+        
         return text
 
     async def generate_tts(

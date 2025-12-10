@@ -2,35 +2,83 @@ from __future__ import annotations
 
 import base64
 import contextlib
+import subprocess
+import tempfile
 import wave
 from pathlib import Path
 
 
-def compute_waveform_b64(wav_path: str | Path, bins: int = 256) -> str:
+def _decode_ogg_to_pcm(ogg_path: Path) -> tuple[bytes, int, int, int]:
+    """Decode OGG/Opus to raw PCM using ffmpeg.
+    
+    Returns (raw_pcm_bytes, n_channels, sample_width, n_frames).
+    [REH]
+    """
+    # Decode to 16-bit signed LE mono WAV in memory
+    cmd = [
+        "ffmpeg", "-hide_banner", "-loglevel", "error",
+        "-i", str(ogg_path),
+        "-f", "s16le", "-acodec", "pcm_s16le",
+        "-ac", "1", "-ar", "48000",
+        "-"
+    ]
+    try:
+        result = subprocess.run(cmd, capture_output=True, timeout=30)
+        if result.returncode != 0:
+            raise RuntimeError(f"ffmpeg failed: {result.stderr.decode()[:200]}")
+        raw = result.stdout
+        # 16-bit mono at 48kHz
+        n_frames = len(raw) // 2
+        return raw, 1, 2, n_frames
+    except Exception:
+        raise
+
+
+def compute_waveform_b64(audio_path: str | Path, bins: int = 256) -> str:
     """
     Compute a compact waveform byte array (max 256 bytes) and return base64-encoded string.
 
     Implementation details [PA][IV]:
-    - Reads PCM from a WAV file (mono or stereo). If stereo, downmix by averaging channels.
+    - Reads PCM from a WAV or OGG file (mono or stereo). If stereo, downmix by averaging channels.
+    - For OGG/Opus, decodes via ffmpeg first.
     - Normalizes samples to [0, 255] representing amplitude; packs into bytes.
     - Returns base64-encoded bytes as required by Discord voice message "waveform" field.
     """
-    p = Path(wav_path)
+    p = Path(audio_path)
     if not p.exists():
-        raise FileNotFoundError(f"WAV not found: {p}")
+        raise FileNotFoundError(f"Audio file not found: {p}")
 
-    with contextlib.closing(wave.open(str(p), "rb")) as wf:
-        n_channels = wf.getnchannels()
-        sample_width = wf.getsampwidth()
-        n_frames = wf.getnframes()
-        wf.getframerate()
+    # Detect OGG/Opus by extension or magic bytes [REH]
+    is_ogg = p.suffix.lower() in (".ogg", ".opus")
+    if not is_ogg:
+        try:
+            with open(p, "rb") as f:
+                magic = f.read(4)
+                is_ogg = magic == b"OggS"
+        except Exception:
+            pass
 
-        if sample_width not in (1, 2, 3, 4):
-            # Unsupported width; bail to flat waveform [REH]
-            return base64.b64encode(bytes([0] * min(bins, 256))).decode("ascii")
+    if is_ogg:
+        # Decode OGG to PCM via ffmpeg
+        try:
+            raw, n_channels, sample_width, n_frames = _decode_ogg_to_pcm(p)
+        except Exception:
+            # Fallback to flat waveform if decoding fails
+            return base64.b64encode(bytes([128] * min(bins, 256))).decode("ascii")
+    else:
+        # WAV path
+        with contextlib.closing(wave.open(str(p), "rb")) as wf:
+            n_channels = wf.getnchannels()
+            sample_width = wf.getsampwidth()
+            n_frames = wf.getnframes()
+            wf.getframerate()
 
-        # Read raw frames
-        raw = wf.readframes(n_frames)
+            if sample_width not in (1, 2, 3, 4):
+                # Unsupported width; bail to flat waveform [REH]
+                return base64.b64encode(bytes([0] * min(bins, 256))).decode("ascii")
+
+            # Read raw frames
+            raw = wf.readframes(n_frames)
 
     # Convert raw PCM to list of ints per sample (mono)
     # We avoid numpy to reduce deps.

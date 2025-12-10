@@ -321,14 +321,40 @@ async def _map_url_to_modality(url: str) -> InputModality:
     """Map URL to modality based on domain and pattern matching [PA]."""
     global _VIDEO_PATTERNS
 
-    # --- NYTimes guard (cheap and early): only /video/ goes to yt-dlp/STT --- [REH][IV]
+    # Parse URL once for all checks [PA]
     try:
         p = urlparse(url)
         host = (p.netloc or "").lower()
         path = p.path or "/"
+        path_lower = path.lower()
     except Exception:
         host = ""
         path = "/"
+        path_lower = "/"
+
+    # === DOCUMENT/PDF GUARDS (check BEFORE video patterns) === [REH][IV]
+    # These must be checked first to prevent video catch-all patterns from
+    # incorrectly classifying document URLs as video.
+    
+    # PDF URLs - check extension early [PA]
+    if _PDF_EXT_PATTERN.search(url):
+        logger.debug(f"url.classify type=PDF_DOCUMENT url={url[:80]}")
+        return InputModality.PDF_DOCUMENT
+    
+    # Image URLs - check extension early [PA]
+    if _IMAGE_EXT_PATTERN.search(url):
+        logger.debug(f"url.classify type=SINGLE_IMAGE url={url[:80]}")
+        return InputModality.SINGLE_IMAGE
+    
+    # Document extensions guard - route to GENERAL_URL for document processing [REH]
+    doc_exts = (".docx", ".doc", ".rtf", ".md", ".markdown", ".odt", ".txt", ".csv", ".xlsx", ".xls")
+    if any(path_lower.endswith(ext) for ext in doc_exts):
+        logger.debug(f"url.classify type=GENERAL_URL (document) url={url[:80]}")
+        return InputModality.GENERAL_URL
+
+    # === DOMAIN-SPECIFIC GUARDS === [REH][IV]
+    
+    # NYTimes: only /video/ goes to yt-dlp/STT
     if host in {"nytimes.com", "www.nytimes.com", "m.nytimes.com"}:
         if "/video/" in path:
             logger.info(f"modality.guard: nytimes video → VIDEO_URL (path={path})")
@@ -336,14 +362,11 @@ async def _map_url_to_modality(url: str) -> InputModality:
         logger.info(f"modality.guard: nytimes non-video → GENERAL_URL (path={path})")
         return InputModality.GENERAL_URL
 
-    # --- TikTok player/embed guard: skip STT for unsupported embed URLs [REH][IV]
-    # These URLs (e.g., /player/v1/<id>) cannot be processed by yt-dlp and should
-    # not trigger STT jobs. Route them to GENERAL_URL so they're skipped gracefully.
+    # TikTok player/embed guard: skip STT for unsupported embed URLs
+    # These URLs (e.g., /player/v1/<id>) cannot be processed by yt-dlp
     if host in {"tiktok.com", "www.tiktok.com", "m.tiktok.com", "vm.tiktok.com"}:
         if path.startswith("/player"):
-            logger.info(
-                f"stt.tiktok.skip kind=player_embed url={url[:80]}"
-            )
+            logger.info(f"stt.tiktok.skip kind=player_embed url={url[:80]}")
             return InputModality.GENERAL_URL
 
     # Twitter/X status posts should go through API-first general URL path [SFT][CA]
@@ -352,44 +375,47 @@ async def _map_url_to_modality(url: str) -> InputModality:
         r"https?://(?:www\.)?(?:twitter|x|fxtwitter|vxtwitter|fixupx)\.com/.+/status/\d+",
         url,
     ):
-        logger.info(
-            f"➡️ Routing Twitter/X status URL to GENERAL_URL for API-first: {url}"
-        )
+        logger.info(f"➡️ Routing Twitter/X status URL to GENERAL_URL for API-first: {url}")
+        return InputModality.GENERAL_URL
+    
+    # News/article site guards - prefer web scraping over STT [REH]
+    # These domains should go through article extraction, not video processing
+    article_domains = {
+        "medium.com", "www.medium.com",
+        "substack.com",
+        "github.com", "www.github.com",
+        "stackoverflow.com", "www.stackoverflow.com",
+        "wikipedia.org", "en.wikipedia.org",
+        "arxiv.org", "www.arxiv.org",
+    }
+    if host in article_domains or any(host.endswith(f".{d}") for d in ("substack.com",)):
+        logger.debug(f"url.classify type=GENERAL_URL (article_domain) url={url[:80]}")
         return InputModality.GENERAL_URL
 
-    # (NYTimes handled above)
-
-    # Load and cache video patterns once [PA]
+    # === VIDEO PATTERN MATCHING === [PA]
+    
+    # Load and cache video patterns once
     if _VIDEO_PATTERNS is None:
         try:
             from .video_ingest import SUPPORTED_PATTERNS
 
-            # Pre-compile patterns for performance [PA]
+            # Pre-compile patterns for performance
             _VIDEO_PATTERNS = [re.compile(pattern) for pattern in SUPPORTED_PATTERNS]
-            logger.debug(
-                f"🎥 Loaded and compiled {len(_VIDEO_PATTERNS)} video patterns"
-            )
+            logger.debug(f"🎥 Loaded and compiled {len(_VIDEO_PATTERNS)} video patterns")
         except ImportError as e:
             logger.warning(
                 f"Could not import SUPPORTED_PATTERNS from video_ingest: {e}, using fallback patterns"
             )
             _VIDEO_PATTERNS = _FALLBACK_PATTERNS
 
-    # Test video patterns with compiled regex [PA]
+    # Test video patterns with compiled regex
     for pattern in _VIDEO_PATTERNS:
-        if pattern.search(url):  # Fixed: use .search() consistently [REH]
-            logger.info(f"✅ Video URL modality detected: {url}")
+        if pattern.search(url):
+            logger.info(f"url.classify type=VIDEO_URL url={url[:80]}")
             return InputModality.VIDEO_URL
 
-    # Image URLs [PA]
-    if _IMAGE_EXT_PATTERN.search(url):
-        return InputModality.SINGLE_IMAGE
-
-    # PDF URLs [PA]
-    if _PDF_EXT_PATTERN.search(url):
-        return InputModality.PDF_DOCUMENT
-
     # General URLs (will try oEmbed first, fallback to screenshot)
+    logger.debug(f"url.classify type=GENERAL_URL (default) url={url[:80]}")
     return InputModality.GENERAL_URL
 
 

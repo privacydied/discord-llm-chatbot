@@ -86,21 +86,49 @@ async def see_infer(
                 )
                 return BotAction(content=friendly_text)
 
-            if response.get("text"):
-                vl_text = response["text"]
+            # Check for non-empty text content [REH][CA]
+            vl_text = response.get("text", "")
+            if vl_text and vl_text.strip():
                 logger.info(f"VL model returned: {len(vl_text)} chars")
                 logger.debug(f"VL result preview: '{vl_text[:100]}...'")
+                logger.info(
+                    "vl.final status=ok model=%s attempts=%s scope=see",
+                    response.get("model"),
+                    telemetry.get("ladder_attempts"),
+                )
                 return BotAction(content=vl_text)
+            
+            # Empty completion is a soft failure - model returned but produced no output [REH]
+            logger.warning(
+                "vl.final status=error reason=empty_completion model=%s attempts=%s scope=see",
+                response.get("model"),
+                telemetry.get("ladder_attempts"),
+            )
+            return BotAction(
+                content=(
+                    "🔧 The vision model returned an empty response. "
+                    "Please try again with a clearer image or different prompt."
+                )
+            )
 
         if isinstance(response, str):
+            # String response is typically an error message from the backend
+            if response.strip():
+                logger.info(
+                    "vl.final status=ok type=string_response scope=see"
+                )
+                return BotAction(content=response)
             logger.info(
                 "vl.final status=error exhausted=true ladder=na attempts=na provider_base=na scope=see"
             )
-            return BotAction(content=response)
+            return BotAction(
+                content="🔧 Vision processing returned an empty result. Please try again."
+            )
 
-        logger.error(f"Unexpected VL response format: {response}")
-        logger.info(
-            "vl.final status=error exhausted=true reason=unexpected_format scope=see"
+        # Truly unexpected format - log for debugging but don't expose internals to user [REH]
+        logger.error(
+            "vl.final status=error reason=unexpected_format type=%s scope=see",
+            type(response).__name__,
         )
         return BotAction(
             content=(

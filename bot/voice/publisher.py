@@ -272,26 +272,47 @@ class VoiceMessagePublisher:
             return VoicePublishResult(message=None, ogg_path=None, ok=False)
 
         # 1) Prepare audio: transcode WAV -> OGG Opus, compute duration + waveform
+        # If input is already OGG/Opus, skip transcoding [REH]
         try:
             if not self._check_tools():
                 return VoicePublishResult(message=None, ogg_path=None, ok=False)
-            wav_p = Path(wav_path)
-            # Compute duration directly from WAV header [REH]
+            audio_p = Path(wav_path)
             duration = 0.0
-            if wav_p.exists():
-                with contextlib.closing(wave.open(str(wav_p), "rb")) as wf:
-                    fr = wf.getframerate() or 0
-                    nf = wf.getnframes() or 0
-                    duration = (nf / float(fr)) if fr else 0.0
-            # Transcode close to reference script: 48kHz, libopus @ 64k
-            bitrate = str(cfg.get("VOICE_PUBLISHER_OPUS_BITRATE", "64k") or "64k")
-            vbr = str(cfg.get("VOICE_PUBLISHER_OPUS_VBR", "on") or "on")
-            comp = int(cfg.get("VOICE_PUBLISHER_OPUS_COMP_LEVEL", 10) or 10)
-            ogg_p = await transcode_to_ogg_opus(
-                wav_p, bitrate=bitrate, vbr=vbr, compression_level=comp
-            )
-            ogg_bytes = ogg_p.read_bytes()
-            waveform_b64 = compute_waveform_b64(wav_p)
+            
+            # Detect file format from extension and magic bytes
+            is_ogg = audio_p.suffix.lower() in (".ogg", ".opus")
+            if not is_ogg and audio_p.exists():
+                # Check magic bytes: OGG starts with "OggS"
+                try:
+                    with open(audio_p, "rb") as f:
+                        magic = f.read(4)
+                        is_ogg = magic == b"OggS"
+                except Exception:
+                    pass
+            
+            if is_ogg:
+                # Already OGG/Opus - use directly, probe duration via ffprobe
+                ogg_p = audio_p
+                ogg_bytes = ogg_p.read_bytes()
+                # Compute waveform from OGG (compute_waveform_b64 handles both formats)
+                waveform_b64 = compute_waveform_b64(ogg_p)
+                self.logger.debug("voice.native.input_already_ogg path=%s", audio_p)
+            else:
+                # WAV input - compute duration from header and transcode
+                if audio_p.exists():
+                    with contextlib.closing(wave.open(str(audio_p), "rb")) as wf:
+                        fr = wf.getframerate() or 0
+                        nf = wf.getnframes() or 0
+                        duration = (nf / float(fr)) if fr else 0.0
+                # Transcode close to reference script: 48kHz, libopus @ 64k
+                bitrate = str(cfg.get("VOICE_PUBLISHER_OPUS_BITRATE", "64k") or "64k")
+                vbr = str(cfg.get("VOICE_PUBLISHER_OPUS_VBR", "on") or "on")
+                comp = int(cfg.get("VOICE_PUBLISHER_OPUS_COMP_LEVEL", 10) or 10)
+                ogg_p = await transcode_to_ogg_opus(
+                    audio_p, bitrate=bitrate, vbr=vbr, compression_level=comp
+                )
+                ogg_bytes = ogg_p.read_bytes()
+                waveform_b64 = compute_waveform_b64(audio_p)
             # Prefer probing duration from OGG (matches reference behavior)
             probed = await self._probe_duration(ogg_p)
             if probed is not None:

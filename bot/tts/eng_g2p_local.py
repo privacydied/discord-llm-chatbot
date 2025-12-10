@@ -88,49 +88,140 @@ def apply_lexicon(text: str) -> str:
 
 
 def normalize_text(text: str) -> str:
-    """Normalize text for TTS processing."""
+    """Normalize text for TTS while preserving prosody-relevant punctuation.
+    
+    Keeps sentence and phrase boundary markers (. , ! ? ; :) for natural speech rhythm.
+    Expands numbers to words for proper pronunciation.
+    [REH][CA]
+    """
     t = unicodedata.normalize("NFKC", text)
-    t = t.replace(":", " ")
+    
+    # Map colons and semicolons to commas (phrase boundaries) rather than dropping
+    t = t.replace(":", ", ").replace(";", ", ")
+    
+    # Keep prosody-relevant punctuation: . , ! ? ' -
+    # Also keep parentheses content but remove the parens themselves
+    t = re.sub(r"[()\[\]{}]", " ", t)
+    
+    # Remove remaining special chars but preserve alphanumeric and prosody marks
     t = re.sub(r"[^A-Za-z0-9'.,?!\-\s]", " ", t)
+    
+    # Normalize multiple punctuation marks
+    t = re.sub(r"([.,!?])\1+", r"\1", t)  # Collapse repeated punctuation
     t = re.sub(r"\s+", " ", t).strip()
-    t = t.replace("what's", "whats")
-    t = number_to_words(t)  # no-op if already words
+    
+    # Handle contractions (preserve for natural speech)
+    # Don't strip apostrophes from contractions like "what's"
+    
+    # Expand numbers to words for proper pronunciation
+    t = number_to_words(t)
+    
     return t
 
 
 def number_to_words(text: str) -> str:
-    """Convert basic numbers to words."""
-    number_map = {
-        "0": "zero",
-        "1": "one",
-        "2": "two",
-        "3": "three",
-        "4": "four",
-        "5": "five",
-        "6": "six",
-        "7": "seven",
-        "8": "eight",
-        "9": "nine",
-        "10": "ten",
-        "11": "eleven",
-        "12": "twelve",
-        "13": "thirteen",
-        "14": "fourteen",
-        "15": "fifteen",
-        "16": "sixteen",
-        "17": "seventeen",
-        "18": "eighteen",
-        "19": "nineteen",
-        "20": "twenty",
+    """Convert numbers to spoken words for natural TTS pronunciation.
+    
+    Handles:
+    - Small numbers (0-99)
+    - Years (1900-2099)
+    - Large numbers with commas (1,000)
+    - Ordinals (1st, 2nd, 3rd)
+    [REH]
+    """
+    # Basic number words
+    ones = [
+        "", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
+        "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen",
+        "seventeen", "eighteen", "nineteen"
+    ]
+    tens = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"]
+    
+    def _small_num(n: int) -> str:
+        """Convert 0-99 to words."""
+        if n < 20:
+            return ones[n]
+        elif n < 100:
+            t, o = divmod(n, 10)
+            return tens[t] + (" " + ones[o] if o else "")
+        return str(n)  # Fallback for unexpected values
+    
+    def _year_to_words(year: int) -> str:
+        """Convert year (1900-2099) to spoken form."""
+        if 1900 <= year <= 1999:
+            return f"{ones[19]} {_small_num(year - 1900)}"
+        elif 2000 <= year <= 2009:
+            return f"two thousand" + (f" {ones[year - 2000]}" if year > 2000 else "")
+        elif 2010 <= year <= 2099:
+            return f"twenty {_small_num(year - 2000)}"
+        return str(year)
+    
+    def _convert_number(s: str) -> str:
+        """Convert a numeric string to words."""
+        # Strip commas from large numbers
+        s_clean = s.replace(",", "")
+        
+        # Check if it's a valid integer
+        if not s_clean.isdigit():
+            return s
+        
+        n = int(s_clean)
+        
+        # Years (4-digit, reasonable range)
+        if 1900 <= n <= 2099 and len(s_clean) == 4:
+            return _year_to_words(n)
+        
+        # Small numbers
+        if n == 0:
+            return "zero"
+        if n < 100:
+            return _small_num(n)
+        if n < 1000:
+            h, r = divmod(n, 100)
+            result = ones[h] + " hundred"
+            if r:
+                result += " " + _small_num(r)
+            return result
+        if n < 10000:
+            th, r = divmod(n, 1000)
+            result = _small_num(th) + " thousand"
+            if r >= 100:
+                result += " " + _convert_number(str(r))
+            elif r > 0:
+                result += " " + _small_num(r)
+            return result
+        
+        # For very large numbers, just return original
+        return s
+    
+    # Ordinal suffixes
+    ordinal_map = {
+        "1st": "first", "2nd": "second", "3rd": "third", "4th": "fourth",
+        "5th": "fifth", "6th": "sixth", "7th": "seventh", "8th": "eighth",
+        "9th": "ninth", "10th": "tenth", "11th": "eleventh", "12th": "twelfth",
+        "13th": "thirteenth", "20th": "twentieth", "30th": "thirtieth",
+        "21st": "twenty first", "22nd": "twenty second", "23rd": "twenty third",
     }
-
+    
     words = text.split()
     out = []
     for word in words:
-        if word.isdigit() and word in number_map:
-            out.append(number_map[word])
+        # Strip trailing punctuation for matching
+        punct = ""
+        clean_word = word
+        while clean_word and clean_word[-1] in ".,!?;:":
+            punct = clean_word[-1] + punct
+            clean_word = clean_word[:-1]
+        
+        # Check ordinals first
+        if clean_word.lower() in ordinal_map:
+            out.append(ordinal_map[clean_word.lower()] + punct)
+        # Check pure numbers or comma-separated numbers
+        elif re.match(r"^\d{1,3}(,\d{3})*$", clean_word) or clean_word.isdigit():
+            out.append(_convert_number(clean_word) + punct)
         else:
             out.append(word)
+    
     return " ".join(out)
 
 
@@ -1162,14 +1253,24 @@ def text_to_ipa(text: str) -> str:
 
     Returns:
         Space-separated IPA string
+    [REH][CA]
     """
     if not text or not text.strip():
         return text
 
+    raw_text = text  # Keep original for logging
+    
     tokenizer = _get_official_tokenizer()
     if tokenizer is not None:
         ipa = _attempt_official_tokenizer(tokenizer, text)
         if ipa:
+            logger.debug(
+                "g2p.official chars_in=%d ipa_len=%d preview=%s",
+                len(raw_text),
+                len(ipa),
+                repr(ipa[:50]) if len(ipa) > 50 else repr(ipa),
+                extra={"subsys": "g2p", "event": "official_tokenizer", "chars": len(raw_text)},
+            )
             return ipa
 
     # Load CMU dictionary if available
@@ -1184,33 +1285,66 @@ def text_to_ipa(text: str) -> str:
 
     # 1. Normalize text and apply lexicon
     text = normalize_text(text)
-    text = apply_lexicon(text)
+    text_after_lexicon = apply_lexicon(text)
+    
+    # Log normalization step for debug visibility [REH]
+    if text != text_after_lexicon:
+        logger.debug(
+            "g2p.lexicon before=%s after=%s",
+            repr(text[:40]),
+            repr(text_after_lexicon[:40]),
+            extra={"subsys": "g2p", "event": "lexicon_applied"},
+        )
+    text = text_after_lexicon
 
     # 3. Tokenize (words and punctuation)
     tokens = re.findall(r"[A-Za-z']+|[0-9]+|[^\sA-Za-z0-9]", text)
 
     # 4. Convert each token to IPA
     ipa_parts = []
+    punct_count = 0
+    word_count = 0
+    
     for token in tokens:
         if token.isalpha():
             # Convert word to IPA
             ipa_word = _word_to_ipa(token, cmudict_dict)
             ipa_parts.append(ipa_word)
+            word_count += 1
         elif token in ".,!?;:":
-            # Map punctuation to pause tokens or drop them
+            # Map punctuation to pause tokens - critical for prosody! [CA]
             if token in ".!?":
                 ipa_parts.append(".")  # Sentence boundary
+                punct_count += 1
             elif token in ",;:":
                 ipa_parts.append(",")  # Phrase boundary
+                punct_count += 1
         elif token == "...":
             ipa_parts.append(".")  # Ellipsis -> period
+            punct_count += 1
         # Drop other punctuation that doesn't map to IPA
 
     # 5. Join and normalize whitespace
     result = " ".join(ipa_parts)
     result = re.sub(r"\s+", " ", result).strip()
 
-    logger.debug(f"Normalized text '{text}' to IPA: {result}")
+    # Structured logging for pipeline visibility [REH]
+    logger.debug(
+        "g2p.complete chars_in=%d words=%d punct=%d ipa_len=%d preview=%s",
+        len(raw_text),
+        word_count,
+        punct_count,
+        len(result),
+        repr(result[:60]) if len(result) > 60 else repr(result),
+        extra={
+            "subsys": "g2p",
+            "event": "g2p_complete",
+            "chars_in": len(raw_text),
+            "words": word_count,
+            "punct": punct_count,
+            "ipa_len": len(result),
+        },
+    )
     return result
 
 

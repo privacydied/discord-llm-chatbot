@@ -820,6 +820,7 @@ class VideoIngestionManager:
             expected_extractor = self._get_expected_extractor(url_no_fragment)
             actual_extractor = (metadata.get("extractor_key") or metadata.get("extractor") or "").lower()
             webpage_url = metadata.get("webpage_url") or ""
+            metadata_video_id = metadata.get("id") or ""
             
             if expected_extractor and actual_extractor:
                 # Check for obvious mismatches (e.g., YouTube URL returning TikTok extractor)
@@ -834,6 +835,33 @@ class VideoIngestionManager:
                     raise VideoIngestError(
                         f"yt-dlp returned unexpected content: expected {expected_extractor}, got {actual_extractor}"
                     )
+            
+            # Additional validation: verify video ID from URL matches metadata ID [REH][IV]
+            # This prevents cross-contamination when yt-dlp resolves to wrong video
+            if expected_extractor == "youtube":
+                normalized = self._normalize_youtube_url(url_no_fragment)
+                if normalized.startswith("youtube://video/"):
+                    url_video_id = normalized.split("/")[-1]
+                    if metadata_video_id and url_video_id and url_video_id != metadata_video_id:
+                        logger.warning(
+                            "stt.ytdlp.id_mismatch url_id=%s metadata_id=%s url=%s",
+                            url_video_id, metadata_video_id, url_no_fragment[:60],
+                        )
+                        raise VideoIngestError(
+                            f"Video ID mismatch: URL suggests {url_video_id} but yt-dlp returned {metadata_video_id}"
+                        )
+            elif expected_extractor == "tiktok":
+                normalized = self._normalize_tiktok_url(url_no_fragment)
+                if normalized.startswith("tiktok://video/"):
+                    url_video_id = normalized.split("/")[-1]
+                    if metadata_video_id and url_video_id and url_video_id != metadata_video_id:
+                        logger.warning(
+                            "stt.ytdlp.id_mismatch url_id=%s metadata_id=%s url=%s",
+                            url_video_id, metadata_video_id, url_no_fragment[:60],
+                        )
+                        raise VideoIngestError(
+                            f"Video ID mismatch: URL suggests {url_video_id} but yt-dlp returned {metadata_video_id}"
+                        )
 
             # Compute canonical video identity for cache keying [REH]
             video_identity = self._canonicalize_video_identity(url, metadata)
@@ -879,6 +907,14 @@ class VideoIngestionManager:
             cache_entry = None if force_refresh else self._get_cache_entry(download_key)
             
             # Log cache lookup for STT debugging [REH]
+            logger.info(
+                "stt.identity original_url=%s canonical=%s extractor=%s video_id=%s cache_key=%s",
+                url[:60] if url else "none",
+                video_identity[:40] if video_identity else "none",
+                actual_extractor,
+                metadata.get("id", "none")[:20],
+                download_key[:20],
+            )
             logger.debug(
                 "stt.cache.lookup key=%s original_url=%s resolved_url=%s",
                 download_key[:20],
