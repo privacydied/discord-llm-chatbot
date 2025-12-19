@@ -1024,11 +1024,21 @@ class Router:
     @staticmethod
     def _is_twitter_url(url: str) -> bool:
         try:
-            u = str(url).lower()
+            u = str(url)
+        except Exception:
+            return False
+        try:
+            # Tweet-id driven: accept any host if we can extract a valid tweet/status ID. [IV]
+            if XApiClient.extract_tweet_id(u):
+                return True
+        except Exception:
+            pass
+        try:
+            low = u.lower()
         except Exception:
             return False
         return any(
-            d in u
+            d in low
             for d in [
                 "twitter.com/",
                 "x.com/",
@@ -4721,7 +4731,10 @@ class Router:
             self.logger.info(f"📋 Starting item {i}: {modality.name} - {description}")
 
             skip_reason: Optional[str] = None
-            if status_keys:
+            # Only dedupe/skip X status processing on true URL items.
+            # Never let embed/thumbnail/image items consume the tweet URL path. [REH][CA]
+            should_dedupe_x_status = bool(status_keys and item.source_type == "url")
+            if should_dedupe_x_status:
                 for key in status_keys:
                     existing = x_media_state["processed"].get(key)
                     if existing:
@@ -4812,7 +4825,10 @@ class Router:
                     duration = result.total_time
                     attempts = result.attempts
 
-                if status_keys:
+                # Only mark X status processed for true URL items.
+                # Never mark for embeds/thumbnails/images. [REH][CA]
+                should_mark_x_status = bool(status_keys and item.source_type == "url")
+                if should_mark_x_status:
                     status_label = "consumed" if success else "failed"
                     for key in status_keys:
                         x_media_state["processed"][key] = status_label
@@ -4830,7 +4846,7 @@ class Router:
                 result_text = f"❌ Exception: {e}"
                 duration = 0.0
                 attempts = 0
-                if status_keys:
+                if should_mark_x_status:
                     for key in status_keys:
                         x_media_state["processed"][key] = "failed"
                     x_media_state["allow_vision"] = True
@@ -5603,9 +5619,12 @@ class Router:
                 return f"URL handler received non-URL item: {item.source_type}"
 
             url = item.payload
-            canon_candidate = self._canonicalize_x_url(url)
-            if canon_candidate and canon_candidate != url:
-                url = canon_candidate
+            # Only canonicalize when this is actually a Twitter/X-like URL to avoid
+            # misclassifying arbitrary hosts that happen to contain numbers. [IV]
+            if self._is_twitter_url(url):
+                canon_candidate = self._canonicalize_x_url(url)
+                if canon_candidate and canon_candidate != url:
+                    url = canon_candidate
             self.logger.info(f"🌐 Processing general URL: {url}")
             
             # --- URL MIME classification for media/document routing [CA][REH] ---

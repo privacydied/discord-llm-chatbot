@@ -3,6 +3,8 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, List, Optional
 
+from urllib.parse import parse_qs, urlparse
+
 import httpx
 
 from .utils.logging import get_logger
@@ -16,10 +18,11 @@ _X_API_BASE_URL = (
     "https://api.twitter.com/2"  # Official v2 endpoint remains twitter.com domain
 )
 _TWEET_ID_RE = re.compile(r"^\d{8,20}$")
-_X_URL_ID_RE = re.compile(
-    r"https?://(?:www\.)?(?:twitter|x|vxtwitter|fxtwitter)\.com/(?:[^/]+/status|i/status)/(\d{8,20})(?:\D.*)?",
+_X_URL_PATH_ID_RE = re.compile(
+    r"/(?:i/(?:web/)?status|i/status|[^/]+/status)/(\d{8,20})(?:\D|$)",
     re.IGNORECASE,
 )
+_X_URL_QUERY_ID_KEYS = ("id", "tweet_id", "status", "status_id")
 
 
 class XApiClient:
@@ -95,9 +98,32 @@ class XApiClient:
         value = value.strip()
         if _TWEET_ID_RE.match(value):
             return value
-        m = _X_URL_ID_RE.match(value)
-        if m:
-            return m.group(1)
+        # Robust URL parsing: handle multiple hosts + URL shapes (status path, i/web/status, query params). [IV]
+        try:
+            parsed = urlparse(value)
+            # 1) Query params (syndication/embed style URLs)
+            qs = parse_qs(parsed.query or "")
+            for k in _X_URL_QUERY_ID_KEYS:
+                vals = qs.get(k)
+                if vals:
+                    cand = (vals[0] or "").strip()
+                    if _TWEET_ID_RE.match(cand):
+                        return cand
+
+            # 2) Path-based extraction
+            m = _X_URL_PATH_ID_RE.search(parsed.path or "")
+            if m:
+                return m.group(1)
+        except Exception:
+            # Fall through to raw regex search
+            pass
+
+        try:
+            m2 = _X_URL_PATH_ID_RE.search(value)
+            if m2:
+                return m2.group(1)
+        except Exception:
+            pass
         return None
 
     def _build_headers(self, bearer_token: Optional[str]) -> Dict[str, str]:
