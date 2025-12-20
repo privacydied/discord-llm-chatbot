@@ -14,7 +14,7 @@ import urllib.request
 from pathlib import Path
 from typing import Dict, Any, Optional, Tuple
 from urllib.parse import ParseResult, urlparse
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 from .utils.logging import get_logger
@@ -247,6 +247,27 @@ class DownloadedAudio:
     demux_fallback: bool = False
 
 
+@dataclass
+class ProcessedAudio:
+    """Backward-compatible audio artifact shape for legacy tests/callers. [CA][REH]
+
+    NOTE: The current STT pipeline consumes DownloadedAudio + preprocess stage.
+    This shim exists to keep older imports from breaking.
+    """
+
+    audio_path: Path
+    metadata: VideoMetadata
+    processed_duration_seconds: float = 0.0
+    speedup_factor: float = 1.0
+    cache_hit: bool = False
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    demux_fallback: bool = False
+
+    @property
+    def raw_path(self) -> Path:
+        return self.audio_path
+
+
 class VideoIngestError(InferenceError):
     """Specific error for video ingestion failures."""
 
@@ -261,6 +282,9 @@ class VideoIngestionManager:
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.cache_index_path = self.cache_dir / "index.json"
         self._index: Dict[str, Dict[str, Any]] = self._load_cache_index()
+        # Ensure cache index exists for deterministic behavior in tests/runtime. [RM]
+        if not self.cache_index_path.exists():
+            self._save_cache_index()
         cfg = load_config()
         try:
             max_mb = int(cfg.get("MAX_ATTACHMENT_SIZE_MB", 25))

@@ -144,13 +144,19 @@ async def fetch_url_content(url: str, timeout: int = 15) -> Optional[Tuple[bytes
     headers = {
         "User-Agent": USER_AGENT,
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.5",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate, br",
+        "DNT": "1",
+        "Upgrade-Insecure-Requests": "1",
     }
 
     try:
         async with httpx.AsyncClient(
             headers=headers, follow_redirects=True, timeout=timeout
         ) as client:
+            logging.debug(
+                f"web.fetch request url={url[:200]} timeout_s={timeout} ua_present={bool(headers.get('User-Agent'))}"
+            )
             response = await client.get(url)
             response.raise_for_status()  # Raise exception for 4xx/5xx responses
             content = await response.aread()

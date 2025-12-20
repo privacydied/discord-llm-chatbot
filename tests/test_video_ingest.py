@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from bot.video_ingest import (
     VideoIngestionManager,
     VideoMetadata,
+    DownloadedAudio,
     ProcessedAudio,
     VideoIngestError,
 )
@@ -39,9 +40,9 @@ class TestVideoIngestionManager:
         url1 = "https://youtube.com/watch?v=test123"
         url2 = "https://youtube.com/watch?v=test456"
 
-        key1a = manager._get_cache_key(url1)
-        key1b = manager._get_cache_key(url1)
-        key2 = manager._get_cache_key(url2)
+        key1a = manager._hash_resolved_url(url1)
+        key1b = manager._hash_resolved_url(url1)
+        key2 = manager._hash_resolved_url(url2)
 
         assert key1a == key1b  # Same URL should produce same key
         assert key1a != key2  # Different URLs should produce different keys
@@ -56,14 +57,15 @@ class TestVideoIngestionManager:
             "https://tiktok.com/@user/video/123456789",
             "https://www.tiktok.com/@user/video/123456789",
             "https://vm.tiktok.com/abc123",
+            "https://vimeo.com/123456",
+            "https://instagram.com/reel/abc123def",
+            "https://www.facebook.com/user/videos/1234567890/",
         ]
 
         unsupported_urls = [
-            "https://vimeo.com/123456",
-            "https://facebook.com/video/123",
-            "https://instagram.com/p/abc123",
             "not-a-url",
             "https://example.com",
+            "ftp://youtube.com/watch?v=test",
         ]
 
         for url in supported_urls:
@@ -105,122 +107,124 @@ class TestVideoIngestionManager:
     @pytest.mark.asyncio
     async def test_unsupported_url_error(self, manager):
         """Test error handling for unsupported URLs."""
-        unsupported_url = "https://vimeo.com/123456"
+        unsupported_url = "https://example.com/123456"
 
         with pytest.raises(VideoIngestError, match="Unsupported URL format"):
             await manager.fetch_and_prepare_url_audio(unsupported_url)
 
     @pytest.mark.asyncio
-    @patch("bot.video_ingest.asyncio.create_subprocess_exec")
-    async def test_ytdlp_download_success(self, mock_subprocess, manager):
-        """Test successful yt-dlp download."""
-        # Mock successful yt-dlp process
-        mock_proc = AsyncMock()
-        mock_proc.returncode = 0
-        mock_proc.communicate.return_value = (
-            b"/tmp/test.wav\nTest Video Title\n120.5\nTest Uploader\n20240101\n",
-            b"",
-        )
-        mock_subprocess.return_value = mock_proc
-
+    async def test_ytdlp_probe_success(self, manager):
+        """Test successful yt-dlp metadata probe parsing."""
         url = "https://youtube.com/watch?v=test123"
+        payload = {
+            "id": "test123",
+            "title": "Test Video Title",
+            "duration": 120.5,
+            "uploader": "Test Uploader",
+            "upload_date": "20240101",
+            "extractor_key": "youtube",
+            "webpage_url": url,
+            "formats": [],
+        }
 
-        with patch.object(Path, "exists", return_value=True):
-            metadata, filepath = await manager._download_with_ytdlp(url, Path("/tmp"))
+        with patch.object(
+            manager,
+            "_run_subprocess",
+            new=AsyncMock(return_value=(json.dumps(payload).encode(), b"")),
+        ):
+            metadata = await manager._probe_metadata(url, timeout_s=1.0)
 
-        assert metadata.url == url
-        assert metadata.title == "Test Video Title"
-        assert metadata.duration_seconds == 120.5
-        assert metadata.uploader == "Test Uploader"
-        assert metadata.source_type == "youtube"
-        assert filepath == Path("/tmp/test.wav")
+        assert metadata["id"] == "test123"
+        assert metadata["title"] == "Test Video Title"
+        assert float(metadata["duration"]) == 120.5
+        assert metadata["uploader"] == "Test Uploader"
 
     @pytest.mark.asyncio
-    @patch("bot.video_ingest.asyncio.create_subprocess_exec")
-    async def test_ytdlp_download_failure(self, mock_subprocess, manager):
-        """Test yt-dlp download failure handling."""
-        # Mock failed yt-dlp process
-        mock_proc = AsyncMock()
-        mock_proc.returncode = 1
-        mock_proc.communicate.return_value = (b"", b"Video not available")
-        mock_subprocess.return_value = mock_proc
-
+    async def test_ytdlp_probe_failure(self, manager):
+        """Test yt-dlp metadata probe failure handling."""
         url = "https://youtube.com/watch?v=invalid"
 
-        with pytest.raises(VideoIngestError, match="yt-dlp download failed"):
-            await manager._download_with_ytdlp(url, Path("/tmp"))
+        with patch.object(
+            manager,
+            "_run_subprocess",
+            new=AsyncMock(side_effect=VideoIngestError("yt-dlp metadata probe failed: nope")),
+        ):
+            with pytest.raises(VideoIngestError, match="yt-dlp metadata probe failed"):
+                await manager._probe_metadata(url, timeout_s=1.0)
 
     @pytest.mark.asyncio
-    @patch("bot.video_ingest.asyncio.create_subprocess_exec")
-    async def test_audio_processing_success(self, mock_subprocess, manager):
-        """Test successful audio processing with ffmpeg."""
-        # Mock successful ffmpeg process
-        mock_proc = AsyncMock()
-        mock_proc.returncode = 0
-        mock_proc.communicate.return_value = (b"", b"")
-        mock_subprocess.return_value = mock_proc
+    async def test_ytdlp_download_audio_command(self, manager):
+        """Test yt-dlp download orchestration emits expected command shape."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir)
+            fake_download = output_dir / "test.m4a"
+            fake_download.write_bytes(b"dummy")
 
-        input_path = Path("/tmp/input.wav")
+            mock_run = AsyncMock(return_value=(str(fake_download).encode(), b""))
+            with patch.object(manager, "_run_subprocess", new=mock_run):
+                path = await manager._download_audio(
+                    source_url="https://example.com/audio",
+                    format_id="140",
+                    ext="m4a",
+                    output_dir=output_dir,
+                    timeout_s=1.0,
+                )
 
-        with patch.object(Path, "exists", return_value=True):
-            result_path = await manager._process_audio(input_path, speedup=1.5)
-
-        expected_path = input_path.with_suffix(".processed.wav")
-        assert result_path == expected_path
-
-        # Verify ffmpeg command
-        mock_subprocess.assert_called_once()
-        args = mock_subprocess.call_args[0][0]
-        assert "ffmpeg" in args
-        assert "-ar" in args and "16000" in args  # 16kHz
-        assert "-ac" in args and "1" in args  # Mono
-        assert "atempo=1.5" in " ".join(args)  # Speedup
+            assert path.exists()
+            assert path.suffix == ".m4a"
+            assert mock_run.call_count == 1
+            cmd = mock_run.call_args[0][0]
+            assert cmd[0] == "yt-dlp"
+            assert "--format" in cmd
+            assert "140" in cmd
 
     def test_cache_entry_validation(self, manager):
         """Test cache entry validation logic."""
-        # Create mock cache entry
         cache_key = "test123"
-        cache_entry = {
-            "url": "https://youtube.com/watch?v=test",
-            "title": "Test Video",
-            "duration_seconds": 120.0,
-            "uploader": "Test User",
-            "upload_date": "20240101",
-            "source_type": "youtube",
-            "processed_path": str(manager.cache_dir / "test.wav"),
+        raw_path = manager.cache_dir / "test.m4a"
+        entry = {
+            "raw_path": str(raw_path),
+            "content_length": 123,
+            "format_id": "140",
+            "ext": "m4a",
+            "source_url": "https://youtube.com/watch?v=test",
             "cached_at": datetime.now(timezone.utc).isoformat(),
-            "speedup_factor": 1.5,
+            "demux_fallback": False,
         }
 
-        # Write to cache index
-        with open(manager.cache_index_path, "w") as f:
-            json.dump({cache_key: cache_entry}, f)
+        manager._index = {cache_key: entry}
+        manager._save_cache_index()
 
-        # Test with missing file
-        result = manager._get_cached_entry(cache_key)
-        assert result is None  # Should return None if file doesn't exist
+        # Missing artifact -> None
+        assert manager._get_cache_entry(cache_key) is None
 
-        # Test with existing file
-        cache_file = Path(cache_entry["processed_path"])
-        cache_file.touch()  # Create empty file
+        # _get_cache_entry purges missing artifacts from the index, so restore it.
+        manager._index = {cache_key: entry}
+        manager._save_cache_index()
 
-        result = manager._get_cached_entry(cache_key)
-        assert result == cache_entry
+        raw_path.touch()
+        found = manager._get_cache_entry(cache_key)
+        assert found is not None
+        found_entry, found_path = found
+        assert found_entry["format_id"] == "140"
+        assert found_path == raw_path
 
 
 class TestHearInferFromUrl:
     """Test cases for hear_infer_from_url function."""
 
     @pytest.mark.asyncio
-    @patch("bot.hear.stt_manager")
     @patch("bot.hear.fetch_and_prepare_url_audio")
-    async def test_successful_transcription(self, mock_fetch, mock_stt):
+    async def test_successful_transcription(self, mock_fetch):
         """Test successful URL transcription."""
-        # Mock STT manager
-        mock_stt.is_available.return_value = True
-        mock_stt.transcribe_async.return_value = "This is the transcribed text"
+        from bot.stt import ModelSpec
 
-        # Mock processed audio
+        stt_stub = Mock()
+        stt_stub.ensure_ready = AsyncMock(return_value=True)
+        stt_stub.default_spec = ModelSpec(size="base", compute_type="int8")
+        stt_stub.downgrade_spec = Mock(return_value=None)
+        stt_stub.cpu_threads = 2
+
         mock_metadata = VideoMetadata(
             url="https://youtube.com/watch?v=test",
             title="Test Video",
@@ -230,59 +234,76 @@ class TestHearInferFromUrl:
             source_type="youtube",
         )
 
-        mock_processed = ProcessedAudio(
-            audio_path=Path("/tmp/test.wav"),
+        mock_download = DownloadedAudio(
+            raw_path=Path("/tmp/test.wav"),
             metadata=mock_metadata,
-            processed_duration_seconds=80.0,
-            speedup_factor=1.5,
+            download_key="abc123",
+            format_id="140",
+            resolved_url="https://example.com/audio",
+            content_length=123,
             cache_hit=False,
+            ext="m4a",
             timestamp=datetime.now(timezone.utc),
         )
+        mock_fetch.return_value = mock_download
 
-        mock_fetch.return_value = mock_processed
+        pre = Mock()
+        pre.duration_in = 10.0
+        pre.duration_out = 9.0
+        pre.atempo_applied = False
+        stream = AsyncMock()
+        stream.finalize = AsyncMock()
+        stream.abort = AsyncMock()
+        pre.stream = stream
 
-        # Test the function
-        result = await hear_infer_from_url("https://youtube.com/watch?v=test")
+        transcript = Mock()
+        transcript.text = "This is the transcribed text"
+        transcript.cache_hit = False
+        transcript.aborted = False
+        transcript.abort_reason = None
+        transcript.model_spec = stt_stub.default_spec
+
+        with (
+            patch("bot.hear.stt_manager", stt_stub),
+            patch("bot.hear._preprocess_audio", new=AsyncMock(return_value=pre)),
+            patch("bot.hear._run_whisper", new=AsyncMock(return_value=transcript)),
+        ):
+            result = await hear_infer_from_url("https://youtube.com/watch?v=test")
 
         assert result["transcription"] == "This is the transcribed text"
         assert result["metadata"]["source"] == "youtube"
         assert result["metadata"]["title"] == "Test Video"
         assert not result["metadata"]["cache_hit"]
 
-        # Verify calls
         mock_fetch.assert_called_once_with(
-            "https://youtube.com/watch?v=test", 1.5, False
+            "https://youtube.com/watch?v=test", force_refresh=False
         )
-        mock_stt.transcribe_async.assert_called_once_with(Path("/tmp/test.wav"))
 
     @pytest.mark.asyncio
-    @patch("bot.hear.stt_manager")
-    async def test_stt_unavailable_error(self, mock_stt):
+    async def test_stt_unavailable_error(self):
         """Test error when STT is not available."""
-        mock_stt.is_available.return_value = False
+        stt_stub = Mock()
+        stt_stub.ensure_ready = AsyncMock(return_value=False)
 
-        with pytest.raises(InferenceError, match="STT engine not available"):
-            await hear_infer_from_url("https://youtube.com/watch?v=test")
+        with patch("bot.hear.stt_manager", stt_stub):
+            with pytest.raises(InferenceError, match="STT engine not available"):
+                await hear_infer_from_url("https://youtube.com/watch?v=test")
 
     @pytest.mark.asyncio
-    @patch("bot.hear.stt_manager")
     @patch("bot.hear.fetch_and_prepare_url_audio")
-    async def test_user_friendly_error_messages(self, mock_fetch, mock_stt):
-        """Test user-friendly error message conversion."""
-        mock_stt.is_available.return_value = True
+    async def test_video_ingest_error_passthrough(self, mock_fetch):
+        """Test VideoIngestError is surfaced as an InferenceError with the same message."""
+        from bot.stt import ModelSpec
 
-        test_cases = [
-            ("unsupported url format", "This URL is not supported"),
-            ("video too long", "This video is too long to process"),
-            ("download failed", "Could not download the video"),
-            ("audio processing failed", "Could not process the audio"),
-            ("unknown error", "Video transcription failed"),
-        ]
+        stt_stub = Mock()
+        stt_stub.ensure_ready = AsyncMock(return_value=True)
+        stt_stub.default_spec = ModelSpec(size="base", compute_type="int8")
+        stt_stub.downgrade_spec = Mock(return_value=None)
+        stt_stub.cpu_threads = 2
 
-        for error_input, expected_output in test_cases:
-            mock_fetch.side_effect = Exception(error_input)
-
-            with pytest.raises(InferenceError, match=expected_output):
+        mock_fetch.side_effect = VideoIngestError("Unsupported URL format: https://example.com")
+        with patch("bot.hear.stt_manager", stt_stub):
+            with pytest.raises(InferenceError, match="Unsupported URL format"):
                 await hear_infer_from_url("https://youtube.com/watch?v=test")
 
 
@@ -392,44 +413,43 @@ class TestVideoIngestionIntegration:
             with patch("bot.video_ingest.CACHE_DIR", cache_dir):
                 manager = VideoIngestionManager()
 
-                # Mock successful processing
+                url = "https://youtube.com/watch?v=test"
+                metadata = {
+                    "id": "testid",
+                    "title": "Test Video",
+                    "duration": 60.0,
+                    "uploader": "Test User",
+                    "upload_date": "20240101",
+                    "extractor_key": "youtube",
+                    "webpage_url": url,
+                    "formats": [
+                        {
+                            "format_id": "140",
+                            "ext": "m4a",
+                            "acodec": "aac",
+                            "vcodec": "none",
+                            "abr": 64,
+                            "url": "https://example.com/audio.m4a",
+                            "filesize": 123,
+                        }
+                    ],
+                }
+
+                async def _fake_download(*_args, **_kwargs) -> Path:
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=".m4a") as tmp:
+                        Path(tmp.name).write_bytes(b"dummy")
+                        return Path(tmp.name)
+
                 with (
-                    patch.object(manager, "_download_with_ytdlp") as mock_download,
-                    patch.object(manager, "_process_audio") as mock_process,
+                    patch.object(manager, "_probe_metadata", new=AsyncMock(return_value=metadata)),
+                    patch.object(manager, "_download_audio", new=AsyncMock(side_effect=_fake_download)) as mock_download,
                 ):
-                    # Setup mocks
-                    mock_metadata = VideoMetadata(
-                        url="https://youtube.com/watch?v=test",
-                        title="Test Video",
-                        duration_seconds=60.0,
-                        uploader="Test User",
-                        upload_date="20240101",
-                        source_type="youtube",
-                    )
+                    result1 = await manager.fetch_and_prepare_url_audio(url)
+                    assert not result1.cache_hit
 
-                    mock_download.return_value = (mock_metadata, Path("/tmp/raw.wav"))
-                    mock_process.return_value = Path("/tmp/processed.wav")
-
-                    # Mock file operations
-                    with (
-                        patch.object(Path, "exists", return_value=True),
-                        patch.object(Path, "rename"),
-                        patch.object(Path, "touch"),
-                    ):
-                        # First request - should download
-                        result1 = await manager.fetch_and_prepare_url_audio(
-                            "https://youtube.com/watch?v=test"
-                        )
-                        assert not result1.cache_hit
-
-                        # Second request - should use cache
-                        result2 = await manager.fetch_and_prepare_url_audio(
-                            "https://youtube.com/watch?v=test"
-                        )
-                        assert result2.cache_hit
-
-                        # Verify download was only called once
-                        assert mock_download.call_count == 1
+                    result2 = await manager.fetch_and_prepare_url_audio(url)
+                    assert result2.cache_hit
+                    assert mock_download.call_count == 1
 
 
 if __name__ == "__main__":

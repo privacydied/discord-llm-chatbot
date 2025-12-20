@@ -89,3 +89,23 @@ async def test_extract_disables_tier_b_on_fatal_launch_failure() -> None:
     assert res.success is False
     assert res.tier_used == "B"
     assert svc._tier_b_available is False
+
+
+@pytest.mark.asyncio
+async def test_extract_does_not_disable_tier_b_on_transient_page_closed_error() -> None:
+    svc = WebExtractionService()
+    svc._tier_b_available = True
+
+    svc._tier_a_httpx = AsyncMock(
+        return_value=ExtractionResult(success=False, tier_used="A", error="no text")
+    )
+
+    svc._tier_b_playwright = AsyncMock(
+        side_effect=Exception("Target page, context or browser has been closed")
+    )
+
+    res = await svc.extract("https://example.com")
+
+    assert res.success is False
+    assert res.tier_used == "B"
+    assert svc._tier_b_available is True

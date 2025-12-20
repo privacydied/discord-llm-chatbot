@@ -1640,6 +1640,12 @@ async def hear_infer_from_url(
     job = STTJob(kind="url", spans=spans, ram_guard=ram_guard)
     download: Optional[DownloadedAudio] = None
     try:
+        ready = await stt_manager.ensure_ready()
+        if not ready:
+            exc = InferenceError("STT engine not available")
+            await job.finish_failure(exc)
+            raise exc
+
         async with _JOB_SEMAPHORE:
             spans.start("yt-dlp")
             try:
