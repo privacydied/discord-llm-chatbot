@@ -52,15 +52,26 @@ def parse_command(
     Returns:
         A ParsedCommand object if a known '!' command is found, otherwise None.
     """
-    content = message.content.strip()
+    raw_content = (message.content or "").strip()
 
     # Remove bot mention from the beginning of the message to isolate the command
     mention_pattern = rf"^<@!?{bot.user.id}>\s*"
-    content = re.sub(mention_pattern, "", content)
+    mentioned_me = bool(re.match(mention_pattern, raw_content))
+    content = re.sub(mention_pattern, "", raw_content)
+
+    is_dm = isinstance(message.channel, discord.DMChannel)
+
+    # Ignore empty content after mention stripping
+    if not content:
+        return None
+
+    # Guild messages must explicitly mention the bot to trigger command parsing
+    if not is_dm and not mentioned_me:
+        return None
 
     if not content.startswith("!"):
-        # Not an explicit command, so the router should handle it as a regular message.
-        return None
+        # Treat plain DM messages or direct mentions as chat commands for a smoother UX
+        return ParsedCommand(command=Command.CHAT, cleaned_content=content)
 
     parts = content.split(maxsplit=1)
     command_str = parts[0]

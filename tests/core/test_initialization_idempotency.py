@@ -55,7 +55,9 @@ def test_bot(mock_config, mock_intents):
         bot.setup_background_tasks = MagicMock()
         bot.setup_tts = AsyncMock()
         bot.setup_router = AsyncMock()
-        bot.load_extensions = AsyncMock()
+        # Wrap load_extensions so Rich output tests exercise the real implementation
+        real_load_extensions = bot.load_extensions
+        bot.load_extensions = AsyncMock(wraps=real_load_extensions)
 
         return bot
 

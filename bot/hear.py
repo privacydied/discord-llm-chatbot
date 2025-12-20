@@ -1628,6 +1628,9 @@ async def hear_infer_from_url(
     """
     Transcribe audio fetched via yt-dlp for the given URL.
     """
+    if hasattr(stt_manager, "is_available") and not stt_manager.is_available():
+        raise InferenceError("STT engine not available")
+
     # Log the exact URL being processed for STT job identity tracking [REH]
     logger.info(
         "stt.job.start kind=url url=%s force_refresh=%s",

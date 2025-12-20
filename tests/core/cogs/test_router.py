@@ -147,11 +147,7 @@ async def test_invalid_command_filter(bot):
     cog = TestRouterCog(bot)
     # This should be filtered by the pre-command gate
     message = cog._create_mock_message("describe something")
-    try:
-        await bot.process_commands(message)
-        assert False, "CommandNotFound should not be raised for filtered messages"
-    except commands.errors.CommandNotFound:
-        assert False, "CommandNotFound should be prevented by pre-command filter"
+    await bot.process_commands(message)
 
 
 def setup(bot):

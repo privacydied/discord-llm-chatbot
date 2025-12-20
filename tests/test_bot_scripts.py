@@ -22,8 +22,7 @@ load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
 
 if not TOKEN:
-    logger.error("DISCORD_TOKEN not found in .env file")
-    sys.exit(1)
+    logger.warning("DISCORD_TOKEN not found in .env file; bot will not start without it.")
 
 # Set up intents
 intents = discord.Intents.default()

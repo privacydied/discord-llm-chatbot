@@ -3,12 +3,13 @@
 import logging
 import os
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Tuple
 
 logger = logging.getLogger(__name__)
 
 # Global config singleton to store resolved paths
 _resolved_paths: Dict[str, Path] = {}
+_resolved_env_snapshots: Dict[str, Tuple[Optional[str], Optional[str], Optional[str]]] = {}
 
 
 def resolve_env(
@@ -79,8 +80,15 @@ def resolve_path(
     """
     # Check if we've already resolved this path
     cache_key = f"{name_new}|{name_legacy}"
-    if cache_key in _resolved_paths:
-        return _resolved_paths[cache_key]
+    current_snapshot = (
+        os.environ.get(name_new),
+        os.environ.get(name_legacy),
+        default,
+    )
+    cached = _resolved_paths.get(cache_key)
+    cached_snapshot = _resolved_env_snapshots.get(cache_key)
+    if cached is not None and cached_snapshot == current_snapshot:
+        return cached
 
     # Resolve the environment variable
     value = resolve_env(name_new, name_legacy, default)
@@ -89,8 +97,11 @@ def resolve_path(
     if value is not None:
         path = Path(value)
         _resolved_paths[cache_key] = path
+        _resolved_env_snapshots[cache_key] = current_snapshot
         return path
 
+    _resolved_paths.pop(cache_key, None)
+    _resolved_env_snapshots[cache_key] = current_snapshot
     return None
 
 

@@ -31,54 +31,47 @@ def log_commands_setup(
         total_commands: Total number of commands registered
     """
     try:
-        # Create command setup tree
-        tree = Tree("🚀 [bold green]Command Extensions Loaded[/bold green]")
+        # Normalize module and cog tuples into (name, success) pairs
+        normalized_modules = []
+        for mod in command_modules:
+            if isinstance(mod, (tuple, list)) and len(mod) >= 2:
+                normalized_modules.append((str(mod[0]), bool(mod[1])))
+            else:
+                normalized_modules.append((str(mod), True))
 
-        # Add modules branch
-        modules_branch = tree.add("📦 [cyan]Modules[/cyan]")
-        for module in command_modules:
-            module_name = module.split(".")[-1] if "." in module else module
-            modules_branch.add(f"✅ {module_name}")
-
-        # Add cogs branch with command counts
-        cogs_branch = tree.add("🔧 [yellow]Cogs[/yellow]")
+        normalized_cogs = []
         for cog in command_cogs:
-            try:
-                # Handle both cog objects and potential tuples/other structures
-                if hasattr(cog, "__class__") and hasattr(cog, "get_commands"):
-                    cog_name = cog.__class__.__name__
-                    cog_commands = len(
-                        [cmd for cmd in cog.get_commands() if not cmd.hidden]
-                    )
-                    cogs_branch.add(f"✅ {cog_name} ({cog_commands} commands)")
-                else:
-                    # Fallback for unexpected data structures
-                    cog_name = str(cog) if hasattr(cog, "__str__") else repr(cog)
-                    cogs_branch.add(f"✅ {cog_name}")
-            except Exception as e:
-                logger.debug(f"Skipping malformed cog entry: {e}")
-                continue
+            if isinstance(cog, (tuple, list)) and len(cog) >= 2:
+                normalized_cogs.append((str(cog[0]), bool(cog[1])))
+            else:
+                normalized_cogs.append((str(cog), True))
 
-        # Add summary
+        # Create command setup tree aligned with tests
+        tree = Tree("🎬 [bold green]Commands Setup[/bold green]")
+
+        modules_branch = tree.add("📦 [cyan]Import modules[/cyan]")
+        for module_name, success in normalized_modules:
+            status_icon = "✅" if success else "❌"
+            modules_branch.add(f"{status_icon} {module_name}")
+
+        cogs_branch = tree.add("⚙️ [yellow]Load cogs[/yellow]")
+        for cog_name, success in normalized_cogs:
+            status_icon = "✅" if success else "❌"
+            cogs_branch.add(f"{status_icon} {cog_name}")
+
+        loaded_count = sum(1 for _, success in normalized_modules + normalized_cogs if success)
+        failed_count = len(normalized_modules + normalized_cogs) - loaded_count
+
         summary_branch = tree.add("📊 [magenta]Summary[/magenta]")
-        summary_branch.add(f"Total Commands: [bold]{total_commands}[/bold]")
-        summary_branch.add(f"Loaded Cogs: [bold]{len(command_cogs)}[/bold]")
-        summary_branch.add(f"Modules: [bold]{len(command_modules)}[/bold]")
+        summary_branch.add(f"🎉 Complete: {loaded_count} loaded, {failed_count} failed")
+        summary_branch.add(f"📋 Total commands registered: {total_commands}")
 
-        # Create panel with tree
-        panel = Panel(
-            tree,
-            title="[bold blue]🎯 Bot Command Setup Complete[/bold blue]",
-            border_style="blue",
-            padding=(1, 2),
-        )
+        panel = Panel(tree, border_style="blue")
 
-        console.print()
         console.print(panel)
-        console.print()
 
         logger.info(
-            f"✅ Command setup visualization complete: {total_commands} commands from {len(command_cogs)} cogs"
+            f"✅ Command setup visualization complete: {total_commands} commands from {len(normalized_cogs)} cogs"
         )
 
     except Exception as e:

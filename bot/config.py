@@ -122,11 +122,12 @@ def load_system_prompts() -> dict[str, str]:
         logger.info(f"✅ Loaded system prompts: {list(prompts.keys())}")
         return prompts
     except FileNotFoundError as e:
-        logger.error(
-            f"❌ Critical error: Prompt file not found at {e.filename}. Please check your .env and file paths."
+        logger.warning(
+            f"⚠️ Prompt file not found at {e.filename}; using minimal fallback prompts for startup."
         )
-        # This is a critical failure, so we exit.
-        sys.exit(1)
+        prompts.setdefault("text_prompt", "You are a helpful assistant.")
+        prompts.setdefault("vl_prompt", "Describe the image succinctly.")
+        return prompts
 
 
 def check_venv_activation() -> None:
