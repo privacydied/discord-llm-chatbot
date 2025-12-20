@@ -314,24 +314,61 @@ class MediaIngestionManager:
             # Import here to avoid circular imports
             from . import web
 
+            # Import tiered extractor lazily to avoid widening import surface
+            from . import web_extraction_service
+
             # Use existing web processing
             processed_data = await web.process_url(url)
 
             processing_time = (time.time() - start_time) * 1000
 
-            # Check for errors in web processing
-            if processed_data.get("error"):
-                return MediaIngestionResult(
-                    success=False,
-                    error_message=processed_data["error"],
-                    fallback_triggered=True,
-                    source_type="scrape",
-                    processing_time_ms=processing_time,
-                )
-
             # Handle image processing with vision-language models (restore original flow)
             screenshot_path = processed_data.get("screenshot_path")
             text_content = processed_data.get("text")
+
+            # If legacy scraping failed or produced no usable text, try tiered extractor once.
+            try:
+                needs_tiered = bool(processed_data.get("error")) or (
+                    not screenshot_path
+                    and not (text_content and str(text_content).strip())
+                )
+            except Exception:
+                needs_tiered = True
+
+            if needs_tiered:
+                try:
+                    extract_res = await web_extraction_service.web_extractor.extract(url)
+                except Exception as e:
+                    extract_res = None
+                    self.logger.debug(
+                        f"Tiered extractor exception for {url}: {e}", exc_info=True
+                    )
+
+                if extract_res is not None and getattr(extract_res, "success", False):
+                    content = (
+                        f"Web content from {extract_res.canonical_url or url}:\n"
+                        f"{extract_res.to_message()}"
+                    )
+                    return MediaIngestionResult(
+                        success=True,
+                        content=content,
+                        metadata={
+                            "fallback_reason": fallback_reason,
+                            "tier_used": getattr(extract_res, "tier_used", None),
+                        },
+                        fallback_triggered=True,
+                        source_type="scrape",
+                        processing_time_ms=processing_time,
+                    )
+
+                if processed_data.get("error"):
+                    return MediaIngestionResult(
+                        success=False,
+                        error_message=processed_data["error"],
+                        fallback_triggered=True,
+                        source_type="scrape",
+                        processing_time_ms=processing_time,
+                    )
 
             if screenshot_path:
                 # Image processing: use vision-language model
@@ -485,8 +522,13 @@ class MediaIngestionManager:
                         )
                     else:
                         # Both paths failed
+                        err = (fallback_result.error_message or "").strip()
+                        if err:
+                            msg = f"Could not extract content from URL: {url} (Error: {err})"
+                        else:
+                            msg = f"Could not extract content from URL: {url}"
                         return BotAction(
-                            content=f"❌ Could not process URL: {fallback_result.error_message}",
+                            content=msg,
                             error=True,
                         )
             else:
@@ -503,8 +545,13 @@ class MediaIngestionManager:
                         fallback_result, message
                     )
                 else:
+                    err = (fallback_result.error_message or "").strip()
+                    if err:
+                        msg = f"Could not extract content from URL: {url} (Error: {err})"
+                    else:
+                        msg = f"Could not extract content from URL: {url}"
                     return BotAction(
-                        content=f"❌ Could not process URL: {fallback_result.error_message}",
+                        content=msg,
                         error=True,
                     )
 

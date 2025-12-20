@@ -86,46 +86,63 @@ class WebExtractionService:
             self._client = None
 
     async def extract(self, url: str) -> ExtractionResult:
-        # Tier A: HTTPX fast path [IV]
+        last_error: Optional[str] = None
+        last_tier = "none"
+
         try:
             res = await self._tier_a_httpx(url)
             if res.success:
                 return res
+            last_error = res.error
+            last_tier = "A"
             logger.info(f"Tier A failed for {url}: {res.error}")
-        except httpx.HTTPStatusError as e:  # expected client/server responses
+        except httpx.HTTPStatusError as e:
             status = e.response.status_code if getattr(e, "response", None) else "?"
+            last_error = f"http_status:{status}"
+            last_tier = "A"
             logger.info(f"Tier A HTTP {status} for {url}: {str(e)[:160]}")
         except (
             httpx.RequestError,
             httpx.TimeoutException,
             httpx.TooManyRedirects,
         ) as e:
+            last_error = f"network_error:{e.__class__.__name__}"
+            last_tier = "A"
             logger.info(f"Tier A network error for {url}: {str(e)[:160]}")
-        except Exception as e:  # unexpected
+        except Exception as e:
+            last_error = f"exception:{e.__class__.__name__}"
+            last_tier = "A"
             logger.debug(f"Tier A exception for {url}: {str(e)[:200]}")
 
-        # Tier B: Playwright (optional, runtime-disabled on fatal errors)
         if self._tier_b_available:
             try:
                 res_b = await self._tier_b_playwright(url)
-                if res_b and res_b.success:
-                    return res_b
+                if res_b is not None:
+                    if res_b.success:
+                        return res_b
+                    last_error = res_b.error or last_error
+                    last_tier = "B"
             except Exception as e:
+                last_error = f"exception:{e.__class__.__name__}"
+                last_tier = "B"
                 logger.info(f"Tier B exception for {url}: {str(e)[:200]}")
-                # Auto-disable Tier B on missing shared libs or launch failures
                 emsg = str(e).lower()
                 if (
                     "error while loading shared libraries" in emsg
                     or "browser has been closed" in emsg
                     or "target page, context or browser has been closed" in emsg
+                    or "executable doesn't exist" in emsg
+                    or "failed to launch" in emsg
                 ):
                     self._tier_b_available = False
                     logger.warning(
-                        "🛑 Disabling Tier B (Playwright) due to missing system libraries/launch failure."
+                        "🛑 Disabling Tier B (Playwright) due to runtime/launch failure."
                     )
 
         return ExtractionResult(
-            success=False, tier_used="none", error="all tiers failed"
+            success=False,
+            tier_used=last_tier,
+            error=last_error or "all tiers failed",
         )
 
     async def _tier_a_httpx(self, url: str) -> ExtractionResult:
@@ -161,24 +178,31 @@ class WebExtractionService:
         timeout_ms = int(TIER_B_TIMEOUT_S * 1000)
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
+            context = None
             try:
                 context = await browser.new_context(
                     user_agent=USER_AGENT, java_script_enabled=True
                 )
                 page = await context.new_page()
-                await page.route(
-                    "**/*",
-                    lambda route: asyncio.create_task(route.continue_())
-                    if route.request.resource_type
-                    in {"document", "xhr", "fetch", "script"}
-                    else asyncio.create_task(route.abort()),
-                )
+                page.set_default_timeout(timeout_ms)
+
+                async def _route_handler(route, request):
+                    try:
+                        if request.resource_type in {"document", "xhr", "fetch", "script"}:
+                            await route.continue_()
+                        else:
+                            await route.abort()
+                    except Exception:
+                        try:
+                            await route.abort()
+                        except Exception:
+                            pass
+
+                await page.route("**/*", _route_handler)
                 await page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
-                # Try to read meta/og after DOM loaded
-                html = await page.content()
-                parsed = self._parse_html_for_text(
-                    html, await page.evaluate("() => document.location.href")
-                )
+                html_doc = await page.content()
+                final_url = await page.evaluate("() => document.location.href")
+                parsed = self._parse_html_for_text(html_doc, final_url)
                 if parsed.get("text"):
                     return ExtractionResult(
                         success=True,
@@ -192,7 +216,15 @@ class WebExtractionService:
                     success=False, tier_used="B", error="no text extracted"
                 )
             finally:
-                await browser.close()
+                if context is not None:
+                    try:
+                        await context.close()
+                    except Exception:
+                        pass
+                try:
+                    await browser.close()
+                except Exception:
+                    pass
 
     # --- Parsers --- [CSD]
     @staticmethod

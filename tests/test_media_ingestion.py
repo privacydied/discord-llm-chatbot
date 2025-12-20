@@ -14,6 +14,7 @@ from bot.media_ingestion import (
 )
 from bot.media_capability import ProbeResult
 from bot.action import BotAction
+from bot.web_extraction_service import ExtractionResult
 
 
 class TestMediaIngestionResult:
@@ -288,17 +289,17 @@ class TestMediaIngestionManager:
     async def test_process_fallback_path_success_with_screenshot(
         self, manager, mock_message
     ):
-        """Test successful fallback processing with screenshot."""
-        url = "https://twitter.com/user/status/123"
-        fallback_reason = "media extraction failed"
+        """Test successful fallback processing with screenshot content."""
+        url = "https://example.com/page"
+        fallback_reason = "domain not whitelisted"
 
         mock_web_result = {
-            "screenshot_path": "/path/to/screenshot.png",
+            "screenshot_path": "/tmp/screenshot.png",
             "text": None,
             "error": None,
         }
 
-        with patch("bot.media_ingestion.web.process_url", return_value=mock_web_result):
+        with patch("bot.web.process_url", return_value=mock_web_result):
             result = await manager._process_fallback_path(
                 url, mock_message, fallback_reason
             )
@@ -321,7 +322,7 @@ class TestMediaIngestionManager:
             "error": None,
         }
 
-        with patch("bot.media_ingestion.web.process_url", return_value=mock_web_result):
+        with patch("bot.web.process_url", return_value=mock_web_result):
             result = await manager._process_fallback_path(
                 url, mock_message, fallback_reason
             )
@@ -338,20 +339,65 @@ class TestMediaIngestionManager:
         fallback_reason = "media extraction failed"
 
         mock_web_result = {
-            "screenshot_path": None,
+            "url": url,
             "text": None,
-            "error": "Page not found",
+            "screenshot_path": None,
+            "error": "Failed to fetch URL",
         }
 
-        with patch("bot.media_ingestion.web.process_url", return_value=mock_web_result):
-            result = await manager._process_fallback_path(
-                url, mock_message, fallback_reason
-            )
+        tiered_fail = ExtractionResult(
+            success=False, tier_used="A", error="no text extracted"
+        )
+
+        with patch("bot.web.process_url", return_value=mock_web_result):
+            with patch(
+                "bot.web_extraction_service.web_extractor.extract", return_value=tiered_fail
+            ):
+                result = await manager._process_fallback_path(
+                    url, mock_message, fallback_reason
+                )
 
         assert result.success is False
-        assert result.error_message == "Page not found"
+        assert result.error_message == "Failed to fetch URL"
         assert result.fallback_triggered is True
         assert result.source_type == "scrape"
+
+    @pytest.mark.asyncio
+    async def test_process_fallback_path_tiered_success_on_empty(
+        self, manager, mock_message
+    ):
+        url = "https://example.com/js"
+        fallback_reason = "domain not whitelisted"
+
+        mock_web_result = {
+            "url": url,
+            "text": None,
+            "screenshot_path": None,
+            "error": "empty_or_js_only",
+        }
+
+        tiered_ok = ExtractionResult(
+            success=True,
+            tier_used="B",
+            canonical_url=url,
+            text="Extracted text",
+            author=None,
+            raw_json_present=False,
+            error=None,
+        )
+
+        with patch("bot.web.process_url", return_value=mock_web_result):
+            with patch(
+                "bot.web_extraction_service.web_extractor.extract", return_value=tiered_ok
+            ):
+                result = await manager._process_fallback_path(
+                    url, mock_message, fallback_reason
+                )
+
+        assert result.success is True
+        assert result.fallback_triggered is True
+        assert result.source_type == "scrape"
+        assert result.content is not None
 
     @pytest.mark.asyncio
     async def test_process_url_smart_media_capable_success(self, manager, mock_message):
@@ -505,7 +551,7 @@ class TestMediaIngestionManager:
 
         assert isinstance(result, BotAction)
         assert result.error is True
-        assert "Could not process URL" in result.content
+        assert "Could not extract content from URL" in result.content
 
     @pytest.mark.asyncio
     async def test_create_bot_action_from_media_basic_brain(
@@ -724,7 +770,7 @@ class TestMediaIngestionIntegration:
             return_value=mock_probe_result,
         ):
             with patch(
-                "bot.media_ingestion.web.process_url", return_value=mock_web_result
+                "bot.web.process_url", return_value=mock_web_result
             ):
                 with patch(
                     "bot.media_ingestion.brain_infer", return_value=mock_brain_result

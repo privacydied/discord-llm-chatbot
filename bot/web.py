@@ -171,6 +171,19 @@ async def fetch_url_content(url: str, timeout: int = 15) -> Optional[Tuple[bytes
         return None
 
 
+async def _fetch_url_content_detail(
+    url: str, timeout: int = 15
+) -> Tuple[Optional[Tuple[bytes, str]], Optional[str]]:
+    """Fetch URL content and return (payload, error_message)."""
+    try:
+        payload = await fetch_url_content(url, timeout=timeout)
+        if payload is None:
+            return None, "fetch_failed"
+        return payload, None
+    except Exception as e:
+        return None, f"fetch_exception: {e.__class__.__name__}"
+
+
 def extract_metadata(html: str, url: str) -> Dict[str, str]:
     """
     Extract metadata from HTML content.
@@ -390,22 +403,22 @@ async def process_url(url: str) -> Dict[str, Any]:
 
     # 2. Attempt standard text extraction (primary method for non-forced sites)
     try:
-        httpx_content_data = await fetch_url_content(url)
+        httpx_content_data, fetch_error = await _fetch_url_content_detail(url)
         if httpx_content_data:
             content, content_type = httpx_content_data
-            if "text/html" in content_type:
-                html_string = content.decode("utf-8")
+            if "text/html" in (content_type or "").lower():
+                html_string = content.decode("utf-8", errors="ignore")
                 raw_text = trafilatura.extract(
                     html_string, url=url, config=trafilatura_config
                 )
                 text_content = strip_boilerplate(raw_text or "")
 
                 # Check for placeholder content indicating a JS-heavy site
-                js_required_keywords = [
+                js_required_keywords = (
                     "enable javascript",
                     "javascript is required",
                     "requires javascript",
-                ]
+                )
                 if text_content and not any(
                     keyword in text_content.lower() for keyword in js_required_keywords
                 ):
@@ -415,10 +428,25 @@ async def process_url(url: str) -> Dict[str, Any]:
                         "screenshot_path": None,
                         "error": None,
                     }
-                else:
-                    logging.warning(
-                        f"Content from {url} is empty or requires JavaScript. Attempting screenshot fallback."
-                    )
+                return {
+                    "url": url,
+                    "text": None,
+                    "screenshot_path": None,
+                    "error": "empty_or_js_only",
+                }
+            return {
+                "url": url,
+                "text": None,
+                "screenshot_path": None,
+                "error": "unsupported_content_type",
+            }
+        if fetch_error:
+            return {
+                "url": url,
+                "text": None,
+                "screenshot_path": None,
+                "error": fetch_error,
+            }
 
     except Exception as e:
         logging.warning(f"Initial httpx fetch failed for {url}: {e}.")
@@ -426,9 +454,7 @@ async def process_url(url: str) -> Dict[str, Any]:
     # 3. No automatic screenshot fallback; allow caller to decide next steps.
 
     # 4. If all methods fail
-    error_msg = (
-        f"All content extraction methods (text and screenshot) failed for {url}."
-    )
+    error_msg = f"All content extraction methods failed for {url}."
     logging.error(error_msg)
     return {"url": url, "text": None, "screenshot_path": None, "error": error_msg}
 
