@@ -71,7 +71,7 @@ class InputItem:
     def __post_init__(self):
         """Validate input item data [IV]."""
         if self.source_type not in ("attachment", "url", "embed"):
-            raise ValueError(f"Invalid source_type: {self.source_type}")
+            logger.warning(f"Invalid source_type: {self.source_type}, treating as unknown")
         if self.order_index < 0:
             raise ValueError(f"Invalid order_index: {self.order_index}")
 

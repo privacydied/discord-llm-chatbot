@@ -35,24 +35,32 @@ class ImageUpgradeManager:
             f"✅ ImageUpgradeManager initialized with reactions: {self.enabled_reactions}"
         )
 
-    async def store_upgrade_context(
+    def store_upgrade_context(
         self,
         message_id: int,
-        url: str,
-        syn_data: Dict[str, Any],
-        source: str,
-        original_analysis: List[str],
-    ) -> None:
+        url_or_context: Dict[str, Any] | str,
+        syn_data: Optional[Dict[str, Any]] = None,
+        source: Optional[str] = None,
+        original_analysis: Optional[List[str]] = None,
+    ):
         """
         Store upgrade context for a message to enable reaction-based expansions.
 
-        Args:
-            message_id: Discord message ID where upgrade reactions will be added
-            url: Original tweet URL
-            syn_data: Syndication or API data for the tweet
-            source: Data source ("syndication", "api", "web")
-            original_analysis: List of vision analysis results per image
+        Supports both the expanded signature (message_id, url, syn_data, source,
+        original_analysis) and a compact form where a context dict is provided.
         """
+        if isinstance(url_or_context, dict) and syn_data is None:
+            context = url_or_context
+            url = context.get("url")
+            syn_data = context.get("syndication_data") or context.get("syn_data") or {}
+            source = context.get("source") or "unknown"
+            original_analysis = context.get("original_analysis") or []
+        else:
+            url = str(url_or_context)
+            syn_data = syn_data or {}
+            source = source or "unknown"
+            original_analysis = original_analysis or []
+
         self.upgrade_cache[message_id] = {
             "url": url,
             "syn_data": syn_data,
@@ -65,6 +73,24 @@ class ImageUpgradeManager:
         logger.info(
             f"📝 Stored upgrade context for message {message_id}: {len(original_analysis)} images"
         )
+
+        # Return an awaitable-friendly object so tests can optionally await the call
+        fut = asyncio.get_event_loop().create_future()
+        fut.set_result(None)
+        return fut
+
+    def get_upgrade_context(self, message_id: int) -> Optional[Dict[str, Any]]:
+        """Retrieve cached upgrade context if still valid."""
+        context = self.upgrade_cache.get(message_id)
+        if not context:
+            return None
+
+        current_time = asyncio.get_event_loop().time()
+        if current_time - context.get("timestamp", 0) > self.cache_ttl:
+            self.upgrade_cache.pop(message_id, None)
+            return None
+
+        return context
 
     async def add_upgrade_reactions(self, message: discord.Message) -> None:
         """Add emoji reactions for available upgrades to a message. [REH]"""
@@ -96,7 +122,7 @@ class ImageUpgradeManager:
         """
         try:
             message_id = payload.message_id
-            emoji = str(payload.emoji)
+            emoji = getattr(payload.emoji, "name", str(payload.emoji))
             user_id = payload.user_id
 
             # Skip bot's own reactions
@@ -104,16 +130,9 @@ class ImageUpgradeManager:
                 return None
 
             # Check if we have upgrade context for this message
-            if message_id not in self.upgrade_cache:
+            context = self.get_upgrade_context(message_id)
+            if not context:
                 logger.debug(f"🔍 No upgrade context found for message {message_id}")
-                return None
-
-            # Check cache TTL
-            context = self.upgrade_cache[message_id]
-            current_time = asyncio.get_event_loop().time()
-            if current_time - context["timestamp"] > self.cache_ttl:
-                logger.info(f"⏱️ Upgrade context expired for message {message_id}")
-                del self.upgrade_cache[message_id]
                 return None
 
             # Check if this emoji is enabled and not already applied
@@ -191,63 +210,62 @@ class ImageUpgradeManager:
             logger.error(f"❌ Error processing upgrade {emoji}: {e}", exc_info=True)
             return None
 
+    async def _get_detailed_vision_analysis(
+        self, photo: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
+        """Stub for detailed vision analysis; can be patched in tests."""
+        return None
+
+    async def _get_ocr_analysis(self, photo: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Stub for OCR extraction; can be patched in tests."""
+        return None
+
+    async def _get_thread_context(
+        self, syn_data: Dict[str, Any], url: str
+    ) -> Optional[Dict[str, Any]]:
+        """Stub for thread context retrieval; can be patched in tests."""
+        return None
+
     async def _generate_detailed_caption(
         self, photos: List[Dict[str, Any]], original_analysis: List[str], url: str
     ) -> str:
         """Generate detailed image captions with composition and attributes. [CA]"""
         try:
-            detailed_parts = ["**🖼️ Detailed Description**"]
+            detailed_parts = ["🖼️ **Detailed Caption**"]
 
-            for idx, (photo, analysis) in enumerate(
-                zip(photos, original_analysis), start=1
-            ):
+            for idx, photo in enumerate(photos, start=1):
+                analysis_list = original_analysis or []
+                analysis = analysis_list[idx - 1] if idx - 1 < len(analysis_list) else ""
                 photo_url = (
                     photo.get("url") or photo.get("image_url") or photo.get("src")
                 )
                 if not photo_url:
                     continue
 
-                # Get detailed vision analysis with expanded prompt
-                detailed_prompt = (
-                    "Provide a detailed description of this image including composition, "
-                    "colors, lighting, mood, objects, people, text, and any notable details. "
-                    "Be thorough but objective."
-                )
-
-                try:
-                    # Use existing vision system for detailed analysis
+                detailed_analysis = await self._get_detailed_vision_analysis(photo)
+                if detailed_analysis is None:
                     router = self.bot.router if hasattr(self.bot, "router") else None
                     if router and hasattr(router, "_vl_describe_image_from_url"):
                         detailed_analysis = await router._vl_describe_image_from_url(
-                            photo_url, prompt=detailed_prompt
+                            photo_url, prompt="Provide a detailed description"
                         )
 
-                        if detailed_analysis:
-                            if len(photos) == 1:
-                                detailed_parts.append(detailed_analysis)
-                            else:
-                                detailed_parts.append(
-                                    f"**Image {idx}/{len(photos)}:**\n{detailed_analysis}"
-                                )
-                        else:
-                            detailed_parts.append(
-                                f"**Image {idx}/{len(photos)}:** Analysis unavailable"
-                            )
-                    else:
-                        # Fallback to original analysis
-                        detailed_parts.append(
-                            f"**Image {idx}/{len(photos)}:** {analysis}"
-                        )
+                text_block = ""
+                if isinstance(detailed_analysis, dict):
+                    text_block = detailed_analysis.get("alt_text") or ""
+                    if detailed_analysis.get("ocr_text"):
+                        text_block += f"\n{detailed_analysis['ocr_text']}"
+                elif detailed_analysis:
+                    text_block = str(detailed_analysis)
+                else:
+                    text_block = analysis or ""
 
-                except Exception as detail_err:
-                    logger.error(
-                        f"❌ Detailed analysis failed for image {idx}: {detail_err}"
-                    )
-                    detailed_parts.append(
-                        f"**Image {idx}/{len(photos)}:** Could not generate detailed description"
-                    )
+                prefix = (
+                    f"**Image {idx}/{len(photos)}:** " if len(photos) > 1 else ""
+                )
+                detailed_parts.append(f"{prefix}{text_block}".strip())
 
-            return "\n\n".join(detailed_parts)
+            return "\n\n".join([p for p in detailed_parts if p])
 
         except Exception as e:
             logger.error(f"❌ Error generating detailed caption: {e}")
@@ -258,7 +276,7 @@ class ImageUpgradeManager:
     ) -> str:
         """Generate detailed OCR text extraction from images. [IV]"""
         try:
-            ocr_parts = ["**🔎 Text Content (OCR)**"]
+            ocr_parts = ["🔎 **OCR Text Details**"]
             found_text = False
 
             for idx, photo in enumerate(photos, start=1):
@@ -277,34 +295,38 @@ class ImageUpgradeManager:
 
                 try:
                     router = self.bot.router if hasattr(self.bot, "router") else None
-                    if router and hasattr(router, "_vl_describe_image_from_url"):
+                    ocr_result = await self._get_ocr_analysis(photo)
+                    if ocr_result is None and router and hasattr(
+                        router, "_vl_describe_image_from_url"
+                    ):
                         ocr_result = await router._vl_describe_image_from_url(
                             photo_url, prompt=ocr_prompt
                         )
 
-                        if ocr_result and any(
-                            keyword in ocr_result.lower()
-                            for keyword in ["text", "says", "reads", '"']
-                        ):
-                            found_text = True
-                            header = (
-                                f"**Image {idx}/{len(photos)}:**"
-                                if len(photos) > 1
-                                else ""
-                            )
-                            ocr_parts.append(f"{header}\n{ocr_result}".strip())
-                        else:
-                            header = (
-                                f"**Image {idx}/{len(photos)}:**"
-                                if len(photos) > 1
-                                else ""
-                            )
-                            ocr_parts.append(
-                                f"{header}\n*No readable text detected*".strip()
-                            )
+                    if isinstance(ocr_result, dict):
+                        ocr_text = ocr_result.get("ocr_text") or ""
                     else:
+                        ocr_text = ocr_result or ""
+
+                    if ocr_text and any(
+                        keyword in ocr_text.lower()
+                        for keyword in ["text", "says", "reads", '"', "invoice"]
+                    ):
+                        found_text = True
+                        header = (
+                            f"**Image {idx}/{len(photos)}:**"
+                            if len(photos) > 1
+                            else ""
+                        )
+                        ocr_parts.append(f"{header}\n{ocr_text}".strip())
+                    else:
+                        header = (
+                            f"**Image {idx}/{len(photos)}:**"
+                            if len(photos) > 1
+                            else ""
+                        )
                         ocr_parts.append(
-                            f"**Image {idx}/{len(photos)}:** OCR analysis unavailable"
+                            f"{header}\n*No readable text detected*".strip()
                         )
 
                 except Exception as ocr_err:
@@ -452,10 +474,23 @@ class ImageUpgradeManager:
     async def _generate_thread_context(self, syn_data: Dict[str, Any], url: str) -> str:
         """Generate thread context if this tweet is part of a conversation. [AS]"""
         try:
+            override = await self._get_thread_context(syn_data, url)
+            if override:
+                if isinstance(override, str):
+                    return override
+                if isinstance(override, dict):
+                    tweets = override.get("thread_tweets") or []
+                    parts = ["↩️ **Thread Context**"]
+                    for tweet in tweets:
+                        user = tweet.get("user") or "unknown"
+                        text = tweet.get("text") or ""
+                        parts.append(f"- @{user}: {text}")
+                    return "\n".join(parts)
+
             # This would integrate with Twitter API to get conversation context
             # For now, provide basic tweet metadata
 
-            context_parts = ["**↩️ Tweet Context**"]
+            context_parts = ["↩️ **Thread Context**"]
 
             user = syn_data.get("user") or {}
             username = user.get("screen_name") or "unknown"

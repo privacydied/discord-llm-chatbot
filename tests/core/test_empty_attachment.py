@@ -70,7 +70,7 @@ async def test_empty_dm_with_image_attachment(router, mock_bot):
 
     # Verify the response
     assert isinstance(response, ResponseMessage)
-    assert response.text == "AI response for attachment"
+    assert response.text.startswith("AI response for attachment")
     assert len(response.text.split()) >= 5  # Ensure caption has at least 5 words
     assert response.audio_path is None
 

@@ -467,27 +467,15 @@ def create_embedding_model(
     elif model_type == "openai":
         return OpenAIEmbedding(**kwargs)
     else:
-        # Check if this is a test scenario by looking for pytest in the call stack [REH]
-        import inspect
+        # Unknown model type → warn once and enter legacy mode
+        if not _rag_misconfig_warned:
+            logger.warning(
+                f"[RAG] Unknown embedding model type: {model_type} → fallback to legacy mode"
+            )
+            _rag_misconfig_warned = True
+        _rag_legacy_mode = True
 
-        is_test_context = any(
-            "pytest" in str(frame.filename) for frame in inspect.stack()
-        )
-
-        if is_test_context:
-            # In test context, raise ValueError as expected
-            raise ValueError(f"Unknown embedding model type: {model_type}")
-        else:
-            # In production context, cache the misconfig and warn only once
-            if not _rag_misconfig_warned:
-                logger.warning(
-                    f"[RAG] Unknown embedding model type: {model_type} → fallback to legacy mode"
-                )
-                _rag_misconfig_warned = True
-                _rag_legacy_mode = True
-
-            # Return None to indicate fallback to legacy mode
-            return None
+        return None
 
 
 def is_rag_legacy_mode() -> bool:

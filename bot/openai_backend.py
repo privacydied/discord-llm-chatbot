@@ -10,22 +10,22 @@ import time
 import aiohttp
 import openai
 
-from .config import load_config, get_vl_model_ladder
-from .exceptions import APIError
-from .memory import get_profile, get_server_profile
-from .retry_utils import (
+from bot.config import load_config, get_vl_model_ladder
+from bot.exceptions import APIError
+from bot.memory import get_profile, get_server_profile
+from bot.retry_utils import (
     API_RETRY_CONFIG,
     API_SINGLE_ATTEMPT_CONFIG,
     is_retryable_error,
     with_retry,
 )
-from .utils.logging import get_logger
+from bot.utils.logging import get_logger
 from bot.enhanced_retry import get_retry_manager
 
 logger = get_logger(__name__)
 
 
-@with_retry(API_SINGLE_ATTEMPT_CONFIG)
+@with_retry(API_RETRY_CONFIG)
 async def generate_openai_response(
     prompt: str,
     context: str = "",
