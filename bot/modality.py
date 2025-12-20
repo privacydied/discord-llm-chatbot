@@ -210,23 +210,43 @@ def collect_image_urls_from_message(message: Message) -> List[ImageRef]:
 
     # 2. Image embeds (use .image.url for full size, with proxy fallback)
     for embed in message.embeds:
-        if embed.type in ("image", "rich") and embed.image and embed.image.url:
-            if embed.image.url not in seen_urls:
-                candidates = [embed.image.url]
+        if embed.type not in ("image", "rich"):
+            continue
 
-                # Add thumbnail proxy as fallback if available
-                if embed.thumbnail and embed.thumbnail.proxy_url:
-                    candidates.append(embed.thumbnail.proxy_url)
+        image_url = None
+        if getattr(embed, "image", None) and getattr(embed.image, "url", None):
+            image_url = embed.image.url
 
-                images.append(
-                    ImageRef(
-                        url=candidates[0],
-                        filename=None,  # Embeds usually don't have filenames
-                        content_type="image/*",  # Generic type
-                        fallback_urls=candidates[1:] if len(candidates) > 1 else [],
-                    )
-                )
-                seen_urls.add(embed.image.url)
+        thumb_proxy = None
+        thumb_url = None
+        if getattr(embed, "thumbnail", None):
+            if getattr(embed.thumbnail, "proxy_url", None):
+                thumb_proxy = embed.thumbnail.proxy_url
+            if getattr(embed.thumbnail, "url", None):
+                thumb_url = embed.thumbnail.url
+
+        primary = image_url or thumb_proxy or thumb_url
+        if not primary:
+            continue
+
+        if primary in seen_urls:
+            continue
+
+        candidates = [primary]
+        # Prefer proxy URL as fallback for thumbnails
+        for u in (image_url, thumb_proxy, thumb_url):
+            if u and u not in candidates:
+                candidates.append(u)
+
+        images.append(
+            ImageRef(
+                url=candidates[0],
+                filename=None,  # Embeds usually don't have filenames
+                content_type="image/*",  # Generic type
+                fallback_urls=candidates[1:] if len(candidates) > 1 else [],
+            )
+        )
+        seen_urls.add(primary)
 
     return images
 

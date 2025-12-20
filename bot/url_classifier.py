@@ -46,6 +46,24 @@ URL_MAX_DOWNLOAD_BYTES = 25 * 1024 * 1024
 URL_DOWNLOAD_TIMEOUT_S = 60.0
 
 
+# Conservative browser-like headers to reduce 403 blocks across sites. [IV]
+# NOTE: No env vars; keep universal/minimal.
+URL_HTTP_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/120.0 Safari/537.36"
+    ),
+    "Accept": (
+        "text/html,application/xhtml+xml,application/xml;q=0.9,"
+        "application/pdf;q=0.9,*/*;q=0.8"
+    ),
+    "Accept-Language": "en-US,en;q=0.9",
+    "Accept-Encoding": "gzip, deflate, br",
+    "DNT": "1",
+    "Upgrade-Insecure-Requests": "1",
+}
+
+
 # ---------------------------------------------------------------------------
 # Data structures
 # ---------------------------------------------------------------------------
@@ -95,29 +113,59 @@ async def detect_url_content_type(url: str) -> Tuple[Optional[str], Optional[int
             timeout=URL_HEAD_TIMEOUT_S,
             follow_redirects=True,
             max_redirects=5,
+            headers=URL_HTTP_HEADERS,
         ) as client:
+            logger.debug(
+                "url.probe.request",
+                extra={
+                    "subsys": "url",
+                    "event": "url.probe.request",
+                    "detail": {
+                        "url": url[:200],
+                        "method": "HEAD",
+                        "timeout_s": URL_HEAD_TIMEOUT_S,
+                        "ua_present": bool(URL_HTTP_HEADERS.get("User-Agent")),
+                    },
+                },
+            )
             response = await client.head(url)
             
             content_type = response.headers.get("content-type")
             content_length_str = response.headers.get("content-length")
             content_length = int(content_length_str) if content_length_str else None
-            
+
+            status = int(getattr(response, "status_code", 0) or 0)
+            if 200 <= status < 400:
+                logger.info(
+                    f"url.probe ok url={url[:80]} content_type={content_type} "
+                    f"content_length={content_length}",
+                    extra={
+                        "subsys": "url",
+                        "event": "url.probe.ok",
+                        "detail": {
+                            "url": url[:200],
+                            "content_type": content_type,
+                            "content_length": content_length,
+                            "status": status,
+                        },
+                    },
+                )
+                return content_type, content_length
+
             logger.info(
-                f"url.probe ok url={url[:80]} content_type={content_type} "
-                f"content_length={content_length}",
+                f"url.probe blocked url={url[:80]} status={status}",
                 extra={
                     "subsys": "url",
-                    "event": "url.probe",
+                    "event": "url.probe.blocked",
                     "detail": {
                         "url": url[:200],
+                        "status": status,
                         "content_type": content_type,
                         "content_length": content_length,
-                        "status": response.status_code,
                     },
                 },
             )
-            
-            return content_type, content_length
+            return None, None
             
     except httpx.TimeoutException:
         logger.debug(f"url.probe timeout url={url[:80]}")
@@ -315,7 +363,22 @@ async def download_url_to_temp(
             timeout=timeout,
             follow_redirects=True,
             max_redirects=5,
+            headers=URL_HTTP_HEADERS,
         ) as client:
+            logger.debug(
+                "url.download.request",
+                extra={
+                    "subsys": "url",
+                    "event": "url.download.request",
+                    "detail": {
+                        "url": url[:200],
+                        "method": "GET",
+                        "timeout_s": timeout,
+                        "max_bytes": max_bytes,
+                        "ua_present": bool(URL_HTTP_HEADERS.get("User-Agent")),
+                    },
+                },
+            )
             # Stream the download to handle large files
             async with client.stream("GET", url) as response:
                 response.raise_for_status()

@@ -72,13 +72,35 @@ class WebExtractionService:
             self._client = httpx.AsyncClient(
                 headers={
                     "User-Agent": USER_AGENT,
-                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                    "Accept": (
+                        "text/html,application/xhtml+xml,application/xml;q=0.9,"
+                        "application/pdf;q=0.9,*/*;q=0.8"
+                    ),
                     "Accept-Language": ACCEPT_LANGUAGE,
+                    "Accept-Encoding": "gzip, deflate, br",
+                    "DNT": "1",
+                    "Upgrade-Insecure-Requests": "1",
                 },
                 follow_redirects=True,
                 timeout=TIER_A_TIMEOUT_S,
             )
         return self._client
+
+    @staticmethod
+    def _is_playwright_fatal_error(message: str) -> bool:
+        m = (message or "").lower()
+        fatal_markers = (
+            "error while loading shared libraries",
+            "executable doesn't exist",
+            "executable doesn't exist at",
+            "failed to launch",
+            "browserType.launch:",
+            "chromium.launch:",
+            "playwright install",
+            "cannot find module",
+            "no such file or directory",
+        )
+        return any(tok in m for tok in fatal_markers)
 
     async def aclose(self) -> None:
         if self._client is not None:
@@ -126,14 +148,7 @@ class WebExtractionService:
                 last_error = f"exception:{e.__class__.__name__}"
                 last_tier = "B"
                 logger.info(f"Tier B exception for {url}: {str(e)[:200]}")
-                emsg = str(e).lower()
-                if (
-                    "error while loading shared libraries" in emsg
-                    or "browser has been closed" in emsg
-                    or "target page, context or browser has been closed" in emsg
-                    or "executable doesn't exist" in emsg
-                    or "failed to launch" in emsg
-                ):
+                if self._is_playwright_fatal_error(str(e)):
                     self._tier_b_available = False
                     logger.warning(
                         "🛑 Disabling Tier B (Playwright) due to runtime/launch failure."
