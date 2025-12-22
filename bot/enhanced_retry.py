@@ -313,7 +313,8 @@ class EnhancedRetryManager:
 
         self._apply_vl_override(vision_from_env=vision_from_env)
         # Keep a concise vision ladder for predictable fallbacks in tests
-        self.provider_configs["vision"] = default_vision[:2]
+        if not self.provider_configs.get("vision"):
+            self.provider_configs["vision"] = default_vision[:2]
 
         # Log parsed ladders
         try:

@@ -6,7 +6,7 @@ Verifies that VISION_FALLBACK_MODELS ladder is used for VL calls.
 import pytest
 import httpx
 
-from bot.enhanced_retry import get_retry_manager, ProviderConfig
+from bot.enhanced_retry import EnhancedRetryManager, get_retry_manager, ProviderConfig
 
 
 def make_httpx_429(retry_after: float = 1.0) -> httpx.HTTPStatusError:
@@ -181,3 +181,26 @@ async def test_vision_ladder_circuit_breaker_skips_failed_provider():
     # flaky should not have been called again (circuit open)
     assert call_count["flaky"] == 1
     assert call_count["stable"] == 2
+
+
+def test_env_vision_ladder_is_authoritative_and_not_clobbered(monkeypatch: pytest.MonkeyPatch):
+    mgr = EnhancedRetryManager()
+
+    # Provide 3 env models; regression used to reset ladder to default_vision[:2]
+    monkeypatch.setenv(
+        "VISION_FALLBACK_MODELS",
+        "openrouter|env-vl-1,openrouter|env-vl-2,openrouter|env-vl-3",
+    )
+    monkeypatch.setenv("VL_MODEL", "")
+
+    # Ensure config cache doesn't hide monkeypatched env
+    try:
+        from bot.config import invalidate_config_cache
+
+        invalidate_config_cache()
+    except Exception:
+        pass
+
+    summary = mgr.refresh_from_env()
+    assert summary["vision"] == ["env-vl-1", "env-vl-2", "env-vl-3"]
+
