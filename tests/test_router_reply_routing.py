@@ -320,7 +320,20 @@ class TestTextDefaultBehavior:
         msg.attachments = []
         msg.mentions = [mock_bot.user]
 
+        class _Typing:
+            async def __aenter__(self):
+                return None
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+        msg.channel = MagicMock(spec=discord.TextChannel)
+        msg.channel.typing.return_value = _Typing()
+
         with patch.object(router, '_should_process_message', return_value=True), \
+             patch.object(router, '_compat_dispatch_for_tests', AsyncMock(return_value=None)), \
+             patch.object(router, '_resolve_scope_and_target', AsyncMock(return_value=("lone", None, ""))), \
+             patch.object(router, '_prioritized_vision_route', AsyncMock(return_value=None)), \
              patch('bot.modality.collect_input_items', return_value=[]), \
              patch.object(router, '_process_multimodal_message_internal') as mock_multi:
 
@@ -343,7 +356,20 @@ class TestTextDefaultBehavior:
         msg.attachments = []
         msg.mentions = [mock_bot.user]
 
+        class _Typing:
+            async def __aenter__(self):
+                return None
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+        msg.channel = MagicMock(spec=discord.TextChannel)
+        msg.channel.typing.return_value = _Typing()
+
         with patch.object(router, '_should_process_message', return_value=True), \
+             patch.object(router, '_compat_dispatch_for_tests', AsyncMock(return_value=None)), \
+             patch.object(router, '_resolve_scope_and_target', AsyncMock(return_value=("lone", None, ""))), \
+             patch.object(router, '_prioritized_vision_route', AsyncMock(return_value=None)), \
              patch('bot.modality.collect_input_items', return_value=[]), \
              patch.object(router, '_process_multimodal_message_internal') as mock_multi:
 

@@ -258,6 +258,15 @@ async def test_dm_plain_text_reply():
 
 
 @pytest.mark.asyncio
+async def test_flow_process_attachments_multimodal_accepts_raw_content_arg(
+    router, mock_message
+):
+    mock_message.attachments = []
+    res = await router._flow_process_attachments_multimodal(mock_message, "")
+    assert isinstance(res, BotAction)
+
+
+@pytest.mark.asyncio
 async def test_guild_unmentioned_ignored():
     """Test that an unmentioned guild message returns None."""
     # Setup

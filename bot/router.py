@@ -8827,7 +8827,9 @@ class Router:
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)
 
-    async def _flow_process_attachments_multimodal(self, message: Message) -> BotAction:
+    async def _flow_process_attachments_multimodal(
+        self, message: Message, raw_content: str | None = None
+    ) -> BotAction:
         """
         Process all attachments with per-file classification (no .txt short-circuit).
         
@@ -8848,7 +8850,9 @@ class Router:
         
         # Aggregate results by bucket
         evidence_parts = []
-        user_caption = (message.content or "").strip()
+        user_caption = (
+            raw_content if raw_content is not None else (message.content or "")
+        ).strip()
         
         # 1. TXT_PROMPT: Append first .txt to evidence
         txt_atts = get_by_bucket(classified, AttachmentBucket.TXT_PROMPT)
