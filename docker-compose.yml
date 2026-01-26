@@ -1,0 +1,82 @@
+services:
+  discord-llm-chatbot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: discord-llm-chatbot
+    restart: unless-stopped
+
+    # Environment configuration
+    env_file:
+      - .env
+
+    # Override specific env vars if needed
+    environment:
+      - TZ=UTC
+      - PYTHONUNBUFFERED=1
+
+    # Persistent volumes
+    volumes:
+      # Configuration and prompts
+      - ./prompts:/app/prompts:ro
+      - ./configs:/app/configs:ro
+      - ./kb:/app/kb:ro
+
+      # TTS models (read-only, pre-downloaded)
+      - ./tts:/app/tts:ro
+
+      # Persistent data (read-write)
+      - ./context.json:/app/context.json:rw
+      - ./enhanced_context.json:/app/enhanced_context.json:rw
+      - ./chroma_db:/app/chroma_db:rw
+      - ./user_profiles:/app/user_profiles:rw
+      - ./server_profiles:/app/server_profiles:rw
+
+      # Logs
+      - ./logs:/app/logs:rw
+      - ./user_logs:/app/user_logs:rw
+
+      # Cache directories
+      - ./cache:/app/cache:rw
+      - ./tts_cache:/app/tts_cache:rw
+
+      # Vision/media data
+      - ./vision_data:/app/vision_data:rw
+      - ./vision_artifacts:/app/vision_artifacts:rw
+
+      # Temp directory
+      - ./temp:/app/temp:rw
+
+    # Expose Prometheus metrics
+    ports:
+      - "8010:8000"
+
+    # Resource limits (adjust based on your NAS capabilities)
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+        reservations:
+          memory: 2G
+
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/metrics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+
+    # Run as non-root (pry user on Synology NAS)
+    user: "1026:100"

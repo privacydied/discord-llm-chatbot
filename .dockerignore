@@ -1,0 +1,80 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv
+.ci-venv
+.uv_cache
+*.egg-info
+dist
+build
+eggs
+.eggs
+*.egg
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Testing
+.pytest_cache
+.coverage
+htmlcov
+.tox
+.nox
+
+# Documentation
+docs
+*.md
+!README.md
+
+# Development files
+*.log
+*.pid
+.env
+.env.*
+!.env.example
+
+# Large data files (will be mounted as volumes)
+context.json
+enhanced_context.json
+chroma_db
+user_profiles
+server_profiles
+user_logs
+logs
+cache
+tts_cache
+vision_data
+vision_artifacts
+temp
+temp_build
+stt
+media
+dm_logs
+
+# Test files
+tests
+test_documents
+examples
+MagicMock
+
+# Other
+*.lock
+requirements.lock
+uv.lock
+*.txt.backup
+commit_message.txt
+yoroi.env
+libs
+vendor
+runtime
+scripts
