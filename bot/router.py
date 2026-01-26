@@ -2206,6 +2206,28 @@ class Router:
                 self._metric_inc("gate.allowed", {"reason": "mention"})
                 return True
 
+            # Check for vision triggers even without mention in guilds
+            if self._detect_direct_vision_triggers(clean_content, message):
+                self._update_dispatch_metadata(
+                    message,
+                    context=context,
+                    mention_detected=False,
+                    reply_to_bot=is_reply,
+                )
+                self.logger.debug(
+                    f"gate.allow | reason=vision_trigger msg_id={message.id}",
+                    extra={
+                        "event": "gate.allow",
+                        "reason": "vision_trigger",
+                        "msg_id": message.id,
+                        "context": context,
+                        "mention_detected": False,
+                        "reply_to_bot": is_reply,
+                    },
+                )
+                self._metric_inc("gate.allowed", {"reason": "vision_trigger"})
+                return True
+
             if allow_reply_without_mention and is_reply:
                 self._update_dispatch_metadata(
                     message,
@@ -9659,13 +9681,52 @@ class Router:
         except Exception:
             pass
 
-        # Start-anchored explicit tokens only (safe, intentional)
-        text = (content or "").strip()
-        token_patterns = [
+        # Determine if this is a DM or guild
+        is_dm = False
+        if message is not None:
+            try:
+                is_dm = isinstance(message.channel, discord.DMChannel)
+            except Exception:
+                is_dm = False
+
+        # Check if message mentions the bot (for guild handling)
+        bot_mentioned = False
+        bot_id = getattr(self.bot.user, "id", None)
+        if message is not None and bot_id:
+            try:
+                mentions = getattr(message, "mentions", [])
+                bot_mentioned = any(getattr(mention, "id", None) == bot_id for mention in mentions)
+            except Exception:
+                bot_mentioned = False
+
+        # Prepare content for pattern matching
+        original_content = (content or "").strip()
+        text = original_content
+
+        # For guilds, require bot mention for specific patterns
+        if not is_dm and not bot_mentioned:
+            # Only check for patterns that don't require bot mention
+            pass
+        else:
+            # Remove bot mention from the beginning if present
+            if bot_mentioned and bot_id:
+                mention_pattern = rf"^<@!?{bot_id}>\s*"
+                text = re.sub(mention_pattern, "", text).strip()
+
+        # Patterns for guilds with mention
+        guild_mentioned_patterns = [
             re.compile(r"^(?:img|image):\s+(.+)$", re.IGNORECASE | re.DOTALL),
+            re.compile(r"^!(?:img|image)\s+(.+)$", re.IGNORECASE | re.DOTALL),
+        ]
+
+        # Patterns for DMs or when mention is optional
+        dm_or_optional_mention_patterns = [
+            re.compile(r"^(?:img|image):\s+(.+)$", re.IGNORECASE | re.DOTALL),
+            re.compile(r"^!(?:img|image)\s+(.+)$", re.IGNORECASE | re.DOTALL),
             re.compile(r"^(?:draw|render):\s+(.+)$", re.IGNORECASE | re.DOTALL),
         ]
 
+        # Legacy phrase patterns (always allowed)
         phrase_patterns = [
             re.compile(
                 r"^(?:generate|create|make|draw)\s+(?:an?\s+)?image\s+(?:of\s+)?(.+)$",
@@ -9694,7 +9755,16 @@ class Router:
                 return prompt
             return None
 
-        for patterns in (token_patterns, phrase_patterns):
+        # Select patterns based on context
+        patterns_to_check = []
+        if is_dm or bot_mentioned:
+            # In DMs or when bot is mentioned, allow all patterns
+            patterns_to_check = dm_or_optional_mention_patterns + phrase_patterns
+        else:
+            # In guilds without mention, only allow phrase patterns
+            patterns_to_check = phrase_patterns
+
+        for patterns in (patterns_to_check,):
             prompt = _extract_prompt(patterns)
             if prompt is None:
                 continue
@@ -9704,8 +9774,11 @@ class Router:
             if re.search(r"https?://", prompt, re.IGNORECASE):
                 return None
             final_prompt = " ".join(prompt.split())
+
+            # Log the trigger with context
+            context = "dm" if is_dm else "guild_mentioned" if bot_mentioned else "guild_no_mention"
             self.logger.info(
-                f"🎨 Direct vision trigger detected: prompt '{final_prompt[:50]}...'"
+                f"🎨 Direct vision trigger detected: prompt '{final_prompt[:50]}...' (context: {context})"
             )
             return {
                 "use_vision": True,
@@ -9714,6 +9787,27 @@ class Router:
                 "confidence": 0.95,
                 "bypass_reason": "Direct token trigger",
             }
+
+        # Special case for DMs: if no trigger patterns match but content looks like a standalone prompt
+        if is_dm and not text.startswith("!") and not text.startswith(("img:", "image:", "draw:", "render:")):
+            # Check if content has sufficient length and doesn't look like a regular chat message
+            if len(text) >= 12 and not re.match(r"^(hello|hi|hey|yo|what's up|sup|good morning|good afternoon|good evening|hey there)", text, re.IGNORECASE):
+                # Additional check to ensure it's not a common question or command
+                if not re.match(r"^(can you|could you|how do|what is|who is|where is|when is|why is|how to|what are|what does|do you|does it|is there|are there)", text, re.IGNORECASE):
+                    # Check if it contains image-related keywords
+                    image_keywords = ["image", "picture", "photo", "drawing", "painting", "illustration", "art", "sketch", "render", "generate", "create", "make", "draw"]
+                    if any(keyword in text.lower() for keyword in image_keywords) or len(text) >= 20:
+                        final_prompt = " ".join(text.split())
+                        self.logger.info(
+                            f"🎨 DM vision trigger detected: prompt '{final_prompt[:50]}...' (standalone)"
+                        )
+                        return {
+                            "use_vision": True,
+                            "task": "text_to_image",
+                            "prompt": final_prompt,
+                            "confidence": 0.85,
+                            "bypass_reason": "DM standalone prompt",
+                        }
 
         if debug_triggers:
             self.logger.info(
