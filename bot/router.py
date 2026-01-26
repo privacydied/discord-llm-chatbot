@@ -943,6 +943,32 @@ class Router:
                 pass
             return data
 
+    async def _probe_twitter_syndication_images(
+        self, url: str, status_id: str
+    ) -> List[str]:
+        """Probe syndication API for tweet images. Returns list of image URLs. [PA][REH]"""
+        if not status_id:
+            status_id = self._parse_twitter_status_id(url) or ""
+        if not status_id:
+            return []
+        try:
+            syn = await self._get_tweet_via_syndication(status_id)
+            if not isinstance(syn, dict):
+                return []
+            photos = syn.get("photos") or []
+            urls: List[str] = []
+            for p in photos:
+                if isinstance(p, dict):
+                    img_url = p.get("url") or p.get("media_url_https") or p.get("media_url")
+                    if img_url and isinstance(img_url, str):
+                        urls.append(img_url)
+                elif isinstance(p, str):
+                    urls.append(p)
+            return urls
+        except Exception as e:
+            self.logger.debug(f"Syndication image probe failed: {e}")
+            return []
+
     def _format_syndication_result(self, syn_data: Dict[str, Any], url: str) -> str:
         """Format Syndication JSON tweet into concise text similar to API format. [PA]"""
         try:
@@ -1064,6 +1090,22 @@ class Router:
                 "fixupx.com/",
             ]
         )
+
+    @staticmethod
+    def _parse_twitter_status_id(url: str) -> Optional[str]:
+        """Extract the tweet/status ID from a Twitter URL. Returns None if not found. [IV]"""
+        return XApiClient.extract_tweet_id(url)
+
+    def _is_twitter_status_url(self, url: str) -> bool:
+        """Check if a URL is a Twitter status URL (contains a valid status ID). [IV]"""
+        return self._parse_twitter_status_id(url) is not None
+
+    def _canonicalize_twitter_status_url(self, url: str) -> str:
+        """Convert any Twitter status URL to canonical form https://x.com/i/status/{id}. [IV]"""
+        status_id = self._parse_twitter_status_id(url)
+        if status_id:
+            return f"https://x.com/i/status/{status_id}"
+        return url
 
     def _register_x_frontend_context(
         self, url: str, frontend: Optional[str], primary: Optional[str]
@@ -5840,12 +5882,15 @@ class Router:
                         try:
                             from .syndication.extract import (
                                 extract_text_and_images_from_syndication,
+                                syndication_has_video,
                             )
 
                             _ext = extract_text_and_images_from_syndication(syn)
                             extracted_images = _ext.get("image_urls", []) or []
+                            _syn_has_video = syndication_has_video(syn)
                         except Exception:
                             extracted_images = []
+                            _syn_has_video = False
 
                         # Bread crumb for future debugging [CMV]
                         try:
@@ -5940,30 +5985,32 @@ class Router:
                                     )
                                     return result
 
-                            # Attempt STT for potential video tweets; silently fall back if not video [PA][REH]
-                            stt_res, stt_err = await _bounded(
-                                hear_infer_from_url(url),
-                                x_stt_probe_timeout,
-                                "x.syndication.stt",
-                                {"url": url},
-                            )
-                            if stt_res and stt_res.get("transcription"):
-                                return self._format_x_tweet_with_transcription(
-                                    base_text=base,
-                                    url=url,
-                                    stt_res=stt_res,
+                            # Only attempt STT if syndication indicates video/animated_gif [PA][REH]
+                            if _syn_has_video:
+                                stt_res, stt_err = await _bounded(
+                                    hear_infer_from_url(url),
+                                    x_stt_probe_timeout,
+                                    "x.syndication.stt",
+                                    {"url": url},
                                 )
-                            # No-speech or error: emit breadcrumbs and continue with caption-only evidence [REH]
-                            try:
-                                self.logger.info(
-                                    "stt.fail",
-                                    extra={
-                                        "event": "stt.fail",
-                                        "detail": {"reason": "no_speech" if stt_err != "error" else "error"},
-                                    },
-                                )
-                            except Exception:
-                                pass
+                                if stt_res and stt_res.get("transcription"):
+                                    return self._format_x_tweet_with_transcription(
+                                        base_text=base,
+                                        url=url,
+                                        stt_res=stt_res,
+                                    )
+                                # No-speech or error: emit breadcrumbs and continue with caption-only evidence [REH]
+                                try:
+                                    self.logger.info(
+                                        "stt.fail",
+                                        extra={
+                                            "event": "stt.fail",
+                                            "detail": {"reason": "no_speech" if stt_err != "error" else "error"},
+                                        },
+                                    )
+                                except Exception:
+                                    pass
+                            # Fall back to text-only for non-video or STT failure
                             try:
                                 self.logger.info(
                                     "fallback",
@@ -5987,7 +6034,7 @@ class Router:
                             return self._format_x_tweet_with_transcription(
                                 base_text=safe_base_text,
                                 url=url,
-                                stt_res=(stt_res or {}),
+                                stt_res=({} if not _syn_has_video else (stt_res or {})),
                             )
 
                         # Images are present somewhere; route to unified syndication→VL handler [CA]

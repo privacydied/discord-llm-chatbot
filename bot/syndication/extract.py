@@ -179,3 +179,30 @@ def extract_text_and_images_from_syndication(tw: Dict[str, Any]) -> Dict[str, An
         "source": source,
         "had_card": had_card,
     }
+
+
+def syndication_has_video(tw: Dict[str, Any]) -> bool:
+    """Check if syndication data indicates video or animated_gif media. [IV]"""
+    if not isinstance(tw, dict):
+        return False
+    # Check video field directly
+    if tw.get("video"):
+        return True
+    # Check extended_entities/entities for video/animated_gif types
+    for entities_key in ("extended_entities", "entities"):
+        ent = tw.get(entities_key) or {}
+        for m in ent.get("media") or []:
+            mtype = (m.get("type") or "").lower()
+            if mtype in ("video", "animated_gif"):
+                return True
+    # Check quoted tweet as well
+    qt = tw.get("quoted_tweet") or {}
+    if qt.get("video"):
+        return True
+    for entities_key in ("extended_entities", "entities"):
+        ent = qt.get(entities_key) or {}
+        for m in ent.get("media") or []:
+            mtype = (m.get("type") or "").lower()
+            if mtype in ("video", "animated_gif"):
+                return True
+    return False

@@ -11,7 +11,9 @@ requires-python = ">=3.11"
 license = { file = "LICENSE" }
 dependencies = [
     "ffmpeg-python>=0.2.0",
+    "ffprobe>=0.5",
     "kokoro-onnx>=0.4.9",
+    "mypy>=1.19.1",
     "soundfile>=0.13.1",
 ]
 

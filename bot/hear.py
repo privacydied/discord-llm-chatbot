@@ -19,6 +19,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import shutil
 import tempfile
 import time
@@ -47,6 +48,8 @@ from .video_ingest import (
     fetch_and_prepare_url_audio,
 )
 from .stt import ModelSpec, stt_manager
+from .stt_module.failure_classifier import STTFailureClassifier, FailureClassification
+from .stt_module.multimodal_fallback import multimodal_fallback_provider, FallbackTranscriptResult
 
 if TYPE_CHECKING:
     import discord
@@ -132,6 +135,10 @@ class TranscriptResult:
     first_chunk_runtime: float
     aborted: bool = False
     abort_reason: Optional[str] = None
+    # Fallback metadata
+    is_fallback: bool = False
+    fallback_provider: Optional[str] = None
+    failure_context: Optional[str] = None
 
 
 class STTJob:
@@ -826,37 +833,76 @@ def _store_transcript_cache(cache_key: str, result: TranscriptResult) -> None:
 
 
 async def _ffprobe(path: Path) -> Tuple[float, int, int]:
-    cmd = [
-        "ffprobe",
-        "-v",
-        "error",
-        "-print_format",
-        "json",
-        "-select_streams",
-        "a:0",
-        "-show_entries",
-        "stream=sample_rate,channels",
-        "-show_entries",
-        "format=duration",
-        str(path),
-    ]
+    """Probe audio file for duration, sample rate, channels. Falls back to ffmpeg if ffprobe unavailable. [REH]"""
+    import shutil
+
+    ffprobe_bin = shutil.which("ffprobe")
+    if ffprobe_bin:
+        cmd = [
+            ffprobe_bin,
+            "-v",
+            "error",
+            "-print_format",
+            "json",
+            "-select_streams",
+            "a:0",
+            "-show_entries",
+            "stream=sample_rate,channels",
+            "-show_entries",
+            "format=duration",
+            str(path),
+        ]
+        proc = await asyncio.create_subprocess_exec(
+            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+        )
+        stdout, stderr = await proc.communicate()
+        if proc.returncode != 0:
+            raise InferenceError(
+                f"ffprobe failed ({proc.returncode}): {stderr.decode(errors='ignore')}"
+            )
+
+        try:
+            info = json.loads(stdout.decode())
+            duration = float(info.get("format", {}).get("duration") or 0.0)
+            stream = (info.get("streams") or [{}])[0]
+            sample_rate = int(stream.get("sample_rate") or SAMPLE_RATE)
+            channels = int(stream.get("channels") or 1)
+        except Exception as exc:
+            raise InferenceError(f"Failed to parse ffprobe output: {exc}") from exc
+        return duration, sample_rate, channels
+
+    # Fallback: use ffmpeg -i to probe (parses stderr output) [REH]
+    ffmpeg_bin = shutil.which("ffmpeg")
+    if not ffmpeg_bin:
+        raise InferenceError("Neither ffprobe nor ffmpeg found in PATH")
+
+    cmd = [ffmpeg_bin, "-i", str(path), "-hide_banner", "-f", "null", "-"]
     proc = await asyncio.create_subprocess_exec(
         *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
     )
-    stdout, stderr = await proc.communicate()
-    if proc.returncode != 0:
-        raise InferenceError(
-            f"ffprobe failed ({proc.returncode}): {stderr.decode(errors='ignore')}"
-        )
+    _, stderr = await proc.communicate()
+    stderr_text = stderr.decode(errors="ignore")
 
-    try:
-        info = json.loads(stdout.decode())
-        duration = float(info.get("format", {}).get("duration") or 0.0)
-        stream = (info.get("streams") or [{}])[0]
-        sample_rate = int(stream.get("sample_rate") or SAMPLE_RATE)
-        channels = int(stream.get("channels") or 1)
-    except Exception as exc:
-        raise InferenceError(f"Failed to parse ffprobe output: {exc}") from exc
+    # Parse duration from "Duration: HH:MM:SS.ms" or "Duration: N/A"
+    duration = 0.0
+    dur_match = re.search(r"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)", stderr_text)
+    if dur_match:
+        h, m, s = dur_match.groups()
+        duration = int(h) * 3600 + int(m) * 60 + float(s)
+
+    # Parse sample rate from "44100 Hz" or similar
+    sample_rate = SAMPLE_RATE
+    sr_match = re.search(r"(\d+)\s*Hz", stderr_text)
+    if sr_match:
+        sample_rate = int(sr_match.group(1))
+
+    # Parse channels from "stereo", "mono", or "N channels"
+    channels = 1
+    if "stereo" in stderr_text.lower():
+        channels = 2
+    elif ch_match := re.search(r"(\d+)\s*channels?", stderr_text, re.IGNORECASE):
+        channels = int(ch_match.group(1))
+
     return duration, sample_rate, channels
 
 
@@ -1595,7 +1641,7 @@ async def hear_infer(audio: Union[Path, "discord.Attachment"]) -> str:
                     )
                     spec = downgraded
 
-            transcript = await _run_whisper(pre, spans, spec, ram_guard, job=job)
+            transcript = await _run_whisper_with_fallback(pre, spans, spec, ram_guard, job=job)
 
             spans.start("stitch")
             result_text = transcript.text
@@ -1685,7 +1731,7 @@ async def hear_infer_from_url(
                     )
                     spec = downgraded
 
-            transcript = await _run_whisper(pre, spans, spec, ram_guard, job=job)
+            transcript = await _run_whisper_with_fallback(pre, spans, spec, ram_guard, job=job)
 
             spans.start("stitch")
             metadata = download.metadata
@@ -1740,3 +1786,112 @@ async def hear_infer_from_url(
         raise
     finally:
         await job.close()
+
+
+async def _run_whisper_with_fallback(
+    pre: PreprocessResult,
+    spans: SpanRecorder,
+    initial_spec: ModelSpec,
+    ram_guard: STTRAMGuard,
+    job: Optional[STTJob] = None,
+) -> TranscriptResult:
+    """
+    Primary whisper transcription with multimodal fallback support.
+
+    This function attempts transcription with faster-whisper first, and falls back
+    to multimodal models if the primary transcription fails with recoverable errors.
+    """
+
+    try:
+        # Try the primary faster-whisper transcription
+        transcript = await _run_whisper(
+            pre=pre,
+            spans=spans,
+            initial_spec=initial_spec,
+            ram_guard=ram_guard,
+            job=job,
+        )
+
+        # If successful, return the primary result
+        return transcript
+
+    except Exception as primary_error:
+        # Classify the failure to determine if fallback should be attempted
+        failure = STTFailureClassifier.classify_failure(
+            error=primary_error,
+            pre_result=pre,
+            audio_path=pre.source_path
+        )
+
+        logger.info(f"[STT] Primary transcription failed: {failure}")
+
+        # Check if multimodal fallback should be attempted
+        config = load_config()
+        fallback_enabled = config.get("STT_MULTIMODAL_FALLBACK_ENABLED", False)
+
+        if not fallback_enabled:
+            logger.info("[STT] Multimodal fallback is disabled, re-raising primary error")
+            raise primary_error
+
+        if not STTFailureClassifier.should_attempt_fallback(
+            classification=failure,
+            has_audio_data=pre.duration_in > 0,
+            pre_duration=pre.duration_in
+        ):
+            logger.info(f"[STT] Fallback not appropriate for failure type: {failure.category}")
+            raise primary_error
+
+        # Attempt multimodal fallback
+        spans.start("multimodal_fallback")
+
+        try:
+            logger.info("[STT] Attempting multimodal fallback transcription")
+
+            # Get multimodal configuration
+            model_config = {
+                "timeout": 30.0,  # Default timeout
+                "min_confidence": 0.5,  # Default confidence
+                "max_retries": 1,  # Default retries
+            }
+
+            # Call the multimodal fallback provider
+            fallback_result = await multimodal_fallback_provider.transcribe_with_fallback(
+                audio_path=pre.source_path,
+                pre_result=pre,
+                failure_reason=failure,
+                model_config=model_config
+            )
+
+            spans.end("multimodal_fallback", ok=True)
+
+            # Convert fallback result to Transcript format
+            transcript = TranscriptResult(
+                text=fallback_result.text,
+                segments=[],  # Fallback doesn't provide segments
+                chunks=[],    # Fallback doesn't provide chunks
+                duration_out=pre.duration_in,
+                model_spec=initial_spec,
+                cache_hit=False,
+                first_chunk_runtime=fallback_result.processing_time_ms / 1000.0,
+                aborted=False,
+                abort_reason=None,
+                is_fallback=True,
+                fallback_provider=fallback_result.provider,
+                failure_context=str(failure)
+            )
+
+            # Log the fallback usage
+            logger.info(
+                f"[STT] Multimodal fallback succeeded with {fallback_result.provider} "
+                f"(confidence: {fallback_result.confidence:.2f}, "
+                f"time: {fallback_result.processing_time_ms:.1f}ms)"
+            )
+
+            return transcript
+
+        except Exception as fallback_error:
+            spans.end("multimodal_fallback", ok=False)
+            logger.error(f"[STT] Multimodal fallback failed: {fallback_error}")
+
+            # Re-raise the original error - fallback failed too
+            raise primary_error

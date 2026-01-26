@@ -382,11 +382,17 @@ class VideoIngestionManager:
         for fmt in formats:
             vcodec = (fmt.get("vcodec") or "").lower()
             acodec = (fmt.get("acodec") or "").lower()
-            if not acodec or acodec == "none":
+            format_id = (fmt.get("format_id") or "").lower()
+            # Skip if explicitly no audio codec AND not an audio-only format
+            # HLS audio streams may have acodec=None but vcodec='none' and 'audio' in format_id [REH]
+            is_audio_hint = "audio" in format_id or vcodec in ("", "none")
+            if acodec == "none" and not is_audio_hint:
+                continue
+            if not acodec and not is_audio_hint:
                 continue
             if vcodec in ("", "none"):
                 audio_formats.append(fmt)
-            else:
+            elif acodec and acodec != "none":
                 muxed_formats.append(fmt)
 
         def _key(fmt: Dict[str, Any]) -> tuple:
