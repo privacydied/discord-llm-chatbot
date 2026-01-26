@@ -551,7 +551,7 @@ class TTSCommands(commands.Cog):
     # The functionality is now handled by the @tts_group.command(name='all') subcommand
 
 
-async def setup(bot):
+async def setup(bot) -> None:
     """Add the TTS commands to the bot."""
     if not bot.get_cog("TTSCommands"):
         await bot.add_cog(TTSCommands(bot))

@@ -32,7 +32,7 @@ ALL_PATTERNS = YOUTUBE_PATTERNS + TIKTOK_PATTERNS
 class VideoCommands(commands.Cog):
     """Commands for video URL processing and transcription."""
 
-    def __init__(self, bot):
+    def __init__(self, bot) -> None:
         self.bot = bot
         logger.info("🎥 VideoCommands cog initialized")
 
@@ -303,7 +303,7 @@ class VideoCommands(commands.Cog):
             logger.error(f"Error reading video cache info: {e}", exc_info=True)
 
 
-async def setup(bot):
+async def setup(bot) -> None:
     """Set up the video commands cog."""
     await bot.add_cog(VideoCommands(bot))
     logger.info("✅ VideoCommands cog loaded")

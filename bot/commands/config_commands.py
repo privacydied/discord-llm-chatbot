@@ -18,12 +18,12 @@ logger = get_logger(__name__)
 class ConfigCommands(commands.Cog):
     """Commands for configuration management and dynamic reloading."""
 
-    def __init__(self, bot):
+    def __init__(self, bot) -> None:
         self.bot = bot
 
     @commands.command(name="reload-config", aliases=["reload_config", "config_reload"])
     @commands.has_permissions(administrator=True)
-    async def reload_config(self, ctx):
+    async def reload_config(self, ctx: commands.Context) -> None:
         """Manually reload configuration from .env file (Admin only)."""
         try:
             logger.info(
@@ -51,7 +51,7 @@ class ConfigCommands(commands.Cog):
 
     @commands.command(name="config-status", aliases=["config_status", "config_info"])
     @commands.has_permissions(administrator=True)
-    async def config_status(self, ctx):
+    async def config_status(self, ctx: commands.Context) -> None:
         """Show current configuration status and version (Admin only)."""
         try:
             version = get_config_version()
@@ -118,7 +118,7 @@ class ConfigCommands(commands.Cog):
             )
 
     @commands.command(name="config-help", aliases=["config_help"])
-    async def config_help(self, ctx):
+    async def config_help(self, ctx: commands.Context) -> None:
         """Show help information about configuration commands."""
         embed = discord.Embed(
             title="🔧 Configuration Commands Help",
@@ -164,7 +164,7 @@ class ConfigCommands(commands.Cog):
         await ctx.reply(embed=embed, mention_author=False)
 
 
-async def setup(bot):
+async def setup(bot) -> None:
     """Set up the config commands cog."""
     await bot.add_cog(ConfigCommands(bot))
     logger.info("✅ ConfigCommands cog loaded")

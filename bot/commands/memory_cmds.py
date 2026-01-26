@@ -29,7 +29,7 @@ config = load_config()
 class MemoryCommands(commands.Cog):
     """Commands for managing user and server memories."""
 
-    def __init__(self, bot):
+    def __init__(self, bot) -> None:
         self.bot = bot
         self.config = load_config()
         self.router = bot.router
@@ -367,7 +367,7 @@ class MemoryCommands(commands.Cog):
             self.server_memory_clear.reset_cooldown(ctx)
 
 
-async def setup(bot):
+async def setup(bot) -> None:
     """Add memory commands to the bot."""
     if not bot.get_cog("MemoryCommands"):
         await bot.add_cog(MemoryCommands(bot))

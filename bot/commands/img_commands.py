@@ -39,7 +39,7 @@ IMG_ATTACHMENT_EXTS = [".txt", ".md", ".json", ".rtf", ".yaml", ".yml"]
 class ImgCommands(commands.Cog):
     """Traditional !img prefix command cog"""
 
-    def __init__(self, bot):
+    def __init__(self, bot) -> None:
         self.bot = bot
         self.config = load_config()
         self.logger = logger
@@ -167,7 +167,7 @@ class ImgCommands(commands.Cog):
     @commands.command(
         name="img", aliases=["image"], help="Generate images from text prompts"
     )
-    async def img_command(self, ctx, *, prompt: Optional[str] = None):
+    async def img_command(self, ctx: commands.Context, *, prompt: Optional[str] = None) -> None:
         """
         Handle !img prefix command - delegates to vision generation system
 
@@ -409,6 +409,6 @@ class ImgCommands(commands.Cog):
         return embed
 
 
-async def setup(bot):
+async def setup(bot) -> None:
     """Setup function for Discord cog loading"""
     await bot.add_cog(ImgCommands(bot))

@@ -620,6 +620,6 @@ class ImageUpgradeCommands(commands.Cog):
         logger.info("🧹 ImageUpgradeCommands cog unloaded")
 
 
-async def setup(bot):
+async def setup(bot) -> None:
     """Setup function for the cog."""
     await bot.add_cog(ImageUpgradeCommands(bot))

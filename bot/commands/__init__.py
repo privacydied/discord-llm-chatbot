@@ -2,7 +2,7 @@
 Command handlers for the Discord bot.
 """
 
-from typing import Dict, Any
+from typing import Dict, Any, Callable
 import logging
 
 # Command modules are loaded via the setup_commands function below.
@@ -11,7 +11,7 @@ import logging
 commands: Dict[str, Any] = {}
 
 
-def register_command(name: str, func: callable, **kwargs):
+def register_command(name: str, func: Callable[..., Any], **kwargs) -> None:
     """
     Register a command with the given name and handler function.
 
@@ -101,7 +101,7 @@ def get_all_commands() -> dict:
     return {name: cmd for name, cmd in commands.items() if name == cmd["name"]}
 
 
-async def setup_commands(bot):
+async def setup_commands(bot) -> None:
     """
     Set up all command modules with the bot instance.
     This function is called during bot startup to register all commands.

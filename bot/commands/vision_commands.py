@@ -30,7 +30,7 @@ logger = get_logger(__name__)
 class VisionCommands(commands.Cog):
     """Vision generation slash commands cog"""
 
-    def __init__(self, bot):
+    def __init__(self, bot) -> None:
         self.bot = bot
         self.config = load_config()
         self.logger = logger
@@ -756,6 +756,6 @@ class VisionCommands(commands.Cog):
             return f"{minutes}m {seconds}s"
 
 
-async def setup(bot):
+async def setup(bot) -> None:
     """Setup function for Discord cog loading"""
     await bot.add_cog(VisionCommands(bot))

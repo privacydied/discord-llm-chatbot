@@ -94,7 +94,7 @@ class AdminAlertManager:
             )
             await self._process_reaction_queue(message_id)
 
-    async def _process_reaction_queue(self, message_id: int):
+    async def _process_reaction_queue(self, message_id: int) -> None:
         """Process queued reactions with spacing."""
         import asyncio
 
@@ -494,7 +494,7 @@ class AdminAlertCommands(commands.Cog):
         self.logger.info("🚨 Admin Alert Commands loaded")
 
     @commands.command(name="alert")
-    async def alert_command(self, ctx, *, message: str = None):
+    async def alert_command(self, ctx: commands.Context, *, message: str = None) -> None:
         """
         Admin broadcast command.
 
@@ -642,7 +642,7 @@ class AdminAlertCommands(commands.Cog):
             )
 
     @commands.Cog.listener()
-    async def on_reaction_add(self, reaction, user):
+    async def on_reaction_add(self, reaction: discord.Reaction, user: discord.User) -> None:
         """Handle emoji reactions on composer cards."""
         if user.bot:
             return
@@ -687,7 +687,7 @@ class AdminAlertCommands(commands.Cog):
             await user.send("❌ An error occurred. Please try again.")
 
     @commands.Cog.listener()
-    async def on_message(self, message: discord.Message):
+    async def on_message(self, message: discord.Message) -> None:
         """Handle DM replies during an active alert session.
 
         Supports:
@@ -865,7 +865,7 @@ class AdminAlertCommands(commands.Cog):
         except Exception as e:
             self.logger.error(f"❌ Failed to update composer embed: {e}")
 
-    async def _handle_channel_selection(self, reaction, user, session):
+    async def _handle_channel_selection(self, reaction: discord.Reaction, user: discord.User, session: "AlertSession") -> None:
         """Present the admin with a numbered list of accessible channels."""
         session.current_step = "select_channels"
 
@@ -937,7 +937,7 @@ class AdminAlertCommands(commands.Cog):
             # Ignore failures (e.g. missing permissions); user can still remove manually
             pass
 
-    async def _handle_content_composition(self, reaction, user, session):
+    async def _handle_content_composition(self, reaction: discord.Reaction, user: discord.User, session: "AlertSession") -> None:
         session.current_step = "compose_content"
 
         await user.send(
@@ -967,7 +967,7 @@ class AdminAlertCommands(commands.Cog):
             )
             raise
 
-    async def _handle_preview(self, reaction, user, session):
+    async def _handle_preview(self, reaction: discord.Reaction, user: discord.User, session: "AlertSession") -> None:
         if not session.destinations:
             await user.send("❌ Please select destinations first (📋).")
             return
@@ -1025,7 +1025,7 @@ class AdminAlertCommands(commands.Cog):
             )
             raise
 
-    async def _handle_send_confirmation(self, reaction, user, session):
+    async def _handle_send_confirmation(self, reaction: discord.Reaction, user: discord.User, session: "AlertSession") -> None:
         if session.current_step != "confirm_send":
             await user.send("❌ Please complete all steps before sending.")
             return
@@ -1076,11 +1076,11 @@ class AdminAlertCommands(commands.Cog):
         except asyncio.TimeoutError:
             await user.send("⏰ Confirmation timeout. Alert cancelled.")
 
-    async def _handle_cancel(self, reaction, user, session):
+    async def _handle_cancel(self, reaction: discord.Reaction, user: discord.User, session: "AlertSession") -> None:
         session.status = AlertSessionStatus.CANCELLED
         del self.alert_manager.sessions[user.id]
         await user.send("❌ Alert session cancelled.")
 
 
-async def setup(bot):
+async def setup(bot) -> None:
     await bot.add_cog(AdminAlertCommands(bot))

@@ -19,7 +19,7 @@ class JanitorCommands(commands.Cog):
 
     @commands.command(name="clean", aliases=["cleanup", "janitor"])
     @commands.has_permissions(administrator=True)
-    async def clean(self, ctx):
+    async def clean(self, ctx: commands.Context) -> None:
         """Manually trigger cache and log cleanup (Admin only)."""
         try:
             logger.info(
@@ -122,7 +122,7 @@ class JanitorCommands(commands.Cog):
 
     @commands.command(name="clean-status", aliases=["cleanup-status", "janitor-status"])
     @commands.has_permissions(administrator=True)
-    async def clean_status(self, ctx):
+    async def clean_status(self, ctx: commands.Context) -> None:
         """Show janitor configuration and status (Admin only)."""
         try:
             from ..janitor import (
@@ -197,7 +197,7 @@ class JanitorCommands(commands.Cog):
             )
 
     @commands.command(name="clean-help", aliases=["cleanup-help", "janitor-help"])
-    async def clean_help(self, ctx):
+    async def clean_help(self, ctx: commands.Context) -> None:
         """Show help information about janitor/cleanup commands."""
         embed = discord.Embed(
             title="🧹 Janitor Commands Help",
@@ -242,7 +242,7 @@ class JanitorCommands(commands.Cog):
         await ctx.reply(embed=embed, mention_author=False)
 
 
-async def setup(bot):
+async def setup(bot) -> None:
     """Set up the janitor commands cog."""
     await bot.add_cog(JanitorCommands(bot))
     logger.info("✅ JanitorCommands cog loaded")

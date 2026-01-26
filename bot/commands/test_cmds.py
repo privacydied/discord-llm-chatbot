@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 class TestCommands(commands.Cog):
     """Simple test commands for debugging."""
 
-    def __init__(self, bot):
+    def __init__(self, bot) -> None:
         self.bot = bot
         self.config = {}
         self.router = None
@@ -24,7 +24,7 @@ class TestCommands(commands.Cog):
         await ctx.send("Pong! 🏓")
 
 
-async def setup(bot):
+async def setup(bot) -> None:
     """Add the test commands to the bot."""
     logger.info("Setting up test commands...")
     if not bot.get_cog("TestCommands"):

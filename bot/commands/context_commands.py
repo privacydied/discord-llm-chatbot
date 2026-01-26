@@ -14,13 +14,13 @@ logger = get_logger(__name__)
 class ContextCommands(commands.Cog):
     """Commands for managing conversation context and privacy settings."""
 
-    def __init__(self, bot):
+    def __init__(self, bot) -> None:
         self.bot = bot
         self.context_handlers = create_context_command_handler(bot)
         logger.info("✔ Context commands loaded")
 
     @commands.command(name="context_reset", aliases=["reset_context", "clear_context"])
-    async def context_reset(self, ctx):
+    async def context_reset(self, ctx: commands.Context) -> None:
         """Reset the conversation context for this channel/DM."""
         try:
             response = await self.context_handlers["context_reset"](ctx.message)
@@ -33,7 +33,7 @@ class ContextCommands(commands.Cog):
             await ctx.reply("❌ Failed to reset context.", mention_author=False)
 
     @commands.command(name="context_stats", aliases=["ctx_stats"])
-    async def context_stats(self, ctx):
+    async def context_stats(self, ctx: commands.Context) -> None:
         """Show context manager statistics."""
         try:
             response = await self.context_handlers["context_stats"](ctx.message)
@@ -44,7 +44,7 @@ class ContextCommands(commands.Cog):
             await ctx.reply("❌ Failed to get context stats.", mention_author=False)
 
     @commands.command(name="privacy_optout", aliases=["opt_out", "no_context"])
-    async def privacy_optout(self, ctx):
+    async def privacy_optout(self, ctx: commands.Context) -> None:
         """Opt out of conversation context tracking."""
         try:
             response = await self.context_handlers["privacy_optout"](ctx.message)
@@ -57,7 +57,7 @@ class ContextCommands(commands.Cog):
             )
 
     @commands.command(name="privacy_optin", aliases=["opt_in", "enable_context"])
-    async def privacy_optin(self, ctx):
+    async def privacy_optin(self, ctx: commands.Context) -> None:
         """Opt back into conversation context tracking."""
         try:
             response = await self.context_handlers["privacy_optin"](ctx.message)
@@ -70,7 +70,7 @@ class ContextCommands(commands.Cog):
             )
 
     @commands.command(name="context_help", aliases=["ctx_help"])
-    async def context_help(self, ctx):
+    async def context_help(self, ctx: commands.Context) -> None:
         """Show help for context management commands."""
         help_text = """
 **🧠 Enhanced Context Management Commands**
@@ -105,7 +105,7 @@ class ContextCommands(commands.Cog):
         await ctx.reply(embed=embed, mention_author=False)
 
 
-async def setup(bot):
+async def setup(bot) -> None:
     """Set up context commands."""
     await bot.add_cog(ContextCommands(bot))
     logger.info("✔ Context commands cog loaded")

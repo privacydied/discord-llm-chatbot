@@ -138,7 +138,7 @@ async def check_bot_permissions(ctx, required_perms=None) -> Tuple[bool, List[st
 class RAGCommands(commands.Cog):
     """Commands for managing the RAG (Retrieval Augmented Generation) system."""
 
-    def __init__(self, bot):
+    def __init__(self, bot) -> None:
         self.bot = bot
 
     @commands.group(name="rag", invoke_without_command=True)
@@ -1092,7 +1092,7 @@ class RAGCommands(commands.Cog):
             await ctx.send(embed=embed)
 
 
-async def setup(bot):
+async def setup(bot) -> None:
     """Set up RAG commands."""
     try:
         logger.info("[RAG Setup] Starting RAG commands cog initialization...")
