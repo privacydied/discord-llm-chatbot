@@ -7,6 +7,7 @@ retry logic, and cost estimation following REH and CA principles.
 
 from __future__ import annotations
 import asyncio
+import base64
 import os
 from urllib.parse import urlparse, unquote
 from pathlib import Path
@@ -27,6 +28,7 @@ from .types import (
 )
 from .unified_adapter import UnifiedVisionAdapter, UnifiedStatus
 from .money import Money
+from .pricing_loader import get_pricing_table
 
 logger = get_logger(__name__)
 
@@ -50,6 +52,9 @@ class VisionGateway:
         # Initialize unified adapter
         self.adapter = UnifiedVisionAdapter(self.config)
         self.active_jobs: Dict[str, Dict[str, Any]] = {}
+
+        # Initialize pricing table for cost calculations [CA]
+        self.pricing_table = get_pricing_table()
 
         self.logger.info("VisionGateway initialized with unified adapter")
 
@@ -380,8 +385,42 @@ class VisionGateway:
                     }
                     return mime_map.get(mime_type, ".png")
 
+                def _try_decode_data_image_url(url: str) -> tuple[Optional[bytes], Optional[str]]:
+                    """Decode data:image/*;base64,... URLs.
+                    Returns (bytes, mime_type) or (None, None) if not a decodable data URL.
+                    """
+                    try:
+                        if not isinstance(url, str) or not url.startswith("data:"):
+                            return None, None
+                        if ";base64," not in url:
+                            return None, None
+                        header, b64 = url.split(",", 1)
+                        mime = header.split(";", 1)[0].replace("data:", "").strip()
+                        if not mime.startswith("image/"):
+                            return None, None
+                        data = base64.b64decode(b64)
+                        return data, mime
+                    except Exception:
+                        return None, None
+
                 for idx, url in enumerate(assets_urls):
                     try:
+                        # OpenRouter may return data URLs for images; decode locally without HTTP
+                        data_bytes, data_mime = _try_decode_data_image_url(url)
+                        if data_bytes is not None and data_mime is not None:
+                            base_name = f"generated_{job_id}_{idx}"
+                            proper_extension = _get_extension_from_mime(data_mime)
+                            proper_final_path = artifacts_dir / f"{base_name}{proper_extension}"
+                            with open(proper_final_path, "wb") as f:
+                                f.write(data_bytes)
+                            file_size = proper_final_path.stat().st_size
+                            saved_artifacts.append(proper_final_path)
+                            total_size += file_size
+                            self.logger.info(
+                                f"Artifact saved from data URL for job {job_id}: {proper_final_path} ({file_size} bytes, {data_mime})"
+                            )
+                            continue
+
                         parsed = urlparse(url)
                         base_name = (
                             unquote(os.path.basename(parsed.path))
@@ -421,13 +460,25 @@ class VisionGateway:
                                 f"Artifact saved with MIME detection for job {job_id}: {saved} ({file_size} bytes, {detected_mime})"
                             )
                         else:
+                            # Scrub data URLs to avoid logging base64 payloads [REH]
+                            url_display = (
+                                f"<data-url:{url.split(',')[0]}>"
+                                if url.startswith("data:")
+                                else url[:100]
+                            )
                             self.logger.warning(
-                                f"Failed to download artifact {idx} for job {job_id}: {url}"
+                                f"Failed to download artifact {idx} for job {job_id}: {url_display}"
                             )
                     except Exception as e:
                         warn_msg = f"Asset download failed: {e}"
                         warnings.append(warn_msg)
-                        self.logger.warning(f"{warn_msg} (job_id={job_id}, url={url})")
+                        # Scrub data URLs to avoid logging base64 payloads [REH]
+                        url_display = (
+                            f"<data-url:{url.split(',')[0]}>"
+                            if url.startswith("data:")
+                            else url[:100]
+                        )
+                        self.logger.warning(f"{warn_msg} (job_id={job_id}, url={url_display})")
 
             # Build VisionResponse with local paths
             response = VisionResponse(

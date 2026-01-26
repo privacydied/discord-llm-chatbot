@@ -871,6 +871,297 @@ class NovitaPlugin(ProviderPlugin):
         return float(base_cost + (pixels * per_px))
 
 
+class OpenRouterPlugin(ProviderPlugin):
+    def __init__(self, name: str, config: Dict[str, Any], api_key: str):
+        super().__init__(name, config, api_key)
+        self.base_url = config.get("base_url", "https://openrouter.ai/api/v1")
+        self.model_map = {
+            VisionTask.TEXT_TO_IMAGE: "black-forest-labs/flux.2-pro",
+        }
+
+    def capabilities(self) -> Dict[str, Any]:
+        return {
+            "modes": [VisionTask.TEXT_TO_IMAGE],
+            "max_size": (2048, 2048),
+            "max_steps": 0,
+            "supports_negative_prompt": False,
+            "supports_batch": False,
+            "nsfw_policy": "unknown",
+        }
+
+    def _is_gemini_model(self, model: str) -> bool:
+        try:
+            m = (model or "").lower()
+            return m.startswith("google/") or "gemini" in m
+        except Exception:
+            return False
+
+    def _aspect_ratio_for_dims(self, width: int, height: int) -> str:
+        ratios = [
+            (1.0, "1:1"),
+            (2 / 3, "2:3"),
+            (3 / 2, "3:2"),
+            (3 / 4, "3:4"),
+            (4 / 3, "4:3"),
+            (4 / 5, "4:5"),
+            (5 / 4, "5:4"),
+            (9 / 16, "9:16"),
+            (16 / 9, "16:9"),
+            (21 / 9, "21:9"),
+        ]
+        try:
+            w = max(1, int(width))
+            h = max(1, int(height))
+            r = w / h
+            best = min(ratios, key=lambda x: abs(x[0] - r))
+            return best[1]
+        except Exception:
+            return "1:1"
+
+    async def submit(self, request: NormalizedRequest) -> str:
+        await self.startup()
+        model = request.preferred_model or self.model_map.get(request.task)
+        if not model:
+            raise VisionError(
+                message=f"Task {request.task.value} not supported by OpenRouter",
+                error_type=VisionErrorType.UNSUPPORTED_TASK,
+                user_message=f"Sorry, {request.task.value} is not supported by this provider.",
+            )
+
+        payload: Dict[str, Any] = {
+            "model": model,
+            "messages": [{"role": "user", "content": request.prompt}],
+            "modalities": ["image", "text"],
+            "stream": False,
+        }
+        if self._is_gemini_model(model):
+            payload["image_config"] = {
+                "aspect_ratio": self._aspect_ratio_for_dims(request.width, request.height)
+            }
+
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+
+        try:
+            async with self.session.post(
+                f"{self.base_url}/chat/completions", json=payload, headers=headers
+            ) as response:
+                error_text = await response.text()
+
+                if response.status == 400:
+                    raise VisionError(
+                        message=f"OpenRouter invalid request: {error_text}",
+                        error_type=VisionErrorType.VALIDATION_ERROR,
+                        user_message="There was an issue with your request parameters. Please check and try again.",
+                    )
+                if response.status == 401:
+                    raise VisionError(
+                        message="OpenRouter authentication failed",
+                        error_type=VisionErrorType.AUTHENTICATION_ERROR,
+                        user_message="Vision service authentication failed. Please contact support.",
+                    )
+                if response.status == 429:
+                    raise VisionError(
+                        message="OpenRouter rate limit exceeded",
+                        error_type=VisionErrorType.RATE_LIMITED,
+                        user_message="Too many requests. Please wait a moment and try again.",
+                    )
+                if response.status >= 500:
+                    raise VisionError(
+                        message=f"OpenRouter server error: {error_text}",
+                        error_type=VisionErrorType.SERVER_ERROR,
+                        user_message="The vision service is temporarily unavailable. Please try again.",
+                    )
+                if response.status != 200:
+                    raise VisionError(
+                        message=f"OpenRouter error ({response.status}): {error_text}",
+                        error_type=VisionErrorType.PROVIDER_ERROR,
+                        user_message="Vision generation failed. Please try again.",
+                    )
+
+                result = await response.json()
+
+                # Debug: log response structure without raw data [REH]
+                logger.debug(
+                    f"OpenRouter response keys: {list(result.keys())}, "
+                    f"choices count: {len(result.get('choices') or [])}"
+                )
+
+                urls: List[str] = []
+
+                # Method 0: Check response-level 'data' array (DALL-E style) [CA]
+                response_data = result.get("data") or []
+                for item in response_data:
+                    if isinstance(item, dict):
+                        # Check for url, b64_json, or revised_prompt with embedded data
+                        if item.get("url"):
+                            urls.append(item["url"])
+                        elif item.get("b64_json"):
+                            # Convert b64_json to data URL
+                            urls.append(f"data:image/png;base64,{item['b64_json']}")
+
+                choices = result.get("choices") or []
+                message = (choices[0] or {}).get("message") if choices else None
+
+                if isinstance(message, dict):
+                    # Method 1: Check message.images array
+                    images = message.get("images") or []
+                    for item in images:
+                        # Handle string items directly (some models return URLs as strings)
+                        if isinstance(item, str) and item:
+                            urls.append(item)
+                            continue
+                        if not isinstance(item, dict):
+                            continue
+                        # Check various field names for image URL
+                        image_url = (
+                            item.get("image_url")
+                            or item.get("imageUrl")
+                            or item.get("url")
+                            or item.get("data")
+                        )
+                        if isinstance(image_url, str) and image_url:
+                            urls.append(image_url)
+                            continue
+                        if isinstance(image_url, dict):
+                            u = image_url.get("url")
+                            if isinstance(u, str) and u:
+                                urls.append(u)
+                        # Check for b64_json field
+                        if item.get("b64_json"):
+                            urls.append(f"data:image/png;base64,{item['b64_json']}")
+
+                    # Method 2: Check message.content array for image blocks [CA]
+                    content = message.get("content")
+                    if isinstance(content, list):
+                        for block in content:
+                            # Handle string blocks that might be data URLs
+                            if isinstance(block, str):
+                                if block.startswith("data:image"):
+                                    urls.append(block)
+                                continue
+                            if not isinstance(block, dict):
+                                continue
+                            block_type = block.get("type", "")
+                            if block_type == "image_url":
+                                img_url_obj = block.get("image_url")
+                                if isinstance(img_url_obj, str) and img_url_obj:
+                                    urls.append(img_url_obj)
+                                elif isinstance(img_url_obj, dict):
+                                    u = img_url_obj.get("url")
+                                    if isinstance(u, str) and u:
+                                        urls.append(u)
+                            elif block_type == "image":
+                                # Some models use type=image with url, data, or b64_json
+                                u = block.get("url") or block.get("data")
+                                if isinstance(u, str) and u:
+                                    urls.append(u)
+                                elif block.get("b64_json"):
+                                    urls.append(f"data:image/png;base64,{block['b64_json']}")
+                            # Check for b64_json at block level regardless of type
+                            elif block.get("b64_json"):
+                                urls.append(f"data:image/png;base64,{block['b64_json']}")
+
+                    # Method 3: Check for raw base64 in message.content string [REH]
+                    if isinstance(content, str):
+                        if content.startswith("data:image"):
+                            urls.append(content)
+                        # Some models embed base64 directly without data: prefix
+                        elif len(content) > 1000 and not content.startswith(("{", "[")):
+                            # Likely raw base64, wrap it
+                            try:
+                                # Validate it looks like base64
+                                import re
+                                if re.match(r'^[A-Za-z0-9+/=]+$', content[:100]):
+                                    urls.append(f"data:image/png;base64,{content}")
+                                    logger.debug("Detected raw base64 in message.content string")
+                            except Exception:
+                                pass
+
+                # Deduplicate while preserving order
+                seen = set()
+                unique_urls = []
+                for u in urls:
+                    if u not in seen:
+                        seen.add(u)
+                        unique_urls.append(u)
+                urls = unique_urls
+
+                if not urls:
+                    # Log response structure for debugging (without sensitive data)
+                    logger.warning(
+                        f"OpenRouter: No images found. Response structure: "
+                        f"keys={list(result.keys())}, "
+                        f"choices={len(choices)}, "
+                        f"message_keys={list(message.keys()) if isinstance(message, dict) else 'N/A'}"
+                    )
+                    raise VisionError(
+                        message="No images returned from provider",
+                        error_type=VisionErrorType.PROVIDER_ERROR,
+                        user_message="No images were returned by the provider.",
+                    )
+
+                # Log extracted images without dumping base64 data [REH]
+                url_summary = []
+                for u in urls:
+                    if isinstance(u, str) and u.startswith("data:"):
+                        # Summarize data URL without logging payload
+                        mime_part = u.split(",")[0] if "," in u else u[:50]
+                        url_summary.append(f"<data-url:{mime_part}>")
+                    else:
+                        url_summary.append(u[:100] if len(u) > 100 else u)
+                logger.debug(
+                    f"OpenRouter extracted {len(urls)} image(s): {url_summary}"
+                )
+
+                job_id = f"openrouter_{int(time.time() * 1000)}"
+                self._results = getattr(self, "_results", {})
+                self._results[job_id] = {
+                    "status": "completed",
+                    "assets": urls,
+                    "cost": 0.0,
+                    "model": model,
+                }
+                return job_id
+
+        except VisionError:
+            raise
+        except Exception as e:
+            raise VisionError(
+                message=f"OpenRouter connection error: {str(e)}",
+                error_type=VisionErrorType.CONNECTION_ERROR,
+                user_message="Unable to connect to vision service. Please try again.",
+            )
+
+    async def poll(self, job_id: str) -> UnifiedJobStatus:
+        results = getattr(self, "_results", {})
+        if job_id not in results:
+            return UnifiedJobStatus(
+                status=UnifiedStatus.FAILED,
+                progress_percentage=0,
+                phase="Job not found",
+            )
+        return UnifiedJobStatus(
+            status=UnifiedStatus.COMPLETED,
+            progress_percentage=100,
+            phase="Generation complete",
+            actual_cost=results[job_id].get("cost", 0.0),
+        )
+
+    async def fetch_result(self, job_id: str) -> UnifiedResult:
+        results = getattr(self, "_results", {})
+        job_data = results.get(job_id, {})
+        assets = list(job_data.get("assets") or [])
+        return UnifiedResult(
+            assets=assets,
+            final_cost=float(job_data.get("cost", 0.0) or 0.0),
+            provider_used="openrouter",
+            metadata={"model": job_data.get("model", "unknown")},
+        )
+
+
 class UnifiedVisionAdapter:
     """
     Unified Vision adapter with pluggable provider system [CA][REH][SFT]
@@ -888,6 +1179,13 @@ class UnifiedVisionAdapter:
         self.logger = get_logger(__name__)
         self.providers: Dict[str, ProviderPlugin] = {}
         self.provider_config = {}
+
+        self.allowed_providers = [
+            str(p).strip().lower()
+            for p in (config.get("VISION_ALLOWED_PROVIDERS") or [])
+            if str(p).strip()
+        ]
+        self.default_provider = str(config.get("VISION_DEFAULT_PROVIDER") or "").strip().lower()
 
         # Model override from environment [CMV]
         self.vision_model_override = config.get("VISION_MODEL", "").strip()
@@ -985,6 +1283,18 @@ class UnifiedVisionAdapter:
                             },
                         },
                     },
+                    {
+                        "name": "openrouter",
+                        "base_url": "https://openrouter.ai/api/v1",
+                        "api_key_env": "VISION_API_KEY",
+                        "enabled": True,
+                        "priority": 3,
+                        "price": {
+                            "image_base": 0.02,
+                            "image_per_px": 0.000005,
+                        },
+                        "limits": {"max_size": "2048x2048", "max_steps": 0},
+                    },
                 ],
             }
         }
@@ -999,6 +1309,9 @@ class UnifiedVisionAdapter:
 
             name = provider_config["name"]
 
+            if self.allowed_providers and name.lower() not in self.allowed_providers:
+                continue
+
             # Get API key from environment
             key_env = provider_config.get("api_key_env", "VISION_API_KEY")
             provider_key = self.config.get(key_env, api_key)
@@ -1012,6 +1325,8 @@ class UnifiedVisionAdapter:
                     plugin = TogetherPlugin(name, provider_config, provider_key)
                 elif name == "novita":
                     plugin = NovitaPlugin(name, provider_config, provider_key)
+                elif name == "openrouter":
+                    plugin = OpenRouterPlugin(name, provider_config, provider_key)
                 else:
                     self.logger.warning(f"Unknown provider: {name}")
                     continue
@@ -1024,7 +1339,7 @@ class UnifiedVisionAdapter:
 
     def _has_valid_credentials(self, provider_name: str) -> bool:
         """Best-effort credential presence check per provider [SFT].
-        Conservative: Together requires a provider-specific key; Novita can use NOVITA_API_KEY or fallback VISION_API_KEY.
+        Each provider checks for its specific key first, then falls back to VISION_API_KEY.
         """
         try:
             name = provider_name.split(":")[0].lower()
@@ -1038,6 +1353,12 @@ class UnifiedVisionAdapter:
                 key = (
                     self.config.get("TOGETHER_API_KEY")
                     or self.config.get("VISION_API_KEY_TOGETHER")
+                    or ""
+                )
+            elif name == "openrouter":
+                key = (
+                    self.config.get("OPENROUTER_API_KEY")
+                    or self.config.get("VISION_API_KEY")
                     or ""
                 )
             else:
@@ -1113,6 +1434,54 @@ class UnifiedVisionAdapter:
                 supports_advanced=True,
             )
 
+        # OpenRouter aliases [CA]
+        # Seedream 4.5
+        for alias in [
+            "openrouter:bytedance-seed/seedream-4.5",
+            "openrouter:seedream-4.5",
+            "seedream-4.5",
+            "seedream",
+        ]:
+            aliases[alias] = ModelSelection(
+                provider="openrouter",
+                endpoint="chat/completions",
+                model_hint="bytedance-seed/seedream-4.5",
+                supports_advanced=False,
+            )
+
+        # FLUX models via OpenRouter
+        for alias in [
+            "openrouter:flux-pro",
+            "openrouter:flux.2-pro",
+            "openrouter:black-forest-labs/flux-pro",
+        ]:
+            aliases[alias] = ModelSelection(
+                provider="openrouter",
+                endpoint="chat/completions",
+                model_hint="black-forest-labs/flux-pro",
+                supports_advanced=False,
+            )
+
+        # Gemini image models via OpenRouter
+        for alias in [
+            "openrouter:gemini-2.0-flash-exp",
+            "openrouter:google/gemini-2.0-flash-exp:free",
+        ]:
+            aliases[alias] = ModelSelection(
+                provider="openrouter",
+                endpoint="chat/completions",
+                model_hint="google/gemini-2.0-flash-exp:free",
+                supports_advanced=False,
+            )
+
+        # Generic OpenRouter alias (uses default model)
+        aliases["openrouter"] = ModelSelection(
+            provider="openrouter",
+            endpoint="chat/completions",
+            model_hint="black-forest-labs/flux-pro",
+            supports_advanced=False,
+        )
+
         return aliases
 
     def resolve_model_selection(
@@ -1134,6 +1503,7 @@ class UnifiedVisionAdapter:
         if ":" in self.vision_model_override:
             parts = self.vision_model_override.split(":", 1)
             provider_name = parts[0].lower()
+            model_part = parts[1] if len(parts) > 1 else None
 
             if provider_name in self.providers:
                 # Default to provider's primary endpoint
@@ -1151,9 +1521,21 @@ class UnifiedVisionAdapter:
                         model_hint="black-forest-labs/FLUX.1-schnell-Free",
                         supports_advanced=True,
                     )
+                elif provider_name == "openrouter":
+                    # OpenRouter: use the model part as-is if provided [CA]
+                    model_hint = model_part or "black-forest-labs/flux-pro"
+                    self.logger.info(
+                        f"Resolved VISION_MODEL '{self.vision_model_override}' → openrouter with model={model_hint}"
+                    )
+                    return ModelSelection(
+                        provider="openrouter",
+                        endpoint="chat/completions",
+                        model_hint=model_hint,
+                        supports_advanced=False,
+                    )
 
         self.logger.warning(
-            f" Unrecognized VISION_MODEL '{self.vision_model_override}', falling back to policy"
+            f"Unrecognized VISION_MODEL '{self.vision_model_override}', falling back to policy"
         )
         return None
 
@@ -1190,6 +1572,7 @@ class UnifiedVisionAdapter:
             input_image_url=request.input_image_url,
             batch_size=1,  # Start with single images
             safety_mode="strict",
+            preferred_model=request.preferred_model,
         )
 
     def select_provider(self, request: NormalizedRequest) -> Optional[ProviderPlugin]:
@@ -1273,6 +1656,29 @@ class UnifiedVisionAdapter:
         policy = self.provider_config.get("vision", {}).get("default_policy", {})
         normalized_request = self.normalize_request(request)
 
+        preferred_provider_obj = getattr(request, "preferred_provider", None)
+        if preferred_provider_obj is not None:
+            try:
+                preferred_name = preferred_provider_obj.value.lower()
+            except Exception:
+                preferred_name = str(preferred_provider_obj).strip().lower()
+
+            if self.allowed_providers and preferred_name not in self.allowed_providers:
+                raise VisionError(
+                    message=f"Provider '{preferred_name}' not allowed",
+                    error_type=VisionErrorType.VALIDATION_ERROR,
+                    user_message="That vision provider is not enabled. Please choose a different provider.",
+                    provider=None,
+                )
+
+            if preferred_name not in self.providers:
+                raise VisionError(
+                    message=f"Provider '{preferred_name}' is not configured",
+                    error_type=VisionErrorType.SYSTEM_ERROR,
+                    user_message="That vision provider is not available right now. Please try again later.",
+                    provider=None,
+                )
+
         # Check for VISION_MODEL override
         model_selection = self.resolve_model_selection(normalized_request)
 
@@ -1280,8 +1686,12 @@ class UnifiedVisionAdapter:
             # Use pinned model/provider/endpoint
             provider_order = [model_selection.provider]
             forced_endpoint = model_selection.endpoint
+            # Apply model_hint to normalized request so provider uses correct model [CA]
+            if model_selection.model_hint:
+                normalized_request.preferred_model = model_selection.model_hint
             self.logger.info(
-                f"🎯 Using VISION_MODEL override: {model_selection.provider}:{model_selection.endpoint}"
+                f"🎯 Using VISION_MODEL override: {model_selection.provider}:{model_selection.endpoint} "
+                f"(model={model_selection.model_hint})"
             )
         else:
             # Use policy-driven selection
@@ -1300,10 +1710,26 @@ class UnifiedVisionAdapter:
                     resolved_order.append(entry)
             provider_order = resolved_order
 
+        preferred_provider = preferred_provider_obj
+        if preferred_provider is not None:
+            try:
+                preferred_name = preferred_provider.value.lower()
+                provider_order = [preferred_name] + list(provider_order)
+            except Exception:
+                pass
+
+        if self.default_provider == "openrouter":
+            try:
+                provider_order = ["openrouter"] + [p for p in provider_order if p != "openrouter"]
+            except Exception:
+                pass
+
         # Filter by configured/healthy providers, preserving order [SFT]
         filtered_order: List[str] = []
         for name in provider_order:
             base = name.split(":")[0]
+            if self.allowed_providers and base.lower() not in self.allowed_providers:
+                continue
             if (
                 self._has_valid_credentials(base)
                 and self._is_provider_healthy(base)
