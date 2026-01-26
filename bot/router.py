@@ -71,7 +71,7 @@ from .threads.x_thread_unroll import unroll_author_thread
 from .web_extraction_service import web_extractor
 from .x_api_client import XApiClient
 from .action import BotAction
-from .command_parser import parse_command
+from .command_parser import COMMAND_MAP, parse_command
 from .utils.file_utils import download_file
 from .utils.attachment_text import read_attachment_text
 from .attachment_classifier import classify_attachments, AttachmentBucket, get_by_bucket
@@ -458,7 +458,7 @@ class Router:
                 "vxtwitter.com",
             }
 
-        # Gate for previously added early X-resolve (enabled by default for correctness) [KBT]
+        # Gate for early X-resolve (enabled by default for correctness) [KBT]
         try:
             self._x_early_resolve_enabled: bool = bool(
                 self.config.get("X_EARLY_RESOLVE_ENABLED", True)
@@ -1065,6 +1065,19 @@ class Router:
             ]
         )
 
+    def _is_twitter_status_url(self, url: str) -> bool:
+        """Check if URL is a Twitter/X status URL with extractable tweet ID [IV]"""
+        try:
+            u = str(url)
+        except Exception:
+            return False
+        try:
+            # Must have a valid tweet/status ID to be considered a status URL
+            tweet_id = XApiClient.extract_tweet_id(u)
+            return tweet_id is not None and len(tweet_id) > 0
+        except Exception:
+            return False
+
     def _register_x_frontend_context(
         self, url: str, frontend: Optional[str], primary: Optional[str]
     ) -> None:
@@ -1624,566 +1637,89 @@ class Router:
                             data = resp.json()
                         except Exception:
                             try:
-                                data = json.loads(resp.text)
+                                # If brotli is used and not auto-decoded, attempt manual decode [REH]
+                                enc = (resp.headers.get("content-encoding") or "").lower()
+                                if "br" in enc:
+                                    try:
+                                        import brotli  # type: ignore
+
+                                        decoded = brotli.decompress(resp.content)
+                                        data = json.loads(
+                                            decoded.decode("utf-8", errors="replace")
+                                        )
+                                    except Exception:
+                                        data = json.loads(resp.text)
                             except Exception:
                                 data = {}
-                        variants = []
-                        duration_s = None
+                        # Extract photo URLs from common shapes
+                        candidates: List[str] = []
+                        # Prefer high-res for pbs assets
+                        try:
+                            from .syndication.url_utils import (
+                                upgrade_pbs_to_orig,
+                            )  # lazy import to avoid cycles
+                        except Exception:
+
+                            def upgrade_pbs_to_orig(u):  # fallback passthrough
+                                return u
+
+                        # fx/vx often: {'tweet': {'media': {'photos':[{'url':...}]}}}
                         try:
                             tweet = (data.get("tweet") or data.get("status")) or {}
-                        except Exception:
-                            tweet = {}
-                        media = {}
-                        try:
-                            media = tweet.get("media") or data.get("media") or {}
-                        except Exception:
-                            media = {}
-                        try:
-                            vids = media.get("videos") or []
-                            for v in vids:
-                                for var in v.get("variants", []) or []:
-                                    variants.append(var)
-                                if not variants and v.get("url"):
-                                    variants.append({"url": v.get("url"), "content_type": v.get("content_type", "")})
-                                if not duration_s:
-                                    dms = v.get("duration_ms") or v.get("duration")
-                                    if isinstance(dms, (int, float)):
-                                        duration_s = float(dms) / (1000.0 if dms > 1000 else 1.0)
+                            media = tweet.get("media") or {}
+                            photos = media.get("photos") or []
+                            for p in photos:
+                                u = p.get("url") or p.get("src") or p.get("href")
+                                if isinstance(u, str):
+                                    candidates.append(upgrade_pbs_to_orig(u))
                         except Exception:
                             pass
-                        try:
-                            for var in media.get("variants", []) or []:
-                                variants.append(var)
-                        except Exception:
-                            pass
-                        pick = None
-                        if variants:
-                            def _score(v):
-                                ct = str(v.get("content_type", "")).lower()
-                                br = v.get("bitrate") or v.get("bit_rate") or 0
-                                urlv = str(v.get("url", ""))
-                                fmt_score = 2 if "mp4" in ct or urlv.endswith(".mp4") else (1 if "mpegurl" in ct or "m3u8" in urlv or "dash" in ct else 0)
-                                return (fmt_score, int(br) if isinstance(br, (int, float)) else 0)
+                        # Some variants: top-level 'photos'
+                        for p in data.get("photos") or []:
+                            if isinstance(p, dict) and p.get("url"):
+                                candidates.append(upgrade_pbs_to_orig(p.get("url")))
+                            elif isinstance(p, str):
+                                candidates.append(upgrade_pbs_to_orig(p))
+                        # Filter + HEAD verify
+                        uniq = []
+                        for u in candidates:
+                            if not u or not u.startswith("http"):
+                                continue
+                            if not _allowed(u):
+                                continue
+                            # Hard blocklist for X video poster thumbnails
                             try:
-                                pick = sorted(variants, key=_score, reverse=True)[0]
+                                pu = urlparse(u)
+                                host = (pu.netloc or "").lower()
+                                path = (pu.path or "").lower()
                             except Exception:
-                                pick = variants[0]
-                        if pick and pick.get("url"):
-                            media_url = self._unwrap_x_media_url(str(pick.get("url")))
-                            self._log_x_media_probe(primary, True, 0, frontend or frontend_for_log)
-                            return {
-                                "kind": "video",
-                                "url": media_url,
-                                "duration": duration_s,
-                                "src": src_name,
-                                "primary": primary,
-                                "frontend": frontend or frontend_for_log,
-                            }
-                    except Exception:
-                        continue
-            # 2) vx/fx HTML (fast)
-            if status_id and http is not None:
-                for src_name, host in (("vx_html", "vxtwitter.com"), ("fx_html", "fxtwitter.com")):
-                    try:
-                        self.logger.debug(f"x.resolve_try src={src_name} id={status_id}")
-                    except Exception:
-                        pass
-                    try:
-                        cfg = RequestConfig(
-                            connect_timeout=min(self._x_syn_timeout_s, 3.0),
-                            read_timeout=min(self._x_syn_timeout_s, 3.0),
-                            total_timeout=min(self._x_syn_timeout_s, 3.0),
-                            max_retries=0,
-                        )
-                        html_url = f"https://{host}/i/status/{status_id}"
-                        resp = await http.get(html_url, config=cfg)
-                        if getattr(resp, "status_code", 500) != 200 or not resp.text:
-                            continue
-                        text_html = resp.text
-                        m = re.search(r"https://video\.twimg\.com/[^\'\"\s]+", text_html, re.IGNORECASE)
-                        if m:
-                            media_url = self._unwrap_x_media_url(m.group(0))
-                            self._log_x_media_probe(primary, True, 0, frontend or frontend_for_log)
-                            return {
-                                "kind": "video",
-                                "url": media_url,
-                                "duration": None,
-                                "src": src_name,
-                                "primary": primary,
-                                "frontend": frontend or frontend_for_log,
-                            }
-                        m2 = re.search(r"<meta[^>]+property=[\'\"]og:video[\'\"][^>]+content=[\'\"]([^\"\']+)[\'\"]", text_html, re.IGNORECASE)
-                        if m2:
-                            media_url = self._unwrap_x_media_url(m2.group(1))
-                            self._log_x_media_probe(primary, True, 0, frontend or frontend_for_log)
-                            return {
-                                "kind": "video",
-                                "url": media_url,
-                                "duration": None,
-                                "src": src_name,
-                                "primary": primary,
-                                "frontend": frontend or frontend_for_log,
-                            }
-                    except Exception:
-                        continue
-            # 3) yt-dlp metadata probe (fallback)
-            meta = await self._yt_dlp_probe(u, timeout_s=min(getattr(self, '_x_syn_timeout_s', 3.0), 6.0))
-            if meta:
-                duration = None
-                try:
-                    d = meta.get("duration")
-                    if isinstance(d, (int, float)):
-                        duration = float(d)
-                except Exception:
-                    duration = None
-                has_formats = False
-                try:
-                    for f in meta.get("formats") or []:
-                        ac = str(f.get("acodec", ""))
-                        vc = str(f.get("vcodec", ""))
-                        if (ac and ac != "none") or (vc and vc != "none"):
-                            has_formats = True
-                            break
-                except Exception:
-                    has_formats = False
-                if duration or has_formats:
-                    media_url = self._unwrap_x_media_url(u)
-                    self._log_x_media_probe(primary, True, 0, frontend or frontend_for_log)
-                    return {
-                        "kind": "video",
-                        "url": media_url,
-                        "duration": duration,
-                        "src": "ytdlp_probe",
-                        "primary": primary,
-                        "frontend": frontend or frontend_for_log,
-                    }
-        images_all: List[str] = []
-        poster_detected_global = False
-        for u in clean:
-            status_id = self._parse_twitter_status_id(u)
-            lookup = self._normalize_x_url(u)
-            ctx = self._x_frontend_canon.get(lookup) or self._x_frontend_canon.get(u) or {}
-            frontend = frontend_hints.get(lookup) or ctx.get('frontend')
-            primary = primary_hints.get(lookup) or ctx.get('primary') or status_id
-            if primary and not primary_for_log:
-                primary_for_log = primary
-            if frontend and not frontend_for_log:
-                frontend_for_log = frontend
-            if not status_id:
-                continue
-            attempt = 0
-            imgs: List[str] = []
-            while attempt < 2 and not imgs:
-                attempt += 1
-                try:
-                    imgs = await asyncio.wait_for(
-                        self._probe_twitter_syndication_images(u, status_id),
-                        timeout=min(getattr(self, '_x_syn_timeout_s', 3.0) + 0.5, 4.0),
-                    )
-                except asyncio.TimeoutError:
-                    try:
-                        self.logger.info(
-                            "timeout_fallback",
-                            extra={
-                                "subsys": "tw",
-                                "event": "timeout_fallback",
-                                "detail": {"reason": "timeout"},
-                            },
-                        )
-                    except Exception:
-                        pass
-                    imgs = []
-                except Exception:
-                    imgs = []
-            poster_prefixes = (
-                "/amplify_video_thumb/",
-                "/ext_tw_video_thumb/",
-                "/tweet_video_thumb/",
-            )
-            for im in imgs:
-                try:
-                    pu = urlparse(im)
-                    host = (pu.netloc or "").lower()
-                    path = (pu.path or "").lower()
-                except Exception:
-                    host = ""
-                    path = ""
-                if host.endswith("pbs.twimg.com") and any(pref in path for pref in poster_prefixes):
-                    poster_detected_global = True
-                    try:
-                        matched = next((pref for pref in poster_prefixes if pref in path), "poster_thumb")
-                        self.logger.info(
-                            "x.image_probe.video_poster_detected",
-                            extra={
-                                "event": "x.image_probe.video_poster_detected",
-                                "detail": {"domain": host, "path": matched},
-                            },
-                        )
-                    except Exception:
-                        pass
-                    continue
-                if im not in images_all:
-                    images_all.append(im)
-            if poster_detected_global or images_all:
-                break
-        if poster_detected_global:
-            self._log_x_media_probe(primary_for_log, True, 0, frontend_for_log)
-            return {
-                "kind": "video",
-                "src": "pbs_thumb",
-                "primary": primary_for_log,
-                "frontend": frontend_for_log,
-            }
-        if images_all:
-            try:
-                self.logger.info(
-                    "media_found",
-                    extra={
-                        "subsys": "tw",
-                        "event": "media_found",
-                        "detail": {"kind": "photos", "count": len(images_all)},
-                    },
-                )
-            except Exception:
-                pass
-            self._log_x_media_probe(primary_for_log, False, len(images_all), frontend_for_log)
-            return {
-                "kind": "image",
-                "images": images_all,
-                "src": "pbs_media",
-                "primary": primary_for_log,
-                "frontend": frontend_for_log,
-            }
-        self._log_x_media_probe(primary_for_log, False, 0, frontend_for_log)
-        return {
-            "kind": "unknown",
-            "reason": "no-formats",
-            "primary": primary_for_log,
-            "frontend": frontend_for_log,
-        }
-
-    # ---- New helpers for targeted syndication image probe on no-formats [REH][PA] ----
-    @staticmethod
-    def _parse_twitter_status_id(url: str) -> Optional[str]:
-        try:
-            # Prefer centralized extractor if available
-            tid = XApiClient.extract_tweet_id(str(url))
-            if tid:
-                return tid
-        except Exception:
-            pass
-        try:
-            u = str(url)
-            # Support both /{user}/status/<id> and /i/status/<id>
-            m = re.search(r"/(?:[\w_]+/status|i/status)/(\d{5,20})(?:\D|$)", u, re.IGNORECASE)
-            if m:
-                return m.group(1)
-        except Exception:
-            return None
-        return None
-
-    @staticmethod
-    def _is_twitter_status_url(url: str) -> bool:
-        try:
-            if not Router._is_twitter_url(url):
-                return False
-            return Router._parse_twitter_status_id(url) is not None
-        except Exception:
-            return False
-
-    @staticmethod
-    def _canonicalize_twitter_status_url(url: str) -> str:
-        try:
-            p = urlparse(url)
-            path = p.path or ""
-            # Normalize host to x.com
-            return urlunparse(("https", "x.com", path, "", "", ""))
-        except Exception:
-            pass
-    def _extract_primary_tweet_id(self, url: str) -> Optional[str]:
-        """Extract the primary tweet ID from a Twitter/X URL."""
-        try:
-            parsed = urlparse(url)
-            path_parts = parsed.path.strip("/").split("/")
-            if len(path_parts) >= 3 and path_parts[0] in ("i", "status"):
-                # Handle /i/status/{id} format
-                if path_parts[0] == "i" and path_parts[1] == "status" and len(path_parts) > 2:
-                    return path_parts[2]
-            elif len(path_parts) >= 2 and path_parts[0] not in ("i", "status"):
-                # Handle /{username}/status/{id} format
-                if "status" in path_parts and len(path_parts) > path_parts.index("status") + 1:
-                    status_idx = path_parts.index("status")
-                    return path_parts[status_idx + 1]
-        except Exception:
-            pass
-        return None
-                # Handle /{username}/status/{id} format
-
-    def _select_twitter_media(self, primary_tweet_id: str, tweet_data: Dict[str, Any]) -> Tuple[Optional[str], int, bool]:
-        """Select the best media URL for the primary tweet using Tier 1/2/3 ranking.
-        
-        Returns: (selected_url, selection_tier, has_audio)
-        """
-        candidates = []
-        
-        # Build candidate list from tweet media
-        extended_entities = tweet_data.get("extended_entities", {})
-        media_items = extended_entities.get("media", [])
-        
-        for media in media_items:
-            if media.get("type") in ("video", "animated_gif"):
-                media_tweet_id = media.get("id_str")
-                variants = media.get("video_info", {}).get("variants", [])
-                
-                for variant in variants:
-                    if variant.get("content_type") == "video/mp4":
-                        candidates.append({
-                            "tweet_id": media_tweet_id,
-                            "url": variant["url"],
-                            "content_type": "video/mp4",
-                            "bitrate": variant.get("bitrate", 0),
-                            "type": media["type"]
-                        })
-        
-        # Add quoted/retweeted candidates if primary has no media
-        if not candidates:
-            # Check quoted tweet
-            quoted = tweet_data.get("quoted_status")
-            if quoted:
-                quoted_extended = quoted.get("extended_entities", {})
-                for media in quoted_extended.get("media", []):
-                    if media.get("type") in ("video", "animated_gif"):
-                        variants = media.get("video_info", {}).get("variants", [])
-                        for variant in variants:
-                            if variant.get("content_type") == "video/mp4":
-                                candidates.append({
-                                    "tweet_id": media.get("id_str"),
-                                    "url": variant["url"],
-                                    "content_type": "video/mp4",
-                                    "bitrate": variant.get("bitrate", 0),
-                                    "type": media["type"]
-                                })
-        
-        # Add retweeted candidates if still no candidates
-        if not candidates:
-            retweeted = tweet_data.get("retweeted_status")
-            if retweeted:
-                retweeted_extended = retweeted.get("extended_entities", {})
-                for media in retweeted_extended.get("media", []):
-                    if media.get("type") in ("video", "animated_gif"):
-                        variants = media.get("video_info", {}).get("variants", [])
-                        for variant in variants:
-                            if variant.get("content_type") == "video/mp4":
-                                candidates.append({
-                                    "tweet_id": media.get("id_str"),
-                                    "url": variant["url"],
-                                    "content_type": "video/mp4",
-                                    "bitrate": variant.get("bitrate", 0),
-                                    "type": media["type"]
-                                })
-        
-        if not candidates:
-            return None, 0, False
-        
-        # Rank candidates: Tier 1 = primary tweet video, Tier 2 = quoted, Tier 3 = retweeted
-        tier1 = [c for c in candidates if c["tweet_id"] == primary_tweet_id and c["type"] == "video"]
-        tier2 = [c for c in candidates if c["tweet_id"] != primary_tweet_id and any(
-            quoted.get("id_str") == c["tweet_id"] for quoted in [tweet_data.get("quoted_status")])]
-        tier3 = [c for c in candidates if c not in tier1 and c not in tier2]
-        
-        # Select from highest tier, preferring highest bitrate
-        selected = None
-        selection_tier = 0
-        
-        if tier1:
-            selected = max(tier1, key=lambda x: x["bitrate"])
-            selection_tier = 1
-        elif tier2:
-            selected = max(tier2, key=lambda x: x["bitrate"])
-            selection_tier = 2
-        elif tier3:
-            selected = max(tier3, key=lambda x: x["bitrate"])
-            selection_tier = 3
-        
-        # Basic audio check (prefer variants with audio streams)
-        has_audio = selected and selected.get("bitrate", 0) > 0  # Higher bitrate often indicates audio
-        
-        return selected["url"] if selected else None, selection_tier, has_audio
-
-    async def _probe_twitter_syndication_images(
-        self, url: str, status_id: str
-    ) -> List[str]:
-        """Probe fx/vx API then HTML/meta for high-res images. Short, bounded budgets.
-        Returns unique HTTPS image URLs, filtered and content-type verified.
-        """
-        images: List[str] = []
-        try:
-            http = await get_http_client()
-        except Exception:
-            http = None
-
-        # Helper: content-type image HEAD check
-        async def _is_image(u: str) -> bool:
-            if http is None:
-                return True  # best-effort
-            cfg = RequestConfig(
-                connect_timeout=min(self._x_syn_timeout_s, 3.0),
-                read_timeout=min(self._x_syn_timeout_s, 3.0),
-                total_timeout=min(self._x_syn_timeout_s + 0.5, 3.5),
-                max_retries=0,
-            )
-            # Use referer + real UA for pbs compatibility [IV]
-            import os as _os
-
-            headers = {
-                "Referer": _os.getenv("IMAGEDL_REFERER", "https://x.com/"),
-                "User-Agent": _os.getenv(
-                    "IMAGEDL_USER_AGENT",
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36",
-                ),
-                "Accept": "image/*,*/*;q=0.8",
-            }
-            try:
-                r = await http.head(u, config=cfg, headers=headers)
-                ctype = (r.headers.get("content-type") or "").lower()
-                if ctype.startswith("image/"):
-                    return True
-                # Some CDNs block HEAD; fall back to lightweight GET
-                if r.status_code in (403, 405):
-                    g = await http.get(u, config=cfg, headers=headers)
-                    ctype_g = (g.headers.get("content-type") or "").lower()
-                    return ctype_g.startswith("image/")
-                return False
-            except Exception:
-                # Last resort: small GET probe
-                try:
-                    g = await http.get(u, config=cfg, headers=headers)
-                    ctype_g = (g.headers.get("content-type") or "").lower()
-                    return ctype_g.startswith("image/")
-                except Exception:
-                    return False
-
-        # Helper: allowlist filter
-        def _allowed(u: str) -> bool:
-            try:
-                host = urlparse(u).netloc.lower()
-                host = host.split(":")[0]
-                return host in self._x_syn_accept_domains
-            except Exception:
-                return False
-
-        # Stage 1: API probes (fx → vx)
-        api_hosts = ["api.fxtwitter.com", "api.vxtwitter.com"]
-        if http is not None and self._x_syn_probe_enabled:
-            for host in api_hosts:
-                try:
-                    api_url = f"https://{host}/status/{status_id}"
-                    cfg = RequestConfig(
-                        connect_timeout=self._x_syn_timeout_s,
-                        read_timeout=self._x_syn_timeout_s,
-                        total_timeout=self._x_syn_timeout_s,
-                        max_retries=0,
-                    )
-                    resp = await http.get(api_url, config=cfg)
-                    if resp.status_code != 200:
-                        self.logger.debug(
-                            f"x.syndication.api.non200 | host={host} status={resp.status_code}"
-                        )
-                        continue
-                    data = {}
-                    try:
-                        # Prefer native JSON parsing to avoid encoding/CE pitfalls [REH]
-                        data = resp.json()
-                    except Exception:
-                        try:
-                            # If brotli is used and not auto-decoded, attempt manual decode [REH]
-                            enc = (resp.headers.get("content-encoding") or "").lower()
-                            if "br" in enc:
+                                host = ""
+                                path = ""
+                            poster_prefixes = (
+                                "/amplify_video_thumb/",
+                                "/ext_tw_video_thumb/",
+                                "/tweet_video_thumb/",
+                            )
+                            if host.endswith("pbs.twimg.com") and any(pref in path for pref in poster_prefixes):
                                 try:
-                                    import brotli  # type: ignore
-
-                                    decoded = brotli.decompress(resp.content)
-                                    data = json.loads(
-                                        decoded.decode("utf-8", errors="replace")
+                                    matched = next((pref for pref in poster_prefixes if pref in path), "poster_thumb")
+                                    self.logger.info(
+                                        "x.image_probe.video_poster_detected",
+                                        extra={
+                                            "event": "x.image_probe.video_poster_detected",
+                                            "detail": {"domain": host, "path": matched},
+                                        },
                                     )
                                 except Exception:
-                                    data = json.loads(resp.text)
-                            else:
-                                data = json.loads(resp.text)
-                        except Exception:
-                            self.logger.debug(
-                                f"x.syndication.api.json_error | host={host}"
-                            )
-                            data = {}
-                    # Extract photo URLs from common shapes
-                    candidates: List[str] = []
-                    # Prefer high-res for pbs assets
-                    try:
-                        from .syndication.url_utils import (
-                            upgrade_pbs_to_orig,
-                        )  # lazy import to avoid cycles
-                    except Exception:
-
-                        def upgrade_pbs_to_orig(u):  # fallback passthrough
-                            return u
-
-                    # fx/vx often: {'tweet': {'media': {'photos':[{'url':...}]}}}
-                    try:
-                        tweet = (data.get("tweet") or data.get("status")) or {}
-                        media = tweet.get("media") or {}
-                        photos = media.get("photos") or []
-                        for p in photos:
-                            u = p.get("url") or p.get("src") or p.get("href")
-                            if isinstance(u, str):
-                                candidates.append(upgrade_pbs_to_orig(u))
-                    except Exception:
-                        pass
-                    # Some variants: top-level 'photos'
-                    for p in data.get("photos") or []:
-                        if isinstance(p, dict) and p.get("url"):
-                            candidates.append(upgrade_pbs_to_orig(p.get("url")))
-                        elif isinstance(p, str):
-                            candidates.append(upgrade_pbs_to_orig(p))
-                    # Filter + HEAD verify
-                    uniq = []
-                    for u in candidates:
-                        if not u or not u.startswith("http"):
-                            continue
-                        if not _allowed(u):
-                            continue
-                        # Hard blocklist for X video poster thumbnails
-                        try:
-                            pu = urlparse(u)
-                            host = (pu.netloc or "").lower()
-                            path = (pu.path or "").lower()
-                        except Exception:
-                            host = ""
-                            path = ""
-                        poster_prefixes = (
-                            "/amplify_video_thumb/",
-                            "/ext_tw_video_thumb/",
-                            "/tweet_video_thumb/",
-                        )
-                        if host.endswith("pbs.twimg.com") and any(pref in path for pref in poster_prefixes):
-                            try:
-                                matched = next((pref for pref in poster_prefixes if pref in path), "poster_thumb")
-                                self.logger.info(
-                                    "x.image_probe.video_poster_detected",
-                                    extra={
-                                        "event": "x.image_probe.video_poster_detected",
-                                        "detail": {"domain": host, "path": matched},
-                                    },
-                                )
-                            except Exception:
-                                pass
-                            continue  # do not accept poster as photo
-                        if u not in uniq and await _is_image(u):
-                            uniq.append(u)
-                    if uniq:
-                        images.extend(uniq)
-                        break  # API success
-                except Exception as e:
-                    self.logger.debug(f"x.syndication.api.error | host={host} err={e}")
+                                    pass
+                                continue  # do not accept poster as photo
+                            if u not in uniq and await _is_image(u):
+                                uniq.append(u)
+                        if uniq:
+                            images.extend(uniq)
+                            break  # API success
+                    except Exception as e:
+                        self.logger.debug(f"x.syndication.api.error | host={host} err={e}")
 
         # Stage 2: HTML/meta fallback on fx/vx
         if not images and http is not None and self._x_syn_probe_enabled:
@@ -3296,6 +2832,21 @@ class Router:
                 if cmd != Command.CHAT:
                     self.logger.info(
                         f"Found command '{parsed_command.command.name}', delegating to cog. (msg_id: {message.id})"
+                    )
+                    return BotAction(meta={"delegated_to_cog": True})
+
+            if not parsed_command and clean_content.startswith("!"):
+                matched = None
+                try:
+                    for key in sorted(COMMAND_MAP.keys(), key=len, reverse=True):
+                        if clean_content == key or clean_content.startswith(f"{key} "):
+                            matched = key
+                            break
+                except Exception:
+                    matched = None
+                if matched:
+                    self.logger.info(
+                        f"Found command '{matched}', delegating to cog. (msg_id: {message.id})"
                     )
                     return BotAction(meta={"delegated_to_cog": True})
 
