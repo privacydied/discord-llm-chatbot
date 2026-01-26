@@ -172,8 +172,17 @@ class LLMBot(commands.Bot):
         Prevents CommandNotFound surfacing for plain text that should be routed elsewhere.
         """
         content = (getattr(message, "content", "") or "").strip()
-        prefix = str(self.command_prefix or "")
-        if not content.startswith(prefix):
+        try:
+            prefixes = await self.get_prefix(message)
+        except Exception:
+            prefixes = self.command_prefix
+        if prefixes is None:
+            prefix_list: list[str] = []
+        elif isinstance(prefixes, (list, tuple)):
+            prefix_list = [str(p) for p in prefixes if p is not None]
+        else:
+            prefix_list = [str(prefixes)]
+        if not any(content.startswith(p) for p in prefix_list if p):
             return None
 
         ctx = await self.get_context(message)
@@ -705,7 +714,8 @@ class LLMBot(commands.Bot):
                             if self.router
                             else None
                         )
-                        if gate_reason:
+                        is_cmd = await self._message_is_command(message)
+                        if gate_reason and not is_cmd:
                             try:
                                 self.logger.info(
                                     f"gate.drop | reason={gate_reason} msg_id:{message.id}",

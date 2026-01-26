@@ -56,6 +56,7 @@ class VisionJobStore:
 
         # File locking for concurrent access
         self._locks: Dict[str, asyncio.Lock] = {}
+        self._ledger_lock = asyncio.Lock()
 
         self.logger.info(
             f"Vision Job Store initialized - jobs_dir: {self.jobs_dir}, ledger_path: {self.ledger_path}"
@@ -376,24 +377,20 @@ class VisionJobStore:
     async def _append_ledger_entry(self, entry: Dict[str, Any]) -> None:
         """Append entry to JSONL ledger file [CMV]"""
         try:
-            async with aiofiles.open(self.ledger_path, "a") as f:
-                fd = None
-                try:
-                    fd = f.fileno()  # type: ignore[attr-defined]
-                except Exception:
-                    fd = None
-
-                if fd is not None:
-                    fcntl.flock(fd, fcntl.LOCK_EX)
-                try:
+            # Use async lock instead of blocking fcntl.flock to prevent deadlocks
+            async with self._ledger_lock:
+                async with aiofiles.open(self.ledger_path, "a") as f:
                     line = json.dumps(entry, ensure_ascii=False) + "\n"
                     await f.write(line)
                     await f.flush()
-                    if fd is not None:
-                        os.fsync(fd)
-                finally:
-                    if fd is not None:
-                        fcntl.flock(fd, fcntl.LOCK_UN)
+
+                    # Force sync to disk for data integrity
+                    if hasattr(f, "fileno"):
+                        try:
+                            fd = f.fileno()  # type: ignore[attr-defined]
+                            os.fsync(fd)
+                        except Exception:
+                            pass
         except Exception as e:
             self.logger.debug(f"Ledger append failed: {e}")
 

@@ -457,6 +457,13 @@ class VisionOrchestratorV2:
                     },
                 )
 
+                # Cleanup completed job watchers
+                try:
+                    watcher_registry = get_watcher_registry()
+                    await watcher_registry.cleanup_completed_watchers()
+                except Exception as e:
+                    self.logger.warning(f"Failed to cleanup job watchers: {e}")
+
             except asyncio.CancelledError:
                 break
             except Exception as e:

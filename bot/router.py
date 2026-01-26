@@ -1065,66 +1065,6 @@ class Router:
             ]
         )
 
-    def _is_twitter_status_url(self, url: str) -> bool:
-        """Check if URL is a Twitter/X status URL with extractable tweet ID [IV]"""
-        try:
-            u = str(url)
-        except Exception:
-            return False
-        try:
-            # Must have a valid tweet/status ID to be considered a status URL
-            tweet_id = XApiClient.extract_tweet_id(u)
-            return tweet_id is not None and len(tweet_id) > 0
-        except Exception:
-            return False
-
-    def _parse_twitter_status_id(self, url: str) -> Optional[str]:
-        """Extract tweet/status ID from a Twitter/X URL [IV]"""
-        try:
-            return XApiClient.extract_tweet_id(str(url))
-        except Exception:
-            return None
-
-    async def _probe_twitter_syndication_images(
-        self, url: str, status_id: str
-    ) -> List[str]:
-        """Probe Twitter syndication API for images associated with a tweet [PA][REH]
-
-        Returns list of image URLs or empty list on failure.
-        """
-        if not status_id:
-            return []
-        try:
-            # Use existing syndication fetch method
-            syn_data = await self._get_tweet_via_syndication(status_id)
-            if not isinstance(syn_data, dict):
-                return []
-
-            images: List[str] = []
-
-            # Extract from 'photos' array (most common)
-            photos = syn_data.get("photos") or []
-            for photo in photos:
-                if isinstance(photo, dict):
-                    photo_url = photo.get("url") or photo.get("media_url")
-                    if photo_url and isinstance(photo_url, str):
-                        images.append(photo_url)
-                elif isinstance(photo, str):
-                    images.append(photo)
-
-            # Also check 'mediaDetails' for additional media
-            media_details = syn_data.get("mediaDetails") or []
-            for media in media_details:
-                if isinstance(media, dict):
-                    media_url = media.get("media_url_https") or media.get("media_url")
-                    if media_url and isinstance(media_url, str) and media_url not in images:
-                        images.append(media_url)
-
-            return images
-        except Exception as e:
-            self.logger.debug(f"Syndication image probe failed for {status_id}: {e}")
-            return []
-
     def _register_x_frontend_context(
         self, url: str, frontend: Optional[str], primary: Optional[str]
     ) -> None:
@@ -8817,7 +8757,12 @@ class Router:
         Returns:
             BotAction with generation result or error message
         """
+        # Generate unique request ID for tracking
+        request_id = f"{message.id}_{int(message.created_at.timestamp())}"
+        self.logger.info(f"Starting vision generation - request_id: {request_id}, user_id: {message.author.id}")
+
         if not self._vision_orchestrator:
+            self.logger.error(f"Vision orchestrator not available - request_id: {request_id}")
             return BotAction(
                 content="🚫 Vision generation is not available right now. Please try again later.",
                 error=True,
@@ -8854,10 +8799,15 @@ class Router:
 
             # Submit job to orchestrator
             self.logger.info(
-                f"🎨 Submitting Vision job: {task_enum.value} (msg_id: {message.id})"
+                f"🎨 Submitting Vision job: {task_enum.value} (request_id: {request_id}, msg_id: {message.id})"
             )
 
-            job = await self._vision_orchestrator.submit_job(vision_request)
+            try:
+                job = await self._vision_orchestrator.submit_job(vision_request)
+                self.logger.info(f"Vision job submitted successfully - job_id: {job.job_id[:8]} (request_id: {request_id})")
+            except Exception as e:
+                self.logger.error(f"Vision job submission failed - request_id: {request_id}, error: {e}")
+                raise
 
             # Initial message uses compact working card
             initial_embed = self._build_vision_status_embed(
@@ -8873,7 +8823,7 @@ class Router:
 
         except Exception as e:
             self.logger.error(
-                f"❌ Vision generation failed: {e} (msg_id: {message.id})",
+                f"❌ Vision generation failed: {e} (request_id: {request_id}, msg_id: {message.id})",
                 exc_info=True,
             )
 

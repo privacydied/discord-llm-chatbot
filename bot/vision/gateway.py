@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import os
+import time
 from urllib.parse import urlparse, unquote
 from pathlib import Path
 from typing import Dict, List, Optional, Any
@@ -52,6 +53,7 @@ class VisionGateway:
         # Initialize unified adapter
         self.adapter = UnifiedVisionAdapter(self.config)
         self.active_jobs: Dict[str, Dict[str, Any]] = {}
+        self._active_jobs_lock = asyncio.Lock()
 
         # Initialize pricing table for cost calculations [CA]
         self.pricing_table = get_pricing_table()
@@ -110,21 +112,23 @@ class VisionGateway:
             )  # replace provisional id with provider-qualified id
             provider_name = response.provider.value
 
-            # Track job metadata
-            self.active_jobs[job_id] = {
-                "request": request,
-                "provider": provider_name,
-                "start_time": asyncio.get_event_loop().time(),
-                "last_poll": 0,
-            }
+            # Track job metadata with thread-safe access
+            async with self._active_jobs_lock:
+                self.active_jobs[job_id] = {
+                    "request": request,
+                    "provider": provider_name,
+                    "start_time": asyncio.get_event_loop().time(),
+                    "last_poll": 0,
+                }
 
             self.logger.info(f"Job {job_id} submitted to provider {provider_name}")
             return job_id
 
         except Exception as e:
-            # Clean up failed job
-            if job_id in self.active_jobs:
-                del self.active_jobs[job_id]
+            # Clean up failed job with thread-safe access
+            async with self._active_jobs_lock:
+                if job_id in self.active_jobs:
+                    del self.active_jobs[job_id]
 
             self.logger.error(
                 f"Vision gateway failed for job {job_id}: {e}", exc_info=True
@@ -266,8 +270,9 @@ class VisionGateway:
             # Poll through unified adapter
             status = await self.adapter.poll(job_id)
 
-            # Update last poll time
-            self.active_jobs[job_id]["last_poll"] = asyncio.get_event_loop().time()
+            # Update last poll time with thread-safe access
+            async with self._active_jobs_lock:
+                self.active_jobs[job_id]["last_poll"] = asyncio.get_event_loop().time()
 
             # Convert unified status to gateway format
             return {
@@ -324,11 +329,17 @@ class VisionGateway:
             saved_artifacts: List[Path] = []
             warnings: List[str] = []
             total_size = 0
+
+            # Create job-specific artifacts directory to prevent collisions
             artifacts_dir = (
                 Path(self.config.get("VISION_ARTIFACTS_DIR", "vision_artifacts"))
-                / job_id
+                / f"{job_id}_{int(time.time())}"  # Add timestamp for uniqueness
             )
             artifacts_dir.mkdir(parents=True, exist_ok=True)
+
+            self.logger.info(
+                f"Created artifacts directory: {artifacts_dir} for job {job_id[:8]}"
+            )
 
             timeout = aiohttp.ClientTimeout(total=30)
             async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -385,7 +396,9 @@ class VisionGateway:
                     }
                     return mime_map.get(mime_type, ".png")
 
-                def _try_decode_data_image_url(url: str) -> tuple[Optional[bytes], Optional[str]]:
+                def _try_decode_data_image_url(
+                    url: str,
+                ) -> tuple[Optional[bytes], Optional[str]]:
                     """Decode data:image/*;base64,... URLs.
                     Returns (bytes, mime_type) or (None, None) if not a decodable data URL.
                     """
@@ -410,7 +423,9 @@ class VisionGateway:
                         if data_bytes is not None and data_mime is not None:
                             base_name = f"generated_{job_id}_{idx}"
                             proper_extension = _get_extension_from_mime(data_mime)
-                            proper_final_path = artifacts_dir / f"{base_name}{proper_extension}"
+                            proper_final_path = (
+                                artifacts_dir / f"{base_name}{proper_extension}"
+                            )
                             with open(proper_final_path, "wb") as f:
                                 f.write(data_bytes)
                             file_size = proper_final_path.stat().st_size
@@ -478,7 +493,9 @@ class VisionGateway:
                             if url.startswith("data:")
                             else url[:100]
                         )
-                        self.logger.warning(f"{warn_msg} (job_id={job_id}, url={url_display})")
+                        self.logger.warning(
+                            f"{warn_msg} (job_id={job_id}, url={url_display})"
+                        )
 
             # Build VisionResponse with local paths
             response = VisionResponse(
@@ -496,8 +513,9 @@ class VisionGateway:
                 warnings=warnings,
             )
 
-            # Clean up completed job
-            del self.active_jobs[job_id]
+            # Clean up completed job with thread-safe access
+            async with self._active_jobs_lock:
+                del self.active_jobs[job_id]
 
             self.logger.info(
                 f"Job {job_id} completed successfully; assets_saved={len(saved_artifacts)}/"
@@ -507,9 +525,10 @@ class VisionGateway:
 
         except Exception as e:
             self.logger.error(f"Failed to get result for job {job_id}: {e}")
-            # Clean up failed job
-            if job_id in self.active_jobs:
-                del self.active_jobs[job_id]
+            # Clean up failed job with thread-safe access
+            async with self._active_jobs_lock:
+                if job_id in self.active_jobs:
+                    del self.active_jobs[job_id]
             return None
 
     async def cancel_job(self, job_id: str) -> bool:
@@ -528,7 +547,9 @@ class VisionGateway:
         try:
             success = await self.adapter.cancel(job_id)
             if success:
-                del self.active_jobs[job_id]
+                async with self._active_jobs_lock:
+                    if job_id in self.active_jobs:
+                        del self.active_jobs[job_id]
                 self.logger.info(f"Job {job_id} cancelled")
             return success
 

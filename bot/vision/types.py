@@ -52,6 +52,7 @@ class VisionProvider(Enum):
 
     TOGETHER = "together"
     NOVITA = "novita"
+    OPENROUTER = "openrouter"
 
 
 class VisionJobState(Enum):

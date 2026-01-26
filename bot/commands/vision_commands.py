@@ -69,7 +69,7 @@ class VisionCommands(commands.Cog):
         negative: Optional[str] = None,
         seed: Optional[int] = None,
         count: Optional[app_commands.Range[int, 1, 4]] = 1,
-        provider: Optional[Literal["together", "novita", "auto"]] = "auto",
+        provider: Optional[Literal["together", "novita", "openrouter", "auto"]] = "auto",
         model: Optional[str] = None,
     ):
         """Handle /image slash command"""

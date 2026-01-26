@@ -12,6 +12,7 @@ Implements the fixes from the "stop debug spam" prompt:
 import asyncio
 import random
 import time
+import threading
 from typing import Dict, Set
 from bot.utils.logging import get_logger
 
@@ -252,14 +253,46 @@ class JobWatcherRegistry:
         active_count = sum(1 for task in self._watchers.values() if not task.done())
         return active_count
 
+    async def cleanup_completed_watchers(self) -> None:
+        """Clean up completed watchers to prevent memory leaks [RM]"""
+        completed_job_ids = []
+        for job_id, task in self._watchers.items():
+            if task.done():
+                completed_job_ids.append(job_id)
 
-# Global registry instance
+        for job_id in completed_job_ids:
+            del self._watchers[job_id]
+            if job_id in self._finalized_jobs:
+                self._finalized_jobs.remove(job_id)
+            if job_id in self._last_states:
+                del self._last_states[job_id]
+            if job_id in self._poll_counts:
+                del self._poll_counts[job_id]
+
+        logger.debug(f"Cleaned up {len(completed_job_ids)} completed watchers")
+
+    def force_cleanup_all(self) -> None:
+        """Force cleanup all watchers (emergency cleanup)"""
+        self._watchers.clear()
+        self._finalized_jobs.clear()
+        self._last_states.clear()
+        self._poll_counts.clear()
+        logger.info("Force cleanup completed - all watcher state cleared")
+
+
+# Global registry instance with thread-safe access
 _global_registry = None
+_registry_lock = threading.Lock()
 
 
 def get_watcher_registry() -> JobWatcherRegistry:
-    """Get or create global watcher registry instance"""
+    """Get or create global watcher registry instance with thread-safe access [REH]"""
     global _global_registry
     if _global_registry is None:
-        _global_registry = JobWatcherRegistry()
+        # Double-checked locking pattern for thread safety
+        with _registry_lock:
+            # Double-check inside lock
+            if _global_registry is None:
+                _global_registry = JobWatcherRegistry()
+                logger.info("Job watcher registry initialized")
     return _global_registry

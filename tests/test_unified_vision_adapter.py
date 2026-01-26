@@ -19,7 +19,7 @@ from bot.vision.unified_adapter import (
     UnifiedResult,
 )
 from bot.vision.gateway import VisionGateway
-from bot.vision.types import VisionRequest, VisionTask, VisionError, VisionErrorType
+from bot.vision.types import VisionRequest, VisionTask, VisionError, VisionErrorType, VisionProvider
 
 
 @pytest.fixture
@@ -28,7 +28,7 @@ def mock_config():
     return {
         "VISION_ENABLED": True,
         "VISION_API_KEY": "test_key_12345",
-        "VISION_ALLOWED_PROVIDERS": ["together", "novita"],
+        "VISION_ALLOWED_PROVIDERS": ["together", "novita", "openrouter"],
         "VISION_DEFAULT_PROVIDER": "together",
         "VISION_PROVIDER_TIMEOUT_MS": 30000,
         "VISION_PROVIDER_MAX_RETRIES": 2,
@@ -138,6 +138,33 @@ class TestProviderPlugins:
         assert VisionTask.TEXT_TO_IMAGE in capabilities["modes"]
         assert "max_size" in capabilities
         assert capabilities["nsfw_policy"] == "filtered"
+
+
+class TestProviderAllowlistAndSelection:
+    """Test allow-listing and explicit provider selection behavior"""
+
+    def test_openrouter_initializes_when_allowed(self, mock_config):
+        adapter = UnifiedVisionAdapter(mock_config)
+        assert "openrouter" in adapter.providers
+
+    @pytest.mark.asyncio
+    async def test_explicit_provider_rejected_when_not_allowed(self, mock_config):
+        config = dict(mock_config)
+        config["VISION_ALLOWED_PROVIDERS"] = ["together", "novita"]
+        adapter = UnifiedVisionAdapter(config)
+
+        request = VisionRequest(
+            user_id="user_456",
+            guild_id="guild_789",
+            task=VisionTask.TEXT_TO_IMAGE,
+            prompt="test",
+            preferred_provider=VisionProvider.OPENROUTER,
+        )
+
+        with pytest.raises(VisionError) as exc_info:
+            await adapter.submit(request)
+
+        assert exc_info.value.error_type == VisionErrorType.VALIDATION_ERROR
 
     @pytest.mark.asyncio
     async def test_plugin_session_management(self, mock_config):

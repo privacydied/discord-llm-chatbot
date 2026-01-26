@@ -936,7 +936,9 @@ class OpenRouterPlugin(ProviderPlugin):
         }
         if self._is_gemini_model(model):
             payload["image_config"] = {
-                "aspect_ratio": self._aspect_ratio_for_dims(request.width, request.height)
+                "aspect_ratio": self._aspect_ratio_for_dims(
+                    request.width, request.height
+                )
             }
 
         headers = {
@@ -1059,10 +1061,14 @@ class OpenRouterPlugin(ProviderPlugin):
                                 if isinstance(u, str) and u:
                                     urls.append(u)
                                 elif block.get("b64_json"):
-                                    urls.append(f"data:image/png;base64,{block['b64_json']}")
+                                    urls.append(
+                                        f"data:image/png;base64,{block['b64_json']}"
+                                    )
                             # Check for b64_json at block level regardless of type
                             elif block.get("b64_json"):
-                                urls.append(f"data:image/png;base64,{block['b64_json']}")
+                                urls.append(
+                                    f"data:image/png;base64,{block['b64_json']}"
+                                )
 
                     # Method 3: Check for raw base64 in message.content string [REH]
                     if isinstance(content, str):
@@ -1074,9 +1080,12 @@ class OpenRouterPlugin(ProviderPlugin):
                             try:
                                 # Validate it looks like base64
                                 import re
-                                if re.match(r'^[A-Za-z0-9+/=]+$', content[:100]):
+
+                                if re.match(r"^[A-Za-z0-9+/=]+$", content[:100]):
                                     urls.append(f"data:image/png;base64,{content}")
-                                    logger.debug("Detected raw base64 in message.content string")
+                                    logger.debug(
+                                        "Detected raw base64 in message.content string"
+                                    )
                             except Exception:
                                 pass
 
@@ -1179,13 +1188,16 @@ class UnifiedVisionAdapter:
         self.logger = get_logger(__name__)
         self.providers: Dict[str, ProviderPlugin] = {}
         self.provider_config = {}
+        self._provider_lock = asyncio.Lock()  # Provider initialization lock
 
         self.allowed_providers = [
             str(p).strip().lower()
             for p in (config.get("VISION_ALLOWED_PROVIDERS") or [])
             if str(p).strip()
         ]
-        self.default_provider = str(config.get("VISION_DEFAULT_PROVIDER") or "").strip().lower()
+        self.default_provider = (
+            str(config.get("VISION_DEFAULT_PROVIDER") or "").strip().lower()
+        )
 
         # Model override from environment [CMV]
         self.vision_model_override = config.get("VISION_MODEL", "").strip()
@@ -1720,7 +1732,9 @@ class UnifiedVisionAdapter:
 
         if self.default_provider == "openrouter":
             try:
-                provider_order = ["openrouter"] + [p for p in provider_order if p != "openrouter"]
+                provider_order = ["openrouter"] + [
+                    p for p in provider_order if p != "openrouter"
+                ]
             except Exception:
                 pass
 
@@ -1752,7 +1766,18 @@ class UnifiedVisionAdapter:
             if provider_name not in self.providers:
                 continue
 
-            provider = self.providers[provider_name]
+            # Ensure provider is properly initialized with thread-safe access
+            try:
+                async with self._provider_lock:
+                    provider = self.providers[provider_name]
+                    # Double-check provider health after lock acquisition
+                    if not self._is_provider_healthy(provider_name):
+                        continue
+            except Exception as e:
+                self.logger.warning(
+                    f"Provider {provider_name} initialization failed: {e}"
+                )
+                continue
             # Belt-and-braces: skip if not configured/healthy
             if not (
                 self._has_valid_credentials(provider_name)

@@ -664,6 +664,7 @@ def load_config():
             if s.strip()
         ],
         "VISION_DEFAULT_PROVIDER": os.getenv("VISION_DEFAULT_PROVIDER", "together"),
+        "VISION_MODEL": _clean_env_value(os.getenv("VISION_MODEL")) or "",
         # Policy and data paths
         "VISION_POLICY_PATH": os.getenv(
             "VISION_POLICY_PATH", "configs/vision_policy.json"

@@ -55,16 +55,17 @@ def mock_message():
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "command_type, expected_text, should_be_none",
+    "command_type, expected_text, should_be_none, should_delegate_to_cog",
     [
-        (Command.PING, "Pong!", False),
-        (Command.HELP, "See `/help` for a list of commands.", False),
-        (Command.CHAT, "Processed text", False),
-        (Command.TTS, None, True),  # Cog-handled
-        (Command.SAY, None, True),  # Cog-handled
-        (Command.TTS_ALL, None, True),  # Cog-handled
-        (Command.SPEAK, None, True),  # Cog-handled
-        (Command.IGNORE, None, True),  # Ignored
+        (Command.PING, "Pong!", False, False),
+        (Command.HELP, "See `/help` for a list of commands.", False, False),
+        (Command.CHAT, "Processed text", False, False),
+        (Command.TTS, None, True, False),
+        (Command.SAY, None, True, False),
+        (Command.TTS_ALL, None, True, False),
+        (Command.SPEAK, None, True, False),
+        (Command.ALERT, None, False, True),
+        (Command.IGNORE, None, True, False),
     ],
 )
 @patch("bot.router.parse_command")
@@ -75,6 +76,7 @@ async def test_command_handling(
     command_type,
     expected_text,
     should_be_none,
+    should_delegate_to_cog,
 ):
     """Test router's handling of static, cog, and ignored commands."""
     mock_parse_command.return_value = ParsedCommand(
@@ -95,11 +97,33 @@ async def test_command_handling(
         assert response is None, (
             f"Expected None for command {command_type.name}, but got a response."
         )
+    elif should_delegate_to_cog:
+        assert response is not None
+        assert isinstance(response, BotAction)
+        assert response.meta.get("delegated_to_cog") is True
     else:
         assert response is not None, (
             f"Expected a response for command {command_type.name}, but got None."
         )
         assert response.text == expected_text
+
+
+@pytest.mark.asyncio
+@patch("bot.router.parse_command")
+async def test_alert_delegates_without_custom_parse(
+    mock_parse_command, router, mock_message
+):
+    mock_parse_command.return_value = None
+
+    mock_message.guild = MagicMock(spec=discord.Guild)
+    mock_message.channel = MagicMock(spec=discord.TextChannel)
+    mock_message.content = "!alert hello"
+
+    response = await router.dispatch_message(mock_message)
+
+    assert response is not None
+    assert isinstance(response, BotAction)
+    assert response.meta.get("delegated_to_cog") is True
 
 
 @pytest.mark.asyncio

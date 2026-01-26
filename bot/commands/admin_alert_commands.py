@@ -62,7 +62,7 @@ class AdminAlertManager:
         self.reaction_queues: Dict[int, List] = {}  # Per-message reaction queues
 
         self.enabled = self.config.get("ALERT_ENABLE", "false").lower() == "true"
-        self.admin_user_ids = self._parse_admin_user_ids()
+        self.admin_user_ids = self._build_authorized_user_ids()
         self.session_timeout = int(self.config.get("ALERT_SESSION_TIMEOUT_S", "1800"))
 
         self.logger.info(f"🚨 Admin alert system initialized: enabled={self.enabled}")
@@ -138,6 +138,45 @@ class AdminAlertManager:
         except Exception as e:
             self.logger.error(f"❌ Failed to parse admin user IDs: {e}")
             return set()
+
+    def _build_authorized_user_ids(self) -> Set[int]:
+        explicit = self._parse_admin_user_ids()
+        if explicit:
+            return set(explicit)
+
+        authorized: Set[int] = set()
+        try:
+            owners = self.config.get("OWNER_IDS", [])
+            if isinstance(owners, list):
+                for owner_id in owners:
+                    try:
+                        authorized.add(int(owner_id))
+                    except Exception:
+                        continue
+        except Exception:
+            pass
+        return authorized
+
+    def refresh_config(self) -> None:
+        try:
+            self.config = load_config()
+        except Exception:
+            return
+
+        try:
+            self.enabled = self.config.get("ALERT_ENABLE", "false").lower() == "true"
+        except Exception:
+            pass
+
+        try:
+            self.admin_user_ids = self._build_authorized_user_ids()
+        except Exception:
+            pass
+
+        try:
+            self.session_timeout = int(self.config.get("ALERT_SESSION_TIMEOUT_S", "1800"))
+        except Exception:
+            pass
 
     def is_admin_user(self, user_id: int) -> bool:
         return user_id in self.admin_user_ids
@@ -455,21 +494,40 @@ class AdminAlertCommands(commands.Cog):
         self.logger.info("🚨 Admin Alert Commands loaded")
 
     @commands.command(name="alert")
-    async def alert_command(self, ctx):
-        """Start an admin alert composition session (DM-only)."""
+    async def alert_command(self, ctx, *, message: str = None):
+        """
+        Admin broadcast command.
+
+        Usage:
+          !alert <message>   - Direct broadcast to all servers
+          !alert             - Start interactive composer session (DM-only)
+        """
+        self.alert_manager.refresh_config()
+
+        # CRITICAL: Admin check BEFORE any routing or side effects [REH][SFT]
+        if not self.alert_manager.is_admin_user(ctx.author.id):
+            self.logger.warning(
+                f"alert:unauthorized user_id={ctx.author.id} channel_type={'DM' if self.alert_manager.is_dm_channel(ctx.channel) else 'guild'}"
+            )
+            await ctx.send("🚫 Access denied. You are not authorized to use the alert system.")
+            return
+
         if not self.alert_manager.enabled:
             await ctx.send("❌ Alert system is disabled.")
             return
 
-        if not self.alert_manager.is_dm_channel(ctx.channel):
-            await ctx.send("🔒 Alert command can only be used in DMs for security.")
+        # DIRECT BROADCAST MODE: !alert <message> [REH][CA]
+        if message is not None:
+            content = message.strip()
+            if not content:
+                await ctx.send("Usage: !alert <message>")
+                return
+            await self._handle_direct_broadcast(ctx, content)
             return
 
-        if not self.alert_manager.is_admin_user(ctx.author.id):
-            await ctx.send(
-                "🚫 Access denied. You are not authorized to use the alert system."
-            )
-            self.logger.warning(f"🚫 Unauthorized alert access: {ctx.author.id}")
+        # COMPOSER MODE: !alert (no message) - DM-only interactive workflow
+        if not self.alert_manager.is_dm_channel(ctx.channel):
+            await ctx.send("🔒 Interactive alert composer can only be used in DMs. Use `!alert <message>` for direct broadcast.")
             return
 
         # Prevent concurrent alert sessions per user [REH][CA]
@@ -483,15 +541,15 @@ class AdminAlertCommands(commands.Cog):
         try:
             session = await self.alert_manager.create_session(ctx.author.id)
             embed = await self.alert_manager.build_composer_embed(session)
-            message = await ctx.send(embed=embed)
+            composer_msg = await ctx.send(embed=embed)
 
-            session.composer_message_id = message.id
+            session.composer_message_id = composer_msg.id
 
             # Add reaction controls with queuing
             reactions = ["📋", "✏️", "👁️", "📤", "❌"]
             for emoji in reactions:
                 await self.alert_manager._queue_reaction_operation(
-                    message, emoji, "add", ctx.author
+                    composer_msg, emoji, "add", ctx.author
                 )
 
             # Mark composer as ready after all setup is complete
@@ -502,6 +560,86 @@ class AdminAlertCommands(commands.Cog):
         except Exception as e:
             self.logger.error(f"❌ Failed to create alert session: {e}")
             await ctx.send("❌ Failed to start alert session. Please try again.")
+
+    async def _handle_direct_broadcast(self, ctx, content: str) -> None:
+        """
+        Direct broadcast mode: send message to all eligible guilds immediately.
+
+        [REH] Non-fatal per-guild errors; continues to other guilds.
+        [CA] Reuses existing permission checking logic.
+        """
+        self.logger.info(
+            f"alert:direct_broadcast:start user_id={ctx.author.id} content_len={len(content)}"
+        )
+
+        guilds_targeted = 0
+        guilds_success = 0
+        guilds_skipped = 0
+        guilds_failed = 0
+
+        for guild in self.bot.guilds:
+            guilds_targeted += 1
+
+            # Get bot member to check permissions
+            bot_member = guild.get_member(self.bot.user.id)
+            if not bot_member:
+                guilds_skipped += 1
+                self.logger.debug(f"alert:skip guild_id={guild.id} reason=bot_not_member")
+                continue
+
+            # Find target channel: system channel > first writable text channel
+            target_channel = None
+
+            # Priority 1: Guild's system channel if bot can send there
+            if guild.system_channel:
+                perms = guild.system_channel.permissions_for(bot_member)
+                if perms.send_messages and perms.read_messages:
+                    target_channel = guild.system_channel
+
+            # Priority 2: First text channel bot can write to
+            if not target_channel:
+                for channel in guild.text_channels:
+                    perms = channel.permissions_for(bot_member)
+                    if perms.send_messages and perms.read_messages:
+                        target_channel = channel
+                        break
+
+            if not target_channel:
+                guilds_skipped += 1
+                self.logger.debug(f"alert:skip guild_id={guild.id} reason=no_writable_channel")
+                continue
+
+            # Send alert to this guild [REH]
+            try:
+                await target_channel.send(content)
+                guilds_success += 1
+                self.logger.debug(
+                    f"alert:sent guild_id={guild.id} channel_id={target_channel.id}"
+                )
+            except Exception as e:
+                guilds_failed += 1
+                self.logger.warning(
+                    f"alert:failed guild_id={guild.id} channel_id={target_channel.id} error={e}"
+                )
+
+        # Log summary [REH]
+        self.logger.info(
+            f"alert:direct_broadcast:complete user_id={ctx.author.id} "
+            f"targeted={guilds_targeted} success={guilds_success} "
+            f"skipped={guilds_skipped} failed={guilds_failed}"
+        )
+
+        # Report to invoking user
+        if guilds_success > 0:
+            await ctx.send(
+                f"✅ Alert sent to {guilds_success} server(s). "
+                f"(Skipped: {guilds_skipped}, Failed: {guilds_failed})"
+            )
+        else:
+            await ctx.send(
+                f"⚠️ Alert could not be delivered to any servers. "
+                f"(Skipped: {guilds_skipped}, Failed: {guilds_failed})"
+            )
 
     @commands.Cog.listener()
     async def on_reaction_add(self, reaction, user):
