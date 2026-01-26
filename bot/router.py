@@ -1078,6 +1078,53 @@ class Router:
         except Exception:
             return False
 
+    def _parse_twitter_status_id(self, url: str) -> Optional[str]:
+        """Extract tweet/status ID from a Twitter/X URL [IV]"""
+        try:
+            return XApiClient.extract_tweet_id(str(url))
+        except Exception:
+            return None
+
+    async def _probe_twitter_syndication_images(
+        self, url: str, status_id: str
+    ) -> List[str]:
+        """Probe Twitter syndication API for images associated with a tweet [PA][REH]
+
+        Returns list of image URLs or empty list on failure.
+        """
+        if not status_id:
+            return []
+        try:
+            # Use existing syndication fetch method
+            syn_data = await self._get_tweet_via_syndication(status_id)
+            if not isinstance(syn_data, dict):
+                return []
+
+            images: List[str] = []
+
+            # Extract from 'photos' array (most common)
+            photos = syn_data.get("photos") or []
+            for photo in photos:
+                if isinstance(photo, dict):
+                    photo_url = photo.get("url") or photo.get("media_url")
+                    if photo_url and isinstance(photo_url, str):
+                        images.append(photo_url)
+                elif isinstance(photo, str):
+                    images.append(photo)
+
+            # Also check 'mediaDetails' for additional media
+            media_details = syn_data.get("mediaDetails") or []
+            for media in media_details:
+                if isinstance(media, dict):
+                    media_url = media.get("media_url_https") or media.get("media_url")
+                    if media_url and isinstance(media_url, str) and media_url not in images:
+                        images.append(media_url)
+
+            return images
+        except Exception as e:
+            self.logger.debug(f"Syndication image probe failed for {status_id}: {e}")
+            return []
+
     def _register_x_frontend_context(
         self, url: str, frontend: Optional[str], primary: Optional[str]
     ) -> None:
