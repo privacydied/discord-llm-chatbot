@@ -9835,27 +9835,6 @@ class Router:
                 "bypass_reason": "Direct token trigger",
             }
 
-        # Special case for DMs: if no trigger patterns match but content looks like a standalone prompt
-        if is_dm and not text.startswith("!") and not text.startswith(("img:", "image:", "draw:", "render:")):
-            # Check if content has sufficient length and doesn't look like a regular chat message
-            if len(text) >= 12 and not re.match(r"^(hello|hi|hey|yo|what's up|sup|good morning|good afternoon|good evening|hey there)", text, re.IGNORECASE):
-                # Additional check to ensure it's not a common question or command
-                if not re.match(r"^(can you|could you|how do|what is|who is|where is|when is|why is|how to|what are|what does|do you|does it|is there|are there)", text, re.IGNORECASE):
-                    # Check if it contains image-related keywords
-                    image_keywords = ["image", "picture", "photo", "drawing", "painting", "illustration", "art", "sketch", "render", "generate", "create", "make", "draw"]
-                    if any(keyword in text.lower() for keyword in image_keywords) or len(text) >= 20:
-                        final_prompt = " ".join(text.split())
-                        self.logger.info(
-                            f"🎨 DM vision trigger detected: prompt '{final_prompt[:50]}...' (standalone)"
-                        )
-                        return {
-                            "use_vision": True,
-                            "task": "text_to_image",
-                            "prompt": final_prompt,
-                            "confidence": 0.85,
-                            "bypass_reason": "DM standalone prompt",
-                        }
-
         if debug_triggers:
             self.logger.info(
                 f"VISION_TRIGGER_DEBUG | no_token_matched content='{text[:100]}...'"

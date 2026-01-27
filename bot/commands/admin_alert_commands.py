@@ -723,7 +723,7 @@ class AdminAlertCommands(commands.Cog):
                     return
 
                 channels = await self.alert_manager.get_accessible_channels()
-                max_count = min(20, len(channels))
+                max_count = min(15, len(channels))  # Must match display limit
                 selected: List[AlertDestination] = []
                 invalid: List[int] = []
 
@@ -877,13 +877,25 @@ class AdminAlertCommands(commands.Cog):
             )
             return
 
-        max_count = min(20, len(channels))
+        # Build channel list respecting Discord's 1024-char field limit [REH]
+        max_count = min(15, len(channels))  # Reduced from 20 to fit field limit
         lines = []
+        total_len = 0
         for idx, channel in enumerate(channels[:max_count], start=1):
             guild_name = channel.guild.name if channel.guild else "Unknown Guild"
-            lines.append(
-                f"`{idx}` • {channel.mention} ({guild_name})"
-            )
+            channel_name = channel.name
+            # Truncate long names to prevent field overflow
+            if len(guild_name) > 20:
+                guild_name = guild_name[:17] + "..."
+            if len(channel_name) > 25:
+                channel_name = channel_name[:22] + "..."
+            line = f"`{idx:>2}` #{channel_name} ({guild_name})"
+            # Check if adding this line would exceed field limit (1024 chars)
+            if total_len + len(line) + 1 > 1000:  # +1 for newline, 24 char buffer
+                lines.append(f"... and {max_count - idx + 1} more")
+                break
+            lines.append(line)
+            total_len += len(line) + 1
 
         embed = discord.Embed(
             title="📋 Select Alert Destinations",
@@ -894,22 +906,23 @@ class AdminAlertCommands(commands.Cog):
             color=0x5865F2,
         )
 
+        shown_count = len([l for l in lines if not l.startswith("...")])
         embed.add_field(
             name=(
-                f"Available Channels (showing {max_count} of {len(channels)})"
-                if len(channels) > max_count
+                f"Available Channels (showing {shown_count} of {len(channels)})"
+                if len(channels) > shown_count
                 else "Available Channels"
             ),
-            value="\n".join(lines),
+            value="\n".join(lines) if lines else "No channels available",
             inline=False,
         )
 
-        if len(channels) > max_count:
+        if len(channels) > shown_count:
             embed.add_field(
                 name="ℹ️ Tip",
                 value=(
-                    "Only the first 20 channels are shown. Adjust the bot's "
-                    "permissions to narrow the list if needed."
+                    f"Only {shown_count} of {len(channels)} channels shown. "
+                    "Adjust bot permissions to narrow the list if needed."
                 ),
                 inline=False,
             )
@@ -923,7 +936,9 @@ class AdminAlertCommands(commands.Cog):
         try:
             composer_embed = await self.alert_manager.build_composer_embed(session)
             composer_embed = self.alert_manager._validate_embed_limits(composer_embed)
-            await reaction.message.edit(embed=composer_embed, view=None)
+            # Fetch full message to avoid partial message edit failures [REH]
+            full_message = await reaction.message.channel.fetch_message(reaction.message.id)
+            await full_message.edit(embed=composer_embed)
         except discord.HTTPException as e:
             self.logger.error(
                 f"❌ Failed to update composer embed during channel selection: "
@@ -958,9 +973,9 @@ class AdminAlertCommands(commands.Cog):
         try:
             composer_embed = await self.alert_manager.build_composer_embed(session)
             composer_embed = self.alert_manager._validate_embed_limits(composer_embed)
-            await reaction.message.edit(
-                embed=composer_embed, view=None
-            )  # Explicitly remove components
+            # Fetch full message to avoid partial message edit failures [REH]
+            full_message = await reaction.message.channel.fetch_message(reaction.message.id)
+            await full_message.edit(embed=composer_embed)
         except discord.HTTPException as e:
             self.logger.error(
                 f"❌ Failed to update composer embed in content composition: status={e.status}, code={e.code}"
@@ -1016,9 +1031,9 @@ class AdminAlertCommands(commands.Cog):
         try:
             composer_embed = await self.alert_manager.build_composer_embed(session)
             composer_embed = self.alert_manager._validate_embed_limits(composer_embed)
-            await reaction.message.edit(
-                embed=composer_embed, view=None
-            )  # Explicitly remove components
+            # Fetch full message to avoid partial message edit failures [REH]
+            full_message = await reaction.message.channel.fetch_message(reaction.message.id)
+            await full_message.edit(embed=composer_embed)
         except discord.HTTPException as e:
             self.logger.error(
                 f"❌ Failed to update composer embed in preview: status={e.status}, code={e.code}"
