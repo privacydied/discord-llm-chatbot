@@ -121,12 +121,13 @@ class ResultAggregator:
         # Treat successful GENERAL_URL text as an additional text source so that
         # scraped link/tweet/document text prevents media-only ack injection. [CA][REH]
         has_scraped_text = any(
-            r.modality == InputModality.GENERAL_URL
-            and bool(r.result_text.strip())
+            r.modality == InputModality.GENERAL_URL and bool(r.result_text.strip())
             for r in self.results
         )
 
-        has_text_sources = has_original_text or has_document or has_stt_text or has_scraped_text
+        has_text_sources = (
+            has_original_text or has_document or has_stt_text or has_scraped_text
+        )
 
         # Media items include visual media plus audio/video sources for logging. [RAT]
         has_media_items = has_visual_media or any(
@@ -140,13 +141,17 @@ class ResultAggregator:
             if original_text and original_text.strip():
                 text_snippets.append(original_text.strip())
             for r in self.results:
-                if r.modality in (
-                    InputModality.GENERAL_URL,
-                    InputModality.PDF_DOCUMENT,
-                    InputModality.PDF_OCR,
-                    InputModality.AUDIO_VIDEO_FILE,
-                    InputModality.VIDEO_URL,
-                ) and r.result_text.strip():
+                if (
+                    r.modality
+                    in (
+                        InputModality.GENERAL_URL,
+                        InputModality.PDF_DOCUMENT,
+                        InputModality.PDF_OCR,
+                        InputModality.AUDIO_VIDEO_FILE,
+                        InputModality.VIDEO_URL,
+                    )
+                    and r.result_text.strip()
+                ):
                     text_snippets.append(r.result_text.strip())
 
             media_snippets = [

@@ -47,43 +47,43 @@ _INTER_SENTENCE_PAUSE_S = 0.25
 
 def _split_into_sentences(text: str) -> List[str]:
     """Split text into sentences at natural boundaries for prosodic chunking.
-    
+
     Uses sentence-ending punctuation (. ! ?) as primary split points,
     falling back to comma/semicolon boundaries for very long sentences.
     Merges short fragments to avoid choppy output.
     [REH][CA]
-    
+
     Args:
         text: Cleaned text to split
-        
+
     Returns:
         List of sentence chunks, each suitable for TTS synthesis
     """
     if not text or not text.strip():
         return []
-    
+
     # Split at sentence boundaries (. ! ?) followed by space or end
     # This regex keeps the punctuation with the preceding sentence
-    raw_sentences = re.split(r'(?<=[.!?])\s+', text.strip())
-    
+    raw_sentences = re.split(r"(?<=[.!?])\s+", text.strip())
+
     chunks = []
     current_chunk = ""
-    
+
     for sent in raw_sentences:
         sent = sent.strip()
         if not sent:
             continue
-        
+
         # If adding this sentence exceeds max, split at comma if possible
         if len(current_chunk) + len(sent) + 1 > _MAX_CHUNK_CHARS:
             # Save current chunk if non-empty
             if current_chunk:
                 chunks.append(current_chunk.strip())
                 current_chunk = ""
-            
+
             # If single sentence is too long, split at commas
             if len(sent) > _MAX_CHUNK_CHARS:
-                parts = re.split(r'(?<=[,;])\s+', sent)
+                parts = re.split(r"(?<=[,;])\s+", sent)
                 for part in parts:
                     part = part.strip()
                     if len(current_chunk) + len(part) + 1 > _MAX_CHUNK_CHARS:
@@ -91,23 +91,29 @@ def _split_into_sentences(text: str) -> List[str]:
                             chunks.append(current_chunk.strip())
                         current_chunk = part
                     else:
-                        current_chunk = (current_chunk + " " + part).strip() if current_chunk else part
+                        current_chunk = (
+                            (current_chunk + " " + part).strip()
+                            if current_chunk
+                            else part
+                        )
             else:
                 current_chunk = sent
         else:
             # Merge short sentences together
             if len(current_chunk) + len(sent) + 1 < _MIN_CHUNK_CHARS:
-                current_chunk = (current_chunk + " " + sent).strip() if current_chunk else sent
+                current_chunk = (
+                    (current_chunk + " " + sent).strip() if current_chunk else sent
+                )
             elif current_chunk:
                 chunks.append(current_chunk.strip())
                 current_chunk = sent
             else:
                 current_chunk = sent
-    
+
     # Don't forget the last chunk
     if current_chunk:
         chunks.append(current_chunk.strip())
-    
+
     # Final pass: merge any remaining tiny chunks
     if len(chunks) > 1:
         merged = []
@@ -122,13 +128,15 @@ def _split_into_sentences(text: str) -> List[str]:
         if buffer:
             merged.append(buffer)
         chunks = merged
-    
+
     return chunks
 
 
-def _generate_inter_sentence_silence(duration_s: float = _INTER_SENTENCE_PAUSE_S) -> bytes:
+def _generate_inter_sentence_silence(
+    duration_s: float = _INTER_SENTENCE_PAUSE_S,
+) -> bytes:
     """Generate silence audio bytes for inter-sentence pause.
-    
+
     Returns WAV-compatible silence at the standard sample rate.
     [REH]
     """
@@ -265,7 +273,9 @@ class TTSManager:
                         loop = asyncio.get_running_loop()
                         try:
                             await asyncio.wait_for(
-                                loop.run_in_executor(self._executor, lambda: synth_attr(warm_text)),
+                                loop.run_in_executor(
+                                    self._executor, lambda: synth_attr(warm_text)
+                                ),
                                 timeout=5.0,
                             )
                         except asyncio.TimeoutError:
@@ -299,7 +309,9 @@ class TTSManager:
                 },
             )
 
-    def _resample_audio(self, audio: np.ndarray, from_sr: int, to_sr: int) -> np.ndarray:
+    def _resample_audio(
+        self, audio: np.ndarray, from_sr: int, to_sr: int
+    ) -> np.ndarray:
         if from_sr == to_sr:
             return audio
         try:
@@ -345,7 +357,9 @@ class TTSManager:
         tail_pad = np.zeros(tail_samples, dtype=np.float32)
         return np.concatenate((head_pad, audio, tail_pad))
 
-    def _self_check_first_rms(self, path: Path, window_ms: int = 200) -> tuple[float, bool]:
+    def _self_check_first_rms(
+        self, path: Path, window_ms: int = 200
+    ) -> tuple[float, bool]:
         try:
             with sf.SoundFile(str(path)) as f:
                 frames = min(int(window_ms * f.samplerate / 1000), len(f))
@@ -445,7 +459,9 @@ class TTSManager:
                 lead_segment *= attenuation
                 body = audio.copy()
                 if xfade_samples > 0:
-                    ramp = np.linspace(0.0, 1.0, xfade_samples, endpoint=False, dtype=np.float32)
+                    ramp = np.linspace(
+                        0.0, 1.0, xfade_samples, endpoint=False, dtype=np.float32
+                    )
                     inv_ramp = 1.0 - ramp
                     lead_segment[-xfade_samples:] *= inv_ramp
                     body[:xfade_samples] *= ramp
@@ -480,7 +496,9 @@ class TTSManager:
         body = audio.copy()
         xfade_samples = min(int(sr * self._preroll_xfade_ms / 1000), noise.size)
         if xfade_samples > 0:
-            ramp = np.linspace(0.0, 1.0, xfade_samples, endpoint=False, dtype=np.float32)
+            ramp = np.linspace(
+                0.0, 1.0, xfade_samples, endpoint=False, dtype=np.float32
+            )
             inv_ramp = 1.0 - ramp
             noise[-xfade_samples:] *= inv_ramp
             body[:xfade_samples] *= ramp
@@ -544,9 +562,7 @@ class TTSManager:
             },
         )
 
-    def _build_cache_key(
-        self, text: str, voice: str, speed: float, mode: str
-    ) -> str:
+    def _build_cache_key(self, text: str, voice: str, speed: float, mode: str) -> str:
         seed = f"v3|{voice}|{speed:.3f}|{mode}|{text}"
         return hashlib.sha256(seed.encode("utf-8")).hexdigest()
 
@@ -577,7 +593,9 @@ class TTSManager:
 
     def _hydrate_asset_state(self) -> None:
         model_candidate = os.getenv("TTS_MODEL_PATH") or os.getenv("KOKORO_MODEL_PATH")
-        voices_candidate = os.getenv("TTS_VOICES_PATH") or os.getenv("KOKORO_VOICES_PATH")
+        voices_candidate = os.getenv("TTS_VOICES_PATH") or os.getenv(
+            "KOKORO_VOICES_PATH"
+        )
         if model_candidate and voices_candidate:
             model_path = Path(model_candidate)
             voices_path = Path(voices_candidate)
@@ -624,7 +642,10 @@ class TTSManager:
                             self._assets_error = exc
                             logger.warning(
                                 "Startup asset prepare failed; will ensure on demand",
-                                extra={"subsys": "tts", "event": "asset_prepare_deferred"},
+                                extra={
+                                    "subsys": "tts",
+                                    "event": "asset_prepare_deferred",
+                                },
                                 exc_info=True,
                             )
                 if self._assets_ready and self._asset_paths:
@@ -685,7 +706,9 @@ class TTSManager:
             except Exception as exc:
                 self._assets_error = exc
                 logger.error(
-                    "Failed to ensure Kokoro assets", extra={"subsys": "tts"}, exc_info=True
+                    "Failed to ensure Kokoro assets",
+                    extra={"subsys": "tts"},
+                    exc_info=True,
                 )
                 raise
             self._assets_ready = True
@@ -702,7 +725,7 @@ class TTSManager:
         self, text: str, timeout: float, **engine_kwargs
     ) -> bytes:
         """Synthesize a single text chunk via the engine (no chunking).
-        
+
         Internal helper used by synthesize() for each sentence chunk.
         [REH][CA]
         """
@@ -716,10 +739,10 @@ class TTSManager:
         if inspect.isawaitable(result):
             return await asyncio.wait_for(result, timeout=timeout)
         return result
-    
+
     def _concatenate_audio_chunks(self, audio_chunks: List[bytes]) -> bytes:
         """Concatenate multiple WAV audio chunks with inter-sentence pauses.
-        
+
         Reads each WAV chunk, inserts brief silence between them, and returns
         a single WAV byte stream.
         [REH][CA]
@@ -728,11 +751,11 @@ class TTSManager:
             return b""
         if len(audio_chunks) == 1:
             return audio_chunks[0]
-        
+
         # Read all audio arrays
         arrays = []
         sample_rate = _CHUNK_SAMPLE_RATE
-        
+
         for i, chunk in enumerate(audio_chunks):
             try:
                 buf = io.BytesIO(chunk)
@@ -741,16 +764,19 @@ class TTSManager:
                     # Resample if needed (rare case)
                     logger.debug(
                         "tts.chunk.resample from=%d to=%d",
-                        sr, sample_rate,
+                        sr,
+                        sample_rate,
                         extra={"subsys": "tts", "event": "chunk_resample"},
                     )
                     # Simple linear interpolation resample
                     duration = len(data) / sr
                     new_length = int(duration * sample_rate)
                     indices = np.linspace(0, len(data) - 1, new_length)
-                    data = np.interp(indices, np.arange(len(data)), data).astype(np.float32)
+                    data = np.interp(indices, np.arange(len(data)), data).astype(
+                        np.float32
+                    )
                 arrays.append(data)
-                
+
                 # Add inter-sentence silence (except after last chunk)
                 if i < len(audio_chunks) - 1:
                     silence_samples = int(sample_rate * _INTER_SENTENCE_PAUSE_S)
@@ -758,25 +784,28 @@ class TTSManager:
             except Exception as e:
                 logger.warning(
                     "tts.chunk.read_failed idx=%d error=%s",
-                    i, str(e),
+                    i,
+                    str(e),
                     extra={"subsys": "tts", "event": "chunk_read_error"},
                 )
                 continue
-        
+
         if not arrays:
             return audio_chunks[0] if audio_chunks else b""
-        
+
         # Concatenate all arrays
         combined = np.concatenate(arrays)
-        
+
         # Write to WAV buffer
         buf = io.BytesIO()
         sf.write(buf, combined, sample_rate, format="WAV", subtype="PCM_16")
         return buf.getvalue()
 
-    async def synthesize(self, text: str, timeout: float = 25.0, **engine_kwargs) -> bytes:
+    async def synthesize(
+        self, text: str, timeout: float = 25.0, **engine_kwargs
+    ) -> bytes:
         """Generates audio from text using sentence-aware chunking for natural prosody.
-        
+
         For texts with multiple sentences, splits at natural boundaries,
         synthesizes each chunk separately, and concatenates with brief pauses.
         [REH][CA]
@@ -806,7 +835,9 @@ class TTSManager:
                         )
                     except Exception as exc:
                         self._record_degraded(f"kokoro init failed: {exc}")
-                        raise SynthesisError("Failed to initialize Kokoro engine") from exc
+                        raise SynthesisError(
+                            "Failed to initialize Kokoro engine"
+                        ) from exc
 
             if isinstance(self.engine, StubEngine) and not self._explicit_stub:
                 reason = self._degraded_reason or "Primary TTS engine unavailable"
@@ -814,7 +845,7 @@ class TTSManager:
 
             # Split text into sentence chunks for natural prosody [CA]
             chunks = _split_into_sentences(text)
-            
+
             # Log chunking for debug visibility [REH]
             if len(chunks) > 1:
                 logger.debug(
@@ -827,7 +858,7 @@ class TTSManager:
                         "chunk_count": len(chunks),
                     },
                 )
-            
+
             # If only one chunk (or empty), synthesize directly
             if len(chunks) <= 1:
                 audio_bytes = await self._synthesize_single_chunk(
@@ -837,16 +868,18 @@ class TTSManager:
                 # Synthesize each chunk and concatenate
                 # Give each chunk enough time - minimum 15s or proportional share [REH]
                 per_chunk_timeout = max(timeout * 0.8 / len(chunks), 15.0)
-                
+
                 logger.debug(
                     "tts.chunk.plan count=%d timeout_each=%.1fs total=%.1fs",
-                    len(chunks), per_chunk_timeout, timeout,
+                    len(chunks),
+                    per_chunk_timeout,
+                    timeout,
                     extra={"subsys": "tts", "event": "chunk_plan"},
                 )
-                
+
                 audio_parts = []
                 chunk_errors = []
-                
+
                 for i, chunk in enumerate(chunks):
                     try:
                         chunk_audio = await self._synthesize_single_chunk(
@@ -855,7 +888,10 @@ class TTSManager:
                         audio_parts.append(chunk_audio)
                         logger.debug(
                             "tts.chunk.done idx=%d/%d chars=%d bytes=%d",
-                            i + 1, len(chunks), len(chunk), len(chunk_audio),
+                            i + 1,
+                            len(chunks),
+                            len(chunk),
+                            len(chunk_audio),
                             extra={
                                 "subsys": "tts",
                                 "event": "chunk_synthesized",
@@ -867,7 +903,10 @@ class TTSManager:
                         chunk_errors.append(f"chunk[{i}]: {err_msg}")
                         logger.warning(
                             "tts.chunk.timeout idx=%d/%d timeout=%.1fs chars=%d",
-                            i, len(chunks), per_chunk_timeout, len(chunk),
+                            i,
+                            len(chunks),
+                            per_chunk_timeout,
+                            len(chunk),
                             extra={"subsys": "tts", "event": "chunk_timeout"},
                         )
                         continue
@@ -876,17 +915,24 @@ class TTSManager:
                         chunk_errors.append(f"chunk[{i}]: {err_msg}")
                         logger.warning(
                             "tts.chunk.failed idx=%d/%d error=%s",
-                            i, len(chunks), err_msg,
-                            extra={"subsys": "tts", "event": "chunk_failed", "error": err_msg},
+                            i,
+                            len(chunks),
+                            err_msg,
+                            extra={
+                                "subsys": "tts",
+                                "event": "chunk_failed",
+                                "error": err_msg,
+                            },
                         )
                         # Continue with remaining chunks rather than failing entirely
                         continue
-                
+
                 # If all chunks failed, try single-pass synthesis as fallback [REH]
                 if not audio_parts:
                     logger.warning(
                         "tts.chunk.all_failed count=%d falling_back_to_single_pass errors=%s",
-                        len(chunks), "; ".join(chunk_errors[:3]),
+                        len(chunks),
+                        "; ".join(chunk_errors[:3]),
                         extra={"subsys": "tts", "event": "chunk_fallback"},
                     )
                     # Fallback: synthesize entire text without chunking
@@ -919,7 +965,9 @@ class TTSManager:
             logger.error(
                 f"TTS synthesis timed out after {timeout}s.", extra={"subsys": "tts"}
             )
-            raise SynthesisError(f"TTS synthesis timed out after {timeout} seconds") from exc
+            raise SynthesisError(
+                f"TTS synthesis timed out after {timeout} seconds"
+            ) from exc
         except Exception as e:
             message = str(e)
             if "engine_missing_callable" in message:
@@ -1000,14 +1048,14 @@ class TTSManager:
 
     def _clean_text(self, text: str) -> str:
         """Clean text for TTS while preserving prosody-relevant punctuation.
-        
+
         Removes Discord-specific markup (mentions, custom emoji) and web content
         while keeping sentence structure and punctuation intact for natural speech.
         [REH][CA]
         """
         if not text:
             return ""
-        
+
         # 1. Replace Discord mentions with speakable alternatives or drop
         # User mentions: <@123456> or <@!123456>
         text = re.sub(r"<@!?\d+>", "", text)
@@ -1015,18 +1063,18 @@ class TTSManager:
         text = re.sub(r"<@&\d+>", "", text)
         # Channel mentions: <#123456>
         text = re.sub(r"<#\d+>", "", text)
-        
+
         # 2. Remove custom Discord emoji: <:name:123456> or <a:name:123456>
         text = re.sub(r"<a?:\w+:\d+>", "", text)
-        
+
         # 3. Remove code blocks (triple backticks with optional language)
         text = re.sub(r"```[\s\S]*?```", " code block ", text)
         # Remove inline code (single backticks)
         text = re.sub(r"`[^`]+`", "", text)
-        
+
         # 4. Strip URLs but preserve surrounding punctuation
         text = re.sub(r"https?://\S+", " link ", text)
-        
+
         # 5. Remove markdown formatting while keeping content
         # Bold: **text** or __text__
         text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)
@@ -1038,21 +1086,23 @@ class TTSManager:
         text = re.sub(r"~~(.+?)~~", r"\1", text)
         # Spoilers: ||text||
         text = re.sub(r"\|\|(.+?)\|\|", r"\1", text)
-        
+
         # 6. Clean up leftover markdown symbols
-        text = text.replace("**", "").replace("__", "").replace("~~", "").replace("||", "")
-        
+        text = (
+            text.replace("**", "").replace("__", "").replace("~~", "").replace("||", "")
+        )
+
         # 7. Normalize Unicode quotes and dashes to ASCII for consistent TTS
         text = text.replace(""", '"').replace(""", '"')
         text = text.replace("'", "'").replace("'", "'")
         text = text.replace("—", ", ").replace("–", ", ")  # Em/en dash → comma pause
         text = text.replace("…", "...")
-        
+
         # 8. Normalize whitespace but preserve sentence structure
         text = re.sub(r"[ \t]+", " ", text)  # Collapse horizontal whitespace
         text = re.sub(r"\n+", " ", text)  # Newlines → space (preserves sentence flow)
         text = text.strip()
-        
+
         # 9. Log cleaned text at debug level for pipeline visibility [REH]
         if len(text) > 0:
             logger.debug(
@@ -1061,7 +1111,7 @@ class TTSManager:
                 repr(text[:60]) if len(text) > 60 else repr(text),
                 extra={"subsys": "tts", "event": "clean_text", "chars": len(text)},
             )
-        
+
         return text
 
     async def generate_tts(
@@ -1446,7 +1496,9 @@ class TTSManager:
             speed_value = candidate_speeds[0]
 
             for cand_speed in candidate_speeds:
-                candidate_key = self._build_cache_key(synth_text, voice_name, cand_speed, ipa_mode)
+                candidate_key = self._build_cache_key(
+                    synth_text, voice_name, cand_speed, ipa_mode
+                )
                 candidate_path = self._file_cache.get(candidate_key)
                 if candidate_path and candidate_path.exists():
                     cache_key = candidate_key
@@ -1501,7 +1553,9 @@ class TTSManager:
                 meta_info.setdefault("cached", False)
                 meta_info.setdefault("speed", speed_value)
                 speed_value = float(meta_info.get("speed", speed_value))
-                cache_key = self._build_cache_key(synth_text, voice_name, speed_value, ipa_mode)
+                cache_key = self._build_cache_key(
+                    synth_text, voice_name, speed_value, ipa_mode
+                )
                 cache_key_short = cache_key[:12]
                 self._file_cache[cache_key] = audio_path
                 self._cache_meta[cache_key] = dict(meta_info)
@@ -1543,7 +1597,6 @@ class TTSManager:
                 meta_info.setdefault("speed", speed_value)
                 speed_value = float(meta_info.get("speed", speed_value))
 
-
             # Annotate meta
             if truncated:
                 action.meta["tts_truncated"] = True
@@ -1555,8 +1608,16 @@ class TTSManager:
             try:
                 audio_path_obj = Path(action.audio_path) if action.audio_path else None
                 if cached_flag:
-                    sr, duration = self._collect_audio_stats(audio_path_obj) if audio_path_obj else (48000, 0.0)
-                    ipa_len = meta_info.get("ipa_len") if "ipa_len" in meta_info else self._compute_ipa_length(synth_text)
+                    sr, duration = (
+                        self._collect_audio_stats(audio_path_obj)
+                        if audio_path_obj
+                        else (48000, 0.0)
+                    )
+                    ipa_len = (
+                        meta_info.get("ipa_len")
+                        if "ipa_len" in meta_info
+                        else self._compute_ipa_length(synth_text)
+                    )
                     meta_info.setdefault("sr", sr)
                     meta_info.setdefault("duration_s", duration)
                     if cache_key:
@@ -1564,9 +1625,13 @@ class TTSManager:
                     self._emit_summary(
                         text_chars=len(synth_text),
                         ipa_len=ipa_len or 0,
-                        lead_preroll_ms=int(meta_info.get("lead_preroll_ms", self._preroll_lead_ms)),
+                        lead_preroll_ms=int(
+                            meta_info.get("lead_preroll_ms", self._preroll_lead_ms)
+                        ),
                         head_pad_ms=int(meta_info.get("head_pad_ms", 0)),
-                        tail_pad_ms=int(meta_info.get("tail_pad_ms", self._tail_pad_ms)),
+                        tail_pad_ms=int(
+                            meta_info.get("tail_pad_ms", self._tail_pad_ms)
+                        ),
                         sr=sr or 48000,
                         duration_s=duration,
                         cached=True,
@@ -1575,16 +1640,18 @@ class TTSManager:
                     sr = int(meta_info.get("sr", 48000))
                     duration = float(meta_info.get("duration_s", 0.0))
                     ipa_len = int(
-                        meta_info.get(
-                            "ipa_len", self._compute_ipa_length(synth_text)
-                        )
+                        meta_info.get("ipa_len", self._compute_ipa_length(synth_text))
                     )
                     self._emit_summary(
                         text_chars=int(meta_info.get("text_chars", len(synth_text))),
                         ipa_len=ipa_len,
-                        lead_preroll_ms=int(meta_info.get("lead_preroll_ms", self._preroll_lead_ms)),
+                        lead_preroll_ms=int(
+                            meta_info.get("lead_preroll_ms", self._preroll_lead_ms)
+                        ),
                         head_pad_ms=int(meta_info.get("head_pad_ms", 0)),
-                        tail_pad_ms=int(meta_info.get("tail_pad_ms", self._tail_pad_ms)),
+                        tail_pad_ms=int(
+                            meta_info.get("tail_pad_ms", self._tail_pad_ms)
+                        ),
                         sr=sr,
                         duration_s=duration,
                         cached=bool(meta_info.get("cached", False)),
@@ -1592,7 +1659,9 @@ class TTSManager:
                     if cache_key:
                         self._cache_meta[cache_key] = dict(meta_info)
             except Exception:
-                logger.debug("tts.summary.emit_failed", extra={"subsys": "tts"}, exc_info=True)
+                logger.debug(
+                    "tts.summary.emit_failed", extra={"subsys": "tts"}, exc_info=True
+                )
 
             return action
         except SynthesisError as exc:

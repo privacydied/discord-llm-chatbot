@@ -45,7 +45,6 @@ from urllib.parse import parse_qs, parse_qsl, urlencode, urlparse, urlunparse, u
 import discord
 from discord import DMChannel, Message
 
-from .config import load_config
 from .brain import brain_infer
 from .enhanced_retry import ProviderConfig, get_retry_manager
 from .evidence import EvidenceBundle
@@ -166,7 +165,9 @@ def _detect_x_twitter_media(message: Message) -> XTwitterMediaInfo:
     has_x_link = any(host in content_lower for host in canonical_hosts)
 
     tweet_urls: List[str] = []
-    url_pattern = r"https?://(?:www\.)?(?:x|twitter|fxtwitter|vxtwitter|fixupx)\.com/\S+"
+    url_pattern = (
+        r"https?://(?:www\.)?(?:x|twitter|fxtwitter|vxtwitter|fixupx)\.com/\S+"
+    )
     for match in re.finditer(url_pattern, message.content or "", re.IGNORECASE):
         u = match.group(0)
         if u not in tweet_urls:
@@ -513,6 +514,7 @@ class Router:
                     )
         except Exception:
             pass
+
     def _format_x_tweet_with_transcription(
         self,
         *,
@@ -542,18 +544,20 @@ class Router:
             caption = ""
             if tweet_data and isinstance(tweet_data, dict):
                 caption = (
-                    tweet_data.get("full_text")
-                    or tweet_data.get("text")
-                    or ""
+                    tweet_data.get("full_text") or tweet_data.get("text") or ""
                 ).strip()
             if not caption and base_text:
                 # Heuristic: first non-empty line not starting with em-dash author or URL
                 try:
-                    lines = [ln.strip() for ln in str(base_text).splitlines() if ln.strip()]
+                    lines = [
+                        ln.strip() for ln in str(base_text).splitlines() if ln.strip()
+                    ]
                     for ln in lines:
                         if ln.startswith("— "):
                             continue
-                        if ln.lower().startswith("http://") or ln.lower().startswith("https://"):
+                        if ln.lower().startswith("http://") or ln.lower().startswith(
+                            "https://"
+                        ):
                             continue
                         caption = ln
                         break
@@ -916,7 +920,11 @@ class Router:
                         "x.text.miss",
                         extra={
                             "event": "x.text.miss",
-                            "detail": {"primary": tweet_id, "layer": "syndication", "reason": "no_text"},
+                            "detail": {
+                                "primary": tweet_id,
+                                "layer": "syndication",
+                                "reason": "no_text",
+                            },
                         },
                     )
                 except Exception:
@@ -936,7 +944,11 @@ class Router:
                     "x.text.resolve",
                     extra={
                         "event": "x.text.resolve",
-                        "detail": {"primary": tweet_id, "source": "syndication", "chars": len(txt)},
+                        "detail": {
+                            "primary": tweet_id,
+                            "source": "syndication",
+                            "chars": len(txt),
+                        },
                     },
                 )
             except Exception:
@@ -959,7 +971,9 @@ class Router:
             urls: List[str] = []
             for p in photos:
                 if isinstance(p, dict):
-                    img_url = p.get("url") or p.get("media_url_https") or p.get("media_url")
+                    img_url = (
+                        p.get("url") or p.get("media_url_https") or p.get("media_url")
+                    )
                     if img_url and isinstance(img_url, str):
                         urls.append(img_url)
                 elif isinstance(p, str):
@@ -994,12 +1008,24 @@ class Router:
                         "x.text.miss",
                         extra={
                             "event": "x.text.miss",
-                            "detail": {"primary": XApiClient.extract_tweet_id(url) or "", "layer": "format", "reason": "empty_text"},
+                            "detail": {
+                                "primary": XApiClient.extract_tweet_id(url) or "",
+                                "layer": "format",
+                                "reason": "empty_text",
+                            },
                         },
                     )
                 except Exception:
                     pass
-            body = text if text and len(text) <= 4000 else ((text[:3990] + "…") if text else "(Tweet text not available. If you want analysis, paste the text or add a screenshot.)")
+            body = (
+                text
+                if text and len(text) <= 4000
+                else (
+                    (text[:3990] + "…")
+                    if text
+                    else "(Tweet text not available. If you want analysis, paste the text or add a screenshot.)"
+                )
+            )
             return f"{prefix}{stamp}{media_hint} → {url}\n{body}"
         except Exception:
             return f"Tweet → {url}\n{str(syn_data)[:4000]}"
@@ -1021,6 +1047,7 @@ class Router:
     def _compose_text_tweet_evidence(self, url: str, syn: Dict[str, Any]) -> str:
         """Build EvidenceBundle for a text-only tweet using syndication payload. [CA]"""
         from .evidence import EvidenceBundle
+
         bundle = EvidenceBundle(source_platform="x", source_url=url)
         try:
             ptid = self._extract_primary_tweet_id(url)
@@ -1175,7 +1202,6 @@ class Router:
                 )
             except Exception:
                 pass
-
 
     def _log_x_media_probe(
         self,
@@ -1350,7 +1376,9 @@ class Router:
         """
         urls: List[str] = []
         try:
-            for m in re.finditer(r"https?://[^\s<>\"'\[\]{}|\\^`]+", text or "", re.IGNORECASE):
+            for m in re.finditer(
+                r"https?://[^\s<>\"'\[\]{}|\\^`]+", text or "", re.IGNORECASE
+            ):
                 raw = m.group(0)
                 if self._is_twitter_status_url(raw):
                     cu = self._canonicalize_twitter_status_url(raw)
@@ -1426,13 +1454,17 @@ class Router:
         """
         try:
             # 1) Trigger layer
-            trigger_urls = self._extract_x_status_urls_from_text(getattr(message, "content", "") or "")
+            trigger_urls = self._extract_x_status_urls_from_text(
+                getattr(message, "content", "") or ""
+            )
             if trigger_urls:
                 return "trigger", trigger_urls
 
             # 2) Reply-parent layer (REPLY_CASE only)
             if scope_case == "reply" and reply_target is not None:
-                parent_urls = self._extract_x_status_urls_from_text(getattr(reply_target, "content", "") or "")
+                parent_urls = self._extract_x_status_urls_from_text(
+                    getattr(reply_target, "content", "") or ""
+                )
                 if parent_urls:
                     return "parent", parent_urls
 
@@ -1451,7 +1483,9 @@ class Router:
                     async for m in message.channel.history(limit=k * 3, before=anchor):
                         # keep humans + our bot only (mirror of thread_tail policy)
                         is_bot = bool(getattr(m.author, "bot", False))
-                        is_ours = int(getattr(m.author, "id", 0)) == int(getattr(self.bot.user, "id", 0))
+                        is_ours = int(getattr(m.author, "id", 0)) == int(
+                            getattr(self.bot.user, "id", 0)
+                        )
                         if is_bot and not is_ours:
                             continue
                         msgs.append(m)
@@ -1459,7 +1493,9 @@ class Router:
                             break
                     msgs = list(reversed(msgs))
                     for m in msgs:
-                        u = self._extract_x_status_urls_from_text(getattr(m, "content", "") or "")
+                        u = self._extract_x_status_urls_from_text(
+                            getattr(m, "content", "") or ""
+                        )
                         for cu in u:
                             if cu not in tail_urls:
                                 tail_urls.append(cu)
@@ -1634,21 +1670,31 @@ class Router:
             http = None
         primary_for_log: Optional[str] = None
         frontend_for_log: Optional[str] = None
+        images: List[str] = []
         for u in clean:
             status_id = self._parse_twitter_status_id(u)
             lookup = self._normalize_x_url(u)
-            ctx = self._x_frontend_canon.get(lookup) or self._x_frontend_canon.get(u) or {}
-            frontend = frontend_hints.get(lookup) or ctx.get('frontend')
-            primary = primary_hints.get(lookup) or ctx.get('primary') or status_id
+            ctx = (
+                self._x_frontend_canon.get(lookup)
+                or self._x_frontend_canon.get(u)
+                or {}
+            )
+            frontend = frontend_hints.get(lookup) or ctx.get("frontend")
+            primary = primary_hints.get(lookup) or ctx.get("primary") or status_id
             if primary and not primary_for_log:
                 primary_for_log = primary
             if frontend and not frontend_for_log:
                 frontend_for_log = frontend
             # 1) vx/fx JSON (fast)
             if status_id and http is not None:
-                for src_name, host in (("vx_json", "api.vxtwitter.com"), ("fx_json", "api.fxtwitter.com")):
+                for src_name, host in (
+                    ("vx_json", "api.vxtwitter.com"),
+                    ("fx_json", "api.fxtwitter.com"),
+                ):
                     try:
-                        self.logger.debug(f"x.resolve_try src={src_name} id={status_id}")
+                        self.logger.debug(
+                            f"x.resolve_try src={src_name} id={status_id}"
+                        )
                     except Exception:
                         pass
                     try:
@@ -1667,7 +1713,9 @@ class Router:
                         except Exception:
                             try:
                                 # If brotli is used and not auto-decoded, attempt manual decode [REH]
-                                enc = (resp.headers.get("content-encoding") or "").lower()
+                                enc = (
+                                    resp.headers.get("content-encoding") or ""
+                                ).lower()
                                 if "br" in enc:
                                     try:
                                         import brotli  # type: ignore
@@ -1714,7 +1762,7 @@ class Router:
                         for u in candidates:
                             if not u or not u.startswith("http"):
                                 continue
-                            if not _allowed(u):
+                            if not self._is_twitter_media_cdn(u):
                                 continue
                             # Hard blocklist for X video poster thumbnails
                             try:
@@ -1729,9 +1777,18 @@ class Router:
                                 "/ext_tw_video_thumb/",
                                 "/tweet_video_thumb/",
                             )
-                            if host.endswith("pbs.twimg.com") and any(pref in path for pref in poster_prefixes):
+                            if host.endswith("pbs.twimg.com") and any(
+                                pref in path for pref in poster_prefixes
+                            ):
                                 try:
-                                    matched = next((pref for pref in poster_prefixes if pref in path), "poster_thumb")
+                                    matched = next(
+                                        (
+                                            pref
+                                            for pref in poster_prefixes
+                                            if pref in path
+                                        ),
+                                        "poster_thumb",
+                                    )
                                     self.logger.info(
                                         "x.image_probe.video_poster_detected",
                                         extra={
@@ -1742,13 +1799,15 @@ class Router:
                                 except Exception:
                                     pass
                                 continue  # do not accept poster as photo
-                            if u not in uniq and await _is_image(u):
+                            if u not in uniq and self._is_direct_image_url(u):
                                 uniq.append(u)
                         if uniq:
                             images.extend(uniq)
                             break  # API success
                     except Exception as e:
-                        self.logger.debug(f"x.syndication.api.error | host={host} err={e}")
+                        self.logger.debug(
+                            f"x.syndication.api.error | host={host} err={e}"
+                        )
 
         # Stage 2: HTML/meta fallback on fx/vx
         if not images and http is not None and self._x_syn_probe_enabled:
@@ -1807,9 +1866,9 @@ class Router:
                     for u in candidates:
                         if not u or not u.startswith("http"):
                             continue
-                        if not _allowed(u):
+                        if not self._is_twitter_media_cdn(u):
                             continue
-                        if u not in uniq and await _is_image(u):
+                        if u not in uniq and self._is_direct_image_url(u):
                             uniq.append(u)
                     if uniq:
                         images.extend(uniq)
@@ -1910,7 +1969,10 @@ class Router:
                 pass
 
     async def _handle_image_with_model(
-        self, item: InputItem, model_override: Optional[str] = None, message: Optional[Message] = None
+        self,
+        item: InputItem,
+        model_override: Optional[str] = None,
+        message: Optional[Message] = None,
     ) -> str:
         """Handle image item with explicit model override. [CA][IV][REH]
         - Attachments: direct VL on file
@@ -1919,7 +1981,9 @@ class Router:
         """
         if isinstance(self.bot, (Mock, MagicMock)):
             try:
-                name = getattr(getattr(item, "payload", None), "filename", "") or "image"
+                name = (
+                    getattr(getattr(item, "payload", None), "filename", "") or "image"
+                )
                 resp = see_infer(image_path=getattr(item.payload, "url", None))
                 if asyncio.iscoroutine(resp):
                     resp = await resp
@@ -1993,7 +2057,9 @@ class Router:
             )
             return f"⚠️ Failed to process image item (error: {e})"
 
-    async def _handle_image(self, item: InputItem, message: Optional[Message] = None) -> str:
+    async def _handle_image(
+        self, item: InputItem, message: Optional[Message] = None
+    ) -> str:
         """Handle image without explicit model override, using default VL model. [CA]"""
         return await self._handle_image_with_model(item, model_override=None)
 
@@ -2453,8 +2519,12 @@ class Router:
         try:
             # THREAD_CASE: message is in a Thread/Forum thread
             if _is_thread_channel(getattr(message, "channel", None)):
-                rt, reason = await resolve_thread_reply_target(self.bot, message, self.config)
-                tail = await collect_thread_tail_context(self.bot, message, rt, self.config)
+                rt, reason = await resolve_thread_reply_target(
+                    self.bot, message, self.config
+                )
+                tail = await collect_thread_tail_context(
+                    self.bot, message, rt, self.config
+                )
                 context_str = ""
                 if tail and isinstance(tail, tuple) and len(tail) == 2:
                     tail_joined, _ = tail
@@ -2468,7 +2538,9 @@ class Router:
                         "phase": "scope",
                         "case": "thread",
                         "scope": str(getattr(message.channel, "id", "unknown")),
-                        "reply_target": str(getattr(rt, "id", "unknown")) if rt else "none",
+                        "reply_target": str(getattr(rt, "id", "unknown"))
+                        if rt
+                        else "none",
                     },
                 )
                 return "thread", rt, context_str
@@ -2484,7 +2556,9 @@ class Router:
                         ref_msg = None
 
                 if ref_msg is not None:
-                    mc = await maybe_build_mention_context(self.bot, message, self.config)
+                    mc = await maybe_build_mention_context(
+                        self.bot, message, self.config
+                    )
                     context_str = ""
                     if mc and isinstance(mc, tuple) and len(mc) == 2:
                         joined_text, _ = mc
@@ -2515,9 +2589,13 @@ class Router:
                     txt = txt.strip()
 
                 if not txt:  # No substantive content after mention removal
-                    anchor, _ = await resolve_implicit_anchor(self.bot, message, self.config)
+                    anchor, _ = await resolve_implicit_anchor(
+                        self.bot, message, self.config
+                    )
                     if anchor:
-                        ia = await collect_implicit_anchor_context(self.bot, message, anchor, self.config)
+                        ia = await collect_implicit_anchor_context(
+                            self.bot, message, anchor, self.config
+                        )
                         context_str = ""
                         if ia and isinstance(ia, tuple) and len(ia) == 2:
                             ia_joined, _ = ia
@@ -2531,7 +2609,9 @@ class Router:
                                 "phase": "scope",
                                 "case": "lone",
                                 "scope": str(getattr(message, "id", "unknown")),
-                                "reply_target": str(getattr(anchor, "id", "none")) if anchor else "none",
+                                "reply_target": str(getattr(anchor, "id", "none"))
+                                if anchor
+                                else "none",
                             },
                         )
                         return "lone", anchor, context_str
@@ -2583,7 +2663,9 @@ class Router:
             if modality_fn:
                 maybe_modality = modality_fn(message)
                 detected_modality = (
-                    await maybe_modality if asyncio.iscoroutine(maybe_modality) else maybe_modality
+                    await maybe_modality
+                    if asyncio.iscoroutine(maybe_modality)
+                    else maybe_modality
                 )
         except Exception:
             detected_modality = None
@@ -2626,7 +2708,9 @@ class Router:
                     text_out = str(result or "")
                 if len(text_out.split()) < 5:
                     text_out = (text_out + " auto generated caption.").strip()
-                return ResponseMessage(content=text_out, text=text_out, audio_path=audio_path)
+                return ResponseMessage(
+                    content=text_out, text=text_out, audio_path=audio_path
+                )
 
         attachments = list(getattr(message, "attachments", []) or [])
         if attachments:
@@ -2644,7 +2728,9 @@ class Router:
                     text_out = str(result or "")
                 if len(text_out.split()) < 5:
                     text_out = (text_out + " auto generated caption.").strip()
-                return ResponseMessage(content=text_out, text=text_out, audio_path=audio_path)
+                return ResponseMessage(
+                    content=text_out, text=text_out, audio_path=audio_path
+                )
 
             att = attachments[0]
             content_type = (getattr(att, "content_type", "") or "").lower()
@@ -2729,13 +2815,18 @@ class Router:
             try:
                 author = getattr(message, "author", None)
                 raw_author_bot = getattr(author, "bot", False) if author else False
-                author_is_bot = raw_author_bot is True if isinstance(raw_author_bot, bool) else False
+                author_is_bot = (
+                    raw_author_bot is True
+                    if isinstance(raw_author_bot, bool)
+                    else False
+                )
                 is_self = False
                 try:
                     is_self = bool(
                         hasattr(self.bot, "user")
                         and author
-                        and getattr(author, "id", None) == getattr(self.bot.user, "id", None)
+                        and getattr(author, "id", None)
+                        == getattr(self.bot.user, "id", None)
                     )
                 except Exception:
                     is_self = False
@@ -2786,7 +2877,9 @@ class Router:
                     extra={
                         "event": "ingest.dispatch_started",
                         "msg_id": message.id,
-                        "channel_id": getattr(getattr(message, "channel", None), "id", None),
+                        "channel_id": getattr(
+                            getattr(message, "channel", None), "id", None
+                        ),
                     },
                 )
             except Exception:
@@ -2844,11 +2937,15 @@ class Router:
                             text_out = str(res)
                         if isinstance(self.bot, (Mock, MagicMock)) and text_out:
                             if len(str(text_out).split()) < 5:
-                                text_out = (str(text_out) + " auto generated caption.").strip()
+                                text_out = (
+                                    str(text_out) + " auto generated caption."
+                                ).strip()
                         if isinstance(res, ResponseMessage):
                             res.text = res.content = text_out
                             return res
-                        return ResponseMessage(content=text_out, text=text_out, audio_path=audio_path)
+                        return ResponseMessage(
+                            content=text_out, text=text_out, audio_path=audio_path
+                        )
 
             # Parse commands first so downstream paths can use cleaned content
             try:
@@ -2876,7 +2973,13 @@ class Router:
                         text="See `/help` for a list of commands.",
                     )
 
-                if cmd in {Command.TTS, Command.SAY, Command.TTS_ALL, Command.SPEAK, Command.IGNORE}:
+                if cmd in {
+                    Command.TTS,
+                    Command.SAY,
+                    Command.TTS_ALL,
+                    Command.SPEAK,
+                    Command.IGNORE,
+                }:
                     return None
 
                 # Allow chat-like commands to continue through the normal routing pipeline
@@ -2919,14 +3022,14 @@ class Router:
                 # Relaxed allowance: mention + minimal meaningful text should route to text
                 # This mirrors the text-default behavior in core bot to avoid dead-ends. [IV][REH]
                 try:
-                    is_mentioned = (
-                        self._is_mentioned(message)
-                    )
+                    is_mentioned = self._is_mentioned(message)
                 except Exception:
                     is_mentioned = False
                 mention_pattern = rf"^<@!?{self.bot.user.id}>\s*"
                 try:
-                    cleaned = re.sub(mention_pattern, "", (message.content or "")).strip()
+                    cleaned = re.sub(
+                        mention_pattern, "", (message.content or "")
+                    ).strip()
                 except Exception:
                     cleaned = (message.content or "").strip()
 
@@ -2960,7 +3063,10 @@ class Router:
                                 "event": "text_default",
                                 "subsys": "gate",
                                 "msg_id": message.id,
-                                "detail": {"reason": "has_text", "clean_len": len(cleaned)},
+                                "detail": {
+                                    "reason": "has_text",
+                                    "clean_len": len(cleaned),
+                                },
                             },
                         )
                     except Exception:
@@ -3007,6 +3113,7 @@ class Router:
                     # If all attachments are plain text (.txt/text/*), skip legacy compat path
                     try:
                         atts = list(getattr(message, "attachments", []) or [])
+
                         def _is_text_att(a) -> bool:
                             try:
                                 name = (getattr(a, "filename", "") or "").lower()
@@ -3014,7 +3121,10 @@ class Router:
                             except Exception:
                                 name, ctype = "", ""
                             return name.endswith(".txt") or ctype.startswith("text/")
-                        all_text_files = bool(atts) and all(_is_text_att(a) for a in atts)
+
+                        all_text_files = bool(atts) and all(
+                            _is_text_att(a) for a in atts
+                        )
                     except Exception:
                         all_text_files = False
 
@@ -3036,16 +3146,26 @@ class Router:
                                 text_out = str(res)
                             if isinstance(self.bot, (Mock, MagicMock)) and text_out:
                                 if len(str(text_out).split()) < 5:
-                                    text_out = (str(text_out) + " auto generated caption.").strip()
+                                    text_out = (
+                                        str(text_out) + " auto generated caption."
+                                    ).strip()
                             if isinstance(res, ResponseMessage):
                                 res.text = res.content = text_out
                                 return res
-                            return ResponseMessage(content=text_out, text=text_out, audio_path=audio_path)
+                            return ResponseMessage(
+                                content=text_out, text=text_out, audio_path=audio_path
+                            )
 
                 # Centralized scope resolution and context building
-                scope_case, reply_target, context_str = await self._resolve_scope_and_target(message)
+                (
+                    scope_case,
+                    reply_target,
+                    context_str,
+                ) = await self._resolve_scope_and_target(message)
 
-                self.logger.debug(f"Scope resolved: context_str='{context_str[:100]}...'")
+                self.logger.debug(
+                    f"Scope resolved: context_str='{context_str[:100]}...'"
+                )
 
                 # Clean mention from content for processing
                 clean_content = content
@@ -3117,7 +3237,9 @@ class Router:
                                     or {}
                                 )
                                 frontend = ctx.get("frontend")
-                                primary = ctx.get("primary") or self._parse_twitter_status_id(normalized_u)
+                                primary = ctx.get(
+                                    "primary"
+                                ) or self._parse_twitter_status_id(normalized_u)
                                 if frontend:
                                     frontend_hints[normalized_u] = frontend
                                 if primary:
@@ -3142,21 +3264,27 @@ class Router:
                             resolved = {"kind": "unknown", "reason": f"exception:{e}"}
                         dt_ms = int((time.perf_counter() - t0) * 1000)
                         kind = (resolved or {}).get("kind", "unknown")
-                        base_context_url = norm_urls[0] if norm_urls else (x_urls[0] if x_urls else "")
+                        base_context_url = (
+                            norm_urls[0] if norm_urls else (x_urls[0] if x_urls else "")
+                        )
                         primary_selected = (
                             (resolved or {}).get("primary")
                             or primary_hints.get(base_context_url)
                             or self._parse_twitter_status_id(base_context_url)
                             or ""
                         )
-                        frontend_selected = (resolved or {}).get("frontend") or frontend_hints.get(base_context_url)
+                        frontend_selected = (resolved or {}).get(
+                            "frontend"
+                        ) or frontend_hints.get(base_context_url)
                         # Single-shot detection marker
                         try:
                             src = (resolved or {}).get("src", "unknown")
                             detail = {"kind": kind, "src": src, "ms": dt_ms}
                             if kind == "image":
                                 try:
-                                    detail["count"] = len((resolved or {}).get("images") or [])
+                                    detail["count"] = len(
+                                        (resolved or {}).get("images") or []
+                                    )
                                 except Exception:
                                     pass
                             if primary_selected:
@@ -3177,28 +3305,46 @@ class Router:
                         url_for_stt = (resolved or {}).get("url") or base_context_url
                         final_kind = kind
                         if url_for_stt and kind == "video":
-                            verify_kind, verify_ct = await self._verify_media_kind(url_for_stt, default="video")
-                            self._log_media_kind_checked(url_for_stt, verify_ct, verify_kind or "video")
+                            verify_kind, verify_ct = await self._verify_media_kind(
+                                url_for_stt, default="video"
+                            )
+                            self._log_media_kind_checked(
+                                url_for_stt, verify_ct, verify_kind or "video"
+                            )
                             if verify_kind == "image":
                                 final_kind = "image"
                         elif kind == "image":
                             images_probe = (resolved or {}).get("images") or []
                             if images_probe:
-                                verify_kind, verify_ct = await self._verify_media_kind(images_probe[0], default="image")
-                                self._log_media_kind_checked(images_probe[0], verify_ct, verify_kind or "image")
+                                verify_kind, verify_ct = await self._verify_media_kind(
+                                    images_probe[0], default="image"
+                                )
+                                self._log_media_kind_checked(
+                                    images_probe[0], verify_ct, verify_kind or "image"
+                                )
                                 if verify_kind == "video":
                                     final_kind = "video"
-                                    url_for_stt = (resolved or {}).get("url") or images_probe[0]
+                                    url_for_stt = (resolved or {}).get(
+                                        "url"
+                                    ) or images_probe[0]
 
                         if final_kind == "video":
                             url_for_stt = url_for_stt or base_context_url
-                            self.logger.info("route.select kind=video reason=resolved_direct_media")
+                            self.logger.info(
+                                "route.select kind=video reason=resolved_direct_media"
+                            )
                             # Emit deterministic media selection breadcrumb and harden cache key via fragment [CMV][CDiP]
                             try:
                                 import hashlib as _hl
 
-                                ptid2 = primary_selected or self._extract_primary_tweet_id(url_for_stt) or ""
-                                uhash2 = _hl.sha256(url_for_stt.encode()).hexdigest()[:16]
+                                ptid2 = (
+                                    primary_selected
+                                    or self._extract_primary_tweet_id(url_for_stt)
+                                    or ""
+                                )
+                                uhash2 = _hl.sha256(url_for_stt.encode()).hexdigest()[
+                                    :16
+                                ]
                                 detail = {
                                     "primary": ptid2,
                                     "selected": ptid2,
@@ -3217,9 +3363,13 @@ class Router:
                                     },
                                 )
                                 if ptid2 and uhash2:
-                                    url_for_stt = f"{url_for_stt}#ptid={ptid2}&uh={uhash2}"
+                                    url_for_stt = (
+                                        f"{url_for_stt}#ptid={ptid2}&uh={uhash2}"
+                                    )
                                     if frontend_selected:
-                                        url_for_stt = f"{url_for_stt}&fe={frontend_selected}"
+                                        url_for_stt = (
+                                            f"{url_for_stt}&fe={frontend_selected}"
+                                        )
                             except Exception:
                                 pass
                             dur = (resolved or {}).get("duration")
@@ -3237,7 +3387,9 @@ class Router:
                                     extra={
                                         "event": "x.video.url_ok",
                                         "detail": {
-                                            "src": ((resolved or {}).get("src") or "ytdlp"),
+                                            "src": (
+                                                (resolved or {}).get("src") or "ytdlp"
+                                            ),
                                             "ms": dt_ms,
                                         },
                                         "msg_id": message.id,
@@ -3248,7 +3400,9 @@ class Router:
                             try:
                                 timeout_override_raw = None
                                 try:
-                                    timeout_override_raw = self.config.get("X_STT_TIMEOUT_S")
+                                    timeout_override_raw = self.config.get(
+                                        "X_STT_TIMEOUT_S"
+                                    )
                                 except Exception:
                                     timeout_override_raw = None
                                 stt_timeout: Optional[float]
@@ -3269,14 +3423,22 @@ class Router:
                                         stt_rtf = X_STT_RTF_DEFAULT
                                     try:
                                         speedup_cfg = float(
-                                            self.config.get("VIDEO_SPEEDUP", _DEFAULT_VIDEO_SPEEDUP)
+                                            self.config.get(
+                                                "VIDEO_SPEEDUP", _DEFAULT_VIDEO_SPEEDUP
+                                            )
                                         )
                                     except Exception:
                                         speedup_cfg = _DEFAULT_VIDEO_SPEEDUP
-                                    safe_speedup = speedup_cfg if speedup_cfg > 0 else _DEFAULT_VIDEO_SPEEDUP
+                                    safe_speedup = (
+                                        speedup_cfg
+                                        if speedup_cfg > 0
+                                        else _DEFAULT_VIDEO_SPEEDUP
+                                    )
                                     effective_duration = 0.0
                                     if isinstance(dur, (int, float)):
-                                        effective_duration = max(float(dur), 0.0) / max(safe_speedup, 0.1)
+                                        effective_duration = max(float(dur), 0.0) / max(
+                                            safe_speedup, 0.1
+                                        )
                                     computed = max(
                                         X_STT_MIN_TIMEOUT_S,
                                         effective_duration * stt_rtf + X_STT_PADDING_S,
@@ -3285,8 +3447,16 @@ class Router:
                                 if stt_timeout is None or stt_timeout <= 0:
                                     stt_timeout = X_STT_MIN_TIMEOUT_S
                                 try:
-                                    mm = int((dur or 0) // 60) if isinstance(dur, (int, float)) else 0
-                                    ss = int((dur or 0) % 60) if isinstance(dur, (int, float)) else 0
+                                    mm = (
+                                        int((dur or 0) // 60)
+                                        if isinstance(dur, (int, float))
+                                        else 0
+                                    )
+                                    ss = (
+                                        int((dur or 0) % 60)
+                                        if isinstance(dur, (int, float))
+                                        else 0
+                                    )
                                     self.logger.info(
                                         "stt.start",
                                         extra={
@@ -3303,7 +3473,8 @@ class Router:
                                 stt_t0 = time.perf_counter()
                                 stt_res = await self._run_stt_job(
                                     asyncio.wait_for(
-                                        hear_infer_from_url(url_for_stt), timeout=stt_timeout
+                                        hear_infer_from_url(url_for_stt),
+                                        timeout=stt_timeout,
                                     ),
                                     message,
                                 )
@@ -3312,7 +3483,9 @@ class Router:
                                 )
                                 try:
                                     el_ms = int((time.perf_counter() - stt_t0) * 1000)
-                                    chars = len((stt_res or {}).get("transcription", ""))
+                                    chars = len(
+                                        (stt_res or {}).get("transcription", "")
+                                    )
                                     self.logger.info(
                                         "stt.ok",
                                         extra={
@@ -3382,7 +3555,11 @@ class Router:
                                     es = str(e).lower()
                                     if "403" in es or "forbidden" in es:
                                         reason = "403"
-                                    elif "format" in es or "no video formats" in es or "no such format" in es:
+                                    elif (
+                                        "format" in es
+                                        or "no video formats" in es
+                                        or "no such format" in es
+                                    ):
                                         reason = "no_formats"
                                     elif "timeout" in es:
                                         reason = "timeout"
@@ -3432,17 +3609,26 @@ class Router:
                                 )
                         elif final_kind == "image":
                             images = (resolved or {}).get("images") or []
-                            self.logger.info("route.select kind=image reason=resolved_syndication_photos")
+                            self.logger.info(
+                                "route.select kind=image reason=resolved_syndication_photos"
+                            )
                             self.logger.info(
                                 f"media.resolve: result=image count={len(images)}"
                             )
                             try:
-                                domain = "pbs.twimg.com" if any("pbs.twimg.com" in (i or "") for i in images) else "unknown"
+                                domain = (
+                                    "pbs.twimg.com"
+                                    if any("pbs.twimg.com" in (i or "") for i in images)
+                                    else "unknown"
+                                )
                                 self.logger.info(
                                     "x.photos.ok",
                                     extra={
                                         "event": "x.photos.ok",
-                                        "detail": {"count": len(images), "domain": domain},
+                                        "detail": {
+                                            "count": len(images),
+                                            "domain": domain,
+                                        },
                                         "msg_id": message.id,
                                     },
                                 )
@@ -3632,8 +3818,7 @@ class Router:
                                 ".bmp",
                                 ".pdf",
                                 ".mp4",
-                                ".opus"
-                                ".mov",
+                                ".opus.mov",
                                 ".mkv",
                                 ".webm",
                                 ".avi",
@@ -3742,7 +3927,10 @@ class Router:
                             handler_res = await asyncio.wait_for(
                                 self._handle_video_url(item), timeout=handler_timeout_s
                             )
-                    elif modality in (InputModality.GENERAL_URL, InputModality.SCREENSHOT_URL):
+                    elif modality in (
+                        InputModality.GENERAL_URL,
+                        InputModality.SCREENSHOT_URL,
+                    ):
                         try:
                             handler_res = await asyncio.wait_for(
                                 self._handle_general_url(item, message=message),
@@ -3750,9 +3938,13 @@ class Router:
                             )
                         except TypeError:
                             handler_res = await asyncio.wait_for(
-                                self._handle_general_url(item), timeout=handler_timeout_s
+                                self._handle_general_url(item),
+                                timeout=handler_timeout_s,
                             )
-                    elif modality in (InputModality.SINGLE_IMAGE, InputModality.MULTI_IMAGE):
+                    elif modality in (
+                        InputModality.SINGLE_IMAGE,
+                        InputModality.MULTI_IMAGE,
+                    ):
                         try:
                             handler_res = await asyncio.wait_for(
                                 self._handle_image(item, message=message),
@@ -3762,7 +3954,10 @@ class Router:
                             handler_res = await asyncio.wait_for(
                                 self._handle_image(item), timeout=handler_timeout_s
                             )
-                    elif modality in (InputModality.PDF_DOCUMENT, InputModality.PDF_OCR):
+                    elif modality in (
+                        InputModality.PDF_DOCUMENT,
+                        InputModality.PDF_OCR,
+                    ):
                         try:
                             handler_res = await asyncio.wait_for(
                                 self._handle_pdf(item, message=message),
@@ -3821,6 +4016,7 @@ class Router:
         items = collect_input_items(message)
         # Treat plain text attachments as prompt extensions, not standalone items
         try:
+
             def _is_text_att(a) -> bool:
                 try:
                     name = (getattr(a, "filename", "") or "").lower()
@@ -3953,7 +4149,9 @@ class Router:
                     try:
                         for it in items:
                             if getattr(it, "source_type", None) == "url":
-                                existing_urls.add(str(getattr(it, "payload", "")).strip())
+                                existing_urls.add(
+                                    str(getattr(it, "payload", "")).strip()
+                                )
                     except Exception:
                         pass
 
@@ -4030,8 +4228,11 @@ class Router:
                     ref_msg = None
             if ref_msg and getattr(ref_msg, "content", None):
                 import re as _re
+
                 # Extract URLs from the referenced message
-                found_urls = _re.findall(r"https?://[^\s<>\"'\[\]{}|\\^`]+", ref_msg.content or "")
+                found_urls = _re.findall(
+                    r"https?://[^\s<>\"'\[\]{}|\\^`]+", ref_msg.content or ""
+                )
                 if found_urls:
                     # Deduplicate against existing url items
                     try:
@@ -4078,9 +4279,12 @@ class Router:
                         ref_msg = None
                 if ref_msg:
                     import re as _re
+
                     # 1) URLs present in the parent's text content
                     if getattr(ref_msg, "content", None):
-                        found_urls = _re.findall(r"https?://[^\s<>\"'\[\]{}|\\^`]+", ref_msg.content or "")
+                        found_urls = _re.findall(
+                            r"https?://[^\s<>\"'\[\]{}|\\^`]+", ref_msg.content or ""
+                        )
                     else:
                         found_urls = []
 
@@ -4181,7 +4385,9 @@ class Router:
             if _is_thread_channel(getattr(message, "channel", None)):
                 if not original_text or not original_text.strip():
                     try:
-                        rt, _ = await resolve_thread_reply_target(self.bot, message, self.config)
+                        rt, _ = await resolve_thread_reply_target(
+                            self.bot, message, self.config
+                        )
                     except Exception:
                         rt = None
                     adopted = False
@@ -4201,10 +4407,17 @@ class Router:
                                     extra={
                                         "subsys": "mem.thread",
                                         "event": "adopt_ok",
-                                        "guild_id": getattr(getattr(message, "guild", None), "id", None),
-                                        "user_id": getattr(getattr(message, "author", None), "id", None),
+                                        "guild_id": getattr(
+                                            getattr(message, "guild", None), "id", None
+                                        ),
+                                        "user_id": getattr(
+                                            getattr(message, "author", None), "id", None
+                                        ),
                                         "msg_id": getattr(message, "id", None),
-                                        "detail": {"source": "reply_target", "len": len(original_text)},
+                                        "detail": {
+                                            "source": "reply_target",
+                                            "len": len(original_text),
+                                        },
                                     },
                                 )
                             except Exception:
@@ -4212,7 +4425,9 @@ class Router:
                     if not adopted:
                         anchor = rt or message
                         try:
-                            async for m in message.channel.history(limit=10, before=anchor):
+                            async for m in message.channel.history(
+                                limit=10, before=anchor
+                            ):
                                 is_human = not bool(getattr(m.author, "bot", False))
                                 m_text = str(getattr(m, "content", "") or "").strip()
                                 if is_human and m_text:
@@ -4224,10 +4439,21 @@ class Router:
                                             extra={
                                                 "subsys": "mem.thread",
                                                 "event": "adopt_ok",
-                                                "guild_id": getattr(getattr(message, "guild", None), "id", None),
-                                                "user_id": getattr(getattr(message, "author", None), "id", None),
+                                                "guild_id": getattr(
+                                                    getattr(message, "guild", None),
+                                                    "id",
+                                                    None,
+                                                ),
+                                                "user_id": getattr(
+                                                    getattr(message, "author", None),
+                                                    "id",
+                                                    None,
+                                                ),
                                                 "msg_id": getattr(message, "id", None),
-                                                "detail": {"source": "prev_human", "len": len(original_text)},
+                                                "detail": {
+                                                    "source": "prev_human",
+                                                    "len": len(original_text),
+                                                },
                                             },
                                         )
                                     except Exception:
@@ -4240,12 +4466,16 @@ class Router:
 
         # Reply-case UX fallback (non-thread): mention + reply with minimal text → adopt parent text. [REH][IV]
         try:
-            if not _is_thread_channel(getattr(message, "channel", None)) and getattr(message, "reference", None):
+            if not _is_thread_channel(getattr(message, "channel", None)) and getattr(
+                message, "reference", None
+            ):
                 # Only trigger on @mention to avoid hijacking normal replies
                 if self.bot.user in (getattr(message, "mentions", None) or []):
                     minimal = True
                     try:
-                        minimal = not bool(re.search(r"[A-Za-z0-9]", original_text or ""))
+                        minimal = not bool(
+                            re.search(r"[A-Za-z0-9]", original_text or "")
+                        )
                     except Exception:
                         minimal = not bool(original_text and original_text.strip())
                     if minimal:
@@ -4253,7 +4483,9 @@ class Router:
                         ref_msg = getattr(ref, "resolved", None)
                         if ref_msg is None and getattr(ref, "message_id", None):
                             try:
-                                ref_msg = await message.channel.fetch_message(ref.message_id)
+                                ref_msg = await message.channel.fetch_message(
+                                    ref.message_id
+                                )
                             except Exception:
                                 ref_msg = None
                         if ref_msg and getattr(ref_msg, "content", None):
@@ -4274,10 +4506,21 @@ class Router:
                                             extra={
                                                 "subsys": "mem.reply",
                                                 "event": "adopt_ok",
-                                                "guild_id": getattr(getattr(message, "guild", None), "id", None),
-                                                "user_id": getattr(getattr(message, "author", None), "id", None),
+                                                "guild_id": getattr(
+                                                    getattr(message, "guild", None),
+                                                    "id",
+                                                    None,
+                                                ),
+                                                "user_id": getattr(
+                                                    getattr(message, "author", None),
+                                                    "id",
+                                                    None,
+                                                ),
                                                 "msg_id": getattr(message, "id", None),
-                                                "detail": {"source": "reply_parent", "len": len(original_text)},
+                                                "detail": {
+                                                    "source": "reply_parent",
+                                                    "len": len(original_text),
+                                                },
                                             },
                                         )
                                     except Exception:
@@ -4290,6 +4533,7 @@ class Router:
         # Ingest .txt attachments from the triggering message into the text prompt (first match only)
         try:
             atts = list(getattr(message, "attachments", []) or [])
+
             def _is_text_att2(a) -> bool:
                 try:
                     name = (getattr(a, "filename", "") or "").lower()
@@ -4323,9 +4567,7 @@ class Router:
                         )
                         if len(txt_atts) > 1:
                             extra = len(txt_atts) - 1
-                            self.logger.info(
-                                f"attachments.txt_ignored extra={extra}"
-                            )
+                            self.logger.info(f"attachments.txt_ignored extra={extra}")
                     except Exception:
                         pass
                 else:
@@ -4524,13 +4766,17 @@ class Router:
 
             # Default to TEXT for any minimal chat signal (mentions, punctuation, emoji, short words)
             try:
-                mentioned_me = self.bot.user in (getattr(message, "mentions", None) or [])
+                mentioned_me = self.bot.user in (
+                    getattr(message, "mentions", None) or []
+                )
                 self.logger.info(
                     "text_default",
                     extra={
                         "subsys": "route",
                         "event": "text_default",
-                        "reason": "mention_has_text" if mentioned_me else "ambiguous_intent",
+                        "reason": "mention_has_text"
+                        if mentioned_me
+                        else "ambiguous_intent",
                         "msg_id": getattr(message, "id", None),
                     },
                 )
@@ -4926,8 +5172,6 @@ class Router:
             )
             return f"⚠️ Failed to process image from URL (error: {e})"
 
-
-
     async def _vl_describe_image_from_url(
         self,
         image_url: str,
@@ -5042,7 +5286,9 @@ class Router:
             except Exception:
                 pass
 
-    async def _handle_video_url(self, item: InputItem, message: Optional[Message] = None) -> str:
+    async def _handle_video_url(
+        self, item: InputItem, message: Optional[Message] = None
+    ) -> str:
         """
         Handle video URL input items (YouTube, TikTok, etc.).
         For Twitter/X URLs: tries yt-dlp first, routes non-video posts to the tiered WebExtractionService (no auto-screenshot).
@@ -5078,7 +5324,9 @@ class Router:
                     or {}
                 )
                 frontend_ctx = ctx.get("frontend")
-                primary_ctx = ctx.get("primary") or self._parse_twitter_status_id(normalized_url)
+                primary_ctx = ctx.get("primary") or self._parse_twitter_status_id(
+                    normalized_url
+                )
                 if frontend_ctx:
                     frontend_hint[normalized_url] = frontend_ctx
                 if primary_ctx:
@@ -5098,12 +5346,20 @@ class Router:
                     or ""
                 )
                 frontend_selected = (resolved or {}).get("frontend") or frontend_ctx
-                if (resolved or {}).get("kind") == "video" and (resolved or {}).get("url"):
+                if (resolved or {}).get("kind") == "video" and (resolved or {}).get(
+                    "url"
+                ):
                     candidate_url = str(resolved.get("url"))
-                    verify_kind, verify_ct = await self._verify_media_kind(candidate_url, default="video")
-                    self._log_media_kind_checked(candidate_url, verify_ct, verify_kind or "video")
+                    verify_kind, verify_ct = await self._verify_media_kind(
+                        candidate_url, default="video"
+                    )
+                    self._log_media_kind_checked(
+                        candidate_url, verify_ct, verify_kind or "video"
+                    )
                     if verify_kind == "video":
-                        self.logger.info("route.select kind=video reason=resolved_direct_media")
+                        self.logger.info(
+                            "route.select kind=video reason=resolved_direct_media"
+                        )
                         stt_target_url = candidate_url
                         try:
                             import hashlib as _hl
@@ -5128,7 +5384,9 @@ class Router:
                             if primary_selected and uhash:
                                 stt_target_url = f"{stt_target_url}#ptid={primary_selected}&uh={uhash}"
                                 if frontend_selected:
-                                    stt_target_url = f"{stt_target_url}&fe={frontend_selected}"
+                                    stt_target_url = (
+                                        f"{stt_target_url}&fe={frontend_selected}"
+                                    )
                         except Exception:
                             pass
                     else:
@@ -5136,7 +5394,6 @@ class Router:
                         stt_target_url = url
                 else:
                     stt_target_url = url
-
 
             result = await self._run_stt_job(
                 hear_infer_from_url(stt_target_url),
@@ -5210,7 +5467,9 @@ class Router:
                             try:
                                 syn = await self._get_tweet_via_syndication(tweet_id)
                                 if syn:
-                                    base_text = self._format_syndication_result(syn, url)
+                                    base_text = self._format_syndication_result(
+                                        syn, url
+                                    )
                             except Exception:
                                 base_text = None
                     except Exception:
@@ -5386,7 +5645,10 @@ class Router:
                     try:
                         self.logger.info(
                             "fallback",
-                            extra={"event": "fallback", "detail": {"kind": "caption_only"}},
+                            extra={
+                                "event": "fallback",
+                                "detail": {"kind": "caption_only"},
+                            },
                         )
                     except Exception:
                         pass
@@ -5401,7 +5663,11 @@ class Router:
                             base_text = self._format_x_tweet_result(api_data, url)
                         except Exception:
                             base_text = None
-                    if base_text is None and tweet_id and bool(self.config.get("X_SYNDICATION_ENABLED", True)):
+                    if (
+                        base_text is None
+                        and tweet_id
+                        and bool(self.config.get("X_SYNDICATION_ENABLED", True))
+                    ):
                         try:
                             syn = await self._get_tweet_via_syndication(tweet_id)
                             if syn:
@@ -5440,7 +5706,9 @@ class Router:
 
             return f"⚠️ Video processing failed: {str(e)}"
 
-    async def _handle_audio_video_file(self, item: InputItem, message: Optional[Message] = None) -> str:
+    async def _handle_audio_video_file(
+        self, item: InputItem, message: Optional[Message] = None
+    ) -> str:
         """
         Handle audio/video file attachments.
         Returns transcribed text for further processing.
@@ -5466,7 +5734,9 @@ class Router:
             )
             return f"⚠️ Could not process this audio/video file: {str(e)}"
 
-    async def _handle_pdf(self, item: InputItem, message: Optional[Message] = None) -> str:
+    async def _handle_pdf(
+        self, item: InputItem, message: Optional[Message] = None
+    ) -> str:
         """
         Handle PDF document input items.
         Returns extracted text for further processing.
@@ -5553,7 +5823,9 @@ class Router:
             )
             return "Failed to process PDF document from URL."
 
-    async def _handle_pdf_ocr(self, item: InputItem, message: Optional[Message] = None) -> str:
+    async def _handle_pdf_ocr(
+        self, item: InputItem, message: Optional[Message] = None
+    ) -> str:
         """
         Handle PDF documents that require OCR processing.
         Returns extracted text for further processing.
@@ -5562,12 +5834,14 @@ class Router:
         # TODO: Implement OCR-specific logic
         return await self._handle_pdf(item)
 
-    async def _handle_general_url(self, item: InputItem, message: Optional[Message] = None) -> str:
+    async def _handle_general_url(
+        self, item: InputItem, message: Optional[Message] = None
+    ) -> str:
         """
         Handle general URL input items.
         Returns extracted content for further processing.
         No auto-screenshot fallback here; screenshots require explicit !ss command.
-        
+
         Enhanced: Classifies URLs by MIME type and routes document/audio/video/image
         URLs to their respective pipelines instead of web scraping. [CA][REH]
         """
@@ -5583,19 +5857,19 @@ class Router:
                 if canon_candidate and canon_candidate != url:
                     url = canon_candidate
             self.logger.info(f"🌐 Processing general URL: {url}")
-            
+
             # --- URL MIME classification for media/document routing [CA][REH] ---
             # Skip classification for known platform URLs (Twitter/X, YouTube, etc.)
             # which have their own specialized handling below.
             skip_mime_classification = self._is_twitter_url(url)
-            
+
             if not skip_mime_classification:
                 try:
-                    from .url_classifier import classify_url, ClassifiedURL
+                    from .url_classifier import classify_url
                     from .attachment_classifier import AttachmentBucket
-                    
+
                     classified = await classify_url(url)
-                    
+
                     # Route based on classification bucket
                     if classified.bucket == AttachmentBucket.DOC:
                         # Document URL → document ingestion pipeline
@@ -5608,7 +5882,7 @@ class Router:
                             },
                         )
                         return await self._handle_document_url(url, classified, message)
-                    
+
                     elif classified.bucket == AttachmentBucket.AUDIO:
                         # Audio URL → STT pipeline
                         self.logger.info(
@@ -5620,7 +5894,7 @@ class Router:
                             },
                         )
                         return await self._handle_audio_url(url, classified, message)
-                    
+
                     elif classified.bucket == AttachmentBucket.VIDEO:
                         # Video URL → media/STT pipeline
                         self.logger.info(
@@ -5631,8 +5905,10 @@ class Router:
                                 "detail": {"bucket": "VIDEO", "url": url[:200]},
                             },
                         )
-                        return await self._handle_video_file_url(url, classified, message)
-                    
+                        return await self._handle_video_file_url(
+                            url, classified, message
+                        )
+
                     elif classified.bucket == AttachmentBucket.IMAGE:
                         # Image URL → VL pipeline
                         self.logger.info(
@@ -5644,17 +5920,21 @@ class Router:
                             },
                         )
                         return await self._handle_image_url(url, classified, message)
-                    
+
                     # OTHER bucket or TXT_PROMPT → fall through to web scraping
                     self.logger.info(
                         f"url.route bucket={classified.bucket.name} → web_scrape url={url[:80]}",
                         extra={
                             "subsys": "url",
                             "event": "url.route",
-                            "detail": {"bucket": classified.bucket.name, "url": url[:200], "action": "web_scrape"},
+                            "detail": {
+                                "bucket": classified.bucket.name,
+                                "url": url[:200],
+                                "action": "web_scrape",
+                            },
                         },
                     )
-                    
+
                 except Exception as e:
                     # Classification failed - fall through to existing web scraping [REH]
                     self.logger.debug(f"url.classify.failed url={url[:80]} error={e}")
@@ -5680,7 +5960,9 @@ class Router:
                     )
                 )
             except Exception:
-                x_syn_call_timeout = max(getattr(self, "_x_syn_timeout_s", 3.0), 3.0) + 0.5
+                x_syn_call_timeout = (
+                    max(getattr(self, "_x_syn_timeout_s", 3.0), 3.0) + 0.5
+                )
             try:
                 url_process_timeout = float(cfg.get("URL_PROCESS_TIMEOUT_S", 25.0))
             except Exception:
@@ -5692,9 +5974,12 @@ class Router:
 
             api_data: Optional[Dict[str, Any]] = None
 
-            async def _bounded(coro, timeout_s: float, tag: str, detail: Optional[dict] = None):
+            async def _bounded(
+                coro, timeout_s: float, tag: str, detail: Optional[dict] = None
+            ):
                 """Await coro with a timeout and emit start/ok/timeout/fail breadcrumbs. [REH][PA]"""
                 import time as _t
+
                 t0 = _t.time()
                 try:
                     self.logger.debug(
@@ -5727,7 +6012,8 @@ class Router:
                             f"{tag}.timeout ms={dt_ms}",
                             extra={
                                 "event": f"{tag}.timeout",
-                                "detail": (detail or {}) | {"ms": dt_ms, "timeout_s": timeout_s},
+                                "detail": (detail or {})
+                                | {"ms": dt_ms, "timeout_s": timeout_s},
                             },
                         )
                     except Exception:
@@ -5740,7 +6026,8 @@ class Router:
                             f"{tag}.fail {e.__class__.__name__}: {e}",
                             extra={
                                 "event": f"{tag}.fail",
-                                "detail": (detail or {}) | {"ms": dt_ms, "error": str(e)},
+                                "detail": (detail or {})
+                                | {"ms": dt_ms, "error": str(e)},
                             },
                         )
                     except Exception:
@@ -5751,7 +6038,11 @@ class Router:
             # IMPORTANT: For X/Twitter status URLs we now defer unroll until after media detection,
             # so images/video can take precedence. The early unroll remains available for non-X URLs.
             try:
-                if bool(self.config.get("TWITTER_UNROLL_ENABLED", False)) and self._is_twitter_status_url(url) and False:
+                if (
+                    bool(self.config.get("TWITTER_UNROLL_ENABLED", False))
+                    and self._is_twitter_status_url(url)
+                    and False
+                ):
                     # Emit a DEBUG start event so operators can see attempts when LOG_LEVEL=debug
                     try:
                         self.logger.debug(
@@ -5767,9 +6058,15 @@ class Router:
                     t0 = time.time()
                     ctx, reason = await unroll_author_thread(
                         url,
-                        timeout_s=float(self.config.get("TWITTER_UNROLL_TIMEOUT_S", 15.0)),
-                        max_tweets=int(self.config.get("TWITTER_UNROLL_MAX_TWEETS", 30)),
-                        max_chars=int(self.config.get("TWITTER_UNROLL_MAX_CHARS", 6000)),
+                        timeout_s=float(
+                            self.config.get("TWITTER_UNROLL_TIMEOUT_S", 15.0)
+                        ),
+                        max_tweets=int(
+                            self.config.get("TWITTER_UNROLL_MAX_TWEETS", 30)
+                        ),
+                        max_chars=int(
+                            self.config.get("TWITTER_UNROLL_MAX_CHARS", 6000)
+                        ),
                     )
                     if ctx is not None and getattr(ctx, "joined_text", None):
                         dt_ms = int((time.time() - t0) * 1000)
@@ -5779,7 +6076,11 @@ class Router:
                                 extra={
                                     "subsys": "threads.x",
                                     "event": "unroll_ok",
-                                    "detail": {"tweets": ctx.tweet_count, "ms": dt_ms, "url": ctx.canonical_url},
+                                    "detail": {
+                                        "tweets": ctx.tweet_count,
+                                        "ms": dt_ms,
+                                        "url": ctx.canonical_url,
+                                    },
                                 },
                             )
                         except Exception:
@@ -5792,7 +6093,9 @@ class Router:
                                 extra={
                                     "subsys": "threads.x",
                                     "event": "unroll_fallback",
-                                    "detail": {"reason": reason or "unroll_not_available"},
+                                    "detail": {
+                                        "reason": reason or "unroll_not_available"
+                                    },
                                 },
                             )
                         except Exception:
@@ -5937,8 +6240,13 @@ class Router:
                                 status_id = ""
                             if status_id:
                                 imgs, _ = await _bounded(
-                                    self._probe_twitter_syndication_images(url, status_id),
-                                    min(getattr(self, "_x_syn_timeout_s", 3.0) + 1.0, 4.5),
+                                    self._probe_twitter_syndication_images(
+                                        url, status_id
+                                    ),
+                                    min(
+                                        getattr(self, "_x_syn_timeout_s", 3.0) + 1.0,
+                                        4.5,
+                                    ),
                                     "x.syndication.image_probe",
                                     {"tweet_id": status_id},
                                 )
@@ -6005,7 +6313,11 @@ class Router:
                                         "stt.fail",
                                         extra={
                                             "event": "stt.fail",
-                                            "detail": {"reason": "no_speech" if stt_err != "error" else "error"},
+                                            "detail": {
+                                                "reason": "no_speech"
+                                                if stt_err != "error"
+                                                else "error"
+                                            },
                                         },
                                     )
                                 except Exception:
@@ -6025,12 +6337,15 @@ class Router:
                             try:
                                 base_text_api = (
                                     (api_data.get("data") or [{}])[0].get("text")
-                                    if "api_data" in locals() and isinstance(api_data, dict)
+                                    if "api_data" in locals()
+                                    and isinstance(api_data, dict)
                                     else ""
                                 )
                             except Exception:
                                 base_text_api = ""
-                            safe_base_text = (base_text_api or text or base or "").strip()
+                            safe_base_text = (
+                                base_text_api or text or base or ""
+                            ).strip()
                             return self._format_x_tweet_with_transcription(
                                 base_text=safe_base_text,
                                 url=url,
@@ -6434,7 +6749,10 @@ class Router:
                 f"🧭 Falling back to tiered extractor for {url} (no auto-screenshot)"
             )
             extract_res, _ = await _bounded(
-                web_extractor.extract(url), web_extract_timeout, "url.extract", {"url": url}
+                web_extractor.extract(url),
+                web_extract_timeout,
+                "url.extract",
+                {"url": url},
             )
             if extract_res.success:
                 return f"Web content from {extract_res.canonical_url or url}:\n{extract_res.to_message()}"
@@ -6458,18 +6776,18 @@ class Router:
         """
         Handle document URLs (PDF, DOCX, etc.) by downloading and processing through
         the document ingestion pipeline.
-        
+
         Args:
             url: The document URL
             classified: Classification result with MIME type and filename
             message: Optional Discord message for context
-            
+
         Returns:
             Extracted document text or error message
         """
         try:
             from .document_ingest import ingest_document_from_url
-            
+
             self.logger.info(
                 f"doc.url.start url={url[:80]} content_type={classified.content_type}",
                 extra={
@@ -6482,29 +6800,29 @@ class Router:
                     },
                 },
             )
-            
+
             result = await ingest_document_from_url(url)
-            
+
             if result.get("error"):
                 self.logger.warning(
                     f"doc.url.failed url={url[:80]} error={result['error'][:100]}"
                 )
                 # Fall through to web scraping silently - don't surface error to user
                 return ""
-            
+
             text = result.get("text", "")
             if text:
                 filename = classified.filename or "document"
-                self.logger.info(
-                    f"doc.url.success url={url[:80]} chars={len(text)}"
-                )
+                self.logger.info(f"doc.url.success url={url[:80]} chars={len(text)}")
                 return f"[DOCUMENT: {filename}]\n{text}"
-            
+
             # No text extracted - fall through silently
             return ""
-            
+
         except Exception as e:
-            self.logger.error(f"doc.url.exception url={url[:80]} error={e}", exc_info=True)
+            self.logger.error(
+                f"doc.url.exception url={url[:80]} error={e}", exc_info=True
+            )
             return ""
 
     async def _handle_audio_url(
@@ -6515,12 +6833,12 @@ class Router:
     ) -> str:
         """
         Handle audio URLs by downloading and processing through the STT pipeline.
-        
+
         Args:
             url: The audio URL
             classified: Classification result with MIME type and filename
             message: Optional Discord message for context
-            
+
         Returns:
             Transcription text or error message
         """
@@ -6537,28 +6855,30 @@ class Router:
                     },
                 },
             )
-            
+
             # Use existing hear_infer_from_url which handles URL audio
             result = await hear_infer_from_url(url)
-            
+
             transcription = result.get("transcription", "")
             if transcription:
                 filename = classified.filename or "audio"
                 metadata = result.get("metadata", {})
                 duration = metadata.get("original_duration_s", 0)
-                
+
                 self.logger.info(
                     f"audio.url.success url={url[:80]} chars={len(transcription)} duration={duration:.1f}s"
                 )
-                
+
                 return f"[AUDIO TRANSCRIPT: {filename}]\n{transcription}"
-            
+
             # No transcription - fall through silently
             self.logger.warning(f"audio.url.empty url={url[:80]}")
             return ""
-            
+
         except Exception as e:
-            self.logger.error(f"audio.url.exception url={url[:80]} error={e}", exc_info=True)
+            self.logger.error(
+                f"audio.url.exception url={url[:80]} error={e}", exc_info=True
+            )
             return ""
 
     async def _handle_video_file_url(
@@ -6569,15 +6889,15 @@ class Router:
     ) -> str:
         """
         Handle video file URLs by downloading and processing through the STT pipeline.
-        
+
         This is for direct video file URLs (e.g., .mp4, .webm files), not video
         platform URLs (YouTube, TikTok) which have their own handlers.
-        
+
         Args:
             url: The video file URL
             classified: Classification result with MIME type and filename
             message: Optional Discord message for context
-            
+
         Returns:
             Transcription text or error message
         """
@@ -6594,28 +6914,30 @@ class Router:
                     },
                 },
             )
-            
+
             # Use existing hear_infer_from_url which handles video URLs via yt-dlp
             result = await hear_infer_from_url(url)
-            
+
             transcription = result.get("transcription", "")
             if transcription:
                 filename = classified.filename or "video"
                 metadata = result.get("metadata", {})
                 duration = metadata.get("original_duration_s", 0)
-                
+
                 self.logger.info(
                     f"video.url.success url={url[:80]} chars={len(transcription)} duration={duration:.1f}s"
                 )
-                
+
                 return f"[VIDEO TRANSCRIPT: {filename}]\n{transcription}"
-            
+
             # No transcription - fall through silently
             self.logger.warning(f"video.url.empty url={url[:80]}")
             return ""
-            
+
         except Exception as e:
-            self.logger.error(f"video.url.exception url={url[:80]} error={e}", exc_info=True)
+            self.logger.error(
+                f"video.url.exception url={url[:80]} error={e}", exc_info=True
+            )
             return ""
 
     async def _handle_image_url(
@@ -6626,12 +6948,12 @@ class Router:
     ) -> str:
         """
         Handle image URLs by downloading and processing through the VL pipeline.
-        
+
         Args:
             url: The image URL
             classified: Classification result with MIME type and filename
             message: Optional Discord message for context
-            
+
         Returns:
             Image analysis text or error message
         """
@@ -6648,26 +6970,28 @@ class Router:
                     },
                 },
             )
-            
+
             # Use existing VL describe method
             analysis = await self._vl_describe_image_from_url(
                 url,
                 prompt="Describe this image in detail. Focus on salient objects, text, and context.",
             )
-            
+
             if analysis:
                 filename = classified.filename or "image"
                 self.logger.info(
                     f"image.url.success url={url[:80]} chars={len(analysis)}"
                 )
                 return f"[IMAGE: {filename}]\n{analysis}"
-            
+
             # No analysis - fall through silently
             self.logger.warning(f"image.url.empty url={url[:80]}")
             return ""
-            
+
         except Exception as e:
-            self.logger.error(f"image.url.exception url={url[:80]} error={e}", exc_info=True)
+            self.logger.error(
+                f"image.url.exception url={url[:80]} error={e}", exc_info=True
+            )
             return ""
 
     async def _handle_screenshot_url(
@@ -6741,7 +7065,9 @@ class Router:
             self.logger.error(f"Error taking screenshot of URL: {e}", exc_info=True)
             return f"Failed to screenshot URL: {item.payload}"
 
-    async def _handle_unknown(self, item: InputItem, message: Optional[Message] = None) -> str:
+    async def _handle_unknown(
+        self, item: InputItem, message: Optional[Message] = None
+    ) -> str:
         """
         Handle unknown or unsupported input items.
         Returns appropriate fallback message.
@@ -6862,7 +7188,9 @@ class Router:
             try:
                 url_candidates = re.findall(r"https?://\S+", content)
                 if ref_msg:
-                    url_candidates += re.findall(r"https?://\S+", getattr(ref_msg, "content", "") or "")
+                    url_candidates += re.findall(
+                        r"https?://\S+", getattr(ref_msg, "content", "") or ""
+                    )
                 has_twitter_url = any(self._is_twitter_url(u) for u in url_candidates)
             except Exception:
                 has_twitter_url = False
@@ -6900,8 +7228,12 @@ class Router:
                     intent_result = await self._vision_intent_router.determine_intent(
                         user_message=content_clean,
                         context=context_str,
-                        user_id=str(getattr(getattr(message, "author", None), "id", "")),
-                        guild_id=str(message.guild.id) if getattr(message, "guild", None) else None,
+                        user_id=str(
+                            getattr(getattr(message, "author", None), "id", "")
+                        ),
+                        guild_id=str(message.guild.id)
+                        if getattr(message, "guild", None)
+                        else None,
                     )
                 except Exception:
                     intent_result = None
@@ -6913,7 +7245,9 @@ class Router:
                         pass
                     return None
 
-                if intent_result and getattr(intent_result.decision, "use_vision", False):
+                if intent_result and getattr(
+                    intent_result.decision, "use_vision", False
+                ):
                     try:
                         self._metric_inc("vision.route.intent", {"stage": "precheck"})
                     except Exception:
@@ -6930,7 +7264,10 @@ class Router:
                         try:
                             self._metric_inc(
                                 "vision.route.blocked",
-                                {"reason": "orchestrator_unavailable", "path": "intent"},
+                                {
+                                    "reason": "orchestrator_unavailable",
+                                    "path": "intent",
+                                },
                             )
                         except Exception:
                             pass
@@ -7147,7 +7484,9 @@ class Router:
         # Convert EvidenceBundle to string for processing
         if isinstance(content, EvidenceBundle):
             content_str = content.compose_prompt_text()
-            self.logger.debug(f"📋 Composed evidence bundle for text flow: {len(content_str)} chars")
+            self.logger.debug(
+                f"📋 Composed evidence bundle for text flow: {len(content_str)} chars"
+            )
         else:
             content_str = content
 
@@ -7175,7 +7514,9 @@ class Router:
                 ref_msg = None
             if ref_msg:
                 try:
-                    url_candidates += re.findall(r"https?://\S+", getattr(ref_msg, "content", "") or "")
+                    url_candidates += re.findall(
+                        r"https?://\S+", getattr(ref_msg, "content", "") or ""
+                    )
                 except Exception:
                     pass
                 try:
@@ -7477,7 +7818,9 @@ class Router:
         # Convert EvidenceBundle to string for processing
         if isinstance(content, EvidenceBundle):
             content_str = content.compose_prompt_text()
-            self.logger.debug(f"📋 Composed evidence bundle into {len(content_str)} chars")
+            self.logger.debug(
+                f"📋 Composed evidence bundle into {len(content_str)} chars"
+            )
         else:
             content_str = content
 
@@ -7590,7 +7933,9 @@ class Router:
                         or "vl prompt output:" in content_lower
                         or bool(
                             re.search(
-                                r"^image\s+\d+:", content_str, re.IGNORECASE | re.MULTILINE
+                                r"^image\s+\d+:",
+                                content_str,
+                                re.IGNORECASE | re.MULTILINE,
                             )
                         )
                         or "tweet caption:" in content_lower
@@ -7761,7 +8106,9 @@ class Router:
                 "visual_facts:" in content_lower
                 or "vl prompt output:" in content_lower
                 or bool(
-                    re.search(r"^image\s+\d+:", content_str, re.IGNORECASE | re.MULTILINE)
+                    re.search(
+                        r"^image\s+\d+:", content_str, re.IGNORECASE | re.MULTILINE
+                    )
                 )
                 or "tweet caption:" in content_lower
             )
@@ -8014,7 +8361,10 @@ class Router:
         try:
             self.logger.info(
                 f"route=audio | Audio flow not implemented in this profile (msg_id: {message.id})",
-                extra={"event": "route.audio.stub", "msg_id": getattr(message, "id", None)},
+                extra={
+                    "event": "route.audio.stub",
+                    "msg_id": getattr(message, "id", None),
+                },
             )
         except Exception:
             pass
@@ -8138,7 +8488,9 @@ class Router:
                     error=True,
                 )
 
-    async def _flow_process_attachments_legacy(self, message: Message, attachment=None) -> BotAction:
+    async def _flow_process_attachments_legacy(
+        self, message: Message, attachment=None
+    ) -> BotAction:
         """DEPRECATED: Legacy attachment processor (has .txt short-circuit bug). Use _flow_process_attachments_multimodal instead."""
         # Accept either a Discord Attachment object or a placeholder (e.g., "" from compat path)
         if not hasattr(attachment, "filename"):
@@ -8186,7 +8538,37 @@ class Router:
                 try:
                     attachments = list(getattr(message, "attachments", []) or [])
                     alt = next(
-                        (a for a in attachments if (getattr(a, "filename", "").lower().endswith((".png",".jpg",".jpeg",".webp",".gif",".bmp",".pdf",".mp4",".mov",".mkv",".webm",".avi",".m4v",".mp3",".wav",".ogg",".m4a",".flac")) and a.id != getattr(attachment, "id", None))),
+                        (
+                            a
+                            for a in attachments
+                            if (
+                                getattr(a, "filename", "")
+                                .lower()
+                                .endswith(
+                                    (
+                                        ".png",
+                                        ".jpg",
+                                        ".jpeg",
+                                        ".webp",
+                                        ".gif",
+                                        ".bmp",
+                                        ".pdf",
+                                        ".mp4",
+                                        ".mov",
+                                        ".mkv",
+                                        ".webm",
+                                        ".avi",
+                                        ".m4v",
+                                        ".mp3",
+                                        ".wav",
+                                        ".ogg",
+                                        ".m4a",
+                                        ".flac",
+                                    )
+                                )
+                                and a.id != getattr(attachment, "id", None)
+                            )
+                        ),
                         None,
                     )
                 except Exception:
@@ -8214,7 +8596,9 @@ class Router:
 
         else:
             # Avoid emitting unsupported for plain text attachments; let text path handle them.
-            if filename.endswith(".txt") or (content_type or "").lower().startswith("text/"):
+            if filename.endswith(".txt") or (content_type or "").lower().startswith(
+                "text/"
+            ):
                 return BotAction(content="I didn't receive a file to process.")
             self.logger.warning(
                 f"Unsupported attachment type: {filename} (msg_id: {message.id})"
@@ -8439,7 +8823,7 @@ class Router:
     ) -> BotAction:
         """
         Process all attachments with per-file classification (no .txt short-circuit).
-        
+
         Handles mixed attachments: .txt + PDF + voice + image in a single message.
         Each attachment is classified independently and processed by its bucket.
         """
@@ -8447,39 +8831,42 @@ class Router:
         if not attachments:
             self.logger.warning(f"No attachments to process (msg_id: {message.id})")
             return BotAction(content="I didn't receive any files to process.")
-        
+
         self.logger.info(
             f"Processing {len(attachments)} attachments multimodally (msg_id: {message.id})"
         )
-        
+
         # Classify all attachments independently (no short-circuit)
         classified = classify_attachments(attachments)
-        
+
         # Aggregate results by bucket
         evidence_parts = []
         user_caption = (
             raw_content if raw_content is not None else (message.content or "")
         ).strip()
-        
+
         # 1. TXT_PROMPT: Append first .txt to evidence
         txt_atts = get_by_bucket(classified, AttachmentBucket.TXT_PROMPT)
         if txt_atts:
             try:
-                txt_content = await read_attachment_text(txt_atts[0].attachment, max_bytes=50000)
+                txt_content = await read_attachment_text(
+                    txt_atts[0].attachment, max_bytes=50000
+                )
                 if txt_content:
                     evidence_parts.append(f"[TXT FILE]\n{txt_content}")
                     self.logger.info(f"Loaded .txt file: {len(txt_content)} chars")
             except Exception as e:
                 self.logger.warning(f"Failed to read .txt file: {e}")
-        
+
         # 2. DOC: Extract text from documents (PDF, DOCX, RTF, MD)
         doc_atts = get_by_bucket(classified, AttachmentBucket.DOC)
         for doc_att in doc_atts:
             try:
                 result = await ingest_document_attachment(doc_att.attachment)
                 if result.get("text"):
-                    text_preview = result["text"][:200].replace("\n", " ")
-                    evidence_parts.append(f"[DOCUMENT: {doc_att.filename}]\n{result['text']}")
+                    evidence_parts.append(
+                        f"[DOCUMENT: {doc_att.filename}]\n{result['text']}"
+                    )
                     self.logger.info(
                         f"Extracted document: {doc_att.filename} → {len(result['text'])} chars"
                     )
@@ -8488,73 +8875,87 @@ class Router:
                         f"Document extraction failed for {doc_att.filename}: {result['error']}"
                     )
             except Exception as e:
-                self.logger.error(f"Document ingestion error for {doc_att.filename}: {e}", exc_info=True)
-        
+                self.logger.error(
+                    f"Document ingestion error for {doc_att.filename}: {e}",
+                    exc_info=True,
+                )
+
         # 3. AUDIO/VIDEO: Transcribe via STT (including voice messages)
         audio_atts = get_by_bucket(classified, AttachmentBucket.AUDIO)
         video_atts = get_by_bucket(classified, AttachmentBucket.VIDEO)
-        
+
         for av_att in audio_atts + video_atts:
             try:
-                self.logger.info(f"stt.enqueue kind={av_att.bucket.name.lower()} name={av_att.filename}")
-                
+                self.logger.info(
+                    f"stt.enqueue kind={av_att.bucket.name.lower()} name={av_att.filename}"
+                )
+
                 # Save attachment to temp file for STT
                 import tempfile
+
                 ext = Path(av_att.filename).suffix or ".tmp"
                 with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp_file:
                     tmp_path = Path(tmp_file.name)
-                
+
                 try:
                     await av_att.attachment.save(tmp_path)
                     transcript = await self._run_stt_job(hear_infer(tmp_path), message)
-                    
+
                     if transcript and transcript.strip():
-                        evidence_parts.append(f"[TRANSCRIPT: {av_att.filename}]\n{transcript}")
+                        evidence_parts.append(
+                            f"[TRANSCRIPT: {av_att.filename}]\n{transcript}"
+                        )
                         self.logger.info(
                             f"STT success: {av_att.filename} → {len(transcript)} chars"
                         )
                     else:
-                        self.logger.warning(f"STT returned empty transcript for {av_att.filename}")
-                
+                        self.logger.warning(
+                            f"STT returned empty transcript for {av_att.filename}"
+                        )
+
                 finally:
                     if tmp_path.exists():
                         tmp_path.unlink()
-            
+
             except Exception as e:
                 self.logger.warning(f"STT failed for {av_att.filename}: {e}")
                 # Continue processing other attachments
-        
+
         # 4. IMAGE: Process via VL (use first image only for backward compat)
         img_atts = get_by_bucket(classified, AttachmentBucket.IMAGE)
         if img_atts:
             # If we have text evidence from docs/audio, combine with image
             if evidence_parts:
                 # Process image and combine
-                img_result = await self._process_image_attachment(message, img_atts[0].attachment)
+                img_result = await self._process_image_attachment(
+                    message, img_atts[0].attachment
+                )
                 if img_result and img_result.content:
                     evidence_parts.append(f"[IMAGE ANALYSIS]\n{img_result.content}")
             else:
                 # Image-only message, use existing VL flow
-                return await self._process_image_attachment(message, img_atts[0].attachment)
-        
+                return await self._process_image_attachment(
+                    message, img_atts[0].attachment
+                )
+
         # 5. Aggregate all evidence
         if evidence_parts:
             combined_evidence = "\n\n".join(evidence_parts)
-            
+
             # Build final prompt: user caption + evidence
             if user_caption:
                 final_prompt = f"{user_caption}\n\n{combined_evidence}"
             else:
                 final_prompt = combined_evidence
-            
+
             self.logger.info(
                 f"Multimodal aggregation complete: {len(evidence_parts)} sources, "
                 f"{len(final_prompt)} total chars"
             )
-            
+
             # Send to brain for final processing
             return await brain_infer(final_prompt)
-        
+
         # No processable attachments found
         other_count = len(get_by_bucket(classified, AttachmentBucket.OTHER))
         if other_count > 0:
@@ -8562,7 +8963,7 @@ class Router:
                 content=f"I couldn't process {other_count} unsupported file type(s). "
                 "I support images, audio/video, PDFs, and documents (DOCX/RTF/MD)."
             )
-        
+
         return BotAction(content="I couldn't process any of the attachments.")
 
     def _is_image_only_tweet(self, syn_data: Dict[str, Any]) -> bool:
@@ -8828,10 +9229,14 @@ class Router:
         """
         # Generate unique request ID for tracking
         request_id = f"{message.id}_{int(message.created_at.timestamp())}"
-        self.logger.info(f"Starting vision generation - request_id: {request_id}, user_id: {message.author.id}")
+        self.logger.info(
+            f"Starting vision generation - request_id: {request_id}, user_id: {message.author.id}"
+        )
 
         if not self._vision_orchestrator:
-            self.logger.error(f"Vision orchestrator not available - request_id: {request_id}")
+            self.logger.error(
+                f"Vision orchestrator not available - request_id: {request_id}"
+            )
             return BotAction(
                 content="🚫 Vision generation is not available right now. Please try again later.",
                 error=True,
@@ -8873,9 +9278,13 @@ class Router:
 
             try:
                 job = await self._vision_orchestrator.submit_job(vision_request)
-                self.logger.info(f"Vision job submitted successfully - job_id: {job.job_id[:8]} (request_id: {request_id})")
+                self.logger.info(
+                    f"Vision job submitted successfully - job_id: {job.job_id[:8]} (request_id: {request_id})"
+                )
             except Exception as e:
-                self.logger.error(f"Vision job submission failed - request_id: {request_id}, error: {e}")
+                self.logger.error(
+                    f"Vision job submission failed - request_id: {request_id}, error: {e}"
+                )
                 raise
 
             # Initial message uses compact working card
@@ -9742,7 +10151,9 @@ class Router:
         if message is not None and bot_id:
             try:
                 mentions = getattr(message, "mentions", [])
-                bot_mentioned = any(getattr(mention, "id", None) == bot_id for mention in mentions)
+                bot_mentioned = any(
+                    getattr(mention, "id", None) == bot_id for mention in mentions
+                )
             except Exception:
                 bot_mentioned = False
 
@@ -9760,12 +10171,6 @@ class Router:
                 mention_pattern = rf"^<@!?{bot_id}>\s*"
                 text = re.sub(mention_pattern, "", text).strip()
 
-        # Patterns for guilds with mention
-        guild_mentioned_patterns = [
-            re.compile(r"^(?:img|image):\s+(.+)$", re.IGNORECASE | re.DOTALL),
-            re.compile(r"^!(?:img|image)\s+(.+)$", re.IGNORECASE | re.DOTALL),
-        ]
-
         # Patterns for DMs or when mention is optional
         dm_or_optional_mention_patterns = [
             re.compile(r"^(?:img|image):\s+(.+)$", re.IGNORECASE | re.DOTALL),
@@ -9779,9 +10184,7 @@ class Router:
                 r"^(?:generate|create|make|draw)\s+(?:an?\s+)?image\s+(?:of\s+)?(.+)$",
                 re.IGNORECASE | re.DOTALL,
             ),
-            re.compile(
-                r"^(?:paint|illustrate)\s+(.+)$", re.IGNORECASE | re.DOTALL
-            ),
+            re.compile(r"^(?:paint|illustrate)\s+(.+)$", re.IGNORECASE | re.DOTALL),
         ]
 
         debug_triggers = os.getenv("VISION_TRIGGER_DEBUG", "0").lower() in (
@@ -9798,7 +10201,9 @@ class Router:
                     continue
                 prompt = (m.group(1) or "").strip()
                 # Normalize leading filler like "of a/an"
-                prompt = re.sub(r"^(?:of\s+)?(?:a\s+|an\s+)?", "", prompt, flags=re.IGNORECASE)
+                prompt = re.sub(
+                    r"^(?:of\s+)?(?:a\s+|an\s+)?", "", prompt, flags=re.IGNORECASE
+                )
                 return prompt
             return None
 
@@ -9823,7 +10228,13 @@ class Router:
             final_prompt = " ".join(prompt.split())
 
             # Log the trigger with context
-            context = "dm" if is_dm else "guild_mentioned" if bot_mentioned else "guild_no_mention"
+            context = (
+                "dm"
+                if is_dm
+                else "guild_mentioned"
+                if bot_mentioned
+                else "guild_no_mention"
+            )
             self.logger.info(
                 f"🎨 Direct vision trigger detected: prompt '{final_prompt[:50]}...' (context: {context})"
             )

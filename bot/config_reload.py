@@ -22,6 +22,7 @@ logger = get_logger(__name__)
 _janitor_imported = False
 try:
     from .janitor import restart_janitor
+
     _janitor_imported = True
 except ImportError:
     restart_janitor = None
@@ -34,6 +35,8 @@ _reload_callbacks: Set[Callable[[Dict[str, Any], Dict[str, Any]], None]] = set()
 _file_watcher_task: Optional[asyncio.Task] = None
 _last_reload_time: float = 0
 _watcher_lock: Optional[asyncio.Lock] = None
+
+
 def _candidate_env_paths() -> List[Path]:
     """Return list of candidate env files to watch (resolved absolute paths).
     Order matters; the first existing is used as the preferred .env for default reloads.
@@ -69,12 +72,14 @@ def _preferred_env_path() -> Path:
 _env_file_path = _preferred_env_path()
 _last_env_digest: Optional[str] = None
 
+
 def _file_digest(p: Path) -> Optional[str]:
     try:
         data = p.read_bytes()
         return hashlib.sha256(data).hexdigest()
     except Exception:
         return None
+
 
 # Sensitive keys that should be redacted in logs
 SENSITIVE_KEYS = {
@@ -153,7 +158,11 @@ def _infer_subsystems(changes: Dict[str, Any]) -> Set[str]:
 
     for k in keys:
         ku = k.upper()
-        if ku.startswith("OPENAI_") or ku.startswith("OLLAMA_") or ku.startswith("TEXT_"):
+        if (
+            ku.startswith("OPENAI_")
+            or ku.startswith("OLLAMA_")
+            or ku.startswith("TEXT_")
+        ):
             impacted.add("text")
         if ku.startswith("VL_") or ku.startswith("VISION_"):
             impacted.add("vision")
@@ -187,7 +196,10 @@ def reload_env(env_path: Optional[Path] = None) -> Dict[str, Any]:
                 "config.reload.started",
                 extra={
                     "event": "config.reload.started",
-                    "detail": {"prev_digest": env_before or "", "path": str(target_path)},
+                    "detail": {
+                        "prev_digest": env_before or "",
+                        "path": str(target_path),
+                    },
                 },
             )
 
@@ -244,7 +256,11 @@ def reload_env(env_path: Optional[Path] = None) -> Dict[str, Any]:
                 redacted_added = _redact_sensitive_values(changes.get("added", {}))
                 redacted_removed = _redact_sensitive_values(changes.get("removed", {}))
                 redacted_modified = {
-                    k: ("[REDACTED]" if any(s in k.upper() for s in SENSITIVE_KEYS) else v)
+                    k: (
+                        "[REDACTED]"
+                        if any(s in k.upper() for s in SENSITIVE_KEYS)
+                        else v
+                    )
                     for k, v in changes.get("modified", {}).items()
                 }
                 logger.info(
@@ -319,6 +335,7 @@ def reload_env(env_path: Optional[Path] = None) -> Dict[str, Any]:
             # Refresh retry manager ladders (text/vision/media) from updated env [REH]
             try:
                 from .enhanced_retry import get_retry_manager
+
                 retry_mgr = get_retry_manager()
                 ladder_summary = retry_mgr.refresh_from_env()
                 logger.info(
@@ -333,12 +350,15 @@ def reload_env(env_path: Optional[Path] = None) -> Dict[str, Any]:
                     },
                 )
             except Exception as e:
-                logger.warning(f"⚠️ Failed to refresh retry ladders on config reload: {e}")
+                logger.warning(
+                    f"⚠️ Failed to refresh retry ladders on config reload: {e}"
+                )
 
             # Restart janitor to pick up new config
             if _janitor_imported and restart_janitor is not None:
                 try:
                     import asyncio
+
                     loop = asyncio.get_event_loop()
                     if loop.is_running():
                         asyncio.create_task(restart_janitor())
@@ -436,7 +456,8 @@ async def _file_watcher_loop() -> None:
                         prev = last_digests.get(p)
                         dig = _file_digest(p) if p.exists() else None
                         if (
-                            dig != prev and current_time - last_reload_time >= debounce_delay
+                            dig != prev
+                            and current_time - last_reload_time >= debounce_delay
                         ):
                             reload_env(p)
                             last_reload_time = current_time

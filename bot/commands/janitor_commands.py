@@ -87,9 +87,13 @@ class JanitorCommands(commands.Cog):
                     )
 
                 if files_deleted == 0 and logs_compressed == 0:
-                    embed.description = "✨ Everything is already clean! No files needed cleanup."
+                    embed.description = (
+                        "✨ Everything is already clean! No files needed cleanup."
+                    )
                 else:
-                    embed.description = "✅ Cache and log cleanup completed successfully."
+                    embed.description = (
+                        "✅ Cache and log cleanup completed successfully."
+                    )
 
                 embed.set_footer(
                     text="Automatic cleanup runs every 60 minutes in the background"
@@ -237,7 +241,9 @@ class JanitorCommands(commands.Cog):
             inline=False,
         )
 
-        embed.set_footer(text="Janitor keeps disk usage under control for long-running bots")
+        embed.set_footer(
+            text="Janitor keeps disk usage under control for long-running bots"
+        )
 
         await ctx.reply(embed=embed, mention_author=False)
 

@@ -3,7 +3,6 @@
 from __future__ import annotations
 import asyncio
 import os
-import re
 import sys
 from typing import TYPE_CHECKING, Optional, Dict, List, Tuple, Any
 
@@ -372,7 +371,10 @@ class LLMBot(commands.Bot):
 
             # Register config hot-reload callback to atomically swap live config and prompts [REH]
             try:
-                def _on_config_reload(old_cfg: Dict[str, Any], new_cfg: Dict[str, Any]) -> None:
+
+                def _on_config_reload(
+                    old_cfg: Dict[str, Any], new_cfg: Dict[str, Any]
+                ) -> None:
                     try:
                         # Swap live config snapshot
                         self.config = dict(new_cfg)
@@ -396,18 +398,24 @@ class LLMBot(commands.Bot):
                             # Hot-reload TTS
                             if any(k.startswith("TTS_") for k in upper):
                                 try:
-                                    if getattr(self, "tts_manager", None) and getattr(self.tts_manager, "_executor", None):
+                                    if getattr(self, "tts_manager", None) and getattr(
+                                        self.tts_manager, "_executor", None
+                                    ):
                                         self.tts_manager._executor.shutdown(wait=False)
                                 except Exception:
                                     pass
                                 try:
                                     from bot.tts.interface import TTSManager
+
                                     self.tts_manager = TTSManager(self)
                                     self.logger.info("TTS manager hot-reloaded")
                                 except Exception as e:
                                     self.logger.error(f"TTS hot-reload failed: {e}")
                             # Rebind Vision configs
-                            if any(k.startswith("VISION_") or k.startswith("VL_") for k in upper):
+                            if any(
+                                k.startswith("VISION_") or k.startswith("VL_")
+                                for k in upper
+                            ):
                                 vo = getattr(self, "vision_orchestrator", None)
                                 if vo is not None:
                                     try:
@@ -415,13 +423,23 @@ class LLMBot(commands.Bot):
                                     except Exception:
                                         pass
                                     try:
-                                        if hasattr(vo, "gateway") and vo.gateway is not None:
+                                        if (
+                                            hasattr(vo, "gateway")
+                                            and vo.gateway is not None
+                                        ):
                                             vo.gateway.config = self.config
-                                            if hasattr(vo.gateway, "adapter") and vo.gateway.adapter is not None:
+                                            if (
+                                                hasattr(vo.gateway, "adapter")
+                                                and vo.gateway.adapter is not None
+                                            ):
                                                 vo.gateway.adapter.config = self.config
-                                        self.logger.info("Vision orchestrator config rebound (hot)")
+                                        self.logger.info(
+                                            "Vision orchestrator config rebound (hot)"
+                                        )
                                     except Exception as e:
-                                        self.logger.debug(f"Vision hot-rebind failed: {e}")
+                                        self.logger.debug(
+                                            f"Vision hot-rebind failed: {e}"
+                                        )
                                 try:
                                     retry_mgr = get_retry_manager()
                                     summary = retry_mgr.refresh_from_env()
@@ -434,7 +452,9 @@ class LLMBot(commands.Bot):
                                         order_repr,
                                     )
                                 except Exception as rebound_exc:
-                                    self.logger.debug(f"Vision ladder rebound failed: {rebound_exc}")
+                                    self.logger.debug(
+                                        f"Vision ladder rebound failed: {rebound_exc}"
+                                    )
                             # Restart shared HTTP client on HTTP/PROXY/TIMEOUT/RETRY changes
                             if any(
                                 k.startswith("HTTP_")
@@ -457,7 +477,9 @@ class LLMBot(commands.Bot):
 
                                     _aio.create_task(cleanup_http_client())
                                 except Exception as e:
-                                    self.logger.debug(f"HTTP client restart failed: {e}")
+                                    self.logger.debug(
+                                        f"HTTP client restart failed: {e}"
+                                    )
                         except Exception:
                             pass
                         # Scoped re-init: rebind TTS when TTS_* keys changed; refresh VO configs when VISION/VL_* changed
@@ -472,7 +494,9 @@ class LLMBot(commands.Bot):
                             if any(k.startswith("TTS_") for k in upper):
                                 # Best-effort shutdown of prior TTS thread executor
                                 try:
-                                    if getattr(self, "tts_manager", None) and getattr(self.tts_manager, "_executor", None):
+                                    if getattr(self, "tts_manager", None) and getattr(
+                                        self.tts_manager, "_executor", None
+                                    ):
                                         self.tts_manager._executor.shutdown(wait=False)
                                 except Exception:
                                     pass
@@ -483,7 +507,10 @@ class LLMBot(commands.Bot):
                                     self.logger.info("TTS manager hot-reloaded")
                                 except Exception as e:
                                     self.logger.error(f"TTS hot-reload failed: {e}")
-                            if any(k.startswith("VISION_") or k.startswith("VL_") for k in upper):
+                            if any(
+                                k.startswith("VISION_") or k.startswith("VL_")
+                                for k in upper
+                            ):
                                 vo = getattr(self, "vision_orchestrator", None)
                                 if vo is not None:
                                     try:
@@ -491,13 +518,23 @@ class LLMBot(commands.Bot):
                                     except Exception:
                                         pass
                                     try:
-                                        if hasattr(vo, "gateway") and vo.gateway is not None:
+                                        if (
+                                            hasattr(vo, "gateway")
+                                            and vo.gateway is not None
+                                        ):
                                             vo.gateway.config = self.config
-                                            if hasattr(vo.gateway, "adapter") and vo.gateway.adapter is not None:
+                                            if (
+                                                hasattr(vo.gateway, "adapter")
+                                                and vo.gateway.adapter is not None
+                                            ):
                                                 vo.gateway.adapter.config = self.config
-                                        self.logger.info("Vision orchestrator config rebound (hot)")
+                                        self.logger.info(
+                                            "Vision orchestrator config rebound (hot)"
+                                        )
                                     except Exception as e:
-                                        self.logger.debug(f"Vision hot-rebind failed: {e}")
+                                        self.logger.debug(
+                                            f"Vision hot-rebind failed: {e}"
+                                        )
                         except Exception:
                             pass
                         # Breadcrumb
@@ -723,7 +760,7 @@ class LLMBot(commands.Bot):
                                         "event": "gate.drop",
                                         "reason": gate_reason,
                                         "msg_id": message.id,
-                                        "user_id": getattr(message.author, 'id', None),
+                                        "user_id": getattr(message.author, "id", None),
                                     },
                                 )
                             except Exception:
@@ -1067,11 +1104,13 @@ class LLMBot(commands.Bot):
         target_channel_id = dispatch_meta.get("channel_id")
         if target_channel_id is None:
             if reply_in_thread:
-                target_channel_id = getattr(trigger_channel, "parent_id", None) or getattr(
-                    trigger_channel, "id", None
-                )
+                target_channel_id = getattr(
+                    trigger_channel, "parent_id", None
+                ) or getattr(trigger_channel, "id", None)
             else:
-                target_channel_id = getattr(trigger_channel, "id", None) or ingress_channel_id
+                target_channel_id = (
+                    getattr(trigger_channel, "id", None) or ingress_channel_id
+                )
         target_thread_id = dispatch_meta.get("thread_id")
         if target_thread_id is None and reply_in_thread:
             target_thread_id = getattr(trigger_channel, "id", None)
@@ -1123,7 +1162,9 @@ class LLMBot(commands.Bot):
                 except SynthesisError as exc:
                     status = {}
                     try:
-                        status = self.tts_manager.get_status() if self.tts_manager else {}
+                        status = (
+                            self.tts_manager.get_status() if self.tts_manager else {}
+                        )
                     except Exception:
                         status = {}
                     reason = status.get("degraded_reason") or str(exc)
@@ -1140,9 +1181,7 @@ class LLMBot(commands.Bot):
                     action.audio_path = None
                     action.meta["tts_error"] = reason
                     action.meta["tts_failed"] = True
-                    action.content = (
-                        "I tried to respond with voice, but the TTS service is not working."
-                    )
+                    action.content = "I tried to respond with voice, but the TTS service is not working."
 
         # If action has an audio path after processing, prepare it for sending.
         if action.audio_path:
@@ -1432,7 +1471,9 @@ class LLMBot(commands.Bot):
                                 if not getattr(message.author, "bot", False)
                                 else None
                             )
-                            recipient_reason = "fallback_human" if recipient else "no_human"
+                            recipient_reason = (
+                                "fallback_human" if recipient else "no_human"
+                            )
                     except Exception:
                         recipient = None
                         recipient_reason = "no_human"
@@ -1474,7 +1515,10 @@ class LLMBot(commands.Bot):
                             )
                         else:
                             allowed_mentions = discord.AllowedMentions(
-                                everyone=False, users=[], roles=False, replied_user=False
+                                everyone=False,
+                                users=[],
+                                roles=False,
+                                replied_user=False,
                             )
                     except Exception:
                         allowed_mentions = None
@@ -1483,9 +1527,9 @@ class LLMBot(commands.Bot):
                     try:
                         if explicit_mention and recipient is not None:
                             mention_prefix = getattr(recipient, "mention", None)
-                            if mention_prefix and not (content or "").lstrip().startswith(
-                                str(mention_prefix)
-                            ):
+                            if mention_prefix and not (
+                                content or ""
+                            ).lstrip().startswith(str(mention_prefix)):
                                 content = (
                                     f"{mention_prefix} {content}"
                                     if content
@@ -1834,9 +1878,9 @@ class LLMBot(commands.Bot):
                 if (
                     is_first_part
                     and mention_prefix
-                    and not (chunk_content or "").lstrip().startswith(
-                        str(mention_prefix)
-                    )
+                    and not (chunk_content or "")
+                    .lstrip()
+                    .startswith(str(mention_prefix))
                 ):
                     chunk_content = (
                         f"{mention_prefix} {chunk_content}"
@@ -1910,9 +1954,7 @@ class LLMBot(commands.Bot):
                     pass
 
                 if self.enhanced_context_manager and sent:
-                    await self.enhanced_context_manager.append_message(
-                        sent, role="bot"
-                    )
+                    await self.enhanced_context_manager.append_message(sent, role="bot")
             except discord.errors.HTTPException as e:
                 try:
                     self.logger.error(
@@ -2043,7 +2085,9 @@ class LLMBot(commands.Bot):
         try:
             prefixes = await self.get_prefix(message)
             if isinstance(prefixes, (list, tuple)):
-                return any(prefix and message.content.startswith(prefix) for prefix in prefixes)
+                return any(
+                    prefix and message.content.startswith(prefix) for prefix in prefixes
+                )
             if prefixes:
                 return message.content.startswith(prefixes)
         except Exception as e:

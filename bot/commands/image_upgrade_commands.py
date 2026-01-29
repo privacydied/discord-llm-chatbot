@@ -216,7 +216,9 @@ class ImageUpgradeManager:
         """Stub for detailed vision analysis; can be patched in tests."""
         return None
 
-    async def _get_ocr_analysis(self, photo: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    async def _get_ocr_analysis(
+        self, photo: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
         """Stub for OCR extraction; can be patched in tests."""
         return None
 
@@ -235,7 +237,9 @@ class ImageUpgradeManager:
 
             for idx, photo in enumerate(photos, start=1):
                 analysis_list = original_analysis or []
-                analysis = analysis_list[idx - 1] if idx - 1 < len(analysis_list) else ""
+                analysis = (
+                    analysis_list[idx - 1] if idx - 1 < len(analysis_list) else ""
+                )
                 photo_url = (
                     photo.get("url") or photo.get("image_url") or photo.get("src")
                 )
@@ -260,9 +264,7 @@ class ImageUpgradeManager:
                 else:
                     text_block = analysis or ""
 
-                prefix = (
-                    f"**Image {idx}/{len(photos)}:** " if len(photos) > 1 else ""
-                )
+                prefix = f"**Image {idx}/{len(photos)}:** " if len(photos) > 1 else ""
                 detailed_parts.append(f"{prefix}{text_block}".strip())
 
             return "\n\n".join([p for p in detailed_parts if p])
@@ -296,8 +298,10 @@ class ImageUpgradeManager:
                 try:
                     router = self.bot.router if hasattr(self.bot, "router") else None
                     ocr_result = await self._get_ocr_analysis(photo)
-                    if ocr_result is None and router and hasattr(
-                        router, "_vl_describe_image_from_url"
+                    if (
+                        ocr_result is None
+                        and router
+                        and hasattr(router, "_vl_describe_image_from_url")
                     ):
                         ocr_result = await router._vl_describe_image_from_url(
                             photo_url, prompt=ocr_prompt
@@ -314,16 +318,12 @@ class ImageUpgradeManager:
                     ):
                         found_text = True
                         header = (
-                            f"**Image {idx}/{len(photos)}:**"
-                            if len(photos) > 1
-                            else ""
+                            f"**Image {idx}/{len(photos)}:**" if len(photos) > 1 else ""
                         )
                         ocr_parts.append(f"{header}\n{ocr_text}".strip())
                     else:
                         header = (
-                            f"**Image {idx}/{len(photos)}:**"
-                            if len(photos) > 1
-                            else ""
+                            f"**Image {idx}/{len(photos)}:**" if len(photos) > 1 else ""
                         )
                         ocr_parts.append(
                             f"{header}\n*No readable text detected*".strip()

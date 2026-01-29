@@ -41,7 +41,11 @@ async def brain_infer(
             try:
                 # Build a concise, helpful fallback using user prompt as anchor
                 src = (prompt or "").strip()
-                snippet = (src[:180] + ("…" if len(src) > 180 else "")) if src else "your message"
+                snippet = (
+                    (src[:180] + ("…" if len(src) > 180 else ""))
+                    if src
+                    else "your message"
+                )
                 fallback = (
                     f"I didn’t receive a usable response from the model just now. "
                     f"Could you rephrase or add a bit more detail about “{snippet}”?"
@@ -50,7 +54,10 @@ async def brain_infer(
                     "text.empty_fallback",
                     extra={
                         "event": "text.empty_fallback",
-                        "detail": {"prompt_len": len(prompt or ""), "context_len": len(context or "")},
+                        "detail": {
+                            "prompt_len": len(prompt or ""),
+                            "context_len": len(context or ""),
+                        },
                     },
                 )
                 return BotAction(content=fallback)
@@ -73,9 +80,15 @@ async def brain_infer(
             user_message = "🔐 There's an authentication issue with the AI service. Please contact an administrator."
         elif "rate limit" in error_str or "quota" in error_str:
             user_message = "⏱️ The AI service is currently rate-limited. Please wait a moment and try again."
-        elif "providers unavailable via openrouter" in error_str or (
-            "404" in error_str and "no endpoints" in error_str
-        ) or ("404" in error_str and "endpoint" in error_str and "openrouter" in error_str):
+        elif (
+            "providers unavailable via openrouter" in error_str
+            or ("404" in error_str and "no endpoints" in error_str)
+            or (
+                "404" in error_str
+                and "endpoint" in error_str
+                and "openrouter" in error_str
+            )
+        ):
             try:
                 logger.info(
                     "text.model_pool_unavailable",

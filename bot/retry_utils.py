@@ -119,9 +119,9 @@ def classify_vl_error(exc: Exception) -> Dict[str, Any]:
         if exc.response is not None:
             status_code = exc.response.status_code
             if retry_after_hint is None:
-                ra = exc.response.headers.get("Retry-After") or exc.response.headers.get(
-                    "retry-after"
-                )
+                ra = exc.response.headers.get(
+                    "Retry-After"
+                ) or exc.response.headers.get("retry-after")
                 if ra:
                     try:
                         retry_after_hint = float(ra)

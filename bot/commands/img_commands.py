@@ -167,7 +167,9 @@ class ImgCommands(commands.Cog):
     @commands.command(
         name="img", aliases=["image"], help="Generate images from text prompts"
     )
-    async def img_command(self, ctx: commands.Context, *, prompt: Optional[str] = None) -> None:
+    async def img_command(
+        self, ctx: commands.Context, *, prompt: Optional[str] = None
+    ) -> None:
         """
         Handle !img prefix command - delegates to vision generation system
 

@@ -298,6 +298,7 @@ stt_manager = STTManager()
 
 # Convenience shim maintained for backwards compatibility -----------------------
 
+
 async def transcribe_wav(path: Path) -> str:
     """Alias to stt_manager.transcribe_async for historical callers."""
     return await stt_manager.transcribe_async(path)

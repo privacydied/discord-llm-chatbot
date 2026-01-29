@@ -375,7 +375,9 @@ class TTSCommands(commands.Cog):
                 # Fall back to in-memory bytes when the file is missing or not provided
                 stream = io.BytesIO(audio_bytes or b"")
                 stream.seek(0)
-                filename = "tts_audio.ogg" if mime_type == "audio/ogg" else "tts_audio.wav"
+                filename = (
+                    "tts_audio.ogg" if mime_type == "audio/ogg" else "tts_audio.wav"
+                )
                 return discord.File(stream, filename=filename)
 
             async def send_in_channel() -> bool:
@@ -496,9 +498,7 @@ class TTSCommands(commands.Cog):
                         "user_id": user_id,
                     },
                 )
-                message = (
-                    "❌ The TTS engine does not support this request right now. Please try again later."
-                )
+                message = "❌ The TTS engine does not support this request right now. Please try again later."
             elif "engine_input_error" in reason:
                 logging.error(
                     "tts.process.failed command=say reason=engine_input_error",
@@ -513,13 +513,10 @@ class TTSCommands(commands.Cog):
                 detail = reason.split("engine_input_error", 1)[-1].lstrip(": ").strip()
                 if detail:
                     message = (
-                        "❌ The TTS engine could not process the request: "
-                        f"{detail}"
+                        f"❌ The TTS engine could not process the request: {detail}"
                     )
                 else:
-                    message = (
-                        "❌ The TTS engine could not process the request because the input phonemes are unsupported."
-                    )
+                    message = "❌ The TTS engine could not process the request because the input phonemes are unsupported."
             else:
                 logging.error(
                     "tts.process.failed command=say reason=runtime",

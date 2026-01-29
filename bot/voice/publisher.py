@@ -278,7 +278,7 @@ class VoiceMessagePublisher:
                 return VoicePublishResult(message=None, ogg_path=None, ok=False)
             audio_p = Path(wav_path)
             duration = 0.0
-            
+
             # Detect file format from extension and magic bytes
             is_ogg = audio_p.suffix.lower() in (".ogg", ".opus")
             if not is_ogg and audio_p.exists():
@@ -289,7 +289,7 @@ class VoiceMessagePublisher:
                         is_ogg = magic == b"OggS"
                 except Exception:
                     pass
-            
+
             if is_ogg:
                 # Already OGG/Opus - use directly, probe duration via ffprobe
                 ogg_p = audio_p

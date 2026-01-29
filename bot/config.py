@@ -312,9 +312,7 @@ def load_config():
             os.getenv("MAX_CONTEXT_MESSAGES"), "10", "MAX_CONTEXT_MESSAGES"
         ),
         "MEM_MAX_MSGS": _safe_int(os.getenv("MEM_MAX_MSGS"), "40", "MEM_MAX_MSGS"),
-        "MEM_MAX_CHARS": _safe_int(
-            os.getenv("MEM_MAX_CHARS"), "8000", "MEM_MAX_CHARS"
-        ),
+        "MEM_MAX_CHARS": _safe_int(os.getenv("MEM_MAX_CHARS"), "8000", "MEM_MAX_CHARS"),
         "MEM_MAX_AGE_MIN": _safe_int(
             os.getenv("MEM_MAX_AGE_MIN"), "240", "MEM_MAX_AGE_MIN"
         ),
@@ -623,9 +621,7 @@ def load_config():
         ),
         # STT ORCHESTRATION [CA][CMV] =====
         # Global toggle for STT orchestrator (falls back to legacy path when disabled)
-        "STT_ENABLE": _parse_bool_str(
-            _clean_env_value(os.getenv("STT_ENABLE")), True
-        ),
+        "STT_ENABLE": _parse_bool_str(_clean_env_value(os.getenv("STT_ENABLE")), True),
         # ===== VISION GENERATION SYSTEM [CA][CMV][SFT][REH] =====
         # Master toggles (parsed via robust tokens; default ON when unset)
         "VISION_ENABLED": _ve,
@@ -761,6 +757,34 @@ def load_config():
         # Local provider concurrency controls
         "STT_LOCAL_CONCURRENCY": _safe_int(
             os.getenv("STT_LOCAL_CONCURRENCY"), "2", "STT_LOCAL_CONCURRENCY"
+        ),
+        # MULTIMODAL STT FALLBACK CONFIGURATION [CA][REH]
+        # Enable multimodal fallback when primary STT fails
+        "STT_MULTIMODAL_FALLBACK_ENABLED": _parse_bool_str(
+            _clean_env_value(os.getenv("STT_MULTIMODAL_FALLBACK_ENABLED")), False
+        ),
+        # Comma-separated list of multimodal models for fallback (OpenRouter format)
+        "STT_MULTIMODAL_FALLBACK_MODELS": os.getenv(
+            "STT_MULTIMODAL_FALLBACK_MODELS",
+            "openrouter/openai-whisper-large-v3,openrouter/meta-llama-3-8b-instruct:free",
+        ),
+        # Timeout for multimodal fallback API calls (seconds)
+        "STT_MULTIMODAL_FALLBACK_TIMEOUT_S": _safe_float(
+            os.getenv("STT_MULTIMODAL_FALLBACK_TIMEOUT_S"),
+            "30.0",
+            "STT_MULTIMODAL_FALLBACK_TIMEOUT_S",
+        ),
+        # Minimum confidence threshold for fallback results
+        "STT_MULTIMODAL_FALLBACK_MIN_CONFIDENCE": _safe_float(
+            os.getenv("STT_MULTIMODAL_FALLBACK_MIN_CONFIDENCE"),
+            "0.5",
+            "STT_MULTIMODAL_FALLBACK_MIN_CONFIDENCE",
+        ),
+        # Maximum retry attempts for multimodal fallback
+        "STT_MULTIMODAL_FALLBACK_MAX_RETRIES": _safe_int(
+            os.getenv("STT_MULTIMODAL_FALLBACK_MAX_RETRIES"),
+            "1",
+            "STT_MULTIMODAL_FALLBACK_MAX_RETRIES",
         ),
     }
 

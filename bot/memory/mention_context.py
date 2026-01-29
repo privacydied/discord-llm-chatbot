@@ -75,14 +75,18 @@ def classify_message_case(message: discord.Message) -> str:
         return LONE_CASE
 
 
-async def _fetch_message_safely(channel: discord.abc.Messageable, mid: int, timeout_s: float) -> Optional[discord.Message]:
+async def _fetch_message_safely(
+    channel: discord.abc.Messageable, mid: int, timeout_s: float
+) -> Optional[discord.Message]:
     try:
         return await asyncio.wait_for(channel.fetch_message(mid), timeout=timeout_s)
     except Exception:
         return None
 
 
-async def resolve_anchor(message: discord.Message, case: str, timeout_s: float) -> Optional[discord.Message]:
+async def resolve_anchor(
+    message: discord.Message, case: str, timeout_s: float
+) -> Optional[discord.Message]:
     if case == LONE_CASE:
         return None
 
@@ -141,6 +145,7 @@ async def resolve_anchor(message: discord.Message, case: str, timeout_s: float) 
 def _sanitize_mentions(text: str, guild: Optional[discord.Guild]) -> str:
     if not text:
         return ""
+
     def repl(m):
         uid = int(m.group(1))
         name = None
@@ -155,12 +160,14 @@ def _sanitize_mentions(text: str, guild: Optional[discord.Guild]) -> str:
             try:
                 # Fallback to global cache
                 from discord import utils as dutils  # local import
+
                 u = dutils.get(guild.members, id=uid) if guild else None
                 if u:
                     name = getattr(u, "display_name", None)
             except Exception:
                 name = None
         return f"@{name or uid}"
+
     try:
         s = re.sub(r"<@!?(\d+)>", repl, text)
         # Normalize whitespace: strip, collapse many newlines
@@ -183,7 +190,11 @@ def _format_joined_text(items: List[PackagedItem]) -> str:
                 ts = dt.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
         except Exception:
             pass
-        header = f"[{i}/{n}] {it.author_name} – {ts}" if ts else f"[{i}/{n}] {it.author_name}"
+        header = (
+            f"[{i}/{n}] {it.author_name} – {ts}"
+            if ts
+            else f"[{i}/{n}] {it.author_name}"
+        )
         parts.append(header)
         parts.append(it.text_plain)
         parts.append("")
@@ -192,7 +203,9 @@ def _format_joined_text(items: List[PackagedItem]) -> str:
 
 def _include_message(msg: discord.Message, bot_user_id: int) -> bool:
     try:
-        if getattr(msg.author, "bot", False) and int(getattr(msg.author, "id", 0)) != int(bot_user_id):
+        if getattr(msg.author, "bot", False) and int(
+            getattr(msg.author, "id", 0)
+        ) != int(bot_user_id):
             return False
         return True
     except Exception:
@@ -223,9 +236,13 @@ async def _collect_thread_context(
     truncated = False
 
     try:
+
         async def _walk():
-            async for m in message.channel.history(limit=max_msgs * 3, oldest_first=True):
+            async for m in message.channel.history(
+                limit=max_msgs * 3, oldest_first=True
+            ):
                 yield m
+
         walker = _walk()
         # Guard the iteration with a soft time limit by chunking
         start_time = time.monotonic()
@@ -242,7 +259,7 @@ async def _collect_thread_context(
                     pass
                 else:
                     continue
-            txt = (m.content or "")
+            txt = m.content or ""
             if len(collected) + 1 > max_msgs or (total_chars + len(txt)) > max_chars:
                 truncated = True
                 break
@@ -320,7 +337,10 @@ async def _collect_reply_chain(
         for m in chain:
             if not _include_message(m, int(getattr(bot.user, "id", 0) or 0)):
                 continue
-            if not _within_age(m, max_age_min, now) and getattr(m, "id", None) != anc_id:
+            if (
+                not _within_age(m, max_age_min, now)
+                and getattr(m, "id", None) != anc_id
+            ):
                 continue
             filtered.append(m)
     except Exception:
@@ -331,7 +351,7 @@ async def _collect_reply_chain(
     total_chars = 0
     try:
         for m in reversed(filtered):  # newest→oldest
-            txt = (m.content or "")
+            txt = m.content or ""
             if len(kept_rev) >= max_msgs or (total_chars + len(txt)) > max_chars:
                 truncated = True
                 break
@@ -355,7 +375,11 @@ def _package(
     guild = message.guild
     items: List[PackagedItem] = []
     for i, m in enumerate(messages, start=1):
-        author_name = getattr(m.author, "display_name", getattr(m.author, "name", f"User({getattr(m.author, 'id', 'unknown')})"))
+        author_name = getattr(
+            m.author,
+            "display_name",
+            getattr(m.author, "name", f"User({getattr(m.author, 'id', 'unknown')})"),
+        )
         txt = _sanitize_mentions(m.content or "", guild)
         it = PackagedItem(
             idx=i,
@@ -372,13 +396,17 @@ def _package(
 
     joined_text = _format_joined_text(items)
     conv_id = (
-        str(getattr(message.channel, "id", "")) if case == THREAD_CASE else str(getattr(anchor, "id", ""))
+        str(getattr(message.channel, "id", ""))
+        if case == THREAD_CASE
+        else str(getattr(anchor, "id", ""))
     )
     anc = None
     if anchor:
         anc = {
             "id": str(getattr(anchor, "id", "")),
-            "author": getattr(anchor.author, "display_name", getattr(anchor.author, "name", "")),
+            "author": getattr(
+                anchor.author, "display_name", getattr(anchor.author, "name", "")
+            ),
             "created_at_iso": (anchor.created_at or _now_utc()).isoformat(),
             "jump_url": getattr(anchor, "jump_url", ""),
         }

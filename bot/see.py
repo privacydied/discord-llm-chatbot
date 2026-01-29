@@ -97,7 +97,7 @@ async def see_infer(
                     telemetry.get("ladder_attempts"),
                 )
                 return BotAction(content=vl_text)
-            
+
             # Empty completion is a soft failure - model returned but produced no output [REH]
             logger.warning(
                 "vl.final status=error reason=empty_completion model=%s attempts=%s scope=see",
@@ -114,9 +114,7 @@ async def see_infer(
         if isinstance(response, str):
             # String response is typically an error message from the backend
             if response.strip():
-                logger.info(
-                    "vl.final status=ok type=string_response scope=see"
-                )
+                logger.info("vl.final status=ok type=string_response scope=see")
                 return BotAction(content=response)
             logger.info(
                 "vl.final status=error exhausted=true ladder=na attempts=na provider_base=na scope=see"
@@ -170,4 +168,3 @@ async def see_infer(
             reason,
         )
         return BotAction(content=user_message)
-

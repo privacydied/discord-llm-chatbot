@@ -18,7 +18,6 @@ import aiofiles
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Any
-import fcntl
 from contextlib import asynccontextmanager
 import os
 

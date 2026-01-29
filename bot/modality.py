@@ -71,7 +71,9 @@ class InputItem:
     def __post_init__(self):
         """Validate input item data [IV]."""
         if self.source_type not in ("attachment", "url", "embed"):
-            logger.warning(f"Invalid source_type: {self.source_type}, treating as unknown")
+            logger.warning(
+                f"Invalid source_type: {self.source_type}, treating as unknown"
+            )
         if self.order_index < 0:
             raise ValueError(f"Invalid order_index: {self.order_index}")
 
@@ -282,7 +284,7 @@ async def _map_attachment_to_modality(attachment: discord.Attachment) -> InputMo
     # Cache string operations [PA]
     content_type = attachment.content_type or ""
     filename_lower = attachment.filename.lower()
-    
+
     # Check for Discord voice message flag [IV]
     is_voice_message = getattr(attachment, "voice_message", False) or getattr(
         attachment, "is_voice_message", False
@@ -302,7 +304,7 @@ async def _map_attachment_to_modality(attachment: discord.Attachment) -> InputMo
     # Voice message flag takes precedence
     if is_voice_message:
         return InputModality.AUDIO_VIDEO_FILE
-    
+
     # Audio MIME types including Opus in ogg/webm containers
     if content_type.startswith("audio/") or content_type in {
         "application/ogg",  # Discord voice notes
@@ -311,15 +313,27 @@ async def _map_attachment_to_modality(attachment: discord.Attachment) -> InputMo
         "video/webm",  # Can contain Opus audio
     }:
         return InputModality.AUDIO_VIDEO_FILE
-    
+
     # Video MIME types
     if content_type.startswith("video/"):
         return InputModality.AUDIO_VIDEO_FILE
-    
+
     # Audio/video extensions (comprehensive list) [CMV]
     audio_video_exts = {
-        ".mp3", ".wav", ".ogg", ".opus", ".m4a", ".aac", ".flac",
-        ".mp4", ".avi", ".mov", ".mkv", ".webm", ".m4v", ".oga"
+        ".mp3",
+        ".wav",
+        ".ogg",
+        ".opus",
+        ".m4a",
+        ".aac",
+        ".flac",
+        ".mp4",
+        ".avi",
+        ".mov",
+        ".mkv",
+        ".webm",
+        ".m4v",
+        ".oga",
     }
     if any(filename_lower.endswith(ext) for ext in audio_video_exts):
         return InputModality.AUDIO_VIDEO_FILE
@@ -328,7 +342,7 @@ async def _map_attachment_to_modality(attachment: discord.Attachment) -> InputMo
     doc_exts = {".docx", ".doc", ".rtf", ".md", ".markdown", ".odt"}
     if any(filename_lower.endswith(ext) for ext in doc_exts):
         return InputModality.PDF_DOCUMENT  # Reuse document processing
-    
+
     # .txt files should be handled separately for prompt extension
     if filename_lower.endswith(".txt") or content_type.startswith("text/plain"):
         return InputModality.UNKNOWN  # Let router handle .txt specially
@@ -355,25 +369,36 @@ async def _map_url_to_modality(url: str) -> InputModality:
     # === DOCUMENT/PDF GUARDS (check BEFORE video patterns) === [REH][IV]
     # These must be checked first to prevent video catch-all patterns from
     # incorrectly classifying document URLs as video.
-    
+
     # PDF URLs - check extension early [PA]
     if _PDF_EXT_PATTERN.search(url):
         logger.debug(f"url.classify type=PDF_DOCUMENT url={url[:80]}")
         return InputModality.PDF_DOCUMENT
-    
+
     # Image URLs - check extension early [PA]
     if _IMAGE_EXT_PATTERN.search(url):
         logger.debug(f"url.classify type=SINGLE_IMAGE url={url[:80]}")
         return InputModality.SINGLE_IMAGE
-    
+
     # Document extensions guard - route to GENERAL_URL for document processing [REH]
-    doc_exts = (".docx", ".doc", ".rtf", ".md", ".markdown", ".odt", ".txt", ".csv", ".xlsx", ".xls")
+    doc_exts = (
+        ".docx",
+        ".doc",
+        ".rtf",
+        ".md",
+        ".markdown",
+        ".odt",
+        ".txt",
+        ".csv",
+        ".xlsx",
+        ".xls",
+    )
     if any(path_lower.endswith(ext) for ext in doc_exts):
         logger.debug(f"url.classify type=GENERAL_URL (document) url={url[:80]}")
         return InputModality.GENERAL_URL
 
     # === DOMAIN-SPECIFIC GUARDS === [REH][IV]
-    
+
     # NYTimes: only /video/ goes to yt-dlp/STT
     if host in {"nytimes.com", "www.nytimes.com", "m.nytimes.com"}:
         if "/video/" in path:
@@ -395,25 +420,34 @@ async def _map_url_to_modality(url: str) -> InputModality:
         r"https?://(?:www\.)?(?:twitter|x|fxtwitter|vxtwitter|fixupx)\.com/.+/status/\d+",
         url,
     ):
-        logger.info(f"➡️ Routing Twitter/X status URL to GENERAL_URL for API-first: {url}")
+        logger.info(
+            f"➡️ Routing Twitter/X status URL to GENERAL_URL for API-first: {url}"
+        )
         return InputModality.GENERAL_URL
-    
+
     # News/article site guards - prefer web scraping over STT [REH]
     # These domains should go through article extraction, not video processing
     article_domains = {
-        "medium.com", "www.medium.com",
+        "medium.com",
+        "www.medium.com",
         "substack.com",
-        "github.com", "www.github.com",
-        "stackoverflow.com", "www.stackoverflow.com",
-        "wikipedia.org", "en.wikipedia.org",
-        "arxiv.org", "www.arxiv.org",
+        "github.com",
+        "www.github.com",
+        "stackoverflow.com",
+        "www.stackoverflow.com",
+        "wikipedia.org",
+        "en.wikipedia.org",
+        "arxiv.org",
+        "www.arxiv.org",
     }
-    if host in article_domains or any(host.endswith(f".{d}") for d in ("substack.com",)):
+    if host in article_domains or any(
+        host.endswith(f".{d}") for d in ("substack.com",)
+    ):
         logger.debug(f"url.classify type=GENERAL_URL (article_domain) url={url[:80]}")
         return InputModality.GENERAL_URL
 
     # === VIDEO PATTERN MATCHING === [PA]
-    
+
     # Load and cache video patterns once
     if _VIDEO_PATTERNS is None:
         try:
@@ -421,7 +455,9 @@ async def _map_url_to_modality(url: str) -> InputModality:
 
             # Pre-compile patterns for performance
             _VIDEO_PATTERNS = [re.compile(pattern) for pattern in SUPPORTED_PATTERNS]
-            logger.debug(f"🎥 Loaded and compiled {len(_VIDEO_PATTERNS)} video patterns")
+            logger.debug(
+                f"🎥 Loaded and compiled {len(_VIDEO_PATTERNS)} video patterns"
+            )
         except ImportError as e:
             logger.warning(
                 f"Could not import SUPPORTED_PATTERNS from video_ingest: {e}, using fallback patterns"

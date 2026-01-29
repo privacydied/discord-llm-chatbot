@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import tempfile
 from pathlib import Path
-from typing import TYPE_CHECKING, Dict, Any, Optional
+from typing import TYPE_CHECKING, Dict, Any
 
 from .utils.logging import get_logger
 
@@ -24,18 +24,18 @@ async def ingest_document_attachment(
 ) -> Dict[str, Any]:
     """
     Ingest a document attachment and extract its text content.
-    
+
     Supports: PDF (with OCR fallback), DOCX, DOC, RTF, MD, ODT
-    
+
     Args:
         attachment: Discord attachment to process
-        
+
     Returns:
         Dict with keys: text, metadata, error (if any)
     """
     filename = getattr(attachment, "filename", "unknown")
     ext = Path(filename).suffix.lower()
-    
+
     logger.info(
         f"doc.parse kind={ext} name={filename}",
         extra={
@@ -44,16 +44,14 @@ async def ingest_document_attachment(
             "detail": {"filename": filename, "extension": ext},
         },
     )
-    
+
     # Save attachment to temp file
-    with tempfile.NamedTemporaryFile(
-        delete=False, suffix=ext or ".tmp"
-    ) as tmp_file:
+    with tempfile.NamedTemporaryFile(delete=False, suffix=ext or ".tmp") as tmp_file:
         tmp_path = Path(tmp_file.name)
-    
+
     try:
         await attachment.save(tmp_path)
-        
+
         # Route to appropriate parser based on extension
         if ext == ".pdf":
             result = await _ingest_pdf(tmp_path, filename)
@@ -69,13 +67,13 @@ async def ingest_document_attachment(
                 "metadata": {},
                 "error": f"Unsupported document type: {ext}",
             }
-        
+
         # Log result
         if result.get("text"):
             chars = len(result["text"])
             pages = result.get("metadata", {}).get("page_count", "-")
             ocr_used = result.get("metadata", {}).get("extraction_method") == "ocr"
-            
+
             logger.info(
                 f"doc.parse kind={ext} pages={pages} chars={chars} ocr_used={ocr_used}",
                 extra={
@@ -98,9 +96,9 @@ async def ingest_document_attachment(
                     "detail": {"kind": ext, "error": result["error"][:200]},
                 },
             )
-        
+
         return result
-    
+
     except Exception as e:
         logger.error(f"Document ingestion failed for {filename}: {e}", exc_info=True)
         return {
@@ -108,7 +106,7 @@ async def ingest_document_attachment(
             "metadata": {},
             "error": f"Failed to process document: {str(e)}",
         }
-    
+
     finally:
         # Cleanup temp file
         try:
@@ -121,24 +119,24 @@ async def ingest_document_attachment(
 async def _ingest_pdf(tmp_path: Path, filename: str) -> Dict[str, Any]:
     """
     Ingest PDF with OCR fallback.
-    
+
     Uses existing PDFProcessor which already has OCR fallback logic.
     """
     try:
         from .pdf_utils import PDFProcessor
-        
+
         processor = PDFProcessor()
-        
+
         if not processor.supported:
             return {
                 "text": "",
                 "metadata": {},
                 "error": "PDF processing not available (PyMuPDF not installed)",
             }
-        
+
         # Process PDF (this already includes OCR fallback)
         result = await processor.process(tmp_path)
-        
+
         if isinstance(result, dict):
             # New API returns dict
             if result.get("error") and not result.get("text"):
@@ -159,7 +157,7 @@ async def _ingest_pdf(tmp_path: Path, filename: str) -> Dict[str, Any]:
                 "metadata": {},
                 "error": None if result else "No text extracted",
             }
-    
+
     except Exception as e:
         logger.error(f"PDF ingestion failed: {e}", exc_info=True)
         return {
@@ -173,16 +171,16 @@ async def _ingest_docx(tmp_path: Path, filename: str) -> Dict[str, Any]:
     """Ingest DOCX/DOC/ODT files using RAG document parser."""
     try:
         from .rag.document_parsers import DocumentParserFactory
-        
+
         parser = DocumentParserFactory()
         content, metadata = await parser.parse_document(tmp_path)
-        
+
         return {
             "text": content,
             "metadata": metadata,
             "error": None,
         }
-    
+
     except ImportError as e:
         return {
             "text": "",
@@ -203,22 +201,22 @@ async def _ingest_rtf(tmp_path: Path, filename: str) -> Dict[str, Any]:
     try:
         # Try to use RAG parser if available
         from .rag.document_parsers import DocumentParserFactory
-        
+
         parser = DocumentParserFactory()
-        
+
         # Check if RTF is supported
         if ".rtf" not in parser.get_supported_extensions():
             # Fall back to simple text extraction
             return await _ingest_as_text(tmp_path, filename)
-        
+
         content, metadata = await parser.parse_document(tmp_path)
-        
+
         return {
             "text": content,
             "metadata": metadata,
             "error": None,
         }
-    
+
     except Exception as e:
         logger.warning(f"RTF parsing failed, trying text fallback: {e}")
         return await _ingest_as_text(tmp_path, filename)
@@ -228,16 +226,16 @@ async def _ingest_markdown(tmp_path: Path, filename: str) -> Dict[str, Any]:
     """Ingest Markdown files using RAG document parser."""
     try:
         from .rag.document_parsers import DocumentParserFactory
-        
+
         parser = DocumentParserFactory()
         content, metadata = await parser.parse_document(tmp_path)
-        
+
         return {
             "text": content,
             "metadata": metadata,
             "error": None,
         }
-    
+
     except Exception as e:
         logger.warning(f"Markdown parsing failed, trying text fallback: {e}")
         return await _ingest_as_text(tmp_path, filename)
@@ -258,7 +256,7 @@ async def _ingest_as_text(tmp_path: Path, filename: str) -> Dict[str, Any]:
                 "metadata": {},
                 "error": f"Could not decode file: {e}",
             }
-    
+
     return {
         "text": content,
         "metadata": {
@@ -273,30 +271,31 @@ async def _ingest_as_text(tmp_path: Path, filename: str) -> Dict[str, Any]:
 # URL-based document ingestion [CA][REH]
 # ---------------------------------------------------------------------------
 
+
 async def ingest_document_from_url(url: str) -> Dict[str, Any]:
     """
     Ingest a document from a URL and extract its text content.
-    
+
     Downloads the document to a temp file and processes it using the same
     pipeline as Discord attachments.
-    
+
     Supports: PDF (with OCR fallback), DOCX, DOC, RTF, MD, ODT
-    
+
     Args:
         url: HTTP(S) URL pointing to a document file
-        
+
     Returns:
         Dict with keys: text, metadata, error (if any)
     """
     from .url_classifier import download_url_to_temp, _extract_filename_from_url
-    
+
     filename = _extract_filename_from_url(url) or "document"
     ext = Path(filename).suffix.lower()
-    
+
     # Ensure we have a valid extension for temp file
     if not ext:
         ext = ".tmp"
-    
+
     logger.info(
         f"doc.url.parse kind={ext} url={url[:80]}",
         extra={
@@ -305,10 +304,10 @@ async def ingest_document_from_url(url: str) -> Dict[str, Any]:
             "detail": {"url": url[:200], "extension": ext},
         },
     )
-    
+
     # Download to temp file
     tmp_path, error = await download_url_to_temp(url, suffix=ext)
-    
+
     if error:
         logger.warning(
             f"doc.url.download.failed url={url[:80]} error={error[:100]}",
@@ -323,7 +322,7 @@ async def ingest_document_from_url(url: str) -> Dict[str, Any]:
             "metadata": {"source_url": url},
             "error": f"Failed to download document: {error}",
         }
-    
+
     try:
         # Route to appropriate parser based on extension
         if ext == ".pdf":
@@ -342,17 +341,17 @@ async def ingest_document_from_url(url: str) -> Dict[str, Any]:
                 "metadata": {},
                 "error": f"Unsupported document type: {ext}",
             }
-        
+
         # Add source URL to metadata
         result.setdefault("metadata", {})
         result["metadata"]["source_url"] = url
-        
+
         # Log result
         if result.get("text"):
             chars = len(result["text"])
             pages = result.get("metadata", {}).get("page_count", "-")
             ocr_used = result.get("metadata", {}).get("extraction_method") == "ocr"
-            
+
             logger.info(
                 f"doc.url.parse kind={ext} pages={pages} chars={chars} ocr_used={ocr_used}",
                 extra={
@@ -373,12 +372,16 @@ async def ingest_document_from_url(url: str) -> Dict[str, Any]:
                 extra={
                     "subsys": "doc",
                     "event": "doc.url.parse.failed",
-                    "detail": {"kind": ext, "error": result["error"][:200], "url": url[:200]},
+                    "detail": {
+                        "kind": ext,
+                        "error": result["error"][:200],
+                        "url": url[:200],
+                    },
                 },
             )
-        
+
         return result
-    
+
     except Exception as e:
         logger.error(f"Document URL ingestion failed for {url}: {e}", exc_info=True)
         return {
@@ -386,7 +389,7 @@ async def ingest_document_from_url(url: str) -> Dict[str, Any]:
             "metadata": {"source_url": url},
             "error": f"Failed to process document: {str(e)}",
         }
-    
+
     finally:
         # Cleanup temp file
         try:

@@ -337,7 +337,9 @@ class MediaIngestionManager:
 
             if needs_tiered:
                 try:
-                    extract_res = await web_extraction_service.web_extractor.extract(url)
+                    extract_res = await web_extraction_service.web_extractor.extract(
+                        url
+                    )
                 except Exception as e:
                     extract_res = None
                     self.logger.debug(
@@ -547,7 +549,9 @@ class MediaIngestionManager:
                 else:
                     err = (fallback_result.error_message or "").strip()
                     if err:
-                        msg = f"Could not extract content from URL: {url} (Error: {err})"
+                        msg = (
+                            f"Could not extract content from URL: {url} (Error: {err})"
+                        )
                     else:
                         msg = f"Could not extract content from URL: {url}"
                     return BotAction(

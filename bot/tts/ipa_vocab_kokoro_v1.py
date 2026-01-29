@@ -28,9 +28,7 @@ except Exception as exc:  # pragma: no cover - dependency missing in some tests
     _IMPORT_ERROR = exc
     PHONEME_TO_ID = {}
     EXPECTED_VOCAB_SIZE = None
-    logger.debug(
-        "kokoro_onnx unavailable; IPA vocabulary disabled", exc_info=True
-    )
+    logger.debug("kokoro_onnx unavailable; IPA vocabulary disabled", exc_info=True)
 else:
     logger.debug(
         "Loaded official Kokoro IPA vocabulary with %d entries", len(PHONEME_TO_ID)

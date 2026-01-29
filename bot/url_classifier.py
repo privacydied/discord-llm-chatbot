@@ -11,7 +11,6 @@ reusing existing pipelines for document parsing, STT, VL, etc.
 
 from __future__ import annotations
 
-import asyncio
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -68,10 +67,11 @@ URL_HTTP_HEADERS = {
 # Data structures
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class ClassifiedURL:
     """A URL with its classification result."""
-    
+
     url: str
     bucket: AttachmentBucket
     content_type: Optional[str]  # From HTTP headers, if available
@@ -84,16 +84,17 @@ class ClassifiedURL:
 # URL content-type detection [REH][PA]
 # ---------------------------------------------------------------------------
 
+
 async def detect_url_content_type(url: str) -> Tuple[Optional[str], Optional[int]]:
     """
     Detect the content type of a URL using a HEAD request.
-    
+
     Args:
         url: HTTP(S) URL to probe
-        
+
     Returns:
         Tuple of (content_type, content_length) or (None, None) on failure
-        
+
     Notes:
         - Uses HEAD request to avoid downloading full content
         - Falls back gracefully on network errors or timeouts
@@ -103,11 +104,13 @@ async def detect_url_content_type(url: str) -> Tuple[Optional[str], Optional[int
     try:
         parsed = urlparse(url)
         if parsed.scheme not in ("http", "https"):
-            logger.debug(f"url.probe skip non-http scheme={parsed.scheme} url={url[:80]}")
+            logger.debug(
+                f"url.probe skip non-http scheme={parsed.scheme} url={url[:80]}"
+            )
             return None, None
     except Exception:
         return None, None
-    
+
     try:
         async with httpx.AsyncClient(
             timeout=URL_HEAD_TIMEOUT_S,
@@ -129,7 +132,7 @@ async def detect_url_content_type(url: str) -> Tuple[Optional[str], Optional[int
                 },
             )
             response = await client.head(url)
-            
+
             content_type = response.headers.get("content-type")
             content_length_str = response.headers.get("content-length")
             content_length = int(content_length_str) if content_length_str else None
@@ -166,7 +169,7 @@ async def detect_url_content_type(url: str) -> Tuple[Optional[str], Optional[int
                 },
             )
             return None, None
-            
+
     except httpx.TimeoutException:
         logger.debug(f"url.probe timeout url={url[:80]}")
         return None, None
@@ -201,25 +204,25 @@ def _extract_filename_from_url(url: str) -> Optional[str]:
 async def classify_url(url: str) -> ClassifiedURL:
     """
     Classify a URL into a processing bucket.
-    
+
     This determines whether a URL should be processed as:
     - DOC: Document (PDF, DOCX, etc.) → document parsing pipeline
     - AUDIO: Audio file → STT pipeline
     - VIDEO: Video file → media/STT pipeline
     - IMAGE: Image file → VL pipeline
     - OTHER: Web page or unsupported → existing web scraper
-    
+
     Args:
         url: HTTP(S) URL to classify
-        
+
     Returns:
         ClassifiedURL with bucket assignment and metadata
     """
     filename = _extract_filename_from_url(url)
-    
+
     # Try HEAD request first for accurate content-type detection
     content_type, content_length = await detect_url_content_type(url)
-    
+
     if content_type:
         # Check if it's a web page - these go to web scraper, not attachment pipeline
         if is_web_page_mime(content_type):
@@ -244,10 +247,10 @@ async def classify_url(url: str) -> ClassifiedURL:
                 content_length=content_length,
                 detection_method="head_request",
             )
-        
+
         # Use unified MIME classification
         bucket = classify_mime_and_extension(content_type, filename)
-        
+
         logger.info(
             f"url.classify bucket={bucket.name} url={url[:80]} method=head_request",
             extra={
@@ -262,7 +265,7 @@ async def classify_url(url: str) -> ClassifiedURL:
                 },
             },
         )
-        
+
         return ClassifiedURL(
             url=url,
             bucket=bucket,
@@ -271,11 +274,11 @@ async def classify_url(url: str) -> ClassifiedURL:
             content_length=content_length,
             detection_method="head_request",
         )
-    
+
     # Fallback: classify by extension only
     if filename:
         bucket = classify_mime_and_extension(None, filename)
-        
+
         logger.info(
             f"url.classify bucket={bucket.name} url={url[:80]} method=extension_only",
             extra={
@@ -289,7 +292,7 @@ async def classify_url(url: str) -> ClassifiedURL:
                 },
             },
         )
-        
+
         return ClassifiedURL(
             url=url,
             bucket=bucket,
@@ -298,7 +301,7 @@ async def classify_url(url: str) -> ClassifiedURL:
             content_length=None,
             detection_method="extension_only",
         )
-    
+
     # No content-type and no recognizable extension - treat as web page
     logger.info(
         f"url.classify bucket=OTHER url={url[:80]} method=fallback",
@@ -312,7 +315,7 @@ async def classify_url(url: str) -> ClassifiedURL:
             },
         },
     )
-    
+
     return ClassifiedURL(
         url=url,
         bucket=AttachmentBucket.OTHER,
@@ -327,6 +330,7 @@ async def classify_url(url: str) -> ClassifiedURL:
 # URL download helper [REH][RM]
 # ---------------------------------------------------------------------------
 
+
 async def download_url_to_temp(
     url: str,
     max_bytes: int = URL_MAX_DOWNLOAD_BYTES,
@@ -335,18 +339,18 @@ async def download_url_to_temp(
 ) -> Tuple[Optional[Path], Optional[str]]:
     """
     Download a URL to a temporary file.
-    
+
     Args:
         url: HTTP(S) URL to download
         max_bytes: Maximum file size to download
         timeout: Download timeout in seconds
         suffix: File extension for temp file (e.g. ".pdf")
-        
+
     Returns:
         Tuple of (temp_file_path, error_message)
         - On success: (Path, None)
         - On failure: (None, error_string)
-        
+
     Notes:
         - Caller is responsible for cleaning up the temp file
         - Respects Content-Length header to avoid downloading oversized files
@@ -357,7 +361,7 @@ async def download_url_to_temp(
             return None, f"Unsupported URL scheme: {parsed.scheme}"
     except Exception as e:
         return None, f"Invalid URL: {e}"
-    
+
     try:
         async with httpx.AsyncClient(
             timeout=timeout,
@@ -382,30 +386,36 @@ async def download_url_to_temp(
             # Stream the download to handle large files
             async with client.stream("GET", url) as response:
                 response.raise_for_status()
-                
+
                 # Check content length before downloading
                 content_length_str = response.headers.get("content-length")
                 if content_length_str:
                     content_length = int(content_length_str)
                     if content_length > max_bytes:
-                        return None, f"File too large: {content_length} bytes (max {max_bytes})"
-                
+                        return (
+                            None,
+                            f"File too large: {content_length} bytes (max {max_bytes})",
+                        )
+
                 # Create temp file
                 with tempfile.NamedTemporaryFile(
                     delete=False,
                     suffix=suffix or ".tmp",
                 ) as tmp_file:
                     tmp_path = Path(tmp_file.name)
-                    
+
                     downloaded = 0
                     async for chunk in response.aiter_bytes(chunk_size=65536):
                         downloaded += len(chunk)
                         if downloaded > max_bytes:
                             # Clean up and abort
                             tmp_path.unlink(missing_ok=True)
-                            return None, f"Download exceeded max size: {downloaded} bytes"
+                            return (
+                                None,
+                                f"Download exceeded max size: {downloaded} bytes",
+                            )
                         tmp_file.write(chunk)
-                
+
                 logger.info(
                     f"url.download ok url={url[:80]} bytes={downloaded}",
                     extra={
@@ -418,9 +428,9 @@ async def download_url_to_temp(
                         },
                     },
                 )
-                
+
                 return tmp_path, None
-                
+
     except httpx.HTTPStatusError as e:
         return None, f"HTTP error {e.response.status_code}: {e}"
     except httpx.TimeoutException:

@@ -59,7 +59,9 @@ def log_commands_setup(
             status_icon = "✅" if success else "❌"
             cogs_branch.add(f"{status_icon} {cog_name}")
 
-        loaded_count = sum(1 for _, success in normalized_modules + normalized_cogs if success)
+        loaded_count = sum(
+            1 for _, success in normalized_modules + normalized_cogs if success
+        )
         failed_count = len(normalized_modules + normalized_cogs) - loaded_count
 
         summary_branch = tree.add("📊 [magenta]Summary[/magenta]")

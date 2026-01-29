@@ -25,37 +25,39 @@ class ProviderStatus(Enum):
 # Hardcoded set of models known to support image input [CMV][REH]
 # Models not in this set will be filtered from the vision ladder.
 # This prevents 404 "no endpoints support image input" errors.
-_IMAGE_CAPABLE_MODELS: frozenset[str] = frozenset({
-    # Kimi VL models
-    "moonshotai/kimi-vl-a3b-thinking:free",
-    "moonshotai/kimi-vl-a3b:free",
-    # Qwen VL models
-    "qwen/qwen2.5-vl-32b-instruct:free",
-    "qwen/qwen2.5-vl-72b-instruct:free",
-    "qwen/qwen2-vl-7b-instruct:free",
-    "qwen/qwen-vl-plus:free",
-    "qwen/qwen-vl-max:free",
-    # Google Gemini/Gemma VL models
-    "google/gemini-2.0-flash-thinking-exp:free",
-    "google/gemini-2.0-flash-exp:free",
-    "google/gemini-pro-vision:free",
-    "google/gemma-3-27b-it:free",
-    # Meta Llama VL models
-    "meta-llama/llama-3.2-11b-vision-instruct:free",
-    "meta-llama/llama-3.2-90b-vision-instruct:free",
-    # OpenAI models (native API)
-    "gpt-4-vision-preview",
-    "gpt-4o",
-    "gpt-4o-mini",
-    # Anthropic Claude models (native API)
-    "claude-3-opus-20240229",
-    "claude-3-sonnet-20240229",
-    "claude-3-haiku-20240307",
-    "claude-3-5-sonnet-20241022",
-    # Other VL models
-    "pixtral-12b-2409",
-    "pixtral-large-2411",
-})
+_IMAGE_CAPABLE_MODELS: frozenset[str] = frozenset(
+    {
+        # Kimi VL models
+        "moonshotai/kimi-vl-a3b-thinking:free",
+        "moonshotai/kimi-vl-a3b:free",
+        # Qwen VL models
+        "qwen/qwen2.5-vl-32b-instruct:free",
+        "qwen/qwen2.5-vl-72b-instruct:free",
+        "qwen/qwen2-vl-7b-instruct:free",
+        "qwen/qwen-vl-plus:free",
+        "qwen/qwen-vl-max:free",
+        # Google Gemini/Gemma VL models
+        "google/gemini-2.0-flash-thinking-exp:free",
+        "google/gemini-2.0-flash-exp:free",
+        "google/gemini-pro-vision:free",
+        "google/gemma-3-27b-it:free",
+        # Meta Llama VL models
+        "meta-llama/llama-3.2-11b-vision-instruct:free",
+        "meta-llama/llama-3.2-90b-vision-instruct:free",
+        # OpenAI models (native API)
+        "gpt-4-vision-preview",
+        "gpt-4o",
+        "gpt-4o-mini",
+        # Anthropic Claude models (native API)
+        "claude-3-opus-20240229",
+        "claude-3-sonnet-20240229",
+        "claude-3-haiku-20240307",
+        "claude-3-5-sonnet-20241022",
+        # Other VL models
+        "pixtral-12b-2409",
+        "pixtral-large-2411",
+    }
+)
 
 
 def _is_image_capable_model(model: str) -> bool:
@@ -192,9 +194,7 @@ class EnhancedRetryManager:
             ProviderConfig(
                 "openrouter", "moonshotai/kimi-vl-a3b-thinking:free", timeout=6.0
             ),
-            ProviderConfig(
-                "openrouter", "openai/gpt-4o-mini", timeout=8.0
-            ),
+            ProviderConfig("openrouter", "openai/gpt-4o-mini", timeout=8.0),
         ]
         default_text = [
             # Prefer chat-style model first for latency and robustness
@@ -256,14 +256,18 @@ class EnhancedRetryManager:
         vl_head = (config.get("VL_MODEL") or "").strip()
         text_head = (config.get("OPENAI_TEXT_MODEL") or "").strip()
 
-        def _ensure_head(ladder: List[ProviderConfig], head_model: str, default_timeout: float) -> List[ProviderConfig]:
+        def _ensure_head(
+            ladder: List[ProviderConfig], head_model: str, default_timeout: float
+        ) -> List[ProviderConfig]:
             """
             Ensure head_model is at the front of the ladder without reordering the remainder.
             If head_model is absent, prepend it with default_timeout.
             """
             if not head_model:
                 return ladder
-            existing_idx = next((i for i, pc in enumerate(ladder) if pc.model == head_model), None)
+            existing_idx = next(
+                (i for i, pc in enumerate(ladder) if pc.model == head_model), None
+            )
             if existing_idx is not None:
                 head_cfg = ladder[existing_idx]
                 remainder = [pc for i, pc in enumerate(ladder) if i != existing_idx]
@@ -278,14 +282,20 @@ class EnhancedRetryManager:
         if vision_from_env:
             # Do not drop or reorder env-provided models; only warn if suspected non-image
             possible_non_image = [
-                pc.model for pc in raw_vision_ladder if not _is_image_capable_model(pc.model)
+                pc.model
+                for pc in raw_vision_ladder
+                if not _is_image_capable_model(pc.model)
             ]
             if possible_non_image:
                 logger.warning(
                     "vision.ladder.possible_non_image_models=%s (env_authoritative)",
                     possible_non_image,
                 )
-            head_timeout = raw_vision_ladder[0].timeout if raw_vision_ladder else default_vision[0].timeout
+            head_timeout = (
+                raw_vision_ladder[0].timeout
+                if raw_vision_ladder
+                else default_vision[0].timeout
+            )
             filtered_vision = _ensure_head(raw_vision_ladder, vl_head, head_timeout)
         else:
             # Defaults are curated; keep ordering without filtering to preserve fallbacks used in tests
@@ -294,11 +304,13 @@ class EnhancedRetryManager:
         self.provider_configs["vision"] = filtered_vision
 
         # Text ladder: env is authoritative; no filtering
-        raw_text_ladder = _parse_ladder(
-            text_models, text_timeouts, default_text
-        )
+        raw_text_ladder = _parse_ladder(text_models, text_timeouts, default_text)
         if text_from_env:
-            head_timeout = raw_text_ladder[0].timeout if raw_text_ladder else default_text[0].timeout
+            head_timeout = (
+                raw_text_ladder[0].timeout
+                if raw_text_ladder
+                else default_text[0].timeout
+            )
             filtered_text = _ensure_head(raw_text_ladder, text_head, head_timeout)
         else:
             filtered_text = raw_text_ladder
@@ -499,7 +511,11 @@ class EnhancedRetryManager:
         # Hard non-retryable 404 / no-endpoints patterns (provider permanently unavailable)
         if "404" in error_str and "no endpoints found" in error_str:
             return False
-        if "404" in error_str and "no endpoint" in error_str and "openrouter" in error_str:
+        if (
+            "404" in error_str
+            and "no endpoint" in error_str
+            and "openrouter" in error_str
+        ):
             return False
         if "404" in error_str and "model not found" in error_str:
             return False
@@ -690,8 +706,12 @@ class EnhancedRetryManager:
 
         # All providers exhausted
         total_time = time.time() - start_time
-        if budget_exhausted and (last_exception is None or "budget" not in str(last_exception).lower()):
-            last_exception = TimeoutError(f"Per-item budget of {per_item_budget}s exceeded")
+        if budget_exhausted and (
+            last_exception is None or "budget" not in str(last_exception).lower()
+        ):
+            last_exception = TimeoutError(
+                f"Per-item budget of {per_item_budget}s exceeded"
+            )
         return RetryResult(
             success=False,
             error=last_exception or Exception("All providers exhausted"),

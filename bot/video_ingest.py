@@ -375,7 +375,9 @@ class VideoIngestionManager:
         except ValueError:
             return len(preference)
 
-    def _select_audio_format(self, metadata: Dict[str, Any], url: str) -> Tuple[Dict[str, Any], bool]:
+    def _select_audio_format(
+        self, metadata: Dict[str, Any], url: str
+    ) -> Tuple[Dict[str, Any], bool]:
         formats = metadata.get("requested_downloads") or metadata.get("formats") or []
         audio_formats = []
         muxed_formats = []
@@ -416,9 +418,7 @@ class VideoIngestionManager:
             return selected_audio, False
 
         if not muxed_formats:
-            raise VideoIngestError(
-                f"No audio-capable formats available for URL: {url}"
-            )
+            raise VideoIngestError(f"No audio-capable formats available for URL: {url}")
 
         def _mux_key(fmt: Dict[str, Any]) -> tuple:
             abr = fmt.get("abr") or fmt.get("tbr") or float("inf")
@@ -463,21 +463,26 @@ class VideoIngestionManager:
             parsed = urlparse(url)
             # Normalize TikTok host variations
             host = parsed.netloc.lower()
-            if host in ("vm.tiktok.com", "m.tiktok.com", "www.tiktok.com", "tiktok.com"):
+            if host in (
+                "vm.tiktok.com",
+                "m.tiktok.com",
+                "www.tiktok.com",
+                "tiktok.com",
+            ):
                 path = parsed.path.rstrip("/")
-                
+
                 # Handle /player/v1/<video_id> embed URLs - extract video ID for identity
                 player_match = re.match(r"^/player(?:/v\d+)?/(\d+)", path)
                 if player_match:
                     video_id = player_match.group(1)
                     return f"tiktok://video/{video_id}"
-                
+
                 # Handle /@user/video/<video_id> canonical URLs - extract video ID
                 video_match = re.match(r"^/@[\w\.-]+/video/(\d+)", path)
                 if video_match:
                     video_id = video_match.group(1)
                     return f"tiktok://video/{video_id}"
-                
+
                 # For short URLs like /t/ZP8UxRTSU, the path is the key
                 return f"tiktok://{path}"
         except Exception:
@@ -496,7 +501,12 @@ class VideoIngestionManager:
         try:
             parsed = urlparse(url)
             host = parsed.netloc.lower()
-            if host in ("vm.tiktok.com", "m.tiktok.com", "www.tiktok.com", "tiktok.com"):
+            if host in (
+                "vm.tiktok.com",
+                "m.tiktok.com",
+                "www.tiktok.com",
+                "tiktok.com",
+            ):
                 path = parsed.path or ""
                 # /player/ or /player/v1/ URLs are embed URLs
                 if path.startswith("/player"):
@@ -519,27 +529,28 @@ class VideoIngestionManager:
             parsed = urlparse(url)
             host = parsed.netloc.lower()
             path = parsed.path or ""
-            
+
             # youtu.be/VIDEO_ID
             if host in ("youtu.be", "www.youtu.be"):
                 video_id = path.lstrip("/").split("/")[0].split("?")[0]
                 if video_id and len(video_id) >= 6:
                     return f"youtube://video/{video_id}"
-            
+
             # youtube.com variants
             if host in ("youtube.com", "www.youtube.com", "m.youtube.com"):
                 # /watch?v=VIDEO_ID
                 if path.startswith("/watch"):
                     from urllib.parse import parse_qs
+
                     query = parse_qs(parsed.query)
                     video_id = query.get("v", [""])[0]
                     if video_id and len(video_id) >= 6:
                         return f"youtube://video/{video_id}"
-                
+
                 # /shorts/VIDEO_ID, /embed/VIDEO_ID, /live/VIDEO_ID, /v/VIDEO_ID
                 for prefix in ("/shorts/", "/embed/", "/live/", "/v/"):
                     if path.startswith(prefix):
-                        video_id = path[len(prefix):].split("/")[0].split("?")[0]
+                        video_id = path[len(prefix) :].split("/")[0].split("?")[0]
                         if video_id and len(video_id) >= 6:
                             return f"youtube://video/{video_id}"
         except Exception:
@@ -577,43 +588,46 @@ class VideoIngestionManager:
             video_id = metadata.get("id") or ""
             if extractor and video_id:
                 return f"{extractor.lower()}:{video_id}"
-        
+
         # Fallback: use provider-specific URL normalization
         if not original_url:
             return ""
-        
+
         url_lower = original_url.lower()
-        
+
         # YouTube normalization
         if "youtube.com" in url_lower or "youtu.be" in url_lower:
             normalized = VideoIngestionManager._normalize_youtube_url(original_url)
             if normalized.startswith("youtube://"):
                 return normalized.replace("://", ":")
-        
+
         # TikTok normalization
         if "tiktok.com" in url_lower:
             normalized = VideoIngestionManager._normalize_tiktok_url(original_url)
             if normalized.startswith("tiktok://"):
                 return normalized.replace("://", ":")
-        
+
         # Generic fallback: hash of original URL
         return f"generic:{hashlib.sha256(original_url.encode()).hexdigest()[:16]}"
 
     def _compute_download_key(
-        self, resolved_url: str, fmt_id: str, content_length: Optional[int],
+        self,
+        resolved_url: str,
+        fmt_id: str,
+        content_length: Optional[int],
         original_url: Optional[str] = None,
         video_identity: Optional[str] = None,
     ) -> str:
         """
         Compute a unique cache key for a download job.
-        
+
         ALWAYS includes video identity to prevent cross-contamination across
         different videos that may share CDN URLs or similar resolved paths.
         [REH][CA]
         """
         length_part = str(content_length) if content_length is not None else "na"
         base_key = f"{self._hash_resolved_url(resolved_url)}-{fmt_id}-{length_part}"
-        
+
         # Always include video identity hash to prevent cross-contamination [REH]
         if video_identity:
             identity_hash = self._hash_resolved_url(video_identity)[:10]
@@ -623,7 +637,7 @@ class VideoIngestionManager:
             fallback_identity = self._canonicalize_video_identity(original_url)
             identity_hash = self._hash_resolved_url(fallback_identity)[:10]
             base_key = f"{base_key}-v{identity_hash}"
-        
+
         return base_key
 
     def _get_cache_entry(
@@ -639,9 +653,8 @@ class VideoIngestionManager:
 
     def _should_apply_cookies(self, url: str) -> bool:
         source = self._get_source_type(url)
-        return (
-            bool(YTDLP_COOKIES_FROM_BROWSER or YTDLP_COOKIES_FILE)
-            and (not YTDLP_COOKIES_SITES or source in YTDLP_COOKIES_SITES)
+        return bool(YTDLP_COOKIES_FROM_BROWSER or YTDLP_COOKIES_FILE) and (
+            not YTDLP_COOKIES_SITES or source in YTDLP_COOKIES_SITES
         )
 
     def _augment_with_cookies(self, cmd: list, url: str) -> list:
@@ -665,7 +678,9 @@ class VideoIngestionManager:
             stderr=asyncio.subprocess.PIPE,
         )
         try:
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout_s)
+            stdout, stderr = await asyncio.wait_for(
+                proc.communicate(), timeout=timeout_s
+            )
         except asyncio.TimeoutError:
             try:
                 proc.kill()
@@ -728,7 +743,7 @@ class VideoIngestionManager:
             metadata = json.loads(stdout.decode())
         except json.JSONDecodeError as exc:
             raise VideoIngestError(f"Failed to parse yt-dlp metadata: {exc}")
-        
+
         # Log the resolved URL from yt-dlp for debugging [REH]
         resolved_id = metadata.get("id") or "unknown"
         resolved_webpage = metadata.get("webpage_url") or metadata.get("url") or "none"
@@ -848,10 +863,12 @@ class VideoIngestionManager:
 
             # Validate yt-dlp metadata matches expected provider for known domains [REH][IV]
             expected_extractor = self._get_expected_extractor(url_no_fragment)
-            actual_extractor = (metadata.get("extractor_key") or metadata.get("extractor") or "").lower()
+            actual_extractor = (
+                metadata.get("extractor_key") or metadata.get("extractor") or ""
+            ).lower()
             webpage_url = metadata.get("webpage_url") or ""
             metadata_video_id = metadata.get("id") or ""
-            
+
             if expected_extractor and actual_extractor:
                 # Check for obvious mismatches (e.g., YouTube URL returning TikTok extractor)
                 if expected_extractor != actual_extractor:
@@ -865,17 +882,23 @@ class VideoIngestionManager:
                     raise VideoIngestError(
                         f"yt-dlp returned unexpected content: expected {expected_extractor}, got {actual_extractor}"
                     )
-            
+
             # Additional validation: verify video ID from URL matches metadata ID [REH][IV]
             # This prevents cross-contamination when yt-dlp resolves to wrong video
             if expected_extractor == "youtube":
                 normalized = self._normalize_youtube_url(url_no_fragment)
                 if normalized.startswith("youtube://video/"):
                     url_video_id = normalized.split("/")[-1]
-                    if metadata_video_id and url_video_id and url_video_id != metadata_video_id:
+                    if (
+                        metadata_video_id
+                        and url_video_id
+                        and url_video_id != metadata_video_id
+                    ):
                         logger.warning(
                             "stt.ytdlp.id_mismatch url_id=%s metadata_id=%s url=%s",
-                            url_video_id, metadata_video_id, url_no_fragment[:60],
+                            url_video_id,
+                            metadata_video_id,
+                            url_no_fragment[:60],
                         )
                         raise VideoIngestError(
                             f"Video ID mismatch: URL suggests {url_video_id} but yt-dlp returned {metadata_video_id}"
@@ -884,10 +907,16 @@ class VideoIngestionManager:
                 normalized = self._normalize_tiktok_url(url_no_fragment)
                 if normalized.startswith("tiktok://video/"):
                     url_video_id = normalized.split("/")[-1]
-                    if metadata_video_id and url_video_id and url_video_id != metadata_video_id:
+                    if (
+                        metadata_video_id
+                        and url_video_id
+                        and url_video_id != metadata_video_id
+                    ):
                         logger.warning(
                             "stt.ytdlp.id_mismatch url_id=%s metadata_id=%s url=%s",
-                            url_video_id, metadata_video_id, url_no_fragment[:60],
+                            url_video_id,
+                            metadata_video_id,
+                            url_no_fragment[:60],
                         )
                         raise VideoIngestError(
                             f"Video ID mismatch: URL suggests {url_video_id} but yt-dlp returned {metadata_video_id}"
@@ -930,12 +959,14 @@ class VideoIngestionManager:
                 )
 
             download_key = self._compute_download_key(
-                resolved_url, fmt_id, content_length,
+                resolved_url,
+                fmt_id,
+                content_length,
                 original_url=url,
                 video_identity=video_identity,
             )
             cache_entry = None if force_refresh else self._get_cache_entry(download_key)
-            
+
             # Log cache lookup for STT debugging [REH]
             logger.info(
                 "stt.identity original_url=%s canonical=%s extractor=%s video_id=%s cache_key=%s",

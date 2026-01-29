@@ -2,7 +2,7 @@
 OpenAI/OpenRouter Backend - Handles OpenAI API calls including OpenRouter.
 """
 
-from typing import Any, AsyncGenerator, Dict, List, Union
+from typing import Any, AsyncGenerator, Dict, Union
 import base64
 import os
 import time
@@ -15,8 +15,6 @@ from bot.exceptions import APIError
 from bot.memory import get_profile, get_server_profile
 from bot.retry_utils import (
     API_RETRY_CONFIG,
-    API_SINGLE_ATTEMPT_CONFIG,
-    is_retryable_error,
     with_retry,
 )
 from bot.utils.logging import get_logger
@@ -296,8 +294,7 @@ Server Context: {server_context}"""
 
             per_item_budget = float(config.get("TEXT_PER_ITEM_BUDGET", 120.0))
             try:
-                logger.info(
-                    f"[OpenAI] text.budget seconds={per_item_budget}")
+                logger.info(f"[OpenAI] text.budget seconds={per_item_budget}")
             except Exception:
                 pass
             rr = await retry_mgr.run_with_fallback(
@@ -454,9 +451,7 @@ Server Context: {server_context}"""
         error_msg = str(e) if str(e) else "No error message"
         error_details = f"{error_type}: {error_msg}"
 
-        logger.error(
-            f"Unexpected error in generate_openai_response: {error_details}"
-        )
+        logger.error(f"Unexpected error in generate_openai_response: {error_details}")
         logger.debug(
             "Traceback for unexpected error in generate_openai_response",
             exc_info=True,
@@ -579,7 +574,9 @@ async def _generate_vl_response_with_retry(
     except FileNotFoundError as exc:
         raise APIError(f"VL prompt file not found: {vl_prompt_file_path}") from exc
     except Exception as exc:
-        raise APIError(f"Error reading VL prompt file {vl_prompt_file_path}: {exc}") from exc
+        raise APIError(
+            f"Error reading VL prompt file {vl_prompt_file_path}: {exc}"
+        ) from exc
 
     if user_id:
         profile = get_profile(str(user_id))
@@ -656,7 +653,9 @@ async def _generate_vl_response_with_retry(
                 }
                 # Filter to allowed params
                 api_params = {
-                    k: v for k, v in api_params.items() if k in OPENROUTER_ALLOWED_PARAMS
+                    k: v
+                    for k, v in api_params.items()
+                    if k in OPENROUTER_ALLOWED_PARAMS
                 }
 
                 t0 = time.monotonic()
@@ -790,7 +789,9 @@ async def _generate_vl_response_with_retry(
 
                     api_err = APIError(msg)
                     api_err.vl_exhausted = True
-                    api_err.vl_ladder_summary = f"attempts={attempts},time={total_time:.2f}s,last={prov}"
+                    api_err.vl_ladder_summary = (
+                        f"attempts={attempts},time={total_time:.2f}s,last={prov}"
+                    )
                     api_err.vl_attempts = attempts
                     api_err.vl_provider_base = base_url
                     try:
@@ -957,9 +958,7 @@ async def generate_vl_response(
                 attempts,
                 provider_base,
             )
-            friendly_message = (
-                "🔧 The vision service is temporarily unavailable. Please try again in a few minutes."
-            )
+            friendly_message = "🔧 The vision service is temporarily unavailable. Please try again in a few minutes."
             return {
                 "text": friendly_message,
                 "model": None,

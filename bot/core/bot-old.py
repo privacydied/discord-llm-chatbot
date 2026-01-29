@@ -135,7 +135,9 @@ class LLMBot(commands.Bot):
                 except SynthesisError as exc:
                     status = {}
                     try:
-                        status = self.tts_manager.get_status() if self.tts_manager else {}
+                        status = (
+                            self.tts_manager.get_status() if self.tts_manager else {}
+                        )
                     except Exception:
                         status = {}
                     reason = status.get("degraded_reason") or str(exc)
@@ -153,9 +155,7 @@ class LLMBot(commands.Bot):
                     action.audio_path = None
                     action.meta["tts_error"] = reason
                     action.meta["tts_failed"] = True
-                    action.content = (
-                        "I tried to respond with voice, but the TTS service is not working."
-                    )
+                    action.content = "I tried to respond with voice, but the TTS service is not working."
 
         # If action has an audio path after processing, prepare it for sending.
         if action.audio_path:

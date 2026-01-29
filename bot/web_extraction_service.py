@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import json
 import os
 import re
@@ -203,7 +202,12 @@ class WebExtractionService:
 
                 async def _route_handler(route, request):
                     try:
-                        if request.resource_type in {"document", "xhr", "fetch", "script"}:
+                        if request.resource_type in {
+                            "document",
+                            "xhr",
+                            "fetch",
+                            "script",
+                        }:
                             await route.continue_()
                         else:
                             await route.abort()

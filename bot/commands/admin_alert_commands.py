@@ -174,7 +174,9 @@ class AdminAlertManager:
             pass
 
         try:
-            self.session_timeout = int(self.config.get("ALERT_SESSION_TIMEOUT_S", "1800"))
+            self.session_timeout = int(
+                self.config.get("ALERT_SESSION_TIMEOUT_S", "1800")
+            )
         except Exception:
             pass
 
@@ -494,7 +496,9 @@ class AdminAlertCommands(commands.Cog):
         self.logger.info("🚨 Admin Alert Commands loaded")
 
     @commands.command(name="alert")
-    async def alert_command(self, ctx: commands.Context, *, message: str = None) -> None:
+    async def alert_command(
+        self, ctx: commands.Context, *, message: str = None
+    ) -> None:
         """
         Admin broadcast command.
 
@@ -509,7 +513,9 @@ class AdminAlertCommands(commands.Cog):
             self.logger.warning(
                 f"alert:unauthorized user_id={ctx.author.id} channel_type={'DM' if self.alert_manager.is_dm_channel(ctx.channel) else 'guild'}"
             )
-            await ctx.send("🚫 Access denied. You are not authorized to use the alert system.")
+            await ctx.send(
+                "🚫 Access denied. You are not authorized to use the alert system."
+            )
             return
 
         if not self.alert_manager.enabled:
@@ -527,7 +533,9 @@ class AdminAlertCommands(commands.Cog):
 
         # COMPOSER MODE: !alert (no message) - DM-only interactive workflow
         if not self.alert_manager.is_dm_channel(ctx.channel):
-            await ctx.send("🔒 Interactive alert composer can only be used in DMs. Use `!alert <message>` for direct broadcast.")
+            await ctx.send(
+                "🔒 Interactive alert composer can only be used in DMs. Use `!alert <message>` for direct broadcast."
+            )
             return
 
         # Prevent concurrent alert sessions per user [REH][CA]
@@ -584,7 +592,9 @@ class AdminAlertCommands(commands.Cog):
             bot_member = guild.get_member(self.bot.user.id)
             if not bot_member:
                 guilds_skipped += 1
-                self.logger.debug(f"alert:skip guild_id={guild.id} reason=bot_not_member")
+                self.logger.debug(
+                    f"alert:skip guild_id={guild.id} reason=bot_not_member"
+                )
                 continue
 
             # Find target channel: system channel > first writable text channel
@@ -606,7 +616,9 @@ class AdminAlertCommands(commands.Cog):
 
             if not target_channel:
                 guilds_skipped += 1
-                self.logger.debug(f"alert:skip guild_id={guild.id} reason=no_writable_channel")
+                self.logger.debug(
+                    f"alert:skip guild_id={guild.id} reason=no_writable_channel"
+                )
                 continue
 
             # Send alert to this guild [REH]
@@ -642,7 +654,9 @@ class AdminAlertCommands(commands.Cog):
             )
 
     @commands.Cog.listener()
-    async def on_reaction_add(self, reaction: discord.Reaction, user: discord.User) -> None:
+    async def on_reaction_add(
+        self, reaction: discord.Reaction, user: discord.User
+    ) -> None:
         """Handle emoji reactions on composer cards."""
         if user.bot:
             return
@@ -865,7 +879,9 @@ class AdminAlertCommands(commands.Cog):
         except Exception as e:
             self.logger.error(f"❌ Failed to update composer embed: {e}")
 
-    async def _handle_channel_selection(self, reaction: discord.Reaction, user: discord.User, session: "AlertSession") -> None:
+    async def _handle_channel_selection(
+        self, reaction: discord.Reaction, user: discord.User, session: "AlertSession"
+    ) -> None:
         """Present the admin with a numbered list of accessible channels."""
         session.current_step = "select_channels"
 
@@ -906,7 +922,7 @@ class AdminAlertCommands(commands.Cog):
             color=0x5865F2,
         )
 
-        shown_count = len([l for l in lines if not l.startswith("...")])
+        shown_count = len([line for line in lines if not line.startswith("...")])
         embed.add_field(
             name=(
                 f"Available Channels (showing {shown_count} of {len(channels)})"
@@ -937,7 +953,9 @@ class AdminAlertCommands(commands.Cog):
             composer_embed = await self.alert_manager.build_composer_embed(session)
             composer_embed = self.alert_manager._validate_embed_limits(composer_embed)
             # Fetch full message to avoid partial message edit failures [REH]
-            full_message = await reaction.message.channel.fetch_message(reaction.message.id)
+            full_message = await reaction.message.channel.fetch_message(
+                reaction.message.id
+            )
             await full_message.edit(embed=composer_embed)
         except discord.HTTPException as e:
             self.logger.error(
@@ -952,7 +970,9 @@ class AdminAlertCommands(commands.Cog):
             # Ignore failures (e.g. missing permissions); user can still remove manually
             pass
 
-    async def _handle_content_composition(self, reaction: discord.Reaction, user: discord.User, session: "AlertSession") -> None:
+    async def _handle_content_composition(
+        self, reaction: discord.Reaction, user: discord.User, session: "AlertSession"
+    ) -> None:
         session.current_step = "compose_content"
 
         await user.send(
@@ -974,7 +994,9 @@ class AdminAlertCommands(commands.Cog):
             composer_embed = await self.alert_manager.build_composer_embed(session)
             composer_embed = self.alert_manager._validate_embed_limits(composer_embed)
             # Fetch full message to avoid partial message edit failures [REH]
-            full_message = await reaction.message.channel.fetch_message(reaction.message.id)
+            full_message = await reaction.message.channel.fetch_message(
+                reaction.message.id
+            )
             await full_message.edit(embed=composer_embed)
         except discord.HTTPException as e:
             self.logger.error(
@@ -982,7 +1004,9 @@ class AdminAlertCommands(commands.Cog):
             )
             raise
 
-    async def _handle_preview(self, reaction: discord.Reaction, user: discord.User, session: "AlertSession") -> None:
+    async def _handle_preview(
+        self, reaction: discord.Reaction, user: discord.User, session: "AlertSession"
+    ) -> None:
         if not session.destinations:
             await user.send("❌ Please select destinations first (📋).")
             return
@@ -1032,7 +1056,9 @@ class AdminAlertCommands(commands.Cog):
             composer_embed = await self.alert_manager.build_composer_embed(session)
             composer_embed = self.alert_manager._validate_embed_limits(composer_embed)
             # Fetch full message to avoid partial message edit failures [REH]
-            full_message = await reaction.message.channel.fetch_message(reaction.message.id)
+            full_message = await reaction.message.channel.fetch_message(
+                reaction.message.id
+            )
             await full_message.edit(embed=composer_embed)
         except discord.HTTPException as e:
             self.logger.error(
@@ -1040,7 +1066,9 @@ class AdminAlertCommands(commands.Cog):
             )
             raise
 
-    async def _handle_send_confirmation(self, reaction: discord.Reaction, user: discord.User, session: "AlertSession") -> None:
+    async def _handle_send_confirmation(
+        self, reaction: discord.Reaction, user: discord.User, session: "AlertSession"
+    ) -> None:
         if session.current_step != "confirm_send":
             await user.send("❌ Please complete all steps before sending.")
             return
@@ -1091,7 +1119,9 @@ class AdminAlertCommands(commands.Cog):
         except asyncio.TimeoutError:
             await user.send("⏰ Confirmation timeout. Alert cancelled.")
 
-    async def _handle_cancel(self, reaction: discord.Reaction, user: discord.User, session: "AlertSession") -> None:
+    async def _handle_cancel(
+        self, reaction: discord.Reaction, user: discord.User, session: "AlertSession"
+    ) -> None:
         session.status = AlertSessionStatus.CANCELLED
         del self.alert_manager.sessions[user.id]
         await user.send("❌ Alert session cancelled.")

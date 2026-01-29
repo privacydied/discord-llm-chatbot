@@ -9,7 +9,9 @@ logger = logging.getLogger(__name__)
 
 # Global config singleton to store resolved paths
 _resolved_paths: Dict[str, Path] = {}
-_resolved_env_snapshots: Dict[str, Tuple[Optional[str], Optional[str], Optional[str]]] = {}
+_resolved_env_snapshots: Dict[
+    str, Tuple[Optional[str], Optional[str], Optional[str]]
+] = {}
 
 
 def resolve_env(

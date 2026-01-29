@@ -1,4 +1,5 @@
 """Evidence bundle data structures for multimodal provenance stitching."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -8,14 +9,16 @@ from typing import Any, Dict, List, Optional, Tuple
 def _normalize_text(value: Optional[str]) -> str:
     if not value:
         return ""
-    return "\n".join(part.strip() for part in str(value).splitlines() if part.strip()).strip()
+    return "\n".join(
+        part.strip() for part in str(value).splitlines() if part.strip()
+    ).strip()
 
 
 def _trim_text(value: str, max_chars: int) -> str:
     if max_chars <= 0 or len(value) <= max_chars:
         return value
     if max_chars <= 3:
-        return value[:max_chars - 3] + "..."
+        return value[: max_chars - 3] + "..."
 
 
 @dataclass(slots=True)
@@ -46,7 +49,9 @@ class EvidenceBundle:
     source_platform: str = ""
     source_url: str = ""
     primary_tweet_id: Optional[str] = None  # Anchor for deterministic media selection
-    selected_tweet_id: Optional[str] = None  # Actual media host tweet id (may equal primary)
+    selected_tweet_id: Optional[str] = (
+        None  # Actual media host tweet id (may equal primary)
+    )
     caption_text: str = ""
     quoted_text: str = ""  # For quote tweets and retweets
     media_transcript: str = ""
@@ -56,6 +61,7 @@ class EvidenceBundle:
     extra_sections: List[EvidenceSection] = field(default_factory=list)
     # Local flag for telemetry and routing decisions when STT yields no/low speech [REH]
     stt_no_speech: bool = False
+
     def add_section(
         self,
         *,
@@ -95,7 +101,9 @@ class EvidenceBundle:
             return right
         return f"{left}\n\n{right}"
 
-    def _sections_similar(self, section1: EvidenceSection, section2: EvidenceSection) -> bool:
+    def _sections_similar(
+        self, section1: EvidenceSection, section2: EvidenceSection
+    ) -> bool:
         """Check if two sections are near-duplicates for deduplication."""
         if section1.kind == section2.kind:
             return False  # Same kind should not be deduped
@@ -123,16 +131,19 @@ class EvidenceBundle:
                     kind="caption",
                     title="Tweet Caption",
                     body=self.caption_text.strip(),
-                    provenance={"source": "tweet_text"}
-                ))
+                    provenance={"source": "tweet_text"},
+                )
+            )
 
         if self.quoted_text.strip():
-            sections.append(EvidenceSection(
-                kind="quoted",
-                title="Quoted Text",
-                body=self.quoted_text.strip(),
-                provenance={"source": "quoted_tweet"}
-            ))
+            sections.append(
+                EvidenceSection(
+                    kind="quoted",
+                    title="Quoted Text",
+                    body=self.quoted_text.strip(),
+                    provenance={"source": "quoted_tweet"},
+                )
+            )
 
         # Choose between transcript and vision (prioritize transcript if present)
         media_body = ""
@@ -145,28 +156,34 @@ class EvidenceBundle:
             media_title = "Visual Analysis"
 
         if media_body:
-            sections.append(EvidenceSection(
-                kind="media",
-                title=media_title,
-                body=media_body,
-                provenance={"source": "media_processing"}
-            ))
+            sections.append(
+                EvidenceSection(
+                    kind="media",
+                    title=media_title,
+                    body=media_body,
+                    provenance={"source": "media_processing"},
+                )
+            )
 
         if self.media_ocr_text.strip():
-            sections.append(EvidenceSection(
-                kind="ocr",
-                title="OCR Text",
-                body=self.media_ocr_text.strip(),
-                provenance={"source": "ocr_extraction"}
-            ))
+            sections.append(
+                EvidenceSection(
+                    kind="ocr",
+                    title="OCR Text",
+                    body=self.media_ocr_text.strip(),
+                    provenance={"source": "ocr_extraction"},
+                )
+            )
 
         if self.media_alt_text.strip():
-            sections.append(EvidenceSection(
-                kind="alt",
-                title="Alt Text",
-                body=self.media_alt_text.strip(),
-                provenance={"source": "alt_text"}
-            ))
+            sections.append(
+                EvidenceSection(
+                    kind="alt",
+                    title="Alt Text",
+                    body=self.media_alt_text.strip(),
+                    provenance={"source": "alt_text"},
+                )
+            )
 
         # Add any extra sections
         sections.extend(self.extra_sections)
@@ -191,7 +208,9 @@ class EvidenceBundle:
 
         return sections
 
-    def compose_prompt_text(self, *, token_budget: int = 0, section_limit: int = 0) -> str:
+    def compose_prompt_text(
+        self, *, token_budget: int = 0, section_limit: int = 0
+    ) -> str:
         """
         Compose evidence into final prompt text with token guard and ordering.
         Args:
@@ -245,8 +264,9 @@ class EvidenceBundle:
         # Logging [CDiP]
         try:
             from .utils.logging import get_logger
+
             logger = get_logger(__name__)
-            kept_sections = [sec.kind for sec in sections[:len(parts)]]
+            kept_sections = [sec.kind for sec in sections[: len(parts)]]
             # Per-section length snapshot for telemetry
             lens = {
                 "caption": len(self.caption_text or ""),
@@ -265,13 +285,15 @@ class EvidenceBundle:
                         "lengths": lens,
                         "stt_no_speech": bool(getattr(self, "stt_no_speech", False)),
                         "primary": self.primary_tweet_id or "",
-                        "selected": (self.selected_tweet_id or self.primary_tweet_id or ""),
+                        "selected": (
+                            self.selected_tweet_id or self.primary_tweet_id or ""
+                        ),
                         "sections_kept": kept_sections,
                         "total_sections": len(sections),
                         "token_budget": token_budget,
                         "section_limit": section_limit,
-                    }
-                }
+                    },
+                },
             )
         except Exception:
             pass

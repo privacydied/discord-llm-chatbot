@@ -47,12 +47,14 @@ from .video_ingest import (
     VideoIngestError,
     fetch_and_prepare_url_audio,
 )
+from .config import load_config
 from .stt import ModelSpec, stt_manager
-from .stt_module.failure_classifier import STTFailureClassifier, FailureClassification
-from .stt_module.multimodal_fallback import multimodal_fallback_provider, FallbackTranscriptResult
+from .stt_module.failure_classifier import STTFailureClassifier
+from .stt_module.multimodal_fallback import multimodal_fallback_provider
 
 if TYPE_CHECKING:
     import discord
+    from faster_whisper import WhisperModel
 
 logger = get_logger(__name__)
 
@@ -114,11 +116,11 @@ class PreprocessResult:
         if samples > 0:
             self.duration_out = samples / float(self.sample_rate or SAMPLE_RATE or 1)
             expected = (
-                self.duration_in / ATEMPO_FACTOR if self.atempo_applied else self.duration_in
+                self.duration_in / ATEMPO_FACTOR
+                if self.atempo_applied
+                else self.duration_in
             )
-            self.silence_removed_ms = max(
-                0, int((expected - self.duration_out) * 1000)
-            )
+            self.silence_removed_ms = max(0, int((expected - self.duration_out) * 1000))
         else:
             self.duration_out = 0.0
             self.silence_removed_ms = 0
@@ -210,7 +212,9 @@ class STTJob:
         self.temp_handle = temp_handle
         self.temp_path = path
 
-    def enter_aborting(self, reason: str, chunks_done: int = 0, dur_done: float = 0.0) -> None:
+    def enter_aborting(
+        self, reason: str, chunks_done: int = 0, dur_done: float = 0.0
+    ) -> None:
         if self.state == "running":
             self.state = "aborting"
         self.abort_reason = reason or self.abort_reason
@@ -261,7 +265,11 @@ class STTJob:
         self._finalized = True
         self.state = "finalized"
         if self.status == "partial":
-            transcript_text = (self.transcript.text if self.transcript else "") if self.transcript else ""
+            transcript_text = (
+                (self.transcript.text if self.transcript else "")
+                if self.transcript
+                else ""
+            )
             try:
                 logger.info(
                     "stt.partial_ok chars=%s reason=%s",
@@ -317,13 +325,17 @@ class STTJob:
             except Exception:
                 logger.debug("⚠️ Failed to remove temp attachment", exc_info=True)
             self.temp_handle = None
-        if self.temp_path is not None and (removed_temp is None or self.temp_path != removed_temp):
+        if self.temp_path is not None and (
+            removed_temp is None or self.temp_path != removed_temp
+        ):
             try:
                 os.unlink(self.temp_path)
             except FileNotFoundError:
                 pass
             except Exception:
-                logger.debug("⚠️ Failed to remove temp path %s", self.temp_path, exc_info=True)
+                logger.debug(
+                    "⚠️ Failed to remove temp path %s", self.temp_path, exc_info=True
+                )
             self.temp_path = None
         else:
             self.temp_path = None
@@ -598,6 +610,8 @@ class FFMpegPCMStream(BasePCMStream):
             reason = "abort" if self._aborted else "error"
             ok = success and self._error is None and not self._aborted
             self._spans.end("pre", ok=ok, reason=reason)
+
+
 class NoSpeechDetected(RuntimeError):
     """Raised when VAD confirms no speech and the first chunk yields no tokens."""
 
@@ -763,9 +777,7 @@ def _reset_stream_from_cache(pre: PreprocessResult) -> None:
     expected_after_atempo = (
         pre.duration_in / ATEMPO_FACTOR if pre.atempo_applied else pre.duration_in
     )
-    pre.silence_removed_ms = max(
-        0, int((expected_after_atempo - duration_out) * 1000)
-    )
+    pre.silence_removed_ms = max(0, int((expected_after_atempo - duration_out) * 1000))
 
 
 def _transcript_cache_key(
@@ -920,9 +932,7 @@ async def _preprocess_audio(
 ) -> PreprocessResult:
     spans.start("pre")
     duration_in, sr, channels = await _ffprobe(source_path)
-    logger.info(
-        "pre.probe dur_in=%.2f sr=%s ch=%s", duration_in, sr, channels
-    )
+    logger.info("pre.probe dur_in=%.2f sr=%s ch=%s", duration_in, sr, channels)
     ram_guard.check("ffprobe")
 
     silence_applied = not voice_note and duration_in > SHORT_CLIP_S
@@ -948,9 +958,7 @@ async def _preprocess_audio(
         expected_after_atempo = (
             duration_in / ATEMPO_FACTOR if atempo_applied else duration_in
         )
-        silence_removed_ms = max(
-            0, int((expected_after_atempo - duration_out) * 1000)
-        )
+        silence_removed_ms = max(0, int((expected_after_atempo - duration_out) * 1000))
         pre_result = PreprocessResult(
             stream=stream,
             sample_rate=SAMPLE_RATE,
@@ -1083,9 +1091,7 @@ def _drain_frames(frames: deque[np.ndarray]) -> np.ndarray:
     return np.concatenate(parts)
 
 
-def _segments_to_dict(
-    segments: List[Any], offset: float
-) -> List[Dict[str, Any]]:
+def _segments_to_dict(segments: List[Any], offset: float) -> List[Dict[str, Any]]:
     results: List[Dict[str, Any]] = []
     for seg in segments:
         results.append(
@@ -1133,7 +1139,9 @@ async def _run_whisper(
         try:
             await pre.stream.finalize(success=not transcript.aborted)
         except Exception as exc:
-            if isinstance(exc, InferenceError) and "Audio preprocessing timed out" in str(exc):
+            if isinstance(
+                exc, InferenceError
+            ) and "Audio preprocessing timed out" in str(exc):
                 logger.debug("⚠️ Stream finalization failed: %s", exc)
             else:
                 logger.debug("⚠️ Stream finalization failed", exc_info=True)
@@ -1187,9 +1195,7 @@ async def _transcribe_with_model(
     if cached:
         spans.spans["whisper"] = 0
         logger.info("stt.span stage=whisper ms=0 ok=true reason=cache")
-        logger.info(
-            "cache.hit stage=transcript key=%s", cache_key[:12]
-        )
+        logger.info("cache.hit stage=transcript key=%s", cache_key[:12])
         return cached
 
     spans.start("whisper")
@@ -1326,7 +1332,12 @@ async def _transcribe_with_model(
             samples_buffered += frame.shape[0]
 
             while samples_buffered >= chunk_samples:
-                remaining_ms = int(max(0.0, (whisper_budget - (time.perf_counter() - start_time)) * 1000))
+                remaining_ms = int(
+                    max(
+                        0.0,
+                        (whisper_budget - (time.perf_counter() - start_time)) * 1000,
+                    )
+                )
                 try:
                     logger.info(
                         "stt.budget remaining_ms=%s next_chunk_idx=%s",
@@ -1390,8 +1401,12 @@ async def _transcribe_with_model(
                     tail = None
                     aborted_reason = "memory_guard"
                     if job:
-                        current_end = chunk_records[-1]["end"] if chunk_records else chunk_end_s
-                        job.enter_aborting("memory_guard", len(chunk_records), current_end)
+                        current_end = (
+                            chunk_records[-1]["end"] if chunk_records else chunk_end_s
+                        )
+                        job.enter_aborting(
+                            "memory_guard", len(chunk_records), current_end
+                        )
                     gc.collect()
                     break
                 if (time.perf_counter() - start_time) > whisper_budget:
@@ -1402,7 +1417,9 @@ async def _transcribe_with_model(
                 break
 
         if not aborted_reason and (chunk_idx == 0 or frames):
-            remaining_ms = int(max(0.0, (whisper_budget - (time.perf_counter() - start_time)) * 1000))
+            remaining_ms = int(
+                max(0.0, (whisper_budget - (time.perf_counter() - start_time)) * 1000)
+            )
             try:
                 logger.info(
                     "stt.budget remaining_ms=%s next_chunk_idx=%s",
@@ -1426,7 +1443,10 @@ async def _transcribe_with_model(
                     segments, info, runtime = await _decode_chunk(remainder)
                     if chunk_idx == 0:
                         first_chunk_runtime = runtime
-                        if not segments and info.no_speech_prob >= NO_SPEECH_PROB_THRESHOLD:
+                        if (
+                            not segments
+                            and info.no_speech_prob >= NO_SPEECH_PROB_THRESHOLD
+                        ):
                             spans.end("whisper", ok=False, reason="no_speech")
                             logger.info("stt.no_speech_fast_exit")
                             raise InferenceError(
@@ -1458,10 +1478,19 @@ async def _transcribe_with_model(
                         tail = None
                         aborted_reason = "memory_guard"
                         if job:
-                            current_end = chunk_records[-1]["end"] if chunk_records else chunk_end_s
-                            job.enter_aborting("memory_guard", len(chunk_records), current_end)
+                            current_end = (
+                                chunk_records[-1]["end"]
+                                if chunk_records
+                                else chunk_end_s
+                            )
+                            job.enter_aborting(
+                                "memory_guard", len(chunk_records), current_end
+                            )
                         gc.collect()
-                    if aborted_reason is None and (time.perf_counter() - start_time) > whisper_budget:
+                    if (
+                        aborted_reason is None
+                        and (time.perf_counter() - start_time) > whisper_budget
+                    ):
                         aborted_reason = "time_budget"
     except InferenceError:
         raise
@@ -1568,7 +1597,7 @@ def _log_summary(
 
 
 async def _ensure_local_audio(
-    audio: Union[Path, "discord.Attachment"]
+    audio: Union[Path, "discord.Attachment"],
 ) -> Tuple[Path, Optional[tempfile.NamedTemporaryFile], bool]:
     if isinstance(audio, Path):
         return audio, None, False
@@ -1641,7 +1670,9 @@ async def hear_infer(audio: Union[Path, "discord.Attachment"]) -> str:
                     )
                     spec = downgraded
 
-            transcript = await _run_whisper_with_fallback(pre, spans, spec, ram_guard, job=job)
+            transcript = await _run_whisper_with_fallback(
+                pre, spans, spec, ram_guard, job=job
+            )
 
             spans.start("stitch")
             result_text = transcript.text
@@ -1653,7 +1684,9 @@ async def hear_infer(audio: Union[Path, "discord.Attachment"]) -> str:
             try:
                 await job.pre.stream.abort()
             except Exception:
-                logger.debug("⚠️ Stream abort failed after RAM guard trigger", exc_info=True)
+                logger.debug(
+                    "⚠️ Stream abort failed after RAM guard trigger", exc_info=True
+                )
         await job.finish_failure(exc)
         raise InferenceError(str(exc)) from exc
     except Exception as exc:
@@ -1668,9 +1701,7 @@ async def hear_infer(audio: Union[Path, "discord.Attachment"]) -> str:
         await job.close()
 
 
-async def hear_infer_from_url(
-    url: str, force_refresh: bool = False
-) -> Dict[str, Any]:
+async def hear_infer_from_url(url: str, force_refresh: bool = False) -> Dict[str, Any]:
     """
     Transcribe audio fetched via yt-dlp for the given URL.
     """
@@ -1683,7 +1714,7 @@ async def hear_infer_from_url(
         url[:120] if url else "none",
         force_refresh,
     )
-    
+
     spans = SpanRecorder()
     ram_guard = STTRAMGuard(STT_MAX_RAM_MB)
     job = STTJob(kind="url", spans=spans, ram_guard=ram_guard)
@@ -1731,7 +1762,9 @@ async def hear_infer_from_url(
                     )
                     spec = downgraded
 
-            transcript = await _run_whisper_with_fallback(pre, spans, spec, ram_guard, job=job)
+            transcript = await _run_whisper_with_fallback(
+                pre, spans, spec, ram_guard, job=job
+            )
 
             spans.start("stitch")
             metadata = download.metadata
@@ -1755,23 +1788,29 @@ async def hear_infer_from_url(
             }
             spans.end("stitch", ok=True)
             _log_summary(spans, pre, transcript, cache_hit=transcript.cache_hit)
-            
+
             # Log transcript completion with URL identity for debugging [REH]
-            transcript_preview = (transcript.text[:60] + "...") if len(transcript.text) > 60 else transcript.text
+            transcript_preview = (
+                (transcript.text[:60] + "...")
+                if len(transcript.text) > 60
+                else transcript.text
+            )
             logger.info(
                 "stt.job.complete url=%s chars=%d preview=%s",
                 url[:80] if url else "none",
                 len(transcript.text),
                 repr(transcript_preview),
             )
-            
+
             return await job.finish_success(result)
     except RAMGuardExceeded as exc:
         if job.pre and job.pre.stream:
             try:
                 await job.pre.stream.abort()
             except Exception:
-                logger.debug("⚠️ Stream abort failed after RAM guard trigger", exc_info=True)
+                logger.debug(
+                    "⚠️ Stream abort failed after RAM guard trigger", exc_info=True
+                )
         await job.finish_failure(exc)
         raise InferenceError(str(exc)) from exc
     except Exception as exc:
@@ -1818,9 +1857,7 @@ async def _run_whisper_with_fallback(
     except Exception as primary_error:
         # Classify the failure to determine if fallback should be attempted
         failure = STTFailureClassifier.classify_failure(
-            error=primary_error,
-            pre_result=pre,
-            audio_path=pre.source_path
+            error=primary_error, pre_result=pre, audio_path=pre.source_path
         )
 
         logger.info(f"[STT] Primary transcription failed: {failure}")
@@ -1830,15 +1867,19 @@ async def _run_whisper_with_fallback(
         fallback_enabled = config.get("STT_MULTIMODAL_FALLBACK_ENABLED", False)
 
         if not fallback_enabled:
-            logger.info("[STT] Multimodal fallback is disabled, re-raising primary error")
+            logger.info(
+                "[STT] Multimodal fallback is disabled, re-raising primary error"
+            )
             raise primary_error
 
         if not STTFailureClassifier.should_attempt_fallback(
             classification=failure,
             has_audio_data=pre.duration_in > 0,
-            pre_duration=pre.duration_in
+            pre_duration=pre.duration_in,
         ):
-            logger.info(f"[STT] Fallback not appropriate for failure type: {failure.category}")
+            logger.info(
+                f"[STT] Fallback not appropriate for failure type: {failure.category}"
+            )
             raise primary_error
 
         # Attempt multimodal fallback
@@ -1855,11 +1896,13 @@ async def _run_whisper_with_fallback(
             }
 
             # Call the multimodal fallback provider
-            fallback_result = await multimodal_fallback_provider.transcribe_with_fallback(
-                audio_path=pre.source_path,
-                pre_result=pre,
-                failure_reason=failure,
-                model_config=model_config
+            fallback_result = (
+                await multimodal_fallback_provider.transcribe_with_fallback(
+                    audio_path=pre.source_path,
+                    pre_result=pre,
+                    failure_reason=failure,
+                    model_config=model_config,
+                )
             )
 
             spans.end("multimodal_fallback", ok=True)
@@ -1868,7 +1911,7 @@ async def _run_whisper_with_fallback(
             transcript = TranscriptResult(
                 text=fallback_result.text,
                 segments=[],  # Fallback doesn't provide segments
-                chunks=[],    # Fallback doesn't provide chunks
+                chunks=[],  # Fallback doesn't provide chunks
                 duration_out=pre.duration_in,
                 model_spec=initial_spec,
                 cache_hit=False,
@@ -1877,7 +1920,7 @@ async def _run_whisper_with_fallback(
                 abort_reason=None,
                 is_fallback=True,
                 fallback_provider=fallback_result.provider,
-                failure_context=str(failure)
+                failure_context=str(failure),
             )
 
             # Log the fallback usage

@@ -194,7 +194,9 @@ def _parse_tweet_blocks(
     articles = soup.find_all("article")
     if not articles:
         # Fallback: common mirror structures
-        articles = soup.find_all("div", attrs={"data-testid": re.compile("tweet", re.I)})
+        articles = soup.find_all(
+            "div", attrs={"data-testid": re.compile("tweet", re.I)}
+        )
 
     # Special-case: FixTweet/vx mirrors often contain only meta tags + redirect; synthesize a single block
     # from meta description when no tweet ARTICLEs are present. [REH][PA]
@@ -202,7 +204,9 @@ def _parse_tweet_blocks(
         try:
             # Resolve tweet_id from canonical link if present
             tw_id = None
-            canonical_link = soup.find("link", attrs={"rel": re.compile("canonical", re.I)})
+            canonical_link = soup.find(
+                "link", attrs={"rel": re.compile("canonical", re.I)}
+            )
             can_href = canonical_link.get("href") if canonical_link else None
             if can_href:
                 m = re.search(r"/status/(\d{5,20})(?:\D|$)", can_href)
@@ -211,7 +215,9 @@ def _parse_tweet_blocks(
 
             # Author from twitter:creator meta or canonical path
             author = None
-            m_creator = soup.find("meta", attrs={"property": re.compile("twitter:creator", re.I)})
+            m_creator = soup.find(
+                "meta", attrs={"property": re.compile("twitter:creator", re.I)}
+            )
             if m_creator and m_creator.get("content"):
                 c = m_creator.get("content")
                 if c.startswith("@"):
@@ -428,7 +434,10 @@ async def _fetch_html_with_playwright(url: str, timeout_s: float) -> Optional[st
                 extra={
                     "subsys": "threads.x",
                     "event": "playwright_fetch_error",
-                    "detail": {"url": url, "error": str(e.__class__.__name__) + ": " + str(e)},
+                    "detail": {
+                        "url": url,
+                        "error": str(e.__class__.__name__) + ": " + str(e),
+                    },
                 },
             )
         except Exception:
@@ -455,7 +464,11 @@ async def unroll_author_thread(
                 extra={
                     "subsys": "threads.x",
                     "event": "unroll_normalized",
-                    "detail": {"canonical": canonical, "tweet_id": tid, "handle": handle},
+                    "detail": {
+                        "canonical": canonical,
+                        "tweet_id": tid,
+                        "handle": handle,
+                    },
                 },
             )
         except Exception:
@@ -467,7 +480,9 @@ async def unroll_author_thread(
 
     # Phase 1A: JSON mirror probe (fx/vx) to stitch minimal thread without browsers [PA]
     try:
-        ctx_json = await _unroll_via_mirror_json(tid, handle, timeout_s, max_tweets, max_chars)
+        ctx_json = await _unroll_via_mirror_json(
+            tid, handle, timeout_s, max_tweets, max_chars
+        )
         if ctx_json is not None and getattr(ctx_json, "joined_text", None):
             try:
                 logger.debug(
@@ -585,7 +600,9 @@ async def unroll_author_thread(
         pass
     if not blocks:
         # Optional X API probe as a final chance before giving up [REH]
-        ctx_api = await _maybe_xapi_unroll(canonical, tid, handle, timeout_s, max_tweets, max_chars)
+        ctx_api = await _maybe_xapi_unroll(
+            canonical, tid, handle, timeout_s, max_tweets, max_chars
+        )
         if ctx_api is not None:
             return ctx_api, None
         return None, "dom_mismatch"
@@ -648,7 +665,9 @@ async def unroll_author_thread(
 
     if not items:
         # Optional X API probe as a final chance before giving up [REH]
-        ctx_api = await _maybe_xapi_unroll(canonical, tid, handle, timeout_s, max_tweets, max_chars)
+        ctx_api = await _maybe_xapi_unroll(
+            canonical, tid, handle, timeout_s, max_tweets, max_chars
+        )
         if ctx_api is not None:
             return ctx_api, None
         return None, "no_items"
@@ -697,7 +716,11 @@ async def _unroll_via_mirror_json(
     try:
         logger.debug(
             "threads.x: json_probe_start",
-            extra={"subsys": "threads.x", "event": "json_probe_start", "detail": {"id": tweet_id}},
+            extra={
+                "subsys": "threads.x",
+                "event": "json_probe_start",
+                "detail": {"id": tweet_id},
+            },
         )
     except Exception:
         pass
@@ -715,7 +738,9 @@ async def _unroll_via_mirror_json(
 
     async def _fx(id_: str) -> Optional[Dict[str, Any]]:
         try:
-            r = await http.get(f"https://api.fxtwitter.com/Tweet/status/{id_}", config=cfg)
+            r = await http.get(
+                f"https://api.fxtwitter.com/Tweet/status/{id_}", config=cfg
+            )
             if r is None or r.status_code >= 400:
                 return None
             return r.json()
@@ -724,7 +749,9 @@ async def _unroll_via_mirror_json(
 
     async def _vx(id_: str) -> Optional[Dict[str, Any]]:
         try:
-            r = await http.get(f"https://api.vxtwitter.com/Tweet/status/{id_}", config=cfg)
+            r = await http.get(
+                f"https://api.vxtwitter.com/Tweet/status/{id_}", config=cfg
+            )
             if r is None or r.status_code >= 400:
                 return None
             return r.json()
@@ -756,7 +783,11 @@ async def _unroll_via_mirror_json(
                     "created_timestamp": data.get("date_epoch"),
                     "quote": {
                         "id": (data.get("qrt") or {}).get("tweetID"),
-                        "author": {"screen_name": (data.get("qrt") or {}).get("user_screen_name")},
+                        "author": {
+                            "screen_name": (data.get("qrt") or {}).get(
+                                "user_screen_name"
+                            )
+                        },
                     },
                     "raw_text": None,
                 }
@@ -785,11 +816,15 @@ async def _unroll_via_mirror_json(
         try:
             ts = t.get("created_timestamp")
             if isinstance(ts, (int, float)):
-                ts_iso = datetime.utcfromtimestamp(int(ts)).strftime("%Y-%m-%dT%H:%M:%SZ")
+                ts_iso = datetime.utcfromtimestamp(int(ts)).strftime(
+                    "%Y-%m-%dT%H:%M:%SZ"
+                )
         except Exception:
             ts_iso = None
 
-        if (len(items) + 1) > max_tweets or (sum(len(it.text_plain) for it in items) + len(text)) > max_chars:
+        if (len(items) + 1) > max_tweets or (
+            sum(len(it.text_plain) for it in items) + len(text)
+        ) > max_chars:
             break
         items.append(
             TweetItem(

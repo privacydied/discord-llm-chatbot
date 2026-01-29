@@ -154,16 +154,16 @@ class KokoroONNXEngine(BaseEngine):
         return self._synthesize_with_registry(text)
 
     def _synthesize_english_ipa(self, text: str, **kwargs) -> bytes:
-        logger.debug(
-            "English path: phoneme-only; using official model IPA vocabulary."
-        )
+        logger.debug("English path: phoneme-only; using official model IPA vocabulary.")
 
         # Check timeout configuration
         cold_timeout = float(os.getenv("KOKORO_TTS_TIMEOUT_COLD", "60"))
         warm_timeout = float(os.getenv("KOKORO_TTS_TIMEOUT_WARM", "20"))
 
         timeout = (
-            warm_timeout if getattr(self, "_synthesis_initialized", False) else cold_timeout
+            warm_timeout
+            if getattr(self, "_synthesis_initialized", False)
+            else cold_timeout
         )
 
         try:
@@ -302,7 +302,9 @@ class KokoroONNXEngine(BaseEngine):
             wav_path = result_container[0]
             matched_symbols = getattr(kd, "_last_matched_symbols", [])
             normalized_first = _normalize_token(first_token)
-            normalized_match = _normalize_token(matched_symbols[0]) if matched_symbols else ""
+            normalized_match = (
+                _normalize_token(matched_symbols[0]) if matched_symbols else ""
+            )
             first_token_ok = not normalized_first or (
                 normalized_match and normalized_first.startswith(normalized_match)
             )
