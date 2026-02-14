@@ -1883,7 +1883,14 @@ class Router:
                 final.append(u)
             if len(final) >= max(1, self._x_syn_max_images):
                 break
-        return final
+
+        # Return proper dict shape as declared in type hint
+        return {
+            "kind": "image" if final else "unknown",
+            "images": final,
+            "url": final[0] if final else None,
+            "duration": None,
+        }
 
     async def _route_tweet_as_perception_images(
         self, img_urls: List[str], *, message: Message, context_str: str
@@ -2706,6 +2713,12 @@ class Router:
                     audio_path = result.audio_path
                 else:
                     text_out = str(result or "")
+                # Return error if no text was generated [REH]
+                if not text_out or not str(text_out).strip():
+                    return ResponseMessage(
+                        content="Error: No text was generated. Please try again.",
+                        text="Error: No text was generated. Please try again.",
+                    )
                 if len(text_out.split()) < 5:
                     text_out = (text_out + " auto generated caption.").strip()
                 return ResponseMessage(
@@ -2726,6 +2739,12 @@ class Router:
                     audio_path = result.audio_path
                 else:
                     text_out = str(result or "")
+                # Return error if no text was generated [REH]
+                if not text_out or not str(text_out).strip():
+                    return ResponseMessage(
+                        content="Error: No text was generated. Please try again.",
+                        text="Error: No text was generated. Please try again.",
+                    )
                 if len(text_out.split()) < 5:
                     text_out = (text_out + " auto generated caption.").strip()
                 return ResponseMessage(
@@ -2935,6 +2954,12 @@ class Router:
                             audio_path = res.audio_path
                         else:
                             text_out = str(res)
+                        # Return error if no text was generated [REH]
+                        if not text_out or not str(text_out).strip():
+                            return ResponseMessage(
+                                content="Error: No text was generated. Please try again.",
+                                text="Error: No text was generated. Please try again.",
+                            )
                         if isinstance(self.bot, (Mock, MagicMock)) and text_out:
                             if len(str(text_out).split()) < 5:
                                 text_out = (
@@ -3144,6 +3169,12 @@ class Router:
                                 audio_path = res.audio_path
                             else:
                                 text_out = str(res)
+                            # Return error if no text was generated [REH]
+                            if not text_out or not str(text_out).strip():
+                                return ResponseMessage(
+                                    content="Error: No text was generated. Please try again.",
+                                    text="Error: No text was generated. Please try again.",
+                                )
                             if isinstance(self.bot, (Mock, MagicMock)) and text_out:
                                 if len(str(text_out).split()) < 5:
                                     text_out = (
