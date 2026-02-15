@@ -6293,6 +6293,29 @@ class Router:
                         # Mixed media (video + images) must route to STT, not VL.
                         has_any_images = bool(photos) or bool(extracted_images)
                         is_image_only = has_any_images and (not _syn_has_video)
+                        # Sparse syndication payloads (e.g., only text/user) can miss media metadata.
+                        # In that case, defer final text fallback so Tier-2 API media checks can run.
+                        syn_media_hints = any(
+                            k in syn
+                            for k in (
+                                "media",
+                                "photos",
+                                "video",
+                                "video_info",
+                                "video_variants",
+                                "video_urls",
+                                "media_duration",
+                                "duration_ms",
+                                "extended_entities",
+                                "entities",
+                                "quoted_tweet",
+                                "quoted_status",
+                                "retweeted_status",
+                                "legacy",
+                                "card",
+                                "image",
+                            )
+                        )
 
                         # Log routing decision for observability [IV][REH]
                         try:
@@ -6477,58 +6500,79 @@ class Router:
                                     )
                                     return result
 
+                            sparse_no_media = (
+                                (not _syn_has_video)
+                                and (not has_any_images)
+                                and (not syn_media_hints)
+                            )
+                            if sparse_no_media and tweet_id and x_client is not None:
+                                try:
+                                    self.logger.info(
+                                        "route=x_syndication.defer_to_api reason=sparse_media_metadata",
+                                        extra={
+                                            "event": "x.syndication.defer_to_api",
+                                            "detail": {
+                                                "tweet_id": tweet_id,
+                                                "syn_keys": sorted(list(syn.keys()))[:30],
+                                            },
+                                        },
+                                    )
+                                except Exception:
+                                    pass
+                            else:
                             # Fall back to text-only ONLY when video was NOT confirmed by syndication [REH]
+                                try:
+                                    self.logger.info(
+                                        "fallback",
+                                        extra={
+                                            "event": "fallback",
+                                            "detail": {"kind": "caption_only"},
+                                        },
+                                    )
+                                except Exception:
+                                    pass
+                                # Prefer API text if available; otherwise fall back to syndication text or composed evidence [REH]
+                                try:
+                                    base_text_api = (
+                                        (api_data.get("data") or [{}])[0].get("text")
+                                        if "api_data" in locals()
+                                        and isinstance(api_data, dict)
+                                        else ""
+                                    )
+                                except Exception:
+                                    base_text_api = ""
+                                safe_base_text = (
+                                    base_text_api or text or base or ""
+                                ).strip()
+                                return self._format_x_tweet_with_transcription(
+                                    base_text=safe_base_text,
+                                    url=url,
+                                    stt_res={},
+                                )
+
+                        if has_any_images:
+                            # Images are present and no video is confirmed; route to unified syndication→VL handler.
+                            from .syndication.handler import (
+                                handle_twitter_syndication_to_vl,
+                            )
+
                             try:
                                 self.logger.info(
-                                    "fallback",
-                                    extra={
-                                        "event": "fallback",
-                                        "detail": {"kind": "caption_only"},
-                                    },
+                                    "route=x_syndication | sending images to VL (hi-res)",
+                                    extra={"detail": {"url": url}},
                                 )
                             except Exception:
                                 pass
-                            # Prefer API text if available; otherwise fall back to syndication text or composed evidence [REH]
-                            try:
-                                base_text_api = (
-                                    (api_data.get("data") or [{}])[0].get("text")
-                                    if "api_data" in locals()
-                                    and isinstance(api_data, dict)
-                                    else ""
-                                )
-                            except Exception:
-                                base_text_api = ""
-                            safe_base_text = (
-                                base_text_api or text or base or ""
-                            ).strip()
-                            return self._format_x_tweet_with_transcription(
-                                base_text=safe_base_text,
-                                url=url,
-                                stt_res={},
+
+                            result = await handle_twitter_syndication_to_vl(
+                                syn,
+                                url,
+                                self._unified_vl_to_text_pipeline,
+                                self.bot.system_prompts.get("vl_prompt"),
+                                reply_style="ack+thoughts",
                             )
-
-                        # Images are present and no video is confirmed; route to unified syndication→VL handler.
-                        from .syndication.handler import (
-                            handle_twitter_syndication_to_vl,
-                        )
-
-                        try:
-                            self.logger.info(
-                                "route=x_syndication | sending images to VL (hi-res)",
-                                extra={"detail": {"url": url}},
-                            )
-                        except Exception:
-                            pass
-
-                        result = await handle_twitter_syndication_to_vl(
-                            syn,
-                            url,
-                            self._unified_vl_to_text_pipeline,
-                            self.bot.system_prompts.get("vl_prompt"),
-                            reply_style="ack+thoughts",
-                        )
-                        # Syndication handler returns final text; pass through as string for aggregator
-                        return result
+                            # Syndication handler returns final text; pass through as string for aggregator
+                            return result
 
                     # If syndication JSON failed to produce data, probe fx/vx for high-res photos [REH][PA]
                     if getattr(
