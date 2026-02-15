@@ -303,6 +303,31 @@ def syndication_has_video(tw: Dict[str, Any]) -> bool:
 
         return False
 
+    def _node_has_media_hints(node: Dict[str, Any]) -> bool:
+        if not isinstance(node, dict) or not node:
+            return False
+        if any(
+            k in node
+            for k in (
+                "media",
+                "photos",
+                "video",
+                "video_info",
+                "video_variants",
+                "video_urls",
+                "media_duration",
+                "duration_ms",
+                "extended_entities",
+                "entities",
+                "card",
+                "image",
+            )
+        ):
+            return True
+        for _source, _media in _iter_syndication_media_entries(node):
+            return True
+        return False
+
     # Evaluate all known nesting shapes deterministically.
     nodes_to_scan: List[Tuple[str, Dict[str, Any]]] = [("tweet", tw)]
     for key in ("quoted_tweet", "quoted_status", "retweeted_status", "legacy"):
@@ -311,9 +336,15 @@ def syndication_has_video(tw: Dict[str, Any]) -> bool:
             log.info("syndication_has_video: checking nested node=%s", key)
             nodes_to_scan.append((key, node))
 
+    saw_media_hints = False
     for node_name, node in nodes_to_scan:
+        if _node_has_media_hints(node):
+            saw_media_hints = True
         if _node_has_video(node_name, node):
             return True
 
+    if not saw_media_hints:
+        log.info("syndication_has_video: indeterminate (no media metadata)")
+        return False
     log.info("syndication_has_video: no video detected")
     return False

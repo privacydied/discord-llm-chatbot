@@ -21,6 +21,7 @@ import math
 import os
 import re
 import shutil
+import subprocess
 import tempfile
 import time
 from collections import deque
@@ -91,6 +92,80 @@ try:
         STT_MAX_RAM_MB = None
 except Exception:
     STT_MAX_RAM_MB = None
+
+_FFMPEG_BIN_CACHE: Optional[str] = None
+_FFMPEG_BIN_HAS_AAC: Optional[bool] = None
+
+
+def _ffmpeg_candidates() -> List[str]:
+    candidates: List[str] = []
+    for env_key in ("STT_FFMPEG_BIN", "FFMPEG_BIN", "FFMPEG_BINARY"):
+        value = (os.getenv(env_key) or "").strip()
+        if value:
+            candidates.append(value)
+    # Prefer Synology ffmpeg7 package when present; fallback to default ffmpeg.
+    candidates.extend(["ffmpeg7", "ffmpeg"])
+    # Preserve order while de-duplicating.
+    seen = set()
+    ordered: List[str] = []
+    for c in candidates:
+        if c in seen:
+            continue
+        seen.add(c)
+        ordered.append(c)
+    return ordered
+
+
+def _ffmpeg_supports_aac_decoder(ffmpeg_bin: str) -> bool:
+    try:
+        proc = subprocess.run(
+            [ffmpeg_bin, "-hide_banner", "-decoders"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+        if proc.returncode != 0:
+            return False
+        out = proc.stdout or ""
+        return bool(re.search(r"\baac(?:_fixed|_latm)?\b", out))
+    except Exception:
+        return False
+
+
+def _resolve_ffmpeg_bin() -> str:
+    global _FFMPEG_BIN_CACHE, _FFMPEG_BIN_HAS_AAC
+    if _FFMPEG_BIN_CACHE:
+        return _FFMPEG_BIN_CACHE
+
+    for candidate in _ffmpeg_candidates():
+        ffmpeg_bin = None
+        if os.path.sep in candidate:
+            path_obj = Path(candidate)
+            if path_obj.exists():
+                ffmpeg_bin = str(path_obj)
+        else:
+            ffmpeg_bin = shutil.which(candidate)
+        if not ffmpeg_bin:
+            continue
+
+        has_aac = _ffmpeg_supports_aac_decoder(ffmpeg_bin)
+        _FFMPEG_BIN_CACHE = ffmpeg_bin
+        _FFMPEG_BIN_HAS_AAC = has_aac
+        try:
+            logger.info(
+                "stt.ffmpeg.selected path=%s aac_decoder=%s",
+                ffmpeg_bin,
+                str(has_aac).lower(),
+            )
+        except Exception:
+            pass
+        return ffmpeg_bin
+
+    raise InferenceError(
+        "ffmpeg executable not found; set STT_FFMPEG_BIN to an installed ffmpeg binary"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -847,8 +922,6 @@ def _store_transcript_cache(cache_key: str, result: TranscriptResult) -> None:
 
 async def _ffprobe(path: Path) -> Tuple[float, int, int]:
     """Probe audio file for duration, sample rate, channels. Falls back to ffmpeg if ffprobe unavailable. [REH]"""
-    import shutil
-
     ffprobe_bin = shutil.which("ffprobe")
     if ffprobe_bin:
         cmd = [
@@ -885,9 +958,7 @@ async def _ffprobe(path: Path) -> Tuple[float, int, int]:
         return duration, sample_rate, channels
 
     # Fallback: use ffmpeg -i to probe (parses stderr output) [REH]
-    ffmpeg_bin = shutil.which("ffmpeg")
-    if not ffmpeg_bin:
-        raise InferenceError("Neither ffprobe nor ffmpeg found in PATH")
+    ffmpeg_bin = _resolve_ffmpeg_bin()
 
     cmd = [ffmpeg_bin, "-i", str(path), "-hide_banner", "-f", "null", "-"]
     proc = await asyncio.create_subprocess_exec(
@@ -954,13 +1025,11 @@ async def _extract_audio_to_wav_forced(
     1. Extract audio stream to WAV with codec auto-detection
     2. Use -acodec pcm_s16le to force PCM output
 
-    This works around missing AAC decoders by letting ffmpeg auto-negotiate
-    the best available decoder. [REH]
+    This retries extraction with the configured STT ffmpeg binary. [REH]
     """
-    import shutil
-
-    ffmpeg_bin = shutil.which("ffmpeg")
-    if not ffmpeg_bin:
+    try:
+        ffmpeg_bin = _resolve_ffmpeg_bin()
+    except Exception:
         logger.warning("ffmpeg not found for forced extraction")
         return False
 
@@ -1180,8 +1249,20 @@ async def _preprocess_audio(
     filter_chain.append("aresample=async=1:first_pts=0")
     filters = ",".join(filter_chain)
 
+    ffmpeg_bin = _resolve_ffmpeg_bin()
+    if _FFMPEG_BIN_HAS_AAC is False and source_path.suffix.lower() in {
+        ".mp4",
+        ".m4a",
+        ".aac",
+    }:
+        logger.warning(
+            "stt.ffmpeg.aac_missing path=%s source=%s",
+            ffmpeg_bin,
+            source_path.name,
+        )
+
     ffmpeg_cmd = [
-        "ffmpeg",
+        ffmpeg_bin,
         "-hide_banner",
         "-loglevel",
         "error",
