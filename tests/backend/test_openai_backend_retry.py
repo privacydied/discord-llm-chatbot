@@ -328,3 +328,42 @@ async def test_404_no_endpoints_opens_long_cooldown_and_skips_next_call(monkeypa
     # dead model should be skipped on immediate next call due long cooldown
     assert calls["dead"] == 1
     assert calls["ok"] == 2
+
+
+@pytest.mark.asyncio
+async def test_circuit_probe_window_prevents_zero_attempt_exhaustion(monkeypatch):
+    monkeypatch.setenv("CIRCUIT_PROBE_WINDOW_S", "0.5")
+
+    mgr = EnhancedRetryManager()
+    mgr.provider_configs["text"] = [
+        ProviderConfig("openrouter", "model-a", timeout=1.0, max_attempts=1),
+        ProviderConfig("openrouter", "model-b", timeout=1.0, max_attempts=1),
+    ]
+
+    now = __import__("time").time()
+    # Simulate both providers circuit-open but close to cooldown expiry.
+    for key in ("openrouter:model-a", "openrouter:model-b"):
+        breaker = mgr._get_circuit_breaker(key)
+        breaker.status = ProviderStatus.CIRCUIT_OPEN
+        breaker.failure_count = breaker.failure_threshold
+        breaker.cooldown_duration = 2.0
+        breaker.last_failure_time = now - 1.8  # remaining ~= 0.2s (inside probe window)
+
+    calls = {"a": 0, "b": 0}
+
+    def factory(pc: ProviderConfig):
+        async def run():
+            if pc.model == "model-a":
+                calls["a"] += 1
+                raise Exception("429 Too Many Requests")
+            calls["b"] += 1
+            return "OK-B"
+
+        return run
+
+    res = await mgr.run_with_fallback("text", factory, per_item_budget=5.0)
+    assert res.success is True
+    assert res.result == "OK-B"
+    assert res.attempts >= 1
+    assert calls["a"] >= 1
+    assert calls["b"] == 1

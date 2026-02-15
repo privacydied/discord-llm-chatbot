@@ -452,10 +452,30 @@ class EnhancedRetryManager:
 
         if breaker.status == ProviderStatus.CIRCUIT_OPEN:
             # Check if cooldown period has passed
-            if time.time() - breaker.last_failure_time > breaker.cooldown_duration:
+            now = time.time()
+            elapsed = now - breaker.last_failure_time
+            cooldown = max(0.0, float(breaker.cooldown_duration or 0.0))
+            remaining = cooldown - elapsed
+            if remaining <= 0:
                 breaker.status = ProviderStatus.DEGRADED
                 breaker.failure_count = 0
                 logger.info(f"🔄 Circuit breaker reset for {provider_key}")
+                return True
+
+            # Near-expiry probe window: avoid "0 attempts / all providers exhausted"
+            # when retries happen just before cooldown elapses (common under 429 bursts).
+            # Long cooldowns (e.g., dead 404 models) remain protected.
+            try:
+                probe_window_s = float(os.getenv("CIRCUIT_PROBE_WINDOW_S", "0.5"))
+            except Exception:
+                probe_window_s = 0.5
+            if probe_window_s > 0 and remaining <= probe_window_s:
+                breaker.status = ProviderStatus.DEGRADED
+                # Keep it one failure away from reopening if the probe fails.
+                breaker.failure_count = max(0, breaker.failure_threshold - 1)
+                logger.info(
+                    f"🔄 Circuit probe window reached for {provider_key} (remaining={remaining:.2f}s)"
+                )
                 return True
             return False
 
