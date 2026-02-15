@@ -5,7 +5,12 @@ import httpx
 from bot.exceptions import APIError
 from bot import retry_utils as retry_utils_mod
 from bot.openai_backend import generate_openai_response
-from bot.enhanced_retry import get_retry_manager, ProviderConfig
+from bot.enhanced_retry import (
+    EnhancedRetryManager,
+    ProviderStatus,
+    get_retry_manager,
+    ProviderConfig,
+)
 
 
 def make_httpx_429(retry_after: float) -> httpx.HTTPStatusError:
@@ -269,3 +274,57 @@ async def test_streaming_bypasses_fallback_and_streams_chunks(monkeypatch):
     text_stream = "".join(x["text"] for x in outs if not x["finished"])
     assert text_stream == "Hello world!"
     assert call_log["count"] == 1
+
+
+def test_text_fallback_env_ladder_is_not_overridden_by_openai_text_model(monkeypatch):
+    monkeypatch.setenv(
+        "TEXT_FALLBACK_MODELS", "openrouter|model-a,openrouter|model-b"
+    )
+    monkeypatch.setenv("OPENAI_TEXT_MODEL", "dead-model-not-in-ladder")
+    monkeypatch.delenv("TEXT_FALLBACK_TIMEOUTS", raising=False)
+
+    mgr = EnhancedRetryManager()
+    ladder = mgr.provider_configs.get("text", [])
+    assert [p.model for p in ladder][:2] == ["model-a", "model-b"]
+
+
+@pytest.mark.asyncio
+async def test_404_no_endpoints_opens_long_cooldown_and_skips_next_call(monkeypatch):
+    monkeypatch.delenv("TEXT_FALLBACK_MODELS", raising=False)
+    monkeypatch.delenv("TEXT_FALLBACK_TIMEOUTS", raising=False)
+    monkeypatch.setenv("OPENROUTER_DEAD_MODEL_COOLDOWN_S", "1800")
+
+    mgr = EnhancedRetryManager()
+    mgr.provider_configs["text"] = [
+        ProviderConfig("openrouter", "dead-model", timeout=1.0, max_attempts=1),
+        ProviderConfig("openrouter", "ok-model", timeout=1.0, max_attempts=1),
+    ]
+
+    calls = {"dead": 0, "ok": 0}
+
+    def factory(pc: ProviderConfig):
+        async def run():
+            if pc.model == "dead-model":
+                calls["dead"] += 1
+                raise Exception(
+                    "NotFoundError: Error code: 404 - {'error': {'message': 'No endpoints found for dead-model.'}}"
+                )
+            calls["ok"] += 1
+            return "OK"
+
+        return run
+
+    res1 = await mgr.run_with_fallback("text", factory, per_item_budget=5.0)
+    assert res1.success is True
+    assert calls["dead"] == 1
+    assert calls["ok"] == 1
+
+    breaker = mgr._get_circuit_breaker("openrouter:dead-model")
+    assert breaker.status == ProviderStatus.CIRCUIT_OPEN
+    assert breaker.cooldown_duration >= 1800.0
+
+    res2 = await mgr.run_with_fallback("text", factory, per_item_budget=5.0)
+    assert res2.success is True
+    # dead model should be skipped on immediate next call due long cooldown
+    assert calls["dead"] == 1
+    assert calls["ok"] == 2

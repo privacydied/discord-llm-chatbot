@@ -303,15 +303,12 @@ class EnhancedRetryManager:
 
         self.provider_configs["vision"] = filtered_vision
 
-        # Text ladder: env is authoritative; no filtering
+        # Text ladder: env is authoritative; preserve exact order from TEXT_FALLBACK_MODELS.
+        # Do not prepend OPENAI_TEXT_MODEL when env ladder is provided, because stale
+        # model slugs can cause repeated 404/no-endpoints stalls before real fallbacks.
         raw_text_ladder = _parse_ladder(text_models, text_timeouts, default_text)
         if text_from_env:
-            head_timeout = (
-                raw_text_ladder[0].timeout
-                if raw_text_ladder
-                else default_text[0].timeout
-            )
-            filtered_text = _ensure_head(raw_text_ladder, text_head, head_timeout)
+            filtered_text = raw_text_ladder
         else:
             filtered_text = raw_text_ladder
 
@@ -638,6 +635,16 @@ class EnhancedRetryManager:
                         self._record_failure(provider_key)
                         breaker = self._get_circuit_breaker(provider_key)
                         breaker.status = ProviderStatus.CIRCUIT_OPEN
+                        try:
+                            dead_model_cooldown = float(
+                                os.getenv("OPENROUTER_DEAD_MODEL_COOLDOWN_S", "1800")
+                            )
+                        except Exception:
+                            dead_model_cooldown = 1800.0
+                        breaker.cooldown_duration = max(
+                            float(breaker.cooldown_duration or 0.0),
+                            max(60.0, dead_model_cooldown),
+                        )
                         break
 
                     logger.warning(
