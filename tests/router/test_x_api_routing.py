@@ -227,6 +227,144 @@ async def test_sparse_syndication_defers_to_api_video_stt(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_sparse_syndication_without_api_uses_direct_media_probe_for_stt(monkeypatch):
+    bot = DummyBot()
+    bot.config["X_API_ENABLED"] = False
+    bot.system_prompts = {"vl_prompt": None}
+    router = Router(bot)
+
+    monkeypatch.setattr(XApiClient, "extract_tweet_id", staticmethod(lambda u: "1"))
+
+    async def _fake_syn(_self, _tweet_id):
+        return {"text": "caption only", "user": {"screen_name": "u"}}
+
+    monkeypatch.setattr(Router, "_get_tweet_via_syndication", _fake_syn)
+
+    async def _fake_get_client(_self):
+        return None
+
+    monkeypatch.setattr(Router, "_get_x_api_client", _fake_get_client)
+
+    async def _fake_resolve(self, urls, frontend_hints=None, primary_hints=None):
+        return {"kind": "video", "url": urls[0]}
+
+    monkeypatch.setattr(Router, "_resolve_x_media", _fake_resolve)
+
+    import bot.router as router_mod
+
+    stt_mock = AsyncMock(return_value={"transcription": "hello world"})
+    monkeypatch.setattr(router_mod, "hear_infer_from_url", stt_mock)
+
+    def _fmt(_self, base_text, url, stt_res):
+        return f"STT:{(stt_res or {}).get('transcription', '')}"
+
+    monkeypatch.setattr(Router, "_format_x_tweet_with_transcription", _fmt)
+
+    item = InputItem(
+        source_type="url", payload="https://x.com/user/status/1", order_index=0
+    )
+    res = await router._handle_general_url(item)
+
+    assert res == "STT:hello world"
+    stt_mock.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_sparse_syndication_without_api_uses_direct_media_probe_for_images(
+    monkeypatch,
+):
+    bot = DummyBot()
+    bot.config["X_API_ENABLED"] = False
+    bot.system_prompts = {"vl_prompt": None}
+    router = Router(bot)
+
+    monkeypatch.setattr(XApiClient, "extract_tweet_id", staticmethod(lambda u: "1"))
+
+    async def _fake_syn(_self, _tweet_id):
+        return {"text": "caption only", "user": {"screen_name": "u"}}
+
+    monkeypatch.setattr(Router, "_get_tweet_via_syndication", _fake_syn)
+
+    async def _fake_get_client(_self):
+        return None
+
+    monkeypatch.setattr(Router, "_get_x_api_client", _fake_get_client)
+
+    async def _fake_resolve(self, urls, frontend_hints=None, primary_hints=None):
+        return {
+            "kind": "image",
+            "images": ["https://pbs.twimg.com/media/test123.jpg?name=orig"],
+            "url": "https://pbs.twimg.com/media/test123.jpg?name=orig",
+        }
+
+    monkeypatch.setattr(Router, "_resolve_x_media", _fake_resolve)
+    import bot.syndication.handler as syn_handler_mod
+
+    async def _fake_syn_handler(
+        syn_data, url, vl_handler, vl_prompt=None, reply_style="ack+thoughts"
+    ):
+        assert len((syn_data or {}).get("photos") or []) == 1
+        return "VL_OK_SPARSE_IMAGE"
+
+    monkeypatch.setattr(
+        syn_handler_mod,
+        "handle_twitter_syndication_to_vl",
+        _fake_syn_handler,
+        raising=True,
+    )
+
+    item = InputItem(
+        source_type="url", payload="https://x.com/user/status/1", order_index=0
+    )
+    res = await router._handle_general_url(item)
+
+    assert res == "VL_OK_SPARSE_IMAGE"
+
+
+@pytest.mark.asyncio
+async def test_sparse_syndication_unknown_forces_stt_before_text_fallback(monkeypatch):
+    bot = DummyBot()
+    bot.config["X_API_ENABLED"] = False
+    bot.system_prompts = {"vl_prompt": None}
+    router = Router(bot)
+
+    monkeypatch.setattr(XApiClient, "extract_tweet_id", staticmethod(lambda u: "1"))
+
+    async def _fake_syn(_self, _tweet_id):
+        return {"text": "caption only", "user": {"screen_name": "u"}}
+
+    monkeypatch.setattr(Router, "_get_tweet_via_syndication", _fake_syn)
+
+    async def _fake_get_client(_self):
+        return None
+
+    monkeypatch.setattr(Router, "_get_x_api_client", _fake_get_client)
+
+    async def _fake_resolve(self, urls, frontend_hints=None, primary_hints=None):
+        return {"kind": "unknown", "images": [], "url": None}
+
+    monkeypatch.setattr(Router, "_resolve_x_media", _fake_resolve)
+
+    import bot.router as router_mod
+
+    stt_mock = AsyncMock(return_value={"transcription": "forced hello world"})
+    monkeypatch.setattr(router_mod, "hear_infer_from_url", stt_mock)
+
+    def _fmt(_self, base_text, url, stt_res):
+        return f"STT:{(stt_res or {}).get('transcription', '')}"
+
+    monkeypatch.setattr(Router, "_format_x_tweet_with_transcription", _fmt)
+
+    item = InputItem(
+        source_type="url", payload="https://x.com/user/status/1", order_index=0
+    )
+    res = await router._handle_general_url(item)
+
+    assert res == "STT:forced hello world"
+    stt_mock.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_resolve_x_media_unwraps_fx_proxy(monkeypatch):
     bot = DummyBot()
     router = Router(bot)

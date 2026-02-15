@@ -6505,20 +6505,189 @@ class Router:
                                 and (not has_any_images)
                                 and (not syn_media_hints)
                             )
-                            if sparse_no_media and tweet_id and x_client is not None:
+                            if sparse_no_media:
                                 try:
                                     self.logger.info(
-                                        "route=x_syndication.defer_to_api reason=sparse_media_metadata",
+                                        "route=x_syndication.defer reason=sparse_media_metadata",
                                         extra={
-                                            "event": "x.syndication.defer_to_api",
+                                            "event": "x.syndication.defer",
                                             "detail": {
                                                 "tweet_id": tweet_id,
                                                 "syn_keys": sorted(list(syn.keys()))[:30],
+                                                "has_api_client": bool(x_client is not None),
                                             },
                                         },
                                     )
                                 except Exception:
                                     pass
+                                # Sparse syndication can omit media metadata entirely.
+                                # Probe direct X media resolution before caption-only fallback.
+                                try:
+                                    resolved_sparse, _ = await _bounded(
+                                        self._resolve_x_media([url]),
+                                        min(
+                                            getattr(self, "_x_syn_timeout_s", 3.0) + 1.0,
+                                            4.5,
+                                        ),
+                                        "x.syndication.sparse.resolve",
+                                        {"tweet_id": tweet_id or ""},
+                                    )
+                                except Exception:
+                                    resolved_sparse = None
+
+                                sparse_kind = (
+                                    (resolved_sparse or {}).get("kind", "unknown")
+                                    if isinstance(resolved_sparse, dict)
+                                    else "unknown"
+                                )
+                                sparse_images = (
+                                    (resolved_sparse or {}).get("images") or []
+                                    if isinstance(resolved_sparse, dict)
+                                    else []
+                                )
+                                if sparse_kind == "video":
+                                    sparse_url = (
+                                        (resolved_sparse or {}).get("url") or url
+                                    )
+                                    try:
+                                        self.logger.info(
+                                            "route=x_syndication.sparse.stt_start",
+                                            extra={
+                                                "event": "x.syndication.sparse.stt_start",
+                                                "detail": {
+                                                    "tweet_id": tweet_id or "",
+                                                    "resolved_kind": "video",
+                                                },
+                                            },
+                                        )
+                                    except Exception:
+                                        pass
+                                    stt_res, stt_err = await _bounded(
+                                        hear_infer_from_url(sparse_url),
+                                        x_stt_probe_timeout,
+                                        "x.syndication.sparse.stt",
+                                        {"url": sparse_url},
+                                    )
+                                    if stt_res and stt_res.get("transcription"):
+                                        return self._format_x_tweet_with_transcription(
+                                            base_text=base,
+                                            url=sparse_url,
+                                            stt_res=stt_res,
+                                        )
+                                    safe_base_text = (text or base or "").strip()
+                                    stt_error_result = {
+                                        "transcription": None,
+                                        "error": stt_err or "transcription_failed",
+                                        "media_kind": "video",
+                                        "url": sparse_url,
+                                    }
+                                    return self._format_x_tweet_with_transcription(
+                                        base_text=safe_base_text,
+                                        url=sparse_url,
+                                        stt_res=stt_error_result,
+                                    )
+                                if sparse_kind == "image" and sparse_images:
+                                    try:
+                                        first_host = urlparse(sparse_images[0]).netloc
+                                    except Exception:
+                                        first_host = ""
+                                    self.logger.info(
+                                        f"route.twitter.syndication | images={len(sparse_images)} | {first_host or 'n/a'}"
+                                    )
+                                    syn_like = {
+                                        "text": text,
+                                        "photos": [{"url": u} for u in sparse_images],
+                                    }
+                                    from .syndication.handler import (
+                                        handle_twitter_syndication_to_vl,
+                                    )
+
+                                    return await handle_twitter_syndication_to_vl(
+                                        syn_like,
+                                        url,
+                                        self._unified_vl_to_text_pipeline,
+                                        self.bot.system_prompts.get("vl_prompt"),
+                                        reply_style="ack+thoughts",
+                                    )
+                                if sparse_kind not in ("video", "image"):
+                                    # Last resort for sparse syndication: attempt STT directly on the tweet URL.
+                                    # This preserves video->STT routing when metadata endpoints are incomplete.
+                                    try:
+                                        self.logger.info(
+                                            "route=x_syndication.sparse.force_stt_start",
+                                            extra={
+                                                "event": "x.syndication.sparse.force_stt_start",
+                                                "detail": {
+                                                    "tweet_id": tweet_id or "",
+                                                    "resolved_kind": sparse_kind,
+                                                },
+                                            },
+                                        )
+                                    except Exception:
+                                        pass
+                                    forced_stt_res, forced_stt_err = await _bounded(
+                                        hear_infer_from_url(url),
+                                        x_stt_probe_timeout,
+                                        "x.syndication.sparse.force_stt",
+                                        {"url": url},
+                                    )
+                                    if forced_stt_res and forced_stt_res.get(
+                                        "transcription"
+                                    ):
+                                        return self._format_x_tweet_with_transcription(
+                                            base_text=base,
+                                            url=url,
+                                            stt_res=forced_stt_res,
+                                        )
+                                    try:
+                                        self.logger.info(
+                                            "stt.fail",
+                                            extra={
+                                                "event": "stt.fail",
+                                                "detail": {
+                                                    "reason": (
+                                                        "no_speech"
+                                                        if forced_stt_err != "error"
+                                                        else "error"
+                                                    ),
+                                                    "media_kind": "unknown_sparse",
+                                                },
+                                            },
+                                        )
+                                    except Exception:
+                                        pass
+
+                                # If API is available, continue to Tier-2 API branch below.
+                                if tweet_id and x_client is not None:
+                                    pass
+                                else:
+                                    try:
+                                        self.logger.info(
+                                            "fallback",
+                                            extra={
+                                                "event": "fallback",
+                                                "detail": {"kind": "caption_only"},
+                                            },
+                                        )
+                                    except Exception:
+                                        pass
+                                    try:
+                                        base_text_api = (
+                                            (api_data.get("data") or [{}])[0].get("text")
+                                            if "api_data" in locals()
+                                            and isinstance(api_data, dict)
+                                            else ""
+                                        )
+                                    except Exception:
+                                        base_text_api = ""
+                                    safe_base_text = (
+                                        base_text_api or text or base or ""
+                                    ).strip()
+                                    return self._format_x_tweet_with_transcription(
+                                        base_text=safe_base_text,
+                                        url=url,
+                                        stt_res={},
+                                    )
                             else:
                             # Fall back to text-only ONLY when video was NOT confirmed by syndication [REH]
                                 try:
