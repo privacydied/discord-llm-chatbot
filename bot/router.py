@@ -6215,64 +6215,9 @@ class Router:
                 tweet_id = XApiClient.extract_tweet_id(str(url))
                 x_client = await self._get_x_api_client()
 
-                # Check embeds for image detection to gate STT probe [IV][REH]
-                # If Discord embeds indicate images for this X URL, skip STT entirely.
-                # This prevents STT from running on image-only tweets when X_TWITTER_STT_PROBE_FIRST is enabled.
-                embed_indicates_images = False
-                if message:
-                    try:
-                        for embed in message.embeds:
-                            embed_url = getattr(embed, "url", "") or ""
-                            if url in embed_url or embed_url in url:
-                                if getattr(embed, "image", None) or getattr(
-                                    embed, "video", None
-                                ):
-                                    if getattr(embed, "video", None):
-                                        # Video embed means we should try STT
-                                        embed_indicates_images = False
-                                        break
-                                    else:
-                                        # Image embed means skip STT
-                                        embed_indicates_images = True
-                                        break
-                    except Exception:
-                        pass
-
-                # Fast path: try STT probe first for X URLs only when API client is unavailable [PA][REH]
-                # Preserves API-first behavior when API access is configured/available.
-                # Changed default to False: syndication must confirm content type before STT [IV]
-                # STT is skipped if embeds indicate images (to prevent unnecessary processing) [IV]
-                if (
-                    bool(cfg.get("X_TWITTER_STT_PROBE_FIRST", False))
-                    and (x_client is None)
-                    and not embed_indicates_images
-                ):
-                    stt_res, stt_err = await _bounded(
-                        hear_infer_from_url(url),
-                        x_stt_probe_timeout,
-                        "x.stt_probe",
-                        {"url": url},
-                    )
-                    if stt_res and stt_res.get("transcription"):
-                        base_text = None
-                        if syndication_enabled and tweet_id:
-                            syn, _ = await _bounded(
-                                self._get_tweet_via_syndication(tweet_id),
-                                x_syn_call_timeout,
-                                "x.syndication.probe",
-                                {"tweet_id": tweet_id},
-                            )
-                            if syn:
-                                base_text = self._format_syndication_result(syn, url)
-                        return self._format_x_tweet_with_transcription(
-                            base_text=base_text,
-                            url=url,
-                            stt_res=stt_res,
-                        )
-                    if stt_err == "error":
-                        # Non-fatal errors already logged; continue
-                        pass
-
+                # Syndication-first: must confirm video content before STT is attempted [IV][REH]
+                # Removed STT probe-first path - it was unreliable and ran STT on image-only tweets
+                # Syndication now ALWAYS runs first to determine content type
                 # Tier 1: Syndication JSON (cache + concurrency) when allowed and preferred [PA][REH]
                 if (
                     tweet_id
