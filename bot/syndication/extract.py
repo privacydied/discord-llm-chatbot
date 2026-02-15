@@ -251,27 +251,35 @@ def syndication_has_video(tw: Dict[str, Any]) -> bool:
         log.info("syndication_has_video: detected via top-level video_variants/video_urls")
         return True
 
-    # 5. Check if there's media but no photos (strong video indicator) [REH]
-    # Some video tweets only have a 'media' array without explicit type field
+    # 5. Check top-level media array for video content [REH]
+    # IMPORTANT: Must check media array regardless of photos presence to detect mixed media
+    # Some tweets have both photos (in 'photos' array) and videos (in 'media' array)
     has_media = bool(tw.get("media"))
-    has_photos = bool(tw.get("photos"))
-    if has_media and not has_photos:
-        # Additional check: if media exists and we can verify at least one entry
+    if has_media:
+        # Check if media array exists and inspect each entry
         media_list = tw.get("media") or []
-        if media_list and all(isinstance(m, dict) for m in media_list):
-            # Check if any media entry lacks 'type' or has non-photo characteristics
+        if media_list:
             for m in media_list:
+                if not isinstance(m, dict):
+                    continue
                 mtype = (m.get("type") or "").lower()
+                # Explicit video/animated_gif type
+                if mtype in ("video", "animated_gif"):
+                    log.info(
+                        "syndication_has_video: detected via top-level media array, type=%s",
+                        mtype,
+                    )
+                    return True
+                # Check for video indicators within media entry
+                if m.get("video_info") or m.get("video_variants") or m.get("video_urls"):
+                    log.info("syndication_has_video: detected via media entry with video indicators")
+                    return True
                 # If type is missing or not explicitly "photo", likely video
                 if not mtype or mtype not in ("photo", "image"):
                     log.info(
                         "syndication_has_video: detected via media without photo type, type=%s",
                         mtype or "missing",
                     )
-                    return True
-                # Check for video indicators within media entry
-                if m.get("video_info") or m.get("video_variants") or m.get("video_urls"):
-                    log.info("syndication_has_video: detected via media entry with video indicators")
                     return True
 
     # 6. Check quoted tweet as well (recursively) [IV][REH]
