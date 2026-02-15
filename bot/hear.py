@@ -924,6 +924,193 @@ async def _ffprobe(path: Path) -> Tuple[float, int, int]:
 # ---------------------------------------------------------------------------
 
 
+def _is_codec_error(error: Exception) -> bool:
+    """Check if error is related to audio codec decoding issues. [REH]"""
+    error_str = str(error).lower()
+    codec_patterns = [
+        "decoder",
+        "codec",
+        "aac",
+        "h264",
+        "hevc",
+        "avc",
+        "unsupported",
+        "invalid data",
+        "truncated",
+        "corrupted",
+    ]
+    return any(pattern in error_str for pattern in codec_patterns)
+
+
+async def _extract_audio_to_wav_forced(
+    source_path: Path,
+    target_path: Path,
+    timeout: float = 120.0,
+) -> bool:
+    """
+    Force-extract audio to WAV using ffmpeg with explicit codec handling.
+
+    This is a Tier 2 extraction retry that uses a two-step approach:
+    1. Extract audio stream to WAV with codec auto-detection
+    2. Use -acodec pcm_s16le to force PCM output
+
+    This works around missing AAC decoders by letting ffmpeg auto-negotiate
+    the best available decoder. [REH]
+    """
+    import shutil
+
+    ffmpeg_bin = shutil.which("ffmpeg")
+    if not ffmpeg_bin:
+        logger.warning("ffmpeg not found for forced extraction")
+        return False
+
+    cmd = [
+        ffmpeg_bin,
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-i",
+        str(source_path),
+        "-vn",  # No video
+        "-acodec",
+        "pcm_s16le",  # Force PCM output
+        "-ar",
+        str(SAMPLE_RATE),
+        "-ac",
+        "1",
+        "-y",  # Overwrite
+        str(target_path),
+    ]
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+
+        if (
+            proc.returncode == 0
+            and target_path.exists()
+            and target_path.stat().st_size > 0
+        ):
+            logger.info(
+                "pre.extract_forced_success src=%s wav=%s bytes=%d",
+                source_path.name,
+                target_path.name,
+                target_path.stat().st_size,
+            )
+            return True
+
+        error_msg = stderr.decode(errors="ignore") if stderr else "unknown"
+        logger.warning(
+            "pre.extract_forced_failed src=%s returncode=%d error=%s",
+            source_path.name,
+            proc.returncode,
+            error_msg[:200],
+        )
+        return False
+
+    except asyncio.TimeoutError:
+        logger.warning("pre.extract_forced_timeout src=%s", source_path.name)
+        try:
+            proc.kill()
+        except Exception:
+            pass
+        return False
+    except Exception as exc:
+        logger.warning(
+            "pre.extract_forced_error src=%s error=%s",
+            source_path.name,
+            exc,
+        )
+        return False
+
+
+async def _preprocess_audio_with_retry(
+    source_path: Path,
+    spans: SpanRecorder,
+    download: Optional[DownloadedAudio],
+    voice_note: bool,
+    ram_guard: STTRAMGuard,
+) -> PreprocessResult:
+    """
+    Preprocess audio with Tier 2 extraction retry for codec errors. [REH]
+
+    Tier 1: Direct preprocessing (existing logic)
+    Tier 2: If codec error, force-extract to WAV first, then preprocess
+
+    This ensures that AAC decoder issues don't cause complete STT failure.
+    """
+    try:
+        # Tier 1: Try normal preprocessing
+        return await _preprocess_audio(
+            source_path=source_path,
+            spans=spans,
+            download=download,
+            voice_note=voice_note,
+            ram_guard=ram_guard,
+        )
+    except Exception as primary_error:
+        # Check if this is a codec-related error that warrants extraction retry
+        if not _is_codec_error(primary_error):
+            # Not a codec error - re-raise immediately
+            raise
+
+        logger.info(
+            "pre.codec_error_detected error=%s attempting_tier2_retry",
+            str(primary_error)[:150],
+        )
+
+        # Tier 2: Force-extract to WAV and retry
+        wav_path = None
+        try:
+            # Create temp WAV file for forced extraction
+            wav_handle = tempfile.NamedTemporaryFile(
+                delete=False, suffix=".wav", dir=str(PCM_CACHE_DIR)
+            )
+            wav_path = Path(wav_handle.name)
+            wav_handle.close()
+
+            # Force-extract to WAV
+            spans.start("pre_extract_forced")
+            success = await _extract_audio_to_wav_forced(
+                source_path=source_path,
+                target_path=wav_path,
+                timeout=120.0,
+            )
+            spans.end("pre_extract_forced", ok=success)
+
+            if not success:
+                # Extraction failed - this is unrecoverable
+                raise InferenceError(
+                    f"Failed to extract audio from {source_path.name}: "
+                    f"forced WAV conversion failed"
+                ) from primary_error
+
+            # Retry preprocessing with the WAV file
+            logger.info("pre.tier2_retry wav=%s", wav_path.name)
+            result = await _preprocess_audio(
+                source_path=wav_path,
+                spans=spans,
+                download=download,  # Still track original download info
+                voice_note=voice_note,
+                ram_guard=ram_guard,
+            )
+
+            logger.info("pre.tier2_success wav=%s", wav_path.name)
+            return result
+
+        finally:
+            # Clean up the temporary WAV file
+            if wav_path and wav_path.exists():
+                try:
+                    wav_path.unlink()
+                except Exception:
+                    pass
+
+
 async def _preprocess_audio(
     source_path: Path,
     spans: SpanRecorder,
@@ -1652,7 +1839,7 @@ async def hear_infer(audio: Union[Path, "discord.Attachment"]) -> str:
             local_path, temp_handle, created_temp = await _ensure_local_audio(audio)
             job.register_temp(temp_handle, local_path if created_temp else None)
             voice_note = _is_voice_note(attachment) if attachment is not None else False
-            pre = await _preprocess_audio(
+            pre = await _preprocess_audio_with_retry(
                 source_path=local_path,
                 spans=spans,
                 download=None,
@@ -1744,7 +1931,7 @@ async def hear_infer_from_url(url: str, force_refresh: bool = False) -> Dict[str
             job.register_download(download)
             ram_guard.check("yt-dlp")
 
-            pre = await _preprocess_audio(
+            pre = await _preprocess_audio_with_retry(
                 source_path=download.raw_path,
                 spans=spans,
                 download=download,
