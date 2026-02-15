@@ -1780,6 +1780,61 @@ class Router:
         primary_for_log: Optional[str] = None
         frontend_for_log: Optional[str] = None
         images: List[str] = []
+        videos: List[str] = []
+
+        def _normalize_video_candidate(raw_url: Any) -> Optional[str]:
+            """Normalize candidate video URLs from fx/vx payloads."""
+            try:
+                if not raw_url or not isinstance(raw_url, str):
+                    return None
+                candidate = self._unwrap_x_media_url(raw_url.strip())
+                if not candidate.startswith("http"):
+                    return None
+                parsed = urlparse(candidate)
+                host = (parsed.netloc or "").lower()
+                path = (parsed.path or "").lower()
+                if host.endswith("video.twimg.com") or host.endswith("ton.twimg.com"):
+                    return candidate
+                if any(path.endswith(sfx) for sfx in (".mp4", ".m3u8", ".webm")):
+                    return candidate
+                return None
+            except Exception:
+                return None
+
+        def _collect_video_urls(node: Any) -> List[str]:
+            """Recursively collect likely video URLs from a JSON-like object."""
+            found: List[str] = []
+            try:
+                if isinstance(node, dict):
+                    for key, value in node.items():
+                        key_l = str(key).lower()
+                        if isinstance(value, str):
+                            if key_l in {
+                                "url",
+                                "video_url",
+                                "playback_url",
+                                "hls_url",
+                                "m3u8_url",
+                                "source",
+                            } or "video" in key_l:
+                                cand = _normalize_video_candidate(value)
+                                if cand and cand not in found:
+                                    found.append(cand)
+                        else:
+                            sub = _collect_video_urls(value)
+                            for cand in sub:
+                                if cand not in found:
+                                    found.append(cand)
+                elif isinstance(node, list):
+                    for item in node:
+                        sub = _collect_video_urls(item)
+                        for cand in sub:
+                            if cand not in found:
+                                found.append(cand)
+            except Exception:
+                return found
+            return found
+
         for u in clean:
             status_id = self._parse_twitter_status_id(u)
             lookup = self._normalize_x_url(u)
@@ -1837,6 +1892,38 @@ class Router:
                                         data = json.loads(resp.text)
                             except Exception:
                                 data = {}
+                        # Extract video URLs from common fx/vx payload shapes.
+                        try:
+                            tweet = (data.get("tweet") or data.get("status")) or {}
+                            media = tweet.get("media") or {}
+                            video_nodes: List[Any] = []
+                            for key in ("video", "videos", "video_info", "media"):
+                                value = media.get(key)
+                                if value:
+                                    video_nodes.append(value)
+                            for key in ("video", "videos", "video_info"):
+                                value = tweet.get(key)
+                                if value:
+                                    video_nodes.append(value)
+                            for node in video_nodes:
+                                for cand in _collect_video_urls(node):
+                                    if cand not in videos:
+                                        videos.append(cand)
+                        except Exception:
+                            pass
+                        # Best-effort regex sweep for escaped/wrapped URLs.
+                        try:
+                            raw_text = (resp.text or "").replace("\\/", "/")
+                            for m in re.finditer(
+                                r"https://(?:video|ton)\.twimg\.com/[^\s\"'<>]+",
+                                raw_text,
+                                re.IGNORECASE,
+                            ):
+                                cand = _normalize_video_candidate(m.group(0))
+                                if cand and cand not in videos:
+                                    videos.append(cand)
+                        except Exception:
+                            pass
                         # Extract photo URLs from common shapes
                         candidates: List[str] = []
                         # Prefer high-res for pbs assets
@@ -1915,6 +2002,7 @@ class Router:
                                 uniq.append(u)
                         if uniq:
                             images.extend(uniq)
+                        if videos or uniq:
                             break  # API success
                     except Exception as e:
                         self.logger.debug(
@@ -1999,12 +2087,26 @@ class Router:
             if len(final) >= max(1, self._x_syn_max_images):
                 break
 
+        # Prefer video when both video and image candidates exist.
+        chosen_video = videos[0] if videos else None
+        if chosen_video:
+            return {
+                "kind": "video",
+                "images": final,
+                "url": chosen_video,
+                "duration": None,
+                "primary": primary_for_log or "",
+                "frontend": frontend_for_log,
+            }
+
         # Return proper dict shape as declared in type hint
         return {
             "kind": "image" if final else "unknown",
             "images": final,
             "url": final[0] if final else None,
             "duration": None,
+            "primary": primary_for_log or "",
+            "frontend": frontend_for_log,
         }
 
     async def _route_tweet_as_perception_images(
