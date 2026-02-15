@@ -274,16 +274,42 @@ def syndication_has_video(tw: Dict[str, Any]) -> bool:
                     log.info("syndication_has_video: detected via media entry with video indicators")
                     return True
 
-    # 6. Check quoted tweet as well (recursively) [IV]
-    qt = tw.get("quoted_tweet") or {}
-    if isinstance(qt, dict) and qt:
-        # Check quoted tweet's video field
-        if qt.get("video") or qt.get("video_info"):
-            log.info("syndication_has_video: detected via quoted_tweet video field")
+    # 6. Check quoted tweet as well (recursively) [IV][REH]
+    # Check for both quoted_tweet and quoted_status (different field names in different API versions)
+    for qt_key in ("quoted_tweet", "quoted_status"):
+        qt = tw.get(qt_key) or {}
+        if isinstance(qt, dict) and qt:
+            # Check quoted tweet's video field
+            if qt.get("video") or qt.get("video_info"):
+                log.info(f"syndication_has_video: detected via {qt_key} video field")
+                return True
+            # Check quoted tweet's entities
+            for entities_key in ("extended_entities", "entities"):
+                ent = qt.get(entities_key) or {}
+                media_list = ent.get("media") or []
+                for m in media_list:
+                    if not isinstance(m, dict):
+                        continue
+                    mtype = (m.get("type") or "").lower()
+                    if mtype in ("video", "animated_gif"):
+                        log.info(
+                            f"syndication_has_video: detected via {qt_key} {entities_key}",
+                        )
+                        return True
+                    if m.get("video_info"):
+                        log.info(f"syndication_has_video: detected via {qt_key} media.video_info")
+                        return True
+
+    # 7. Check retweeted status as well [REH]
+    rt = tw.get("retweeted_status") or {}
+    if isinstance(rt, dict) and rt:
+        # Check retweeted status's video field
+        if rt.get("video") or rt.get("video_info"):
+            log.info("syndication_has_video: detected via retweeted_status video field")
             return True
-        # Check quoted tweet's entities
+        # Check retweeted status's entities
         for entities_key in ("extended_entities", "entities"):
-            ent = qt.get(entities_key) or {}
+            ent = rt.get(entities_key) or {}
             media_list = ent.get("media") or []
             for m in media_list:
                 if not isinstance(m, dict):
@@ -291,12 +317,44 @@ def syndication_has_video(tw: Dict[str, Any]) -> bool:
                 mtype = (m.get("type") or "").lower()
                 if mtype in ("video", "animated_gif"):
                     log.info(
-                        "syndication_has_video: detected via quoted_tweet %s",
+                        "syndication_has_video: detected via retweeted_status %s",
                         entities_key,
                     )
                     return True
                 if m.get("video_info"):
-                    log.info("syndication_has_video: detected via quoted_tweet media.video_info")
+                    log.info("syndication_has_video: detected via retweeted_status media.video_info")
+                    return True
+
+    # 8. Check legacy format (data nested under 'legacy' key) [REH]
+    # Some syndication responses wrap the actual data under a 'legacy' key
+    legacy = tw.get("legacy") or {}
+    if isinstance(legacy, dict) and legacy:
+        # Check for video indicators in legacy data
+        if legacy.get("video") or legacy.get("video_info"):
+            log.info("syndication_has_video: detected via legacy video field")
+            return True
+        if legacy.get("media_duration") or legacy.get("duration_ms"):
+            log.info("syndication_has_video: detected via legacy media_duration field")
+            return True
+        if legacy.get("video_variants") or legacy.get("video_urls"):
+            log.info("syndication_has_video: detected via legacy video_variants")
+            return True
+        # Check legacy's extended_entities for video media
+        for entities_key in ("extended_entities", "entities"):
+            ent = legacy.get(entities_key) or {}
+            media_list = ent.get("media") or []
+            for m in media_list:
+                if not isinstance(m, dict):
+                    continue
+                mtype = (m.get("type") or "").lower()
+                if mtype in ("video", "animated_gif"):
+                    log.info(
+                        "syndication_has_video: detected via legacy %s",
+                        entities_key,
+                    )
+                    return True
+                if m.get("video_info"):
+                    log.info("syndication_has_video: detected via legacy media.video_info")
                     return True
 
     log.info("syndication_has_video: no video detected")
