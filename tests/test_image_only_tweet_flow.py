@@ -88,12 +88,12 @@ class TestImageOnlyTweetFlow:
     def test_is_image_only_tweet_detection(
         self, router, sample_image_only_tweet, sample_mixed_content_tweet
     ):
-        """Test detection of image-only tweets vs mixed content."""
+        """Test detection of image flow tweets (images present, no video)."""
         # Test image-only tweet (empty text + photos)
         assert router._is_image_only_tweet(sample_image_only_tweet)
 
-        # Test mixed content tweet (text + photos)
-        assert not router._is_image_only_tweet(sample_mixed_content_tweet)
+        # Text + photos should still be image flow when no video exists
+        assert router._is_image_only_tweet(sample_mixed_content_tweet)
 
         # Test text-only tweet (no photos)
         text_only = {"text": "Just text", "photos": []}
@@ -105,6 +105,13 @@ class TestImageOnlyTweetFlow:
 
         no_photos = {"text": "", "photos": None}
         assert not router._is_image_only_tweet(no_photos)
+
+        mixed_media = {
+            "text": "video + photo",
+            "photos": [{"url": "https://pbs.twimg.com/media/a.jpg"}],
+            "media": [{"type": "video", "video_info": {"duration_ms": 1000}}],
+        }
+        assert not router._is_image_only_tweet(mixed_media)
 
     @pytest.mark.asyncio
     async def test_handle_image_only_tweet_single_image(

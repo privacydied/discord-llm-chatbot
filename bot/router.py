@@ -6289,16 +6289,10 @@ class Router:
                         except Exception:
                             pass
 
-                        # Check for image-only tweet
-                        # Consider both native photos AND extracted images from extended_entities [IV][REH]
-                        # IMPORTANT: image-only must exclude video - mixed media (image+video) goes to STT [IV]
-                        normalize_empty = bool(
-                            cfg.get("TWITTER_NORMALIZE_EMPTY_TEXT", True)
-                        )
+                        # Check for image-only tweet (images present, no video)
+                        # Mixed media (video + images) must route to STT, not VL.
                         has_any_images = bool(photos) or bool(extracted_images)
-                        is_image_only = has_any_images and not _syn_has_video and (
-                            not text or (normalize_empty and not text.strip())
-                        )
+                        is_image_only = has_any_images and (not _syn_has_video)
 
                         # Log routing decision for observability [IV][REH]
                         try:
@@ -6355,9 +6349,73 @@ class Router:
                         # Compose evidence for text-only tweets through the standard bundle [CA]
                         base = self._compose_text_tweet_evidence(url, syn)
 
-                        # IMPORTANT: Skip image probe when video is present - mixed media goes to STT [IV][REH]
-                        # Only probe for images if we have no video AND no native photos
-                        if (not _syn_has_video) and (not photos) and (not extracted_images):
+                        # Video always wins: route confirmed video (including mixed media) to STT.
+                        if _syn_has_video:
+                            # Log STT initiation for confirmed video content [IV]
+                            try:
+                                self.logger.info(
+                                    f"route=x_syndication.stt_start syndication_confirmed_video=true url={url[:80]}",
+                                    extra={
+                                        "event": "x.syndication.stt_start",
+                                        "detail": {
+                                            "has_video": True,
+                                            "url": url[:80],
+                                            "photos": len(photos),
+                                            "extracted_images": len(extracted_images),
+                                        },
+                                    },
+                                )
+                            except Exception:
+                                pass
+                            stt_res, stt_err = await _bounded(
+                                hear_infer_from_url(url),
+                                x_stt_probe_timeout,
+                                "x.syndication.stt",
+                                {"url": url},
+                            )
+                            if stt_res and stt_res.get("transcription"):
+                                return self._format_x_tweet_with_transcription(
+                                    base_text=base,
+                                    url=url,
+                                    stt_res=stt_res,
+                                )
+                            # STT failed for confirmed video content
+                            # Maintain video modality instead of collapsing to text [REH][IV]
+                            try:
+                                self.logger.info(
+                                    "stt.fail",
+                                    extra={
+                                        "event": "stt.fail",
+                                        "detail": {
+                                            "reason": (
+                                                "no_speech"
+                                                if stt_err != "error"
+                                                else "error"
+                                            ),
+                                            "media_kind": "video",
+                                        },
+                                        "msg_id": message.id if message else None,
+                                    },
+                                )
+                            except Exception:
+                                pass
+                            # For confirmed video with STT failure, return structured error that maintains video context
+                            # Do NOT collapse to text-only - the video content is real, even if transcription failed [REH]
+                            safe_base_text = (text or base or "").strip()
+                            stt_error_result = {
+                                "transcription": None,
+                                "error": stt_err or "transcription_failed",
+                                "media_kind": "video",
+                                "url": url,
+                            }
+                            return self._format_x_tweet_with_transcription(
+                                base_text=safe_base_text,
+                                url=url,
+                                stt_res=stt_error_result,
+                            )
+
+                        # No video confirmed. Probe for images only when none were extracted yet.
+                        if (not photos) and (not extracted_images):
                             try:
                                 status_id = (
                                     tweet_id or self._parse_twitter_status_id(url) or ""
@@ -6419,71 +6477,6 @@ class Router:
                                     )
                                     return result
 
-                            # Only attempt STT if syndication indicates video/animated_gif [PA][REH]
-                            if _syn_has_video:
-                                # Log STT initiation for confirmed video content [IV]
-                                try:
-                                    self.logger.info(
-                                        f"route=x_syndication.stt_start syndication_confirmed_video=true url={url[:80]}",
-                                        extra={
-                                            "event": "x.syndication.stt_start",
-                                            "detail": {
-                                                "has_video": True,
-                                                "url": url[:80],
-                                                "photos": len(photos),
-                                                "extracted_images": len(extracted_images),
-                                            },
-                                        },
-                                    )
-                                except Exception:
-                                    pass
-                                stt_res, stt_err = await _bounded(
-                                    hear_infer_from_url(url),
-                                    x_stt_probe_timeout,
-                                    "x.syndication.stt",
-                                    {"url": url},
-                                )
-                                if stt_res and stt_res.get("transcription"):
-                                    return self._format_x_tweet_with_transcription(
-                                        base_text=base,
-                                        url=url,
-                                        stt_res=stt_res,
-                                    )
-                                # STT failed for confirmed video content
-                                # Maintain video modality instead of collapsing to text [REH][IV]
-                                try:
-                                    self.logger.info(
-                                        "stt.fail",
-                                        extra={
-                                            "event": "stt.fail",
-                                            "detail": {
-                                                "reason": (
-                                                    "no_speech"
-                                                    if stt_err != "error"
-                                                    else "error"
-                                                ),
-                                                "media_kind": "video",
-                                            },
-                                            "msg_id": message.id if message else None,
-                                        },
-                                    )
-                                except Exception:
-                                    pass
-                                # For confirmed video with STT failure, return structured error that maintains video context
-                                # Do NOT collapse to text-only - the video content is real, even if transcription failed [REH]
-                                safe_base_text = (text or base or "").strip()
-                                stt_error_result = {
-                                    "transcription": None,
-                                    "error": stt_err or "transcription_failed",
-                                    "media_kind": "video",
-                                    "url": url,
-                                }
-                                return self._format_x_tweet_with_transcription(
-                                    base_text=safe_base_text,
-                                    url=url,
-                                    stt_res=stt_error_result,
-                                )
-
                             # Fall back to text-only ONLY when video was NOT confirmed by syndication [REH]
                             try:
                                 self.logger.info(
@@ -6511,10 +6504,10 @@ class Router:
                             return self._format_x_tweet_with_transcription(
                                 base_text=safe_base_text,
                                 url=url,
-                                stt_res=({} if not _syn_has_video else (stt_res or {})),
+                                stt_res={},
                             )
 
-                        # Images are present somewhere; route to unified syndication→VL handler [CA]
+                        # Images are present and no video is confirmed; route to unified syndication→VL handler.
                         from .syndication.handler import (
                             handle_twitter_syndication_to_vl,
                         )
@@ -9129,11 +9122,17 @@ class Router:
         return BotAction(content="I couldn't process any of the attachments.")
 
     def _is_image_only_tweet(self, syn_data: Dict[str, Any]) -> bool:
-        """Detect whether a tweet is image-only (no meaningful text but has photos)."""
-        text = (syn_data.get("text") or syn_data.get("full_text") or "").strip()
+        """Detect whether a tweet has images and no video media."""
         photos = syn_data.get("photos")
         has_photos = bool(photos) and len(photos) > 0
-        return has_photos and (text == "" or text.isspace())
+        if not has_photos:
+            return False
+        try:
+            from .syndication.extract import syndication_has_video
+
+            return not syndication_has_video(syn_data)
+        except Exception:
+            return True
 
     async def _handle_image_only_tweet(
         self, url: str, syn_data: Dict[str, Any], source: str = "syndication"

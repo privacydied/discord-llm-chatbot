@@ -3,7 +3,10 @@ Unit tests for syndication content extraction.
 Tests for extract_text_and_images_from_syndication function.
 """
 
-from bot.syndication.extract import extract_text_and_images_from_syndication
+from bot.syndication.extract import (
+    extract_text_and_images_from_syndication,
+    syndication_has_video,
+)
 
 
 class TestSyndicationExtract:
@@ -222,3 +225,47 @@ class TestSyndicationExtract:
         assert result["text"] == "Test resilience"
         assert len(result["image_urls"]) == 1
         assert result["image_urls"][0] == "https://pbs.twimg.com/media/ABC123?name=orig"
+
+    def test_syndication_has_video_detects_mixed_media(self):
+        syndication_json = {
+            "text": "mixed",
+            "photos": [{"url": "https://pbs.twimg.com/media/IMG123?name=small"}],
+            "media": [
+                {"type": "photo", "media_url_https": "https://pbs.twimg.com/media/IMG123"},
+                {
+                    "type": "video",
+                    "video_info": {"duration_ms": 10333},
+                    "video_variants": [{"url": "https://video.twimg.com/ext_tw_video/vid.mp4"}],
+                },
+            ],
+        }
+
+        assert syndication_has_video(syndication_json) is True
+
+    def test_syndication_has_video_detects_nested_quoted_and_retweeted(self):
+        quoted = {
+            "quoted_status": {
+                "media": [{"type": "animated_gif"}],
+            }
+        }
+        retweeted = {
+            "retweeted_status": {
+                "extended_entities": {
+                    "media": [{"type": "video", "video_info": {"duration_ms": 5000}}]
+                }
+            }
+        }
+
+        assert syndication_has_video(quoted) is True
+        assert syndication_has_video(retweeted) is True
+
+    def test_syndication_has_video_false_for_photos_only(self):
+        syndication_json = {
+            "text": "photos only",
+            "photos": [{"url": "https://pbs.twimg.com/media/PHOTO123?name=small"}],
+            "extended_entities": {
+                "media": [{"type": "photo", "media_url_https": "https://pbs.twimg.com/media/PHOTO123"}]
+            },
+        }
+
+        assert syndication_has_video(syndication_json) is False

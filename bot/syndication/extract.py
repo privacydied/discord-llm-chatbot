@@ -3,12 +3,37 @@ Extraction utilities for syndication content processing.
 Implements strict media selection policy for X/Twitter syndication payloads.
 """
 
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Iterable, Tuple
 from .url_utils import upgrade_pbs_to_orig, pbs_base_key
 import logging
 import os
 
 log = logging.getLogger(__name__)
+
+
+def _iter_syndication_media_entries(
+    node: Dict[str, Any],
+) -> Iterable[Tuple[str, Dict[str, Any]]]:
+    """Yield media entries from common syndication containers with source labels."""
+    if not isinstance(node, dict):
+        return
+
+    top_media = node.get("media") or []
+    if isinstance(top_media, list):
+        for m in top_media:
+            if isinstance(m, dict):
+                yield ("media", m)
+
+    for entities_key in ("extended_entities", "entities"):
+        entities = node.get(entities_key) or {}
+        if not isinstance(entities, dict):
+            continue
+        media = entities.get("media") or []
+        if not isinstance(media, list):
+            continue
+        for m in media:
+            if isinstance(m, dict):
+                yield (f"{entities_key}.media", m)
 
 
 def extract_text_and_images_from_syndication(tw: Dict[str, Any]) -> Dict[str, Any]:
@@ -48,9 +73,7 @@ def extract_text_and_images_from_syndication(tw: Dict[str, Any]) -> Dict[str, An
 
     def _collect_from_entities(node: Dict[str, Any]) -> List[str]:
         urls: List[str] = []
-        ee = (node.get("extended_entities") or {}).get("media") or []
-        en = (node.get("entities") or {}).get("media") or []
-        for m in ee or en:
+        for _source, m in _iter_syndication_media_entries(node):
             try:
                 mtype = (m.get("type") or "").lower()
                 raw: Optional[str] = None
@@ -122,20 +145,24 @@ def extract_text_and_images_from_syndication(tw: Dict[str, Any]) -> Dict[str, An
             primary_urls = ent_urls
             source = "photos"  # treat as native photos/thumbnail selection
 
-    # 2) Quoted tweet fallback (only if no primary native media)
+    # 2) Quoted/retweeted fallback (only if no primary native media)
     if not primary_urls and include_quoted:
-        qt = tw.get("quoted_tweet") or {}
-        q_urls = _collect_from_photos(qt)
-        q_source = "quoted_photos"
-        if not q_urls:
-            ent_q_urls = _collect_from_entities(qt)
-            if ent_q_urls:
-                q_urls = ent_q_urls
-        if q_urls:
-            primary_urls = q_urls
-            source = q_source
-            # Also capture if quoted had card (not used for selection)
-            had_card = had_card or bool(_extract_card_url(qt))
+        fallback_nodes = [
+            ("quoted_tweet", tw.get("quoted_tweet") or {}),
+            ("quoted_status", tw.get("quoted_status") or {}),
+            ("retweeted_status", tw.get("retweeted_status") or {}),
+        ]
+        for node_name, node in fallback_nodes:
+            if not isinstance(node, dict) or not node:
+                continue
+            q_urls = _collect_from_photos(node)
+            if not q_urls:
+                q_urls = _collect_from_entities(node)
+            if q_urls:
+                primary_urls = q_urls
+                source = f"{node_name}_photos"
+                had_card = had_card or bool(_extract_card_url(node))
+                break
 
     # 3) Card image fallback (only if neither primary nor quoted have native media)
     if not primary_urls:
@@ -194,176 +221,99 @@ def syndication_has_video(tw: Dict[str, Any]) -> bool:
     if not isinstance(tw, dict):
         return False
 
-    # Info logging: log syndication keys for video detection troubleshooting [IV][REH]
-    # Use INFO level to ensure visibility in production logs
-    try:
-        available_keys = list(tw.keys())[:20]  # Limit to avoid huge logs
-        log.info(
-            "syndication_has_video: checking keys=%s",
-            available_keys,
-        )
-    except Exception:
-        pass
+    def _log_node_keys(node_name: str, node: Dict[str, Any]) -> None:
+        try:
+            keys = sorted(list(node.keys()))
+            log.info("syndication_has_video: %s.keys=%s", node_name, keys)
+        except Exception:
+            pass
 
-    # 1. Check video field directly at top level
-    if tw.get("video"):
-        log.info("syndication_has_video: detected via top-level 'video' field")
-        return True
+    def _node_has_video(node_name: str, node: Dict[str, Any]) -> bool:
+        if not isinstance(node, dict) or not node:
+            return False
 
-    # 2. Check video_info field (alternative video indicator) [REH]
-    if tw.get("video_info"):
-        log.info("syndication_has_video: detected via 'video_info' field")
-        return True
+        _log_node_keys(node_name, node)
 
-    # 3. Check extended_entities/entities for video/animated_gif types
-    for entities_key in ("extended_entities", "entities"):
-        ent = tw.get(entities_key) or {}
-        media_list = ent.get("media") or []
-        if not media_list:
-            continue
-        for m in media_list:
-            if not isinstance(m, dict):
-                continue
-            mtype = (m.get("type") or "").lower()
+        # Direct node-level video markers
+        if node.get("video"):
+            log.info("syndication_has_video: detected via %s.video", node_name)
+            return True
+        if node.get("video_info"):
+            log.info("syndication_has_video: detected via %s.video_info", node_name)
+            return True
+        if node.get("video_variants") or node.get("video_urls"):
+            log.info(
+                "syndication_has_video: detected via %s.video_variants/video_urls",
+                node_name,
+            )
+            return True
+        if node.get("media_duration") or node.get("duration_ms"):
+            log.info(
+                "syndication_has_video: detected via %s.media_duration/duration_ms",
+                node_name,
+            )
+            return True
+
+        for idx, (source, media) in enumerate(_iter_syndication_media_entries(node)):
+            mtype = (media.get("type") or "").lower()
+            has_video_info = bool(media.get("video_info"))
+            has_variants = bool(media.get("video_variants") or media.get("video_urls"))
+            has_duration = bool(media.get("duration_ms") or media.get("media_duration"))
+            has_poster = bool(
+                media.get("poster")
+                or media.get("thumbnail_url")
+                or media.get("media_url_https")
+            )
+            log.info(
+                "syndication_has_video: media_check node=%s source=%s idx=%d type=%s "
+                "has_video_info=%s has_variants=%s has_duration=%s has_poster=%s",
+                node_name,
+                source,
+                idx,
+                mtype or "missing",
+                has_video_info,
+                has_variants,
+                has_duration,
+                has_poster,
+            )
+
             if mtype in ("video", "animated_gif"):
                 log.info(
-                    "syndication_has_video: detected via %s media type=%s",
-                    entities_key,
+                    "syndication_has_video: detected via %s %s type=%s",
+                    node_name,
+                    source,
                     mtype,
                 )
                 return True
-            # Additional check: video_info inside media entity [REH]
-            if m.get("video_info"):
-                log.info("syndication_has_video: detected via media.video_info")
+            if has_video_info or has_variants:
+                log.info(
+                    "syndication_has_video: detected via %s %s video markers",
+                    node_name,
+                    source,
+                )
                 return True
-            # Check for video_variants (another possible indicator) [REH]
-            if m.get("video_variants") or m.get("video_urls"):
-                log.info("syndication_has_video: detected via media video_variants/video_urls")
+            if mtype and mtype not in ("photo", "image"):
+                log.info(
+                    "syndication_has_video: detected via %s %s non-photo type=%s",
+                    node_name,
+                    source,
+                    mtype,
+                )
                 return True
 
-    # 4. Additional video indicators that might be present [REH]
-    # Check for media_duration (present in video tweets)
-    if tw.get("media_duration") or tw.get("duration_ms"):
-        log.info("syndication_has_video: detected via media_duration/duration_ms field")
-        return True
-    # Check for video_variants at top level
-    if tw.get("video_variants") or tw.get("video_urls"):
-        log.info("syndication_has_video: detected via top-level video_variants/video_urls")
-        return True
+        return False
 
-    # 5. Check top-level media array for video content [REH]
-    # IMPORTANT: Must check media array regardless of photos presence to detect mixed media
-    # Some tweets have both photos (in 'photos' array) and videos (in 'media' array)
-    has_media = bool(tw.get("media"))
-    if has_media:
-        # Check if media array exists and inspect each entry
-        media_list = tw.get("media") or []
-        if media_list:
-            for m in media_list:
-                if not isinstance(m, dict):
-                    continue
-                mtype = (m.get("type") or "").lower()
-                # Explicit video/animated_gif type
-                if mtype in ("video", "animated_gif"):
-                    log.info(
-                        "syndication_has_video: detected via top-level media array, type=%s",
-                        mtype,
-                    )
-                    return True
-                # Check for video indicators within media entry
-                if m.get("video_info") or m.get("video_variants") or m.get("video_urls"):
-                    log.info("syndication_has_video: detected via media entry with video indicators")
-                    return True
-                # If type is missing or not explicitly "photo", likely video
-                if not mtype or mtype not in ("photo", "image"):
-                    log.info(
-                        "syndication_has_video: detected via media without photo type, type=%s",
-                        mtype or "missing",
-                    )
-                    return True
+    # Evaluate all known nesting shapes deterministically.
+    nodes_to_scan: List[Tuple[str, Dict[str, Any]]] = [("tweet", tw)]
+    for key in ("quoted_tweet", "quoted_status", "retweeted_status", "legacy"):
+        node = tw.get(key) or {}
+        if isinstance(node, dict) and node:
+            log.info("syndication_has_video: checking nested node=%s", key)
+            nodes_to_scan.append((key, node))
 
-    # 6. Check quoted tweet as well (recursively) [IV][REH]
-    # Check for both quoted_tweet and quoted_status (different field names in different API versions)
-    for qt_key in ("quoted_tweet", "quoted_status"):
-        qt = tw.get(qt_key) or {}
-        if isinstance(qt, dict) and qt:
-            # Check quoted tweet's video field
-            if qt.get("video") or qt.get("video_info"):
-                log.info(f"syndication_has_video: detected via {qt_key} video field")
-                return True
-            # Check quoted tweet's entities
-            for entities_key in ("extended_entities", "entities"):
-                ent = qt.get(entities_key) or {}
-                media_list = ent.get("media") or []
-                for m in media_list:
-                    if not isinstance(m, dict):
-                        continue
-                    mtype = (m.get("type") or "").lower()
-                    if mtype in ("video", "animated_gif"):
-                        log.info(
-                            f"syndication_has_video: detected via {qt_key} {entities_key}",
-                        )
-                        return True
-                    if m.get("video_info"):
-                        log.info(f"syndication_has_video: detected via {qt_key} media.video_info")
-                        return True
-
-    # 7. Check retweeted status as well [REH]
-    rt = tw.get("retweeted_status") or {}
-    if isinstance(rt, dict) and rt:
-        # Check retweeted status's video field
-        if rt.get("video") or rt.get("video_info"):
-            log.info("syndication_has_video: detected via retweeted_status video field")
+    for node_name, node in nodes_to_scan:
+        if _node_has_video(node_name, node):
             return True
-        # Check retweeted status's entities
-        for entities_key in ("extended_entities", "entities"):
-            ent = rt.get(entities_key) or {}
-            media_list = ent.get("media") or []
-            for m in media_list:
-                if not isinstance(m, dict):
-                    continue
-                mtype = (m.get("type") or "").lower()
-                if mtype in ("video", "animated_gif"):
-                    log.info(
-                        "syndication_has_video: detected via retweeted_status %s",
-                        entities_key,
-                    )
-                    return True
-                if m.get("video_info"):
-                    log.info("syndication_has_video: detected via retweeted_status media.video_info")
-                    return True
-
-    # 8. Check legacy format (data nested under 'legacy' key) [REH]
-    # Some syndication responses wrap the actual data under a 'legacy' key
-    legacy = tw.get("legacy") or {}
-    if isinstance(legacy, dict) and legacy:
-        # Check for video indicators in legacy data
-        if legacy.get("video") or legacy.get("video_info"):
-            log.info("syndication_has_video: detected via legacy video field")
-            return True
-        if legacy.get("media_duration") or legacy.get("duration_ms"):
-            log.info("syndication_has_video: detected via legacy media_duration field")
-            return True
-        if legacy.get("video_variants") or legacy.get("video_urls"):
-            log.info("syndication_has_video: detected via legacy video_variants")
-            return True
-        # Check legacy's extended_entities for video media
-        for entities_key in ("extended_entities", "entities"):
-            ent = legacy.get(entities_key) or {}
-            media_list = ent.get("media") or []
-            for m in media_list:
-                if not isinstance(m, dict):
-                    continue
-                mtype = (m.get("type") or "").lower()
-                if mtype in ("video", "animated_gif"):
-                    log.info(
-                        "syndication_has_video: detected via legacy %s",
-                        entities_key,
-                    )
-                    return True
-                if m.get("video_info"):
-                    log.info("syndication_has_video: detected via legacy media.video_info")
-                    return True
 
     log.info("syndication_has_video: no video detected")
     return False
