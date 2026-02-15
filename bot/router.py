@@ -6406,22 +6406,42 @@ class Router:
                                         url=url,
                                         stt_res=stt_res,
                                     )
-                                # No-speech or error: emit breadcrumbs and continue with caption-only evidence [REH]
+                                # STT failed for confirmed video content
+                                # Maintain video modality instead of collapsing to text [REH][IV]
                                 try:
                                     self.logger.info(
                                         "stt.fail",
                                         extra={
                                             "event": "stt.fail",
                                             "detail": {
-                                                "reason": "no_speech"
-                                                if stt_err != "error"
-                                                else "error"
+                                                "reason": (
+                                                    "no_speech"
+                                                    if stt_err != "error"
+                                                    else "error"
+                                                ),
+                                                "media_kind": "video",
                                             },
+                                            "msg_id": message.id if message else None,
                                         },
                                     )
                                 except Exception:
                                     pass
-                            # Fall back to text-only for non-video or STT failure
+                                # For confirmed video with STT failure, return structured error that maintains video context
+                                # Do NOT collapse to text-only - the video content is real, even if transcription failed [REH]
+                                safe_base_text = (text or base or "").strip()
+                                stt_error_result = {
+                                    "transcription": None,
+                                    "error": stt_err or "transcription_failed",
+                                    "media_kind": "video",
+                                    "url": url,
+                                }
+                                return self._format_x_tweet_with_transcription(
+                                    base_text=safe_base_text,
+                                    url=url,
+                                    stt_res=stt_error_result,
+                                )
+
+                            # Fall back to text-only ONLY when video was NOT confirmed by syndication [REH]
                             try:
                                 self.logger.info(
                                     "fallback",
