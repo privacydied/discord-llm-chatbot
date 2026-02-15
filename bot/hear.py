@@ -1683,6 +1683,7 @@ async def _transcribe_with_model(
                     ):
                         aborted_reason = "time_budget"
     except InferenceError:
+        spans.end("whisper", ok=False, reason="error")
         raise
     except RAMGuardExceeded:
         await pre.stream.abort()
