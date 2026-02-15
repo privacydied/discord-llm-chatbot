@@ -6262,13 +6262,40 @@ class Router:
 
                         # Check for image-only tweet
                         # Consider both native photos AND extracted images from extended_entities [IV][REH]
+                        # IMPORTANT: image-only must exclude video - mixed media (image+video) goes to STT [IV]
                         normalize_empty = bool(
                             cfg.get("TWITTER_NORMALIZE_EMPTY_TEXT", True)
                         )
                         has_any_images = bool(photos) or bool(extracted_images)
-                        is_image_only = has_any_images and (
+                        is_image_only = has_any_images and not _syn_has_video and (
                             not text or (normalize_empty and not text.strip())
                         )
+
+                        # Log routing decision for observability [IV][REH]
+                        try:
+                            routing_decision = (
+                                "video"
+                                if _syn_has_video
+                                else ("image_only" if is_image_only else "text_or_mixed")
+                            )
+                            self.logger.info(
+                                f"route=x_syndication.decision decision={routing_decision} "
+                                f"photos={len(photos)} extracted={len(extracted_images)} "
+                                f"has_video={_syn_has_video} has_images={has_any_images}",
+                                extra={
+                                    "event": "x.syndication.routing_decision",
+                                    "detail": {
+                                        "decision": routing_decision,
+                                        "photos": len(photos),
+                                        "extracted_images": len(extracted_images),
+                                        "has_video": _syn_has_video,
+                                        "has_images": has_any_images,
+                                        "text_length": len(text),
+                                    },
+                                },
+                            )
+                        except Exception:
+                            pass
 
                         if is_image_only and bool(
                             cfg.get("TWITTER_IMAGE_ONLY_ENABLE", True)
@@ -6365,6 +6392,22 @@ class Router:
 
                             # Only attempt STT if syndication indicates video/animated_gif [PA][REH]
                             if _syn_has_video:
+                                # Log STT initiation for confirmed video content [IV]
+                                try:
+                                    self.logger.info(
+                                        f"route=x_syndication.stt_start syndication_confirmed_video=true url={url[:80]}",
+                                        extra={
+                                            "event": "x.syndication.stt_start",
+                                            "detail": {
+                                                "has_video": True,
+                                                "url": url[:80],
+                                                "photos": len(photos),
+                                                "extracted_images": len(extracted_images),
+                                            },
+                                        },
+                                    )
+                                except Exception:
+                                    pass
                                 stt_res, stt_err = await _bounded(
                                     hear_infer_from_url(url),
                                     x_stt_probe_timeout,
