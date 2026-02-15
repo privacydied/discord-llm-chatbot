@@ -6326,9 +6326,9 @@ class Router:
                         # Compose evidence for text-only tweets through the standard bundle [CA]
                         base = self._compose_text_tweet_evidence(url, syn)
 
-                        # If we have no images at all (neither native photos nor extracted),
-                        # try targeted fx/vx/HTML probe for images before falling back to text. [REH][PA]
-                        if (not photos) and (not extracted_images):
+                        # IMPORTANT: Skip image probe when video is present - mixed media goes to STT [IV][REH]
+                        # Only probe for images if we have no video AND no native photos
+                        if (not _syn_has_video) and (not photos) and (not extracted_images):
                             try:
                                 status_id = (
                                     tweet_id or self._parse_twitter_status_id(url) or ""

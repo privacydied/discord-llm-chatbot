@@ -182,27 +182,95 @@ def extract_text_and_images_from_syndication(tw: Dict[str, Any]) -> Dict[str, An
 
 
 def syndication_has_video(tw: Dict[str, Any]) -> bool:
-    """Check if syndication data indicates video or animated_gif media. [IV]"""
+    """Check if syndication data indicates video or animated_gif media. [IV][REH]"""
     if not isinstance(tw, dict):
         return False
-    # Check video field directly
+
+    # Debug: log syndication keys for video detection troubleshooting [IV][REH]
+    try:
+        available_keys = list(tw.keys())[:20]  # Limit to avoid huge logs
+        log.debug(
+            "syndication_has_video: checking keys=%s",
+            available_keys,
+        )
+    except Exception:
+        pass
+
+    # 1. Check video field directly at top level
     if tw.get("video"):
+        log.info("syndication_has_video: detected via top-level 'video' field")
         return True
-    # Check extended_entities/entities for video/animated_gif types
+
+    # 2. Check video_info field (alternative video indicator) [REH]
+    if tw.get("video_info"):
+        log.info("syndication_has_video: detected via 'video_info' field")
+        return True
+
+    # 3. Check extended_entities/entities for video/animated_gif types
     for entities_key in ("extended_entities", "entities"):
         ent = tw.get(entities_key) or {}
-        for m in ent.get("media") or []:
+        media_list = ent.get("media") or []
+        if not media_list:
+            continue
+        for m in media_list:
+            if not isinstance(m, dict):
+                continue
             mtype = (m.get("type") or "").lower()
             if mtype in ("video", "animated_gif"):
+                log.info(
+                    "syndication_has_video: detected via %s media type=%s",
+                    entities_key,
+                    mtype,
+                )
                 return True
-    # Check quoted tweet as well
+            # Additional check: video_info inside media entity [REH]
+            if m.get("video_info"):
+                log.info("syndication_has_video: detected via media.video_info")
+                return True
+
+    # 4. Check if there's media but no photos (strong video indicator) [REH]
+    # Some video tweets only have a 'media' array without explicit type field
+    has_media = bool(tw.get("media"))
+    has_photos = bool(tw.get("photos"))
+    if has_media and not has_photos:
+        # Additional check: if media exists and we can verify at least one entry
+        media_list = tw.get("media") or []
+        if media_list and all(isinstance(m, dict) for m in media_list):
+            # Check if any media entry lacks 'type' or has non-photo characteristics
+            for m in media_list:
+                mtype = (m.get("type") or "").lower()
+                # If type is missing or not explicitly "photo", likely video
+                if not mtype or mtype not in ("photo", "image"):
+                    log.info(
+                        "syndication_has_video: detected via media without photo type, type=%s",
+                        mtype or "missing",
+                    )
+                    return True
+
+    # 5. Check quoted tweet as well (recursively) [IV]
     qt = tw.get("quoted_tweet") or {}
-    if qt.get("video"):
-        return True
-    for entities_key in ("extended_entities", "entities"):
-        ent = qt.get(entities_key) or {}
-        for m in ent.get("media") or []:
-            mtype = (m.get("type") or "").lower()
-            if mtype in ("video", "animated_gif"):
-                return True
+    if isinstance(qt, dict) and qt:
+        # Check quoted tweet's video field
+        if qt.get("video") or qt.get("video_info"):
+            log.info("syndication_has_video: detected via quoted_tweet video field")
+            return True
+        # Check quoted tweet's entities
+        for entities_key in ("extended_entities", "entities"):
+            ent = qt.get(entities_key) or {}
+            media_list = ent.get("media") or []
+            for m in media_list:
+                if not isinstance(m, dict):
+                    continue
+                mtype = (m.get("type") or "").lower()
+                if mtype in ("video", "animated_gif"):
+                    log.info(
+                        "syndication_has_video: detected via quoted_tweet %s",
+                        entities_key,
+                    )
+                    return True
+                if m.get("video_info"):
+                    log.info("syndication_has_video: detected via quoted_tweet media.video_info")
+                    return True
+
+    log.debug("syndication_has_video: no video detected")
     return False
