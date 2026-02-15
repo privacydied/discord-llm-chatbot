@@ -6233,6 +6233,23 @@ class Router:
                     )
                     if syn:
                         self._metric_inc("x.syndication.hit", None)
+
+                        # Log syndication response keys for video detection debugging [IV][REH]
+                        try:
+                            syn_keys = list(syn.keys())[:30] if isinstance(syn, dict) else []
+                            self.logger.info(
+                                f"route=x_syndication.metadata keys={syn_keys} tweet_id={tweet_id}",
+                                extra={
+                                    "event": "x.syndication.metadata",
+                                    "detail": {
+                                        "tweet_id": tweet_id,
+                                        "keys": syn_keys,
+                                    },
+                                },
+                            )
+                        except Exception:
+                            pass
+
                         # Media-first branching: use robust extractor rather than only 'photos' [CA][REH]
                         photos = syn.get("photos") or []
                         text = (syn.get("text") or syn.get("full_text") or "").strip()
@@ -6248,6 +6265,18 @@ class Router:
                             _ext = extract_text_and_images_from_syndication(syn)
                             extracted_images = _ext.get("image_urls", []) or []
                             _syn_has_video = syndication_has_video(syn)
+
+                            # Log video detection result explicitly [IV][REH]
+                            self.logger.info(
+                                f"route=x_syndication.video_detection has_video={_syn_has_video} tweet_id={tweet_id}",
+                                extra={
+                                    "event": "x.syndication.video_detection",
+                                    "detail": {
+                                        "has_video": _syn_has_video,
+                                        "tweet_id": tweet_id,
+                                    },
+                                },
+                            )
                         except Exception:
                             extracted_images = []
                             _syn_has_video = False

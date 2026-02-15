@@ -182,14 +182,23 @@ def extract_text_and_images_from_syndication(tw: Dict[str, Any]) -> Dict[str, An
 
 
 def syndication_has_video(tw: Dict[str, Any]) -> bool:
-    """Check if syndication data indicates video or animated_gif media. [IV][REH]"""
+    """Check if syndication data indicates video or animated_gif media. [IV][REH]
+
+    Detection strategies in priority order:
+    1. Top-level 'video' field
+    2. Top-level 'video_info' field
+    3. extended_entities/entities for video/animated_gif types or video_info
+    4. Additional video indicators (video_vars, media_duration, etc.)
+    5. Quoted tweet (recursive)
+    """
     if not isinstance(tw, dict):
         return False
 
-    # Debug: log syndication keys for video detection troubleshooting [IV][REH]
+    # Info logging: log syndication keys for video detection troubleshooting [IV][REH]
+    # Use INFO level to ensure visibility in production logs
     try:
         available_keys = list(tw.keys())[:20]  # Limit to avoid huge logs
-        log.debug(
+        log.info(
             "syndication_has_video: checking keys=%s",
             available_keys,
         )
@@ -227,8 +236,22 @@ def syndication_has_video(tw: Dict[str, Any]) -> bool:
             if m.get("video_info"):
                 log.info("syndication_has_video: detected via media.video_info")
                 return True
+            # Check for video_variants (another possible indicator) [REH]
+            if m.get("video_variants") or m.get("video_urls"):
+                log.info("syndication_has_video: detected via media video_variants/video_urls")
+                return True
 
-    # 4. Check if there's media but no photos (strong video indicator) [REH]
+    # 4. Additional video indicators that might be present [REH]
+    # Check for media_duration (present in video tweets)
+    if tw.get("media_duration") or tw.get("duration_ms"):
+        log.info("syndication_has_video: detected via media_duration/duration_ms field")
+        return True
+    # Check for video_variants at top level
+    if tw.get("video_variants") or tw.get("video_urls"):
+        log.info("syndication_has_video: detected via top-level video_variants/video_urls")
+        return True
+
+    # 5. Check if there's media but no photos (strong video indicator) [REH]
     # Some video tweets only have a 'media' array without explicit type field
     has_media = bool(tw.get("media"))
     has_photos = bool(tw.get("photos"))
@@ -246,8 +269,12 @@ def syndication_has_video(tw: Dict[str, Any]) -> bool:
                         mtype or "missing",
                     )
                     return True
+                # Check for video indicators within media entry
+                if m.get("video_info") or m.get("video_variants") or m.get("video_urls"):
+                    log.info("syndication_has_video: detected via media entry with video indicators")
+                    return True
 
-    # 5. Check quoted tweet as well (recursively) [IV]
+    # 6. Check quoted tweet as well (recursively) [IV]
     qt = tw.get("quoted_tweet") or {}
     if isinstance(qt, dict) and qt:
         # Check quoted tweet's video field
@@ -272,5 +299,5 @@ def syndication_has_video(tw: Dict[str, Any]) -> bool:
                     log.info("syndication_has_video: detected via quoted_tweet media.video_info")
                     return True
 
-    log.debug("syndication_has_video: no video detected")
+    log.info("syndication_has_video: no video detected")
     return False
