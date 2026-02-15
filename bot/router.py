@@ -1648,6 +1648,54 @@ class Router:
             "ton.twimg.com",
         }
 
+    @staticmethod
+    def _is_tweet_media_url(url: str) -> bool:
+        """Check if URL is valid tweet media, excluding profile/banner images. [IV]
+
+        Valid tweet media:
+        - /media/ paths (actual tweet attachments)
+        - Tweet-specific photo identifiers
+
+        Invalid (metadata only, not content):
+        - /profile_images/ (avatars)
+        - /profile_banners/ (banners)
+        - /card_img/ (card images)
+        - /ad_img/ (advertisements)
+
+        This is critical for correct routing: profile images must not trigger VL pipeline.
+        """
+        try:
+            u = str(url).lower()
+        except Exception:
+            return False
+        try:
+            path = urlparse(u).path or ""
+        except Exception:
+            return False
+
+        # Block non-media paths (metadata, not content) [IV]
+        blocked_prefixes = (
+            "/profile_images/",
+            "/profile_banners/",
+            "/card_img/",
+            "/ad_img/",
+            "/emoji/",
+        )
+        if any(path.startswith(prefix) for prefix in blocked_prefixes):
+            return False
+
+        # Video poster thumbnails are metadata, not primary content
+        poster_prefixes = (
+            "/amplify_video_thumb/",
+            "/ext_tw_video_thumb/",
+            "/tweet_video_thumb/",
+        )
+        if any(prefix in path for prefix in poster_prefixes):
+            return False
+
+        # Valid tweet media has /media/ in path
+        return "/media/" in path
+
     async def _resolve_x_media(
         self,
         urls: List[str],
@@ -1764,6 +1812,9 @@ class Router:
                                 continue
                             if not self._is_twitter_media_cdn(u):
                                 continue
+                            # CRITICAL: Only accept actual tweet media, not profile/banner images [IV]
+                            if not self._is_tweet_media_url(u):
+                                continue
                             # Hard blocklist for X video poster thumbnails
                             try:
                                 pu = urlparse(u)
@@ -1867,6 +1918,9 @@ class Router:
                         if not u or not u.startswith("http"):
                             continue
                         if not self._is_twitter_media_cdn(u):
+                            continue
+                        # CRITICAL: Only accept actual tweet media, not profile/banner images [IV]
+                        if not self._is_tweet_media_url(u):
                             continue
                         if u not in uniq and self._is_direct_image_url(u):
                             uniq.append(u)
