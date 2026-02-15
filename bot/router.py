@@ -6290,10 +6290,12 @@ class Router:
                             pass
 
                         # Check for image-only tweet
+                        # Consider both native photos AND extracted images from extended_entities [IV][REH]
                         normalize_empty = bool(
                             cfg.get("TWITTER_NORMALIZE_EMPTY_TEXT", True)
                         )
-                        is_image_only = bool(photos) and (
+                        has_any_images = bool(photos) or bool(extracted_images)
+                        is_image_only = has_any_images and (
                             not text or (normalize_empty and not text.strip())
                         )
 
@@ -6301,12 +6303,23 @@ class Router:
                             cfg.get("TWITTER_IMAGE_ONLY_ENABLE", True)
                         ):
                             # Preserve existing specialized path when native photos are present [CA]
+                            # Also route to VL when images were extracted from extended_entities [IV]
+                            img_count = (
+                                len(extracted_images)
+                                if extracted_images
+                                else len(photos)
+                            )
                             self.logger.info(
                                 f"🖼️ Image-only tweet detected, routing to Vision/OCR: {url}"
                             )
                             self._metric_inc(
                                 "x.tweet_image_only.syndication",
-                                {"photos": str(len(photos))},
+                                {
+                                    "photos": str(img_count),
+                                    "source": "extracted"
+                                    if extracted_images
+                                    else "native",
+                                },
                             )
                             return await self._handle_image_only_tweet(
                                 url, syn, source="syndication"
