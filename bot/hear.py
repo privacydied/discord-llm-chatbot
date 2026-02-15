@@ -109,6 +109,7 @@ class PreprocessResult:
     cache_key: str
     cache_hit: bool
     source_hash: str
+    source_path: Path
     duration_out: float = 0.0
 
     def update_from_stream(self) -> None:
@@ -969,6 +970,7 @@ async def _preprocess_audio(
             cache_key=cache_key,
             cache_hit=True,
             source_hash=source_hash,
+            source_path=source_path,
             duration_out=duration_out,
         )
         spans.end("pre", ok=True, reason="cache")
@@ -1049,6 +1051,7 @@ async def _preprocess_audio(
         cache_key=cache_key,
         cache_hit=False,
         source_hash=source_hash,
+        source_path=source_path,
     )
 
 
