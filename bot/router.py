@@ -4832,6 +4832,19 @@ class Router:
         has_x_url = any(
             host in (message.content or "").lower() for host in x_hosts_for_gate
         ) or (x_info_for_gate.has_x_link if x_info_for_gate else False)
+        x_status_urls_from_items: set[str] = set()
+        try:
+            for it in items:
+                if getattr(it, "source_type", None) != "url":
+                    continue
+                raw_u = str(getattr(it, "payload", "") or "").strip()
+                if not raw_u or not self._is_twitter_url(raw_u):
+                    continue
+                has_x_url = True
+                if self._is_twitter_status_url(raw_u):
+                    x_status_urls_from_items.add(self._normalize_x_url(raw_u))
+        except Exception:
+            pass
 
         x_media_kind = "none"
         if x_info_for_gate:
@@ -4851,7 +4864,7 @@ class Router:
                 self._normalize_x_url(u) for u in x_info_for_gate.media_urls if u
             }
         else:
-            x_media_state["primary_urls"] = set()
+            x_media_state["primary_urls"] = x_status_urls_from_items
 
         # Filter out Twitter thumbnails from image count if X URLs present
         if has_x_url and heuristic_image_items:
