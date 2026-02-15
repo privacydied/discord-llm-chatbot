@@ -6215,11 +6215,37 @@ class Router:
                 tweet_id = XApiClient.extract_tweet_id(str(url))
                 x_client = await self._get_x_api_client()
 
+                # Check embeds for image detection to gate STT probe [IV][REH]
+                # If Discord embeds indicate images for this X URL, skip STT entirely.
+                # This prevents STT from running on image-only tweets when X_TWITTER_STT_PROBE_FIRST is enabled.
+                embed_indicates_images = False
+                if message:
+                    try:
+                        for embed in message.embeds:
+                            embed_url = getattr(embed, "url", "") or ""
+                            if url in embed_url or embed_url in url:
+                                if getattr(embed, "image", None) or getattr(
+                                    embed, "video", None
+                                ):
+                                    if getattr(embed, "video", None):
+                                        # Video embed means we should try STT
+                                        embed_indicates_images = False
+                                        break
+                                    else:
+                                        # Image embed means skip STT
+                                        embed_indicates_images = True
+                                        break
+                    except Exception:
+                        pass
+
                 # Fast path: try STT probe first for X URLs only when API client is unavailable [PA][REH]
                 # Preserves API-first behavior when API access is configured/available.
                 # Changed default to False: syndication must confirm content type before STT [IV]
-                if bool(cfg.get("X_TWITTER_STT_PROBE_FIRST", False)) and (
-                    x_client is None
+                # STT is skipped if embeds indicate images (to prevent unnecessary processing) [IV]
+                if (
+                    bool(cfg.get("X_TWITTER_STT_PROBE_FIRST", False))
+                    and (x_client is None)
+                    and not embed_indicates_images
                 ):
                     stt_res, stt_err = await _bounded(
                         hear_infer_from_url(url),
