@@ -547,12 +547,25 @@ class Router:
                     tweet_data.get("full_text") or tweet_data.get("text") or ""
                 ).strip()
             if not caption and base_text:
-                # Heuristic: first non-empty line not starting with em-dash author or URL
+                # Parse structured evidence first when available.
                 try:
-                    lines = [
-                        ln.strip() for ln in str(base_text).splitlines() if ln.strip()
-                    ]
+                    base_str = str(base_text)
+                    m = re.search(
+                        r"\[Tweet Caption\]\s*\n(?P<body>.*?)(?:\n\n\[|\Z)",
+                        base_str,
+                        flags=re.DOTALL,
+                    )
+                    if m:
+                        caption = (m.group("body") or "").strip()
+                except Exception:
+                    caption = ""
+            if not caption and base_text:
+                # Fallback heuristic: first non-empty non-marker line.
+                try:
+                    lines = [ln.strip() for ln in str(base_text).splitlines() if ln.strip()]
                     for ln in lines:
+                        if ln.startswith("[") and ln.endswith("]"):
+                            continue
                         if ln.startswith("— "):
                             continue
                         if ln.lower().startswith("http://") or ln.lower().startswith(
