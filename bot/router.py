@@ -631,6 +631,37 @@ class Router:
         # Compose into final text (also emits context.assembled breadcrumb in EvidenceBundle)
         return bundle.compose_prompt_text()
 
+    def _compose_x_tweet_with_visual_facts(
+        self,
+        *,
+        user_text: Optional[str],
+        tweet_caption: Optional[str],
+        vl_notes: Optional[str],
+    ) -> str:
+        """Compose text-flow input for image tweets with caption + VL facts. [CA][REH]"""
+        clean_user = (user_text or "").strip()
+        clean_caption = (tweet_caption or "").strip()
+        clean_vl = (vl_notes or "").strip()
+
+        if not clean_caption and not clean_vl:
+            return clean_user
+
+        lines: List[str] = []
+        if clean_user:
+            lines.append(clean_user)
+            lines.append("")
+
+        lines.append("VISUAL_FACTS:")
+        lines.append("tweet caption:")
+        lines.append(clean_caption or "—")
+
+        if clean_vl:
+            lines.append("")
+            lines.append("vl prompt output:")
+            lines.append(clean_vl)
+
+        return "\n".join(lines).strip()
+
     async def _handle_x_twitter_fallback(
         self, tweet_url: str, message: Message, context_str: str
     ) -> BotAction:
@@ -3772,6 +3803,39 @@ class Router:
                                     vl_notes = sanitize_vl_reply_text(vl_notes or "")
                                 except Exception:
                                     vl_notes = None
+                            tweet_caption = ""
+                            try:
+                                caption_tweet_id = (
+                                    primary_selected
+                                    or self._parse_twitter_status_id(base_context_url)
+                                    or ""
+                                )
+                                if caption_tweet_id:
+                                    syn_caption = await self._get_tweet_via_syndication(
+                                        caption_tweet_id
+                                    )
+                                    if isinstance(syn_caption, dict):
+                                        tweet_caption = self._extract_syndication_text(
+                                            syn_caption
+                                        )
+                                self.logger.info(
+                                    "x.image.caption.resolve",
+                                    extra={
+                                        "event": "x.image.caption.resolve",
+                                        "detail": {
+                                            "tweet_id": caption_tweet_id,
+                                            "chars": len(tweet_caption or ""),
+                                        },
+                                        "msg_id": message.id,
+                                    },
+                                )
+                            except Exception:
+                                tweet_caption = ""
+                            composed_input = self._compose_x_tweet_with_visual_facts(
+                                user_text=clean_content,
+                                tweet_caption=tweet_caption,
+                                vl_notes=vl_notes,
+                            )
                             self.logger.info(
                                 f"🎯 Route: vl_from_x_images | msg_id={message.id}"
                             )
@@ -3787,10 +3851,10 @@ class Router:
                             except Exception:
                                 pass
                             return await self._flow_process_text(
-                                content=clean_content,
+                                content=composed_input or clean_content,
                                 context=context_str,
                                 message=message,
-                                perception_notes=vl_notes or None,
+                                perception_notes=None,
                             )
                         else:
                             reason = (resolved or {}).get("reason", "unknown")
