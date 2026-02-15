@@ -588,15 +588,32 @@ class Router:
         # STT transcript with low-speech guard [REH]
         try:
             transcript = ((stt_res or {}).get("transcription") or "").strip()
-            # If very short/empty, omit transcript but flag stt_no_speech [CMV]
-            min_chars = 16  # small inline threshold
-            if transcript and len(transcript) >= min_chars:
+            # Preserve any non-empty transcript so caption+transcript can always be joined.
+            if transcript:
                 bundle.media_transcript = transcript
             else:
                 bundle.media_transcript = ""
                 bundle.stt_no_speech = True
         except Exception:
             bundle.media_transcript = ""
+
+        # Concatenate caption + transcript for video tweets before text flow [REH]
+        try:
+            if bundle.caption_text and bundle.media_transcript:
+                combined = (
+                    f"{bundle.caption_text.strip()}\n\n{bundle.media_transcript.strip()}"
+                )
+                bundle.add_section(
+                    kind="caption_transcript",
+                    title="Tweet Caption + Audio Transcript",
+                    body=combined,
+                    provenance={"source": "tweet_text+stt"},
+                )
+                # Avoid duplicating content in separate fixed sections.
+                bundle.caption_text = ""
+                bundle.media_transcript = ""
+        except Exception:
+            pass
 
         # Compose into final text (also emits context.assembled breadcrumb in EvidenceBundle)
         return bundle.compose_prompt_text()
