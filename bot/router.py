@@ -6217,7 +6217,8 @@ class Router:
 
                 # Fast path: try STT probe first for X URLs only when API client is unavailable [PA][REH]
                 # Preserves API-first behavior when API access is configured/available.
-                if bool(cfg.get("X_TWITTER_STT_PROBE_FIRST", True)) and (
+                # Changed default to False: syndication must confirm content type before STT [IV]
+                if bool(cfg.get("X_TWITTER_STT_PROBE_FIRST", False)) and (
                     x_client is None
                 ):
                     stt_res, stt_err = await _bounded(
