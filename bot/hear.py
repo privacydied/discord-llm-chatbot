@@ -520,7 +520,26 @@ class BasePCMStream:
         except BaseException as exc:
             self._error = exc
         finally:
-            await self._queue.put(None)
+            self._signal_end()
+
+    def _signal_end(self) -> None:
+        """Best-effort enqueue of stream sentinel without blocking on full queue."""
+        try:
+            self._queue.put_nowait(None)
+            return
+        except asyncio.QueueFull:
+            # Drop buffered frames to guarantee end-of-stream marker is visible.
+            try:
+                while True:
+                    self._queue.get_nowait()
+            except asyncio.QueueEmpty:
+                pass
+            try:
+                self._queue.put_nowait(None)
+            except Exception:
+                pass
+        except Exception:
+            pass
 
     async def iter_frames(self) -> AsyncIterator[bytes]:
         await self.start()
@@ -533,14 +552,25 @@ class BasePCMStream:
 
     async def wait_finished(self) -> None:
         if self._producer_task:
-            await self._producer_task
+            try:
+                await self._producer_task
+            except asyncio.CancelledError:
+                if not self._aborted:
+                    raise
         for task in self._monitor_tasks:
-            await task
+            try:
+                await task
+            except asyncio.CancelledError:
+                if not self._aborted:
+                    raise
         if self._error and not isinstance(self._error, asyncio.CancelledError):
             raise self._error
 
     async def abort(self) -> None:
         self._aborted = True
+        if self._producer_task and not self._producer_task.done():
+            self._producer_task.cancel()
+        self._signal_end()
 
     async def finalize(self, success: bool) -> None:
         if self._finalized:
