@@ -92,8 +92,32 @@ async def handle_twitter_syndication_to_vl(
 
         temp_paths = []
 
-        max_images = int(os.getenv("VL_MAX_IMAGES", "4"))
+        # Keep X/Twitter syndication VL bounded so one tweet cannot exceed media item budget.
+        # Default to 1 image for deterministic latency; allow opt-in via env.
+        try:
+            global_vl_max = int(os.getenv("VL_MAX_IMAGES", "4"))
+        except Exception:
+            global_vl_max = 4
+        try:
+            x_vl_max = int(os.getenv("X_SYNDICATION_VL_MAX_IMAGES", "1"))
+        except Exception:
+            x_vl_max = 1
+        if global_vl_max <= 0:
+            global_vl_max = 4
+        if x_vl_max <= 0:
+            x_vl_max = 1
+
+        max_images = max(1, min(global_vl_max, x_vl_max))
         limited_urls = image_urls[:max_images]
+        if len(image_urls) > len(limited_urls):
+            try:
+                log.info(
+                    "x.syndication.vl.cap images_in=%d images_used=%d",
+                    len(image_urls),
+                    len(limited_urls),
+                )
+            except Exception:
+                pass
 
         async with aiohttp.ClientSession() as session:
             for i, image_url in enumerate(limited_urls):
