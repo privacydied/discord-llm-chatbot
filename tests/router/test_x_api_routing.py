@@ -365,6 +365,111 @@ async def test_sparse_syndication_unknown_forces_stt_before_text_fallback(monkey
 
 
 @pytest.mark.asyncio
+async def test_sparse_syndication_tco_article_resolves_to_text(monkeypatch):
+    bot = DummyBot()
+    bot.config["X_API_ENABLED"] = False
+    bot.system_prompts = {"vl_prompt": None}
+    router = Router(bot)
+
+    monkeypatch.setattr(XApiClient, "extract_tweet_id", staticmethod(lambda u: "1"))
+
+    async def _fake_syn(_self, _tweet_id):
+        return {"text": "https://t.co/Zq03pbrEgu", "user": {"screen_name": "u"}}
+
+    monkeypatch.setattr(Router, "_get_tweet_via_syndication", _fake_syn)
+
+    async def _fake_get_client(_self):
+        return None
+
+    monkeypatch.setattr(Router, "_get_x_api_client", _fake_get_client)
+
+    article_mock = AsyncMock(
+        return_value={
+            "id": "2016825738041630720",
+            "title": "The TESTOSTERONE Kabbalah",
+            "preview_text": "They control everything.",
+            "content": {"blocks": [{"text": "Cellular energy production and metabolism."}]},
+        }
+    )
+    monkeypatch.setattr(
+        Router, "_fetch_x_article_from_fxtwitter", article_mock, raising=True
+    )
+
+    resolve_mock = AsyncMock(return_value={"kind": "unknown", "images": [], "url": None})
+    monkeypatch.setattr(Router, "_resolve_x_media", resolve_mock, raising=True)
+
+    import bot.router as router_mod
+
+    stt_mock = AsyncMock(return_value={"transcription": "should not run"})
+    monkeypatch.setattr(router_mod, "hear_infer_from_url", stt_mock)
+
+    def _fmt(_self, base_text, url, stt_res):
+        return base_text
+
+    monkeypatch.setattr(Router, "_format_x_tweet_with_transcription", _fmt)
+
+    item = InputItem(
+        source_type="url", payload="https://x.com/user/status/1", order_index=0
+    )
+    res = await router._handle_general_url(item)
+
+    assert "The TESTOSTERONE Kabbalah" in res
+    assert "They control everything." in res
+    assert "Cellular energy production and metabolism." in res
+    assert "https://t.co/" not in res
+    article_mock.assert_awaited_once()
+    resolve_mock.assert_not_awaited()
+    stt_mock.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_fetch_x_article_from_fxtwitter_parses_article_payload(monkeypatch):
+    bot = DummyBot()
+    router = Router(bot)
+
+    class DummyResp:
+        status_code = 200
+
+        @staticmethod
+        def json():
+            return {
+                "tweet": {
+                    "article": {
+                        "id": "2016825738041630720",
+                        "title": "The TESTOSTERONE Kabbalah",
+                        "preview_text": "They control everything.",
+                        "content": {
+                            "blocks": [
+                                {"type": "header-two", "text": "Section A"},
+                                {"type": "unstyled", "text": "Section B"},
+                            ]
+                        },
+                    }
+                }
+            }
+
+    class DummyHttp:
+        @staticmethod
+        async def get(url, config=None, headers=None):
+            return DummyResp()
+
+    async def fake_http_client():
+        return DummyHttp()
+
+    monkeypatch.setattr("bot.router.get_http_client", fake_http_client)
+
+    article = await router._fetch_x_article_from_fxtwitter("1")
+
+    assert article is not None
+    assert article["id"] == "2016825738041630720"
+    assert article["url"] == "https://x.com/i/article/2016825738041630720"
+    assert article["title"] == "The TESTOSTERONE Kabbalah"
+    assert article["preview_text"] == "They control everything."
+    assert article["content"]["blocks"][0]["text"] == "Section A"
+    assert article["content"]["blocks"][1]["text"] == "Section B"
+
+
+@pytest.mark.asyncio
 async def test_resolve_x_media_unwraps_fx_proxy(monkeypatch):
     bot = DummyBot()
     router = Router(bot)

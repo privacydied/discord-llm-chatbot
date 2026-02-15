@@ -851,6 +851,33 @@ class Router:
             ]
             base = "https://cdn.syndication.twimg.com/"
             data = None
+            media_hint_keys = (
+                "media",
+                "photos",
+                "video",
+                "video_info",
+                "video_variants",
+                "video_urls",
+                "media_duration",
+                "duration_ms",
+                "extended_entities",
+                "entities",
+                "quoted_tweet",
+                "quoted_status",
+                "retweeted_status",
+                "legacy",
+                "card",
+                "image",
+                "article",
+            )
+
+            def _has_usable_payload(node: Any) -> bool:
+                if not isinstance(node, dict):
+                    return False
+                if self._extract_syndication_text(node):
+                    return True
+                return any(k in node for k in media_hint_keys)
+
             try:
                 http_client = await get_http_client()
                 for endpoint, params in params_variants:
@@ -883,10 +910,7 @@ class Router:
                         )
                         continue
                     # If the JSON lacks usable text, try oEmbed fallbacks before moving on
-                    if not (
-                        isinstance(data, dict)
-                        and (data.get("text") or data.get("full_text"))
-                    ):
+                    if not _has_usable_payload(data):
                         oembed_url = "https://publish.twitter.com/oembed"
                         oembed_params = {
                             "url": f"https://twitter.com/i/status/{tweet_id}",
@@ -924,10 +948,7 @@ class Router:
                         except Exception:
                             pass
                         # Try x.com oembed variant if still no data
-                        if not (
-                            isinstance(data, dict)
-                            and (data.get("text") or data.get("full_text"))
-                        ):
+                        if not _has_usable_payload(data):
                             try:
                                 oembed_params_x = dict(oembed_params)
                                 oembed_params_x["url"] = (
@@ -960,9 +981,7 @@ class Router:
                             except Exception:
                                 pass
                     # Break when we have usable data; otherwise continue to next variant
-                    if isinstance(data, dict) and (
-                        data.get("text") or data.get("full_text")
-                    ):
+                    if _has_usable_payload(data):
                         break
             except Exception as e:
                 self.logger.info(
@@ -973,9 +992,7 @@ class Router:
                 return None
 
             # Minimal validation: require text field
-            if not isinstance(data, dict) or not (
-                data.get("text") or data.get("full_text")
-            ):
+            if not _has_usable_payload(data):
                 try:
                     self.logger.info(
                         "x.text.miss",
@@ -1000,7 +1017,7 @@ class Router:
             self._syn_cache[tweet_id] = {"data": data, "ts": time.time()}
             self._metric_inc("x.syndication.success", None)
             try:
-                txt = (data.get("full_text") or data.get("text") or "").strip()
+                txt = self._extract_syndication_text(data)
                 self.logger.info(
                     "x.text.resolve",
                     extra={
@@ -1047,15 +1064,7 @@ class Router:
     def _format_syndication_result(self, syn_data: Dict[str, Any], url: str) -> str:
         """Format Syndication JSON tweet into concise text similar to API format. [PA]"""
         try:
-            # Prefer long-form note tweets, then legacy/full_text, then text
-            note = syn_data.get("note_tweet") or {}
-            text = (
-                (note.get("text") if isinstance(note, dict) else None)
-                or (syn_data.get("legacy", {}) or {}).get("full_text")
-                or syn_data.get("full_text")
-                or syn_data.get("text")
-                or ""
-            ).strip()
+            text = self._extract_syndication_text(syn_data)
             user = syn_data.get("user") or {}
             username = user.get("screen_name") or user.get("name")
             created_at = syn_data.get("created_at") or syn_data.get("date_created")
@@ -1091,19 +1100,59 @@ class Router:
         except Exception:
             return f"Tweet → {url}\n{str(syn_data)[:4000]}"
 
+    @staticmethod
+    def _extract_x_article_text(article_node: Any) -> str:
+        """Extract normalized text from an X article payload."""
+        if not isinstance(article_node, dict):
+            return ""
+        title = str(article_node.get("title") or "").strip()
+        preview = str(article_node.get("preview_text") or "").strip()
+        blocks: List[str] = []
+        content = article_node.get("content") or {}
+        if isinstance(content, dict):
+            raw_blocks = content.get("blocks") or []
+            if isinstance(raw_blocks, list):
+                for block in raw_blocks:
+                    if not isinstance(block, dict):
+                        continue
+                    btxt = unescape(str(block.get("text") or "")).strip()
+                    if btxt:
+                        blocks.append(btxt)
+        parts: List[str] = []
+        if title:
+            parts.append(unescape(title))
+        if preview:
+            parts.append(unescape(preview))
+        for btxt in blocks:
+            if btxt not in parts:
+                parts.append(btxt)
+        merged = "\n\n".join(parts).strip()
+        max_chars = 12000
+        if len(merged) > max_chars:
+            return merged[: max_chars - 1].rstrip() + "…"
+        return merged
+
     def _extract_syndication_text(self, node: Dict[str, Any]) -> str:
-        """Extract tweet body text from a syndication-like node with long-form support."""
+        """Extract tweet body text from syndication-like payloads, including X Articles."""
         if not isinstance(node, dict):
             return ""
         note = node.get("note_tweet") or {}
-        text = (
+        base_text = (
             (note.get("text") if isinstance(note, dict) else None)
             or (node.get("legacy", {}) or {}).get("full_text")
             or node.get("full_text")
             or node.get("text")
             or ""
         )
-        return (text or "").strip()
+        base_text = (base_text or "").strip()
+        article_text = self._extract_x_article_text(node.get("article"))
+        if article_text:
+            if base_text and not re.search(r"https?://t\.co/[A-Za-z0-9]+", base_text):
+                if article_text in base_text:
+                    return base_text
+                return f"{base_text}\n\n[Linked X Article]\n{article_text}"
+            return article_text
+        return base_text
 
     def _compose_text_tweet_evidence(self, url: str, syn: Dict[str, Any]) -> str:
         """Build EvidenceBundle for a text-only tweet using syndication payload. [CA]"""
@@ -2108,6 +2157,67 @@ class Router:
             "primary": primary_for_log or "",
             "frontend": frontend_for_log,
         }
+
+    async def _fetch_x_article_from_fxtwitter(
+        self, status_id: str
+    ) -> Optional[Dict[str, Any]]:
+        """Resolve X Article payload from fx API for article-style status posts."""
+        if not status_id:
+            return None
+        try:
+            http = await get_http_client()
+            cfg = RequestConfig(
+                connect_timeout=min(self._x_syn_timeout_s, 3.0),
+                read_timeout=min(self._x_syn_timeout_s, 3.0),
+                total_timeout=min(self._x_syn_timeout_s + 0.5, 3.5),
+                max_retries=0,
+            )
+            resp = await http.get(f"https://api.fxtwitter.com/status/{status_id}", config=cfg)
+            if getattr(resp, "status_code", 500) != 200:
+                return None
+            try:
+                payload = resp.json()
+            except Exception:
+                return None
+            tweet = (payload.get("tweet") or payload.get("status")) or {}
+            if not isinstance(tweet, dict):
+                return None
+            article = tweet.get("article")
+            if not isinstance(article, dict) or not article:
+                return None
+
+            normalized: Dict[str, Any] = {}
+            article_id = str(article.get("id") or "").strip()
+            title = str(article.get("title") or "").strip()
+            preview_text = str(article.get("preview_text") or "").strip()
+            content = article.get("content") or {}
+            blocks = content.get("blocks") if isinstance(content, dict) else []
+            kept_blocks: List[Dict[str, Any]] = []
+            if isinstance(blocks, list):
+                for block in blocks:
+                    if not isinstance(block, dict):
+                        continue
+                    btxt = str(block.get("text") or "").strip()
+                    if not btxt:
+                        continue
+                    kept_blocks.append({"text": btxt, "type": block.get("type")})
+
+            if article_id:
+                normalized["id"] = article_id
+                normalized["url"] = f"https://x.com/i/article/{article_id}"
+            if title:
+                normalized["title"] = title
+            if preview_text:
+                normalized["preview_text"] = preview_text
+            if kept_blocks:
+                normalized["content"] = {"blocks": kept_blocks}
+
+            if not (normalized.get("title") or normalized.get("preview_text") or kept_blocks):
+                return None
+            return normalized
+        except Exception as e:
+            self.logger.debug(f"x.article.resolve.failed id={status_id} err={e}")
+            return None
 
     async def _route_tweet_as_perception_images(
         self, img_urls: List[str], *, message: Message, context_str: str
@@ -6461,7 +6571,7 @@ class Router:
 
                         # Media-first branching: use robust extractor rather than only 'photos' [CA][REH]
                         photos = syn.get("photos") or []
-                        text = (syn.get("text") or syn.get("full_text") or "").strip()
+                        text = self._extract_syndication_text(syn)
 
                         # Enhanced: look for images in extended_entities/quoted/card as well
                         extracted_images = []
@@ -6502,6 +6612,49 @@ class Router:
                         # Mixed media (video + images) must route to STT, not VL.
                         has_any_images = bool(photos) or bool(extracted_images)
                         is_image_only = has_any_images and (not _syn_has_video)
+                        # X Article posts often syndicate as a t.co pointer with no media metadata.
+                        # Resolve article text early so they stay in text flow (not STT/VL fallbacks).
+                        if (
+                            (not _syn_has_video)
+                            and (not has_any_images)
+                            and tweet_id
+                            and bool(re.search(r"https?://t\.co/[A-Za-z0-9]+", text or ""))
+                        ):
+                            article_data, _ = await _bounded(
+                                self._fetch_x_article_from_fxtwitter(tweet_id),
+                                min(
+                                    getattr(self, "_x_syn_timeout_s", 3.0) + 0.5,
+                                    4.5,
+                                ),
+                                "x.syndication.article.resolve",
+                                {"tweet_id": tweet_id},
+                            )
+                            if isinstance(article_data, dict) and article_data:
+                                try:
+                                    syn["article"] = article_data
+                                except Exception:
+                                    pass
+                                text = self._extract_syndication_text(syn)
+                                base = self._compose_text_tweet_evidence(url, syn)
+                                try:
+                                    self.logger.info(
+                                        "route=x_syndication.article.ok",
+                                        extra={
+                                            "event": "x.syndication.article.ok",
+                                            "detail": {
+                                                "tweet_id": tweet_id,
+                                                "chars": len(text or ""),
+                                                "article_id": article_data.get("id") or "",
+                                            },
+                                        },
+                                    )
+                                except Exception:
+                                    pass
+                                return self._format_x_tweet_with_transcription(
+                                    base_text=base,
+                                    url=url,
+                                    stt_res={},
+                                )
                         # Sparse syndication payloads (e.g., only text/user) can miss media metadata.
                         # In that case, defer final text fallback so Tier-2 API media checks can run.
                         syn_media_hints = any(
@@ -6685,11 +6838,9 @@ class Router:
                                                 )
                                             )
                                             if isinstance(syn2, dict):
-                                                tweet_text = (
-                                                    syn2.get("text")
-                                                    or syn2.get("full_text")
-                                                    or ""
-                                                ).strip()
+                                                tweet_text = self._extract_syndication_text(
+                                                    syn2
+                                                )
                                         except Exception:
                                             pass
                                     syn_like = {
@@ -6979,11 +7130,9 @@ class Router:
                                             status_id
                                         )
                                         if isinstance(syn, dict):
-                                            tweet_text = (
-                                                syn.get("text")
-                                                or syn.get("full_text")
-                                                or ""
-                                            ).strip()
+                                            tweet_text = self._extract_syndication_text(
+                                                syn
+                                            )
                                 except Exception:
                                     tweet_text = ""
                                 # Fallback to fx/vx API for caption if still empty [REH]

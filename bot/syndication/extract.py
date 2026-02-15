@@ -7,6 +7,8 @@ from typing import List, Dict, Any, Optional, Iterable, Tuple
 from .url_utils import upgrade_pbs_to_orig, pbs_base_key
 import logging
 import os
+import re
+from html import unescape
 
 log = logging.getLogger(__name__)
 
@@ -47,15 +49,53 @@ def extract_text_and_images_from_syndication(tw: Dict[str, Any]) -> Dict[str, An
       4) High-res: upgrade pbs URLs to name=orig; handle legacy :size suffix.
       5) Dedup: compare by base asset (strip query and :size) while preserving order.
     """
-    # Prefer long-form note tweets when present, then legacy/full_text, then text
+    def _extract_article_text(article_node: Dict[str, Any]) -> str:
+        if not isinstance(article_node, dict):
+            return ""
+        parts: List[str] = []
+        title = str(article_node.get("title") or "").strip()
+        preview = str(article_node.get("preview_text") or "").strip()
+        if title:
+            parts.append(unescape(title))
+        if preview:
+            parts.append(unescape(preview))
+        content = article_node.get("content") or {}
+        blocks = content.get("blocks") if isinstance(content, dict) else []
+        if isinstance(blocks, list):
+            for block in blocks:
+                if not isinstance(block, dict):
+                    continue
+                btxt = unescape(str(block.get("text") or "")).strip()
+                if btxt and btxt not in parts:
+                    parts.append(btxt)
+        merged = "\n\n".join(parts).strip()
+        max_chars = 12000
+        if len(merged) > max_chars:
+            return merged[: max_chars - 1].rstrip() + "…"
+        return merged
+
+    # Prefer long-form note tweets when present, then legacy/full_text, then text/article
     note = tw.get("note_tweet") or {}
-    text = (
+    base_text = (
         (note.get("text") if isinstance(note, dict) else None)
         or (tw.get("legacy", {}) or {}).get("full_text")
         or tw.get("full_text")
         or tw.get("text")
         or ""
     )
+    base_text = (base_text or "").strip()
+    article_text = _extract_article_text(tw.get("article") or {})
+    if article_text:
+        if base_text and not re.search(r"https?://t\.co/[A-Za-z0-9]+", base_text):
+            text = (
+                base_text
+                if article_text in base_text
+                else f"{base_text}\n\n[Linked X Article]\n{article_text}"
+            )
+        else:
+            text = article_text
+    else:
+        text = base_text
     include_quoted = os.getenv("SYND_INCLUDE_QUOTED_MEDIA", "true").lower() in (
         "1",
         "true",

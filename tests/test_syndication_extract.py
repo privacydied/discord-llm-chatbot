@@ -156,6 +156,30 @@ class TestSyndicationExtract:
         result = extract_text_and_images_from_syndication(syndication_json_empty)
         assert result["text"] == ""
 
+    def test_extract_text_uses_article_when_tco_pointer_only(self):
+        syndication_json = {
+            "text": "https://t.co/Zq03pbrEgu",
+            "article": {
+                "id": "2016825738041630720",
+                "title": "The TESTOSTERONE Kabbalah",
+                "preview_text": "They control everything.",
+                "content": {
+                    "blocks": [
+                        {"text": "Cellular energy production and metabolism."},
+                        {"text": "Hormonal signaling under chronic stress."},
+                    ]
+                },
+            },
+            "photos": [],
+        }
+
+        result = extract_text_and_images_from_syndication(syndication_json)
+
+        assert "The TESTOSTERONE Kabbalah" in result["text"]
+        assert "They control everything." in result["text"]
+        assert "Cellular energy production and metabolism." in result["text"]
+        assert "https://t.co/" not in result["text"]
+
     def test_extract_missing_photo_urls(self):
         """Handle photos with missing or empty URLs gracefully."""
         syndication_json = {
