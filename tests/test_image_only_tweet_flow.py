@@ -219,6 +219,43 @@ class TestImageOnlyTweetFlow:
                     assert mock_vision.call_count == 2
 
     @pytest.mark.asyncio
+    async def test_handle_image_only_tweet_includes_article_caption(
+        self, router, sample_image_only_tweet
+    ):
+        """Image-only flow should carry X article text into composed evidence."""
+        tweet_with_article = {
+            **sample_image_only_tweet,
+            "text": "https://t.co/Zq03pbrEgu",
+            "article": {
+                "id": "2016825738041630720",
+                "title": "The TESTOSTERONE Kabbalah",
+                "preview_text": "They control everything.",
+                "content": {"blocks": [{"text": "Cellular energy production and metabolism."}]},
+            },
+        }
+
+        with patch.object(
+            router, "_vl_describe_image_from_url", new_callable=AsyncMock
+        ) as mock_vision:
+            mock_vision.return_value = "analysis text"
+
+            with patch.object(router, "_build_neutral_vision_prompt") as mock_prompt:
+                mock_prompt.return_value = "Describe this image neutrally"
+
+                with patch.object(router, "_parse_vision_analysis") as mock_parse:
+                    mock_parse.return_value = ("image summary", "", [])
+
+                    result = await router._handle_image_only_tweet(
+                        "https://twitter.com/testuser/status/123456789",
+                        tweet_with_article,
+                    )
+
+        assert "[Tweet Caption]" in result
+        assert "The TESTOSTERONE Kabbalah" in result
+        assert "Cellular energy production and metabolism." in result
+        assert "image summary" in result
+
+    @pytest.mark.asyncio
     async def test_toxic_content_filtering(self, router):
         """Test that toxic content is filtered from vision responses."""
         toxic_tweet = {

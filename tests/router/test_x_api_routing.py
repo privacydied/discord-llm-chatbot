@@ -470,6 +470,121 @@ async def test_fetch_x_article_from_fxtwitter_parses_article_payload(monkeypatch
 
 
 @pytest.mark.asyncio
+async def test_hydrate_syndication_article_merges_full_article_blocks(monkeypatch):
+    bot = DummyBot()
+    router = Router(bot)
+
+    article_mock = AsyncMock(
+        return_value={
+            "id": "2016825738041630720",
+            "title": "The TESTOSTERONE Kabbalah",
+            "preview_text": "They control everything.",
+            "content": {
+                "blocks": [
+                    {"type": "unstyled", "text": "Cellular energy production and metabolism."},
+                    {"type": "unstyled", "text": "Hormonal signaling under chronic stress."},
+                ]
+            },
+        }
+    )
+    monkeypatch.setattr(
+        Router, "_fetch_x_article_from_fxtwitter", article_mock, raising=True
+    )
+
+    syn = {
+        "text": "https://t.co/Zq03pbrEgu",
+        "article": {
+            "id": "2016825738041630720",
+            "title": "The TESTOSTERONE Kabbalah",
+            "preview_text": "They control everything.",
+        },
+    }
+    hydrated = await router._hydrate_syndication_article_if_needed("1", syn)
+    text = router._extract_syndication_text(hydrated)
+
+    assert "Cellular energy production and metabolism." in text
+    assert "Hormonal signaling under chronic stress." in text
+    assert "https://t.co/" not in text
+    article_mock.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_sparse_image_probe_passes_hydrated_article_text_to_vl(monkeypatch):
+    bot = DummyBot()
+    bot.config["X_API_ENABLED"] = False
+    bot.system_prompts = {"vl_prompt": None}
+    router = Router(bot)
+
+    monkeypatch.setattr(XApiClient, "extract_tweet_id", staticmethod(lambda u: "1"))
+
+    async def _fake_syn(_self, _tweet_id):
+        return {
+            "text": "https://t.co/Zq03pbrEgu",
+            "article": {
+                "id": "2016825738041630720",
+                "title": "The TESTOSTERONE Kabbalah",
+                "preview_text": "They control everything.",
+            },
+            "user": {"screen_name": "u"},
+            "news_action_type": "article",
+        }
+
+    monkeypatch.setattr(Router, "_get_tweet_via_syndication", _fake_syn)
+
+    async def _fake_get_client(_self):
+        return None
+
+    monkeypatch.setattr(Router, "_get_x_api_client", _fake_get_client)
+
+    article_mock = AsyncMock(
+        return_value={
+            "id": "2016825738041630720",
+            "title": "The TESTOSTERONE Kabbalah",
+            "preview_text": "They control everything.",
+            "content": {"blocks": [{"text": "Cellular energy production and metabolism."}]},
+        }
+    )
+    monkeypatch.setattr(
+        Router, "_fetch_x_article_from_fxtwitter", article_mock, raising=True
+    )
+
+    async def _fake_resolve(self, urls, frontend_hints=None, primary_hints=None):
+        return {
+            "kind": "image",
+            "images": ["https://pbs.twimg.com/media/test123.jpg?name=orig"],
+            "url": "https://pbs.twimg.com/media/test123.jpg?name=orig",
+        }
+
+    monkeypatch.setattr(Router, "_resolve_x_media", _fake_resolve)
+
+    captured = {}
+    import bot.syndication.handler as syn_handler_mod
+
+    async def _fake_syn_handler(
+        syn_data, url, vl_handler, vl_prompt=None, reply_style="ack+thoughts"
+    ):
+        captured["text"] = (syn_data or {}).get("text", "")
+        return "VL_OK_SPARSE_IMAGE_ARTICLE"
+
+    monkeypatch.setattr(
+        syn_handler_mod,
+        "handle_twitter_syndication_to_vl",
+        _fake_syn_handler,
+        raising=True,
+    )
+
+    item = InputItem(
+        source_type="url", payload="https://x.com/user/status/1", order_index=0
+    )
+    res = await router._handle_general_url(item)
+
+    assert res == "VL_OK_SPARSE_IMAGE_ARTICLE"
+    assert "Cellular energy production and metabolism." in captured.get("text", "")
+    assert "https://t.co/" not in captured.get("text", "")
+    article_mock.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_resolve_x_media_unwraps_fx_proxy(monkeypatch):
     bot = DummyBot()
     router = Router(bot)

@@ -65,6 +65,23 @@ start() {
   echo "Started: PID $(cat "$PIDFILE") (log: $LOGFILE)"
 }
 
+fg() {
+  if is_running; then
+    echo "Already running as PID $(cat "$PIDFILE"). Stop it first: $0 stop"
+    exit 1
+  fi
+
+  # Optional: skip cleaning if you really want to
+  if [[ "${SKIP_CLEAN:-0}" != "1" ]]; then
+    clean
+  else
+    echo "SKIP_CLEAN=1 — skipping cache cleanup."
+  fi
+
+  # Foreground launch keeps TTY attached so Rich colors render live.
+  uv run python -m bot.main
+}
+
 stop() {
   if ! is_running; then
     echo "Not running."
@@ -99,13 +116,13 @@ status() {
 case "${1:-}" in
   start)        start ;;
   start-clean)  SKIP_CLEAN=0 start ;;
+  fg)           fg ;;
   stop)         stop ;;
   restart)      stop; start ;;
   clean)        clean ;;
   status)       status ;;
   *)
-    echo "Usage: $0 {start|start-clean|stop|restart|status|clean}"
+    echo "Usage: $0 {start|start-clean|fg|stop|restart|status|clean}"
     exit 1
     ;;
 esac
-

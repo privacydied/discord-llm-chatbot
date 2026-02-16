@@ -1154,6 +1154,86 @@ class Router:
             return article_text
         return base_text
 
+    @staticmethod
+    def _syndication_article_has_blocks(article_node: Any) -> bool:
+        if not isinstance(article_node, dict):
+            return False
+        content = article_node.get("content") or {}
+        blocks = content.get("blocks") if isinstance(content, dict) else []
+        if not isinstance(blocks, list):
+            return False
+        for block in blocks:
+            if not isinstance(block, dict):
+                continue
+            if str(block.get("text") or "").strip():
+                return True
+        return False
+
+    def _syndication_needs_article_hydration(
+        self, syn: Dict[str, Any], *, allow_tco_pointer: bool = False
+    ) -> bool:
+        if not isinstance(syn, dict) or not syn:
+            return False
+        article = syn.get("article")
+        if isinstance(article, dict) and article:
+            if self._syndication_article_has_blocks(article):
+                return False
+            if any(
+                str(article.get(k) or "").strip()
+                for k in ("id", "rest_id", "title", "preview_text")
+            ):
+                return True
+
+        # X article syndication can surface as a t.co pointer and optional news action metadata.
+        if str(syn.get("news_action_type") or "").strip():
+            return True
+        if allow_tco_pointer:
+            txt = (
+                str(syn.get("text") or "").strip()
+                or str(syn.get("full_text") or "").strip()
+                or str((syn.get("legacy") or {}).get("full_text") or "").strip()
+            )
+            if bool(re.fullmatch(r"https?://t\.co/[A-Za-z0-9]+", txt)):
+                return True
+        return False
+
+    async def _hydrate_syndication_article_if_needed(
+        self,
+        status_id: str,
+        syn: Optional[Dict[str, Any]],
+        *,
+        allow_tco_pointer: bool = False,
+    ) -> Dict[str, Any]:
+        if not status_id or not isinstance(syn, dict):
+            return syn if isinstance(syn, dict) else {}
+        if not self._syndication_needs_article_hydration(
+            syn, allow_tco_pointer=allow_tco_pointer
+        ):
+            return syn
+        try:
+            article_data = await self._fetch_x_article_from_fxtwitter(status_id)
+        except Exception:
+            article_data = None
+        if isinstance(article_data, dict) and article_data:
+            merged = dict(syn)
+            merged["article"] = article_data
+            try:
+                self.logger.info(
+                    "x.article.hydrated",
+                    extra={
+                        "event": "x.article.hydrated",
+                        "detail": {
+                            "tweet_id": status_id,
+                            "article_id": article_data.get("id") or "",
+                            "chars": len(self._extract_syndication_text(merged)),
+                        },
+                    },
+                )
+            except Exception:
+                pass
+            return merged
+        return syn
+
     def _compose_text_tweet_evidence(self, url: str, syn: Dict[str, Any]) -> str:
         """Build EvidenceBundle for a text-only tweet using syndication payload. [CA]"""
         from .evidence import EvidenceBundle
@@ -4027,6 +4107,13 @@ class Router:
                                         caption_tweet_id
                                     )
                                     if isinstance(syn_caption, dict):
+                                        syn_caption = (
+                                            await self._hydrate_syndication_article_if_needed(
+                                                caption_tweet_id,
+                                                syn_caption,
+                                                allow_tco_pointer=True,
+                                            )
+                                        )
                                         tweet_caption = self._extract_syndication_text(
                                             syn_caption
                                         )
@@ -5943,15 +6030,12 @@ class Router:
                             try:
                                 tweet_text = ""
                                 try:
-                                    syn = await self._get_tweet_via_syndication(
-                                        status_id
-                                    )
+                                    syn = await self._get_tweet_via_syndication(status_id)
                                     if isinstance(syn, dict):
-                                        tweet_text = (
-                                            syn.get("text")
-                                            or syn.get("full_text")
-                                            or ""
-                                        ).strip()
+                                        syn = await self._hydrate_syndication_article_if_needed(
+                                            status_id, syn, allow_tco_pointer=True
+                                        )
+                                        tweet_text = self._extract_syndication_text(syn)
                                 except Exception:
                                     tweet_text = ""
 
@@ -5983,12 +6067,10 @@ class Router:
                                                 or fxj.get("status")
                                                 or {}
                                             )
-                                            tweet_text = (
-                                                tnode.get("text")
-                                                or tnode.get("content")
-                                                or tnode.get("full_text")
-                                                or ""
-                                            ).strip()
+                                            if isinstance(tnode, dict):
+                                                tweet_text = self._extract_syndication_text(
+                                                    tnode
+                                                )
                                     except Exception:
                                         pass
 
@@ -6551,6 +6633,10 @@ class Router:
                         {"tweet_id": tweet_id},
                     )
                     if syn:
+                        if tweet_id:
+                            syn = await self._hydrate_syndication_article_if_needed(
+                                tweet_id, syn
+                            )
                         self._metric_inc("x.syndication.hit", None)
 
                         # Log syndication response keys for video detection debugging [IV][REH]
@@ -6727,8 +6813,17 @@ class Router:
                                     else "native",
                                 },
                             )
+                            syn_for_images = syn
+                            if tweet_id:
+                                syn_for_images = (
+                                    await self._hydrate_syndication_article_if_needed(
+                                        tweet_id,
+                                        syn_for_images,
+                                        allow_tco_pointer=True,
+                                    )
+                                )
                             return await self._handle_image_only_tweet(
-                                url, syn, source="syndication"
+                                url, syn_for_images, source="syndication"
                             )
 
                         # Compose evidence for text-only tweets through the standard bundle [CA]
@@ -6830,19 +6925,23 @@ class Router:
                                     )
                                     # Convert to syndication-like shape and route to VL
                                     tweet_text = text
-                                    if not tweet_text:
-                                        try:
-                                            syn2 = (
-                                                await self._get_tweet_via_syndication(
-                                                    status_id
-                                                )
+                                    try:
+                                        syn2 = await self._get_tweet_via_syndication(
+                                            status_id
+                                        )
+                                        if isinstance(syn2, dict):
+                                            syn2 = await self._hydrate_syndication_article_if_needed(
+                                                status_id,
+                                                syn2,
+                                                allow_tco_pointer=True,
                                             )
-                                            if isinstance(syn2, dict):
-                                                tweet_text = self._extract_syndication_text(
-                                                    syn2
-                                                )
-                                        except Exception:
-                                            pass
+                                            hydrated_text = self._extract_syndication_text(
+                                                syn2
+                                            )
+                                            if hydrated_text:
+                                                tweet_text = hydrated_text
+                                    except Exception:
+                                        pass
                                     syn_like = {
                                         "text": tweet_text,
                                         "photos": [{"url": u} for u in imgs],
@@ -6954,8 +7053,20 @@ class Router:
                                     self.logger.info(
                                         f"route.twitter.syndication | images={len(sparse_images)} | {first_host or 'n/a'}"
                                     )
+                                    image_text = text
+                                    if tweet_id:
+                                        syn_for_sparse_images = (
+                                            await self._hydrate_syndication_article_if_needed(
+                                                tweet_id,
+                                                syn,
+                                                allow_tco_pointer=True,
+                                            )
+                                        )
+                                        image_text = self._extract_syndication_text(
+                                            syn_for_sparse_images
+                                        )
                                     syn_like = {
-                                        "text": text,
+                                        "text": image_text,
                                         "photos": [{"url": u} for u in sparse_images],
                                     }
                                     from .syndication.handler import (
@@ -7093,8 +7204,15 @@ class Router:
                             except Exception:
                                 pass
 
+                            syn_for_vl = syn
+                            if tweet_id:
+                                syn_for_vl = (
+                                    await self._hydrate_syndication_article_if_needed(
+                                        tweet_id, syn_for_vl, allow_tco_pointer=True
+                                    )
+                                )
                             result = await handle_twitter_syndication_to_vl(
-                                syn,
+                                syn_for_vl,
                                 url,
                                 self._unified_vl_to_text_pipeline,
                                 self.bot.system_prompts.get("vl_prompt"),
@@ -7130,6 +7248,9 @@ class Router:
                                             status_id
                                         )
                                         if isinstance(syn, dict):
+                                            syn = await self._hydrate_syndication_article_if_needed(
+                                                status_id, syn, allow_tco_pointer=True
+                                            )
                                             tweet_text = self._extract_syndication_text(
                                                 syn
                                             )
@@ -7163,12 +7284,10 @@ class Router:
                                                 or fxj.get("status")
                                                 or {}
                                             )
-                                            tweet_text = (
-                                                tnode.get("text")
-                                                or tnode.get("content")
-                                                or tnode.get("full_text")
-                                                or ""
-                                            ).strip()
+                                            if isinstance(tnode, dict):
+                                                tweet_text = self._extract_syndication_text(
+                                                    tnode
+                                                )
                                     except Exception:
                                         pass
                                 syn_like = {
@@ -9800,8 +9919,16 @@ class Router:
                     if len(results) == 1
                     else f"📷 Images Analysis ({len(results)})"
                 )
+                caption_text = self._extract_syndication_text(syn_data)
                 analysis_block = "\n".join(results)
-                parts = [header, analysis_block]
+                parts = [header]
+
+                if caption_text:
+                    parts.append("[Tweet Caption]")
+                    parts.append(caption_text)
+                    parts.append("")
+
+                parts.append(analysis_block)
 
                 if ocr_texts and bool(cfg.get("VISION_OCR_ENABLE", True)):
                     parts.append("")
