@@ -1604,16 +1604,32 @@ def extract_x_status_urls_from_text(
     """Extract canonical X/Twitter status URLs from text preserving order."""
     urls: List[str] = []
     try:
-        for raw in iter_status_url_candidates(text):
-            append_status_url_if_match(
-                urls,
-                raw,
-                is_status_url=is_status_url,
-                canonicalize_status_url=canonicalize_status_url,
-            )
+        collect_status_urls_from_candidates(
+            urls,
+            text,
+            is_status_url=is_status_url,
+            canonicalize_status_url=canonicalize_status_url,
+        )
     except Exception:
         pass
     return urls
+
+
+def collect_status_urls_from_candidates(
+    items: List[str],
+    text: str,
+    *,
+    is_status_url: Callable[[str], bool],
+    canonicalize_status_url: Callable[[str], str],
+) -> None:
+    """Collect canonical status URLs from candidate URLs found in text."""
+    for raw in iter_status_url_candidates(text):
+        append_status_url_if_match(
+            items,
+            raw,
+            is_status_url=is_status_url,
+            canonicalize_status_url=canonicalize_status_url,
+        )
 
 
 def x_url_extract_pattern() -> str:
