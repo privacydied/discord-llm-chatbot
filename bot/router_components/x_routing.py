@@ -1601,6 +1601,11 @@ async def resolve_and_probe_twitter_images(
 
 def normalize_probed_image_urls(image_urls: Optional[List[str]]) -> List[str]:
     """Normalize probed image URL payload to an always-list value."""
+    return probed_image_urls_or_empty(image_urls)
+
+
+def probed_image_urls_or_empty(image_urls: Optional[List[str]]) -> List[str]:
+    """Return probed image URLs when present, otherwise empty list."""
     return image_urls or []
 
 

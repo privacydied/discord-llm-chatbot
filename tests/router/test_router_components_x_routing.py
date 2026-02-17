@@ -194,6 +194,7 @@ from bot.router_components.x_routing import (
     format_twitter_syndication_image_count,
     resolve_first_image_host,
     resolve_first_image_url,
+    probed_image_urls_or_empty,
     normalize_probed_image_urls,
     build_twitter_image_probe_result,
     resolve_and_probe_twitter_images,
@@ -2031,6 +2032,12 @@ def test_normalize_probed_image_urls_variants() -> None:
     assert normalize_probed_image_urls(["u1"]) == ["u1"]
     assert normalize_probed_image_urls(None) == []
     assert normalize_probed_image_urls([]) == []
+
+
+def test_probed_image_urls_or_empty_variants() -> None:
+    assert probed_image_urls_or_empty(["u1"]) == ["u1"]
+    assert probed_image_urls_or_empty(None) == []
+    assert probed_image_urls_or_empty([]) == []
 
 
 def test_build_twitter_image_probe_result_normalizes_urls() -> None:
