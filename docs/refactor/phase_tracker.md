@@ -826,3 +826,21 @@
   - Validation:
     - `./.venv/bin/pytest -q tests/router/test_router_caption_only_helpers.py tests/router/test_x_api_routing.py tests/router/test_router_x_base_text_resolution.py` -> `46 passed`
     - `./.venv/bin/pytest -q tests/core tests/router tests/syndication tests/vision tests/test_hear_ffmpeg_resolution.py tests/test_hear_stream_abort.py tests/test_media_ingestion.py tests/test_video_ingest.py tests/router/test_router_x_result_format_contract.py tests/router/test_router_x_base_text_resolution.py tests/test_media_ingestion_compat_contracts.py tests/vision/test_money_contract.py tests/test_media_ingestion_helpers.py tests/test_stt_pipeline_runtime.py tests/test_stt_pipeline_ffmpeg_runtime.py tests/test_stt_pipeline_youtube_path.py tests/test_stt_pipeline_result_payload.py tests/test_stt_pipeline_spec_select.py tests/test_stt_pipeline_logging.py tests/test_stt_pipeline_lifecycle.py tests/test_stt_pipeline_url_ingest.py tests/test_stt_pipeline_transcribe_flow.py tests/test_stt_pipeline_stitch.py` -> `315 passed`
+- 2026-02-17:
+  - Refactor (behavior-preserving): extracted shared Twitter status-id resolver:
+    - `bot/router.py::_resolve_twitter_status_id()`
+  - Rewired duplicated status-id resolution callsites:
+    - `_probe_twitter_syndication_images()`
+    - tweet-video fallback syndication image probe branch
+    - syndication image-probe branch in X routing
+    - high-res image probe branch in X routing
+  - Preserved behavior:
+    - explicit `tweet_id` hint takes precedence
+    - otherwise parses from URL with existing parser semantics
+    - still returns empty string when no status id is available
+  - Extended tests in `tests/router/test_router_caption_only_helpers.py`:
+    - `test_resolve_twitter_status_id_prefers_explicit_hint`
+    - `test_resolve_twitter_status_id_falls_back_to_parser`
+  - Validation:
+    - `./.venv/bin/pytest -q tests/router/test_router_caption_only_helpers.py tests/router/test_x_api_routing.py tests/router/test_router_x_base_text_resolution.py` -> `48 passed`
+    - `./.venv/bin/pytest -q tests/core tests/router tests/syndication tests/vision tests/test_hear_ffmpeg_resolution.py tests/test_hear_stream_abort.py tests/test_media_ingestion.py tests/test_video_ingest.py tests/router/test_router_x_result_format_contract.py tests/router/test_router_x_base_text_resolution.py tests/test_media_ingestion_compat_contracts.py tests/vision/test_money_contract.py tests/test_media_ingestion_helpers.py tests/test_stt_pipeline_runtime.py tests/test_stt_pipeline_ffmpeg_runtime.py tests/test_stt_pipeline_youtube_path.py tests/test_stt_pipeline_result_payload.py tests/test_stt_pipeline_spec_select.py tests/test_stt_pipeline_logging.py tests/test_stt_pipeline_lifecycle.py tests/test_stt_pipeline_url_ingest.py tests/test_stt_pipeline_transcribe_flow.py tests/test_stt_pipeline_stitch.py` -> `317 passed`

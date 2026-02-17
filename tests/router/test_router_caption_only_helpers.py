@@ -340,6 +340,44 @@ def test_extract_fxtwitter_tweet_node_handles_variants() -> None:
     assert router._extract_fxtwitter_tweet_node(None) == {}
 
 
+def test_resolve_twitter_status_id_prefers_explicit_hint(monkeypatch) -> None:
+    router = Router(DummyBot())
+
+    monkeypatch.setattr(
+        Router,
+        "_parse_twitter_status_id",
+        lambda _self, _url: (_ for _ in ()).throw(
+            AssertionError("parser should not be called when tweet_id is provided")
+        ),
+    )
+
+    assert (
+        router._resolve_twitter_status_id(
+            "https://x.com/user/status/111",
+            tweet_id="123",
+        )
+        == "123"
+    )
+
+
+def test_resolve_twitter_status_id_falls_back_to_parser(monkeypatch) -> None:
+    router = Router(DummyBot())
+
+    monkeypatch.setattr(
+        Router,
+        "_parse_twitter_status_id",
+        lambda _self, _url: "456",
+    )
+    assert router._resolve_twitter_status_id("https://x.com/user/status/111") == "456"
+
+    monkeypatch.setattr(
+        Router,
+        "_parse_twitter_status_id",
+        lambda _self, _url: None,
+    )
+    assert router._resolve_twitter_status_id("https://x.com/user/status/111") == ""
+
+
 def test_x_syn_probe_budget_timeout_caps_at_four_point_five() -> None:
     router = Router(DummyBot())
     router._x_syn_timeout_s = 9.0

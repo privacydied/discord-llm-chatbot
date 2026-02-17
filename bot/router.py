@@ -1062,8 +1062,7 @@ class Router:
         self, url: str, status_id: str
     ) -> List[str]:
         """Probe syndication API for tweet images. Returns list of image URLs. [PA][REH]"""
-        if not status_id:
-            status_id = self._parse_twitter_status_id(url) or ""
+        status_id = self._resolve_twitter_status_id(url, tweet_id=status_id)
         if not status_id:
             return []
         try:
@@ -1314,6 +1313,12 @@ class Router:
     def _parse_twitter_status_id(url: str) -> Optional[str]:
         """Extract the tweet/status ID from a Twitter URL. Returns None if not found. [IV]"""
         return parse_twitter_status_id(url)
+
+    def _resolve_twitter_status_id(
+        self, url: str, tweet_id: Optional[str] = None
+    ) -> str:
+        """Return status ID from explicit hint first, otherwise parse from URL."""
+        return tweet_id or self._parse_twitter_status_id(url) or ""
 
     @staticmethod
     def _extract_primary_tweet_id(url: str) -> Optional[str]:
@@ -5571,7 +5576,7 @@ class Router:
                     self, "_x_syn_probe_enabled", True
                 ) and self._is_twitter_status_url(url):
                     try:
-                        status_id = self._parse_twitter_status_id(url)
+                        status_id = self._resolve_twitter_status_id(url)
                         imgs = await self._probe_twitter_syndication_images(
                             url, status_id or ""
                         )
@@ -6337,8 +6342,8 @@ class Router:
                         # No video confirmed. Probe for images only when none were extracted yet.
                         if (not photos) and (not extracted_images):
                             try:
-                                status_id = (
-                                    tweet_id or self._parse_twitter_status_id(url) or ""
+                                status_id = self._resolve_twitter_status_id(
+                                    url, tweet_id=tweet_id
                                 )
                             except Exception:
                                 status_id = ""
@@ -6548,8 +6553,8 @@ class Router:
                         self, "_x_syn_probe_enabled", True
                     ) and self._is_twitter_status_url(url):
                         try:
-                            status_id = (
-                                tweet_id or self._parse_twitter_status_id(url) or ""
+                            status_id = self._resolve_twitter_status_id(
+                                url, tweet_id=tweet_id
                             )
                             imgs = await self._probe_twitter_syndication_images(
                                 url, status_id
