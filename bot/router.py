@@ -671,6 +671,10 @@ class Router:
             max_retries=0,
         )
 
+    def _x_syn_probe_budget_timeout_s(self) -> float:
+        """Compute bounded timeout budget for image/media probe calls."""
+        return min(getattr(self, "_x_syn_timeout_s", 3.0) + 1.0, 4.5)
+
     def _extract_fxtwitter_tweet_node(self, payload: Any) -> Dict[str, Any]:
         """Extract the canonical tweet/status node from fx/vx payloads."""
         if not isinstance(payload, dict):
@@ -6311,10 +6315,7 @@ class Router:
                                     self._probe_twitter_syndication_images(
                                         url, status_id
                                     ),
-                                    min(
-                                        getattr(self, "_x_syn_timeout_s", 3.0) + 1.0,
-                                        4.5,
-                                    ),
+                                    self._x_syn_probe_budget_timeout_s(),
                                     "x.syndication.image_probe",
                                     {"tweet_id": status_id},
                                 )
@@ -6375,10 +6376,7 @@ class Router:
                                 try:
                                     resolved_sparse, _ = await _bounded(
                                         self._resolve_x_media([url]),
-                                        min(
-                                            getattr(self, "_x_syn_timeout_s", 3.0) + 1.0,
-                                            4.5,
-                                        ),
+                                        self._x_syn_probe_budget_timeout_s(),
                                         "x.syndication.sparse.resolve",
                                         {"tweet_id": tweet_id or ""},
                                     )

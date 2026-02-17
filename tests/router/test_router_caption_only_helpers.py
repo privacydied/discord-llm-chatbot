@@ -308,6 +308,20 @@ def test_extract_fxtwitter_tweet_node_handles_variants() -> None:
     assert router._extract_fxtwitter_tweet_node(None) == {}
 
 
+def test_x_syn_probe_budget_timeout_caps_at_four_point_five() -> None:
+    router = Router(DummyBot())
+    router._x_syn_timeout_s = 9.0
+
+    assert router._x_syn_probe_budget_timeout_s() == 4.5
+
+
+def test_x_syn_probe_budget_timeout_uses_syn_timeout_plus_one() -> None:
+    router = Router(DummyBot())
+    router._x_syn_timeout_s = 2.2
+
+    assert router._x_syn_probe_budget_timeout_s() == 3.2
+
+
 def test_stt_result_has_transcription_matches_existing_truthiness() -> None:
     router = Router(DummyBot())
 
