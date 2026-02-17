@@ -10,6 +10,7 @@ from bot.router_components.input_harvest import (
     has_explicit_media_intent,
     has_meaningful_text,
     is_text_attachment,
+    strip_discord_mentions_and_urls,
     strip_urls,
 )
 
@@ -116,3 +117,12 @@ def test_append_embed_related_urls() -> None:
     assert "https://video.twimg.com/ext_tw_video/1" in found_urls
     assert "https://x.com/u" in found_urls
     assert "https://x.com/u/status/2" in found_urls
+
+
+def test_strip_discord_mentions_and_urls() -> None:
+    text = "<@123> check this <#999> https://x.com/u/status/1 hello"
+    cleaned = strip_discord_mentions_and_urls(text)
+    assert "<@123>" not in cleaned
+    assert "<#999>" not in cleaned
+    assert "https://x.com" not in cleaned
+    assert "hello" in cleaned

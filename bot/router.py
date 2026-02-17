@@ -114,6 +114,7 @@ from .router_components import (
     normalize_x_url,
     parse_twitter_status_id,
     strip_leading_bot_mention,
+    strip_discord_mentions_and_urls,
     strip_urls,
     unwrap_x_media_url,
 )
@@ -4384,10 +4385,8 @@ class Router:
                     adopted = False
                     if rt and getattr(rt, "content", None):
                         rt_raw = str(rt.content or "")
-                        # Strip Discord mentions (<@...>, <@!...>, roles <@&...>, channels <#...>) and URLs
-                        rt_clean = re.sub(r"<[@#][^>]+>", "", rt_raw)
-                        rt_clean = re.sub(r"https?://\S+", "", rt_clean)
-                        rt_clean = rt_clean.strip()
+                        # Strip Discord mentions/URLs for better signal.
+                        rt_clean = strip_discord_mentions_and_urls(rt_raw)
                         # Require some alphanumeric signal to avoid adopting pure glyphs/whitespace
                         if rt_clean and re.search(r"[A-Za-z0-9]", rt_clean):
                             original_text = rt_clean
@@ -4482,10 +4481,8 @@ class Router:
                         if ref_msg and getattr(ref_msg, "content", None):
                             rt_raw = str(ref_msg.content or "")
                             try:
-                                # Strip mentions and URLs for better signal
-                                rt_clean = re.sub(r"<[@#][^>]+>", "", rt_raw)
-                                rt_clean = re.sub(r"https?://\S+", "", rt_clean)
-                                rt_clean = rt_clean.strip()
+                                # Strip mentions and URLs for better signal.
+                                rt_clean = strip_discord_mentions_and_urls(rt_raw)
                             except Exception:
                                 rt_clean = (ref_msg.content or "").strip()
                             try:

@@ -7,6 +7,7 @@ from typing import Any, Callable, Iterable, List, Sequence, Set
 
 _URL_STRICT_PATTERN = r"https?://[^\s<>\"'\[\]{}|\\^`]+"
 _URL_LOOSE_PATTERN = r"https?://\S+"
+_DISCORD_MENTION_TOKEN_PATTERN = r"<[@#][^>]+>"
 
 
 def is_text_attachment(attachment: Any) -> bool:
@@ -110,6 +111,16 @@ def strip_urls(text: str) -> str:
     """Remove strict URL matches from text."""
     try:
         return re.sub(_URL_STRICT_PATTERN, "", text or "").strip()
+    except Exception:
+        return (text or "").strip()
+
+
+def strip_discord_mentions_and_urls(text: str) -> str:
+    """Strip Discord mention/channel tokens and loose URLs from text."""
+    try:
+        out = re.sub(_DISCORD_MENTION_TOKEN_PATTERN, "", text or "")
+        out = re.sub(_URL_LOOSE_PATTERN, "", out)
+        return out.strip()
     except Exception:
         return (text or "").strip()
 

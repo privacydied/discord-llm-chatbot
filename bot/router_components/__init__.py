@@ -15,6 +15,7 @@ from .input_harvest import (
     has_explicit_media_intent,
     has_meaningful_text,
     is_text_attachment,
+    strip_discord_mentions_and_urls,
     strip_urls,
 )
 from .runtime import RouterRuntimeCompat, load_router_runtime_compat
@@ -60,6 +61,7 @@ __all__ = [
     "normalize_x_url",
     "parse_twitter_status_id",
     "strip_leading_bot_mention",
+    "strip_discord_mentions_and_urls",
     "strip_urls",
     "collect_x_candidate_urls",
     "unwrap_x_media_url",
