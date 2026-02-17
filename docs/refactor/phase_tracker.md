@@ -178,3 +178,11 @@
     - fetch-failure path
   - Validation:
     - `./.venv/bin/pytest -q tests/router/test_router_reference_resolution.py tests/router/test_router_components_compose_contract.py tests/router/test_router_components_compose.py tests/router/test_router_components_input_harvest.py tests/router/test_router_components_gating.py tests/router/test_router_components_x_routing.py tests/test_video_ingest.py tests/test_stt_pipeline_runtime.py tests/test_stt_pipeline_ffmpeg_runtime.py tests/test_stt_pipeline_youtube_path.py` -> `49 passed`
+- 2026-02-17:
+  - Extended `tests/test_stt_pipeline_runtime.py` with direct contract tests for `ensure_stt_manager_ready()`:
+    - no `ensure_ready` fail-open
+    - async and sync `ensure_ready` paths
+    - `is_available=False` path
+    - exception paths (`is_available` / `ensure_ready`)
+  - Validation:
+    - `./.venv/bin/pytest -q tests/test_stt_pipeline_runtime.py tests/test_stt_pipeline_ffmpeg_runtime.py tests/test_stt_pipeline_youtube_path.py tests/test_video_ingest.py tests/router/test_router_reference_resolution.py tests/router/test_router_components_compose_contract.py tests/router/test_router_components_compose.py tests/router/test_router_components_input_harvest.py tests/router/test_router_components_gating.py tests/router/test_router_components_x_routing.py` -> `55 passed`
