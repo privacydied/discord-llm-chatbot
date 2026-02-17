@@ -1055,10 +1055,18 @@ def build_syndication_oembed_fallback_plan(
     tweet_id: str,
 ) -> Tuple[str, List[Tuple[str, Dict[str, str]]]]:
     """Return oEmbed fallback URL and ordered variant params."""
-    return (
+    return build_syndication_oembed_fallback_plan_tuple(
         build_syndication_oembed_url(),
         build_syndication_oembed_fallback_params(tweet_id),
     )
+
+
+def build_syndication_oembed_fallback_plan_tuple(
+    url: str,
+    variants: List[Tuple[str, Dict[str, str]]],
+) -> Tuple[str, List[Tuple[str, Dict[str, str]]]]:
+    """Return canonical oEmbed fallback plan tuple (url, variants)."""
+    return url, variants
 
 
 def build_syndication_fetch_plan(
