@@ -308,6 +308,20 @@ def build_stt_fail_log_payload(
     return payload
 
 
+def build_x_video_stt_error_result_payload(
+    *,
+    url: str,
+    stt_error: Optional[str],
+) -> Dict[str, Any]:
+    """Build the canonical STT error payload for video tweet formatting."""
+    return {
+        "transcription": None,
+        "error": stt_error or "transcription_failed",
+        "media_kind": "video",
+        "url": url,
+    }
+
+
 def x_syn_probe_budget_timeout_s(x_syn_timeout_s: float) -> float:
     """Compute bounded timeout budget for image/media probe calls."""
     return min(float(x_syn_timeout_s) + 1.0, 4.5)

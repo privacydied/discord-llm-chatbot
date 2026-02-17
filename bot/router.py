@@ -127,6 +127,7 @@ from .router_components import (
     is_twitter_status_url,
     classify_stt_error_reason,
     build_stt_fail_log_payload,
+    build_x_video_stt_error_result_payload,
     x_syn_probe_budget_timeout_s,
     x_syn_quick_request_timeouts,
     build_syndication_photo_payload,
@@ -627,12 +628,10 @@ class Router:
     ) -> str:
         """Format video STT failure while preserving video modality context."""
         safe_base_text = (tweet_text or base_text or "").strip()
-        stt_error_result = {
-            "transcription": None,
-            "error": stt_error or "transcription_failed",
-            "media_kind": "video",
-            "url": url,
-        }
+        stt_error_result = build_x_video_stt_error_result_payload(
+            url=url,
+            stt_error=stt_error,
+        )
         return self._format_x_tweet_with_transcription(
             base_text=safe_base_text,
             url=url,

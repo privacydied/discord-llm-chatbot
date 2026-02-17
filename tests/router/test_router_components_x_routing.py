@@ -20,6 +20,7 @@ from bot.router_components.x_routing import (
     parse_twitter_status_id,
     classify_stt_error_reason,
     build_stt_fail_log_payload,
+    build_x_video_stt_error_result_payload,
     resolve_twitter_status_id,
     is_twitter_status_url,
     stt_result_has_transcription,
@@ -254,6 +255,28 @@ def test_build_stt_fail_log_payload_includes_optional_fields() -> None:
         "event": "stt.fail",
         "detail": {"reason": "error", "media_kind": "video"},
         "msg_id": 123,
+    }
+
+
+def test_build_x_video_stt_error_result_payload_defaults_and_shape() -> None:
+    assert build_x_video_stt_error_result_payload(
+        url="https://x.com/u/status/1",
+        stt_error=None,
+    ) == {
+        "transcription": None,
+        "error": "transcription_failed",
+        "media_kind": "video",
+        "url": "https://x.com/u/status/1",
+    }
+
+    assert build_x_video_stt_error_result_payload(
+        url="https://x.com/u/status/2",
+        stt_error="network_error",
+    ) == {
+        "transcription": None,
+        "error": "network_error",
+        "media_kind": "video",
+        "url": "https://x.com/u/status/2",
     }
 
 
