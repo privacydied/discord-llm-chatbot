@@ -172,6 +172,7 @@ from bot.router_components.x_routing import (
     x_syn_timeout_with_offset_and_cap,
     x_syn_quick_request_timeouts,
     build_syndication_photo_payload,
+    build_syndication_photo_items,
     format_twitter_syndication_images_log_line,
     resolve_first_image_host,
     normalize_probed_image_urls,
@@ -1750,6 +1751,11 @@ def test_build_syndication_photo_payload_shape() -> None:
 
     payload_none = build_syndication_photo_payload(None, [])
     assert payload_none == {"text": None, "photos": []}
+
+
+def test_build_syndication_photo_items_shape() -> None:
+    assert build_syndication_photo_items(["u1", "u2"]) == [{"url": "u1"}, {"url": "u2"}]
+    assert build_syndication_photo_items([]) == []
 
 
 def test_format_twitter_syndication_images_log_line_with_and_without_msg_id() -> None:

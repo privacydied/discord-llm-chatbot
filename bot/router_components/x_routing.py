@@ -1507,8 +1507,13 @@ def build_syndication_photo_payload(
     """Build syndication-like payload consumed by the unified VL handler."""
     return {
         "text": text,
-        "photos": [{"url": url} for url in image_urls],
+        "photos": build_syndication_photo_items(image_urls),
     }
+
+
+def build_syndication_photo_items(image_urls: List[str]) -> List[Dict[str, str]]:
+    """Build canonical list of photo item dicts for syndication payloads."""
+    return [{"url": url} for url in image_urls]
 
 
 def format_twitter_syndication_images_log_line(
