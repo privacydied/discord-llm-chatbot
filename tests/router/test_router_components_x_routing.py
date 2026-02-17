@@ -56,8 +56,10 @@ from bot.router_components.x_routing import (
     build_syndication_accept_json_mime,
     build_syndication_accept_text_mime,
     build_syndication_accept_text_quality,
+    build_syndication_accept_text_entry,
     build_syndication_accept_any_mime,
     build_syndication_accept_any_quality,
+    build_syndication_accept_any_entry,
     build_syndication_lang,
     build_syndication_dnt_value,
     build_syndication_omit_script_value,
@@ -888,12 +890,20 @@ def test_build_syndication_accept_text_quality_constant() -> None:
     assert build_syndication_accept_text_quality() == "q=0.9"
 
 
+def test_build_syndication_accept_text_entry_constant() -> None:
+    assert build_syndication_accept_text_entry() == "text/javascript;q=0.9"
+
+
 def test_build_syndication_accept_any_mime_constant() -> None:
     assert build_syndication_accept_any_mime() == "*/*"
 
 
 def test_build_syndication_accept_any_quality_constant() -> None:
     assert build_syndication_accept_any_quality() == "q=0.8"
+
+
+def test_build_syndication_accept_any_entry_constant() -> None:
+    assert build_syndication_accept_any_entry() == "*/*;q=0.8"
 
 
 def test_build_syndication_lang_constant() -> None:
