@@ -2050,6 +2050,16 @@ def iter_text_url_matches(text: str, *, url_re: Any) -> Iterable[Any]:
 
 def url_matches(text: str, *, url_re: Any) -> Iterable[Any]:
     """Yield URL regex match objects for text URL extraction loops."""
+    yield from url_matches_source(text, url_re=url_re)
+
+
+def url_matches_source(text: str, *, url_re: Any) -> Iterable[Any]:
+    """Yield source URL matches used by url_matches helper."""
+    yield from url_matches_iter(text, url_re=url_re)
+
+
+def url_matches_iter(text: str, *, url_re: Any) -> Iterable[Any]:
+    """Yield iterator used by url_matches source helper."""
     yield from iter_url_matches(text, url_re=url_re)
 
 
