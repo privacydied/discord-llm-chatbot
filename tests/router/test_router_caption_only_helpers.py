@@ -182,3 +182,13 @@ def test_format_x_video_stt_error_result_defaults_error(monkeypatch) -> None:
 
     assert captured["base_text"] == "base text"
     assert captured["stt_res"]["error"] == "transcription_failed"
+
+
+def test_classify_stt_error_reason_matches_existing_semantics() -> None:
+    router = Router(DummyBot())
+
+    assert router._classify_stt_error_reason("error") == "error"
+    assert router._classify_stt_error_reason(None) == "no_speech"
+    assert router._classify_stt_error_reason("timeout") == "no_speech"
+    # Preserve legacy exact-match behavior (case-sensitive)
+    assert router._classify_stt_error_reason("ERROR") == "no_speech"

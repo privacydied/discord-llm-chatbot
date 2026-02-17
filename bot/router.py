@@ -561,6 +561,10 @@ class Router:
         except Exception:
             pass
 
+    def _classify_stt_error_reason(self, stt_err: Optional[str]) -> str:
+        """Map STT status token to the canonical fallback reason."""
+        return "no_speech" if stt_err != "error" else "error"
+
     def _extract_x_api_primary_text(self, api_data: Any) -> str:
         """Extract canonical tweet text from X API payload variants."""
         try:
@@ -6250,7 +6254,7 @@ class Router:
                             # STT failed for confirmed video content
                             # Maintain video modality instead of collapsing to text [REH][IV]
                             self._emit_stt_fail_event(
-                                "no_speech" if stt_err != "error" else "error",
+                                self._classify_stt_error_reason(stt_err),
                                 media_kind="video",
                                 msg_id=(message.id if message else None),
                             )
@@ -6474,11 +6478,7 @@ class Router:
                                             stt_res=forced_stt_res,
                                         )
                                     self._emit_stt_fail_event(
-                                        (
-                                            "no_speech"
-                                            if forced_stt_err != "error"
-                                            else "error"
-                                        ),
+                                        self._classify_stt_error_reason(forced_stt_err),
                                         media_kind="unknown_sparse",
                                     )
 
