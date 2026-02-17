@@ -2143,6 +2143,16 @@ def filter_canonical_x_urls(
 
 def canonical_x_url_items_buffer() -> List[str]:
     """Build mutable list buffer for canonicalized X URL collection."""
+    return canonical_x_url_items_buffer_source()
+
+
+def canonical_x_url_items_buffer_source() -> List[str]:
+    """Return source list buffer used by canonical X URL helper."""
+    return canonical_x_url_items_buffer_value()
+
+
+def canonical_x_url_items_buffer_value() -> List[str]:
+    """Return value used by canonical X URL items buffer source helper."""
     return []
 
 

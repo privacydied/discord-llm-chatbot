@@ -14,6 +14,8 @@ from bot.router_components.x_routing import (
     extract_x_status_urls_from_text,
     filter_canonical_x_urls,
     canonical_x_url_items_buffer,
+    canonical_x_url_items_buffer_source,
+    canonical_x_url_items_buffer_value,
     x_url_matches_predicate,
     is_x_url_candidate,
     append_x_url_if_match,
@@ -816,6 +818,14 @@ def test_extract_raw_urls_and_filter_canonical_x_urls() -> None:
 
 def test_canonical_x_url_items_buffer_starts_empty() -> None:
     assert canonical_x_url_items_buffer() == []
+
+
+def test_canonical_x_url_items_buffer_source_starts_empty() -> None:
+    assert canonical_x_url_items_buffer_source() == []
+
+
+def test_canonical_x_url_items_buffer_value_starts_empty() -> None:
+    assert canonical_x_url_items_buffer_value() == []
 
 
 def test_append_unique_str_only_appends_new_values() -> None:
