@@ -132,6 +132,7 @@ from .router_components import (
     resolve_caption_only_base_text,
     resolve_video_stt_error_base_text,
     syndication_article_has_blocks,
+    extract_x_article_text,
     x_syn_probe_budget_timeout_s,
     x_syn_quick_request_timeouts,
     build_syndication_photo_payload,
@@ -1288,35 +1289,7 @@ class Router:
 
     @staticmethod
     def _extract_x_article_text(article_node: Any) -> str:
-        """Extract normalized text from an X article payload."""
-        if not isinstance(article_node, dict):
-            return ""
-        title = str(article_node.get("title") or "").strip()
-        preview = str(article_node.get("preview_text") or "").strip()
-        blocks: List[str] = []
-        content = article_node.get("content") or {}
-        if isinstance(content, dict):
-            raw_blocks = content.get("blocks") or []
-            if isinstance(raw_blocks, list):
-                for block in raw_blocks:
-                    if not isinstance(block, dict):
-                        continue
-                    btxt = unescape(str(block.get("text") or "")).strip()
-                    if btxt:
-                        blocks.append(btxt)
-        parts: List[str] = []
-        if title:
-            parts.append(unescape(title))
-        if preview:
-            parts.append(unescape(preview))
-        for btxt in blocks:
-            if btxt not in parts:
-                parts.append(btxt)
-        merged = "\n\n".join(parts).strip()
-        max_chars = 12000
-        if len(merged) > max_chars:
-            return merged[: max_chars - 1].rstrip() + "…"
-        return merged
+        return extract_x_article_text(article_node)
 
     def _extract_syndication_text(self, node: Dict[str, Any]) -> str:
         """Extract tweet body text from syndication-like payloads, including X Articles."""

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from html import unescape
 import re
 from typing import Any, Awaitable, Callable, Dict, Iterable, List, Optional, Tuple
 from urllib.parse import parse_qs, unquote, urlparse, urlunparse
@@ -363,6 +364,38 @@ def syndication_article_has_blocks(article_node: Any) -> bool:
         if str(block.get("text") or "").strip():
             return True
     return False
+
+
+def extract_x_article_text(article_node: Any) -> str:
+    """Extract normalized text from an X article payload."""
+    if not isinstance(article_node, dict):
+        return ""
+    title = str(article_node.get("title") or "").strip()
+    preview = str(article_node.get("preview_text") or "").strip()
+    blocks: List[str] = []
+    content = article_node.get("content") or {}
+    if isinstance(content, dict):
+        raw_blocks = content.get("blocks") or []
+        if isinstance(raw_blocks, list):
+            for block in raw_blocks:
+                if not isinstance(block, dict):
+                    continue
+                btxt = unescape(str(block.get("text") or "")).strip()
+                if btxt:
+                    blocks.append(btxt)
+    parts: List[str] = []
+    if title:
+        parts.append(unescape(title))
+    if preview:
+        parts.append(unescape(preview))
+    for btxt in blocks:
+        if btxt not in parts:
+            parts.append(btxt)
+    merged = "\n\n".join(parts).strip()
+    max_chars = 12000
+    if len(merged) > max_chars:
+        return merged[: max_chars - 1].rstrip() + "…"
+    return merged
 
 
 def x_syn_probe_budget_timeout_s(x_syn_timeout_s: float) -> float:

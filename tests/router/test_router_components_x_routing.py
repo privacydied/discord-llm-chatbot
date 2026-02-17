@@ -25,6 +25,7 @@ from bot.router_components.x_routing import (
     resolve_caption_only_base_text,
     resolve_video_stt_error_base_text,
     syndication_article_has_blocks,
+    extract_x_article_text,
     resolve_twitter_status_id,
     is_twitter_status_url,
     stt_result_has_transcription,
@@ -359,6 +360,31 @@ def test_syndication_article_has_blocks_variants() -> None:
         syndication_article_has_blocks({"content": {"blocks": [{"x": 1}, "bad"]}})
         is False
     )
+
+
+def test_extract_x_article_text_dedupes_unescapes_and_caps() -> None:
+    article = {
+        "title": "Title &amp; Co",
+        "preview_text": "Preview",
+        "content": {
+            "blocks": [
+                {"text": "Body A"},
+                {"text": "Body A"},
+                {"text": "Body &amp; B"},
+                {"x": 1},
+                "bad",
+            ]
+        },
+    }
+    out = extract_x_article_text(article)
+    assert out == "Title & Co\n\nPreview\n\nBody A\n\nBody & B"
+
+
+def test_extract_x_article_text_truncates_at_12000_chars() -> None:
+    huge = "a" * 12050
+    out = extract_x_article_text({"title": huge})
+    assert len(out) == 12000
+    assert out.endswith("…")
 
 
 def test_x_syn_probe_budget_timeout_s_caps_and_offsets() -> None:
