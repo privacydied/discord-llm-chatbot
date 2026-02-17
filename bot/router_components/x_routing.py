@@ -761,7 +761,7 @@ def build_syndication_oembed_options() -> Dict[str, str]:
 
 def build_syndication_dnt_value() -> str:
     """Return canonical DNT option value for syndication/oEmbed requests."""
-    return "false"
+    return build_syndication_bool_false_value()
 
 
 def build_syndication_omit_script_value() -> str:
@@ -777,6 +777,11 @@ def build_syndication_hide_thread_value() -> str:
 def build_syndication_bool_true_value() -> str:
     """Return canonical string value used for enabled syndication flags."""
     return "true"
+
+
+def build_syndication_bool_false_value() -> str:
+    """Return canonical string value used for disabled syndication flags."""
+    return "false"
 
 
 def build_syndication_oembed_metric_endpoint(host: str) -> str:
