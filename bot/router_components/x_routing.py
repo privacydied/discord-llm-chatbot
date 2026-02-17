@@ -2356,6 +2356,24 @@ def canonicalized_value(
     canonicalize: Callable[[str], str],
 ) -> str:
     """Return canonicalized form of one raw value."""
+    return canonicalized_value_source(raw_value, canonicalize=canonicalize)
+
+
+def canonicalized_value_source(
+    raw_value: str,
+    *,
+    canonicalize: Callable[[str], str],
+) -> str:
+    """Return source canonicalized value for canonicalization helper."""
+    return canonicalized_value_result(raw_value, canonicalize=canonicalize)
+
+
+def canonicalized_value_result(
+    raw_value: str,
+    *,
+    canonicalize: Callable[[str], str],
+) -> str:
+    """Return value used by canonicalized-value source helper."""
     return canonicalize(raw_value)
 
 

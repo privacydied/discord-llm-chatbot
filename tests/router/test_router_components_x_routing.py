@@ -36,6 +36,8 @@ from bot.router_components.x_routing import (
     raw_url_is_present_result,
     append_canonicalized_value,
     canonicalized_value,
+    canonicalized_value_source,
+    canonicalized_value_result,
     append_canonical_x_url,
     canonical_x_raw_value,
     canonical_x_raw_value_source,
@@ -931,6 +933,14 @@ def test_append_canonicalized_value_only_appends_unique_canonical() -> None:
 
 def test_canonicalized_value_delegates_transform() -> None:
     assert canonicalized_value("a", canonicalize=lambda s: f"x:{s}") == "x:a"
+
+
+def test_canonicalized_value_source_delegates_transform() -> None:
+    assert canonicalized_value_source("a", canonicalize=lambda s: f"x:{s}") == "x:a"
+
+
+def test_canonicalized_value_result_delegates_transform() -> None:
+    assert canonicalized_value_result("a", canonicalize=lambda s: f"x:{s}") == "x:a"
 
 
 def test_append_canonical_x_url_only_appends_unique_canonical() -> None:
