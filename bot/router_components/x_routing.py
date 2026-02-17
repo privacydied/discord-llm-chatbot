@@ -636,13 +636,18 @@ def build_syndication_base_url() -> str:
     return "https://cdn.syndication.twimg.com/"
 
 
+def build_syndication_fetch_user_agent() -> str:
+    """Return canonical user-agent for CDN syndication fetches."""
+    return (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+    )
+
+
 def build_syndication_fetch_headers() -> Dict[str, str]:
     """Return canonical headers for CDN syndication fetches."""
     return {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-            "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
-        ),
+        "User-Agent": build_syndication_fetch_user_agent(),
         "Accept": "application/json, text/javascript;q=0.9, */*;q=0.8",
         "Accept-Language": "en-US,en;q=0.9",
         "Referer": "https://platform.twitter.com/",
