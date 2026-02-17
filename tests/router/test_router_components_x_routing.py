@@ -32,6 +32,7 @@ from bot.router_components.x_routing import (
     extract_syndication_text,
     build_x_text_miss_log_payload,
     format_syndication_body_text,
+    format_syndication_header_line,
     resolve_twitter_status_id,
     is_twitter_status_url,
     stt_result_has_transcription,
@@ -539,6 +540,37 @@ def test_format_syndication_body_text_variants() -> None:
     out = format_syndication_body_text(long_text)
     assert len(out) == 3991
     assert out.endswith("…")
+
+
+def test_format_syndication_header_line_variants() -> None:
+    assert (
+        format_syndication_header_line(
+            user={"screen_name": "alice", "name": "Alice"},
+            created_at="2026-02-17",
+            photos=["p1", "p2"],
+            url="https://x.com/u/status/1",
+        )
+        == "@alice • 2026-02-17 • media:2 → https://x.com/u/status/1"
+    )
+    assert (
+        format_syndication_header_line(
+            user={},
+            created_at=None,
+            photos=[],
+            url="https://x.com/u/status/1",
+        )
+        == "Tweet → https://x.com/u/status/1"
+    )
+
+
+def test_format_syndication_header_line_preserves_len_error_behavior() -> None:
+    with pytest.raises(TypeError):
+        format_syndication_header_line(
+            user={"name": "Alice"},
+            created_at="2026-02-17",
+            photos=3,
+            url="https://x.com/u/status/1",
+        )
 
 
 def test_x_syn_probe_budget_timeout_s_caps_and_offsets() -> None:

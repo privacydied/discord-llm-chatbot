@@ -137,6 +137,7 @@ from .router_components import (
     extract_syndication_text,
     build_x_text_miss_log_payload,
     format_syndication_body_text,
+    format_syndication_header_line,
     x_syn_probe_budget_timeout_s,
     x_syn_quick_request_timeouts,
     build_syndication_photo_payload,
@@ -1257,12 +1258,14 @@ class Router:
         try:
             text = self._extract_syndication_text(syn_data)
             user = syn_data.get("user") or {}
-            username = user.get("screen_name") or user.get("name")
             created_at = syn_data.get("created_at") or syn_data.get("date_created")
             photos = syn_data.get("photos") or []
-            media_hint = f" • media:{len(photos)}" if photos else ""
-            prefix = f"@{username}" if username else "Tweet"
-            stamp = f" • {created_at}" if created_at else ""
+            header_line = format_syndication_header_line(
+                user=user,
+                created_at=created_at,
+                photos=photos,
+                url=url,
+            )
             if not text:
                 try:
                     self.logger.info(
@@ -1272,7 +1275,7 @@ class Router:
                 except Exception:
                     pass
             body = format_syndication_body_text(text)
-            return f"{prefix}{stamp}{media_hint} → {url}\n{body}"
+            return f"{header_line}\n{body}"
         except Exception:
             return f"Tweet → {url}\n{str(syn_data)[:4000]}"
 

@@ -503,6 +503,21 @@ def format_syndication_body_text(text: str) -> str:
     return "(Tweet text not available. If you want analysis, paste the text or add a screenshot.)"
 
 
+def format_syndication_header_line(
+    *,
+    user: Any,
+    created_at: Any,
+    photos: Any,
+    url: str,
+) -> str:
+    """Format syndication header line preserving legacy field access semantics."""
+    username = user.get("screen_name") or user.get("name")
+    media_hint = f" • media:{len(photos)}" if photos else ""
+    prefix = f"@{username}" if username else "Tweet"
+    stamp = f" • {created_at}" if created_at else ""
+    return f"{prefix}{stamp}{media_hint} → {url}"
+
+
 def x_syn_probe_budget_timeout_s(x_syn_timeout_s: float) -> float:
     """Compute bounded timeout budget for image/media probe calls."""
     return min(float(x_syn_timeout_s) + 1.0, 4.5)
