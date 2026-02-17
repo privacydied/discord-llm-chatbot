@@ -842,9 +842,14 @@ def build_syndication_lang_key() -> str:
 
 def build_syndication_fetch_params_core(tweet_id: str) -> Dict[str, str]:
     """Return core syndication fetch params for a tweet id (without DNT)."""
+    return build_syndication_fetch_params_core_map(tweet_id, build_syndication_lang())
+
+
+def build_syndication_fetch_params_core_map(tweet_id: str, lang: str) -> Dict[str, str]:
+    """Return core syndication fetch params map for explicit tweet id/lang values."""
     return {
         build_syndication_id_key(): tweet_id,
-        build_syndication_lang_key(): build_syndication_lang(),
+        build_syndication_lang_key(): lang,
     }
 
 
