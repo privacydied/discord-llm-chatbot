@@ -633,3 +633,15 @@
   - Validation:
     - `./.venv/bin/pytest -q tests/router/test_router_caption_only_helpers.py tests/router/test_x_api_routing.py tests/router/test_router_x_base_text_resolution.py` -> `27 passed`
     - `./.venv/bin/pytest -q tests/core tests/router tests/syndication tests/vision tests/test_hear_ffmpeg_resolution.py tests/test_hear_stream_abort.py tests/test_media_ingestion.py tests/test_video_ingest.py tests/router/test_router_x_result_format_contract.py tests/router/test_router_x_base_text_resolution.py tests/test_media_ingestion_compat_contracts.py tests/vision/test_money_contract.py tests/test_media_ingestion_helpers.py tests/test_stt_pipeline_runtime.py tests/test_stt_pipeline_ffmpeg_runtime.py tests/test_stt_pipeline_youtube_path.py tests/test_stt_pipeline_result_payload.py tests/test_stt_pipeline_spec_select.py tests/test_stt_pipeline_logging.py tests/test_stt_pipeline_lifecycle.py tests/test_stt_pipeline_url_ingest.py tests/test_stt_pipeline_transcribe_flow.py tests/test_stt_pipeline_stitch.py` -> `296 passed`
+- 2026-02-17:
+  - Refactor (behavior-preserving): extracted X API primary tweet normalization helper:
+    - `bot/router.py::_extract_x_api_primary_tweet()`
+  - Rewired call sites to reuse helper:
+    - `_extract_x_api_primary_text()`
+    - X API photo-routing branch in syndication/API tier
+  - Preserved existing payload handling for normal API shapes (dict/list under `data`).
+  - Extended tests in `tests/router/test_router_caption_only_helpers.py`:
+    - dict/list/empty/non-dict payload variants for primary tweet extraction
+  - Validation:
+    - `./.venv/bin/pytest -q tests/router/test_router_caption_only_helpers.py tests/router/test_x_api_routing.py tests/router/test_router_x_base_text_resolution.py` -> `28 passed`
+    - `./.venv/bin/pytest -q tests/core tests/router tests/syndication tests/vision tests/test_hear_ffmpeg_resolution.py tests/test_hear_stream_abort.py tests/test_media_ingestion.py tests/test_video_ingest.py tests/router/test_router_x_result_format_contract.py tests/router/test_router_x_base_text_resolution.py tests/test_media_ingestion_compat_contracts.py tests/vision/test_money_contract.py tests/test_media_ingestion_helpers.py tests/test_stt_pipeline_runtime.py tests/test_stt_pipeline_ffmpeg_runtime.py tests/test_stt_pipeline_youtube_path.py tests/test_stt_pipeline_result_payload.py tests/test_stt_pipeline_spec_select.py tests/test_stt_pipeline_logging.py tests/test_stt_pipeline_lifecycle.py tests/test_stt_pipeline_url_ingest.py tests/test_stt_pipeline_transcribe_flow.py tests/test_stt_pipeline_stitch.py` -> `297 passed`

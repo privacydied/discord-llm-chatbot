@@ -192,3 +192,13 @@ def test_classify_stt_error_reason_matches_existing_semantics() -> None:
     assert router._classify_stt_error_reason("timeout") == "no_speech"
     # Preserve legacy exact-match behavior (case-sensitive)
     assert router._classify_stt_error_reason("ERROR") == "no_speech"
+
+
+def test_extract_x_api_primary_tweet_handles_payload_variants() -> None:
+    router = Router(DummyBot())
+
+    assert router._extract_x_api_primary_tweet({"data": {"id": "1"}}) == {"id": "1"}
+    assert router._extract_x_api_primary_tweet({"data": [{"id": "2"}]}) == {"id": "2"}
+    assert router._extract_x_api_primary_tweet({"data": []}) == {}
+    assert router._extract_x_api_primary_tweet({"data": ["bad"]}) == {}
+    assert router._extract_x_api_primary_tweet(None) == {}

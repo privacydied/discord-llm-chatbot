@@ -565,19 +565,22 @@ class Router:
         """Map STT status token to the canonical fallback reason."""
         return "no_speech" if stt_err != "error" else "error"
 
+    def _extract_x_api_primary_tweet(self, api_data: Any) -> Dict[str, Any]:
+        """Extract the primary tweet node from X API payload variants."""
+        if not isinstance(api_data, dict):
+            return {}
+        data = api_data.get("data")
+        if isinstance(data, list):
+            first = data[0] if data else {}
+            return first if isinstance(first, dict) else {}
+        if isinstance(data, dict):
+            return data
+        return {}
+
     def _extract_x_api_primary_text(self, api_data: Any) -> str:
         """Extract canonical tweet text from X API payload variants."""
         try:
-            if not isinstance(api_data, dict):
-                return ""
-            data = api_data.get("data")
-            tweet: Dict[str, Any]
-            if isinstance(data, list):
-                tweet = data[0] if data else {}
-            elif isinstance(data, dict):
-                tweet = data
-            else:
-                tweet = {}
+            tweet = self._extract_x_api_primary_tweet(api_data)
             return str((tweet or {}).get("text") or "").strip()
         except Exception:
             return ""
@@ -6680,13 +6683,7 @@ class Router:
                             "photo" in media_types and len(media_types) == 1
                         ):
                             # Check for image-only tweet via API data [IV]
-                            tweet_data = api_data.get("data", {})
-                            if isinstance(tweet_data, list) and tweet_data:
-                                tweet_data = tweet_data[0]
-                            elif isinstance(tweet_data, dict):
-                                pass  # already correct format
-                            else:
-                                tweet_data = {}
+                            tweet_data = self._extract_x_api_primary_tweet(api_data)
 
                             api_text = (tweet_data.get("text") or "").strip()
                             photos = [
