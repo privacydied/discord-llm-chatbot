@@ -18,6 +18,7 @@ from .result_payload import build_url_transcript_result
 from .logging import log_stt_job_complete, transcript_preview
 from .spec_select import select_initial_model_spec
 from .lifecycle import abort_job_stream_if_present
+from .url_ingest import fetch_url_audio_with_span
 
 __all__ = [
     "STTRuntimeCompat",
@@ -26,6 +27,7 @@ __all__ = [
     "build_url_transcript_result",
     "log_stt_job_complete",
     "abort_job_stream_if_present",
+    "fetch_url_audio_with_span",
     "select_initial_model_spec",
     "transcript_preview",
     "ensure_stt_manager_ready",

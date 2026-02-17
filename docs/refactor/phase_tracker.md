@@ -378,3 +378,17 @@
     - `./.venv/bin/python -m py_compile bot/hear.py bot/stt_pipeline/__init__.py bot/stt_pipeline/youtube_path.py`
     - `./.venv/bin/pytest -q tests/test_stt_pipeline_youtube_path.py tests/test_video_ingest.py tests/test_hear_ffmpeg_resolution.py tests/test_stt_pipeline_logging.py tests/test_stt_pipeline_lifecycle.py` -> `22 passed`
     - `./.venv/bin/pytest -q tests/core tests/router tests/syndication tests/vision tests/test_hear_ffmpeg_resolution.py tests/test_hear_stream_abort.py tests/test_media_ingestion.py tests/test_video_ingest.py tests/router/test_router_x_result_format_contract.py tests/test_media_ingestion_compat_contracts.py tests/vision/test_money_contract.py tests/test_media_ingestion_helpers.py tests/test_stt_pipeline_runtime.py tests/test_stt_pipeline_ffmpeg_runtime.py tests/test_stt_pipeline_youtube_path.py tests/test_stt_pipeline_result_payload.py tests/test_stt_pipeline_spec_select.py tests/test_stt_pipeline_logging.py tests/test_stt_pipeline_lifecycle.py` -> `256 passed`
+- 2026-02-17:
+  - Refactor (behavior-preserving): extracted URL yt-dlp span wiring into:
+    - `bot/stt_pipeline/url_ingest.py::fetch_url_audio_with_span()`
+  - Rewired `bot/hear.py::hear_infer_from_url()` download stage to delegate span start/end bookkeeping.
+  - Preserved error behavior:
+    - `VideoIngestError` is still converted to `InferenceError` at the same call site.
+  - Exported helper via `bot/stt_pipeline/__init__.py`.
+  - Added focused contracts in `tests/test_stt_pipeline_url_ingest.py`:
+    - success span start/end
+    - failure span end with `ok=false` and `reason=error`, then re-raise
+  - Validation:
+    - `./.venv/bin/python -m py_compile bot/hear.py bot/stt_pipeline/__init__.py bot/stt_pipeline/url_ingest.py`
+    - `./.venv/bin/pytest -q tests/test_stt_pipeline_url_ingest.py tests/test_stt_pipeline_youtube_path.py tests/test_video_ingest.py tests/test_hear_ffmpeg_resolution.py tests/test_stt_pipeline_logging.py tests/test_stt_pipeline_lifecycle.py` -> `24 passed`
+    - `./.venv/bin/pytest -q tests/core tests/router tests/syndication tests/vision tests/test_hear_ffmpeg_resolution.py tests/test_hear_stream_abort.py tests/test_media_ingestion.py tests/test_video_ingest.py tests/router/test_router_x_result_format_contract.py tests/test_media_ingestion_compat_contracts.py tests/vision/test_money_contract.py tests/test_media_ingestion_helpers.py tests/test_stt_pipeline_runtime.py tests/test_stt_pipeline_ffmpeg_runtime.py tests/test_stt_pipeline_youtube_path.py tests/test_stt_pipeline_result_payload.py tests/test_stt_pipeline_spec_select.py tests/test_stt_pipeline_logging.py tests/test_stt_pipeline_lifecycle.py tests/test_stt_pipeline_url_ingest.py` -> `258 passed`

@@ -60,6 +60,7 @@ from .stt_pipeline import (
     ffmpeg_bin_has_aac,
     ffmpeg_candidates_from_env,
     ffmpeg_supports_aac_decoder,
+    fetch_url_audio_with_span,
     log_stt_job_complete,
     load_stt_runtime_compat,
     parse_stt_max_ram_mb,
@@ -2010,14 +2011,14 @@ async def hear_infer_from_url(url: str, force_refresh: bool = False) -> Dict[str
                 await job.finish_failure(exc)
                 raise exc
 
-            spans.start("yt-dlp")
             try:
-                download = await fetch_and_prepare_url_audio(
-                    url, force_refresh=force_refresh
+                download = await fetch_url_audio_with_span(
+                    url=url,
+                    force_refresh=force_refresh,
+                    fetcher=fetch_and_prepare_url_audio,
+                    spans=spans,
                 )
-                spans.end("yt-dlp", ok=True)
             except VideoIngestError as exc:
-                spans.end("yt-dlp", ok=False, reason="error")
                 await job.finish_failure(exc)
                 raise InferenceError(str(exc)) from exc
 
