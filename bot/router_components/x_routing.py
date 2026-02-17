@@ -1652,12 +1652,22 @@ def extract_raw_urls_from_texts(texts: Iterable[str]) -> List[str]:
     raw_urls: List[str] = []
     try:
         url_re = x_url_extract_regex()
-        for t in texts:
-            for u in iter_text_urls(t, url_re=url_re):
-                append_raw_url_if_present(raw_urls, u)
+        collect_raw_urls_from_texts(raw_urls, texts, url_re=url_re)
     except Exception:
         pass
     return raw_urls
+
+
+def collect_raw_urls_from_texts(
+    items: List[str],
+    texts: Iterable[str],
+    *,
+    url_re: Any,
+) -> None:
+    """Collect de-duplicated raw URLs from multiple text blobs."""
+    for t in texts:
+        for u in iter_text_urls(t, url_re=url_re):
+            append_raw_url_if_present(items, u)
 
 
 def iter_text_urls(text: str, *, url_re: Any) -> Iterable[str]:
