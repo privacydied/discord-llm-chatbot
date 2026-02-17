@@ -65,6 +65,7 @@ from .stt_pipeline import (
     load_stt_runtime_compat,
     parse_stt_max_ram_mb,
     preprocess_and_transcribe,
+    run_stitch_stage,
     try_youtube_transcript_first,
 )
 from .youtube_transcript import resolve_youtube_transcript
@@ -1943,10 +1944,13 @@ async def hear_infer(audio: Union[Path, "discord.Attachment"]) -> str:
                 run_whisper_with_fallback=_run_whisper_with_fallback,
             )
 
-            spans.start("stitch")
-            result_text = transcript.text
-            spans.end("stitch", ok=True)
-            _log_summary(spans, pre, transcript, cache_hit=transcript.cache_hit)
+            result_text = run_stitch_stage(
+                spans=spans,
+                pre=pre,
+                transcript=transcript,
+                build_result=lambda: transcript.text,
+                log_summary=_log_summary,
+            )
             return await job.finish_success(result_text)
     except RAMGuardExceeded as exc:
         await abort_job_stream_if_present(
@@ -2032,15 +2036,18 @@ async def hear_infer_from_url(url: str, force_refresh: bool = False) -> Dict[str
                 run_whisper_with_fallback=_run_whisper_with_fallback,
             )
 
-            spans.start("stitch")
-            result = build_url_transcript_result(
-                transcript=transcript,
-                download=download,
+            result = run_stitch_stage(
+                spans=spans,
                 pre=pre,
-                atempo_factor=ATEMPO_FACTOR,
+                transcript=transcript,
+                build_result=lambda: build_url_transcript_result(
+                    transcript=transcript,
+                    download=download,
+                    pre=pre,
+                    atempo_factor=ATEMPO_FACTOR,
+                ),
+                log_summary=_log_summary,
             )
-            spans.end("stitch", ok=True)
-            _log_summary(spans, pre, transcript, cache_hit=transcript.cache_hit)
 
             # Log transcript completion with URL identity for debugging [REH]
             log_stt_job_complete(

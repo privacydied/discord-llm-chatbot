@@ -20,6 +20,7 @@ from .spec_select import select_initial_model_spec
 from .lifecycle import abort_job_stream_if_present
 from .url_ingest import fetch_url_audio_with_span
 from .transcribe_flow import preprocess_and_transcribe
+from .stitch import run_stitch_stage
 
 __all__ = [
     "STTRuntimeCompat",
@@ -30,6 +31,7 @@ __all__ = [
     "abort_job_stream_if_present",
     "fetch_url_audio_with_span",
     "preprocess_and_transcribe",
+    "run_stitch_stage",
     "select_initial_model_spec",
     "transcript_preview",
     "ensure_stt_manager_ready",

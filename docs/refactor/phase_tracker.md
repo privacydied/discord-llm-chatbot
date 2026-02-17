@@ -418,3 +418,18 @@
     - `./.venv/bin/python -m py_compile bot/hear.py bot/stt_pipeline/transcribe_flow.py`
     - `./.venv/bin/pytest -q tests/test_stt_pipeline_transcribe_flow.py tests/test_stt_pipeline_spec_select.py tests/test_video_ingest.py tests/test_hear_ffmpeg_resolution.py` -> `15 passed`
     - `./.venv/bin/pytest -q tests/core tests/router tests/syndication tests/vision tests/test_hear_ffmpeg_resolution.py tests/test_hear_stream_abort.py tests/test_media_ingestion.py tests/test_video_ingest.py tests/router/test_router_x_result_format_contract.py tests/test_media_ingestion_compat_contracts.py tests/vision/test_money_contract.py tests/test_media_ingestion_helpers.py tests/test_stt_pipeline_runtime.py tests/test_stt_pipeline_ffmpeg_runtime.py tests/test_stt_pipeline_youtube_path.py tests/test_stt_pipeline_result_payload.py tests/test_stt_pipeline_spec_select.py tests/test_stt_pipeline_logging.py tests/test_stt_pipeline_lifecycle.py tests/test_stt_pipeline_url_ingest.py tests/test_stt_pipeline_transcribe_flow.py` -> `260 passed`
+- 2026-02-17:
+  - Refactor (behavior-preserving): extracted stitch-stage bookkeeping into:
+    - `bot/stt_pipeline/stitch.py::run_stitch_stage()`
+  - Rewired both STT entry points in `bot/hear.py` to use shared stitch flow for:
+    - `spans.start/end("stitch")`
+    - summary logging callback wiring
+  - Preserved output schemas:
+    - attachment path still returns plain transcript text
+    - URL path still returns metadata dict via `build_url_transcript_result()`
+  - Exported helper via `bot/stt_pipeline/__init__.py`.
+  - Added focused contracts in `tests/test_stt_pipeline_stitch.py`.
+  - Validation:
+    - `./.venv/bin/python -m py_compile bot/hear.py bot/stt_pipeline/__init__.py bot/stt_pipeline/stitch.py`
+    - `./.venv/bin/pytest -q tests/test_stt_pipeline_stitch.py tests/test_stt_pipeline_transcribe_flow.py tests/test_video_ingest.py tests/test_hear_ffmpeg_resolution.py` -> `15 passed`
+    - `./.venv/bin/pytest -q tests/core tests/router tests/syndication tests/vision tests/test_hear_ffmpeg_resolution.py tests/test_hear_stream_abort.py tests/test_media_ingestion.py tests/test_video_ingest.py tests/router/test_router_x_result_format_contract.py tests/test_media_ingestion_compat_contracts.py tests/vision/test_money_contract.py tests/test_media_ingestion_helpers.py tests/test_stt_pipeline_runtime.py tests/test_stt_pipeline_ffmpeg_runtime.py tests/test_stt_pipeline_youtube_path.py tests/test_stt_pipeline_result_payload.py tests/test_stt_pipeline_spec_select.py tests/test_stt_pipeline_logging.py tests/test_stt_pipeline_lifecycle.py tests/test_stt_pipeline_url_ingest.py tests/test_stt_pipeline_transcribe_flow.py tests/test_stt_pipeline_stitch.py` -> `262 passed`
