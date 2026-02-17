@@ -538,6 +538,21 @@ def build_syndication_fetch_failed_payload(
     }
 
 
+def build_x_text_canon_payload(
+    *,
+    url: str,
+    primary: str,
+) -> Dict[str, Any]:
+    """Build structured payload for X canonical-text breadcrumbs."""
+    return {
+        "event": "x.text.canon",
+        "detail": {
+            "url": url,
+            "primary": primary,
+        },
+    }
+
+
 def build_x_text_resolve_payload(
     *,
     primary: str,

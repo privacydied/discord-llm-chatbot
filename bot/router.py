@@ -144,6 +144,7 @@ from .router_components import (
     extract_syndication_photo_urls,
     build_syndication_non_200_log_payload,
     build_syndication_fetch_failed_payload,
+    build_x_text_canon_payload,
     x_syn_probe_budget_timeout_s,
     x_syn_quick_request_timeouts,
     build_syndication_photo_payload,
@@ -1344,10 +1345,10 @@ class Router:
                 try:
                     self.logger.info(
                         "x.text.canon",
-                        extra={
-                            "event": "x.text.canon",
-                            "detail": {"url": url, "primary": ptid},
-                        },
+                        extra=build_x_text_canon_payload(
+                            url=url,
+                            primary=ptid,
+                        ),
                     )
                 except Exception:
                     pass
