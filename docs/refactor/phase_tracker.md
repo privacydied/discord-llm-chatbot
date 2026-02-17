@@ -186,3 +186,15 @@
     - exception paths (`is_available` / `ensure_ready`)
   - Validation:
     - `./.venv/bin/pytest -q tests/test_stt_pipeline_runtime.py tests/test_stt_pipeline_ffmpeg_runtime.py tests/test_stt_pipeline_youtube_path.py tests/test_video_ingest.py tests/router/test_router_reference_resolution.py tests/router/test_router_components_compose_contract.py tests/router/test_router_components_compose.py tests/router/test_router_components_input_harvest.py tests/router/test_router_components_gating.py tests/router/test_router_components_x_routing.py` -> `55 passed`
+- 2026-02-17:
+  - Restored ffmpeg resolver compatibility symbols in `bot/hear.py`:
+    - `_FFMPEG_BIN_CACHE`
+    - `_FFMPEG_BIN_HAS_AAC`
+    - `_ffmpeg_supports_aac_decoder()`
+    - deterministic `_resolve_ffmpeg_bin()` behavior for legacy monkeypatch tests.
+  - Added `extract_primary_tweet_id()` to `bot/router_components/x_routing.py` and rewired `Router._extract_primary_tweet_id()` wrapper in `bot/router.py`.
+  - Exported new helper via `bot/router_components/__init__.py`.
+  - Validation:
+    - `./.venv/bin/python -m py_compile bot/hear.py bot/router.py bot/router_components/__init__.py bot/router_components/x_routing.py`
+    - `./.venv/bin/pytest -q tests/test_hear_ffmpeg_resolution.py tests/router/test_x_caption_transcript_concat.py tests/router/test_router_components_x_routing.py` -> `13 passed`
+    - `./.venv/bin/pytest -q tests/core tests/router tests/syndication tests/vision tests/test_hear_ffmpeg_resolution.py tests/test_hear_stream_abort.py tests/test_media_ingestion.py tests/test_video_ingest.py` -> `30 failed, 171 passed` (improved from `32 failed`)

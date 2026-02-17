@@ -14,6 +14,28 @@ def parse_twitter_status_id(url: str) -> Optional[str]:
     return XApiClient.extract_tweet_id(url)
 
 
+def extract_primary_tweet_id(url: str) -> Optional[str]:
+    """Extract stable primary tweet ID, preferring explicit URL hint fragments."""
+    raw_url = str(url or "").strip()
+    if not raw_url:
+        return None
+
+    try:
+        parsed = urlparse(raw_url)
+        for params in (parse_qs(parsed.fragment or ""), parse_qs(parsed.query or "")):
+            for key in ("ptid", "primary", "tweet_id", "status_id", "id"):
+                values = params.get(key) or []
+                if not values:
+                    continue
+                candidate = str(values[0] or "").strip()
+                if candidate and candidate.isdigit():
+                    return candidate
+    except Exception:
+        pass
+
+    return parse_twitter_status_id(raw_url)
+
+
 def canonicalize_twitter_status_url(url: str) -> str:
     """Convert any Twitter status URL to canonical form https://x.com/i/status/{id}."""
     status_id = parse_twitter_status_id(url)

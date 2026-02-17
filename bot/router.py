@@ -95,6 +95,7 @@ from .router_components import (
     canonicalize_twitter_status_url,
     collect_x_candidate_urls,
     existing_url_payloads,
+    extract_primary_tweet_id,
     extract_raw_urls_from_texts,
     extract_x_status_urls_from_text,
     extract_urls_loose,
@@ -1156,6 +1157,11 @@ class Router:
     def _parse_twitter_status_id(url: str) -> Optional[str]:
         """Extract the tweet/status ID from a Twitter URL. Returns None if not found. [IV]"""
         return parse_twitter_status_id(url)
+
+    @staticmethod
+    def _extract_primary_tweet_id(url: str) -> Optional[str]:
+        """Extract a stable primary tweet ID from URL hints or status path."""
+        return extract_primary_tweet_id(url)
 
     def _is_twitter_status_url(self, url: str) -> bool:
         """Check if a URL is a Twitter status URL (contains a valid status ID). [IV]"""
