@@ -766,11 +766,16 @@ def build_syndication_dnt_value() -> str:
 
 def build_syndication_omit_script_value() -> str:
     """Return canonical omit-script option value for oEmbed requests."""
-    return "true"
+    return build_syndication_bool_true_value()
 
 
 def build_syndication_hide_thread_value() -> str:
     """Return canonical hide-thread option value for oEmbed requests."""
+    return build_syndication_bool_true_value()
+
+
+def build_syndication_bool_true_value() -> str:
+    """Return canonical string value used for enabled syndication flags."""
     return "true"
 
 
