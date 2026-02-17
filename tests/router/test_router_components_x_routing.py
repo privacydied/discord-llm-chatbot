@@ -226,6 +226,7 @@ from bot.router_components.x_routing import (
     raw_url_extract_regex,
     raw_url_items_result,
     raw_url_items_buffer,
+    raw_url_candidate_value,
     raw_url_source_texts,
     collect_raw_urls_from_texts,
     url_matches,
@@ -389,6 +390,10 @@ def test_raw_url_extract_regex_matches_x_url_extract_regex() -> None:
 
 def test_raw_url_items_result_identity() -> None:
     assert raw_url_items_result(["u1", "u2"]) == ["u1", "u2"]
+
+
+def test_raw_url_candidate_value_identity() -> None:
+    assert raw_url_candidate_value("https://x.com/u/status/1") == "https://x.com/u/status/1"
 
 
 def test_raw_url_items_buffer_starts_empty() -> None:

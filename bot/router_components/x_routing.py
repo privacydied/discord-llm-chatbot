@@ -1757,7 +1757,12 @@ def collect_raw_urls_from_texts(
     """Collect de-duplicated raw URLs from multiple text blobs."""
     for t in raw_url_source_texts(texts):
         for u in iter_text_urls(t, url_re=url_re):
-            append_raw_url_if_present(items, u)
+            append_raw_url_if_present(items, raw_url_candidate_value(u))
+
+
+def raw_url_candidate_value(raw_url: str) -> str:
+    """Return raw URL candidate value used by raw URL collector loop."""
+    return raw_url
 
 
 def raw_url_source_texts(texts: Iterable[str]) -> Iterable[str]:
