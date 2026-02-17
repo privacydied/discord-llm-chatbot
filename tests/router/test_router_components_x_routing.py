@@ -1,3 +1,4 @@
+import re
 from types import SimpleNamespace
 
 import pytest
@@ -206,6 +207,7 @@ from bot.router_components.x_routing import (
     status_url_items_buffer,
     collect_status_urls_from_candidates,
     x_url_extract_pattern,
+    x_url_extract_flags,
     iter_status_url_candidates,
     x_url_extract_regex,
     raw_url_items_buffer,
@@ -309,6 +311,10 @@ def test_status_url_items_buffer_starts_empty() -> None:
 
 def test_x_url_extract_pattern_constant() -> None:
     assert x_url_extract_pattern() == r"https?://[^\s<>\"'\[\]{}|\\^`]+"
+
+
+def test_x_url_extract_flags_constant() -> None:
+    assert x_url_extract_flags() == re.IGNORECASE
 
 
 def test_iter_status_url_candidates_yields_raw_matches() -> None:

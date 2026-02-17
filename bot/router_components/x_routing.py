@@ -1671,7 +1671,12 @@ def iter_status_url_candidates(text: str) -> Iterable[str]:
 
 def x_url_extract_regex() -> Any:
     """Return compiled URL extraction regex used for broad URL harvesting."""
-    return re.compile(x_url_extract_pattern(), re.IGNORECASE)
+    return re.compile(x_url_extract_pattern(), x_url_extract_flags())
+
+
+def x_url_extract_flags() -> int:
+    """Return regex flags used by URL extraction pattern compiler."""
+    return re.IGNORECASE
 
 
 def extract_raw_urls_from_texts(texts: Iterable[str]) -> List[str]:
