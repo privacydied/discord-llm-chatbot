@@ -689,9 +689,15 @@ def build_syndication_fetch_params(
 def build_syndication_fetch_params_variants(tweet_id: str) -> List[Tuple[str, Dict[str, str]]]:
     """Return endpoint+params variants for CDN syndication fetch attempts."""
     return [
-        ("widgets", build_syndication_fetch_params(tweet_id)),
-        ("tweet-result", build_syndication_fetch_params(tweet_id)),
-        ("widgets", build_syndication_fetch_params(tweet_id, include_dnt=True)),
+        (build_syndication_widgets_endpoint(), build_syndication_fetch_params(tweet_id)),
+        (
+            build_syndication_tweet_result_endpoint(),
+            build_syndication_fetch_params(tweet_id),
+        ),
+        (
+            build_syndication_widgets_endpoint(),
+            build_syndication_fetch_params(tweet_id, include_dnt=True),
+        ),
     ]
 
 
@@ -793,6 +799,16 @@ def build_syndication_fetch_metric_payload(endpoint: str) -> Dict[str, str]:
     return {"endpoint": endpoint}
 
 
+def build_syndication_widgets_endpoint() -> str:
+    """Return canonical widgets endpoint key."""
+    return "widgets"
+
+
+def build_syndication_tweet_result_endpoint() -> str:
+    """Return canonical tweet-result endpoint key."""
+    return "tweet-result"
+
+
 def syndication_cache_ttl_s(default_ttl_s: float, cached: Any) -> float:
     """Compute syndication cache TTL with shorter cap for negative entries."""
     ttl = default_ttl_s
@@ -830,7 +846,11 @@ def build_syndication_cache_entry(data: Any, now_s: float) -> Dict[str, Any]:
 
 def build_syndication_endpoint_url(base: str, endpoint: str) -> str:
     """Build syndication endpoint URL preserving legacy endpoint mapping."""
-    suffix = "widgets/tweet" if endpoint == "widgets" else "tweet-result"
+    suffix = (
+        "widgets/tweet"
+        if endpoint == build_syndication_widgets_endpoint()
+        else build_syndication_tweet_result_endpoint()
+    )
     return base + suffix
 
 

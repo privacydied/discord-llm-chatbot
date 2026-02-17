@@ -52,6 +52,8 @@ from bot.router_components.x_routing import (
     build_syndication_fetch_headers,
     build_syndication_fetch_params,
     build_syndication_fetch_params_variants,
+    build_syndication_widgets_endpoint,
+    build_syndication_tweet_result_endpoint,
     build_syndication_oembed_params,
     build_syndication_oembed_status_url,
     build_syndication_oembed_options,
@@ -835,6 +837,11 @@ def test_build_syndication_fetch_params_variants_shape() -> None:
         ("tweet-result", {"id": "2022790791047823773", "lang": "en"}),
         ("widgets", {"id": "2022790791047823773", "lang": "en", "dnt": "false"}),
     ]
+
+
+def test_build_syndication_endpoint_name_constants() -> None:
+    assert build_syndication_widgets_endpoint() == "widgets"
+    assert build_syndication_tweet_result_endpoint() == "tweet-result"
 
 
 def test_extract_oembed_payload_from_response_variants() -> None:

@@ -1278,7 +1278,7 @@ class Router:
 
         bundle = EvidenceBundle(source_platform="x", source_url=url)
         try:
-            ptid = self._extract_primary_tweet_id(url)
+            ptid = extract_primary_tweet_id(url)
             if ptid:
                 bundle.primary_tweet_id = ptid
                 bundle.selected_tweet_id = ptid
@@ -3601,7 +3601,7 @@ class Router:
 
                                 ptid2 = (
                                     primary_selected
-                                    or self._extract_primary_tweet_id(url_for_stt)
+                                    or extract_primary_tweet_id(url_for_stt)
                                     or ""
                                 )
                                 uhash2 = _hl.sha256(url_for_stt.encode()).hexdigest()[
