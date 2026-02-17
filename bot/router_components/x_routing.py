@@ -1666,6 +1666,11 @@ def status_url_candidates(text: str) -> Iterable[str]:
 
 def x_url_extract_pattern() -> str:
     """Return canonical URL extraction regex pattern used for X/Twitter scans."""
+    return x_url_extract_pattern_value()
+
+
+def x_url_extract_pattern_value() -> str:
+    """Return literal regex pattern string used for URL extraction."""
     return r"https?://[^\s<>\"'\[\]{}|\\^`]+"
 
 

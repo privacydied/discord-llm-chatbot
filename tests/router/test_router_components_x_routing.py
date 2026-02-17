@@ -213,6 +213,7 @@ from bot.router_components.x_routing import (
     collect_status_urls_from_candidates,
     status_url_candidates,
     x_url_extract_pattern,
+    x_url_extract_pattern_value,
     x_url_extract_flags,
     compile_url_extract_regex,
     status_url_extract_regex,
@@ -321,6 +322,10 @@ def test_status_url_items_buffer_starts_empty() -> None:
 
 def test_x_url_extract_pattern_constant() -> None:
     assert x_url_extract_pattern() == r"https?://[^\s<>\"'\[\]{}|\\^`]+"
+
+
+def test_x_url_extract_pattern_value_constant() -> None:
+    assert x_url_extract_pattern_value() == r"https?://[^\s<>\"'\[\]{}|\\^`]+"
 
 
 def test_x_url_extract_flags_constant() -> None:
