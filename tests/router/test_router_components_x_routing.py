@@ -33,6 +33,7 @@ from bot.router_components.x_routing import (
     build_x_text_miss_log_payload,
     format_syndication_body_text,
     format_syndication_header_line,
+    format_syndication_error_fallback,
     resolve_twitter_status_id,
     is_twitter_status_url,
     stt_result_has_transcription,
@@ -571,6 +572,14 @@ def test_format_syndication_header_line_preserves_len_error_behavior() -> None:
             photos=3,
             url="https://x.com/u/status/1",
         )
+
+
+def test_format_syndication_error_fallback_truncates_payload_repr() -> None:
+    syn_data = {"blob": "a" * 5000}
+    out = format_syndication_error_fallback("https://x.com/u/status/1", syn_data)
+    assert out.startswith("Tweet → https://x.com/u/status/1\n")
+    payload_part = out.split("\n", 1)[1]
+    assert len(payload_part) == 4000
 
 
 def test_x_syn_probe_budget_timeout_s_caps_and_offsets() -> None:

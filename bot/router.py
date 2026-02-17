@@ -138,6 +138,7 @@ from .router_components import (
     build_x_text_miss_log_payload,
     format_syndication_body_text,
     format_syndication_header_line,
+    format_syndication_error_fallback,
     x_syn_probe_budget_timeout_s,
     x_syn_quick_request_timeouts,
     build_syndication_photo_payload,
@@ -1277,7 +1278,7 @@ class Router:
             body = format_syndication_body_text(text)
             return f"{header_line}\n{body}"
         except Exception:
-            return f"Tweet → {url}\n{str(syn_data)[:4000]}"
+            return format_syndication_error_fallback(url, syn_data)
 
     @staticmethod
     def _extract_x_article_text(article_node: Any) -> str:

@@ -518,6 +518,11 @@ def format_syndication_header_line(
     return f"{prefix}{stamp}{media_hint} → {url}"
 
 
+def format_syndication_error_fallback(url: str, syn_data: Any) -> str:
+    """Format fallback output when syndication payload formatting fails."""
+    return f"Tweet → {url}\n{str(syn_data)[:4000]}"
+
+
 def x_syn_probe_budget_timeout_s(x_syn_timeout_s: float) -> float:
     """Compute bounded timeout budget for image/media probe calls."""
     return min(float(x_syn_timeout_s) + 1.0, 4.5)
