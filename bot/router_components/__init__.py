@@ -2,6 +2,7 @@
 
 from .compose import (
     compose_x_tweet_with_visual_facts,
+    format_x_tweet_result,
     format_x_tweet_with_transcription,
 )
 from .gating import is_reply_to_bot, mentions_bot, strip_leading_bot_mention
@@ -49,6 +50,7 @@ __all__ = [
     "extract_raw_urls_from_texts",
     "extract_x_status_urls_from_text",
     "filter_canonical_x_urls",
+    "format_x_tweet_result",
     "format_x_tweet_with_transcription",
     "has_explicit_media_intent",
     "has_meaningful_text",

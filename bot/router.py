@@ -101,6 +101,7 @@ from .router_components import (
     extract_urls_loose,
     extract_urls_strict,
     filter_canonical_x_urls,
+    format_x_tweet_result,
     format_x_tweet_with_transcription,
     has_explicit_media_intent,
     has_meaningful_text,
@@ -2191,64 +2192,11 @@ class Router:
 
     def _format_x_tweet_result(self, api_data: Dict[str, Any], url: str) -> str:
         """Format X API tweet response into concise text. [PA][IV]"""
-        try:
-            payload = api_data or {}
-            tweet = payload.get("data") if isinstance(payload.get("data"), dict) else payload
-            tweet = tweet or {}
-            includes = payload.get("includes") if isinstance(payload.get("includes"), dict) else {}
-            media_list = includes.get("media") if isinstance(includes.get("media"), list) else []
-
-            text = (tweet.get("full_text") or tweet.get("text") or "").strip()
-
-            user = ""
-            try:
-                users = includes.get("users") if isinstance(includes, dict) else None
-                if isinstance(users, list):
-                    author_id = str(tweet.get("author_id") or "").strip()
-                    for u in users:
-                        if not isinstance(u, dict):
-                            continue
-                        if author_id and str(u.get("id") or "").strip() != author_id:
-                            continue
-                        user = (
-                            u.get("name")
-                            or u.get("username")
-                            or u.get("screen_name")
-                            or ""
-                        ).strip()
-                        if user:
-                            break
-            except Exception:
-                user = ""
-            if not user:
-                user_obj = tweet.get("user") if isinstance(tweet.get("user"), dict) else {}
-                user = (user_obj.get("name") or user_obj.get("screen_name") or "").strip()
-
-            photo_count = 0
-            try:
-                photo_count = sum(
-                    1 for m in media_list if isinstance(m, dict) and m.get("type") == "photo"
-                )
-            except Exception:
-                photo_count = 0
-
-            parts: List[str] = []
-            if text:
-                parts.append(text)
-            if photo_count:
-                parts.append(f"Photos: {photo_count}")
-            if user:
-                parts.append(f"— {user}")
-            parts.append(self._canonicalize_twitter_status_url(url))
-
-            out = "\n".join(parts).strip()
-            return out or self._canonicalize_twitter_status_url(url)
-        except Exception as e:
-            try:
-                self.logger.warning(f"Error formatting X tweet: {e}")
-            except Exception:
-                pass
-            return self._canonicalize_twitter_status_url(url)
+        return format_x_tweet_result(
+            api_data=api_data,
+            url=url,
+            canonicalize_status_url=self._canonicalize_twitter_status_url,
+        )
 
     def _is_reply_to_bot(self, message: Message) -> bool:
         """Check if a message is a reply to the bot."""

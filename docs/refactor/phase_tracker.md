@@ -239,3 +239,13 @@
   - Validation:
     - `./.venv/bin/pytest -q tests/router/test_router_x_result_format_contract.py tests/test_media_ingestion_compat_contracts.py tests/vision/test_money_contract.py` -> `8 passed`
     - `./.venv/bin/pytest -q tests/core tests/router tests/syndication tests/vision tests/test_hear_ffmpeg_resolution.py tests/test_hear_stream_abort.py tests/test_media_ingestion.py tests/test_video_ingest.py tests/router/test_router_x_result_format_contract.py tests/test_media_ingestion_compat_contracts.py tests/vision/test_money_contract.py` -> `214 passed`
+- 2026-02-17:
+  - Refactor (behavior-preserving): extracted X API tweet text formatter into `bot/router_components/compose.py` as `format_x_tweet_result()`.
+  - Wired `Router._format_x_tweet_result()` to delegate to extracted pure helper.
+  - Exported helper from `bot/router_components/__init__.py`.
+  - Added pure helper tests to `tests/router/test_router_components_compose.py`:
+    - wrapped payload + photo count formatting
+    - canonical URL fallback formatting
+  - Validation:
+    - `./.venv/bin/pytest -q tests/router/test_router_components_compose.py tests/router/test_router_components_compose_contract.py tests/router/test_router_x_result_format_contract.py tests/core/test_router.py tests/router/test_x_api_routing.py` -> `33 passed`
+    - `./.venv/bin/pytest -q tests/core tests/router tests/syndication tests/vision tests/test_hear_ffmpeg_resolution.py tests/test_hear_stream_abort.py tests/test_media_ingestion.py tests/test_video_ingest.py tests/router/test_router_x_result_format_contract.py tests/test_media_ingestion_compat_contracts.py tests/vision/test_money_contract.py` -> `216 passed`

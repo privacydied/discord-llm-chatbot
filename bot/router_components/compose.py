@@ -115,6 +115,86 @@ def format_x_tweet_with_transcription(
     return bundle.compose_prompt_text()
 
 
+def format_x_tweet_result(
+    *,
+    api_data: Dict[str, Any],
+    url: str,
+    canonicalize_status_url: Callable[[str], str],
+) -> str:
+    """Format X API tweet response into concise text."""
+    try:
+        payload = api_data or {}
+        tweet = (
+            payload.get("data")
+            if isinstance(payload.get("data"), dict)
+            else payload
+        )
+        tweet = tweet or {}
+        includes = (
+            payload.get("includes")
+            if isinstance(payload.get("includes"), dict)
+            else {}
+        )
+        media_list = (
+            includes.get("media")
+            if isinstance(includes.get("media"), list)
+            else []
+        )
+
+        text = (tweet.get("full_text") or tweet.get("text") or "").strip()
+
+        user = ""
+        try:
+            users = includes.get("users") if isinstance(includes, dict) else None
+            if isinstance(users, list):
+                author_id = str(tweet.get("author_id") or "").strip()
+                for user_item in users:
+                    if not isinstance(user_item, dict):
+                        continue
+                    if author_id and str(user_item.get("id") or "").strip() != author_id:
+                        continue
+                    user = (
+                        user_item.get("name")
+                        or user_item.get("username")
+                        or user_item.get("screen_name")
+                        or ""
+                    ).strip()
+                    if user:
+                        break
+        except Exception:
+            user = ""
+
+        if not user:
+            user_obj = (
+                tweet.get("user") if isinstance(tweet.get("user"), dict) else {}
+            )
+            user = (user_obj.get("name") or user_obj.get("screen_name") or "").strip()
+
+        photo_count = 0
+        try:
+            photo_count = sum(
+                1
+                for media in media_list
+                if isinstance(media, dict) and media.get("type") == "photo"
+            )
+        except Exception:
+            photo_count = 0
+
+        parts: List[str] = []
+        if text:
+            parts.append(text)
+        if photo_count:
+            parts.append(f"Photos: {photo_count}")
+        if user:
+            parts.append(f"— {user}")
+        parts.append(canonicalize_status_url(url))
+
+        out = "\n".join(parts).strip()
+        return out or canonicalize_status_url(url)
+    except Exception:
+        return canonicalize_status_url(url)
+
+
 def compose_x_tweet_with_visual_facts(
     *,
     user_text: Optional[str],
