@@ -24,6 +24,7 @@ from bot.router_components.x_routing import (
     build_x_video_stt_error_result_payload,
     resolve_caption_only_base_text,
     resolve_video_stt_error_base_text,
+    syndication_article_has_blocks,
     resolve_twitter_status_id,
     is_twitter_status_url,
     stt_result_has_transcription,
@@ -340,6 +341,23 @@ def test_resolve_video_stt_error_base_text_preserves_router_precedence() -> None
             base_text="base text",
         )
         == ""
+    )
+
+
+def test_syndication_article_has_blocks_variants() -> None:
+    assert syndication_article_has_blocks(None) is False
+    assert syndication_article_has_blocks({}) is False
+    assert syndication_article_has_blocks({"content": {"blocks": "bad"}}) is False
+    assert (
+        syndication_article_has_blocks({"content": {"blocks": [{"text": "   "}]}}) is False
+    )
+    assert (
+        syndication_article_has_blocks({"content": {"blocks": [{"text": "hello"}]}})
+        is True
+    )
+    assert (
+        syndication_article_has_blocks({"content": {"blocks": [{"x": 1}, "bad"]}})
+        is False
     )
 
 

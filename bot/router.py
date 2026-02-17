@@ -131,6 +131,7 @@ from .router_components import (
     build_x_video_stt_error_result_payload,
     resolve_caption_only_base_text,
     resolve_video_stt_error_base_text,
+    syndication_article_has_blocks,
     x_syn_probe_budget_timeout_s,
     x_syn_quick_request_timeouts,
     build_syndication_photo_payload,
@@ -1341,18 +1342,7 @@ class Router:
 
     @staticmethod
     def _syndication_article_has_blocks(article_node: Any) -> bool:
-        if not isinstance(article_node, dict):
-            return False
-        content = article_node.get("content") or {}
-        blocks = content.get("blocks") if isinstance(content, dict) else []
-        if not isinstance(blocks, list):
-            return False
-        for block in blocks:
-            if not isinstance(block, dict):
-                continue
-            if str(block.get("text") or "").strip():
-                return True
-        return False
+        return syndication_article_has_blocks(article_node)
 
     def _syndication_needs_article_hydration(
         self, syn: Dict[str, Any], *, allow_tco_pointer: bool = False

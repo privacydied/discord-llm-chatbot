@@ -349,6 +349,22 @@ def resolve_video_stt_error_base_text(
     return (tweet_text or base_text or "").strip()
 
 
+def syndication_article_has_blocks(article_node: Any) -> bool:
+    """Check whether a syndication article payload contains at least one non-empty block."""
+    if not isinstance(article_node, dict):
+        return False
+    content = article_node.get("content") or {}
+    blocks = content.get("blocks") if isinstance(content, dict) else []
+    if not isinstance(blocks, list):
+        return False
+    for block in blocks:
+        if not isinstance(block, dict):
+            continue
+        if str(block.get("text") or "").strip():
+            return True
+    return False
+
+
 def x_syn_probe_budget_timeout_s(x_syn_timeout_s: float) -> float:
     """Compute bounded timeout budget for image/media probe calls."""
     return min(float(x_syn_timeout_s) + 1.0, 4.5)
