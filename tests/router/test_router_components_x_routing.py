@@ -157,6 +157,7 @@ from bot.router_components.x_routing import (
     format_syndication_truncated_text,
     format_syndication_header_line,
     format_syndication_error_fallback,
+    format_syndication_error_payload_repr,
     extract_syndication_photo_urls,
     resolve_twitter_status_id,
     is_twitter_status_url,
@@ -1669,6 +1670,10 @@ def test_format_syndication_error_fallback_truncates_payload_repr() -> None:
     assert out.startswith("Tweet → https://x.com/u/status/1\n")
     payload_part = out.split("\n", 1)[1]
     assert len(payload_part) == 4000
+
+
+def test_format_syndication_error_payload_repr_truncates() -> None:
+    assert len(format_syndication_error_payload_repr({"blob": "a" * 5000})) == 4000
 
 
 def test_extract_syndication_photo_urls_variants() -> None:

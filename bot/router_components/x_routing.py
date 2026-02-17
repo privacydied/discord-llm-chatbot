@@ -1436,7 +1436,12 @@ def format_syndication_header_line(
 
 def format_syndication_error_fallback(url: str, syn_data: Any) -> str:
     """Format fallback output when syndication payload formatting fails."""
-    return f"Tweet → {url}\n{str(syn_data)[:4000]}"
+    return f"Tweet → {url}\n{format_syndication_error_payload_repr(syn_data)}"
+
+
+def format_syndication_error_payload_repr(syn_data: Any) -> str:
+    """Return truncated string representation for syndication fallback payloads."""
+    return str(syn_data)[:4000]
 
 
 def extract_syndication_photo_urls(photos: Any) -> List[str]:
