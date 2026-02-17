@@ -1541,15 +1541,21 @@ def format_twitter_syndication_images_log_line(
     """Format canonical breadcrumb line for Twitter image-route detection."""
     first_host = resolve_first_image_host(image_urls)
     suffix = format_twitter_syndication_msg_suffix(msg_id)
+    host_label = format_twitter_syndication_host_label(first_host)
     return (
         f"route.twitter.syndication | images={len(image_urls)} | "
-        f"{first_host or 'n/a'}{suffix}"
+        f"{host_label}{suffix}"
     )
 
 
 def format_twitter_syndication_msg_suffix(msg_id: Optional[int]) -> str:
     """Return optional log suffix with message id for syndication breadcrumbs."""
     return f" | msg_id={msg_id}" if msg_id is not None else ""
+
+
+def format_twitter_syndication_host_label(first_host: str) -> str:
+    """Return host label used in syndication image-route breadcrumb lines."""
+    return first_host or "n/a"
 
 
 def resolve_first_image_host(image_urls: List[str]) -> str:
