@@ -1840,9 +1840,14 @@ def append_canonical_status_url(
     """Canonicalize status URL then append uniquely to target list."""
     append_canonicalized_value(
         items,
-        raw_url,
+        canonical_status_raw_value(raw_url),
         canonicalize=canonicalize_status_url,
     )
+
+
+def canonical_status_raw_value(raw_url: str) -> str:
+    """Return raw status URL value used by canonical status append path."""
+    return raw_url
 
 
 def append_canonicalized_value(
