@@ -1972,6 +1972,16 @@ def raw_url_extract_regex_value() -> Any:
 
 def raw_url_items_buffer() -> List[str]:
     """Build mutable list buffer for extracted raw URL collection."""
+    return raw_url_items_buffer_source()
+
+
+def raw_url_items_buffer_source() -> List[str]:
+    """Return source list buffer used by raw URL items helper."""
+    return raw_url_items_buffer_value()
+
+
+def raw_url_items_buffer_value() -> List[str]:
+    """Return value used by raw URL items buffer source helper."""
     return []
 
 
