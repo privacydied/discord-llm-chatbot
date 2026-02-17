@@ -1245,8 +1245,13 @@ def syndication_cache_ttl_s(default_ttl_s: float, cached: Any) -> float:
     """Compute syndication cache TTL with shorter cap for negative entries."""
     ttl = default_ttl_s
     if cached.get(build_syndication_negative_cache_key()):
-        ttl = min(default_ttl_s, build_syndication_negative_cache_ttl_cap_s())
+        ttl = syndication_negative_cache_ttl_value(default_ttl_s)
     return ttl
+
+
+def syndication_negative_cache_ttl_value(default_ttl_s: float) -> float:
+    """Return effective TTL for negative cache entries under cap policy."""
+    return min(default_ttl_s, build_syndication_negative_cache_ttl_cap_s())
 
 
 def build_syndication_negative_cache_ttl_cap_s() -> float:

@@ -136,6 +136,7 @@ from bot.router_components.x_routing import (
     build_syndication_metric_payload_map,
     build_syndication_fetch_metric_payload,
     syndication_cache_ttl_s,
+    syndication_negative_cache_ttl_value,
     syndication_cache_is_fresh,
     classify_syndication_cache_hit,
     build_syndication_negative_cache_entry,
@@ -1394,6 +1395,11 @@ def test_syndication_cache_ttl_s_caps_negative_entries() -> None:
     assert syndication_cache_ttl_s(600.0, {"neg": True}) == 300.0
     assert syndication_cache_ttl_s(120.0, {"neg": True}) == 120.0
     assert syndication_cache_ttl_s(600.0, {"neg": False}) == 600.0
+
+
+def test_syndication_negative_cache_ttl_value_caps_default_ttl() -> None:
+    assert syndication_negative_cache_ttl_value(600.0) == 300.0
+    assert syndication_negative_cache_ttl_value(120.0) == 120.0
 
 
 def test_build_syndication_negative_cache_ttl_cap_s_constant() -> None:
