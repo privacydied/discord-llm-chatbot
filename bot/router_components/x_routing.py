@@ -1722,6 +1722,11 @@ def status_url_extract_regex() -> Any:
 
 def status_url_extract_regex_source() -> Any:
     """Return underlying regex object used for status URL extraction."""
+    return x_url_extract_regex_source()
+
+
+def x_url_extract_regex_source() -> Any:
+    """Return underlying regex object used for X URL extraction."""
     return x_url_extract_regex()
 
 
