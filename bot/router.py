@@ -707,6 +707,22 @@ class Router:
             return False
         return bool(stt_result.get("transcription"))
 
+    def _format_x_transcription_if_present(
+        self,
+        *,
+        base_text: str,
+        url: str,
+        stt_res: Any,
+    ) -> Optional[str]:
+        """Format X transcription output only when STT contains transcription text."""
+        if not self._stt_result_has_transcription(stt_res):
+            return None
+        return self._format_x_tweet_with_transcription(
+            base_text=base_text,
+            url=url,
+            stt_res=stt_res,
+        )
+
     async def _maybe_hydrate_syndication_payload(
         self,
         tweet_id: Optional[str],
@@ -6314,12 +6330,13 @@ class Router:
                                 "x.syndication.stt",
                                 {"url": url},
                             )
-                            if self._stt_result_has_transcription(stt_res):
-                                return self._format_x_tweet_with_transcription(
-                                    base_text=base,
-                                    url=url,
-                                    stt_res=stt_res,
-                                )
+                            formatted = self._format_x_transcription_if_present(
+                                base_text=base,
+                                url=url,
+                                stt_res=stt_res,
+                            )
+                            if formatted:
+                                return formatted
                             # STT failed for confirmed video content
                             # Maintain video modality instead of collapsing to text [REH][IV]
                             self._emit_stt_fail_event(
@@ -6433,12 +6450,13 @@ class Router:
                                         "x.syndication.sparse.stt",
                                         {"url": sparse_url},
                                     )
-                                    if self._stt_result_has_transcription(stt_res):
-                                        return self._format_x_tweet_with_transcription(
-                                            base_text=base,
-                                            url=sparse_url,
-                                            stt_res=stt_res,
-                                        )
+                                    formatted = self._format_x_transcription_if_present(
+                                        base_text=base,
+                                        url=sparse_url,
+                                        stt_res=stt_res,
+                                    )
+                                    if formatted:
+                                        return formatted
                                     return self._format_x_video_stt_error_result(
                                         url=sparse_url,
                                         stt_error=stt_err,
@@ -6485,14 +6503,13 @@ class Router:
                                         "x.syndication.sparse.force_stt",
                                         {"url": url},
                                     )
-                                    if self._stt_result_has_transcription(
-                                        forced_stt_res
-                                    ):
-                                        return self._format_x_tweet_with_transcription(
-                                            base_text=base,
-                                            url=url,
-                                            stt_res=forced_stt_res,
-                                        )
+                                    formatted = self._format_x_transcription_if_present(
+                                        base_text=base,
+                                        url=url,
+                                        stt_res=forced_stt_res,
+                                    )
+                                    if formatted:
+                                        return formatted
                                     self._emit_stt_fail_event(
                                         self._classify_stt_error_reason(forced_stt_err),
                                         media_kind="unknown_sparse",
@@ -6591,17 +6608,16 @@ class Router:
                                     "x.api.stt",
                                     {"url": url},
                                 )
-                                if self._stt_result_has_transcription(stt_res):
-                                    base = self._format_x_tweet_result(api_data, url)
-                                    formatted = self._format_x_tweet_with_transcription(
-                                        base_text=base,
-                                        url=url,
-                                        stt_res=stt_res,
-                                    )
+                                base = self._format_x_tweet_result(api_data, url)
+                                formatted = self._format_x_transcription_if_present(
+                                    base_text=base,
+                                    url=url,
+                                    stt_res=stt_res,
+                                )
+                                if formatted:
                                     return f"Video/audio content from {url}: {formatted}"
                                 # No-speech in API probe: log and continue with caption-only bundle [REH]
                                 self._emit_caption_only_fallback_breadcrumbs("no_speech")
-                                base = self._format_x_tweet_result(api_data, url)
                                 return self._format_x_tweet_with_transcription(
                                     base_text=base,
                                     url=url,

@@ -437,6 +437,53 @@ def test_stt_result_has_transcription_matches_existing_truthiness() -> None:
     assert router._stt_result_has_transcription(None) is False
 
 
+def test_format_x_transcription_if_present_returns_formatted_output(
+    monkeypatch,
+) -> None:
+    router = Router(DummyBot())
+    captured = {}
+
+    def _fmt(self, *, base_text=None, url="", stt_res=None, **kwargs):
+        captured["base_text"] = base_text
+        captured["url"] = url
+        captured["stt_res"] = stt_res
+        return "formatted"
+
+    monkeypatch.setattr(Router, "_format_x_tweet_with_transcription", _fmt)
+
+    out = router._format_x_transcription_if_present(
+        base_text="base",
+        url="https://x.com/u/status/1",
+        stt_res={"transcription": "hello"},
+    )
+
+    assert out == "formatted"
+    assert captured["base_text"] == "base"
+    assert captured["url"] == "https://x.com/u/status/1"
+    assert captured["stt_res"] == {"transcription": "hello"}
+
+
+def test_format_x_transcription_if_present_returns_none_without_transcription(
+    monkeypatch,
+) -> None:
+    router = Router(DummyBot())
+
+    monkeypatch.setattr(
+        Router,
+        "_format_x_tweet_with_transcription",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("formatter should not be called")
+        ),
+    )
+
+    out = router._format_x_transcription_if_present(
+        base_text="base",
+        url="https://x.com/u/status/1",
+        stt_res={},
+    )
+    assert out is None
+
+
 @pytest.mark.asyncio
 async def test_maybe_hydrate_syndication_payload_no_tweet_id_returns_input() -> None:
     router = Router(DummyBot())
