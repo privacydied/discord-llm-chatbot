@@ -56,6 +56,8 @@ from .stt_module.multimodal_fallback import multimodal_fallback_provider
 from .stt_pipeline import (
     build_youtube_transcript_result,
     ensure_stt_manager_ready,
+    ffmpeg_candidates_from_env,
+    ffmpeg_supports_aac_decoder,
     load_stt_runtime_compat,
 )
 from .youtube_transcript import resolve_youtube_transcript
@@ -105,40 +107,11 @@ _FFMPEG_BIN_HAS_AAC: Optional[bool] = None
 
 
 def _ffmpeg_candidates() -> List[str]:
-    candidates: List[str] = []
-    for env_key in ("STT_FFMPEG_BIN", "FFMPEG_BIN", "FFMPEG_BINARY"):
-        value = (os.getenv(env_key) or "").strip()
-        if value:
-            candidates.append(value)
-    # Prefer Synology ffmpeg7 package when present; fallback to default ffmpeg.
-    candidates.extend(["ffmpeg7", "ffmpeg"])
-    # Preserve order while de-duplicating.
-    seen = set()
-    ordered: List[str] = []
-    for c in candidates:
-        if c in seen:
-            continue
-        seen.add(c)
-        ordered.append(c)
-    return ordered
+    return ffmpeg_candidates_from_env()
 
 
 def _ffmpeg_supports_aac_decoder(ffmpeg_bin: str) -> bool:
-    try:
-        proc = subprocess.run(
-            [ffmpeg_bin, "-hide_banner", "-decoders"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            timeout=5,
-            check=False,
-        )
-        if proc.returncode != 0:
-            return False
-        out = proc.stdout or ""
-        return bool(re.search(r"\baac(?:_fixed|_latm)?\b", out))
-    except Exception:
-        return False
+    return ffmpeg_supports_aac_decoder(ffmpeg_bin)
 
 
 def _resolve_ffmpeg_bin() -> str:
