@@ -1479,7 +1479,7 @@ def extract_syndication_photo_urls(photos: Any) -> List[str]:
 
 def x_syn_probe_budget_timeout_s(x_syn_timeout_s: float) -> float:
     """Compute bounded timeout budget for image/media probe calls."""
-    return min(float(x_syn_timeout_s) + 1.0, 4.5)
+    return x_syn_timeout_with_offset_and_cap(x_syn_timeout_s, 1.0, 4.5)
 
 
 def x_syn_quick_request_timeouts(x_syn_timeout_s: float) -> tuple[float, float, float]:
@@ -1487,13 +1487,18 @@ def x_syn_quick_request_timeouts(x_syn_timeout_s: float) -> tuple[float, float, 
     return (
         x_syn_timeout_cap(x_syn_timeout_s, 3.0),
         x_syn_timeout_cap(x_syn_timeout_s, 3.0),
-        min(x_syn_timeout_s + 0.5, 3.5),
+        x_syn_timeout_with_offset_and_cap(x_syn_timeout_s, 0.5, 3.5),
     )
 
 
 def x_syn_timeout_cap(value: float, cap: float) -> float:
     """Return bounded timeout value under the provided cap."""
     return min(value, cap)
+
+
+def x_syn_timeout_with_offset_and_cap(value: float, offset: float, cap: float) -> float:
+    """Return bounded timeout after applying an additive offset."""
+    return x_syn_timeout_cap(float(value) + offset, cap)
 
 
 def build_syndication_photo_payload(
