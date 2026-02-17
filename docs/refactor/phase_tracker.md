@@ -150,3 +150,13 @@
   - Validation:
     - `./.venv/bin/python -m py_compile bot/router.py`
     - `./.venv/bin/pytest -q tests/router/test_router_components_input_harvest.py tests/router/test_router_components_gating.py tests/router/test_router_components_x_routing.py tests/router/test_router_components_compose.py tests/test_video_ingest.py tests/test_stt_pipeline_runtime.py tests/test_stt_pipeline_ffmpeg_runtime.py tests/test_stt_pipeline_youtube_path.py` -> `39 passed`
+- 2026-02-17:
+  - Added contract tests for X composition invariants:
+    - `tests/router/test_router_components_compose_contract.py`
+  - Coverage includes:
+    - caption+transcript combined section behavior
+    - caption-only fallback behavior
+    - transcript-only fallback behavior
+    - visual-facts composition presence checks
+  - Validation:
+    - `./.venv/bin/pytest -q tests/router/test_router_components_compose_contract.py tests/router/test_router_components_compose.py tests/router/test_router_components_input_harvest.py tests/router/test_router_components_gating.py tests/router/test_router_components_x_routing.py tests/test_video_ingest.py tests/test_stt_pipeline_runtime.py tests/test_stt_pipeline_ffmpeg_runtime.py tests/test_stt_pipeline_youtube_path.py` -> `43 passed`
