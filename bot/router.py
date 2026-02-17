@@ -133,6 +133,7 @@ from .router_components import (
     extract_oembed_payload_from_response,
     build_syndication_oembed_params,
     build_syndication_fetch_plan,
+    build_syndication_fetch_metric_payload,
     classify_syndication_cache_hit,
     build_syndication_negative_cache_entry,
     build_syndication_cache_entry,
@@ -1053,7 +1054,10 @@ class Router:
                 http_client = await get_http_client()
                 for endpoint, params in params_variants:
                     url = build_syndication_endpoint_url(base, endpoint)
-                    self._metric_inc("x.syndication.fetch", {"endpoint": endpoint})
+                    self._metric_inc(
+                        "x.syndication.fetch",
+                        build_syndication_fetch_metric_payload(endpoint),
+                    )
                     resp = await http_client.get(url, headers=headers, params=params)
                     if resp.status_code != 200:
                         self.logger.info(
@@ -1082,7 +1086,8 @@ class Router:
                         oembed_params = build_syndication_oembed_params(tweet_id)
                         try:
                             self._metric_inc(
-                                "x.syndication.fetch", {"endpoint": "oembed"}
+                                "x.syndication.fetch",
+                                build_syndication_fetch_metric_payload("oembed"),
                             )
                             resp_oe = await http_client.get(
                                 oembed_url, headers=headers, params=oembed_params
@@ -1100,7 +1105,8 @@ class Router:
                                     use_x_host=True,
                                 )
                                 self._metric_inc(
-                                    "x.syndication.fetch", {"endpoint": "oembed_x"}
+                                    "x.syndication.fetch",
+                                    build_syndication_fetch_metric_payload("oembed_x"),
                                 )
                                 resp2 = await http_client.get(
                                     oembed_url, headers=headers, params=oembed_params_x

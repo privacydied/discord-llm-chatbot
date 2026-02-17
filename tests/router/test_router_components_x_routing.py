@@ -40,6 +40,7 @@ from bot.router_components.x_routing import (
     extract_oembed_payload_from_response,
     build_syndication_oembed_params,
     build_syndication_fetch_plan,
+    build_syndication_fetch_metric_payload,
     syndication_cache_ttl_s,
     syndication_cache_is_fresh,
     classify_syndication_cache_hit,
@@ -710,6 +711,13 @@ def test_build_syndication_fetch_plan_shape_and_values() -> None:
         ("tweet-result", {"id": "2022790791047823773", "lang": "en"}),
         ("widgets", {"id": "2022790791047823773", "lang": "en", "dnt": "false"}),
     ]
+
+
+def test_build_syndication_fetch_metric_payload_shape() -> None:
+    assert build_syndication_fetch_metric_payload("widgets") == {"endpoint": "widgets"}
+    assert build_syndication_fetch_metric_payload("oembed_x") == {
+        "endpoint": "oembed_x"
+    }
 
 
 def test_syndication_cache_ttl_s_caps_negative_entries() -> None:

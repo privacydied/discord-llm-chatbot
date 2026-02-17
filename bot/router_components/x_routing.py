@@ -652,6 +652,11 @@ def build_syndication_fetch_plan(
     return base, headers, params_variants
 
 
+def build_syndication_fetch_metric_payload(endpoint: str) -> Dict[str, str]:
+    """Build metric labels payload for syndication fetch endpoints."""
+    return {"endpoint": endpoint}
+
+
 def syndication_cache_ttl_s(default_ttl_s: float, cached: Any) -> float:
     """Compute syndication cache TTL with shorter cap for negative entries."""
     ttl = default_ttl_s
