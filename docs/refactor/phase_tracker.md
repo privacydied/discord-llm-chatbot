@@ -844,3 +844,19 @@
   - Validation:
     - `./.venv/bin/pytest -q tests/router/test_router_caption_only_helpers.py tests/router/test_x_api_routing.py tests/router/test_router_x_base_text_resolution.py` -> `48 passed`
     - `./.venv/bin/pytest -q tests/core tests/router tests/syndication tests/vision tests/test_hear_ffmpeg_resolution.py tests/test_hear_stream_abort.py tests/test_media_ingestion.py tests/test_video_ingest.py tests/router/test_router_x_result_format_contract.py tests/router/test_router_x_base_text_resolution.py tests/test_media_ingestion_compat_contracts.py tests/vision/test_money_contract.py tests/test_media_ingestion_helpers.py tests/test_stt_pipeline_runtime.py tests/test_stt_pipeline_ffmpeg_runtime.py tests/test_stt_pipeline_youtube_path.py tests/test_stt_pipeline_result_payload.py tests/test_stt_pipeline_spec_select.py tests/test_stt_pipeline_logging.py tests/test_stt_pipeline_lifecycle.py tests/test_stt_pipeline_url_ingest.py tests/test_stt_pipeline_transcribe_flow.py tests/test_stt_pipeline_stitch.py` -> `317 passed`
+- 2026-02-17:
+  - Refactor (behavior-preserving): extracted shared probed-image to VL helper:
+    - `bot/router.py::_route_probed_twitter_images_with_caption()`
+  - Rewired duplicate image-probe branches to helper:
+    - tweet-video fallback syndication probe branch
+    - syndication-first high-res image probe branch
+  - Preserved behavior:
+    - logs `route.twitter.syndication` breadcrumb
+    - resolves caption via `_resolve_twitter_caption_text(status_id)`
+    - routes via `_route_twitter_images_with_caption(...)`
+    - existing error handling/fallback behavior unchanged at call sites
+  - Extended tests in `tests/router/test_router_caption_only_helpers.py`:
+    - `test_route_probed_twitter_images_with_caption_logs_resolves_and_routes`
+  - Validation:
+    - `./.venv/bin/pytest -q tests/router/test_router_caption_only_helpers.py tests/router/test_x_api_routing.py tests/router/test_router_x_base_text_resolution.py` -> `49 passed`
+    - `./.venv/bin/pytest -q tests/core tests/router tests/syndication tests/vision tests/test_hear_ffmpeg_resolution.py tests/test_hear_stream_abort.py tests/test_media_ingestion.py tests/test_video_ingest.py tests/router/test_router_x_result_format_contract.py tests/router/test_router_x_base_text_resolution.py tests/test_media_ingestion_compat_contracts.py tests/vision/test_money_contract.py tests/test_media_ingestion_helpers.py tests/test_stt_pipeline_runtime.py tests/test_stt_pipeline_ffmpeg_runtime.py tests/test_stt_pipeline_youtube_path.py tests/test_stt_pipeline_result_payload.py tests/test_stt_pipeline_spec_select.py tests/test_stt_pipeline_logging.py tests/test_stt_pipeline_lifecycle.py tests/test_stt_pipeline_url_ingest.py tests/test_stt_pipeline_transcribe_flow.py tests/test_stt_pipeline_stitch.py` -> `318 passed`

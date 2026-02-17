@@ -273,6 +273,40 @@ async def test_route_twitter_images_with_caption_builds_payload_and_routes(
     )
 
 
+@pytest.mark.asyncio
+async def test_route_probed_twitter_images_with_caption_logs_resolves_and_routes(
+    monkeypatch,
+) -> None:
+    router = Router(DummyBot())
+    calls = {}
+
+    def _log_images(self, image_urls, msg_id=None):
+        calls["log"] = (image_urls, msg_id)
+
+    async def _resolve_text(self, status_id):
+        calls["resolve"] = status_id
+        return "caption"
+
+    async def _route_images(self, *, url, caption_text, image_urls):
+        calls["route"] = (url, caption_text, image_urls)
+        return "ok"
+
+    monkeypatch.setattr(Router, "_log_twitter_syndication_images", _log_images)
+    monkeypatch.setattr(Router, "_resolve_twitter_caption_text", _resolve_text)
+    monkeypatch.setattr(Router, "_route_twitter_images_with_caption", _route_images)
+
+    out = await router._route_probed_twitter_images_with_caption(
+        url="https://x.com/u/status/1",
+        status_id="123",
+        image_urls=["u1", "u2"],
+    )
+
+    assert out == "ok"
+    assert calls["log"] == (["u1", "u2"], None)
+    assert calls["resolve"] == "123"
+    assert calls["route"] == ("https://x.com/u/status/1", "caption", ["u1", "u2"])
+
+
 def test_log_twitter_syndication_images_with_and_without_msg_id() -> None:
     router = Router(DummyBot())
     router.logger = CaptureLogger()

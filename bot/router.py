@@ -645,6 +645,18 @@ class Router:
         syn_payload = self._build_syndication_photo_payload(caption_text, image_urls)
         return await self._route_twitter_syndication_to_vl(syn_payload, url)
 
+    async def _route_probed_twitter_images_with_caption(
+        self, *, url: str, status_id: Optional[str], image_urls: List[str]
+    ) -> str:
+        """Log probed images, resolve caption text, and route through VL."""
+        self._log_twitter_syndication_images(image_urls)
+        tweet_text = await self._resolve_twitter_caption_text(status_id)
+        return await self._route_twitter_images_with_caption(
+            url=url,
+            caption_text=tweet_text,
+            image_urls=image_urls,
+        )
+
     def _log_twitter_syndication_images(
         self, image_urls: List[str], *, msg_id: Optional[int] = None
     ) -> None:
@@ -5581,16 +5593,11 @@ class Router:
                             url, status_id or ""
                         )
                         if imgs:
-                            self._log_twitter_syndication_images(imgs)
                             # Prefer unified VL pipeline with caption when available [CA][REH]
                             try:
-                                tweet_text = await self._resolve_twitter_caption_text(
-                                    status_id
-                                )
-
-                                return await self._route_twitter_images_with_caption(
+                                return await self._route_probed_twitter_images_with_caption(
                                     url=url,
-                                    caption_text=tweet_text,
+                                    status_id=status_id,
                                     image_urls=imgs,
                                 )
                             except Exception:
@@ -6560,14 +6567,9 @@ class Router:
                                 url, status_id
                             )
                             if imgs:
-                                self._log_twitter_syndication_images(imgs)
-                                # Convert to syndication-like shape and route to VL
-                                tweet_text = await self._resolve_twitter_caption_text(
-                                    status_id
-                                )
-                                result = await self._route_twitter_images_with_caption(
+                                result = await self._route_probed_twitter_images_with_caption(
                                     url=url,
-                                    caption_text=tweet_text,
+                                    status_id=status_id,
                                     image_urls=imgs,
                                 )
                                 return result
