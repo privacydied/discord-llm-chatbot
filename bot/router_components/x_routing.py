@@ -682,7 +682,7 @@ def build_syndication_fetch_params(
     """Return canonical syndication fetch params for a tweet id."""
     params = {"id": tweet_id, "lang": build_syndication_lang()}
     if include_dnt:
-        params["dnt"] = "false"
+        params["dnt"] = build_syndication_dnt_value()
     return params
 
 
@@ -723,10 +723,15 @@ def build_syndication_oembed_hosts() -> Tuple[str, str]:
 def build_syndication_oembed_options() -> Dict[str, str]:
     """Return canonical oEmbed flags for privacy/script/thread behavior."""
     return {
-        "dnt": "false",
+        "dnt": build_syndication_dnt_value(),
         "omit_script": "true",
         "hide_thread": "true",
     }
+
+
+def build_syndication_dnt_value() -> str:
+    """Return canonical DNT option value for syndication/oEmbed requests."""
+    return "false"
 
 
 def build_syndication_oembed_metric_endpoint(host: str) -> str:

@@ -1443,6 +1443,22 @@
     - `./.venv/bin/pytest -q tests/router/test_router_components_x_routing.py` -> `84 passed`
     - `./.venv/bin/pytest -q tests/core tests/router tests/syndication tests/vision tests/test_hear_ffmpeg_resolution.py tests/test_hear_stream_abort.py tests/test_media_ingestion.py tests/test_video_ingest.py tests/router/test_router_x_result_format_contract.py tests/router/test_router_x_base_text_resolution.py tests/test_media_ingestion_compat_contracts.py tests/vision/test_money_contract.py tests/test_media_ingestion_helpers.py tests/test_stt_pipeline_runtime.py tests/test_stt_pipeline_ffmpeg_runtime.py tests/test_stt_pipeline_youtube_path.py tests/test_stt_pipeline_result_payload.py tests/test_stt_pipeline_spec_select.py tests/test_stt_pipeline_logging.py tests/test_stt_pipeline_lifecycle.py tests/test_stt_pipeline_url_ingest.py tests/test_stt_pipeline_transcribe_flow.py tests/test_stt_pipeline_stitch.py` -> `410 passed`
 - 2026-02-17:
+  - Refactor (behavior-preserving): extracted canonical DNT value helper into router components:
+    - `bot/router_components/x_routing.py::build_syndication_dnt_value()`
+  - Reused helper in both builders:
+    - `bot/router_components/x_routing.py::build_syndication_fetch_params()`
+    - `bot/router_components/x_routing.py::build_syndication_oembed_options()`
+  - Exported helper via `bot/router_components/__init__.py`.
+  - Added focused pure-helper test in `tests/router/test_router_components_x_routing.py`:
+    - `test_build_syndication_dnt_value_constant`
+  - Preserved behavior:
+    - DNT value remains `"false"`
+    - fetch/oEmbed params unchanged
+  - Validation:
+    - `python -m compileall bot/router_components/x_routing.py bot/router_components/__init__.py tests/router/test_router_components_x_routing.py` -> `ok`
+    - `./.venv/bin/pytest -q tests/router/test_router_components_x_routing.py` -> `85 passed`
+    - `./.venv/bin/pytest -q tests/core tests/router tests/syndication tests/vision tests/test_hear_ffmpeg_resolution.py tests/test_hear_stream_abort.py tests/test_media_ingestion.py tests/test_video_ingest.py tests/router/test_router_x_result_format_contract.py tests/router/test_router_x_base_text_resolution.py tests/test_media_ingestion_compat_contracts.py tests/vision/test_money_contract.py tests/test_media_ingestion_helpers.py tests/test_stt_pipeline_runtime.py tests/test_stt_pipeline_ffmpeg_runtime.py tests/test_stt_pipeline_youtube_path.py tests/test_stt_pipeline_result_payload.py tests/test_stt_pipeline_spec_select.py tests/test_stt_pipeline_logging.py tests/test_stt_pipeline_lifecycle.py tests/test_stt_pipeline_url_ingest.py tests/test_stt_pipeline_transcribe_flow.py tests/test_stt_pipeline_stitch.py` -> `411 passed`
+- 2026-02-17:
   - Refactor (behavior-preserving): extracted syndication oEmbed endpoint literal into router components:
     - `bot/router_components/x_routing.py::build_syndication_oembed_url()`
   - Rewired router call site to delegate:
