@@ -528,3 +528,16 @@
     - `./.venv/bin/python -m py_compile bot/router.py tests/router/test_router_x_base_text_resolution.py`
     - `./.venv/bin/pytest -q tests/router/test_router_x_base_text_resolution.py tests/router/test_x_api_routing.py tests/router/test_router_x_result_format_contract.py tests/core/test_router.py` -> `28 passed`
     - `./.venv/bin/pytest -q tests/core tests/router tests/syndication tests/vision tests/test_hear_ffmpeg_resolution.py tests/test_hear_stream_abort.py tests/test_media_ingestion.py tests/test_video_ingest.py tests/router/test_router_x_result_format_contract.py tests/router/test_router_x_base_text_resolution.py tests/test_media_ingestion_compat_contracts.py tests/vision/test_money_contract.py tests/test_media_ingestion_helpers.py tests/test_stt_pipeline_runtime.py tests/test_stt_pipeline_ffmpeg_runtime.py tests/test_stt_pipeline_youtube_path.py tests/test_stt_pipeline_result_payload.py tests/test_stt_pipeline_spec_select.py tests/test_stt_pipeline_logging.py tests/test_stt_pipeline_lifecycle.py tests/test_stt_pipeline_url_ingest.py tests/test_stt_pipeline_transcribe_flow.py tests/test_stt_pipeline_stitch.py` -> `281 passed`
+- 2026-02-17:
+  - Refactor (behavior-preserving): extracted caption-only fallback breadcrumb logging into:
+    - `bot/router.py::_emit_caption_only_fallback_breadcrumbs()`
+  - Rewired `_handle_video_url()` branches to reuse helper:
+    - no-speech degrade path (`reason=no_speech`)
+    - `InferenceError` caption-only degrade path (`reason=error`)
+  - Reused existing `_resolve_x_base_text_for_url()` in `InferenceError` caption-only path, removing duplicated API/syndication lookup code.
+  - Added focused test in `tests/router/test_x_api_routing.py`:
+    - `InferenceError` path degrades to caption-only composed output when base text is resolvable.
+  - Validation:
+    - `./.venv/bin/python -m py_compile bot/router.py tests/router/test_x_api_routing.py`
+    - `./.venv/bin/pytest -q tests/router/test_x_api_routing.py tests/router/test_router_x_base_text_resolution.py tests/router/test_router_x_result_format_contract.py tests/core/test_router.py` -> `29 passed`
+    - `./.venv/bin/pytest -q tests/core tests/router tests/syndication tests/vision tests/test_hear_ffmpeg_resolution.py tests/test_hear_stream_abort.py tests/test_media_ingestion.py tests/test_video_ingest.py tests/router/test_router_x_result_format_contract.py tests/router/test_router_x_base_text_resolution.py tests/test_media_ingestion_compat_contracts.py tests/vision/test_money_contract.py tests/test_media_ingestion_helpers.py tests/test_stt_pipeline_runtime.py tests/test_stt_pipeline_ffmpeg_runtime.py tests/test_stt_pipeline_youtube_path.py tests/test_stt_pipeline_result_payload.py tests/test_stt_pipeline_spec_select.py tests/test_stt_pipeline_logging.py tests/test_stt_pipeline_lifecycle.py tests/test_stt_pipeline_url_ingest.py tests/test_stt_pipeline_transcribe_flow.py tests/test_stt_pipeline_stitch.py` -> `282 passed`

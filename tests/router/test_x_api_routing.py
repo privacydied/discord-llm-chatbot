@@ -5,6 +5,7 @@ from urllib.parse import quote
 
 from bot.router import Router, XApiClient
 from bot.modality import InputItem
+from bot.exceptions import InferenceError
 
 
 class DummyBot:
@@ -223,6 +224,36 @@ async def test_sparse_syndication_defers_to_api_video_stt(monkeypatch):
     res = await router._handle_general_url(item)
 
     assert res == "STT:hello world"
+    stt_mock.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_video_url_inference_error_degrades_to_caption_only_with_resolved_base_text(
+    monkeypatch,
+):
+    bot = DummyBot()
+    router = Router(bot)
+
+    import bot.router as router_mod
+
+    stt_mock = AsyncMock(side_effect=InferenceError("boom"))
+    monkeypatch.setattr(router_mod, "hear_infer_from_url", stt_mock)
+
+    async def _fake_resolve_base(_self, _url):
+        return "base text"
+
+    def _fmt(_self, base_text, url, stt_res):
+        return f"FMT:{base_text}|{(stt_res or {}).get('transcription', '')}"
+
+    monkeypatch.setattr(Router, "_resolve_x_base_text_for_url", _fake_resolve_base)
+    monkeypatch.setattr(Router, "_format_x_tweet_with_transcription", _fmt)
+
+    item = InputItem(
+        source_type="url", payload="https://x.com/user/status/1", order_index=0
+    )
+    res = await router._handle_video_url(item)
+
+    assert res == "FMT:base text|"
     stt_mock.assert_awaited_once()
 
 

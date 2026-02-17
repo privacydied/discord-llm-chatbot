@@ -516,6 +516,29 @@ class Router:
         except Exception:
             return None
 
+    def _emit_caption_only_fallback_breadcrumbs(self, reason: str) -> None:
+        """Emit non-fatal stt/fallback breadcrumbs for caption-only degrade paths."""
+        try:
+            self.logger.info(
+                "stt.fail",
+                extra={
+                    "event": "stt.fail",
+                    "detail": {"reason": reason},
+                },
+            )
+        except Exception:
+            pass
+        try:
+            self.logger.info(
+                "fallback",
+                extra={
+                    "event": "fallback",
+                    "detail": {"kind": "caption_only"},
+                },
+            )
+        except Exception:
+            pass
+
     async def _get_x_api_client(self) -> Optional[XApiClient]:
         """Create or return a cached XApiClient based on config. [CA][IV]"""
         cfg = self.config
@@ -5298,27 +5321,7 @@ class Router:
                 if is_twitter:
                     base_text = await self._resolve_x_base_text_for_url(url)
 
-                    # Breadcrumbs for dashboards without user-visible failure [CDiP]
-                    try:
-                        self.logger.info(
-                            "stt.fail",
-                            extra={
-                                "event": "stt.fail",
-                                "detail": {"reason": "no_speech"},
-                            },
-                        )
-                    except Exception:
-                        pass
-                    try:
-                        self.logger.info(
-                            "fallback",
-                            extra={
-                                "event": "fallback",
-                                "detail": {"kind": "caption_only"},
-                            },
-                        )
-                    except Exception:
-                        pass
+                    self._emit_caption_only_fallback_breadcrumbs("no_speech")
 
                     composed = self._format_x_tweet_with_transcription(
                         base_text=base_text,
@@ -5452,46 +5455,10 @@ class Router:
             # Prefer caption-only degrade for Twitter when available [REH]
             if is_twitter:
                 try:
-                    # Breadcrumbs: stt.fail + fallback
-                    try:
-                        self.logger.info(
-                            "stt.fail",
-                            extra={"event": "stt.fail", "detail": {"reason": "error"}},
-                        )
-                    except Exception:
-                        pass
-                    try:
-                        self.logger.info(
-                            "fallback",
-                            extra={
-                                "event": "fallback",
-                                "detail": {"kind": "caption_only"},
-                            },
-                        )
-                    except Exception:
-                        pass
+                    self._emit_caption_only_fallback_breadcrumbs("error")
 
-                    # Try API then syndication for anchored caption
-                    base_text = None
-                    tweet_id = XApiClient.extract_tweet_id(str(url))
-                    x_client = await self._get_x_api_client()
-                    if tweet_id and x_client is not None:
-                        try:
-                            api_data = await x_client.get_tweet_by_id(tweet_id)
-                            base_text = self._format_x_tweet_result(api_data, url)
-                        except Exception:
-                            base_text = None
-                    if (
-                        base_text is None
-                        and tweet_id
-                        and bool(self.config.get("X_SYNDICATION_ENABLED", True))
-                    ):
-                        try:
-                            syn = await self._get_tweet_via_syndication(tweet_id)
-                            if syn:
-                                base_text = self._format_syndication_result(syn, url)
-                        except Exception:
-                            base_text = None
+                    # Try API then syndication for anchored caption.
+                    base_text = await self._resolve_x_base_text_for_url(url)
                     if base_text:
                         return self._format_x_tweet_with_transcription(
                             base_text=base_text,
