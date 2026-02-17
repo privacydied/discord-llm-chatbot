@@ -1753,8 +1753,17 @@ def append_x_url_if_match(
     canonicalize_x_url: Callable[[str], str],
 ) -> None:
     """Append canonical X/Twitter URL only when raw URL matches predicate."""
-    if is_x_url_candidate(raw_url, is_x_url=is_x_url):
+    if x_url_matches_predicate(raw_url, is_x_url=is_x_url):
         append_matched_x_url(items, raw_url, canonicalize_x_url=canonicalize_x_url)
+
+
+def x_url_matches_predicate(
+    raw_url: str,
+    *,
+    is_x_url: Callable[[str], bool],
+) -> bool:
+    """Return whether raw URL matches X/Twitter predicate for append gating."""
+    return is_x_url_candidate(raw_url, is_x_url=is_x_url)
 
 
 def append_unique_str(items: List[str], value: str) -> None:

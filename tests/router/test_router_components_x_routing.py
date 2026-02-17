@@ -13,6 +13,7 @@ from bot.router_components.x_routing import (
     extract_x_status_urls_from_text,
     filter_canonical_x_urls,
     canonical_x_url_items_buffer,
+    x_url_matches_predicate,
     is_x_url_candidate,
     append_x_url_if_match,
     append_unique_str,
@@ -485,6 +486,17 @@ def test_append_matched_x_url_only_appends_unique_canonical() -> None:
 def test_is_x_url_candidate_delegates_predicate() -> None:
     assert is_x_url_candidate("https://x.com/u/status/1", is_x_url=lambda u: "x.com" in u)
     assert not is_x_url_candidate("https://example.com", is_x_url=lambda u: "x.com" in u)
+
+
+def test_x_url_matches_predicate_delegates_candidate_check() -> None:
+    assert x_url_matches_predicate(
+        "https://x.com/u/status/1",
+        is_x_url=lambda u: "x.com" in u,
+    )
+    assert not x_url_matches_predicate(
+        "https://example.com",
+        is_x_url=lambda u: "x.com" in u,
+    )
 
 
 def test_append_x_url_if_match() -> None:
