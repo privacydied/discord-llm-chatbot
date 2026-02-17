@@ -80,6 +80,7 @@ from bot.router_components.x_routing import (
     build_syndication_fetch_params_core,
     build_syndication_fetch_params_with_optional_dnt,
     build_syndication_fetch_params,
+    build_syndication_fetch_params_variants_list,
     build_syndication_fetch_params_variants,
     build_syndication_widgets_params_variant,
     build_syndication_tweet_result_params_variant,
@@ -1181,6 +1182,15 @@ def test_build_syndication_fetch_params_with_optional_dnt() -> None:
 
 def test_build_syndication_fetch_params_variants_shape() -> None:
     variants = build_syndication_fetch_params_variants("2022790791047823773")
+    assert variants == [
+        ("widgets", {"id": "2022790791047823773", "lang": "en"}),
+        ("tweet-result", {"id": "2022790791047823773", "lang": "en"}),
+        ("widgets", {"id": "2022790791047823773", "lang": "en", "dnt": "false"}),
+    ]
+
+
+def test_build_syndication_fetch_params_variants_list_shape() -> None:
+    variants = build_syndication_fetch_params_variants_list("2022790791047823773")
     assert variants == [
         ("widgets", {"id": "2022790791047823773", "lang": "en"}),
         ("tweet-result", {"id": "2022790791047823773", "lang": "en"}),

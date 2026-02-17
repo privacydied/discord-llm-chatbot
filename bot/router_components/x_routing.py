@@ -850,6 +850,13 @@ def build_syndication_fetch_params_core(tweet_id: str) -> Dict[str, str]:
 
 def build_syndication_fetch_params_variants(tweet_id: str) -> List[Tuple[str, Dict[str, str]]]:
     """Return endpoint+params variants for CDN syndication fetch attempts."""
+    return build_syndication_fetch_params_variants_list(tweet_id)
+
+
+def build_syndication_fetch_params_variants_list(
+    tweet_id: str,
+) -> List[Tuple[str, Dict[str, str]]]:
+    """Return canonical ordered list of syndication fetch param variants."""
     return [
         build_syndication_widgets_params_variant(tweet_id),
         build_syndication_tweet_result_params_variant(tweet_id),
