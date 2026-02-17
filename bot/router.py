@@ -86,7 +86,12 @@ from .memory.thread_tail import (
     resolve_implicit_anchor,
     collect_implicit_anchor_context,
 )
-from .router_components import RouterRuntimeCompat, load_router_runtime_compat
+from .router_components import (
+    RouterRuntimeCompat,
+    compose_x_tweet_with_visual_facts,
+    format_x_tweet_with_transcription,
+    load_router_runtime_compat,
+)
 
 if TYPE_CHECKING:
     from bot.core.bot import LLMBot as DiscordBot
@@ -477,113 +482,13 @@ class Router:
         stt_res: Dict[str, Any],
         tweet_data: Optional[Dict[str, Any]] = None,
     ) -> str:
-        """Assemble a single evidence bundle for a tweet using caption + STT.
-        Returns composed prompt text (string) for downstream flows.
-        [CA][REH][IV]
-        """
-        bundle = EvidenceBundle(source_platform="x", source_url=url)
-
-        # Primary ID anchor for deterministic media selection [CMV]
-        try:
-            ptid = self._extract_primary_tweet_id(url)
-            if ptid:
-                bundle.primary_tweet_id = ptid
-                # Default selected to primary unless overridden by selection later
-                bundle.selected_tweet_id = ptid
-        except Exception:
-            pass
-
-        # Caption population: prefer tweet_data text; fallback to base_text heuristic [IV]
-        try:
-            caption = ""
-            if tweet_data and isinstance(tweet_data, dict):
-                caption = (
-                    tweet_data.get("full_text") or tweet_data.get("text") or ""
-                ).strip()
-            if not caption and base_text:
-                # Parse structured evidence first when available.
-                try:
-                    base_str = str(base_text)
-                    m = re.search(
-                        r"\[Tweet Caption\]\s*\n(?P<body>.*?)(?:\n\n\[|\Z)",
-                        base_str,
-                        flags=re.DOTALL,
-                    )
-                    if m:
-                        caption = (m.group("body") or "").strip()
-                except Exception:
-                    caption = ""
-            if not caption and base_text:
-                # Fallback heuristic: first non-empty non-marker line.
-                try:
-                    lines = [ln.strip() for ln in str(base_text).splitlines() if ln.strip()]
-                    for ln in lines:
-                        if ln.startswith("[") and ln.endswith("]"):
-                            continue
-                        if ln.startswith("— "):
-                            continue
-                        if ln.lower().startswith("http://") or ln.lower().startswith(
-                            "https://"
-                        ):
-                            continue
-                        caption = ln
-                        break
-                except Exception:
-                    caption = (base_text or "").strip()
-            if caption:
-                bundle.caption_text = caption
-        except Exception:
-            pass
-
-        # Quoted/retweet text when provided [IV]
-        try:
-            if tweet_data and isinstance(tweet_data, dict):
-                q = tweet_data.get("quoted_status") or {}
-                if isinstance(q, dict):
-                    qt = (q.get("full_text") or q.get("text") or "").strip()
-                    if qt:
-                        bundle.quoted_text = qt
-                if not bundle.quoted_text:
-                    r = tweet_data.get("retweeted_status") or {}
-                    if isinstance(r, dict):
-                        rt = (r.get("full_text") or r.get("text") or "").strip()
-                        if rt:
-                            bundle.quoted_text = rt
-        except Exception:
-            pass
-
-        # STT transcript with low-speech guard [REH]
-        try:
-            transcript = ((stt_res or {}).get("transcription") or "").strip()
-            # Preserve any non-empty transcript so caption+transcript can always be joined.
-            if transcript:
-                bundle.media_transcript = transcript
-            else:
-                bundle.media_transcript = ""
-                bundle.stt_no_speech = True
-        except Exception:
-            bundle.media_transcript = ""
-
-        # Concatenate caption + transcript for video tweets before text flow [REH]
-        try:
-            if bundle.caption_text and bundle.media_transcript:
-                combined = (
-                    f"{bundle.caption_text.strip()}\n\n{bundle.media_transcript.strip()}"
-                )
-                bundle.add_section(
-                    kind="caption_transcript",
-                    title="Tweet Caption + Audio Transcript",
-                    body=combined,
-                    provenance={"source": "tweet_text+stt"},
-                )
-                # Avoid duplicating content in separate fixed sections.
-                bundle.caption_text = ""
-                bundle.media_transcript = ""
-        except Exception:
-            pass
-
-        # Compose into final text (also emits context.assembled breadcrumb in EvidenceBundle)
-        return bundle.compose_prompt_text()
+        return format_x_tweet_with_transcription(
+            base_text=base_text,
+            url=url,
+            stt_res=stt_res,
+            tweet_data=tweet_data,
+            extract_primary_tweet_id=self._extract_primary_tweet_id,
+        )
 
     def _compose_x_tweet_with_visual_facts(
         self,
@@ -592,29 +497,11 @@ class Router:
         tweet_caption: Optional[str],
         vl_notes: Optional[str],
     ) -> str:
-        """Compose text-flow input for image tweets with caption + VL facts. [CA][REH]"""
-        clean_user = (user_text or "").strip()
-        clean_caption = (tweet_caption or "").strip()
-        clean_vl = (vl_notes or "").strip()
-
-        if not clean_caption and not clean_vl:
-            return clean_user
-
-        lines: List[str] = []
-        if clean_user:
-            lines.append(clean_user)
-            lines.append("")
-
-        lines.append("VISUAL_FACTS:")
-        lines.append("tweet caption:")
-        lines.append(clean_caption or "—")
-
-        if clean_vl:
-            lines.append("")
-            lines.append("vl prompt output:")
-            lines.append(clean_vl)
-
-        return "\n".join(lines).strip()
+        return compose_x_tweet_with_visual_facts(
+            user_text=user_text,
+            tweet_caption=tweet_caption,
+            vl_notes=vl_notes,
+        )
 
     async def _handle_x_twitter_fallback(
         self, tweet_url: str, message: Message, context_str: str
