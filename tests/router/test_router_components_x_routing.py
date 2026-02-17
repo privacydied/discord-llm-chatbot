@@ -42,6 +42,7 @@ from bot.router_components.x_routing import (
     build_syndication_oembed_url,
     build_syndication_oembed_key,
     build_syndication_oembed_host,
+    build_syndication_cdn_host,
     build_syndication_base_url,
     build_syndication_fetch_user_agent,
     build_syndication_fetch_accept_language,
@@ -806,6 +807,10 @@ def test_build_syndication_oembed_fallback_plan_shape() -> None:
 
 def test_build_syndication_oembed_url_constant() -> None:
     assert build_syndication_oembed_url() == "https://publish.twitter.com/oembed"
+
+
+def test_build_syndication_cdn_host_constant() -> None:
+    assert build_syndication_cdn_host() == "cdn.syndication.twimg.com"
 
 
 def test_build_syndication_base_url_constant() -> None:

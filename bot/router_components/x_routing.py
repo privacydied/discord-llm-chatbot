@@ -641,9 +641,14 @@ def build_syndication_oembed_host() -> str:
     return "publish.twitter.com"
 
 
+def build_syndication_cdn_host() -> str:
+    """Return canonical host used for syndication CDN API requests."""
+    return "cdn.syndication.twimg.com"
+
+
 def build_syndication_base_url() -> str:
     """Return the canonical CDN syndication base URL."""
-    return "https://cdn.syndication.twimg.com/"
+    return f"https://{build_syndication_cdn_host()}/"
 
 
 def build_syndication_fetch_user_agent() -> str:
