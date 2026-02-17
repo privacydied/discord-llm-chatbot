@@ -652,6 +652,19 @@ class Router:
             stt_res=stt_res,
         )
 
+    async def _format_x_with_resolved_base_text_if_available(
+        self, *, url: str, stt_res: Any
+    ) -> Optional[str]:
+        """Resolve X base text and format only when non-empty base text is available."""
+        base_text = await self._resolve_x_base_text_for_url(url)
+        if not base_text:
+            return None
+        return self._format_x_tweet_with_transcription(
+            base_text=base_text,
+            url=url,
+            stt_res=stt_res,
+        )
+
     async def _route_twitter_syndication_to_vl(
         self, syn_payload: Dict[str, Any], url: str
     ) -> str:
@@ -5709,13 +5722,12 @@ class Router:
                     self._emit_caption_only_fallback_breadcrumbs("error")
 
                     # Try API then syndication for anchored caption.
-                    base_text = await self._resolve_x_base_text_for_url(url)
-                    if base_text:
-                        return self._format_x_tweet_with_transcription(
-                            base_text=base_text,
-                            url=url,
-                            stt_res={"transcription": ""},
-                        )
+                    formatted = await self._format_x_with_resolved_base_text_if_available(
+                        url=url,
+                        stt_res={"transcription": ""},
+                    )
+                    if formatted:
+                        return formatted
                 except Exception:
                     pass
             # Fallback to existing user-friendly message for non-Twitter or when caption unavailable
