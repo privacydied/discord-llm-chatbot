@@ -256,3 +256,19 @@ def test_log_twitter_syndication_images_with_and_without_msg_id() -> None:
         == "route.twitter.syndication | images=1 | pbs.twimg.com | msg_id=123"
     )
     assert router.logger.info_lines[1] == "route.twitter.syndication | images=1 | n/a"
+
+
+def test_build_syndication_photo_payload_shape() -> None:
+    router = Router(DummyBot())
+
+    payload = router._build_syndication_photo_payload(
+        "caption text",
+        ["u1", "u2"],
+    )
+    assert payload == {
+        "text": "caption text",
+        "photos": [{"url": "u1"}, {"url": "u2"}],
+    }
+
+    payload_none = router._build_syndication_photo_payload(None, [])
+    assert payload_none == {"text": None, "photos": []}

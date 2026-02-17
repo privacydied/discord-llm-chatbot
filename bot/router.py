@@ -653,6 +653,15 @@ class Router:
             f"route.twitter.syndication | images={len(image_urls)} | {first_host or 'n/a'}{suffix}"
         )
 
+    def _build_syndication_photo_payload(
+        self, text: Optional[str], image_urls: List[str]
+    ) -> Dict[str, Any]:
+        """Build syndication-like payload consumed by the unified VL handler."""
+        return {
+            "text": text,
+            "photos": [{"url": u} for u in image_urls],
+        }
+
     def _build_visual_anchored_system_prompt(
         self, content: str, *, fallback: bool = False
     ) -> Optional[str]:
@@ -5519,10 +5528,10 @@ class Router:
                                     except Exception:
                                         pass
 
-                                syn_like = {
-                                    "text": tweet_text,
-                                    "photos": [{"url": u} for u in imgs],
-                                }
+                                syn_like = self._build_syndication_photo_payload(
+                                    tweet_text,
+                                    imgs,
+                                )
                                 return await self._route_twitter_syndication_to_vl(
                                     syn_like,
                                     url,
@@ -6319,10 +6328,10 @@ class Router:
                                                 tweet_text = hydrated_text
                                     except Exception:
                                         pass
-                                    syn_like = {
-                                        "text": tweet_text,
-                                        "photos": [{"url": u} for u in imgs],
-                                    }
+                                    syn_like = self._build_syndication_photo_payload(
+                                        tweet_text,
+                                        imgs,
+                                    )
                                     result = await self._route_twitter_syndication_to_vl(
                                         syn_like,
                                         url,
@@ -6423,10 +6432,10 @@ class Router:
                                         image_text = self._extract_syndication_text(
                                             syn_for_sparse_images
                                         )
-                                    syn_like = {
-                                        "text": image_text,
-                                        "photos": [{"url": u} for u in sparse_images],
-                                    }
+                                    syn_like = self._build_syndication_photo_payload(
+                                        image_text,
+                                        sparse_images,
+                                    )
                                     return await self._route_twitter_syndication_to_vl(
                                         syn_like,
                                         url,
@@ -6579,10 +6588,10 @@ class Router:
                                                 )
                                     except Exception:
                                         pass
-                                syn_like = {
-                                    "text": tweet_text,
-                                    "photos": [{"url": u} for u in imgs],
-                                }
+                                syn_like = self._build_syndication_photo_payload(
+                                    tweet_text,
+                                    imgs,
+                                )
                                 result = await self._route_twitter_syndication_to_vl(
                                     syn_like,
                                     url,
