@@ -694,9 +694,7 @@ def build_syndication_oembed_params(
     lang = build_syndication_lang()
     return {
         "url": f"https://{host}/i/status/{tweet_id}",
-        "dnt": "false",
-        "omit_script": "true",
-        "hide_thread": "true",
+        **build_syndication_oembed_options(),
         "lang": lang,
     }
 
@@ -704,6 +702,15 @@ def build_syndication_oembed_params(
 def build_syndication_oembed_hosts() -> Tuple[str, str]:
     """Return ordered oEmbed host fallbacks for tweet lookups."""
     return ("twitter.com", "x.com")
+
+
+def build_syndication_oembed_options() -> Dict[str, str]:
+    """Return canonical oEmbed flags for privacy/script/thread behavior."""
+    return {
+        "dnt": "false",
+        "omit_script": "true",
+        "hide_thread": "true",
+    }
 
 
 def build_syndication_oembed_metric_endpoint(host: str) -> str:
