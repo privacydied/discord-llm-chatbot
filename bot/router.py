@@ -602,6 +602,23 @@ class Router:
             stt_res={},
         )
 
+    def _format_x_caption_only_fallback_result(
+        self,
+        *,
+        url: str,
+        base_text: Optional[str] = None,
+        tweet_text: Optional[str] = None,
+        api_data: Optional[Any] = None,
+    ) -> str:
+        """Emit caption-only fallback breadcrumb and return caption-only evidence."""
+        self._emit_caption_only_fallback_event()
+        return self._format_x_caption_only_transcription(
+            url=url,
+            base_text=base_text,
+            tweet_text=tweet_text,
+            api_data=api_data,
+        )
+
     def _format_x_video_stt_error_result(
         self,
         *,
@@ -6551,8 +6568,7 @@ class Router:
                                 if tweet_id and x_client is not None:
                                     pass
                                 else:
-                                    self._emit_caption_only_fallback_event()
-                                    return self._format_x_caption_only_transcription(
+                                    return self._format_x_caption_only_fallback_result(
                                         url=url,
                                         base_text=base,
                                         tweet_text=text,
@@ -6562,9 +6578,8 @@ class Router:
                                     )
                             else:
                             # Fall back to text-only ONLY when video was NOT confirmed by syndication [REH]
-                                self._emit_caption_only_fallback_event()
                                 # Prefer API text if available; otherwise fall back to syndication text or composed evidence [REH]
-                                return self._format_x_caption_only_transcription(
+                                return self._format_x_caption_only_fallback_result(
                                     url=url,
                                     base_text=base,
                                     tweet_text=text,

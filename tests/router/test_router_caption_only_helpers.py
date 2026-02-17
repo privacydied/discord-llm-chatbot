@@ -95,6 +95,39 @@ def test_format_x_caption_only_transcription_falls_back_to_tweet_then_base(
     assert captured["stt_res"] == {}
 
 
+def test_format_x_caption_only_fallback_result_emits_event_and_delegates(
+    monkeypatch,
+) -> None:
+    router = Router(DummyBot())
+    router.logger = CaptureLogger()
+    captured = {}
+
+    def _fmt(self, *, url="", base_text=None, tweet_text=None, api_data=None):
+        captured["url"] = url
+        captured["base_text"] = base_text
+        captured["tweet_text"] = tweet_text
+        captured["api_data"] = api_data
+        return "ok"
+
+    monkeypatch.setattr(Router, "_format_x_caption_only_transcription", _fmt)
+
+    out = router._format_x_caption_only_fallback_result(
+        url="https://x.com/u/status/1",
+        base_text="base",
+        tweet_text="tweet",
+        api_data={"data": {"text": "api"}},
+    )
+
+    assert out == "ok"
+    assert router.logger.info_lines == ["fallback"]
+    assert captured == {
+        "url": "https://x.com/u/status/1",
+        "base_text": "base",
+        "tweet_text": "tweet",
+        "api_data": {"data": {"text": "api"}},
+    }
+
+
 def test_emit_caption_only_fallback_event_logs_fallback_only() -> None:
     router = Router(DummyBot())
     router.logger = CaptureLogger()
