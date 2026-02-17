@@ -1427,11 +1427,16 @@ def format_syndication_header_line(
     url: str,
 ) -> str:
     """Format syndication header line preserving legacy field access semantics."""
-    username = user.get("screen_name") or user.get("name")
+    username = format_syndication_header_username(user)
     media_hint = f" • media:{len(photos)}" if photos else ""
     prefix = f"@{username}" if username else "Tweet"
     stamp = f" • {created_at}" if created_at else ""
     return f"{prefix}{stamp}{media_hint} → {url}"
+
+
+def format_syndication_header_username(user: Any) -> Any:
+    """Resolve syndication header username from `screen_name` then `name`."""
+    return user.get("screen_name") or user.get("name")
 
 
 def format_syndication_error_fallback(url: str, syn_data: Any) -> str:
