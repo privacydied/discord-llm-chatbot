@@ -270,6 +270,8 @@ from bot.router_components.x_routing import (
     raw_url_items_buffer_source,
     raw_url_items_buffer_value,
     raw_url_candidate_values,
+    raw_url_candidate_values_source,
+    raw_url_candidate_values_iter,
     raw_url_candidate_value,
     raw_url_source_texts,
     raw_url_source_texts_iter,
@@ -646,6 +648,16 @@ def test_raw_url_candidate_value_identity() -> None:
 
 def test_raw_url_candidate_values_delegates_iter_text_urls() -> None:
     urls = list(raw_url_candidate_values("a https://x.com/u/status/1 b", url_re=x_url_extract_regex()))
+    assert urls == ["https://x.com/u/status/1"]
+
+
+def test_raw_url_candidate_values_source_delegates_iter_text_urls() -> None:
+    urls = list(raw_url_candidate_values_source("a https://x.com/u/status/1 b", url_re=x_url_extract_regex()))
+    assert urls == ["https://x.com/u/status/1"]
+
+
+def test_raw_url_candidate_values_iter_delegates_iter_text_urls() -> None:
+    urls = list(raw_url_candidate_values_iter("a https://x.com/u/status/1 b", url_re=x_url_extract_regex()))
     assert urls == ["https://x.com/u/status/1"]
 
 

@@ -1999,6 +1999,16 @@ def collect_raw_urls_from_texts(
 
 def raw_url_candidate_values(text: str, *, url_re: Any) -> Iterable[str]:
     """Yield raw URL candidate values for collector loops."""
+    yield from raw_url_candidate_values_source(text, url_re=url_re)
+
+
+def raw_url_candidate_values_source(text: str, *, url_re: Any) -> Iterable[str]:
+    """Yield source iterator for raw URL candidate values helper."""
+    yield from raw_url_candidate_values_iter(text, url_re=url_re)
+
+
+def raw_url_candidate_values_iter(text: str, *, url_re: Any) -> Iterable[str]:
+    """Yield iterator used by raw URL candidate values source helper."""
     yield from iter_text_urls(text, url_re=url_re)
 
 
