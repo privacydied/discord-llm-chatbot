@@ -3899,24 +3899,14 @@ class Router:
                                     vl_notes = None
                             tweet_caption = ""
                             try:
-                                caption_tweet_id = (
-                                    primary_selected
-                                    or self._parse_twitter_status_id(base_context_url)
-                                    or ""
+                                caption_tweet_id = self._resolve_twitter_status_id(
+                                    base_context_url,
+                                    tweet_id=primary_selected,
                                 )
                                 if caption_tweet_id:
-                                    syn_caption = await self._get_tweet_via_syndication(
+                                    tweet_caption = await self._resolve_twitter_caption_from_syndication(
                                         caption_tweet_id
                                     )
-                                    if syn_caption:
-                                        syn_caption = await self._maybe_hydrate_syndication_payload(
-                                            caption_tweet_id,
-                                            syn_caption,
-                                            allow_tco_pointer=True,
-                                        )
-                                        tweet_caption = self._extract_syndication_text(
-                                            syn_caption
-                                        )
                                 self.logger.info(
                                     "x.image.caption.resolve",
                                     extra={

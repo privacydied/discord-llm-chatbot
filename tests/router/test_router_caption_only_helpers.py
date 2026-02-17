@@ -611,3 +611,19 @@ async def test_resolve_twitter_caption_from_syndication_returns_fallback_on_miss
         fallback_text="fallback",
     )
     assert out_empty == "fallback"
+
+
+@pytest.mark.asyncio
+async def test_resolve_twitter_caption_from_syndication_default_fallback_empty(
+    monkeypatch,
+) -> None:
+    router = Router(DummyBot())
+
+    async def _get_syn(self, _status_id):
+        return {}
+
+    monkeypatch.setattr(Router, "_get_tweet_via_syndication", _get_syn)
+    monkeypatch.setattr(Router, "_extract_syndication_text", lambda _s, _n: "")
+
+    out = await router._resolve_twitter_caption_from_syndication("123")
+    assert out == ""
