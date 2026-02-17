@@ -599,6 +599,22 @@ def build_oembed_text_payload(
     }
 
 
+def build_syndication_oembed_params(
+    tweet_id: str,
+    *,
+    use_x_host: bool = False,
+) -> Dict[str, str]:
+    """Build oEmbed request params for syndication fallback lookups."""
+    host = "x.com" if use_x_host else "twitter.com"
+    return {
+        "url": f"https://{host}/i/status/{tweet_id}",
+        "dnt": "false",
+        "omit_script": "true",
+        "hide_thread": "true",
+        "lang": "en",
+    }
+
+
 def syndication_has_usable_payload(
     node: Any,
     *,

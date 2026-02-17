@@ -37,6 +37,7 @@ from bot.router_components.x_routing import (
     build_syndication_fetch_failed_payload,
     build_x_text_canon_payload,
     build_oembed_text_payload,
+    build_syndication_oembed_params,
     extract_oembed_html_text,
     syndication_has_usable_payload,
     syndication_media_hint_keys,
@@ -645,6 +646,25 @@ def test_build_oembed_text_payload_returns_none_for_non_usable_obj() -> None:
 def test_build_oembed_text_payload_non_string_html_raises() -> None:
     with pytest.raises(TypeError):
         build_oembed_text_payload({"html": {"bad": "value"}})
+
+
+def test_build_syndication_oembed_params_default_and_x_host() -> None:
+    assert build_syndication_oembed_params("2022790791047823773") == {
+        "url": "https://twitter.com/i/status/2022790791047823773",
+        "dnt": "false",
+        "omit_script": "true",
+        "hide_thread": "true",
+        "lang": "en",
+    }
+    assert build_syndication_oembed_params(
+        "2022790791047823773", use_x_host=True
+    ) == {
+        "url": "https://x.com/i/status/2022790791047823773",
+        "dnt": "false",
+        "omit_script": "true",
+        "hide_thread": "true",
+        "lang": "en",
+    }
 
 
 def test_syndication_has_usable_payload_with_text_or_media_hints() -> None:

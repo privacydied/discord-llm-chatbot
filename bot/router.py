@@ -131,6 +131,7 @@ from .router_components import (
     resolve_caption_only_base_text,
     resolve_video_stt_error_base_text,
     build_oembed_text_payload,
+    build_syndication_oembed_params,
     syndication_has_usable_payload,
     syndication_media_hint_keys,
     syndication_article_has_blocks,
@@ -1094,13 +1095,7 @@ class Router:
                     # If the JSON lacks usable text, try oEmbed fallbacks before moving on
                     if not _has_usable_payload(data):
                         oembed_url = "https://publish.twitter.com/oembed"
-                        oembed_params = {
-                            "url": f"https://twitter.com/i/status/{tweet_id}",
-                            "dnt": "false",
-                            "omit_script": "true",
-                            "hide_thread": "true",
-                            "lang": "en",
-                        }
+                        oembed_params = build_syndication_oembed_params(tweet_id)
                         try:
                             self._metric_inc(
                                 "x.syndication.fetch", {"endpoint": "oembed"}
@@ -1121,9 +1116,9 @@ class Router:
                         # Try x.com oembed variant if still no data
                         if not _has_usable_payload(data):
                             try:
-                                oembed_params_x = dict(oembed_params)
-                                oembed_params_x["url"] = (
-                                    f"https://x.com/i/status/{tweet_id}"
+                                oembed_params_x = build_syndication_oembed_params(
+                                    tweet_id,
+                                    use_x_host=True,
                                 )
                                 self._metric_inc(
                                     "x.syndication.fetch", {"endpoint": "oembed_x"}
