@@ -54,6 +54,7 @@ from .stt import ModelSpec, stt_manager
 from .stt_module.failure_classifier import STTFailureClassifier
 from .stt_module.multimodal_fallback import multimodal_fallback_provider
 from .stt_pipeline import (
+    abort_job_stream_if_present,
     build_url_transcript_result,
     build_youtube_transcript_result,
     ensure_stt_manager_ready,
@@ -1954,21 +1955,19 @@ async def hear_infer(audio: Union[Path, "discord.Attachment"]) -> str:
             _log_summary(spans, pre, transcript, cache_hit=transcript.cache_hit)
             return await job.finish_success(result_text)
     except RAMGuardExceeded as exc:
-        if job.pre and job.pre.stream:
-            try:
-                await job.pre.stream.abort()
-            except Exception:
-                logger.debug(
-                    "⚠️ Stream abort failed after RAM guard trigger", exc_info=True
-                )
+        await abort_job_stream_if_present(
+            job=job,
+            logger=logger,
+            debug_message="⚠️ Stream abort failed after RAM guard trigger",
+        )
         await job.finish_failure(exc)
         raise InferenceError(str(exc)) from exc
     except Exception as exc:
-        if job.pre and job.pre.stream:
-            try:
-                await job.pre.stream.abort()
-            except Exception:
-                logger.debug("⚠️ Stream abort failed after error", exc_info=True)
+        await abort_job_stream_if_present(
+            job=job,
+            logger=logger,
+            debug_message="⚠️ Stream abort failed after error",
+        )
         await job.finish_failure(exc)
         raise
     finally:
@@ -2094,23 +2093,19 @@ async def hear_infer_from_url(url: str, force_refresh: bool = False) -> Dict[str
 
             return await job.finish_success(result)
     except RAMGuardExceeded as exc:
-        if job.pre and job.pre.stream:
-            try:
-                await job.pre.stream.abort()
-            except Exception:
-                logger.debug(
-                    "⚠️ Stream abort failed after RAM guard trigger", exc_info=True
-                )
+        await abort_job_stream_if_present(
+            job=job,
+            logger=logger,
+            debug_message="⚠️ Stream abort failed after RAM guard trigger",
+        )
         await job.finish_failure(exc)
         raise InferenceError(str(exc)) from exc
     except Exception as exc:
-        if job.pre and job.pre.stream:
-            try:
-                await job.pre.stream.abort()
-            except Exception:
-                logger.debug(
-                    "⚠️ Stream abort failed in hear_infer_from_url", exc_info=True
-                )
+        await abort_job_stream_if_present(
+            job=job,
+            logger=logger,
+            debug_message="⚠️ Stream abort failed in hear_infer_from_url",
+        )
         await job.finish_failure(exc)
         raise
     finally:

@@ -346,3 +346,18 @@
     - `./.venv/bin/python -m py_compile bot/hear.py bot/stt_pipeline/__init__.py bot/stt_pipeline/logging.py`
     - `./.venv/bin/pytest -q tests/test_stt_pipeline_logging.py tests/test_stt_pipeline_spec_select.py tests/test_stt_pipeline_result_payload.py tests/test_video_ingest.py tests/test_hear_ffmpeg_resolution.py` -> `18 passed`
     - `./.venv/bin/pytest -q tests/core tests/router tests/syndication tests/vision tests/test_hear_ffmpeg_resolution.py tests/test_hear_stream_abort.py tests/test_media_ingestion.py tests/test_video_ingest.py tests/router/test_router_x_result_format_contract.py tests/test_media_ingestion_compat_contracts.py tests/vision/test_money_contract.py tests/test_media_ingestion_helpers.py tests/test_stt_pipeline_runtime.py tests/test_stt_pipeline_ffmpeg_runtime.py tests/test_stt_pipeline_youtube_path.py tests/test_stt_pipeline_result_payload.py tests/test_stt_pipeline_spec_select.py tests/test_stt_pipeline_logging.py` -> `250 passed`
+- 2026-02-17:
+  - Refactor (behavior-preserving): extracted STT job stream-abort handling into:
+    - `bot/stt_pipeline/lifecycle.py::abort_job_stream_if_present()`
+  - Rewired duplicated abort blocks in `bot/hear.py`:
+    - `hear_infer()` RAM/exceptions
+    - `hear_infer_from_url()` RAM/exceptions
+  - Exported helper via `bot/stt_pipeline/__init__.py`.
+  - Added focused contracts in `tests/test_stt_pipeline_lifecycle.py`:
+    - abort executes when stream exists
+    - abort failure is swallowed and debug-logged
+    - missing stream is a no-op
+  - Validation:
+    - `./.venv/bin/python -m py_compile bot/hear.py bot/stt_pipeline/__init__.py bot/stt_pipeline/lifecycle.py`
+    - `./.venv/bin/pytest -q tests/test_stt_pipeline_lifecycle.py tests/test_stt_pipeline_logging.py tests/test_stt_pipeline_spec_select.py tests/test_stt_pipeline_result_payload.py tests/test_video_ingest.py tests/test_hear_ffmpeg_resolution.py` -> `21 passed`
+    - `./.venv/bin/pytest -q tests/core tests/router tests/syndication tests/vision tests/test_hear_ffmpeg_resolution.py tests/test_hear_stream_abort.py tests/test_media_ingestion.py tests/test_video_ingest.py tests/router/test_router_x_result_format_contract.py tests/test_media_ingestion_compat_contracts.py tests/vision/test_money_contract.py tests/test_media_ingestion_helpers.py tests/test_stt_pipeline_runtime.py tests/test_stt_pipeline_ffmpeg_runtime.py tests/test_stt_pipeline_youtube_path.py tests/test_stt_pipeline_result_payload.py tests/test_stt_pipeline_spec_select.py tests/test_stt_pipeline_logging.py tests/test_stt_pipeline_lifecycle.py` -> `253 passed`
