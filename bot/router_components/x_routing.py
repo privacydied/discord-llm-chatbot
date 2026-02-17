@@ -1116,6 +1116,13 @@ def build_syndication_oembed_fallback_params(
     tweet_id: str,
 ) -> List[Tuple[str, Dict[str, str]]]:
     """Return ordered oEmbed fallback variants and their metric endpoint labels."""
+    return build_syndication_oembed_fallback_items_list(tweet_id)
+
+
+def build_syndication_oembed_fallback_items_list(
+    tweet_id: str,
+) -> List[Tuple[str, Dict[str, str]]]:
+    """Return ordered list of oEmbed fallback items for a tweet id."""
     items: List[Tuple[str, Dict[str, str]]] = []
     for host in build_syndication_oembed_hosts():
         items.append(build_syndication_oembed_fallback_item(host, tweet_id))

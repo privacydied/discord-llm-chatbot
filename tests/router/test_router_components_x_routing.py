@@ -123,6 +123,7 @@ from bot.router_components.x_routing import (
     build_syndication_oembed_metric_default_endpoint,
     build_syndication_oembed_x_metric_endpoint,
     build_syndication_oembed_fallback_item,
+    build_syndication_oembed_fallback_items_list,
     build_syndication_oembed_fallback_params,
     build_syndication_oembed_fallback_plan,
     build_syndication_oembed_fallback_plan_components,
@@ -947,6 +948,31 @@ def test_build_syndication_oembed_host_constant() -> None:
 
 def test_build_syndication_oembed_fallback_params_ordered_variants() -> None:
     assert build_syndication_oembed_fallback_params("2022790791047823773") == [
+        (
+            "oembed",
+            {
+                "url": "https://twitter.com/i/status/2022790791047823773",
+                "dnt": "false",
+                "omit_script": "true",
+                "hide_thread": "true",
+                "lang": "en",
+            },
+        ),
+        (
+            "oembed_x",
+            {
+                "url": "https://x.com/i/status/2022790791047823773",
+                "dnt": "false",
+                "omit_script": "true",
+                "hide_thread": "true",
+                "lang": "en",
+            },
+        ),
+    ]
+
+
+def test_build_syndication_oembed_fallback_items_list_ordered_variants() -> None:
+    assert build_syndication_oembed_fallback_items_list("2022790791047823773") == [
         (
             "oembed",
             {
