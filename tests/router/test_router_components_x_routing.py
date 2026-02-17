@@ -164,6 +164,7 @@ from bot.router_components.x_routing import (
     format_syndication_error_payload_repr,
     extract_syndication_photo_urls,
     extract_syndication_photo_url_from_dict,
+    extract_syndication_photo_urls_from_item,
     resolve_twitter_status_id,
     is_twitter_status_url,
     stt_result_has_transcription,
@@ -1733,6 +1734,13 @@ def test_extract_syndication_photo_url_from_dict_priority() -> None:
     assert extract_syndication_photo_url_from_dict({"media_url_https": "u2"}) == "u2"
     assert extract_syndication_photo_url_from_dict({"media_url": "u3"}) == "u3"
     assert extract_syndication_photo_url_from_dict({}) is None
+
+
+def test_extract_syndication_photo_urls_from_item_variants() -> None:
+    assert extract_syndication_photo_urls_from_item({"url": "u1"}) == ["u1"]
+    assert extract_syndication_photo_urls_from_item("u2") == ["u2"]
+    assert extract_syndication_photo_urls_from_item({"url": None}) == []
+    assert extract_syndication_photo_urls_from_item(1) == []
 
 
 def test_x_syn_probe_budget_timeout_s_caps_and_offsets() -> None:
