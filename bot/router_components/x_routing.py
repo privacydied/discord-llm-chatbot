@@ -1828,6 +1828,11 @@ def raw_url_candidate_value(raw_url: str) -> str:
 
 def raw_url_source_texts(texts: Iterable[str]) -> Iterable[str]:
     """Yield source text blobs consumed by raw URL collection."""
+    yield from raw_url_source_texts_iter(texts)
+
+
+def raw_url_source_texts_iter(texts: Iterable[str]) -> Iterable[str]:
+    """Yield iterator source used by raw URL source text helper."""
     yield from texts
 
 
