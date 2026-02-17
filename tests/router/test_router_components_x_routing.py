@@ -154,6 +154,7 @@ from bot.router_components.x_routing import (
     syndication_node_has_media_hints,
     syndication_media_hint_keys,
     format_syndication_body_text,
+    format_syndication_truncated_text,
     format_syndication_header_line,
     format_syndication_error_fallback,
     extract_syndication_photo_urls,
@@ -1621,6 +1622,12 @@ def test_format_syndication_body_text_variants() -> None:
     )
     long_text = "a" * 5000
     out = format_syndication_body_text(long_text)
+    assert len(out) == 3991
+    assert out.endswith("…")
+
+
+def test_format_syndication_truncated_text_shape() -> None:
+    out = format_syndication_truncated_text("x" * 5000)
     assert len(out) == 3991
     assert out.endswith("…")
 

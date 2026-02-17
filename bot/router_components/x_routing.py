@@ -1410,8 +1410,13 @@ def format_syndication_body_text(text: str) -> str:
     if text and len(text) <= 4000:
         return text
     if text:
-        return text[:3990] + "…"
+        return format_syndication_truncated_text(text)
     return "(Tweet text not available. If you want analysis, paste the text or add a screenshot.)"
+
+
+def format_syndication_truncated_text(text: str) -> str:
+    """Return legacy-truncated syndication body text with ellipsis suffix."""
+    return text[:3990] + "…"
 
 
 def format_syndication_header_line(
