@@ -1338,6 +1338,22 @@
     - `./.venv/bin/pytest -q tests/router/test_router_components_x_routing.py tests/router/test_router_caption_only_helpers.py tests/router/test_x_api_routing.py tests/router/test_router_x_base_text_resolution.py` -> `95 passed`
     - `./.venv/bin/pytest -q tests/core tests/router tests/syndication tests/vision tests/test_hear_ffmpeg_resolution.py tests/test_hear_stream_abort.py tests/test_media_ingestion.py tests/test_video_ingest.py tests/router/test_router_x_result_format_contract.py tests/router/test_router_x_base_text_resolution.py tests/test_media_ingestion_compat_contracts.py tests/vision/test_money_contract.py tests/test_media_ingestion_helpers.py tests/test_stt_pipeline_runtime.py tests/test_stt_pipeline_ffmpeg_runtime.py tests/test_stt_pipeline_youtube_path.py tests/test_stt_pipeline_result_payload.py tests/test_stt_pipeline_spec_select.py tests/test_stt_pipeline_logging.py tests/test_stt_pipeline_lifecycle.py tests/test_stt_pipeline_url_ingest.py tests/test_stt_pipeline_transcribe_flow.py tests/test_stt_pipeline_stitch.py` -> `357 passed`
 - 2026-02-17:
+  - Refactor (behavior-preserving): extracted syndication base/article merge helper into router components:
+    - `bot/router_components/x_routing.py::merge_syndication_base_with_article()`
+  - Rewired router formatter to delegate merge logic:
+    - `bot/router.py::_extract_syndication_text()`
+  - Exported helper via `bot/router_components/__init__.py`.
+  - Added focused pure-helper test in `tests/router/test_router_components_x_routing.py`:
+    - `test_merge_syndication_base_with_article_variants`
+  - Preserved behavior:
+    - `t.co` pointer base text still defers to article text
+    - duplicate article content in base text still avoids redundant append
+    - annotation format remains `"[Linked X Article]"`
+  - Validation:
+    - `python -m py_compile bot/router.py bot/router_components/__init__.py bot/router_components/x_routing.py tests/router/test_router_components_x_routing.py` -> `ok`
+    - `./.venv/bin/pytest -q tests/router/test_router_components_x_routing.py tests/router/test_router_caption_only_helpers.py tests/router/test_x_api_routing.py tests/router/test_router_x_base_text_resolution.py` -> `96 passed`
+    - `./.venv/bin/pytest -q tests/core tests/router tests/syndication tests/vision tests/test_hear_ffmpeg_resolution.py tests/test_hear_stream_abort.py tests/test_media_ingestion.py tests/test_video_ingest.py tests/router/test_router_x_result_format_contract.py tests/router/test_router_x_base_text_resolution.py tests/test_media_ingestion_compat_contracts.py tests/vision/test_money_contract.py tests/test_media_ingestion_helpers.py tests/test_stt_pipeline_runtime.py tests/test_stt_pipeline_ffmpeg_runtime.py tests/test_stt_pipeline_youtube_path.py tests/test_stt_pipeline_result_payload.py tests/test_stt_pipeline_spec_select.py tests/test_stt_pipeline_logging.py tests/test_stt_pipeline_lifecycle.py tests/test_stt_pipeline_url_ingest.py tests/test_stt_pipeline_transcribe_flow.py tests/test_stt_pipeline_stitch.py` -> `358 passed`
+- 2026-02-17:
   - Refactor (behavior-preserving): extracted Twitter status-url predicate into router components:
     - `bot/router_components/x_routing.py::is_twitter_status_url()`
   - Rewired router wrapper to delegate while preserving parser-injection behavior:

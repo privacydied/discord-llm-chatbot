@@ -28,6 +28,7 @@ from bot.router_components.x_routing import (
     extract_x_article_text,
     syndication_needs_article_hydration,
     extract_syndication_base_text,
+    merge_syndication_base_with_article,
     resolve_twitter_status_id,
     is_twitter_status_url,
     stt_result_has_transcription,
@@ -443,6 +444,44 @@ def test_extract_syndication_base_text_precedence() -> None:
     )
     assert extract_syndication_base_text({"text": " text "}) == "text"
     assert extract_syndication_base_text(None) == ""
+
+
+def test_merge_syndication_base_with_article_variants() -> None:
+    assert (
+        merge_syndication_base_with_article(
+            base_text="base",
+            article_text="",
+        )
+        == "base"
+    )
+    assert (
+        merge_syndication_base_with_article(
+            base_text="base",
+            article_text="article",
+        )
+        == "base\n\n[Linked X Article]\narticle"
+    )
+    assert (
+        merge_syndication_base_with_article(
+            base_text="base article body",
+            article_text="article body",
+        )
+        == "base article body"
+    )
+    assert (
+        merge_syndication_base_with_article(
+            base_text="https://t.co/abc123",
+            article_text="article",
+        )
+        == "article"
+    )
+    assert (
+        merge_syndication_base_with_article(
+            base_text="",
+            article_text="article",
+        )
+        == "article"
+    )
 
 
 def test_x_syn_probe_budget_timeout_s_caps_and_offsets() -> None:

@@ -135,6 +135,7 @@ from .router_components import (
     extract_x_article_text,
     syndication_needs_article_hydration,
     extract_syndication_base_text,
+    merge_syndication_base_with_article,
     x_syn_probe_budget_timeout_s,
     x_syn_quick_request_timeouts,
     build_syndication_photo_payload,
@@ -1299,13 +1300,10 @@ class Router:
             return ""
         base_text = extract_syndication_base_text(node)
         article_text = self._extract_x_article_text(node.get("article"))
-        if article_text:
-            if base_text and not re.search(r"https?://t\.co/[A-Za-z0-9]+", base_text):
-                if article_text in base_text:
-                    return base_text
-                return f"{base_text}\n\n[Linked X Article]\n{article_text}"
-            return article_text
-        return base_text
+        return merge_syndication_base_with_article(
+            base_text=base_text,
+            article_text=article_text,
+        )
 
     @staticmethod
     def _syndication_article_has_blocks(article_node: Any) -> bool:

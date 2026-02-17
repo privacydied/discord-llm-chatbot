@@ -447,6 +447,21 @@ def extract_syndication_base_text(node: Any) -> str:
     return (base_text or "").strip()
 
 
+def merge_syndication_base_with_article(
+    *,
+    base_text: str,
+    article_text: str,
+) -> str:
+    """Merge syndication base tweet text with hydrated article text."""
+    if not article_text:
+        return base_text
+    if base_text and not re.search(r"https?://t\.co/[A-Za-z0-9]+", base_text):
+        if article_text in base_text:
+            return base_text
+        return f"{base_text}\n\n[Linked X Article]\n{article_text}"
+    return article_text
+
+
 def x_syn_probe_budget_timeout_s(x_syn_timeout_s: float) -> float:
     """Compute bounded timeout budget for image/media probe calls."""
     return min(float(x_syn_timeout_s) + 1.0, 4.5)
