@@ -23,6 +23,7 @@ from bot.router_components.x_routing import (
     build_caption_only_fallback_log_payload,
     build_x_video_stt_error_result_payload,
     resolve_caption_only_base_text,
+    resolve_video_stt_error_base_text,
     resolve_twitter_status_id,
     is_twitter_status_url,
     stt_result_has_transcription,
@@ -311,6 +312,31 @@ def test_resolve_caption_only_base_text_preserves_router_precedence() -> None:
         resolve_caption_only_base_text(
             api_text="   ",
             tweet_text="tweet text",
+            base_text="base text",
+        )
+        == ""
+    )
+
+
+def test_resolve_video_stt_error_base_text_preserves_router_precedence() -> None:
+    assert (
+        resolve_video_stt_error_base_text(
+            tweet_text="tweet text",
+            base_text="base text",
+        )
+        == "tweet text"
+    )
+    assert (
+        resolve_video_stt_error_base_text(
+            tweet_text="",
+            base_text="base text",
+        )
+        == "base text"
+    )
+    # Preserve legacy behavior: truthy whitespace tweet text still wins before strip().
+    assert (
+        resolve_video_stt_error_base_text(
+            tweet_text="   ",
             base_text="base text",
         )
         == ""

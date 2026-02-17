@@ -130,6 +130,7 @@ from .router_components import (
     build_caption_only_fallback_log_payload,
     build_x_video_stt_error_result_payload,
     resolve_caption_only_base_text,
+    resolve_video_stt_error_base_text,
     x_syn_probe_budget_timeout_s,
     x_syn_quick_request_timeouts,
     build_syndication_photo_payload,
@@ -630,7 +631,10 @@ class Router:
         tweet_text: Optional[str] = None,
     ) -> str:
         """Format video STT failure while preserving video modality context."""
-        safe_base_text = (tweet_text or base_text or "").strip()
+        safe_base_text = resolve_video_stt_error_base_text(
+            tweet_text=tweet_text,
+            base_text=base_text,
+        )
         stt_error_result = build_x_video_stt_error_result_payload(
             url=url,
             stt_error=stt_error,
