@@ -1717,7 +1717,7 @@ def append_x_url_if_match(
 ) -> None:
     """Append canonical X/Twitter URL only when raw URL matches predicate."""
     if is_x_url_candidate(raw_url, is_x_url=is_x_url):
-        append_canonical_x_url(items, raw_url, canonicalize_x_url=canonicalize_x_url)
+        append_matched_x_url(items, raw_url, canonicalize_x_url=canonicalize_x_url)
 
 
 def append_unique_str(items: List[str], value: str) -> None:
@@ -1803,3 +1803,13 @@ def append_matched_status_url(
         raw_url,
         canonicalize_status_url=canonicalize_status_url,
     )
+
+
+def append_matched_x_url(
+    items: List[str],
+    raw_url: str,
+    *,
+    canonicalize_x_url: Callable[[str], str],
+) -> None:
+    """Append canonicalized X/Twitter URL for a URL already known to match."""
+    append_canonical_x_url(items, raw_url, canonicalize_x_url=canonicalize_x_url)
