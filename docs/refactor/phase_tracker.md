@@ -225,3 +225,17 @@
     - `./.venv/bin/pytest -q tests/core/test_router.py tests/router/test_x_api_routing.py` -> `20 passed`
     - `./.venv/bin/pytest -q tests/test_media_ingestion.py tests/core/test_empty_attachment.py tests/syndication/test_extract_policy.py tests/vision/test_pricing_calculations.py` -> `54 passed`
     - `./.venv/bin/pytest -q tests/core tests/router tests/syndication tests/vision tests/test_hear_ffmpeg_resolution.py tests/test_hear_stream_abort.py tests/test_media_ingestion.py tests/test_video_ingest.py` -> `201 passed`
+- 2026-02-17:
+  - Added compatibility contract tests to prevent regressions in restored behavior:
+    - `tests/router/test_router_x_result_format_contract.py`
+      - wrapped X API payload formatting
+      - `Photos: N` output contract
+      - safe prompt lookup contract (`_get_system_prompt`)
+    - `tests/test_media_ingestion_compat_contracts.py`
+      - patchable module seam presence (`hear_infer_from_url`, `brain_infer`, `contextual_brain_infer_simple`, `see_infer`)
+      - fallback text-flow behavior with non-awaitable router mocks
+    - `tests/vision/test_money_contract.py`
+      - `float(Money(...))` compatibility contract
+  - Validation:
+    - `./.venv/bin/pytest -q tests/router/test_router_x_result_format_contract.py tests/test_media_ingestion_compat_contracts.py tests/vision/test_money_contract.py` -> `8 passed`
+    - `./.venv/bin/pytest -q tests/core tests/router tests/syndication tests/vision tests/test_hear_ffmpeg_resolution.py tests/test_hear_stream_abort.py tests/test_media_ingestion.py tests/test_video_ingest.py tests/router/test_router_x_result_format_contract.py tests/test_media_ingestion_compat_contracts.py tests/vision/test_money_contract.py` -> `214 passed`
