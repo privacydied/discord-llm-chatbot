@@ -674,6 +674,16 @@ def build_syndication_oembed_params(
     }
 
 
+def build_syndication_oembed_fallback_params(
+    tweet_id: str,
+) -> List[Tuple[str, Dict[str, str]]]:
+    """Return ordered oEmbed fallback variants and their metric endpoint labels."""
+    return [
+        ("oembed", build_syndication_oembed_params(tweet_id)),
+        ("oembed_x", build_syndication_oembed_params(tweet_id, use_x_host=True)),
+    ]
+
+
 def build_syndication_fetch_plan(
     tweet_id: str,
 ) -> Tuple[str, Dict[str, str], List[Tuple[str, Dict[str, str]]]]:

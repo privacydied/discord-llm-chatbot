@@ -44,6 +44,7 @@ from bot.router_components.x_routing import (
     build_syndication_fetch_headers,
     build_syndication_fetch_params_variants,
     build_syndication_oembed_params,
+    build_syndication_oembed_fallback_params,
     build_syndication_fetch_plan,
     build_syndication_fetch_metric_payload,
     syndication_cache_ttl_s,
@@ -689,6 +690,31 @@ def test_build_syndication_oembed_params_default_and_x_host() -> None:
         "hide_thread": "true",
         "lang": "en",
     }
+
+
+def test_build_syndication_oembed_fallback_params_ordered_variants() -> None:
+    assert build_syndication_oembed_fallback_params("2022790791047823773") == [
+        (
+            "oembed",
+            {
+                "url": "https://twitter.com/i/status/2022790791047823773",
+                "dnt": "false",
+                "omit_script": "true",
+                "hide_thread": "true",
+                "lang": "en",
+            },
+        ),
+        (
+            "oembed_x",
+            {
+                "url": "https://x.com/i/status/2022790791047823773",
+                "dnt": "false",
+                "omit_script": "true",
+                "hide_thread": "true",
+                "lang": "en",
+            },
+        ),
+    ]
 
 
 def test_build_syndication_oembed_url_constant() -> None:

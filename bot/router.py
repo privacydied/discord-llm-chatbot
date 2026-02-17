@@ -132,7 +132,7 @@ from .router_components import (
     resolve_video_stt_error_base_text,
     extract_oembed_payload_from_response,
     build_syndication_oembed_url,
-    build_syndication_oembed_params,
+    build_syndication_oembed_fallback_params,
     build_syndication_fetch_plan,
     build_syndication_fetch_metric_payload,
     classify_syndication_cache_hit,
@@ -1089,39 +1089,27 @@ class Router:
                     # If the JSON lacks usable text, try oEmbed fallbacks before moving on
                     if not _has_usable_payload(data):
                         oembed_url = build_syndication_oembed_url()
-                        oembed_params = build_syndication_oembed_params(tweet_id)
-                        try:
-                            self._metric_inc(
-                                "x.syndication.fetch",
-                                build_syndication_fetch_metric_payload("oembed"),
-                            )
-                            resp_oe = await http_client.get(
-                                oembed_url, headers=headers, params=oembed_params
-                            )
-                            oembed_data = extract_oembed_payload_from_response(resp_oe)
-                            if oembed_data:
-                                data = oembed_data
-                        except Exception:
-                            pass
-                        # Try x.com oembed variant if still no data
-                        if not _has_usable_payload(data):
+                        for (
+                            metric_endpoint,
+                            oembed_params,
+                        ) in build_syndication_oembed_fallback_params(tweet_id):
+                            if _has_usable_payload(data):
+                                break
                             try:
-                                oembed_params_x = build_syndication_oembed_params(
-                                    tweet_id,
-                                    use_x_host=True,
-                                )
                                 self._metric_inc(
                                     "x.syndication.fetch",
-                                    build_syndication_fetch_metric_payload("oembed_x"),
+                                    build_syndication_fetch_metric_payload(
+                                        metric_endpoint
+                                    ),
                                 )
-                                resp2 = await http_client.get(
-                                    oembed_url, headers=headers, params=oembed_params_x
+                                resp_oe = await http_client.get(
+                                    oembed_url, headers=headers, params=oembed_params
                                 )
-                                oembed_data2 = extract_oembed_payload_from_response(
-                                    resp2
+                                oembed_data = extract_oembed_payload_from_response(
+                                    resp_oe
                                 )
-                                if oembed_data2:
-                                    data = oembed_data2
+                                if oembed_data:
+                                    data = oembed_data
                             except Exception:
                                 pass
                     # Break when we have usable data; otherwise continue to next variant
