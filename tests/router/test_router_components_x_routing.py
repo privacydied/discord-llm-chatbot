@@ -44,6 +44,7 @@ from bot.router_components.x_routing import (
     build_syndication_fetch_user_agent,
     build_syndication_fetch_accept_language,
     build_syndication_fetch_referer,
+    build_syndication_fetch_accept,
     build_syndication_fetch_headers,
     build_syndication_fetch_params_variants,
     build_syndication_oembed_params,
@@ -754,6 +755,12 @@ def test_build_syndication_fetch_accept_language_constant() -> None:
 
 def test_build_syndication_fetch_referer_constant() -> None:
     assert build_syndication_fetch_referer() == "https://platform.twitter.com/"
+
+
+def test_build_syndication_fetch_accept_constant() -> None:
+    assert build_syndication_fetch_accept() == (
+        "application/json, text/javascript;q=0.9, */*;q=0.8"
+    )
 
 
 def test_build_syndication_fetch_params_variants_shape() -> None:

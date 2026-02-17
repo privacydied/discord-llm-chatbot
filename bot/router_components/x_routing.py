@@ -654,11 +654,16 @@ def build_syndication_fetch_referer() -> str:
     return "https://platform.twitter.com/"
 
 
+def build_syndication_fetch_accept() -> str:
+    """Return canonical Accept header for CDN syndication fetches."""
+    return "application/json, text/javascript;q=0.9, */*;q=0.8"
+
+
 def build_syndication_fetch_headers() -> Dict[str, str]:
     """Return canonical headers for CDN syndication fetches."""
     return {
         "User-Agent": build_syndication_fetch_user_agent(),
-        "Accept": "application/json, text/javascript;q=0.9, */*;q=0.8",
+        "Accept": build_syndication_fetch_accept(),
         "Accept-Language": build_syndication_fetch_accept_language(),
         "Referer": build_syndication_fetch_referer(),
     }
