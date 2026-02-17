@@ -693,7 +693,15 @@ def build_syndication_platform_host() -> str:
 
 def build_syndication_fetch_accept() -> str:
     """Return canonical Accept header for CDN syndication fetches."""
-    return "application/json, text/javascript;q=0.9, */*;q=0.8"
+    return (
+        "application/json, text/javascript;q=0.9, */*;"
+        f"{build_syndication_accept_any_quality()}"
+    )
+
+
+def build_syndication_accept_any_quality() -> str:
+    """Return canonical quality token for wildcard Accept entries."""
+    return "q=0.8"
 
 
 def build_syndication_lang() -> str:

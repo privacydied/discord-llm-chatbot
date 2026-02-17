@@ -52,6 +52,7 @@ from bot.router_components.x_routing import (
     build_syndication_fetch_referer,
     build_syndication_platform_host,
     build_syndication_fetch_accept,
+    build_syndication_accept_any_quality,
     build_syndication_lang,
     build_syndication_dnt_value,
     build_syndication_omit_script_value,
@@ -861,6 +862,10 @@ def test_build_syndication_fetch_accept_constant() -> None:
     assert build_syndication_fetch_accept() == (
         "application/json, text/javascript;q=0.9, */*;q=0.8"
     )
+
+
+def test_build_syndication_accept_any_quality_constant() -> None:
+    assert build_syndication_accept_any_quality() == "q=0.8"
 
 
 def test_build_syndication_lang_constant() -> None:
