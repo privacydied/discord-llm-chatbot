@@ -334,6 +334,52 @@ def test_stt_result_has_transcription_matches_existing_truthiness() -> None:
 
 
 @pytest.mark.asyncio
+async def test_maybe_hydrate_syndication_payload_no_tweet_id_returns_input() -> None:
+    router = Router(DummyBot())
+    payload = {"text": "x"}
+
+    out = await router._maybe_hydrate_syndication_payload("", payload)
+
+    assert out is payload
+
+
+@pytest.mark.asyncio
+async def test_maybe_hydrate_syndication_payload_non_dict_returns_input() -> None:
+    router = Router(DummyBot())
+    payload = "raw"
+
+    out = await router._maybe_hydrate_syndication_payload("123", payload)
+
+    assert out == "raw"
+
+
+@pytest.mark.asyncio
+async def test_maybe_hydrate_syndication_payload_calls_hydrator(monkeypatch) -> None:
+    router = Router(DummyBot())
+    payload = {"text": "x"}
+    called = {}
+
+    async def _hydrate(self, tweet_id, syn, allow_tco_pointer=False):
+        called["tweet_id"] = tweet_id
+        called["syn"] = syn
+        called["allow_tco_pointer"] = allow_tco_pointer
+        return {"text": "hydrated"}
+
+    monkeypatch.setattr(Router, "_hydrate_syndication_article_if_needed", _hydrate)
+
+    out = await router._maybe_hydrate_syndication_payload(
+        "123",
+        payload,
+        allow_tco_pointer=True,
+    )
+
+    assert out == {"text": "hydrated"}
+    assert called["tweet_id"] == "123"
+    assert called["syn"] is payload
+    assert called["allow_tco_pointer"] is True
+
+
+@pytest.mark.asyncio
 async def test_resolve_twitter_caption_text_prefers_syndication(monkeypatch) -> None:
     router = Router(DummyBot())
     calls = {"hydrated": False}

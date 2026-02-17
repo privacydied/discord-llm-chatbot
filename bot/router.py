@@ -688,6 +688,22 @@ class Router:
             return False
         return bool(stt_result.get("transcription"))
 
+    async def _maybe_hydrate_syndication_payload(
+        self,
+        tweet_id: Optional[str],
+        payload: Any,
+        *,
+        allow_tco_pointer: bool = False,
+    ) -> Any:
+        """Hydrate syndication payload when tweet id and dict payload are available."""
+        if not tweet_id or not isinstance(payload, dict):
+            return payload
+        return await self._hydrate_syndication_article_if_needed(
+            tweet_id,
+            payload,
+            allow_tco_pointer=allow_tco_pointer,
+        )
+
     async def _resolve_twitter_caption_text(self, status_id: Optional[str]) -> str:
         """Resolve tweet caption via syndication first, then fx/vx fallback."""
         if not status_id:
@@ -696,8 +712,8 @@ class Router:
         tweet_text = ""
         try:
             syn = await self._get_tweet_via_syndication(status_id)
-            if isinstance(syn, dict):
-                syn = await self._hydrate_syndication_article_if_needed(
+            if syn:
+                syn = await self._maybe_hydrate_syndication_payload(
                     status_id, syn, allow_tco_pointer=True
                 )
                 tweet_text = self._extract_syndication_text(syn)
@@ -3850,13 +3866,11 @@ class Router:
                                     syn_caption = await self._get_tweet_via_syndication(
                                         caption_tweet_id
                                     )
-                                    if isinstance(syn_caption, dict):
-                                        syn_caption = (
-                                            await self._hydrate_syndication_article_if_needed(
-                                                caption_tweet_id,
-                                                syn_caption,
-                                                allow_tco_pointer=True,
-                                            )
+                                    if syn_caption:
+                                        syn_caption = await self._maybe_hydrate_syndication_payload(
+                                            caption_tweet_id,
+                                            syn_caption,
+                                            allow_tco_pointer=True,
                                         )
                                         tweet_caption = self._extract_syndication_text(
                                             syn_caption
@@ -6060,10 +6074,9 @@ class Router:
                         {"tweet_id": tweet_id},
                     )
                     if syn:
-                        if tweet_id:
-                            syn = await self._hydrate_syndication_article_if_needed(
-                                tweet_id, syn
-                            )
+                        syn = await self._maybe_hydrate_syndication_payload(
+                            tweet_id, syn
+                        )
                         self._metric_inc("x.syndication.hit", None)
 
                         # Log syndication response keys for video detection debugging [IV][REH]
@@ -6241,14 +6254,11 @@ class Router:
                                 },
                             )
                             syn_for_images = syn
-                            if tweet_id:
-                                syn_for_images = (
-                                    await self._hydrate_syndication_article_if_needed(
-                                        tweet_id,
-                                        syn_for_images,
-                                        allow_tco_pointer=True,
-                                    )
-                                )
+                            syn_for_images = await self._maybe_hydrate_syndication_payload(
+                                tweet_id,
+                                syn_for_images,
+                                allow_tco_pointer=True,
+                            )
                             return await self._handle_image_only_tweet(
                                 url, syn_for_images, source="syndication"
                             )
@@ -6328,8 +6338,8 @@ class Router:
                                         syn2 = await self._get_tweet_via_syndication(
                                             status_id
                                         )
-                                        if isinstance(syn2, dict):
-                                            syn2 = await self._hydrate_syndication_article_if_needed(
+                                        if syn2:
+                                            syn2 = await self._maybe_hydrate_syndication_payload(
                                                 status_id,
                                                 syn2,
                                                 allow_tco_pointer=True,
@@ -6431,17 +6441,16 @@ class Router:
                                 if sparse_kind == "image" and sparse_images:
                                     self._log_twitter_syndication_images(sparse_images)
                                     image_text = text
-                                    if tweet_id:
-                                        syn_for_sparse_images = (
-                                            await self._hydrate_syndication_article_if_needed(
-                                                tweet_id,
-                                                syn,
-                                                allow_tco_pointer=True,
-                                            )
+                                    syn_for_sparse_images = (
+                                        await self._maybe_hydrate_syndication_payload(
+                                            tweet_id,
+                                            syn,
+                                            allow_tco_pointer=True,
                                         )
-                                        image_text = self._extract_syndication_text(
-                                            syn_for_sparse_images
-                                        )
+                                    )
+                                    image_text = self._extract_syndication_text(
+                                        syn_for_sparse_images
+                                    )
                                     syn_like = self._build_syndication_photo_payload(
                                         image_text,
                                         sparse_images,
@@ -6522,12 +6531,9 @@ class Router:
                                 pass
 
                             syn_for_vl = syn
-                            if tweet_id:
-                                syn_for_vl = (
-                                    await self._hydrate_syndication_article_if_needed(
-                                        tweet_id, syn_for_vl, allow_tco_pointer=True
-                                    )
-                                )
+                            syn_for_vl = await self._maybe_hydrate_syndication_payload(
+                                tweet_id, syn_for_vl, allow_tco_pointer=True
+                            )
                             result = await self._route_twitter_syndication_to_vl(
                                 syn_for_vl,
                                 url,
