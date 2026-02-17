@@ -89,6 +89,7 @@ from bot.router_components.x_routing import (
     build_syndication_negative_cache_hit_label,
     build_syndication_data_cache_hit_label,
     build_syndication_oembed_params,
+    build_syndication_oembed_params_bundle,
     build_syndication_oembed_params_core,
     build_syndication_oembed_url_key,
     build_syndication_oembed_host_for_flag,
@@ -769,6 +770,19 @@ def test_build_syndication_oembed_params_core_shape() -> None:
     ) == {
         "url": "https://twitter.com/i/status/2022790791047823773",
         "lang": "en",
+    }
+
+
+def test_build_syndication_oembed_params_bundle_shape() -> None:
+    assert build_syndication_oembed_params_bundle(
+        "twitter.com",
+        "2022790791047823773",
+    ) == {
+        "url": "https://twitter.com/i/status/2022790791047823773",
+        "lang": "en",
+        "dnt": "false",
+        "omit_script": "true",
+        "hide_thread": "true",
     }
 
 

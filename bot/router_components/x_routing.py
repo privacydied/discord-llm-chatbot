@@ -849,6 +849,11 @@ def build_syndication_oembed_params(
 ) -> Dict[str, str]:
     """Build oEmbed request params for syndication fallback lookups."""
     host = build_syndication_oembed_host_for_flag(use_x_host)
+    return build_syndication_oembed_params_bundle(host, tweet_id)
+
+
+def build_syndication_oembed_params_bundle(host: str, tweet_id: str) -> Dict[str, str]:
+    """Return merged core+options oEmbed params for a resolved host."""
     return {
         **build_syndication_oembed_params_core(host, tweet_id),
         **build_syndication_oembed_options(),
