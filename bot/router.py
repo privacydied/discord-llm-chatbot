@@ -128,6 +128,7 @@ from .router_components import (
     x_syn_probe_budget_timeout_s,
     x_syn_quick_request_timeouts,
     build_syndication_photo_payload,
+    format_twitter_syndication_images_log_line,
     stt_result_has_transcription,
     strip_leading_bot_mention,
     strip_discord_mentions_and_urls,
@@ -762,15 +763,11 @@ class Router:
         self, image_urls: List[str], *, msg_id: Optional[int] = None
     ) -> None:
         """Emit canonical breadcrumb for Twitter image-route detection."""
-        first_host = ""
-        try:
-            if image_urls:
-                first_host = urlparse(image_urls[0]).netloc
-        except Exception:
-            first_host = ""
-        suffix = f" | msg_id={msg_id}" if msg_id is not None else ""
         self.logger.info(
-            f"route.twitter.syndication | images={len(image_urls)} | {first_host or 'n/a'}{suffix}"
+            format_twitter_syndication_images_log_line(
+                image_urls,
+                msg_id=msg_id,
+            )
         )
 
     def _build_syndication_photo_payload(

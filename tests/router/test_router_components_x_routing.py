@@ -23,6 +23,7 @@ from bot.router_components.x_routing import (
     x_syn_probe_budget_timeout_s,
     x_syn_quick_request_timeouts,
     build_syndication_photo_payload,
+    format_twitter_syndication_images_log_line,
 )
 
 
@@ -236,3 +237,17 @@ def test_build_syndication_photo_payload_shape() -> None:
 
     payload_none = build_syndication_photo_payload(None, [])
     assert payload_none == {"text": None, "photos": []}
+
+
+def test_format_twitter_syndication_images_log_line_with_and_without_msg_id() -> None:
+    assert (
+        format_twitter_syndication_images_log_line(
+            ["https://pbs.twimg.com/media/abc.jpg"],
+            msg_id=123,
+        )
+        == "route.twitter.syndication | images=1 | pbs.twimg.com | msg_id=123"
+    )
+    assert (
+        format_twitter_syndication_images_log_line(["not a url"])
+        == "route.twitter.syndication | images=1 | n/a"
+    )

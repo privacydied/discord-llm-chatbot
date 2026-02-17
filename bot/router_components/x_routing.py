@@ -303,6 +303,23 @@ def build_syndication_photo_payload(
     }
 
 
+def format_twitter_syndication_images_log_line(
+    image_urls: List[str], *, msg_id: Optional[int] = None
+) -> str:
+    """Format canonical breadcrumb line for Twitter image-route detection."""
+    first_host = ""
+    try:
+        if image_urls:
+            first_host = urlparse(image_urls[0]).netloc
+    except Exception:
+        first_host = ""
+    suffix = f" | msg_id={msg_id}" if msg_id is not None else ""
+    return (
+        f"route.twitter.syndication | images={len(image_urls)} | "
+        f"{first_host or 'n/a'}{suffix}"
+    )
+
+
 def extract_x_status_urls_from_text(
     text: str,
     *,
