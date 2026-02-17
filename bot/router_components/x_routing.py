@@ -1866,6 +1866,11 @@ def compile_regex(pattern: str, *, flags: int) -> Any:
 
 def compile_regex_pattern_argument(pattern: str) -> str:
     """Return normalized pattern argument for generic regex compilation."""
+    return compile_regex_pattern_value(pattern)
+
+
+def compile_regex_pattern_value(pattern: str) -> str:
+    """Return value used by generic regex pattern argument helper."""
     return pattern
 
 
