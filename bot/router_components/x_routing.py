@@ -992,7 +992,12 @@ def build_syndication_fetch_plan(
 
 def build_syndication_fetch_metric_payload(endpoint: str) -> Dict[str, str]:
     """Build metric labels payload for syndication fetch endpoints."""
-    return {"endpoint": endpoint}
+    return {build_syndication_metric_endpoint_key(): endpoint}
+
+
+def build_syndication_metric_endpoint_key() -> str:
+    """Return canonical metric key name for endpoint label payloads."""
+    return "endpoint"
 
 
 def build_syndication_widgets_endpoint() -> str:

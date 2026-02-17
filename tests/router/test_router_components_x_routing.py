@@ -104,6 +104,7 @@ from bot.router_components.x_routing import (
     build_syndication_oembed_fallback_params,
     build_syndication_oembed_fallback_plan,
     build_syndication_fetch_plan,
+    build_syndication_metric_endpoint_key,
     build_syndication_fetch_metric_payload,
     syndication_cache_ttl_s,
     syndication_cache_is_fresh,
@@ -1081,6 +1082,10 @@ def test_build_syndication_fetch_metric_payload_shape() -> None:
     assert build_syndication_fetch_metric_payload("oembed_x") == {
         "endpoint": "oembed_x"
     }
+
+
+def test_build_syndication_metric_endpoint_key_constant() -> None:
+    assert build_syndication_metric_endpoint_key() == "endpoint"
 
 
 def test_syndication_cache_ttl_s_caps_negative_entries() -> None:
