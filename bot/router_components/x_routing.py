@@ -918,7 +918,19 @@ def build_syndication_oembed_params_bundle(host: str, tweet_id: str) -> Dict[str
 
 def build_syndication_oembed_params_core(host: str, tweet_id: str) -> Dict[str, str]:
     """Return core oEmbed params (url + lang) for a resolved host."""
-    lang = build_syndication_lang()
+    return build_syndication_oembed_params_core_map(
+        host,
+        tweet_id,
+        build_syndication_lang(),
+    )
+
+
+def build_syndication_oembed_params_core_map(
+    host: str,
+    tweet_id: str,
+    lang: str,
+) -> Dict[str, str]:
+    """Return core oEmbed params map for explicit host/tweet/lang values."""
     return {
         build_syndication_oembed_url_key(): build_syndication_oembed_status_url(
             host, tweet_id
