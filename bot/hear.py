@@ -56,10 +56,10 @@ from .stt_module.multimodal_fallback import multimodal_fallback_provider
 from .stt_pipeline import (
     build_youtube_transcript_result,
     ensure_stt_manager_ready,
-    ffmpeg_candidates_from_env,
-    ffmpeg_supports_aac_decoder,
+    ffmpeg_bin_has_aac,
     load_stt_runtime_compat,
     parse_stt_max_ram_mb,
+    resolve_ffmpeg_bin,
 )
 from .youtube_transcript import resolve_youtube_transcript
 
@@ -97,50 +97,11 @@ MEMORY_ABORT_THRESHOLD_MB = 900
 
 STT_MAX_RAM_MB = parse_stt_max_ram_mb()
 
-_FFMPEG_BIN_CACHE: Optional[str] = None
-_FFMPEG_BIN_HAS_AAC: Optional[bool] = None
-
-
-def _ffmpeg_candidates() -> List[str]:
-    return ffmpeg_candidates_from_env()
-
-
-def _ffmpeg_supports_aac_decoder(ffmpeg_bin: str) -> bool:
-    return ffmpeg_supports_aac_decoder(ffmpeg_bin)
-
-
 def _resolve_ffmpeg_bin() -> str:
-    global _FFMPEG_BIN_CACHE, _FFMPEG_BIN_HAS_AAC
-    if _FFMPEG_BIN_CACHE:
-        return _FFMPEG_BIN_CACHE
-
-    for candidate in _ffmpeg_candidates():
-        ffmpeg_bin = None
-        if os.path.sep in candidate:
-            path_obj = Path(candidate)
-            if path_obj.exists():
-                ffmpeg_bin = str(path_obj)
-        else:
-            ffmpeg_bin = shutil.which(candidate)
-        if not ffmpeg_bin:
-            continue
-
-        has_aac = _ffmpeg_supports_aac_decoder(ffmpeg_bin)
-        _FFMPEG_BIN_CACHE = ffmpeg_bin
-        _FFMPEG_BIN_HAS_AAC = has_aac
-        try:
-            logger.info(
-                "stt.ffmpeg.selected path=%s aac_decoder=%s",
-                ffmpeg_bin,
-                str(has_aac).lower(),
-            )
-        except Exception:
-            pass
-        return ffmpeg_bin
-
-    raise InferenceError(
-        "ffmpeg executable not found; set STT_FFMPEG_BIN to an installed ffmpeg binary"
-    )
+    try:
+        return resolve_ffmpeg_bin(logger=logger)
+    except RuntimeError as exc:
+        raise InferenceError(str(exc)) from exc
 
 
 # ---------------------------------------------------------------------------
@@ -1255,7 +1216,7 @@ async def _preprocess_audio(
     filters = ",".join(filter_chain)
 
     ffmpeg_bin = _resolve_ffmpeg_bin()
-    if _FFMPEG_BIN_HAS_AAC is False and source_path.suffix.lower() in {
+    if ffmpeg_bin_has_aac() is False and source_path.suffix.lower() in {
         ".mp4",
         ".m4a",
         ".aac",

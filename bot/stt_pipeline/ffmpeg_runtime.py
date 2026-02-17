@@ -4,8 +4,13 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import subprocess
-from typing import List
+from pathlib import Path
+from typing import Any, List, Optional
+
+_FFMPEG_BIN_CACHE: Optional[str] = None
+_FFMPEG_BIN_HAS_AAC: Optional[bool] = None
 
 
 def ffmpeg_candidates_from_env() -> List[str]:
@@ -45,3 +50,51 @@ def ffmpeg_supports_aac_decoder(ffmpeg_bin: str) -> bool:
         return bool(re.search(r"\baac(?:_fixed|_latm)?\b", out))
     except Exception:
         return False
+
+
+def ffmpeg_bin_has_aac() -> Optional[bool]:
+    """Return cached AAC decoder availability for selected ffmpeg binary."""
+    return _FFMPEG_BIN_HAS_AAC
+
+
+def reset_ffmpeg_runtime_cache() -> None:
+    """Reset cached ffmpeg binary selection (used by tests)."""
+    global _FFMPEG_BIN_CACHE, _FFMPEG_BIN_HAS_AAC
+    _FFMPEG_BIN_CACHE = None
+    _FFMPEG_BIN_HAS_AAC = None
+
+
+def resolve_ffmpeg_bin(*, logger: Any | None = None) -> str:
+    """Resolve and cache ffmpeg binary path with AAC capability probe."""
+    global _FFMPEG_BIN_CACHE, _FFMPEG_BIN_HAS_AAC
+    if _FFMPEG_BIN_CACHE:
+        return _FFMPEG_BIN_CACHE
+
+    for candidate in ffmpeg_candidates_from_env():
+        ffmpeg_bin = None
+        if os.path.sep in candidate:
+            path_obj = Path(candidate)
+            if path_obj.exists():
+                ffmpeg_bin = str(path_obj)
+        else:
+            ffmpeg_bin = shutil.which(candidate)
+        if not ffmpeg_bin:
+            continue
+
+        has_aac = ffmpeg_supports_aac_decoder(ffmpeg_bin)
+        _FFMPEG_BIN_CACHE = ffmpeg_bin
+        _FFMPEG_BIN_HAS_AAC = has_aac
+        if logger is not None:
+            try:
+                logger.info(
+                    "stt.ffmpeg.selected path=%s aac_decoder=%s",
+                    ffmpeg_bin,
+                    str(has_aac).lower(),
+                )
+            except Exception:
+                pass
+        return ffmpeg_bin
+
+    raise RuntimeError(
+        "ffmpeg executable not found; set STT_FFMPEG_BIN to an installed ffmpeg binary"
+    )

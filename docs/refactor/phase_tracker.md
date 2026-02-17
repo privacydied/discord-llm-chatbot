@@ -134,3 +134,13 @@
   - Validation:
     - `./.venv/bin/python -m py_compile bot/router.py bot/router_components/__init__.py bot/router_components/input_harvest.py`
     - `./.venv/bin/pytest -q tests/router/test_router_components_input_harvest.py tests/router/test_router_components_gating.py tests/router/test_router_components_x_routing.py tests/router/test_router_components_compose.py tests/test_video_ingest.py tests/test_stt_pipeline_runtime.py tests/test_stt_pipeline_ffmpeg_runtime.py tests/test_stt_pipeline_youtube_path.py` -> `37 passed`
+- 2026-02-17:
+  - Extended `bot/stt_pipeline/ffmpeg_runtime.py` with cached resolver/state helpers:
+    - `resolve_ffmpeg_bin`
+    - `ffmpeg_bin_has_aac`
+    - `reset_ffmpeg_runtime_cache`
+  - Routed `bot/hear.py::_resolve_ffmpeg_bin` through extracted runtime resolver while preserving `InferenceError` surface.
+  - Expanded tests in `tests/test_stt_pipeline_ffmpeg_runtime.py`.
+  - Validation:
+    - `./.venv/bin/python -m py_compile bot/hear.py bot/stt_pipeline/__init__.py bot/stt_pipeline/ffmpeg_runtime.py`
+    - `./.venv/bin/pytest -q tests/test_stt_pipeline_ffmpeg_runtime.py tests/test_stt_pipeline_runtime.py tests/test_stt_pipeline_youtube_path.py tests/test_video_ingest.py tests/router/test_router_components_input_harvest.py tests/router/test_router_components_gating.py tests/router/test_router_components_x_routing.py tests/router/test_router_components_compose.py` -> `39 passed`
