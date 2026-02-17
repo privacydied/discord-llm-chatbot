@@ -1774,8 +1774,13 @@ def append_unique_str(items: List[str], value: str) -> None:
 
 def append_raw_url_if_present(items: List[str], raw_url: str) -> None:
     """Append extracted raw URL only when non-empty and not yet present."""
-    if raw_url_is_present(raw_url):
+    if raw_url_should_append(raw_url):
         append_unique_str(items, raw_url)
+
+
+def raw_url_should_append(raw_url: str) -> bool:
+    """Return whether raw URL should be appended by presence gating."""
+    return raw_url_is_present(raw_url)
 
 
 def raw_url_is_present(raw_url: str) -> bool:
