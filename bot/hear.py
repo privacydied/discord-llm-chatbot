@@ -24,6 +24,7 @@ import shutil
 import subprocess
 import tempfile
 import time
+from datetime import datetime, timezone
 from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
@@ -52,6 +53,7 @@ from .config import load_config
 from .stt import ModelSpec, stt_manager
 from .stt_module.failure_classifier import STTFailureClassifier
 from .stt_module.multimodal_fallback import multimodal_fallback_provider
+from .youtube_transcript import resolve_youtube_transcript
 
 if TYPE_CHECKING:
     import discord
@@ -95,6 +97,18 @@ except Exception:
 
 _FFMPEG_BIN_CACHE: Optional[str] = None
 _FFMPEG_BIN_HAS_AAC: Optional[bool] = None
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    norm = str(raw).strip().lower()
+    if norm in {"1", "true", "yes", "on", "enabled"}:
+        return True
+    if norm in {"0", "false", "no", "off", "disabled"}:
+        return False
+    return default
 
 
 def _ffmpeg_candidates() -> List[str]:
@@ -2007,9 +2021,6 @@ async def hear_infer_from_url(url: str, force_refresh: bool = False) -> Dict[str
     """
     Transcribe audio fetched via yt-dlp for the given URL.
     """
-    if hasattr(stt_manager, "is_available") and not stt_manager.is_available():
-        raise InferenceError("STT engine not available")
-
     # Log the exact URL being processed for STT job identity tracking [REH]
     logger.info(
         "stt.job.start kind=url url=%s force_refresh=%s",
@@ -2022,13 +2033,74 @@ async def hear_infer_from_url(url: str, force_refresh: bool = False) -> Dict[str
     job = STTJob(kind="url", spans=spans, ram_guard=ram_guard)
     download: Optional[DownloadedAudio] = None
     try:
-        ready = await stt_manager.ensure_ready()
-        if not ready:
-            exc = InferenceError("STT engine not available")
-            await job.finish_failure(exc)
-            raise exc
-
         async with _JOB_SEMAPHORE:
+            # YouTube transcript-first: try caption tracks before yt-dlp/ffmpeg/whisper.
+            # On failure/unavailable captions we fail open to the existing STT pipeline.
+            if _env_bool("YOUTUBE_TRANSCRIPT_FIRST", True):
+                try:
+                    yt = await resolve_youtube_transcript(
+                        url, force_refresh=force_refresh
+                    )
+                except Exception as exc:
+                    yt = None
+                    logger.debug(
+                        "stt.youtube_transcript.fail_open url=%s err=%s",
+                        url[:120] if url else "none",
+                        exc,
+                    )
+
+                if yt and yt.text:
+                    now_iso = datetime.now(timezone.utc).isoformat()
+                    result = {
+                        "transcription": yt.text,
+                        "partial": False,
+                        "abort_reason": "",
+                        "metadata": {
+                            "source": "youtube",
+                            "url": url,
+                            "title": yt.title,
+                            "uploader": yt.uploader,
+                            "upload_date": "",
+                            "original_duration_s": float(yt.duration_s or 0.0),
+                            "processed_duration_s": float(yt.duration_s or 0.0),
+                            "speedup_factor": 1.0,
+                            "cache_hit": bool(yt.cache_hit),
+                            "timestamp": now_iso,
+                            "demux_fallback": False,
+                            "transcription_source": yt.source,
+                            "transcription_language": yt.language,
+                        },
+                    }
+                    logger.info(
+                        "stt.youtube_transcript.ok video_id=%s lang=%s source=%s chars=%d cache_hit=%s",
+                        yt.video_id,
+                        yt.language or "unknown",
+                        yt.source,
+                        len(yt.text),
+                        str(bool(yt.cache_hit)).lower(),
+                    )
+                    transcript_preview = (
+                        (yt.text[:60] + "...") if len(yt.text) > 60 else yt.text
+                    )
+                    logger.info(
+                        "stt.job.complete url=%s chars=%d preview=%s",
+                        url[:80] if url else "none",
+                        len(yt.text),
+                        repr(transcript_preview),
+                    )
+                    return await job.finish_success(result)
+
+            if hasattr(stt_manager, "is_available") and not stt_manager.is_available():
+                exc = InferenceError("STT engine not available")
+                await job.finish_failure(exc)
+                raise exc
+
+            ready = await stt_manager.ensure_ready()
+            if not ready:
+                exc = InferenceError("STT engine not available")
+                await job.finish_failure(exc)
+                raise exc
+
             spans.start("yt-dlp")
             try:
                 download = await fetch_and_prepare_url_audio(
