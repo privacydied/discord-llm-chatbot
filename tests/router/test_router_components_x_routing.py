@@ -218,6 +218,7 @@ from bot.router_components.x_routing import (
     compile_url_extract_regex,
     status_url_extract_regex_source,
     status_url_extract_regex,
+    status_url_candidates_from_text,
     iter_status_url_candidates,
     x_url_extract_regex,
     raw_url_items_buffer,
@@ -351,6 +352,11 @@ def test_status_url_extract_regex_source_matches_x_url_extract_regex() -> None:
 
 def test_iter_status_url_candidates_yields_raw_matches() -> None:
     urls = list(iter_status_url_candidates("a https://x.com/u/status/1 b"))
+    assert urls == ["https://x.com/u/status/1"]
+
+
+def test_status_url_candidates_from_text_yields_raw_matches() -> None:
+    urls = list(status_url_candidates_from_text("a https://x.com/u/status/1 b"))
     assert urls == ["https://x.com/u/status/1"]
 
 

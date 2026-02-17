@@ -1676,6 +1676,11 @@ def x_url_extract_pattern_value() -> str:
 
 def iter_status_url_candidates(text: str) -> Iterable[str]:
     """Yield raw URL candidates for status extraction from one text blob."""
+    yield from status_url_candidates_from_text(text)
+
+
+def status_url_candidates_from_text(text: str) -> Iterable[str]:
+    """Yield status URL candidates using canonical status regex source."""
     yield from iter_text_urls(text, url_re=status_url_extract_regex())
 
 
