@@ -763,6 +763,11 @@ def build_syndication_lang() -> str:
 
 def build_syndication_fetch_headers() -> Dict[str, str]:
     """Return canonical headers for CDN syndication fetches."""
+    return build_syndication_fetch_headers_base()
+
+
+def build_syndication_fetch_headers_base() -> Dict[str, str]:
+    """Return canonical base headers map for CDN syndication fetches."""
     return {
         "User-Agent": build_syndication_fetch_user_agent(),
         "Accept": build_syndication_fetch_accept(),

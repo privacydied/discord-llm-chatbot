@@ -70,6 +70,7 @@ from bot.router_components.x_routing import (
     build_syndication_bool_true_value,
     build_syndication_bool_false_value,
     build_syndication_fetch_headers,
+    build_syndication_fetch_headers_base,
     build_syndication_fetch_params,
     build_syndication_fetch_params_variants,
     build_syndication_widgets_endpoint,
@@ -833,6 +834,13 @@ def test_build_syndication_base_url_constant() -> None:
 
 def test_build_syndication_fetch_headers_shape() -> None:
     headers = build_syndication_fetch_headers()
+    assert headers["Referer"] == "https://platform.twitter.com/"
+    assert headers["Accept-Language"] == "en-US,en;q=0.9"
+    assert "Mozilla/5.0" in headers["User-Agent"]
+
+
+def test_build_syndication_fetch_headers_base_shape() -> None:
+    headers = build_syndication_fetch_headers_base()
     assert headers["Referer"] == "https://platform.twitter.com/"
     assert headers["Accept-Language"] == "en-US,en;q=0.9"
     assert "Mozilla/5.0" in headers["User-Agent"]
