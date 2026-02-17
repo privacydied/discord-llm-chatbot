@@ -707,7 +707,11 @@ def build_syndication_oembed_params(
     use_x_host: bool = False,
 ) -> Dict[str, str]:
     """Build oEmbed request params for syndication fallback lookups."""
-    host = "x.com" if use_x_host else "twitter.com"
+    host = (
+        build_syndication_x_host()
+        if use_x_host
+        else build_syndication_twitter_host()
+    )
     lang = build_syndication_lang()
     return {
         "url": build_syndication_oembed_status_url(host, tweet_id),
@@ -728,7 +732,17 @@ def build_syndication_status_path() -> str:
 
 def build_syndication_oembed_hosts() -> Tuple[str, str]:
     """Return ordered oEmbed host fallbacks for tweet lookups."""
-    return ("twitter.com", "x.com")
+    return (build_syndication_twitter_host(), build_syndication_x_host())
+
+
+def build_syndication_twitter_host() -> str:
+    """Return canonical twitter hostname for syndication/oEmbed lookups."""
+    return "twitter.com"
+
+
+def build_syndication_x_host() -> str:
+    """Return canonical x hostname for syndication/oEmbed lookups."""
+    return "x.com"
 
 
 def build_syndication_oembed_options() -> Dict[str, str]:
@@ -759,7 +773,7 @@ def build_syndication_oembed_metric_endpoint(host: str) -> str:
     """Return metric endpoint label for a given oEmbed host."""
     return (
         build_syndication_oembed_x_metric_endpoint()
-        if host == "x.com"
+        if host == build_syndication_x_host()
         else build_syndication_oembed_metric_default_endpoint()
     )
 
@@ -786,7 +800,7 @@ def build_syndication_oembed_fallback_params(
                 endpoint,
                 build_syndication_oembed_params(
                     tweet_id,
-                    use_x_host=(host == "x.com"),
+                    use_x_host=(host == build_syndication_x_host()),
                 ),
             )
         )

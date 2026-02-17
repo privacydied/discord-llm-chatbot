@@ -66,6 +66,8 @@ from bot.router_components.x_routing import (
     build_syndication_status_path,
     build_syndication_oembed_options,
     build_syndication_oembed_hosts,
+    build_syndication_twitter_host,
+    build_syndication_x_host,
     build_syndication_oembed_metric_endpoint,
     build_syndication_oembed_metric_default_endpoint,
     build_syndication_oembed_x_metric_endpoint,
@@ -721,6 +723,11 @@ def test_build_syndication_oembed_params_default_and_x_host() -> None:
 
 def test_build_syndication_oembed_hosts_order() -> None:
     assert build_syndication_oembed_hosts() == ("twitter.com", "x.com")
+
+
+def test_build_syndication_host_constants() -> None:
+    assert build_syndication_twitter_host() == "twitter.com"
+    assert build_syndication_x_host() == "x.com"
 
 
 def test_build_syndication_oembed_status_url_shape() -> None:
