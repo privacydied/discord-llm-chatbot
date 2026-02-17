@@ -1623,8 +1623,7 @@ def x_url_extract_pattern() -> str:
 
 def iter_status_url_candidates(text: str) -> Iterable[str]:
     """Yield raw URL candidates for status extraction from one text blob."""
-    for m in re.finditer(x_url_extract_pattern(), text or "", re.IGNORECASE):
-        yield m.group(0)
+    yield from iter_text_urls(text, url_re=x_url_extract_regex())
 
 
 def x_url_extract_regex() -> Any:
