@@ -645,6 +645,12 @@ def syndication_cache_ttl_s(default_ttl_s: float, cached: Any) -> float:
     return ttl
 
 
+def syndication_cache_is_fresh(now_s: float, default_ttl_s: float, cached: Any) -> bool:
+    """Return True when syndication cache entry is still fresh under TTL policy."""
+    ttl = syndication_cache_ttl_s(default_ttl_s, cached)
+    return (now_s - float(cached.get("ts", 0))) < ttl
+
+
 def build_syndication_endpoint_url(base: str, endpoint: str) -> str:
     """Build syndication endpoint URL preserving legacy endpoint mapping."""
     suffix = "widgets/tweet" if endpoint == "widgets" else "tweet-result"

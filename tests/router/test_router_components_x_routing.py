@@ -40,6 +40,7 @@ from bot.router_components.x_routing import (
     build_syndication_oembed_params,
     build_syndication_fetch_plan,
     syndication_cache_ttl_s,
+    syndication_cache_is_fresh,
     build_syndication_endpoint_url,
     extract_oembed_html_text,
     syndication_has_usable_payload,
@@ -691,6 +692,30 @@ def test_syndication_cache_ttl_s_caps_negative_entries() -> None:
 def test_syndication_cache_ttl_s_preserves_attribute_error_for_bad_cache() -> None:
     with pytest.raises(AttributeError):
         syndication_cache_ttl_s(600.0, object())
+
+
+def test_syndication_cache_is_fresh_respects_ttl_policy() -> None:
+    assert (
+        syndication_cache_is_fresh(
+            1_000.0,
+            600.0,
+            {"ts": 500.0, "neg": False},
+        )
+        is True
+    )
+    assert (
+        syndication_cache_is_fresh(
+            1_000.0,
+            600.0,
+            {"ts": 500.0, "neg": True},
+        )
+        is False
+    )
+
+
+def test_syndication_cache_is_fresh_preserves_ts_parse_error() -> None:
+    with pytest.raises(ValueError):
+        syndication_cache_is_fresh(1_000.0, 600.0, {"ts": "bad", "neg": False})
 
 
 def test_build_syndication_endpoint_url_mapping() -> None:
