@@ -126,6 +126,7 @@ from .router_components import (
     resolve_twitter_status_id,
     classify_stt_error_reason,
     x_syn_probe_budget_timeout_s,
+    x_syn_quick_request_timeouts,
     stt_result_has_transcription,
     strip_leading_bot_mention,
     strip_discord_mentions_and_urls,
@@ -782,10 +783,13 @@ class Router:
 
     def _build_x_syn_quick_request_config(self) -> RequestConfig:
         """Build short-budget HTTP config for quick X syndication probes."""
+        connect_timeout, read_timeout, total_timeout = x_syn_quick_request_timeouts(
+            self._x_syn_timeout_s
+        )
         return RequestConfig(
-            connect_timeout=min(self._x_syn_timeout_s, 3.0),
-            read_timeout=min(self._x_syn_timeout_s, 3.0),
-            total_timeout=min(self._x_syn_timeout_s + 0.5, 3.5),
+            connect_timeout=connect_timeout,
+            read_timeout=read_timeout,
+            total_timeout=total_timeout,
             max_retries=0,
         )
 

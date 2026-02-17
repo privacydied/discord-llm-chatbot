@@ -284,6 +284,15 @@ def x_syn_probe_budget_timeout_s(x_syn_timeout_s: float) -> float:
     return min(float(x_syn_timeout_s) + 1.0, 4.5)
 
 
+def x_syn_quick_request_timeouts(x_syn_timeout_s: float) -> tuple[float, float, float]:
+    """Compute bounded connect/read/total request budgets for quick probes."""
+    return (
+        min(x_syn_timeout_s, 3.0),
+        min(x_syn_timeout_s, 3.0),
+        min(x_syn_timeout_s + 0.5, 3.5),
+    )
+
+
 def extract_x_status_urls_from_text(
     text: str,
     *,
