@@ -637,6 +637,14 @@ def build_syndication_fetch_plan(
     return base, headers, params_variants
 
 
+def syndication_cache_ttl_s(default_ttl_s: float, cached: Any) -> float:
+    """Compute syndication cache TTL with shorter cap for negative entries."""
+    ttl = default_ttl_s
+    if cached.get("neg"):
+        ttl = min(default_ttl_s, 300.0)
+    return ttl
+
+
 def build_syndication_endpoint_url(base: str, endpoint: str) -> str:
     """Build syndication endpoint URL preserving legacy endpoint mapping."""
     suffix = "widgets/tweet" if endpoint == "widgets" else "tweet-result"

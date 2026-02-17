@@ -133,6 +133,7 @@ from .router_components import (
     build_oembed_text_payload,
     build_syndication_oembed_params,
     build_syndication_fetch_plan,
+    syndication_cache_ttl_s,
     build_syndication_endpoint_url,
     syndication_has_usable_payload,
     syndication_media_hint_keys,
@@ -1009,10 +1010,7 @@ class Router:
         now = time.time()
         cached = self._syn_cache.get(tweet_id)
         if cached:
-            ttl = self._syn_ttl_s
-            if cached.get("neg"):
-                # Shorter TTL for negative cache entries to reduce long-lived false negatives [REH]
-                ttl = min(self._syn_ttl_s, 300.0)
+            ttl = syndication_cache_ttl_s(self._syn_ttl_s, cached)
             if (now - float(cached.get("ts", 0))) < ttl:
                 if cached.get("neg"):
                     self._metric_inc("x.syndication.neg_cache_hit", None)
@@ -1029,9 +1027,7 @@ class Router:
             # Check cache again inside lock
             cached = self._syn_cache.get(tweet_id)
             if cached:
-                ttl = self._syn_ttl_s
-                if cached.get("neg"):
-                    ttl = min(self._syn_ttl_s, 300.0)
+                ttl = syndication_cache_ttl_s(self._syn_ttl_s, cached)
                 if (now - float(cached.get("ts", 0))) < ttl:
                     if cached.get("neg"):
                         self._metric_inc("x.syndication.neg_cache_hit_locked", None)

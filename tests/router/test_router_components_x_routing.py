@@ -39,6 +39,7 @@ from bot.router_components.x_routing import (
     build_oembed_text_payload,
     build_syndication_oembed_params,
     build_syndication_fetch_plan,
+    syndication_cache_ttl_s,
     build_syndication_endpoint_url,
     extract_oembed_html_text,
     syndication_has_usable_payload,
@@ -679,6 +680,17 @@ def test_build_syndication_fetch_plan_shape_and_values() -> None:
         ("tweet-result", {"id": "2022790791047823773", "lang": "en"}),
         ("widgets", {"id": "2022790791047823773", "lang": "en", "dnt": "false"}),
     ]
+
+
+def test_syndication_cache_ttl_s_caps_negative_entries() -> None:
+    assert syndication_cache_ttl_s(600.0, {"neg": True}) == 300.0
+    assert syndication_cache_ttl_s(120.0, {"neg": True}) == 120.0
+    assert syndication_cache_ttl_s(600.0, {"neg": False}) == 600.0
+
+
+def test_syndication_cache_ttl_s_preserves_attribute_error_for_bad_cache() -> None:
+    with pytest.raises(AttributeError):
+        syndication_cache_ttl_s(600.0, object())
 
 
 def test_build_syndication_endpoint_url_mapping() -> None:
