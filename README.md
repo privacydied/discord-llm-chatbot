@@ -30,32 +30,86 @@
 ## 🧭 Architecture (high-level)
 
 ```mermaid
-flowchart LR
-    A[Discord Gateway] --> B["LLMBot (discord.py)"]
-    B --> C[Router]
+flowchart TD
+    R["run.py"] --> M["bot.main"]
+    M --> B["LLMBot (discord.py)"]
+    B --> SH["setup_hook()"]
 
-    C --> D1[Text: OpenAI / OpenRouter]
-    C --> D2["Text (local): Ollama"]
-    C --> E["RAG: Hybrid Search (ChromaDB)"]
-    C --> F["Vision Orchestrator: Together / Novita"]
-    C --> G1[Media: STT Orchestrator]
-    G1 --> GY[YouTube transcript-first resolver]
-    GY -->|hit| GT[Transcript text]
-    GY -->|miss| G3[yt-dlp + python-ffmpeg preprocess]
-    G3 --> G2[faster-whisper / whispercpp]
-    G2 --> GT
-    C --> H1["PDF / OCR: PyMuPDF"]
-    H1 --> H2["Tesseract OCR (optional)"]
+    SH --> COGS["Command Cogs"]
+    SH --> ROUTER["Router"]
+    SH --> VO["VisionOrchestrator"]
+    SH --> TTS["TTSManager"]
+    SH --> RAGINIT["RAG init (optional eager load)"]
+    SH --> MET["Metrics: Prometheus or Noop"]
 
-    B --> I[Commands / Cogs]
-    B --> J[Prometheus Metrics]
-    B --> K["Logging: Rich + JSONL"]
+    DG["Discord Gateway Events"] --> Q["Per-user message queue"]
+    Q --> RD["router.dispatch_message()"]
+    RD --> CMD["Command delegation"]
+    CMD --> COGS
+
+    RD --> MM["Multimodal collector + ResultAggregator"]
+    MM --> IMG["Image inputs"]
+    MM --> VID["Video/Audio URLs"]
+    MM --> URL["General URLs (incl. X/Twitter)"]
+    MM --> DOC["PDF/Docs"]
+
+    IMG --> SEE["see.py"]
+    SEE --> VLB["VL backend ladder (OpenRouter)"]
+    VLB --> EVID["Evidence text"]
+
+    URL --> XS["X syndication + article hydration + media detection"]
+    URL --> WEB["Web extraction service"]
+    XS --> EVID
+    WEB --> EVID
+
+    DOC --> PDF["PyMuPDF parsing"]
+    DOC --> OCR["Tesseract OCR (optional)"]
+    PDF --> EVID
+    OCR --> EVID
+
+    VID --> YTF["YouTube transcript-first resolver"]
+    YTF -->|hit| EVID
+    YTF -->|miss| YTDLP["video_ingest: yt-dlp"]
+    YTDLP --> FFMPEG["python-ffmpeg preprocess"]
+    FFMPEG --> WH["faster-whisper / whispercpp"]
+    WH --> EVID
+
+    EVID --> TF["_invoke_text_flow()"]
+    TF --> RAG["Hybrid RAG search (ChromaDB)"]
+    TF --> CTX["Contextual brain + memory context"]
+    RAG --> BRAIN["brain_infer()"]
+    CTX --> BRAIN
+    BRAIN --> AIR["ai_backend router"]
+    AIR --> OA["OpenAI/OpenRouter text ladder"]
+    AIR --> OL["Ollama"]
+    OA --> ACT["BotAction"]
+    OL --> ACT
+
+    ACT --> SEND["_execute_action()"]
+    SEND --> VOICE["TTS + optional native voice publish"]
+    SEND --> OUT["Discord reply/edit"]
+
+    B --> LOG["Rich console + JSONL logging"]
+    ROUTER --> LOG
+    B --> MET
 
     subgraph Storage["Files / Storage"]
-        L1[kb/]
-        L2[chroma_db/]
-        L3["vision_data/, logs/, user_profiles/, server_profiles/"]
+        KB["kb/ + chroma_db/"]
+        CTXSTORE["context.json + enhanced_context.json"]
+        CACHE["cache/stt_* + cache/video_audio + cache/youtube_transcripts"]
+        PROF["user_profiles/ + server_profiles/"]
+        VDATA["vision_data/ + logs/"]
     end
+
+    RAG --> KB
+    TF --> CTXSTORE
+    YTF --> CACHE
+    YTDLP --> CACHE
+    FFMPEG --> CACHE
+    WH --> CACHE
+    B --> PROF
+    VO --> VDATA
+    LOG --> VDATA
 ```
 
 Entrypoint: `run.py` → `bot.main:run_bot()` → `LLMBot.start()`
