@@ -1635,8 +1635,7 @@ def extract_raw_urls_from_texts(texts: Iterable[str]) -> List[str]:
         for t in texts:
             for m in url_re.finditer(t or ""):
                 u = m.group(0)
-                if u:
-                    append_unique_str(raw_urls, u)
+                append_raw_url_if_present(raw_urls, u)
     except Exception:
         pass
     return raw_urls
@@ -1660,6 +1659,12 @@ def append_unique_str(items: List[str], value: str) -> None:
     """Append value to list only when it is not already present."""
     if value not in items:
         items.append(value)
+
+
+def append_raw_url_if_present(items: List[str], raw_url: str) -> None:
+    """Append extracted raw URL only when non-empty and not yet present."""
+    if raw_url:
+        append_unique_str(items, raw_url)
 
 
 def append_canonical_x_url(
