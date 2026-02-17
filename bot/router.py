@@ -678,6 +678,12 @@ class Router:
         node = (payload.get("tweet") or payload.get("status")) or {}
         return node if isinstance(node, dict) else {}
 
+    def _stt_result_has_transcription(self, stt_result: Any) -> bool:
+        """Check whether an STT result payload contains non-empty transcription text."""
+        if not isinstance(stt_result, dict):
+            return False
+        return bool(stt_result.get("transcription"))
+
     async def _resolve_twitter_caption_text(self, status_id: Optional[str]) -> str:
         """Resolve tweet caption via syndication first, then fx/vx fallback."""
         if not status_id:
@@ -6270,7 +6276,7 @@ class Router:
                                 "x.syndication.stt",
                                 {"url": url},
                             )
-                            if stt_res and stt_res.get("transcription"):
+                            if self._stt_result_has_transcription(stt_res):
                                 return self._format_x_tweet_with_transcription(
                                     base_text=base,
                                     url=url,
@@ -6412,7 +6418,7 @@ class Router:
                                         "x.syndication.sparse.stt",
                                         {"url": sparse_url},
                                     )
-                                    if stt_res and stt_res.get("transcription"):
+                                    if self._stt_result_has_transcription(stt_res):
                                         return self._format_x_tweet_with_transcription(
                                             base_text=base,
                                             url=sparse_url,
@@ -6468,8 +6474,8 @@ class Router:
                                         "x.syndication.sparse.force_stt",
                                         {"url": url},
                                     )
-                                    if forced_stt_res and forced_stt_res.get(
-                                        "transcription"
+                                    if self._stt_result_has_transcription(
+                                        forced_stt_res
                                     ):
                                         return self._format_x_tweet_with_transcription(
                                             base_text=base,
@@ -6585,7 +6591,7 @@ class Router:
                                     "x.api.stt",
                                     {"url": url},
                                 )
-                                if stt_res and stt_res.get("transcription"):
+                                if self._stt_result_has_transcription(stt_res):
                                     base = self._format_x_tweet_result(api_data, url)
                                     formatted = self._format_x_tweet_with_transcription(
                                         base_text=base,
@@ -6799,9 +6805,7 @@ class Router:
                     # Process through yt-dlp flow
                     transcription_result = await hear_infer_from_url(url)
 
-                    if transcription_result and transcription_result.get(
-                        "transcription"
-                    ):
+                    if self._stt_result_has_transcription(transcription_result):
                         transcription = transcription_result["transcription"]
                         metadata = transcription_result.get("metadata", {})
                         title = metadata.get("title", "Unknown")

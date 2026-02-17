@@ -308,6 +308,17 @@ def test_extract_fxtwitter_tweet_node_handles_variants() -> None:
     assert router._extract_fxtwitter_tweet_node(None) == {}
 
 
+def test_stt_result_has_transcription_matches_existing_truthiness() -> None:
+    router = Router(DummyBot())
+
+    assert router._stt_result_has_transcription({"transcription": "hello"}) is True
+    # Preserve existing bool() semantics used in call sites.
+    assert router._stt_result_has_transcription({"transcription": "   "}) is True
+    assert router._stt_result_has_transcription({"transcription": ""}) is False
+    assert router._stt_result_has_transcription({"text": "fallback only"}) is False
+    assert router._stt_result_has_transcription(None) is False
+
+
 @pytest.mark.asyncio
 async def test_resolve_twitter_caption_text_prefers_syndication(monkeypatch) -> None:
     router = Router(DummyBot())
