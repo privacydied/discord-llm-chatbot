@@ -1646,8 +1646,13 @@ def extract_raw_urls_from_texts(texts: Iterable[str]) -> List[str]:
 
 def iter_text_urls(text: str, *, url_re: Any) -> Iterable[str]:
     """Yield raw URL matches from one text blob using provided compiled regex."""
-    for m in url_re.finditer(text or ""):
+    for m in iter_url_matches(text, url_re=url_re):
         yield m.group(0)
+
+
+def iter_url_matches(text: str, *, url_re: Any) -> Iterable[Any]:
+    """Yield raw regex match objects for URL pattern scans in one text blob."""
+    yield from url_re.finditer(text or "")
 
 
 def filter_canonical_x_urls(
