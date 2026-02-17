@@ -739,6 +739,30 @@ class Router:
             allow_tco_pointer=allow_tco_pointer,
         )
 
+    async def _resolve_syndication_caption_from_payload(
+        self,
+        tweet_id: Optional[str],
+        payload: Any,
+        *,
+        fallback_text: str = "",
+    ) -> str:
+        """Resolve caption from a syndication-like payload with optional hydration."""
+        if not isinstance(payload, dict):
+            return fallback_text
+        try:
+            payload = await self._maybe_hydrate_syndication_payload(
+                tweet_id,
+                payload,
+                allow_tco_pointer=True,
+            )
+            if isinstance(payload, dict):
+                caption = self._extract_syndication_text(payload)
+                if caption:
+                    return caption
+        except Exception:
+            pass
+        return fallback_text
+
     async def _resolve_twitter_caption_text(self, status_id: Optional[str]) -> str:
         """Resolve tweet caption via syndication first, then fx/vx fallback."""
         if not status_id:
@@ -748,10 +772,10 @@ class Router:
         try:
             syn = await self._get_tweet_via_syndication(status_id)
             if syn:
-                syn = await self._maybe_hydrate_syndication_payload(
-                    status_id, syn, allow_tco_pointer=True
+                tweet_text = await self._resolve_syndication_caption_from_payload(
+                    status_id,
+                    syn,
                 )
-                tweet_text = self._extract_syndication_text(syn)
         except Exception:
             tweet_text = ""
 
@@ -784,12 +808,11 @@ class Router:
             return fallback_text
         try:
             syn = await self._get_tweet_via_syndication(status_id)
-            syn = await self._maybe_hydrate_syndication_payload(
-                status_id, syn, allow_tco_pointer=True
+            return await self._resolve_syndication_caption_from_payload(
+                status_id,
+                syn,
+                fallback_text=fallback_text,
             )
-            hydrated_text = self._extract_syndication_text(syn)
-            if hydrated_text:
-                return hydrated_text
         except Exception:
             pass
         return fallback_text
@@ -6467,16 +6490,10 @@ class Router:
                                     )
                                 if sparse_kind == "image" and sparse_images:
                                     self._log_twitter_syndication_images(sparse_images)
-                                    image_text = text
-                                    syn_for_sparse_images = (
-                                        await self._maybe_hydrate_syndication_payload(
-                                            tweet_id,
-                                            syn,
-                                            allow_tco_pointer=True,
-                                        )
-                                    )
-                                    image_text = self._extract_syndication_text(
-                                        syn_for_sparse_images
+                                    image_text = await self._resolve_syndication_caption_from_payload(
+                                        tweet_id,
+                                        syn,
+                                        fallback_text=text,
                                     )
                                     return await self._route_twitter_images_with_caption(
                                         url=url,

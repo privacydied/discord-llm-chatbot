@@ -531,6 +531,62 @@ async def test_maybe_hydrate_syndication_payload_calls_hydrator(monkeypatch) -> 
 
 
 @pytest.mark.asyncio
+async def test_resolve_syndication_caption_from_payload_hydrates_and_extracts(
+    monkeypatch,
+) -> None:
+    router = Router(DummyBot())
+    called = {}
+
+    async def _maybe_hydrate(self, tweet_id, payload, allow_tco_pointer=False):
+        called["tweet_id"] = tweet_id
+        called["payload"] = payload
+        called["allow_tco_pointer"] = allow_tco_pointer
+        return {"text": "hydrated"}
+
+    monkeypatch.setattr(Router, "_maybe_hydrate_syndication_payload", _maybe_hydrate)
+    monkeypatch.setattr(Router, "_extract_syndication_text", lambda _s, n: n.get("text", ""))
+
+    out = await router._resolve_syndication_caption_from_payload(
+        "123",
+        {"text": "raw"},
+        fallback_text="fallback",
+    )
+
+    assert out == "hydrated"
+    assert called["tweet_id"] == "123"
+    assert called["payload"] == {"text": "raw"}
+    assert called["allow_tco_pointer"] is True
+
+
+@pytest.mark.asyncio
+async def test_resolve_syndication_caption_from_payload_returns_fallback_on_miss_or_error(
+    monkeypatch,
+) -> None:
+    router = Router(DummyBot())
+
+    out_non_dict = await router._resolve_syndication_caption_from_payload(
+        "123",
+        "bad",
+        fallback_text="fallback",
+    )
+    assert out_non_dict == "fallback"
+
+    async def _maybe_hydrate_raises(self, _tweet_id, _payload, allow_tco_pointer=False):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(
+        Router, "_maybe_hydrate_syndication_payload", _maybe_hydrate_raises
+    )
+
+    out_error = await router._resolve_syndication_caption_from_payload(
+        "123",
+        {"text": "raw"},
+        fallback_text="fallback",
+    )
+    assert out_error == "fallback"
+
+
+@pytest.mark.asyncio
 async def test_resolve_twitter_caption_text_prefers_syndication(monkeypatch) -> None:
     router = Router(DummyBot())
     calls = {"hydrated": False}
