@@ -64,6 +64,7 @@ from .stt_pipeline import (
     log_stt_job_complete,
     load_stt_runtime_compat,
     parse_stt_max_ram_mb,
+    preprocess_and_transcribe,
     select_initial_model_spec,
     try_youtube_transcript_first,
 )
@@ -1929,25 +1930,21 @@ async def hear_infer(audio: Union[Path, "discord.Attachment"]) -> str:
             local_path, temp_handle, created_temp = await _ensure_local_audio(audio)
             job.register_temp(temp_handle, local_path if created_temp else None)
             voice_note = _is_voice_note(attachment) if attachment is not None else False
-            pre = await _preprocess_audio_with_retry(
+            pre, transcript = await preprocess_and_transcribe(
                 source_path=local_path,
                 spans=spans,
                 download=None,
                 voice_note=voice_note,
                 ram_guard=ram_guard,
-            )
-            job.register_pre(pre)
-            ram_guard.check("pre-stage")
-
-            spec = select_initial_model_spec(
-                manager=stt_manager,
-                duration_in_s=pre.duration_in,
-                downgrade_threshold_s=120.0,
-                logger=logger,
-            )
-
-            transcript = await _run_whisper_with_fallback(
-                pre, spans, spec, ram_guard, job=job
+                job=job,
+                preprocess_audio_with_retry=_preprocess_audio_with_retry,
+                select_model_spec=lambda duration_in_s: select_initial_model_spec(
+                    manager=stt_manager,
+                    duration_in_s=duration_in_s,
+                    downgrade_threshold_s=120.0,
+                    logger=logger,
+                ),
+                run_whisper_with_fallback=_run_whisper_with_fallback,
             )
 
             spans.start("stitch")
@@ -2025,25 +2022,21 @@ async def hear_infer_from_url(url: str, force_refresh: bool = False) -> Dict[str
             job.register_download(download)
             ram_guard.check("yt-dlp")
 
-            pre = await _preprocess_audio_with_retry(
+            pre, transcript = await preprocess_and_transcribe(
                 source_path=download.raw_path,
                 spans=spans,
                 download=download,
                 voice_note=False,
                 ram_guard=ram_guard,
-            )
-            job.register_pre(pre)
-            ram_guard.check("pre-stage")
-
-            spec = select_initial_model_spec(
-                manager=stt_manager,
-                duration_in_s=pre.duration_in,
-                downgrade_threshold_s=120.0,
-                logger=logger,
-            )
-
-            transcript = await _run_whisper_with_fallback(
-                pre, spans, spec, ram_guard, job=job
+                job=job,
+                preprocess_audio_with_retry=_preprocess_audio_with_retry,
+                select_model_spec=lambda duration_in_s: select_initial_model_spec(
+                    manager=stt_manager,
+                    duration_in_s=duration_in_s,
+                    downgrade_threshold_s=120.0,
+                    logger=logger,
+                ),
+                run_whisper_with_fallback=_run_whisper_with_fallback,
             )
 
             spans.start("stitch")
