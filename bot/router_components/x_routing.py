@@ -1762,6 +1762,11 @@ def status_url_extract_regex_source() -> Any:
 
 def status_url_extract_regex_source_value() -> Any:
     """Return value used by status URL extraction regex source helper."""
+    return status_url_extract_regex_source_input()
+
+
+def status_url_extract_regex_source_input() -> Any:
+    """Return upstream regex source used by status regex source value helper."""
     return x_url_extract_regex_source()
 
 
