@@ -638,6 +638,21 @@ class Router:
             reply_style="ack+thoughts",
         )
 
+    def _log_twitter_syndication_images(
+        self, image_urls: List[str], *, msg_id: Optional[int] = None
+    ) -> None:
+        """Emit canonical breadcrumb for Twitter image-route detection."""
+        first_host = ""
+        try:
+            if image_urls:
+                first_host = urlparse(image_urls[0]).netloc
+        except Exception:
+            first_host = ""
+        suffix = f" | msg_id={msg_id}" if msg_id is not None else ""
+        self.logger.info(
+            f"route.twitter.syndication | images={len(image_urls)} | {first_host or 'n/a'}{suffix}"
+        )
+
     def _build_visual_anchored_system_prompt(
         self, content: str, *, fallback: bool = False
     ) -> Optional[str]:
@@ -2030,15 +2045,7 @@ class Router:
     async def _route_tweet_as_perception_images(
         self, img_urls: List[str], *, message: Message, context_str: str
     ) -> BotAction:
-        first_host = ""
-        try:
-            if img_urls:
-                first_host = urlparse(img_urls[0]).netloc
-        except Exception:
-            first_host = ""
-        self.logger.info(
-            f"route.twitter.syndication | images={len(img_urls)} | {first_host or 'n/a'} | msg_id={message.id}"
-        )
+        self._log_twitter_syndication_images(img_urls, msg_id=message.id)
         # Run VL on first image (budget-friendly), inject to text flow
         notes = None
         if img_urls:
@@ -5463,14 +5470,7 @@ class Router:
                             url, status_id or ""
                         )
                         if imgs:
-                            first_host = ""
-                            try:
-                                first_host = urlparse(imgs[0]).netloc
-                            except Exception:
-                                first_host = ""
-                            self.logger.info(
-                                f"route.twitter.syndication | images={len(imgs)} | {first_host or 'n/a'}"
-                            )
+                            self._log_twitter_syndication_images(imgs)
                             # Prefer unified VL pipeline with caption when available [CA][REH]
                             try:
                                 tweet_text = ""
@@ -6299,13 +6299,7 @@ class Router:
                                 )
                                 imgs = imgs or []
                                 if imgs:
-                                    try:
-                                        first_host = urlparse(imgs[0]).netloc
-                                    except Exception:
-                                        first_host = ""
-                                    self.logger.info(
-                                        f"route.twitter.syndication | images={len(imgs)} | {first_host or 'n/a'}"
-                                    )
+                                    self._log_twitter_syndication_images(imgs)
                                     # Convert to syndication-like shape and route to VL
                                     tweet_text = text
                                     try:
@@ -6416,13 +6410,7 @@ class Router:
                                         tweet_text=text,
                                     )
                                 if sparse_kind == "image" and sparse_images:
-                                    try:
-                                        first_host = urlparse(sparse_images[0]).netloc
-                                    except Exception:
-                                        first_host = ""
-                                    self.logger.info(
-                                        f"route.twitter.syndication | images={len(sparse_images)} | {first_host or 'n/a'}"
-                                    )
+                                    self._log_twitter_syndication_images(sparse_images)
                                     image_text = text
                                     if tweet_id:
                                         syn_for_sparse_images = (
@@ -6540,13 +6528,7 @@ class Router:
                                 url, status_id
                             )
                             if imgs:
-                                try:
-                                    first_host = urlparse(imgs[0]).netloc
-                                except Exception:
-                                    first_host = ""
-                                self.logger.info(
-                                    f"route.twitter.syndication | images={len(imgs)} | {first_host or 'n/a'}"
-                                )
+                                self._log_twitter_syndication_images(imgs)
                                 # Convert to syndication-like shape and route to VL
                                 tweet_text = ""
                                 try:

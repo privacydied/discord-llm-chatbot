@@ -239,3 +239,20 @@ async def test_route_twitter_syndication_to_vl_delegates_to_handler(monkeypatch)
     assert captured["pipeline"] == router._unified_vl_to_text_pipeline
     assert captured["prompt"] == router._get_system_prompt("vl_prompt")
     assert captured["reply_style"] == "ack+thoughts"
+
+
+def test_log_twitter_syndication_images_with_and_without_msg_id() -> None:
+    router = Router(DummyBot())
+    router.logger = CaptureLogger()
+
+    router._log_twitter_syndication_images(
+        ["https://pbs.twimg.com/media/abc.jpg"],
+        msg_id=123,
+    )
+    router._log_twitter_syndication_images(["not a url"])
+
+    assert (
+        router.logger.info_lines[0]
+        == "route.twitter.syndication | images=1 | pbs.twimg.com | msg_id=123"
+    )
+    assert router.logger.info_lines[1] == "route.twitter.syndication | images=1 | n/a"
