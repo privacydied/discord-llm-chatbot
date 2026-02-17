@@ -1,5 +1,7 @@
 from types import SimpleNamespace
 
+import pytest
+
 from bot.router_components.x_routing import (
     canonicalize_twitter_status_url,
     collect_x_candidate_urls,
@@ -25,6 +27,7 @@ from bot.router_components.x_routing import (
     x_syn_quick_request_timeouts,
     build_syndication_photo_payload,
     format_twitter_syndication_images_log_line,
+    resolve_and_probe_twitter_images,
 )
 
 
@@ -269,3 +272,43 @@ def test_format_twitter_syndication_images_log_line_with_and_without_msg_id() ->
         format_twitter_syndication_images_log_line(["not a url"])
         == "route.twitter.syndication | images=1 | n/a"
     )
+
+
+@pytest.mark.asyncio
+async def test_resolve_and_probe_twitter_images_delegates_and_normalizes() -> None:
+    calls = {}
+
+    def _resolve_status(url, tweet_id=None):
+        calls["resolve"] = (url, tweet_id)
+        return "123"
+
+    async def _probe_images(url, status_id):
+        calls["probe"] = (url, status_id)
+        return ["u1", "u2"]
+
+    status_id, image_urls = await resolve_and_probe_twitter_images(
+        url="https://x.com/u/status/1",
+        tweet_id="hint",
+        resolve_status_id=_resolve_status,
+        probe_images=_probe_images,
+    )
+
+    assert status_id == "123"
+    assert image_urls == ["u1", "u2"]
+    assert calls["resolve"] == ("https://x.com/u/status/1", "hint")
+    assert calls["probe"] == ("https://x.com/u/status/1", "123")
+
+
+@pytest.mark.asyncio
+async def test_resolve_and_probe_twitter_images_normalizes_empty_probe() -> None:
+    status_id, image_urls = await resolve_and_probe_twitter_images(
+        url="https://x.com/u/status/1",
+        resolve_status_id=lambda _url, tweet_id=None: "123",
+        probe_images=lambda _url, _status_id: _async_none(),
+    )
+    assert status_id == "123"
+    assert image_urls == []
+
+
+async def _async_none():
+    return None

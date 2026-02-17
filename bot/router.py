@@ -130,6 +130,7 @@ from .router_components import (
     x_syn_quick_request_timeouts,
     build_syndication_photo_payload,
     format_twitter_syndication_images_log_line,
+    resolve_and_probe_twitter_images,
     stt_result_has_transcription,
     strip_leading_bot_mention,
     strip_discord_mentions_and_urls,
@@ -756,9 +757,12 @@ class Router:
         self, *, url: str, tweet_id: Optional[str] = None
     ) -> Tuple[str, List[str]]:
         """Resolve status id and probe syndication for tweet images."""
-        status_id = self._resolve_twitter_status_id(url, tweet_id=tweet_id)
-        image_urls = await self._probe_twitter_syndication_images(url, status_id)
-        return status_id, (image_urls or [])
+        return await resolve_and_probe_twitter_images(
+            url=url,
+            tweet_id=tweet_id,
+            resolve_status_id=self._resolve_twitter_status_id,
+            probe_images=self._probe_twitter_syndication_images,
+        )
 
     def _log_twitter_syndication_images(
         self, image_urls: List[str], *, msg_id: Optional[int] = None

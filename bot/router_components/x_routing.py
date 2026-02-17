@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Callable, Dict, Iterable, List, Optional
+from typing import Any, Awaitable, Callable, Dict, Iterable, List, Optional, Tuple
 from urllib.parse import parse_qs, unquote, urlparse, urlunparse
 
 from bot.x_api_client import XApiClient
@@ -328,6 +328,19 @@ def format_twitter_syndication_images_log_line(
         f"route.twitter.syndication | images={len(image_urls)} | "
         f"{first_host or 'n/a'}{suffix}"
     )
+
+
+async def resolve_and_probe_twitter_images(
+    *,
+    url: str,
+    tweet_id: Optional[str] = None,
+    resolve_status_id: Callable[..., str],
+    probe_images: Callable[..., Awaitable[List[str]]],
+) -> Tuple[str, List[str]]:
+    """Resolve status id and probe syndication image URLs with normalized defaults."""
+    status_id = resolve_status_id(url, tweet_id=tweet_id)
+    image_urls = await probe_images(url, status_id)
+    return status_id, (image_urls or [])
 
 
 def extract_x_status_urls_from_text(
