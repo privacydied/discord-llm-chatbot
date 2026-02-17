@@ -101,6 +101,7 @@ from bot.router_components.x_routing import (
     build_syndication_oembed_omit_script_key,
     build_syndication_oembed_hide_thread_key,
     build_syndication_oembed_hosts,
+    build_syndication_oembed_hosts_tuple,
     build_syndication_twitter_host,
     build_syndication_x_host,
     is_syndication_x_host,
@@ -761,6 +762,10 @@ def test_build_syndication_oembed_params_default_and_x_host() -> None:
 
 def test_build_syndication_oembed_hosts_order() -> None:
     assert build_syndication_oembed_hosts() == ("twitter.com", "x.com")
+
+
+def test_build_syndication_oembed_hosts_tuple_order() -> None:
+    assert build_syndication_oembed_hosts_tuple() == ("twitter.com", "x.com")
 
 
 def test_build_syndication_oembed_host_for_flag() -> None:

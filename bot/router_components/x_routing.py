@@ -891,6 +891,11 @@ def build_syndication_status_path() -> str:
 
 def build_syndication_oembed_hosts() -> Tuple[str, str]:
     """Return ordered oEmbed host fallbacks for tweet lookups."""
+    return build_syndication_oembed_hosts_tuple()
+
+
+def build_syndication_oembed_hosts_tuple() -> Tuple[str, str]:
+    """Return canonical ordered host tuple for oEmbed fallback attempts."""
     return (build_syndication_twitter_host(), build_syndication_x_host())
 
 
