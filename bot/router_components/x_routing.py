@@ -508,6 +508,22 @@ def build_x_text_miss_payload(
     }
 
 
+def build_syndication_non_200_log_payload(
+    *,
+    tweet_id: str,
+    status: int,
+    endpoint: str,
+) -> Dict[str, Any]:
+    """Build structured payload for syndication non-200 breadcrumb logging."""
+    return {
+        "detail": {
+            "tweet_id": tweet_id,
+            "status": status,
+            "endpoint": endpoint,
+        }
+    }
+
+
 def format_syndication_body_text(text: str) -> str:
     """Format syndication body text with legacy size limits and fallback copy."""
     if text and len(text) <= 4000:

@@ -141,6 +141,7 @@ from .router_components import (
     format_syndication_header_line,
     format_syndication_error_fallback,
     extract_syndication_photo_urls,
+    build_syndication_non_200_log_payload,
     x_syn_probe_budget_timeout_s,
     x_syn_quick_request_timeouts,
     build_syndication_photo_payload,
@@ -1085,13 +1086,11 @@ class Router:
                     if resp.status_code != 200:
                         self.logger.info(
                             "Syndication non-200",
-                            extra={
-                                "detail": {
-                                    "tweet_id": tweet_id,
-                                    "status": resp.status_code,
-                                    "endpoint": endpoint,
-                                }
-                            },
+                            extra=build_syndication_non_200_log_payload(
+                                tweet_id=tweet_id,
+                                status=resp.status_code,
+                                endpoint=endpoint,
+                            ),
                         )
                         self._metric_inc(
                             "x.syndication.non_200",

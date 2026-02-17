@@ -32,6 +32,7 @@ from bot.router_components.x_routing import (
     extract_syndication_text,
     build_x_text_miss_log_payload,
     build_x_text_miss_payload,
+    build_syndication_non_200_log_payload,
     format_syndication_body_text,
     format_syndication_header_line,
     format_syndication_error_fallback,
@@ -546,6 +547,20 @@ def test_build_x_text_miss_payload_accepts_explicit_fields() -> None:
             "layer": "syndication",
             "reason": "no_text",
         },
+    }
+
+
+def test_build_syndication_non_200_log_payload_shape() -> None:
+    assert build_syndication_non_200_log_payload(
+        tweet_id="2022790791047823773",
+        status=403,
+        endpoint="widgets",
+    ) == {
+        "detail": {
+            "tweet_id": "2022790791047823773",
+            "status": 403,
+            "endpoint": "widgets",
+        }
     }
 
 
