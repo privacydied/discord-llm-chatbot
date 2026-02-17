@@ -41,7 +41,7 @@ def canonicalize_twitter_status_url(url: str) -> str:
     """Convert any Twitter status URL to canonical form https://x.com/i/status/{id}."""
     status_id = parse_twitter_status_id(url)
     if status_id:
-        return f"https://x.com/i/status/{status_id}"
+        return f"https://x.com/{build_syndication_status_path()}/{status_id}"
     return url
 
 
@@ -718,7 +718,12 @@ def build_syndication_oembed_params(
 
 def build_syndication_oembed_status_url(host: str, tweet_id: str) -> str:
     """Return status URL used by oEmbed for the selected host."""
-    return f"https://{host}/i/status/{tweet_id}"
+    return f"https://{host}/{build_syndication_status_path()}/{tweet_id}"
+
+
+def build_syndication_status_path() -> str:
+    """Return canonical status path used for X/Twitter status URLs."""
+    return "i/status"
 
 
 def build_syndication_oembed_hosts() -> Tuple[str, str]:
