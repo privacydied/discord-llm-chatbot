@@ -896,7 +896,12 @@ def build_syndication_oembed_host_for_flag(use_x_host: bool) -> str:
 
 def build_syndication_oembed_status_url(host: str, tweet_id: str) -> str:
     """Return status URL used by oEmbed for the selected host."""
-    return f"{build_syndication_status_url_prefix(host)}{tweet_id}"
+    return build_syndication_status_url(host, tweet_id)
+
+
+def build_syndication_status_url(host: str, status_id: Any) -> str:
+    """Return full canonical syndication status URL for host and status id."""
+    return f"{build_syndication_status_url_prefix(host)}{status_id}"
 
 
 def build_syndication_status_url_prefix(host: str) -> str:

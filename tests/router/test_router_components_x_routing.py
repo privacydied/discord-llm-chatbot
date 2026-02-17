@@ -95,6 +95,7 @@ from bot.router_components.x_routing import (
     build_syndication_oembed_url_key,
     build_syndication_oembed_host_for_flag,
     build_syndication_oembed_status_url,
+    build_syndication_status_url,
     build_syndication_status_url_prefix,
     build_syndication_status_path,
     build_syndication_oembed_options,
@@ -827,6 +828,13 @@ def test_build_syndication_oembed_status_url_shape() -> None:
     assert (
         build_syndication_oembed_status_url("twitter.com", "2022790791047823773")
         == "https://twitter.com/i/status/2022790791047823773"
+    )
+
+
+def test_build_syndication_status_url_shape() -> None:
+    assert (
+        build_syndication_status_url("x.com", "2022790791047823773")
+        == "https://x.com/i/status/2022790791047823773"
     )
 
 
