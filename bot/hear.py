@@ -56,11 +56,11 @@ from .stt_module.multimodal_fallback import multimodal_fallback_provider
 from .stt_pipeline import (
     abort_job_stream_if_present,
     build_url_transcript_result,
-    ensure_stt_manager_ready,
+    ensure_manager_ready_or_raise,
     ffmpeg_bin_has_aac,
     ffmpeg_candidates_from_env,
     ffmpeg_supports_aac_decoder,
-    fetch_url_audio_with_span,
+    fetch_url_audio_or_raise,
     log_stt_job_complete,
     load_stt_runtime_compat,
     parse_stt_max_ram_mb,
@@ -2002,22 +2002,19 @@ async def hear_infer_from_url(url: str, force_refresh: bool = False) -> Dict[str
                 if result:
                     return await job.finish_success(result)
 
-            ready = await ensure_stt_manager_ready(stt_manager)
-            if not ready:
-                exc = InferenceError("STT engine not available")
-                await job.finish_failure(exc)
-                raise exc
+            await ensure_manager_ready_or_raise(
+                manager=stt_manager,
+                job=job,
+            )
 
-            try:
-                download = await fetch_url_audio_with_span(
-                    url=url,
-                    force_refresh=force_refresh,
-                    fetcher=fetch_and_prepare_url_audio,
-                    spans=spans,
-                )
-            except VideoIngestError as exc:
-                await job.finish_failure(exc)
-                raise InferenceError(str(exc)) from exc
+            download = await fetch_url_audio_or_raise(
+                url=url,
+                force_refresh=force_refresh,
+                fetcher=fetch_and_prepare_url_audio,
+                spans=spans,
+                job=job,
+                ingest_error_type=VideoIngestError,
+            )
 
             job.register_download(download)
             ram_guard.check("yt-dlp")

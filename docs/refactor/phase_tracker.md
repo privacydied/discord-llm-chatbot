@@ -433,3 +433,24 @@
     - `./.venv/bin/python -m py_compile bot/hear.py bot/stt_pipeline/__init__.py bot/stt_pipeline/stitch.py`
     - `./.venv/bin/pytest -q tests/test_stt_pipeline_stitch.py tests/test_stt_pipeline_transcribe_flow.py tests/test_video_ingest.py tests/test_hear_ffmpeg_resolution.py` -> `15 passed`
     - `./.venv/bin/pytest -q tests/core tests/router tests/syndication tests/vision tests/test_hear_ffmpeg_resolution.py tests/test_hear_stream_abort.py tests/test_media_ingestion.py tests/test_video_ingest.py tests/router/test_router_x_result_format_contract.py tests/test_media_ingestion_compat_contracts.py tests/vision/test_money_contract.py tests/test_media_ingestion_helpers.py tests/test_stt_pipeline_runtime.py tests/test_stt_pipeline_ffmpeg_runtime.py tests/test_stt_pipeline_youtube_path.py tests/test_stt_pipeline_result_payload.py tests/test_stt_pipeline_spec_select.py tests/test_stt_pipeline_logging.py tests/test_stt_pipeline_lifecycle.py tests/test_stt_pipeline_url_ingest.py tests/test_stt_pipeline_transcribe_flow.py tests/test_stt_pipeline_stitch.py` -> `262 passed`
+- 2026-02-17:
+  - Refactor (behavior-preserving): extracted URL-path readiness and ingest error handling into:
+    - `bot/stt_pipeline/url_ingest.py`
+      - `ensure_manager_ready_or_raise()`
+      - `fetch_url_audio_or_raise()`
+  - Rewired `bot/hear.py::hear_infer_from_url()` to delegate:
+    - STT manager availability gate (`STT engine not available`)
+    - yt-dlp ingest error conversion (`VideoIngestError` -> `InferenceError`)
+  - Preserved existing semantics:
+    - still calls `job.finish_failure(...)` before raising in those branches
+    - outer fail handler path remains unchanged
+  - Exported new helpers via `bot/stt_pipeline/__init__.py`.
+  - Expanded contracts in `tests/test_stt_pipeline_url_ingest.py`:
+    - manager-ready success/no-op
+    - manager-not-ready failure conversion
+    - ingest-error conversion
+    - non-ingest error passthrough
+  - Validation:
+    - `./.venv/bin/python -m py_compile bot/hear.py bot/stt_pipeline/__init__.py bot/stt_pipeline/url_ingest.py`
+    - `./.venv/bin/pytest -q tests/test_stt_pipeline_url_ingest.py tests/test_video_ingest.py tests/test_hear_ffmpeg_resolution.py tests/test_stt_pipeline_transcribe_flow.py tests/test_stt_pipeline_stitch.py` -> `21 passed`
+    - `./.venv/bin/pytest -q tests/core tests/router tests/syndication tests/vision tests/test_hear_ffmpeg_resolution.py tests/test_hear_stream_abort.py tests/test_media_ingestion.py tests/test_video_ingest.py tests/router/test_router_x_result_format_contract.py tests/test_media_ingestion_compat_contracts.py tests/vision/test_money_contract.py tests/test_media_ingestion_helpers.py tests/test_stt_pipeline_runtime.py tests/test_stt_pipeline_ffmpeg_runtime.py tests/test_stt_pipeline_youtube_path.py tests/test_stt_pipeline_result_payload.py tests/test_stt_pipeline_spec_select.py tests/test_stt_pipeline_logging.py tests/test_stt_pipeline_lifecycle.py tests/test_stt_pipeline_url_ingest.py tests/test_stt_pipeline_transcribe_flow.py tests/test_stt_pipeline_stitch.py` -> `266 passed`

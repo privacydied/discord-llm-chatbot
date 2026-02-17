@@ -18,7 +18,11 @@ from .result_payload import build_url_transcript_result
 from .logging import log_stt_job_complete, transcript_preview
 from .spec_select import select_initial_model_spec
 from .lifecycle import abort_job_stream_if_present
-from .url_ingest import fetch_url_audio_with_span
+from .url_ingest import (
+    ensure_manager_ready_or_raise,
+    fetch_url_audio_or_raise,
+    fetch_url_audio_with_span,
+)
 from .transcribe_flow import preprocess_and_transcribe
 from .stitch import run_stitch_stage
 
@@ -30,6 +34,8 @@ __all__ = [
     "log_stt_job_complete",
     "abort_job_stream_if_present",
     "fetch_url_audio_with_span",
+    "ensure_manager_ready_or_raise",
+    "fetch_url_audio_or_raise",
     "preprocess_and_transcribe",
     "run_stitch_stage",
     "select_initial_model_spec",
