@@ -115,6 +115,7 @@ from bot.router_components.x_routing import (
     build_syndication_oembed_fallback_item,
     build_syndication_oembed_fallback_params,
     build_syndication_oembed_fallback_plan,
+    build_syndication_oembed_fallback_plan_components,
     build_syndication_oembed_fallback_plan_tuple,
     build_syndication_fetch_plan_components,
     build_syndication_fetch_plan,
@@ -947,6 +948,14 @@ def test_build_syndication_oembed_fallback_item_shape() -> None:
 
 def test_build_syndication_oembed_fallback_plan_shape() -> None:
     url, variants = build_syndication_oembed_fallback_plan("2022790791047823773")
+    assert url == "https://publish.twitter.com/oembed"
+    assert variants == build_syndication_oembed_fallback_params("2022790791047823773")
+
+
+def test_build_syndication_oembed_fallback_plan_components_shape() -> None:
+    url, variants = build_syndication_oembed_fallback_plan_components(
+        "2022790791047823773"
+    )
     assert url == "https://publish.twitter.com/oembed"
     assert variants == build_syndication_oembed_fallback_params("2022790791047823773")
 
