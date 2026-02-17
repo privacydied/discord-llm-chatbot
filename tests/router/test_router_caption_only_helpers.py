@@ -274,6 +274,30 @@ def test_build_syndication_photo_payload_shape() -> None:
     assert payload_none == {"text": None, "photos": []}
 
 
+def test_build_x_syn_quick_request_config_caps_timeouts() -> None:
+    router = Router(DummyBot())
+    router._x_syn_timeout_s = 9.0
+
+    cfg = router._build_x_syn_quick_request_config()
+
+    assert cfg.connect_timeout == 3.0
+    assert cfg.read_timeout == 3.0
+    assert cfg.total_timeout == 3.5
+    assert cfg.max_retries == 0
+
+
+def test_build_x_syn_quick_request_config_uses_lower_timeout() -> None:
+    router = Router(DummyBot())
+    router._x_syn_timeout_s = 1.2
+
+    cfg = router._build_x_syn_quick_request_config()
+
+    assert cfg.connect_timeout == 1.2
+    assert cfg.read_timeout == 1.2
+    assert cfg.total_timeout == 1.7
+    assert cfg.max_retries == 0
+
+
 @pytest.mark.asyncio
 async def test_resolve_twitter_caption_text_prefers_syndication(monkeypatch) -> None:
     router = Router(DummyBot())

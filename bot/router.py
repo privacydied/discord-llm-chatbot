@@ -662,6 +662,15 @@ class Router:
             "photos": [{"url": u} for u in image_urls],
         }
 
+    def _build_x_syn_quick_request_config(self) -> RequestConfig:
+        """Build short-budget HTTP config for quick X syndication probes."""
+        return RequestConfig(
+            connect_timeout=min(self._x_syn_timeout_s, 3.0),
+            read_timeout=min(self._x_syn_timeout_s, 3.0),
+            total_timeout=min(self._x_syn_timeout_s + 0.5, 3.5),
+            max_retries=0,
+        )
+
     async def _resolve_twitter_caption_text(self, status_id: Optional[str]) -> str:
         """Resolve tweet caption via syndication first, then fx/vx fallback."""
         if not status_id:
@@ -683,12 +692,7 @@ class Router:
 
         try:
             http2 = await get_http_client()
-            cfg2 = RequestConfig(
-                connect_timeout=min(self._x_syn_timeout_s, 3.0),
-                read_timeout=min(self._x_syn_timeout_s, 3.0),
-                total_timeout=min(self._x_syn_timeout_s + 0.5, 3.5),
-                max_retries=0,
-            )
+            cfg2 = self._build_x_syn_quick_request_config()
             fxu = f"https://api.fxtwitter.com/status/{status_id}"
             r2 = await http2.get(fxu, config=cfg2)
             if r2.status_code == 200:
@@ -2040,12 +2044,7 @@ class Router:
             return None
         try:
             http = await get_http_client()
-            cfg = RequestConfig(
-                connect_timeout=min(self._x_syn_timeout_s, 3.0),
-                read_timeout=min(self._x_syn_timeout_s, 3.0),
-                total_timeout=min(self._x_syn_timeout_s + 0.5, 3.5),
-                max_retries=0,
-            )
+            cfg = self._build_x_syn_quick_request_config()
             resp = await http.get(f"https://api.fxtwitter.com/status/{status_id}", config=cfg)
             if getattr(resp, "status_code", 500) != 200:
                 return None
