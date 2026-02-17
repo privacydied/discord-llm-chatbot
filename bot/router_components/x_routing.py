@@ -1941,4 +1941,13 @@ def append_matched_x_url(
     canonicalize_x_url: Callable[[str], str],
 ) -> None:
     """Append canonicalized X/Twitter URL for a URL already known to match."""
-    append_canonical_x_url(items, raw_url, canonicalize_x_url=canonicalize_x_url)
+    append_canonical_x_url(
+        items,
+        matched_x_raw_value(raw_url),
+        canonicalize_x_url=canonicalize_x_url,
+    )
+
+
+def matched_x_raw_value(raw_url: str) -> str:
+    """Return matched X raw URL value before canonical append."""
+    return raw_url
