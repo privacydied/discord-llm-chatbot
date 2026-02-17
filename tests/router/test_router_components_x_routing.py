@@ -41,6 +41,7 @@ from bot.router_components.x_routing import (
     extract_oembed_payload_from_response,
     build_syndication_oembed_url,
     build_syndication_base_url,
+    build_syndication_fetch_headers,
     build_syndication_oembed_params,
     build_syndication_fetch_plan,
     build_syndication_fetch_metric_payload,
@@ -695,6 +696,13 @@ def test_build_syndication_oembed_url_constant() -> None:
 
 def test_build_syndication_base_url_constant() -> None:
     assert build_syndication_base_url() == "https://cdn.syndication.twimg.com/"
+
+
+def test_build_syndication_fetch_headers_shape() -> None:
+    headers = build_syndication_fetch_headers()
+    assert headers["Referer"] == "https://platform.twitter.com/"
+    assert headers["Accept-Language"] == "en-US,en;q=0.9"
+    assert "Mozilla/5.0" in headers["User-Agent"]
 
 
 def test_extract_oembed_payload_from_response_variants() -> None:

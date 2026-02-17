@@ -636,6 +636,19 @@ def build_syndication_base_url() -> str:
     return "https://cdn.syndication.twimg.com/"
 
 
+def build_syndication_fetch_headers() -> Dict[str, str]:
+    """Return canonical headers for CDN syndication fetches."""
+    return {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+        ),
+        "Accept": "application/json, text/javascript;q=0.9, */*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Referer": "https://platform.twitter.com/",
+    }
+
+
 def build_syndication_oembed_params(
     tweet_id: str,
     *,
@@ -657,15 +670,7 @@ def build_syndication_fetch_plan(
 ) -> Tuple[str, Dict[str, str], List[Tuple[str, Dict[str, str]]]]:
     """Build base URL, headers, and endpoint param variants for syndication fetch."""
     base = build_syndication_base_url()
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-            "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
-        ),
-        "Accept": "application/json, text/javascript;q=0.9, */*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Referer": "https://platform.twitter.com/",
-    }
+    headers = build_syndication_fetch_headers()
     params_variants = [
         ("widgets", {"id": tweet_id, "lang": "en"}),
         ("tweet-result", {"id": tweet_id, "lang": "en"}),
