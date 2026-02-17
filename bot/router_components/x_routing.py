@@ -626,6 +626,11 @@ def extract_oembed_payload_from_response(
     return build_payload(obj)
 
 
+def build_syndication_oembed_url() -> str:
+    """Return the publish.twitter oEmbed endpoint used in syndication fallbacks."""
+    return "https://publish.twitter.com/oembed"
+
+
 def build_syndication_oembed_params(
     tweet_id: str,
     *,

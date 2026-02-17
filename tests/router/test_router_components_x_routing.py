@@ -39,6 +39,7 @@ from bot.router_components.x_routing import (
     build_x_text_canon_payload,
     build_oembed_text_payload,
     extract_oembed_payload_from_response,
+    build_syndication_oembed_url,
     build_syndication_oembed_params,
     build_syndication_fetch_plan,
     build_syndication_fetch_metric_payload,
@@ -685,6 +686,10 @@ def test_build_syndication_oembed_params_default_and_x_host() -> None:
         "hide_thread": "true",
         "lang": "en",
     }
+
+
+def test_build_syndication_oembed_url_constant() -> None:
+    assert build_syndication_oembed_url() == "https://publish.twitter.com/oembed"
 
 
 def test_extract_oembed_payload_from_response_variants() -> None:

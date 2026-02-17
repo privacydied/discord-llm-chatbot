@@ -131,6 +131,7 @@ from .router_components import (
     resolve_caption_only_base_text,
     resolve_video_stt_error_base_text,
     extract_oembed_payload_from_response,
+    build_syndication_oembed_url,
     build_syndication_oembed_params,
     build_syndication_fetch_plan,
     build_syndication_fetch_metric_payload,
@@ -1087,7 +1088,7 @@ class Router:
                         continue
                     # If the JSON lacks usable text, try oEmbed fallbacks before moving on
                     if not _has_usable_payload(data):
-                        oembed_url = "https://publish.twitter.com/oembed"
+                        oembed_url = build_syndication_oembed_url()
                         oembed_params = build_syndication_oembed_params(tweet_id)
                         try:
                             self._metric_inc(
