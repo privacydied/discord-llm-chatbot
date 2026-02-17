@@ -1757,6 +1757,11 @@ def status_url_extract_regex_source_value() -> Any:
 
 def x_url_extract_regex_source() -> Any:
     """Return underlying regex object used for X URL extraction."""
+    return x_url_extract_regex_source_value()
+
+
+def x_url_extract_regex_source_value() -> Any:
+    """Return value used by X URL extraction regex source helper."""
     return x_url_extract_regex()
 
 
