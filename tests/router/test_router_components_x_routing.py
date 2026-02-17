@@ -243,6 +243,7 @@ from bot.router_components.x_routing import (
     compile_url_extract_flags_argument,
     compile_regex,
     compile_regex_pattern_argument,
+    compile_regex_flags_argument,
     collect_raw_urls_into_items,
     raw_url_items_result,
     raw_url_items_buffer,
@@ -497,6 +498,10 @@ def test_compile_regex_uses_pattern_and_flags() -> None:
 
 def test_compile_regex_pattern_argument_identity() -> None:
     assert compile_regex_pattern_argument(r"https?://x\\.com") == r"https?://x\\.com"
+
+
+def test_compile_regex_flags_argument_identity() -> None:
+    assert compile_regex_flags_argument(re.IGNORECASE) == re.IGNORECASE
 
 
 def test_compile_url_extract_flags_argument_identity() -> None:

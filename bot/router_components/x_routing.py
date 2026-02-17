@@ -1813,12 +1813,20 @@ def compile_url_extract_flags_argument(flags: int) -> int:
 
 def compile_regex(pattern: str, *, flags: int) -> Any:
     """Compile regex from pattern and flags for shared extraction helpers."""
-    return re.compile(compile_regex_pattern_argument(pattern), flags)
+    return re.compile(
+        compile_regex_pattern_argument(pattern),
+        compile_regex_flags_argument(flags),
+    )
 
 
 def compile_regex_pattern_argument(pattern: str) -> str:
     """Return normalized pattern argument for generic regex compilation."""
     return pattern
+
+
+def compile_regex_flags_argument(flags: int) -> int:
+    """Return normalized flags argument for generic regex compilation."""
+    return flags
 
 
 def x_url_extract_flags() -> int:
