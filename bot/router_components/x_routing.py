@@ -1841,6 +1841,11 @@ def x_url_extract_flags_source() -> int:
 
 def x_url_extract_flags_value() -> int:
     """Return literal regex flags value used for URL extraction."""
+    return x_url_extract_flags_literal()
+
+
+def x_url_extract_flags_literal() -> int:
+    """Return literal regex flag constant for URL extraction."""
     return re.IGNORECASE
 
 
