@@ -39,6 +39,7 @@ from bot.router_components.x_routing import (
     build_oembed_text_payload,
     extract_oembed_html_text,
     syndication_has_usable_payload,
+    syndication_media_hint_keys,
     format_syndication_body_text,
     format_syndication_header_line,
     format_syndication_error_fallback,
@@ -681,6 +682,28 @@ def test_syndication_has_usable_payload_non_dict_returns_false() -> None:
             media_hint_keys=("entities",),
         )
         is False
+    )
+
+
+def test_syndication_media_hint_keys_matches_router_contract() -> None:
+    assert syndication_media_hint_keys() == (
+        "media",
+        "photos",
+        "video",
+        "video_info",
+        "video_variants",
+        "video_urls",
+        "media_duration",
+        "duration_ms",
+        "extended_entities",
+        "entities",
+        "quoted_tweet",
+        "quoted_status",
+        "retweeted_status",
+        "legacy",
+        "card",
+        "image",
+        "article",
     )
 
 

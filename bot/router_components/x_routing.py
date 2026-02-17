@@ -613,6 +613,29 @@ def syndication_has_usable_payload(
     return any(k in node for k in media_hint_keys)
 
 
+def syndication_media_hint_keys() -> Tuple[str, ...]:
+    """Canonical syndication media-hint keys used in payload usability checks."""
+    return (
+        "media",
+        "photos",
+        "video",
+        "video_info",
+        "video_variants",
+        "video_urls",
+        "media_duration",
+        "duration_ms",
+        "extended_entities",
+        "entities",
+        "quoted_tweet",
+        "quoted_status",
+        "retweeted_status",
+        "legacy",
+        "card",
+        "image",
+        "article",
+    )
+
+
 def format_syndication_body_text(text: str) -> str:
     """Format syndication body text with legacy size limits and fallback copy."""
     if text and len(text) <= 4000:

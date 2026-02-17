@@ -132,6 +132,7 @@ from .router_components import (
     resolve_video_stt_error_base_text,
     build_oembed_text_payload,
     syndication_has_usable_payload,
+    syndication_media_hint_keys,
     syndication_article_has_blocks,
     extract_x_article_text,
     syndication_needs_article_hydration,
@@ -1052,25 +1053,7 @@ class Router:
             ]
             base = "https://cdn.syndication.twimg.com/"
             data = None
-            media_hint_keys = (
-                "media",
-                "photos",
-                "video",
-                "video_info",
-                "video_variants",
-                "video_urls",
-                "media_duration",
-                "duration_ms",
-                "extended_entities",
-                "entities",
-                "quoted_tweet",
-                "quoted_status",
-                "retweeted_status",
-                "legacy",
-                "card",
-                "image",
-                "article",
-            )
+            media_hint_keys = syndication_media_hint_keys()
 
             def _has_usable_payload(node: Any) -> bool:
                 return syndication_has_usable_payload(
