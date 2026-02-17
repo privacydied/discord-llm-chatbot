@@ -86,6 +86,7 @@ from .memory.thread_tail import (
     resolve_implicit_anchor,
     collect_implicit_anchor_context,
 )
+from .router_components import RouterRuntimeCompat, load_router_runtime_compat
 
 if TYPE_CHECKING:
     from bot.core.bot import LLMBot as DiscordBot
@@ -333,10 +334,9 @@ class Router:
         # Tweet syndication cache and locks [CA][PA]
         self._syn_cache: Dict[str, Dict[str, Any]] = {}
         self._syn_locks: Dict[str, asyncio.Lock] = {}
-        try:
-            self._syn_ttl_s: float = float(self.config.get("X_SYNDICATION_TTL_S", 900))
-        except Exception:
-            self._syn_ttl_s = 900.0
+        runtime_compat: RouterRuntimeCompat = load_router_runtime_compat(self.config)
+        self._runtime_compat = runtime_compat
+        self._syn_ttl_s = runtime_compat.syn_ttl_s
         # Canonical fx/vx context cache to share frontend + primary mappings downstream [REH]
         self._x_frontend_canon: "collections.OrderedDict[str, Dict[str, str]]" = (
             collections.OrderedDict()
@@ -412,60 +412,14 @@ class Router:
             self._vl_prompt_guidelines = None
 
         # --- X/Twitter syndication probe feature flags (read-once, cached) [CMV] ---
-        try:
-            self._x_syn_probe_enabled: bool = bool(
-                self.config.get("X_SYNDICATION_PROBE_ENABLED", True)
-            )
-        except Exception:
-            self._x_syn_probe_enabled = True
-        try:
-            self._x_syn_order: str = str(
-                self.config.get("X_SYNDICATION_ORDER", "yt_dlp,html,api")
-            ).strip()
-        except Exception:
-            self._x_syn_order = "yt_dlp,html,api"
-        try:
-            self._x_syn_timeout_s: float = float(
-                self.config.get("X_SYNDICATION_TIMEOUT_S", 3.0)
-            )
-        except Exception:
-            self._x_syn_timeout_s = 3.0
-        try:
-            self._x_syn_max_images: int = int(
-                self.config.get("X_SYNDICATION_MAX_IMAGES", 4)
-            )
-        except Exception:
-            self._x_syn_max_images = 4
-        try:
-            domains = (
-                self.config.get(
-                    "X_SYNDICATION_ACCEPT_DOMAINS",
-                    "pbs.twimg.com,video.twimg.com,fxtwitter.com,vxtwitter.com",
-                )
-                or ""
-            )
-            self._x_syn_accept_domains: set[str] = {
-                d.strip().lower() for d in str(domains).split(",") if d.strip()
-            }
-        except Exception:
-            self._x_syn_accept_domains = {
-                "pbs.twimg.com",
-                "pbs-0.twimg.com",
-                "pbs-1.twimg.com",
-                "pbs-2.twimg.com",
-                "pbs-3.twimg.com",
-                "video.twimg.com",
-                "fxtwitter.com",
-                "vxtwitter.com",
-            }
+        self._x_syn_probe_enabled = runtime_compat.x_syn_probe_enabled
+        self._x_syn_order = runtime_compat.x_syn_order
+        self._x_syn_timeout_s = runtime_compat.x_syn_timeout_s
+        self._x_syn_max_images = runtime_compat.x_syn_max_images
+        self._x_syn_accept_domains = runtime_compat.x_syn_accept_domains
 
         # Gate for early X-resolve (enabled by default for correctness) [KBT]
-        try:
-            self._x_early_resolve_enabled: bool = bool(
-                self.config.get("X_EARLY_RESOLVE_ENABLED", True)
-            )
-        except Exception:
-            self._x_early_resolve_enabled = True
+        self._x_early_resolve_enabled = runtime_compat.x_early_resolve_enabled
 
     def _append_note_once(self, text: str, note: str) -> str:
         """Append a parenthetical note once, avoiding duplicates and preserving spacing."""
