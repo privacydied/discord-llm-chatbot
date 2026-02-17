@@ -1697,6 +1697,11 @@ def status_url_candidates(text: str) -> Iterable[str]:
 
 def status_url_candidates_source(text: str) -> Iterable[str]:
     """Yield source iterator for status URL candidates."""
+    yield from status_url_candidates_iter(text)
+
+
+def status_url_candidates_iter(text: str) -> Iterable[str]:
+    """Yield iterator used by status URL candidate source helper."""
     yield from iter_status_url_candidates(text)
 
 

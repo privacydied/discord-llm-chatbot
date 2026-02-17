@@ -217,6 +217,7 @@ from bot.router_components.x_routing import (
     status_url_candidate_raw_value,
     status_url_candidates,
     status_url_candidates_source,
+    status_url_candidates_iter,
     x_url_extract_pattern,
     x_url_extract_pattern_value,
     x_url_extract_flags,
@@ -425,6 +426,11 @@ def test_status_url_candidates_delegates_iterator() -> None:
 
 def test_status_url_candidates_source_delegates_iterator() -> None:
     urls = list(status_url_candidates_source("a https://x.com/u/status/1 b"))
+    assert urls == ["https://x.com/u/status/1"]
+
+
+def test_status_url_candidates_iter_delegates_iterator() -> None:
+    urls = list(status_url_candidates_iter("a https://x.com/u/status/1 b"))
     assert urls == ["https://x.com/u/status/1"]
 
 
