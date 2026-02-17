@@ -599,6 +599,20 @@ def build_oembed_text_payload(
     }
 
 
+def syndication_has_usable_payload(
+    node: Any,
+    *,
+    extract_text: Callable[[Any], str],
+    media_hint_keys: Iterable[str],
+) -> bool:
+    """Return True when syndication payload includes usable text in current schema."""
+    if not isinstance(node, dict):
+        return False
+    if extract_text(node):
+        return True
+    return any(k in node for k in media_hint_keys)
+
+
 def format_syndication_body_text(text: str) -> str:
     """Format syndication body text with legacy size limits and fallback copy."""
     if text and len(text) <= 4000:

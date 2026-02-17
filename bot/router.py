@@ -131,6 +131,7 @@ from .router_components import (
     resolve_caption_only_base_text,
     resolve_video_stt_error_base_text,
     build_oembed_text_payload,
+    syndication_has_usable_payload,
     syndication_article_has_blocks,
     extract_x_article_text,
     syndication_needs_article_hydration,
@@ -1072,11 +1073,11 @@ class Router:
             )
 
             def _has_usable_payload(node: Any) -> bool:
-                if not isinstance(node, dict):
-                    return False
-                if self._extract_syndication_text(node):
-                    return True
-                return any(k in node for k in media_hint_keys)
+                return syndication_has_usable_payload(
+                    node,
+                    extract_text=self._extract_syndication_text,
+                    media_hint_keys=media_hint_keys,
+                )
 
             try:
                 http_client = await get_http_client()

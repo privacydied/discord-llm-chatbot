@@ -38,6 +38,7 @@ from bot.router_components.x_routing import (
     build_x_text_canon_payload,
     build_oembed_text_payload,
     extract_oembed_html_text,
+    syndication_has_usable_payload,
     format_syndication_body_text,
     format_syndication_header_line,
     format_syndication_error_fallback,
@@ -643,6 +644,44 @@ def test_build_oembed_text_payload_returns_none_for_non_usable_obj() -> None:
 def test_build_oembed_text_payload_non_string_html_raises() -> None:
     with pytest.raises(TypeError):
         build_oembed_text_payload({"html": {"bad": "value"}})
+
+
+def test_syndication_has_usable_payload_with_text_or_media_hints() -> None:
+    assert (
+        syndication_has_usable_payload(
+            {"text": "hello"},
+            extract_text=lambda node: str(node.get("text") or "").strip(),
+            media_hint_keys=("entities", "media"),
+        )
+        is True
+    )
+    assert (
+        syndication_has_usable_payload(
+            {"entities": {}},
+            extract_text=lambda _node: "",
+            media_hint_keys=("entities", "media"),
+        )
+        is True
+    )
+    assert (
+        syndication_has_usable_payload(
+            {"x": 1},
+            extract_text=lambda _node: "",
+            media_hint_keys=("entities", "media"),
+        )
+        is False
+    )
+
+
+def test_syndication_has_usable_payload_non_dict_returns_false() -> None:
+    assert (
+        syndication_has_usable_payload(
+            None,
+            extract_text=lambda _node: "text",
+            media_hint_keys=("entities",),
+        )
+        is False
+    )
 
 
 def test_format_syndication_body_text_variants() -> None:
