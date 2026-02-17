@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from typing import Any, Callable, Iterable, List, Optional
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse
 
 from bot.x_api_client import XApiClient
 
@@ -12,6 +12,14 @@ from bot.x_api_client import XApiClient
 def parse_twitter_status_id(url: str) -> Optional[str]:
     """Extract tweet/status ID from a Twitter/X URL."""
     return XApiClient.extract_tweet_id(url)
+
+
+def canonicalize_twitter_status_url(url: str) -> str:
+    """Convert any Twitter status URL to canonical form https://x.com/i/status/{id}."""
+    status_id = parse_twitter_status_id(url)
+    if status_id:
+        return f"https://x.com/i/status/{status_id}"
+    return url
 
 
 def is_twitter_url(url: str) -> bool:
@@ -132,6 +140,34 @@ def is_tweet_media_url(url: str) -> bool:
         return False
 
     return "/media/" in path
+
+
+def normalize_x_url(url: str) -> str:
+    """Normalize X/Twitter URLs to canonical host/path, dropping query/fragment."""
+    try:
+        p = urlparse(url)
+        host = (p.netloc or "").lower()
+        aliases = {
+            "mobile.twitter.com",
+            "www.twitter.com",
+            "twitter.com",
+            "www.x.com",
+            "x.com",
+            "fxtwitter.com",
+            "www.fxtwitter.com",
+            "vxtwitter.com",
+            "www.vxtwitter.com",
+            "fixupx.com",
+            "www.fixupx.com",
+        }
+        if host in aliases:
+            host = "x.com"
+        path = p.path or ""
+        if path.endswith("/"):
+            path = path[:-1]
+        return urlunparse(("https", host, path, "", "", ""))
+    except Exception:
+        return url
 
 
 def extract_x_status_urls_from_text(

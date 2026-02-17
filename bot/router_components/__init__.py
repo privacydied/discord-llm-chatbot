@@ -15,6 +15,7 @@ from .input_harvest import (
 )
 from .runtime import RouterRuntimeCompat, load_router_runtime_compat
 from .x_routing import (
+    canonicalize_twitter_status_url,
     collect_x_candidate_urls,
     extract_raw_urls_from_texts,
     extract_x_status_urls_from_text,
@@ -23,12 +24,14 @@ from .x_routing import (
     is_twitter_media_cdn,
     is_twitter_thumbnail_url,
     is_twitter_url,
+    normalize_x_url,
     parse_twitter_status_id,
 )
 
 __all__ = [
     "RouterRuntimeCompat",
     "compose_x_tweet_with_visual_facts",
+    "canonicalize_twitter_status_url",
     "extract_urls_loose",
     "extract_urls_strict",
     "extract_raw_urls_from_texts",
@@ -45,6 +48,7 @@ __all__ = [
     "is_twitter_url",
     "load_router_runtime_compat",
     "mentions_bot",
+    "normalize_x_url",
     "parse_twitter_status_id",
     "strip_leading_bot_mention",
     "strip_urls",

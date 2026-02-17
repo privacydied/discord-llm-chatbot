@@ -99,3 +99,14 @@
   - Validation:
     - `./.venv/bin/python -m py_compile bot/hear.py bot/stt_pipeline/__init__.py bot/stt_pipeline/runtime.py`
     - `./.venv/bin/pytest -q tests/test_stt_pipeline_runtime.py tests/test_stt_pipeline_ffmpeg_runtime.py tests/test_stt_pipeline_youtube_path.py tests/test_video_ingest.py tests/router/test_router_components_x_routing.py tests/router/test_router_components_compose.py tests/router/test_router_components_gating.py tests/router/test_router_components_input_harvest.py` -> `32 passed`
+- 2026-02-17:
+  - Extended `bot/router_components/x_routing.py` with:
+    - `canonicalize_twitter_status_url`
+    - `normalize_x_url`
+  - Routed router wrappers through extracted helpers:
+    - `_canonicalize_twitter_status_url`
+    - `_normalize_x_url`
+  - Expanded tests in `tests/router/test_router_components_x_routing.py`.
+  - Validation:
+    - `./.venv/bin/python -m py_compile bot/router.py bot/router_components/__init__.py bot/router_components/x_routing.py`
+    - `./.venv/bin/pytest -q tests/router/test_router_components_x_routing.py tests/router/test_router_components_compose.py tests/router/test_router_components_gating.py tests/router/test_router_components_input_harvest.py tests/test_video_ingest.py tests/test_stt_pipeline_runtime.py tests/test_stt_pipeline_ffmpeg_runtime.py tests/test_stt_pipeline_youtube_path.py` -> `33 passed`

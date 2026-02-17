@@ -89,6 +89,7 @@ from .memory.thread_tail import (
 from .router_components import (
     RouterRuntimeCompat,
     compose_x_tweet_with_visual_facts,
+    canonicalize_twitter_status_url,
     collect_x_candidate_urls,
     extract_raw_urls_from_texts,
     extract_x_status_urls_from_text,
@@ -106,6 +107,7 @@ from .router_components import (
     is_twitter_url,
     load_router_runtime_compat,
     mentions_bot,
+    normalize_x_url,
     parse_twitter_status_id,
     strip_leading_bot_mention,
     strip_urls,
@@ -1155,10 +1157,7 @@ class Router:
 
     def _canonicalize_twitter_status_url(self, url: str) -> str:
         """Convert any Twitter status URL to canonical form https://x.com/i/status/{id}. [IV]"""
-        status_id = self._parse_twitter_status_id(url)
-        if status_id:
-            return f"https://x.com/i/status/{status_id}"
-        return url
+        return canonicalize_twitter_status_url(url)
 
     def _register_x_frontend_context(
         self, url: str, frontend: Optional[str], primary: Optional[str]
@@ -1551,31 +1550,7 @@ class Router:
         - Trim trailing slashes
         - Drop query/fragment
         """
-        try:
-            p = urlparse(url)
-            host = (p.netloc or "").lower()
-            aliases = {
-                "mobile.twitter.com",
-                "www.twitter.com",
-                "twitter.com",
-                "www.x.com",
-                "x.com",
-                "fxtwitter.com",
-                "www.fxtwitter.com",
-                "vxtwitter.com",
-                "www.vxtwitter.com",
-                "fixupx.com",
-                "www.fixupx.com",
-            }
-            if host in aliases:
-                host = "x.com"
-            path = p.path or ""
-            if path.endswith("/"):
-                path = path[:-1]
-            # Rebuild without query/fragment to avoid tracker variance
-            return urlunparse(("https", host, path, "", "", ""))
-        except Exception:
-            return url
+        return normalize_x_url(url)
 
     @staticmethod
     def _unwrap_x_media_url(url: str) -> str:
