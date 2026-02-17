@@ -1604,8 +1604,7 @@ def extract_x_status_urls_from_text(
     """Extract canonical X/Twitter status URLs from text preserving order."""
     urls: List[str] = []
     try:
-        for m in re.finditer(x_url_extract_pattern(), text or "", re.IGNORECASE):
-            raw = m.group(0)
+        for raw in iter_status_url_candidates(text):
             append_status_url_if_match(
                 urls,
                 raw,
@@ -1620,6 +1619,12 @@ def extract_x_status_urls_from_text(
 def x_url_extract_pattern() -> str:
     """Return canonical URL extraction regex pattern used for X/Twitter scans."""
     return r"https?://[^\s<>\"'\[\]{}|\\^`]+"
+
+
+def iter_status_url_candidates(text: str) -> Iterable[str]:
+    """Yield raw URL candidates for status extraction from one text blob."""
+    for m in re.finditer(x_url_extract_pattern(), text or "", re.IGNORECASE):
+        yield m.group(0)
 
 
 def x_url_extract_regex() -> Any:
