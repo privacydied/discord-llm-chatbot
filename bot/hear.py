@@ -59,6 +59,7 @@ from .stt_pipeline import (
     ffmpeg_candidates_from_env,
     ffmpeg_supports_aac_decoder,
     load_stt_runtime_compat,
+    parse_stt_max_ram_mb,
 )
 from .youtube_transcript import resolve_youtube_transcript
 
@@ -94,13 +95,7 @@ MAX_CHUNK_MULTIPLIER = 1.25
 MAX_CHUNK_ABS_LIMIT = 512
 MEMORY_ABORT_THRESHOLD_MB = 900
 
-try:
-    _MAX_RAM_MB_ENV = os.getenv("STT_MAX_RAM_MB")
-    STT_MAX_RAM_MB = int(_MAX_RAM_MB_ENV) if _MAX_RAM_MB_ENV else None
-    if STT_MAX_RAM_MB is not None and STT_MAX_RAM_MB <= 0:
-        STT_MAX_RAM_MB = None
-except Exception:
-    STT_MAX_RAM_MB = None
+STT_MAX_RAM_MB = parse_stt_max_ram_mb()
 
 _FFMPEG_BIN_CACHE: Optional[str] = None
 _FFMPEG_BIN_HAS_AAC: Optional[bool] = None

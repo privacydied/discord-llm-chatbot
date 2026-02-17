@@ -22,13 +22,27 @@ def _env_bool(name: str, default: bool) -> bool:
 @dataclass(frozen=True)
 class STTRuntimeCompat:
     youtube_transcript_first: bool
+    max_ram_mb: int | None
 
 
 def load_stt_runtime_compat() -> STTRuntimeCompat:
     """Load STT runtime feature toggles with legacy defaults."""
     return STTRuntimeCompat(
-        youtube_transcript_first=_env_bool("YOUTUBE_TRANSCRIPT_FIRST", True)
+        youtube_transcript_first=_env_bool("YOUTUBE_TRANSCRIPT_FIRST", True),
+        max_ram_mb=parse_stt_max_ram_mb(),
     )
+
+
+def parse_stt_max_ram_mb() -> int | None:
+    """Parse STT max RAM limit from env, preserving legacy semantics."""
+    try:
+        raw = os.getenv("STT_MAX_RAM_MB")
+        value = int(raw) if raw else None
+        if value is not None and value <= 0:
+            return None
+        return value
+    except Exception:
+        return None
 
 
 async def ensure_stt_manager_ready(manager: Any) -> bool:

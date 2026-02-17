@@ -92,3 +92,10 @@
   - Validation:
     - `./.venv/bin/python -m py_compile bot/router.py bot/router_components/__init__.py bot/router_components/x_routing.py`
     - `./.venv/bin/pytest -q tests/router/test_router_components_x_routing.py tests/router/test_router_components_compose.py tests/router/test_router_components_gating.py tests/router/test_router_components_input_harvest.py tests/test_video_ingest.py tests/test_stt_pipeline_youtube_path.py tests/test_stt_pipeline_ffmpeg_runtime.py` -> `29 passed`
+- 2026-02-17:
+  - Extended `bot/stt_pipeline/runtime.py` to centralize `STT_MAX_RAM_MB` parsing.
+  - Updated `bot/hear.py` to consume `parse_stt_max_ram_mb()` while preserving semantics.
+  - Added focused tests: `tests/test_stt_pipeline_runtime.py`.
+  - Validation:
+    - `./.venv/bin/python -m py_compile bot/hear.py bot/stt_pipeline/__init__.py bot/stt_pipeline/runtime.py`
+    - `./.venv/bin/pytest -q tests/test_stt_pipeline_runtime.py tests/test_stt_pipeline_ffmpeg_runtime.py tests/test_stt_pipeline_youtube_path.py tests/test_video_ingest.py tests/router/test_router_components_x_routing.py tests/router/test_router_components_compose.py tests/router/test_router_components_gating.py tests/router/test_router_components_input_harvest.py` -> `32 passed`
