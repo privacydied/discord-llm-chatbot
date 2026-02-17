@@ -1734,13 +1734,18 @@ def x_url_extract_regex() -> Any:
     """Return compiled URL extraction regex used for broad URL harvesting."""
     return compile_url_extract_regex(
         x_url_extract_regex_pattern(),
-        flags=x_url_extract_flags(),
+        flags=x_url_extract_compile_flags(),
     )
 
 
 def x_url_extract_regex_pattern() -> str:
     """Return pattern string used by compiled X URL extraction regex."""
     return x_url_extract_pattern()
+
+
+def x_url_extract_compile_flags() -> int:
+    """Return compile-time flags used by X URL extraction regex."""
+    return x_url_extract_flags()
 
 
 def compile_url_extract_regex(pattern: str, *, flags: int) -> Any:
