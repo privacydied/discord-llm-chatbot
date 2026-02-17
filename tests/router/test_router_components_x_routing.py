@@ -5,6 +5,7 @@ from bot.router_components.x_routing import (
     collect_x_candidate_urls,
     extract_x_api_primary_text,
     extract_x_api_primary_tweet,
+    extract_sparse_media_resolution,
     extract_raw_urls_from_texts,
     extract_x_status_urls_from_text,
     filter_canonical_x_urls,
@@ -136,3 +137,20 @@ def test_extract_x_api_primary_text_variants() -> None:
     assert extract_x_api_primary_text({"data": [{"text": "list text"}]}) == "list text"
     assert extract_x_api_primary_text({"data": []}) == ""
     assert extract_x_api_primary_text(None) == ""
+
+
+def test_extract_sparse_media_resolution_defaults_and_sanitizes() -> None:
+    assert extract_sparse_media_resolution(
+        None,
+        default_url="https://x.com/a",
+    ) == ("unknown", [], "https://x.com/a")
+
+    assert extract_sparse_media_resolution(
+        {"kind": "video", "images": "bad", "url": ""},
+        default_url="https://x.com/b",
+    ) == ("video", [], "https://x.com/b")
+
+    assert extract_sparse_media_resolution(
+        {"kind": "", "images": ["i1"], "url": "https://x.com/c"},
+        default_url="https://x.com/d",
+    ) == ("unknown", ["i1"], "https://x.com/c")

@@ -232,6 +232,22 @@ def extract_x_api_primary_text(api_data: Any) -> str:
         return ""
 
 
+def extract_sparse_media_resolution(
+    resolved_sparse: Any, *, default_url: str
+) -> tuple[str, List[str], str]:
+    """Extract sparse media kind/images/url from resolved payload."""
+    if not isinstance(resolved_sparse, dict):
+        return ("unknown", [], default_url)
+    sparse_kind = (resolved_sparse.get("kind") or "unknown").strip() or "unknown"
+    sparse_images = resolved_sparse.get("images") or []
+    if not isinstance(sparse_images, list):
+        sparse_images = []
+    sparse_url = resolved_sparse.get("url") or default_url
+    if not isinstance(sparse_url, str) or not sparse_url:
+        sparse_url = default_url
+    return (sparse_kind, sparse_images, sparse_url)
+
+
 def extract_x_status_urls_from_text(
     text: str,
     *,
