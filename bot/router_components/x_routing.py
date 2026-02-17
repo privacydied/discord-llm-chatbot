@@ -2075,6 +2075,16 @@ def url_match_group_index() -> int:
 
 def iter_url_matches(text: str, *, url_re: Any) -> Iterable[Any]:
     """Yield raw regex match objects for URL pattern scans in one text blob."""
+    yield from iter_url_matches_source(text, url_re=url_re)
+
+
+def iter_url_matches_source(text: str, *, url_re: Any) -> Iterable[Any]:
+    """Yield source regex matches used by iter_url_matches helper."""
+    yield from iter_url_matches_iter(text, url_re=url_re)
+
+
+def iter_url_matches_iter(text: str, *, url_re: Any) -> Iterable[Any]:
+    """Yield iterator used by iter_url_matches source helper."""
     yield from url_re_finditer(url_re, text)
 
 
