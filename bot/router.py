@@ -5675,7 +5675,7 @@ class Router:
                 if is_twitter:
                     composed = await self._format_x_no_speech_fallback(
                         url=url,
-                        stt_res=(result or {}),
+                        stt_res=result,
                     )
                     return composed
 
@@ -6607,24 +6607,26 @@ class Router:
                                 if tweet_id and x_client is not None:
                                     pass
                                 else:
+                                    api_data_for_caption = (
+                                        api_data if "api_data" in locals() else None
+                                    )
                                     return self._format_x_caption_only_fallback_result(
                                         url=url,
                                         base_text=base,
                                         tweet_text=text,
-                                        api_data=(
-                                            api_data if "api_data" in locals() else None
-                                        ),
+                                        api_data=api_data_for_caption,
                                     )
                             else:
                             # Fall back to text-only ONLY when video was NOT confirmed by syndication [REH]
+                                api_data_for_caption = (
+                                    api_data if "api_data" in locals() else None
+                                )
                                 # Prefer API text if available; otherwise fall back to syndication text or composed evidence [REH]
                                 return self._format_x_caption_only_fallback_result(
                                     url=url,
                                     base_text=base,
                                     tweet_text=text,
-                                    api_data=(
-                                        api_data if "api_data" in locals() else None
-                                    ),
+                                    api_data=api_data_for_caption,
                                 )
 
                         if has_any_images:
@@ -6704,7 +6706,7 @@ class Router:
                                 return await self._format_x_no_speech_fallback(
                                     base_text=base,
                                     url=url,
-                                    stt_res=(stt_res or {}),
+                                    stt_res=stt_res,
                                 )
                             except Exception as stt_err:
                                 self.logger.error(
