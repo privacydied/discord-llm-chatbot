@@ -906,6 +906,11 @@ def build_syndication_x_host() -> str:
 
 def build_syndication_oembed_options() -> Dict[str, str]:
     """Return canonical oEmbed flags for privacy/script/thread behavior."""
+    return build_syndication_oembed_options_map()
+
+
+def build_syndication_oembed_options_map() -> Dict[str, str]:
+    """Return canonical oEmbed option key/value map."""
     return {
         build_syndication_oembed_dnt_key(): build_syndication_dnt_value(),
         build_syndication_oembed_omit_script_key(): build_syndication_omit_script_value(),
