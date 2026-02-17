@@ -2039,8 +2039,13 @@ def raw_url_source_texts_iter(texts: Iterable[str]) -> Iterable[str]:
 
 def iter_text_urls(text: str, *, url_re: Any) -> Iterable[str]:
     """Yield raw URL matches from one text blob using provided compiled regex."""
-    for m in url_matches(text, url_re=url_re):
+    for m in iter_text_url_matches(text, url_re=url_re):
         yield url_match_group_value(m)
+
+
+def iter_text_url_matches(text: str, *, url_re: Any) -> Iterable[Any]:
+    """Yield source URL match objects used by iter_text_urls helper."""
+    yield from url_matches(text, url_re=url_re)
 
 
 def url_matches(text: str, *, url_re: Any) -> Iterable[Any]:

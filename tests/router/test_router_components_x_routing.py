@@ -285,6 +285,7 @@ from bot.router_components.x_routing import (
     url_scan_text_fallback,
     url_match_group_index,
     url_match_group_value,
+    iter_text_url_matches,
     iter_text_urls,
 )
 
@@ -694,6 +695,11 @@ def test_raw_url_source_texts_iter_delegates_iterable() -> None:
 def test_iter_text_urls_yields_raw_matches() -> None:
     urls = list(iter_text_urls("a https://x.com/u/status/1 b", url_re=x_url_extract_regex()))
     assert urls == ["https://x.com/u/status/1"]
+
+
+def test_iter_text_url_matches_yields_match_objects() -> None:
+    matches = list(iter_text_url_matches("a https://x.com/u/status/1 b", url_re=x_url_extract_regex()))
+    assert [m.group(0) for m in matches] == ["https://x.com/u/status/1"]
 
 
 def test_collect_raw_urls_from_texts() -> None:
