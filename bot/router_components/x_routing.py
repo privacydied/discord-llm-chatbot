@@ -482,6 +482,18 @@ def extract_syndication_text(
     )
 
 
+def build_x_text_miss_log_payload(url: str) -> Dict[str, Any]:
+    """Build structured breadcrumb payload when syndication text is empty."""
+    return {
+        "event": "x.text.miss",
+        "detail": {
+            "primary": XApiClient.extract_tweet_id(url) or "",
+            "layer": "format",
+            "reason": "empty_text",
+        },
+    }
+
+
 def x_syn_probe_budget_timeout_s(x_syn_timeout_s: float) -> float:
     """Compute bounded timeout budget for image/media probe calls."""
     return min(float(x_syn_timeout_s) + 1.0, 4.5)

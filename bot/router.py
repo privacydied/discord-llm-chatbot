@@ -135,6 +135,7 @@ from .router_components import (
     extract_x_article_text,
     syndication_needs_article_hydration,
     extract_syndication_text,
+    build_x_text_miss_log_payload,
     x_syn_probe_budget_timeout_s,
     x_syn_quick_request_timeouts,
     build_syndication_photo_payload,
@@ -1265,14 +1266,7 @@ class Router:
                 try:
                     self.logger.info(
                         "x.text.miss",
-                        extra={
-                            "event": "x.text.miss",
-                            "detail": {
-                                "primary": XApiClient.extract_tweet_id(url) or "",
-                                "layer": "format",
-                                "reason": "empty_text",
-                            },
-                        },
+                        extra=build_x_text_miss_log_payload(url),
                     )
                 except Exception:
                     pass

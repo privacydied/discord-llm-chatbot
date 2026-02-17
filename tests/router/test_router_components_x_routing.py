@@ -30,6 +30,7 @@ from bot.router_components.x_routing import (
     extract_syndication_base_text,
     merge_syndication_base_with_article,
     extract_syndication_text,
+    build_x_text_miss_log_payload,
     resolve_twitter_status_id,
     is_twitter_status_url,
     stt_result_has_transcription,
@@ -505,6 +506,27 @@ def test_extract_syndication_text_variants() -> None:
         )
         == "base"
     )
+
+
+def test_build_x_text_miss_log_payload_shape_and_primary_id() -> None:
+    assert build_x_text_miss_log_payload(
+        "https://x.com/u/status/2022790791047823773"
+    ) == {
+        "event": "x.text.miss",
+        "detail": {
+            "primary": "2022790791047823773",
+            "layer": "format",
+            "reason": "empty_text",
+        },
+    }
+    assert build_x_text_miss_log_payload("https://example.com/nope") == {
+        "event": "x.text.miss",
+        "detail": {
+            "primary": "",
+            "layer": "format",
+            "reason": "empty_text",
+        },
+    }
 
 
 def test_x_syn_probe_budget_timeout_s_caps_and_offsets() -> None:
