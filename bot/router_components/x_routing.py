@@ -793,9 +793,14 @@ def build_syndication_dnt_key() -> str:
     return "dnt"
 
 
+def build_syndication_id_key() -> str:
+    """Return canonical id param key used in syndication fetch params."""
+    return "id"
+
+
 def build_syndication_fetch_params_core(tweet_id: str) -> Dict[str, str]:
     """Return core syndication fetch params for a tweet id (without DNT)."""
-    return {"id": tweet_id, "lang": build_syndication_lang()}
+    return {build_syndication_id_key(): tweet_id, "lang": build_syndication_lang()}
 
 
 def build_syndication_fetch_params_variants(tweet_id: str) -> List[Tuple[str, Dict[str, str]]]:

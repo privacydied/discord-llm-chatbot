@@ -72,6 +72,7 @@ from bot.router_components.x_routing import (
     build_syndication_fetch_headers,
     build_syndication_fetch_headers_base,
     build_syndication_dnt_key,
+    build_syndication_id_key,
     build_syndication_fetch_params_core,
     build_syndication_fetch_params,
     build_syndication_fetch_params_variants,
@@ -957,6 +958,10 @@ def test_build_syndication_bool_false_value_constant() -> None:
 
 def test_build_syndication_dnt_key_constant() -> None:
     assert build_syndication_dnt_key() == "dnt"
+
+
+def test_build_syndication_id_key_constant() -> None:
+    assert build_syndication_id_key() == "id"
 
 
 def test_build_syndication_fetch_params_variants_with_and_without_dnt() -> None:
