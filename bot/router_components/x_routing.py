@@ -1814,7 +1814,19 @@ def append_canonicalized_value(
     canonicalize: Callable[[str], str],
 ) -> None:
     """Canonicalize raw value then append uniquely to target list."""
-    append_unique_str(items, canonicalize(raw_value))
+    append_unique_str(
+        items,
+        canonicalized_value(raw_value, canonicalize=canonicalize),
+    )
+
+
+def canonicalized_value(
+    raw_value: str,
+    *,
+    canonicalize: Callable[[str], str],
+) -> str:
+    """Return canonicalized form of one raw value."""
+    return canonicalize(raw_value)
 
 
 def append_status_url_if_match(

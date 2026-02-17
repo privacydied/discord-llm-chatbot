@@ -20,6 +20,7 @@ from bot.router_components.x_routing import (
     append_raw_url_if_present,
     raw_url_is_present,
     append_canonicalized_value,
+    canonicalized_value,
     append_canonical_x_url,
     append_canonical_status_url,
     append_status_url_if_match,
@@ -388,6 +389,10 @@ def test_append_canonicalized_value_only_appends_unique_canonical() -> None:
     append_canonicalized_value(items, "a", canonicalize=lambda s: f"x:{s}")
     append_canonicalized_value(items, "b", canonicalize=lambda s: f"x:{s}")
     assert items == ["x:a", "x:b"]
+
+
+def test_canonicalized_value_delegates_transform() -> None:
+    assert canonicalized_value("a", canonicalize=lambda s: f"x:{s}") == "x:a"
 
 
 def test_append_canonical_x_url_only_appends_unique_canonical() -> None:
