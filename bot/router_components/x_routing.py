@@ -1606,12 +1606,12 @@ def extract_x_status_urls_from_text(
     try:
         for m in re.finditer(x_url_extract_pattern(), text or "", re.IGNORECASE):
             raw = m.group(0)
-            if is_status_url(raw):
-                append_canonical_status_url(
-                    urls,
-                    raw,
-                    canonicalize_status_url=canonicalize_status_url,
-                )
+            append_status_url_if_match(
+                urls,
+                raw,
+                is_status_url=is_status_url,
+                canonicalize_status_url=canonicalize_status_url,
+            )
     except Exception:
         pass
     return urls
@@ -1690,3 +1690,19 @@ def append_canonical_status_url(
 ) -> None:
     """Canonicalize status URL then append uniquely to target list."""
     append_unique_str(items, canonicalize_status_url(raw_url))
+
+
+def append_status_url_if_match(
+    items: List[str],
+    raw_url: str,
+    *,
+    is_status_url: Callable[[str], bool],
+    canonicalize_status_url: Callable[[str], str],
+) -> None:
+    """Append canonical status URL only when raw URL matches status predicate."""
+    if is_status_url(raw_url):
+        append_canonical_status_url(
+            items,
+            raw_url,
+            canonicalize_status_url=canonicalize_status_url,
+        )
