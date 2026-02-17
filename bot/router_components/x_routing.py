@@ -1816,12 +1816,21 @@ def append_status_url_if_match(
     canonicalize_status_url: Callable[[str], str],
 ) -> None:
     """Append canonical status URL only when raw URL matches status predicate."""
-    if is_status_url_candidate(raw_url, is_status_url=is_status_url):
+    if status_url_matches_predicate(raw_url, is_status_url=is_status_url):
         append_matched_status_url(
             items,
             raw_url,
             canonicalize_status_url=canonicalize_status_url,
         )
+
+
+def status_url_matches_predicate(
+    raw_url: str,
+    *,
+    is_status_url: Callable[[str], bool],
+) -> bool:
+    """Return whether raw URL matches status predicate for append gating."""
+    return is_status_url_candidate(raw_url, is_status_url=is_status_url)
 
 
 def is_status_url_candidate(

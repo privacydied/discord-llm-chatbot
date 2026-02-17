@@ -22,6 +22,7 @@ from bot.router_components.x_routing import (
     append_canonical_x_url,
     append_canonical_status_url,
     append_status_url_if_match,
+    status_url_matches_predicate,
     is_status_url_candidate,
     append_matched_status_url,
     append_matched_x_url,
@@ -438,6 +439,17 @@ def test_append_status_url_if_match() -> None:
 def test_is_status_url_candidate_delegates_predicate() -> None:
     assert is_status_url_candidate("https://x.com/u/status/1", is_status_url=lambda u: "/status/" in u)
     assert not is_status_url_candidate("https://example.com", is_status_url=lambda u: "/status/" in u)
+
+
+def test_status_url_matches_predicate_delegates_candidate_check() -> None:
+    assert status_url_matches_predicate(
+        "https://x.com/u/status/1",
+        is_status_url=lambda u: "/status/" in u,
+    )
+    assert not status_url_matches_predicate(
+        "https://example.com",
+        is_status_url=lambda u: "/status/" in u,
+    )
 
 
 def test_append_matched_status_url_only_appends_unique_canonical() -> None:
