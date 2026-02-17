@@ -1153,3 +1153,18 @@
     - `python -m py_compile bot/router.py bot/router_components/__init__.py bot/router_components/x_routing.py tests/router/test_router_components_x_routing.py` -> `ok`
     - `./.venv/bin/pytest -q tests/router/test_router_components_x_routing.py tests/router/test_router_caption_only_helpers.py tests/router/test_x_api_routing.py tests/router/test_router_x_base_text_resolution.py` -> `78 passed`
     - `./.venv/bin/pytest -q tests/core tests/router tests/syndication tests/vision tests/test_hear_ffmpeg_resolution.py tests/test_hear_stream_abort.py tests/test_media_ingestion.py tests/test_video_ingest.py tests/router/test_router_x_result_format_contract.py tests/router/test_router_x_base_text_resolution.py tests/test_media_ingestion_compat_contracts.py tests/vision/test_money_contract.py tests/test_media_ingestion_helpers.py tests/test_stt_pipeline_runtime.py tests/test_stt_pipeline_ffmpeg_runtime.py tests/test_stt_pipeline_youtube_path.py tests/test_stt_pipeline_result_payload.py tests/test_stt_pipeline_spec_select.py tests/test_stt_pipeline_logging.py tests/test_stt_pipeline_lifecycle.py tests/test_stt_pipeline_url_ingest.py tests/test_stt_pipeline_transcribe_flow.py tests/test_stt_pipeline_stitch.py` -> `340 passed`
+- 2026-02-17:
+  - Refactor (behavior-preserving): extracted X syndication probe timeout math into router components:
+    - `bot/router_components/x_routing.py::x_syn_probe_budget_timeout_s()`
+  - Rewired router wrapper to delegate:
+    - `bot/router.py::_x_syn_probe_budget_timeout_s()`
+  - Exported helper via `bot/router_components/__init__.py`.
+  - Added focused pure-helper test in `tests/router/test_router_components_x_routing.py`:
+    - `test_x_syn_probe_budget_timeout_s_caps_and_offsets`
+  - Preserved behavior:
+    - timeout still adds `+1.0s` and caps at `4.5s`
+    - router default path still uses `_x_syn_timeout_s` with fallback `3.0`
+  - Validation:
+    - `python -m py_compile bot/router.py bot/router_components/__init__.py bot/router_components/x_routing.py tests/router/test_router_components_x_routing.py` -> `ok`
+    - `./.venv/bin/pytest -q tests/router/test_router_components_x_routing.py tests/router/test_router_caption_only_helpers.py tests/router/test_x_api_routing.py tests/router/test_router_x_base_text_resolution.py` -> `79 passed`
+    - `./.venv/bin/pytest -q tests/core tests/router tests/syndication tests/vision tests/test_hear_ffmpeg_resolution.py tests/test_hear_stream_abort.py tests/test_media_ingestion.py tests/test_video_ingest.py tests/router/test_router_x_result_format_contract.py tests/router/test_router_x_base_text_resolution.py tests/test_media_ingestion_compat_contracts.py tests/vision/test_money_contract.py tests/test_media_ingestion_helpers.py tests/test_stt_pipeline_runtime.py tests/test_stt_pipeline_ffmpeg_runtime.py tests/test_stt_pipeline_youtube_path.py tests/test_stt_pipeline_result_payload.py tests/test_stt_pipeline_spec_select.py tests/test_stt_pipeline_logging.py tests/test_stt_pipeline_lifecycle.py tests/test_stt_pipeline_url_ingest.py tests/test_stt_pipeline_transcribe_flow.py tests/test_stt_pipeline_stitch.py` -> `341 passed`

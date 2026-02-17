@@ -125,6 +125,7 @@ from .router_components import (
     parse_twitter_status_id,
     resolve_twitter_status_id,
     classify_stt_error_reason,
+    x_syn_probe_budget_timeout_s,
     stt_result_has_transcription,
     strip_leading_bot_mention,
     strip_discord_mentions_and_urls,
@@ -790,7 +791,7 @@ class Router:
 
     def _x_syn_probe_budget_timeout_s(self) -> float:
         """Compute bounded timeout budget for image/media probe calls."""
-        return min(getattr(self, "_x_syn_timeout_s", 3.0) + 1.0, 4.5)
+        return x_syn_probe_budget_timeout_s(getattr(self, "_x_syn_timeout_s", 3.0))
 
     def _extract_fxtwitter_tweet_node(self, payload: Any) -> Dict[str, Any]:
         """Extract the canonical tweet/status node from fx/vx payloads."""

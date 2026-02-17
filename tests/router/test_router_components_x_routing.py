@@ -20,6 +20,7 @@ from bot.router_components.x_routing import (
     resolve_twitter_status_id,
     stt_result_has_transcription,
     unwrap_x_media_url,
+    x_syn_probe_budget_timeout_s,
 )
 
 
@@ -212,3 +213,8 @@ def test_classify_stt_error_reason_matches_router_semantics() -> None:
     assert classify_stt_error_reason("timeout") == "no_speech"
     # Preserve legacy exact-match behavior (case-sensitive).
     assert classify_stt_error_reason("ERROR") == "no_speech"
+
+
+def test_x_syn_probe_budget_timeout_s_caps_and_offsets() -> None:
+    assert x_syn_probe_budget_timeout_s(9.0) == 4.5
+    assert x_syn_probe_budget_timeout_s(2.2) == 3.2

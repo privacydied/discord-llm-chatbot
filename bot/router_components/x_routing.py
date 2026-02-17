@@ -279,6 +279,11 @@ def classify_stt_error_reason(stt_err: Optional[str]) -> str:
     return "no_speech" if stt_err != "error" else "error"
 
 
+def x_syn_probe_budget_timeout_s(x_syn_timeout_s: float) -> float:
+    """Compute bounded timeout budget for image/media probe calls."""
+    return min(float(x_syn_timeout_s) + 1.0, 4.5)
+
+
 def extract_x_status_urls_from_text(
     text: str,
     *,
