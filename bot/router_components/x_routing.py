@@ -1634,6 +1634,11 @@ def extract_x_status_urls_from_text(
         )
     except Exception:
         pass
+    return status_url_items_result(urls)
+
+
+def status_url_items_result(urls: List[str]) -> List[str]:
+    """Return collected status URL items for extraction call sites."""
     return urls
 
 

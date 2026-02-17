@@ -210,6 +210,7 @@ from bot.router_components.x_routing import (
     build_twitter_image_probe_result,
     resolve_and_probe_twitter_images,
     status_url_items_buffer,
+    status_url_items_result,
     collect_status_urls_from_candidates,
     status_url_candidates,
     x_url_extract_pattern,
@@ -321,6 +322,10 @@ def test_collect_status_urls_from_candidates() -> None:
 
 def test_status_url_items_buffer_starts_empty() -> None:
     assert status_url_items_buffer() == []
+
+
+def test_status_url_items_result_identity() -> None:
+    assert status_url_items_result(["u1", "u2"]) == ["u1", "u2"]
 
 
 def test_x_url_extract_pattern_constant() -> None:
