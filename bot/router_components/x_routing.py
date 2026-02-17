@@ -911,11 +911,21 @@ def build_syndication_oembed_options() -> Dict[str, str]:
 
 def build_syndication_oembed_options_map() -> Dict[str, str]:
     """Return canonical oEmbed option key/value map."""
+    dnt_key, omit_script_key, hide_thread_key = build_syndication_oembed_option_keys()
     return {
-        build_syndication_oembed_dnt_key(): build_syndication_dnt_value(),
-        build_syndication_oembed_omit_script_key(): build_syndication_omit_script_value(),
-        build_syndication_oembed_hide_thread_key(): build_syndication_hide_thread_value(),
+        dnt_key: build_syndication_dnt_value(),
+        omit_script_key: build_syndication_omit_script_value(),
+        hide_thread_key: build_syndication_hide_thread_value(),
     }
+
+
+def build_syndication_oembed_option_keys() -> Tuple[str, str, str]:
+    """Return canonical oEmbed option keys in stable order."""
+    return (
+        build_syndication_oembed_dnt_key(),
+        build_syndication_oembed_omit_script_key(),
+        build_syndication_oembed_hide_thread_key(),
+    )
 
 
 def build_syndication_oembed_dnt_key() -> str:

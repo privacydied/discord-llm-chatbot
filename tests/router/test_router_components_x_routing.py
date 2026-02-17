@@ -96,6 +96,7 @@ from bot.router_components.x_routing import (
     build_syndication_status_path,
     build_syndication_oembed_options,
     build_syndication_oembed_options_map,
+    build_syndication_oembed_option_keys,
     build_syndication_oembed_dnt_key,
     build_syndication_oembed_omit_script_key,
     build_syndication_oembed_hide_thread_key,
@@ -819,6 +820,14 @@ def test_build_syndication_oembed_options_map_constant() -> None:
         "omit_script": "true",
         "hide_thread": "true",
     }
+
+
+def test_build_syndication_oembed_option_keys_constant() -> None:
+    assert build_syndication_oembed_option_keys() == (
+        "dnt",
+        "omit_script",
+        "hide_thread",
+    )
 
 
 def test_build_syndication_oembed_dnt_key_constant() -> None:
