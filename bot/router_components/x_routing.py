@@ -484,12 +484,26 @@ def extract_syndication_text(
 
 def build_x_text_miss_log_payload(url: str) -> Dict[str, Any]:
     """Build structured breadcrumb payload when syndication text is empty."""
+    return build_x_text_miss_payload(
+        primary=XApiClient.extract_tweet_id(url) or "",
+        layer="format",
+        reason="empty_text",
+    )
+
+
+def build_x_text_miss_payload(
+    *,
+    primary: str,
+    layer: str,
+    reason: str,
+) -> Dict[str, Any]:
+    """Build structured breadcrumb payload for X text-miss events."""
     return {
         "event": "x.text.miss",
         "detail": {
-            "primary": XApiClient.extract_tweet_id(url) or "",
-            "layer": "format",
-            "reason": "empty_text",
+            "primary": primary,
+            "layer": layer,
+            "reason": reason,
         },
     }
 

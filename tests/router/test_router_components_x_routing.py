@@ -31,6 +31,7 @@ from bot.router_components.x_routing import (
     merge_syndication_base_with_article,
     extract_syndication_text,
     build_x_text_miss_log_payload,
+    build_x_text_miss_payload,
     format_syndication_body_text,
     format_syndication_header_line,
     format_syndication_error_fallback,
@@ -529,6 +530,21 @@ def test_build_x_text_miss_log_payload_shape_and_primary_id() -> None:
             "primary": "",
             "layer": "format",
             "reason": "empty_text",
+        },
+    }
+
+
+def test_build_x_text_miss_payload_accepts_explicit_fields() -> None:
+    assert build_x_text_miss_payload(
+        primary="2022790791047823773",
+        layer="syndication",
+        reason="no_text",
+    ) == {
+        "event": "x.text.miss",
+        "detail": {
+            "primary": "2022790791047823773",
+            "layer": "syndication",
+            "reason": "no_text",
         },
     }
 

@@ -136,6 +136,7 @@ from .router_components import (
     syndication_needs_article_hydration,
     extract_syndication_text,
     build_x_text_miss_log_payload,
+    build_x_text_miss_payload,
     format_syndication_body_text,
     format_syndication_header_line,
     format_syndication_error_fallback,
@@ -1191,14 +1192,11 @@ class Router:
                 try:
                     self.logger.info(
                         "x.text.miss",
-                        extra={
-                            "event": "x.text.miss",
-                            "detail": {
-                                "primary": tweet_id,
-                                "layer": "syndication",
-                                "reason": "no_text",
-                            },
-                        },
+                        extra=build_x_text_miss_payload(
+                            primary=tweet_id,
+                            layer="syndication",
+                            reason="no_text",
+                        ),
                     )
                 except Exception:
                     pass
