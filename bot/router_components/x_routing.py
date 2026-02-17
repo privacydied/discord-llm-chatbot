@@ -1728,8 +1728,13 @@ def append_unique_str(items: List[str], value: str) -> None:
 
 def append_raw_url_if_present(items: List[str], raw_url: str) -> None:
     """Append extracted raw URL only when non-empty and not yet present."""
-    if raw_url:
+    if raw_url_is_present(raw_url):
         append_unique_str(items, raw_url)
+
+
+def raw_url_is_present(raw_url: str) -> bool:
+    """Return True when extracted raw URL is non-empty."""
+    return bool(raw_url)
 
 
 def append_canonical_x_url(
