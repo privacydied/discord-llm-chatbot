@@ -842,6 +842,11 @@ def build_syndication_negative_cache_key() -> str:
     return "neg"
 
 
+def build_syndication_cache_data_key() -> str:
+    """Return canonical payload key used for positive syndication cache entries."""
+    return "data"
+
+
 def syndication_cache_is_fresh(now_s: float, default_ttl_s: float, cached: Any) -> bool:
     """Return True when syndication cache entry is still fresh under TTL policy."""
     ttl = syndication_cache_ttl_s(default_ttl_s, cached)
@@ -873,7 +878,10 @@ def build_syndication_negative_cache_entry(now_s: float) -> Dict[str, Any]:
 
 def build_syndication_cache_entry(data: Any, now_s: float) -> Dict[str, Any]:
     """Build positive syndication cache entry with timestamp."""
-    return {"data": data, build_syndication_cache_ts_key(): now_s}
+    return {
+        build_syndication_cache_data_key(): data,
+        build_syndication_cache_ts_key(): now_s,
+    }
 
 
 def build_syndication_negative_cache_hit_label() -> str:
@@ -883,7 +891,7 @@ def build_syndication_negative_cache_hit_label() -> str:
 
 def build_syndication_data_cache_hit_label() -> str:
     """Return cache-hit label for data-backed syndication cache entries."""
-    return "data"
+    return build_syndication_cache_data_key()
 
 
 def build_syndication_endpoint_url(base: str, endpoint: str) -> str:

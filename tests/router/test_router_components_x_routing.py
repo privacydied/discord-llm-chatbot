@@ -58,6 +58,7 @@ from bot.router_components.x_routing import (
     build_syndication_tweet_result_path,
     build_syndication_cache_ts_key,
     build_syndication_negative_cache_key,
+    build_syndication_cache_data_key,
     build_syndication_negative_cache_hit_label,
     build_syndication_data_cache_hit_label,
     build_syndication_oembed_params,
@@ -918,6 +919,10 @@ def test_build_syndication_negative_cache_key_constant() -> None:
     assert build_syndication_negative_cache_key() == "neg"
 
 
+def test_build_syndication_cache_data_key_constant() -> None:
+    assert build_syndication_cache_data_key() == "data"
+
+
 def test_build_syndication_cache_hit_label_constants() -> None:
     assert build_syndication_negative_cache_hit_label() == "neg"
     assert build_syndication_data_cache_hit_label() == "data"
@@ -994,7 +999,7 @@ def test_build_syndication_negative_cache_entry_shape() -> None:
 def test_build_syndication_cache_entry_shape() -> None:
     data = {"text": "hello"}
     assert build_syndication_cache_entry(data, 321.0) == {
-        "data": data,
+        build_syndication_cache_data_key(): data,
         "ts": 321.0,
     }
 
