@@ -638,6 +638,13 @@ class Router:
             reply_style="ack+thoughts",
         )
 
+    async def _route_twitter_images_with_caption(
+        self, *, url: str, caption_text: Optional[str], image_urls: List[str]
+    ) -> str:
+        """Build syndication-like payload from caption+images and route to VL."""
+        syn_payload = self._build_syndication_photo_payload(caption_text, image_urls)
+        return await self._route_twitter_syndication_to_vl(syn_payload, url)
+
     def _log_twitter_syndication_images(
         self, image_urls: List[str], *, msg_id: Optional[int] = None
     ) -> None:
@@ -5576,13 +5583,10 @@ class Router:
                                     status_id
                                 )
 
-                                syn_like = self._build_syndication_photo_payload(
-                                    tweet_text,
-                                    imgs,
-                                )
-                                return await self._route_twitter_syndication_to_vl(
-                                    syn_like,
-                                    url,
+                                return await self._route_twitter_images_with_caption(
+                                    url=url,
+                                    caption_text=tweet_text,
+                                    image_urls=imgs,
                                 )
                             except Exception:
                                 # Fallback: single-image VL without caption
@@ -6355,13 +6359,10 @@ class Router:
                                         status_id,
                                         fallback_text=text,
                                     )
-                                    syn_like = self._build_syndication_photo_payload(
-                                        tweet_text,
-                                        imgs,
-                                    )
-                                    result = await self._route_twitter_syndication_to_vl(
-                                        syn_like,
-                                        url,
+                                    result = await self._route_twitter_images_with_caption(
+                                        url=url,
+                                        caption_text=tweet_text,
+                                        image_urls=imgs,
                                     )
                                     return result
 
@@ -6455,13 +6456,10 @@ class Router:
                                     image_text = self._extract_syndication_text(
                                         syn_for_sparse_images
                                     )
-                                    syn_like = self._build_syndication_photo_payload(
-                                        image_text,
-                                        sparse_images,
-                                    )
-                                    return await self._route_twitter_syndication_to_vl(
-                                        syn_like,
-                                        url,
+                                    return await self._route_twitter_images_with_caption(
+                                        url=url,
+                                        caption_text=image_text,
+                                        image_urls=sparse_images,
                                     )
                                 if sparse_kind not in ("video", "image"):
                                     # Last resort for sparse syndication: attempt STT directly on the tweet URL.
@@ -6562,13 +6560,10 @@ class Router:
                                 tweet_text = await self._resolve_twitter_caption_text(
                                     status_id
                                 )
-                                syn_like = self._build_syndication_photo_payload(
-                                    tweet_text,
-                                    imgs,
-                                )
-                                result = await self._route_twitter_syndication_to_vl(
-                                    syn_like,
-                                    url,
+                                result = await self._route_twitter_images_with_caption(
+                                    url=url,
+                                    caption_text=tweet_text,
+                                    image_urls=imgs,
                                 )
                                 return result
                         except Exception as e:

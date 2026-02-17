@@ -241,6 +241,38 @@ async def test_route_twitter_syndication_to_vl_delegates_to_handler(monkeypatch)
     assert captured["reply_style"] == "ack+thoughts"
 
 
+@pytest.mark.asyncio
+async def test_route_twitter_images_with_caption_builds_payload_and_routes(
+    monkeypatch,
+) -> None:
+    router = Router(DummyBot())
+    calls = {}
+
+    def _build_payload(self, text, image_urls):
+        calls["build"] = (text, image_urls)
+        return {"text": text, "photos": [{"url": u} for u in image_urls]}
+
+    async def _route_payload(self, syn_payload, url):
+        calls["route"] = (syn_payload, url)
+        return "ok"
+
+    monkeypatch.setattr(Router, "_build_syndication_photo_payload", _build_payload)
+    monkeypatch.setattr(Router, "_route_twitter_syndication_to_vl", _route_payload)
+
+    out = await router._route_twitter_images_with_caption(
+        url="https://x.com/u/status/1",
+        caption_text="caption",
+        image_urls=["u1", "u2"],
+    )
+
+    assert out == "ok"
+    assert calls["build"] == ("caption", ["u1", "u2"])
+    assert calls["route"] == (
+        {"text": "caption", "photos": [{"url": "u1"}, {"url": "u2"}]},
+        "https://x.com/u/status/1",
+    )
+
+
 def test_log_twitter_syndication_images_with_and_without_msg_id() -> None:
     router = Router(DummyBot())
     router.logger = CaptureLogger()
