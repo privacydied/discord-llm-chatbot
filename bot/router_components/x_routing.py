@@ -248,6 +248,14 @@ def extract_sparse_media_resolution(
     return (sparse_kind, sparse_images, sparse_url)
 
 
+def extract_fxtwitter_tweet_node(payload: Any) -> Dict[str, Any]:
+    """Extract the canonical tweet/status node from fx/vx payloads."""
+    if not isinstance(payload, dict):
+        return {}
+    node = (payload.get("tweet") or payload.get("status")) or {}
+    return node if isinstance(node, dict) else {}
+
+
 def extract_x_status_urls_from_text(
     text: str,
     *,

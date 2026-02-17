@@ -96,6 +96,7 @@ from .router_components import (
     canonicalize_twitter_status_url,
     collect_x_candidate_urls,
     existing_url_payloads,
+    extract_fxtwitter_tweet_node,
     extract_x_api_primary_text,
     extract_x_api_primary_tweet,
     extract_sparse_media_resolution,
@@ -790,10 +791,7 @@ class Router:
 
     def _extract_fxtwitter_tweet_node(self, payload: Any) -> Dict[str, Any]:
         """Extract the canonical tweet/status node from fx/vx payloads."""
-        if not isinstance(payload, dict):
-            return {}
-        node = (payload.get("tweet") or payload.get("status")) or {}
-        return node if isinstance(node, dict) else {}
+        return extract_fxtwitter_tweet_node(payload)
 
     def _stt_result_has_transcription(self, stt_result: Any) -> bool:
         """Check whether an STT result payload contains non-empty transcription text."""

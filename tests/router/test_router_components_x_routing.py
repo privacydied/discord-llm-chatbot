@@ -3,6 +3,7 @@ from types import SimpleNamespace
 from bot.router_components.x_routing import (
     canonicalize_twitter_status_url,
     collect_x_candidate_urls,
+    extract_fxtwitter_tweet_node,
     extract_x_api_primary_text,
     extract_x_api_primary_tweet,
     extract_sparse_media_resolution,
@@ -154,3 +155,11 @@ def test_extract_sparse_media_resolution_defaults_and_sanitizes() -> None:
         {"kind": "", "images": ["i1"], "url": "https://x.com/c"},
         default_url="https://x.com/d",
     ) == ("unknown", ["i1"], "https://x.com/c")
+
+
+def test_extract_fxtwitter_tweet_node_variants() -> None:
+    assert extract_fxtwitter_tweet_node({"tweet": {"id": "1"}}) == {"id": "1"}
+    assert extract_fxtwitter_tweet_node({"status": {"id": "2"}}) == {"id": "2"}
+    assert extract_fxtwitter_tweet_node({"tweet": "bad"}) == {}
+    assert extract_fxtwitter_tweet_node({"status": []}) == {}
+    assert extract_fxtwitter_tweet_node(None) == {}
