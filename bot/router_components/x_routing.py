@@ -1650,13 +1650,18 @@ def collect_status_urls_from_candidates(
     canonicalize_status_url: Callable[[str], str],
 ) -> None:
     """Collect canonical status URLs from candidate URLs found in text."""
-    for raw in iter_status_url_candidates(text):
+    for raw in status_url_candidates(text):
         append_status_url_if_match(
             items,
             raw,
             is_status_url=is_status_url,
             canonicalize_status_url=canonicalize_status_url,
         )
+
+
+def status_url_candidates(text: str) -> Iterable[str]:
+    """Yield status URL candidates from text for collector loops."""
+    yield from iter_status_url_candidates(text)
 
 
 def x_url_extract_pattern() -> str:

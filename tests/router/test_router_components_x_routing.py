@@ -211,6 +211,7 @@ from bot.router_components.x_routing import (
     resolve_and_probe_twitter_images,
     status_url_items_buffer,
     collect_status_urls_from_candidates,
+    status_url_candidates,
     x_url_extract_pattern,
     x_url_extract_flags,
     compile_url_extract_regex,
@@ -337,6 +338,11 @@ def test_status_url_extract_regex_matches_x_url_extract_regex() -> None:
 
 def test_iter_status_url_candidates_yields_raw_matches() -> None:
     urls = list(iter_status_url_candidates("a https://x.com/u/status/1 b"))
+    assert urls == ["https://x.com/u/status/1"]
+
+
+def test_status_url_candidates_delegates_iterator() -> None:
+    urls = list(status_url_candidates("a https://x.com/u/status/1 b"))
     assert urls == ["https://x.com/u/status/1"]
 
 
