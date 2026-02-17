@@ -13,6 +13,7 @@ from bot.router_components.x_routing import (
     extract_x_status_urls_from_text,
     filter_canonical_x_urls,
     is_x_url_candidate,
+    append_x_url_if_match,
     append_unique_str,
     append_raw_url_if_present,
     append_canonicalized_value,
@@ -432,6 +433,23 @@ def test_append_matched_status_url_only_appends_unique_canonical() -> None:
 def test_is_x_url_candidate_delegates_predicate() -> None:
     assert is_x_url_candidate("https://x.com/u/status/1", is_x_url=lambda u: "x.com" in u)
     assert not is_x_url_candidate("https://example.com", is_x_url=lambda u: "x.com" in u)
+
+
+def test_append_x_url_if_match() -> None:
+    items = []
+    append_x_url_if_match(
+        items,
+        "https://twitter.com/u/status/1?s=20",
+        is_x_url=lambda u: ("x.com/" in u or "twitter.com/" in u),
+        canonicalize_x_url=lambda u: u.split("?")[0].replace("twitter.com", "x.com"),
+    )
+    append_x_url_if_match(
+        items,
+        "https://example.com/page",
+        is_x_url=lambda u: ("x.com/" in u or "twitter.com/" in u),
+        canonicalize_x_url=lambda u: u.split("?")[0].replace("twitter.com", "x.com"),
+    )
+    assert items == ["https://x.com/u/status/1"]
 
 
 def test_unwrap_x_media_url() -> None:

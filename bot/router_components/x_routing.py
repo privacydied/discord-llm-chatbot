@@ -1690,8 +1690,12 @@ def filter_canonical_x_urls(
     """Filter URL list to X/Twitter URLs and canonicalize with de-duplication."""
     out: List[str] = []
     for u in raw_urls:
-        if is_x_url_candidate(u, is_x_url=is_x_url):
-            append_canonical_x_url(out, u, canonicalize_x_url=canonicalize_x_url)
+        append_x_url_if_match(
+            out,
+            u,
+            is_x_url=is_x_url,
+            canonicalize_x_url=canonicalize_x_url,
+        )
     return out
 
 
@@ -1702,6 +1706,18 @@ def is_x_url_candidate(
 ) -> bool:
     """Return True when raw URL is an X/Twitter URL candidate by predicate."""
     return is_x_url(raw_url)
+
+
+def append_x_url_if_match(
+    items: List[str],
+    raw_url: str,
+    *,
+    is_x_url: Callable[[str], bool],
+    canonicalize_x_url: Callable[[str], str],
+) -> None:
+    """Append canonical X/Twitter URL only when raw URL matches predicate."""
+    if is_x_url_candidate(raw_url, is_x_url=is_x_url):
+        append_canonical_x_url(items, raw_url, canonicalize_x_url=canonicalize_x_url)
 
 
 def append_unique_str(items: List[str], value: str) -> None:
