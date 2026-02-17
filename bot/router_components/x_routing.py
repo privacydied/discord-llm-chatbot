@@ -1750,6 +1750,11 @@ def x_url_extract_compile_flags() -> int:
 
 def compile_url_extract_regex(pattern: str, *, flags: int) -> Any:
     """Compile and return URL extraction regex from pattern and flags."""
+    return compile_regex(pattern, flags=flags)
+
+
+def compile_regex(pattern: str, *, flags: int) -> Any:
+    """Compile regex from pattern and flags for shared extraction helpers."""
     return re.compile(pattern, flags)
 
 
