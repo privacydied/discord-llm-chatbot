@@ -1469,12 +1469,17 @@ def extract_syndication_photo_urls(photos: Any) -> List[str]:
     urls: List[str] = []
     for p in photos:
         if isinstance(p, dict):
-            img_url = p.get("url") or p.get("media_url_https") or p.get("media_url")
+            img_url = extract_syndication_photo_url_from_dict(p)
             if img_url and isinstance(img_url, str):
                 urls.append(img_url)
         elif isinstance(p, str):
             urls.append(p)
     return urls
+
+
+def extract_syndication_photo_url_from_dict(photo: Dict[str, Any]) -> Any:
+    """Resolve canonical image URL from a syndication photo dict payload."""
+    return photo.get("url") or photo.get("media_url_https") or photo.get("media_url")
 
 
 def x_syn_probe_budget_timeout_s(x_syn_timeout_s: float) -> float:
