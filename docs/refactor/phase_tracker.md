@@ -262,3 +262,11 @@
   - Validation:
     - `./.venv/bin/pytest -q tests/router/test_router_components_prompt_access.py tests/router/test_router_x_result_format_contract.py tests/router/test_router_components_compose.py tests/router/test_router_components_compose_contract.py` -> `17 passed`
     - `./.venv/bin/pytest -q tests/core tests/router tests/syndication tests/vision tests/test_hear_ffmpeg_resolution.py tests/test_hear_stream_abort.py tests/test_media_ingestion.py tests/test_video_ingest.py tests/router/test_router_x_result_format_contract.py tests/test_media_ingestion_compat_contracts.py tests/vision/test_money_contract.py` -> `220 passed`
+- 2026-02-17:
+  - Refactor (behavior-preserving): extracted direct-image URL predicate into `bot/router_components/input_harvest.py` as `is_direct_image_url()`.
+  - Wired `Router._is_direct_image_url()` to delegate to the extracted helper.
+  - Exported helper through `bot/router_components/__init__.py`.
+  - Expanded tests in `tests/router/test_router_components_input_harvest.py` with direct-image URL coverage.
+  - Validation:
+    - `./.venv/bin/pytest -q tests/router/test_router_components_input_harvest.py tests/core/test_router.py tests/router/test_x_api_routing.py tests/router/test_router_components_prompt_access.py` -> `33 passed`
+    - `./.venv/bin/pytest -q tests/core tests/router tests/syndication tests/vision tests/test_hear_ffmpeg_resolution.py tests/test_hear_stream_abort.py tests/test_media_ingestion.py tests/test_video_ingest.py tests/router/test_router_x_result_format_contract.py tests/test_media_ingestion_compat_contracts.py tests/vision/test_money_contract.py` -> `221 passed`

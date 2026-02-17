@@ -91,6 +91,15 @@ def has_explicit_media_intent(text: str) -> bool:
         return False
 
 
+def is_direct_image_url(url: str) -> bool:
+    """Return True when URL appears to target a direct image asset."""
+    try:
+        u = str(url).lower()
+    except Exception:
+        return False
+    return bool(re.search(r"\.(jpe?g|png|webp)(?:\?|#|$)", u))
+
+
 def extract_urls_loose(text: str) -> List[str]:
     """Extract URLs using permissive whitespace-based matching."""
     try:

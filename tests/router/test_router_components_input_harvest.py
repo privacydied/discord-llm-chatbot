@@ -9,6 +9,7 @@ from bot.router_components.input_harvest import (
     extract_urls_strict,
     has_explicit_media_intent,
     has_meaningful_text,
+    is_direct_image_url,
     is_text_attachment,
     strip_discord_mentions_and_urls,
     strip_urls,
@@ -126,3 +127,11 @@ def test_strip_discord_mentions_and_urls() -> None:
     assert "<#999>" not in cleaned
     assert "https://x.com" not in cleaned
     assert "hello" in cleaned
+
+
+def test_is_direct_image_url() -> None:
+    assert is_direct_image_url("https://cdn.example.com/image.jpg")
+    assert is_direct_image_url("https://cdn.example.com/image.PNG?x=1")
+    assert is_direct_image_url("https://cdn.example.com/image.webp#frag")
+    assert not is_direct_image_url("https://cdn.example.com/image.mp4")
+    assert not is_direct_image_url("not-a-url")

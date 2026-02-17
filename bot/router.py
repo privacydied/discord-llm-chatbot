@@ -106,6 +106,7 @@ from .router_components import (
     get_system_prompt,
     has_explicit_media_intent,
     has_meaningful_text,
+    is_direct_image_url,
     is_reply_to_bot,
     is_text_attachment,
     is_tweet_media_url,
@@ -2042,11 +2043,7 @@ class Router:
     @staticmethod
     def _is_direct_image_url(url: str) -> bool:
         """Lightweight check for direct image URLs by extension. [IV]"""
-        try:
-            u = str(url).lower()
-        except Exception:
-            return False
-        return bool(re.search(r"\.(jpe?g|png|webp)(?:\?|#|$)", u))
+        return is_direct_image_url(url)
 
     async def _process_image_from_attachment_with_model(
         self, attachment, model_override: Optional[str] = None
