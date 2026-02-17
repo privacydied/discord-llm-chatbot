@@ -814,16 +814,25 @@ def build_syndication_fetch_params_core(tweet_id: str) -> Dict[str, str]:
 def build_syndication_fetch_params_variants(tweet_id: str) -> List[Tuple[str, Dict[str, str]]]:
     """Return endpoint+params variants for CDN syndication fetch attempts."""
     return [
-        (build_syndication_widgets_endpoint(), build_syndication_fetch_params(tweet_id)),
+        build_syndication_widgets_params_variant(tweet_id),
         (
             build_syndication_tweet_result_endpoint(),
             build_syndication_fetch_params(tweet_id),
         ),
-        (
-            build_syndication_widgets_endpoint(),
-            build_syndication_fetch_params(tweet_id, include_dnt=True),
-        ),
+        build_syndication_widgets_params_variant(tweet_id, include_dnt=True),
     ]
+
+
+def build_syndication_widgets_params_variant(
+    tweet_id: str,
+    *,
+    include_dnt: bool = False,
+) -> Tuple[str, Dict[str, str]]:
+    """Return widgets endpoint params variant, optionally with DNT flag."""
+    return (
+        build_syndication_widgets_endpoint(),
+        build_syndication_fetch_params(tweet_id, include_dnt=include_dnt),
+    )
 
 
 def build_syndication_oembed_params(
