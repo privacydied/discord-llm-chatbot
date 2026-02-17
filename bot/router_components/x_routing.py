@@ -2105,6 +2105,16 @@ def url_re_finditer_iter(url_re: Any, text: Any) -> Iterable[Any]:
 
 def url_scan_text(text: Any) -> str:
     """Return normalized text input used for URL regex scans."""
+    return url_scan_text_source(text)
+
+
+def url_scan_text_source(text: Any) -> str:
+    """Return source normalized text used by url_scan_text helper."""
+    return url_scan_text_value(text)
+
+
+def url_scan_text_value(text: Any) -> str:
+    """Return value used by url_scan_text source helper."""
     return text or url_scan_text_fallback()
 
 

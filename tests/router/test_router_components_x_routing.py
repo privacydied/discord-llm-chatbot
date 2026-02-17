@@ -287,6 +287,8 @@ from bot.router_components.x_routing import (
     url_re_finditer_source,
     url_re_finditer_iter,
     url_re_finditer,
+    url_scan_text_source,
+    url_scan_text_value,
     url_scan_text,
     url_scan_text_fallback,
     url_match_group_index,
@@ -767,6 +769,18 @@ def test_url_scan_text_normalizes_falsey_inputs() -> None:
     assert url_scan_text("abc") == "abc"
     assert url_scan_text("") == ""
     assert url_scan_text(None) == ""
+
+
+def test_url_scan_text_source_normalizes_falsey_inputs() -> None:
+    assert url_scan_text_source("abc") == "abc"
+    assert url_scan_text_source("") == ""
+    assert url_scan_text_source(None) == ""
+
+
+def test_url_scan_text_value_normalizes_falsey_inputs() -> None:
+    assert url_scan_text_value("abc") == "abc"
+    assert url_scan_text_value("") == ""
+    assert url_scan_text_value(None) == ""
 
 
 def test_url_scan_text_fallback_empty_string() -> None:
