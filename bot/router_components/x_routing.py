@@ -1742,6 +1742,11 @@ def status_url_candidates_regex() -> Any:
 
 def status_url_candidates_regex_source() -> Any:
     """Return underlying regex used for status URL candidate extraction."""
+    return status_url_candidates_regex_value_source()
+
+
+def status_url_candidates_regex_value_source() -> Any:
+    """Return source regex value used by status candidates regex helper."""
     return status_url_extract_regex()
 
 
