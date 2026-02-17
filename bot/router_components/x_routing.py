@@ -1831,6 +1831,11 @@ def compile_regex_flags_argument(flags: int) -> int:
 
 def x_url_extract_flags() -> int:
     """Return regex flags used by URL extraction pattern compiler."""
+    return x_url_extract_flags_source()
+
+
+def x_url_extract_flags_source() -> int:
+    """Return source regex flags used by URL extraction helpers."""
     return x_url_extract_flags_value()
 
 
