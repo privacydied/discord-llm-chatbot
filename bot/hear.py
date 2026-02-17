@@ -53,6 +53,7 @@ from .config import load_config
 from .stt import ModelSpec, stt_manager
 from .stt_module.failure_classifier import STTFailureClassifier
 from .stt_module.multimodal_fallback import multimodal_fallback_provider
+from .stt_pipeline import ensure_stt_manager_ready, load_stt_runtime_compat
 from .youtube_transcript import resolve_youtube_transcript
 
 if TYPE_CHECKING:
@@ -97,18 +98,6 @@ except Exception:
 
 _FFMPEG_BIN_CACHE: Optional[str] = None
 _FFMPEG_BIN_HAS_AAC: Optional[bool] = None
-
-
-def _env_bool(name: str, default: bool) -> bool:
-    raw = os.getenv(name)
-    if raw is None:
-        return default
-    norm = str(raw).strip().lower()
-    if norm in {"1", "true", "yes", "on", "enabled"}:
-        return True
-    if norm in {"0", "false", "no", "off", "disabled"}:
-        return False
-    return default
 
 
 def _ffmpeg_candidates() -> List[str]:
@@ -2034,9 +2023,10 @@ async def hear_infer_from_url(url: str, force_refresh: bool = False) -> Dict[str
     download: Optional[DownloadedAudio] = None
     try:
         async with _JOB_SEMAPHORE:
+            runtime_compat = load_stt_runtime_compat()
             # YouTube transcript-first: try caption tracks before yt-dlp/ffmpeg/whisper.
             # On failure/unavailable captions we fail open to the existing STT pipeline.
-            if _env_bool("YOUTUBE_TRANSCRIPT_FIRST", True):
+            if runtime_compat.youtube_transcript_first:
                 try:
                     yt = await resolve_youtube_transcript(
                         url, force_refresh=force_refresh
@@ -2090,12 +2080,7 @@ async def hear_infer_from_url(url: str, force_refresh: bool = False) -> Dict[str
                     )
                     return await job.finish_success(result)
 
-            if hasattr(stt_manager, "is_available") and not stt_manager.is_available():
-                exc = InferenceError("STT engine not available")
-                await job.finish_failure(exc)
-                raise exc
-
-            ready = await stt_manager.ensure_ready()
+            ready = await ensure_stt_manager_ready(stt_manager)
             if not ready:
                 exc = InferenceError("STT engine not available")
                 await job.finish_failure(exc)
@@ -2217,13 +2202,7 @@ async def _run_whisper_with_fallback(
 
     try:
         # Try the primary faster-whisper transcription
-        transcript = await _run_whisper(
-            pre=pre,
-            spans=spans,
-            initial_spec=initial_spec,
-            ram_guard=ram_guard,
-            job=job,
-        )
+        transcript = await _run_whisper(pre, spans, initial_spec, ram_guard, job=job)
 
         # If successful, return the primary result
         return transcript
