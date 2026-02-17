@@ -1,4 +1,4 @@
-from bot.media_ingestion_helpers import sanitize_metadata
+from bot.media_ingestion_helpers import build_media_context, sanitize_metadata
 
 
 def test_sanitize_metadata_keeps_only_safe_fields() -> None:
@@ -40,3 +40,42 @@ def test_sanitize_metadata_applies_length_limits() -> None:
     assert out["uploader"].endswith("...")
     assert len(out["url"]) <= 503
     assert out["url"].endswith("...")
+
+
+def test_build_media_context_with_full_metadata() -> None:
+    out = build_media_context(
+        "This is the transcript.",
+        {
+            "source": "youtube",
+            "title": "Test Video",
+            "uploader": "Test Channel",
+            "duration_seconds": 120.5,
+            "speedup_factor": 1.5,
+        },
+        "https://youtube.com/watch?v=abc",
+    )
+    assert "youtube video" in out.lower()
+    assert "Test Video" in out
+    assert "Test Channel" in out
+    assert "120.5s" in out
+    assert "1.5x speed" in out
+    assert "This is the transcript." in out
+
+
+def test_build_media_context_with_minimal_metadata() -> None:
+    out = build_media_context(
+        "Transcript text",
+        {},
+        "https://youtube.com/watch?v=abc",
+    )
+    assert "User shared a video from: https://youtube.com/watch?v=abc" in out
+    assert "Transcript text" in out
+
+
+def test_build_media_context_no_transcription_note() -> None:
+    out = build_media_context(
+        "",
+        {"source": "youtube", "title": "No Audio"},
+        "https://youtube.com/watch?v=abc",
+    )
+    assert "No audio transcription was available." in out

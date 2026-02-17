@@ -289,3 +289,14 @@
   - Validation:
     - `./.venv/bin/pytest -q tests/test_media_ingestion_helpers.py tests/test_media_ingestion.py` -> `33 passed`
     - `./.venv/bin/pytest -q tests/core tests/router tests/syndication tests/vision tests/test_hear_ffmpeg_resolution.py tests/test_hear_stream_abort.py tests/test_media_ingestion.py tests/test_video_ingest.py tests/router/test_router_x_result_format_contract.py tests/test_media_ingestion_compat_contracts.py tests/vision/test_money_contract.py tests/test_media_ingestion_helpers.py` -> `224 passed`
+- 2026-02-17:
+  - Refactor (behavior-preserving): extracted media-context composition into helper:
+    - `bot/media_ingestion_helpers.py::build_media_context()`
+  - Kept `MediaIngestionManager._build_media_context()` as a compatibility delegate.
+  - Expanded helper tests in `tests/test_media_ingestion_helpers.py`:
+    - full metadata composition contract
+    - minimal metadata fallback contract
+    - no-transcription fallback note
+  - Validation:
+    - `./.venv/bin/pytest -q tests/test_media_ingestion_helpers.py tests/test_media_ingestion.py` -> `36 passed`
+    - `./.venv/bin/pytest -q tests/core tests/router tests/syndication tests/vision tests/test_hear_ffmpeg_resolution.py tests/test_hear_stream_abort.py tests/test_media_ingestion.py tests/test_video_ingest.py tests/router/test_router_x_result_format_contract.py tests/test_media_ingestion_compat_contracts.py tests/vision/test_money_contract.py tests/test_media_ingestion_helpers.py` -> `227 passed`

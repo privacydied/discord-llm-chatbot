@@ -12,7 +12,7 @@ from urllib.parse import urlparse
 
 from .utils.logging import get_logger
 from .media_capability import media_detector, ProbeResult
-from .media_ingestion_helpers import sanitize_metadata
+from .media_ingestion_helpers import build_media_context, sanitize_metadata
 from .action import BotAction
 
 logger = get_logger(__name__)
@@ -242,36 +242,7 @@ class MediaIngestionManager:
         Returns:
             Formatted context string for LLM processing
         """
-        # Build context with available metadata
-        context_parts = []
-
-        if metadata.get("source"):
-            source_info = f"User shared a {metadata['source']} video"
-            if metadata.get("title"):
-                source_info += f": '{metadata['title']}'"
-            if metadata.get("uploader"):
-                source_info += f" by {metadata['uploader']}"
-
-            # Add duration info if available
-            if metadata.get("duration_seconds"):
-                duration = metadata["duration_seconds"]
-                source_info += f" (Duration: {duration:.1f}s"
-                if metadata.get("speedup_factor"):
-                    source_info += f", processed at {metadata['speedup_factor']}x speed"
-                source_info += ")"
-
-            context_parts.append(source_info)
-        else:
-            context_parts.append(f"User shared a video from: {url}")
-
-        # Add transcription
-        if transcription.strip():
-            context_parts.append("The following is the audio transcription:")
-            context_parts.append(transcription)
-        else:
-            context_parts.append("No audio transcription was available.")
-
-        return "\n\n".join(context_parts)
+        return build_media_context(transcription, metadata, url)
 
     async def _process_fallback_path(
         self, url: str, message, fallback_reason: str

@@ -57,3 +57,34 @@ def sanitize_metadata(
         sanitized[field] = cleaned
 
     return sanitized
+
+
+def build_media_context(
+    transcription: str, metadata: Dict[str, Any], url: str
+) -> str:
+    """Build enriched LLM context from transcription + metadata."""
+    context_parts = []
+
+    if metadata.get("source"):
+        source_info = f"User shared a {metadata['source']} video"
+        if metadata.get("title"):
+            source_info += f": '{metadata['title']}'"
+        if metadata.get("uploader"):
+            source_info += f" by {metadata['uploader']}"
+        if metadata.get("duration_seconds"):
+            duration = metadata["duration_seconds"]
+            source_info += f" (Duration: {duration:.1f}s"
+            if metadata.get("speedup_factor"):
+                source_info += f", processed at {metadata['speedup_factor']}x speed"
+            source_info += ")"
+        context_parts.append(source_info)
+    else:
+        context_parts.append(f"User shared a video from: {url}")
+
+    if (transcription or "").strip():
+        context_parts.append("The following is the audio transcription:")
+        context_parts.append(transcription)
+    else:
+        context_parts.append("No audio transcription was available.")
+
+    return "\n\n".join(context_parts)
