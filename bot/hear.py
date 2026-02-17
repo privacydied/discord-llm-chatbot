@@ -62,6 +62,7 @@ from .stt_pipeline import (
     ffmpeg_supports_aac_decoder,
     load_stt_runtime_compat,
     parse_stt_max_ram_mb,
+    select_initial_model_spec,
 )
 from .youtube_transcript import resolve_youtube_transcript
 
@@ -1935,16 +1936,12 @@ async def hear_infer(audio: Union[Path, "discord.Attachment"]) -> str:
             job.register_pre(pre)
             ram_guard.check("pre-stage")
 
-            spec = stt_manager.default_spec
-            if pre.duration_in > 120:
-                downgraded = stt_manager.downgrade_spec(spec)
-                if downgraded:
-                    logger.info(
-                        "whisper.model_downgrade from=%s to=%s reason=long_audio",
-                        spec.size,
-                        downgraded.size,
-                    )
-                    spec = downgraded
+            spec = select_initial_model_spec(
+                manager=stt_manager,
+                duration_in_s=pre.duration_in,
+                downgrade_threshold_s=120.0,
+                logger=logger,
+            )
 
             transcript = await _run_whisper_with_fallback(
                 pre, spans, spec, ram_guard, job=job
@@ -2070,16 +2067,12 @@ async def hear_infer_from_url(url: str, force_refresh: bool = False) -> Dict[str
             job.register_pre(pre)
             ram_guard.check("pre-stage")
 
-            spec = stt_manager.default_spec
-            if pre.duration_in > 120:
-                downgraded = stt_manager.downgrade_spec(spec)
-                if downgraded:
-                    logger.info(
-                        "whisper.model_downgrade from=%s to=%s reason=long_audio",
-                        spec.size,
-                        downgraded.size,
-                    )
-                    spec = downgraded
+            spec = select_initial_model_spec(
+                manager=stt_manager,
+                duration_in_s=pre.duration_in,
+                downgrade_threshold_s=120.0,
+                logger=logger,
+            )
 
             transcript = await _run_whisper_with_fallback(
                 pre, spans, spec, ram_guard, job=job
