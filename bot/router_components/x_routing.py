@@ -651,6 +651,16 @@ def syndication_cache_is_fresh(now_s: float, default_ttl_s: float, cached: Any) 
     return (now_s - float(cached.get("ts", 0))) < ttl
 
 
+def build_syndication_negative_cache_entry(now_s: float) -> Dict[str, Any]:
+    """Build negative syndication cache entry with timestamp."""
+    return {"neg": True, "ts": now_s}
+
+
+def build_syndication_cache_entry(data: Any, now_s: float) -> Dict[str, Any]:
+    """Build positive syndication cache entry with timestamp."""
+    return {"data": data, "ts": now_s}
+
+
 def build_syndication_endpoint_url(base: str, endpoint: str) -> str:
     """Build syndication endpoint URL preserving legacy endpoint mapping."""
     suffix = "widgets/tweet" if endpoint == "widgets" else "tweet-result"

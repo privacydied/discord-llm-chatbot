@@ -134,6 +134,8 @@ from .router_components import (
     build_syndication_oembed_params,
     build_syndication_fetch_plan,
     syndication_cache_is_fresh,
+    build_syndication_negative_cache_entry,
+    build_syndication_cache_entry,
     build_syndication_endpoint_url,
     syndication_has_usable_payload,
     syndication_media_hint_keys,
@@ -1145,12 +1147,17 @@ class Router:
                     pass
                 self._metric_inc("x.syndication.invalid", None)
                 # Negative cache to avoid repeated hits for unavailable/blocked tweets
-                self._syn_cache[tweet_id] = {"neg": True, "ts": time.time()}
+                self._syn_cache[tweet_id] = build_syndication_negative_cache_entry(
+                    time.time()
+                )
                 self._metric_inc("x.syndication.neg_store", None)
                 return None
 
             # Cache and return
-            self._syn_cache[tweet_id] = {"data": data, "ts": time.time()}
+            self._syn_cache[tweet_id] = build_syndication_cache_entry(
+                data,
+                time.time(),
+            )
             self._metric_inc("x.syndication.success", None)
             try:
                 txt = self._extract_syndication_text(data)

@@ -41,6 +41,8 @@ from bot.router_components.x_routing import (
     build_syndication_fetch_plan,
     syndication_cache_ttl_s,
     syndication_cache_is_fresh,
+    build_syndication_negative_cache_entry,
+    build_syndication_cache_entry,
     build_syndication_endpoint_url,
     extract_oembed_html_text,
     syndication_has_usable_payload,
@@ -716,6 +718,21 @@ def test_syndication_cache_is_fresh_respects_ttl_policy() -> None:
 def test_syndication_cache_is_fresh_preserves_ts_parse_error() -> None:
     with pytest.raises(ValueError):
         syndication_cache_is_fresh(1_000.0, 600.0, {"ts": "bad", "neg": False})
+
+
+def test_build_syndication_negative_cache_entry_shape() -> None:
+    assert build_syndication_negative_cache_entry(123.45) == {
+        "neg": True,
+        "ts": 123.45,
+    }
+
+
+def test_build_syndication_cache_entry_shape() -> None:
+    data = {"text": "hello"}
+    assert build_syndication_cache_entry(data, 321.0) == {
+        "data": data,
+        "ts": 321.0,
+    }
 
 
 def test_build_syndication_endpoint_url_mapping() -> None:
