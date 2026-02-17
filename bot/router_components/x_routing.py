@@ -628,7 +628,15 @@ def extract_oembed_payload_from_response(
 
 def build_syndication_oembed_url() -> str:
     """Return the publish.twitter oEmbed endpoint used in syndication fallbacks."""
-    return f"https://{build_syndication_oembed_host()}/{build_syndication_oembed_key()}"
+    return build_syndication_oembed_endpoint_url(
+        build_syndication_oembed_host(),
+        build_syndication_oembed_key(),
+    )
+
+
+def build_syndication_oembed_endpoint_url(host: str, endpoint_key: str) -> str:
+    """Return fully-qualified oEmbed endpoint URL for a given host/key pair."""
+    return f"https://{host}/{endpoint_key}"
 
 
 def build_syndication_oembed_key() -> str:
