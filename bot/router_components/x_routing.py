@@ -1785,6 +1785,11 @@ def x_url_extract_regex_pattern_source() -> str:
 
 def x_url_extract_compile_flags() -> int:
     """Return compile-time flags used by X URL extraction regex."""
+    return x_url_extract_compile_flags_source()
+
+
+def x_url_extract_compile_flags_source() -> int:
+    """Return source compile flags used by X URL extraction regex."""
     return x_url_extract_flags()
 
 
