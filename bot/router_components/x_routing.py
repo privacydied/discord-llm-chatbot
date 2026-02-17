@@ -1316,7 +1316,7 @@ def build_syndication_negative_cache_entry(now_s: float) -> Dict[str, Any]:
 def build_syndication_cache_entry(data: Any, now_s: float) -> Dict[str, Any]:
     """Build positive syndication cache entry with timestamp."""
     return {
-        build_syndication_cache_data_key(): data,
+        **build_syndication_cache_data_field(data),
         **build_syndication_cache_timestamp_field(now_s),
     }
 
@@ -1329,6 +1329,11 @@ def build_syndication_cache_timestamp_field(now_s: float) -> Dict[str, float]:
 def build_syndication_negative_cache_flag_field() -> Dict[str, bool]:
     """Build canonical negative-cache flag field map."""
     return {build_syndication_negative_cache_key(): True}
+
+
+def build_syndication_cache_data_field(data: Any) -> Dict[str, Any]:
+    """Build canonical positive-cache data field map."""
+    return {build_syndication_cache_data_key(): data}
 
 
 def build_syndication_negative_cache_hit_label() -> str:
