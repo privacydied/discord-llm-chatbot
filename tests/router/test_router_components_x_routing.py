@@ -50,6 +50,7 @@ from bot.router_components.x_routing import (
     build_syndication_fetch_params_variants,
     build_syndication_oembed_params,
     build_syndication_oembed_hosts,
+    build_syndication_oembed_metric_endpoint,
     build_syndication_oembed_fallback_params,
     build_syndication_oembed_fallback_plan,
     build_syndication_fetch_plan,
@@ -701,6 +702,12 @@ def test_build_syndication_oembed_params_default_and_x_host() -> None:
 
 def test_build_syndication_oembed_hosts_order() -> None:
     assert build_syndication_oembed_hosts() == ("twitter.com", "x.com")
+
+
+def test_build_syndication_oembed_metric_endpoint_mapping() -> None:
+    assert build_syndication_oembed_metric_endpoint("twitter.com") == "oembed"
+    assert build_syndication_oembed_metric_endpoint("x.com") == "oembed_x"
+    assert build_syndication_oembed_metric_endpoint("unknown") == "oembed"
 
 
 def test_build_syndication_oembed_fallback_params_ordered_variants() -> None:
