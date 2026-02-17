@@ -1705,7 +1705,12 @@ def collect_raw_urls_from_texts(
 def iter_text_urls(text: str, *, url_re: Any) -> Iterable[str]:
     """Yield raw URL matches from one text blob using provided compiled regex."""
     for m in iter_url_matches(text, url_re=url_re):
-        yield m.group(0)
+        yield url_match_group_value(m)
+
+
+def url_match_group_value(match: Any) -> str:
+    """Return URL string value from one regex match object."""
+    return match.group(0)
 
 
 def iter_url_matches(text: str, *, url_re: Any) -> Iterable[Any]:
