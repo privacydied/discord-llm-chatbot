@@ -659,6 +659,11 @@ def build_syndication_fetch_accept() -> str:
     return "application/json, text/javascript;q=0.9, */*;q=0.8"
 
 
+def build_syndication_lang() -> str:
+    """Return canonical language code for syndication/oEmbed requests."""
+    return "en"
+
+
 def build_syndication_fetch_headers() -> Dict[str, str]:
     """Return canonical headers for CDN syndication fetches."""
     return {
@@ -671,10 +676,11 @@ def build_syndication_fetch_headers() -> Dict[str, str]:
 
 def build_syndication_fetch_params_variants(tweet_id: str) -> List[Tuple[str, Dict[str, str]]]:
     """Return endpoint+params variants for CDN syndication fetch attempts."""
+    lang = build_syndication_lang()
     return [
-        ("widgets", {"id": tweet_id, "lang": "en"}),
-        ("tweet-result", {"id": tweet_id, "lang": "en"}),
-        ("widgets", {"id": tweet_id, "lang": "en", "dnt": "false"}),
+        ("widgets", {"id": tweet_id, "lang": lang}),
+        ("tweet-result", {"id": tweet_id, "lang": lang}),
+        ("widgets", {"id": tweet_id, "lang": lang, "dnt": "false"}),
     ]
 
 
@@ -685,12 +691,13 @@ def build_syndication_oembed_params(
 ) -> Dict[str, str]:
     """Build oEmbed request params for syndication fallback lookups."""
     host = "x.com" if use_x_host else "twitter.com"
+    lang = build_syndication_lang()
     return {
         "url": f"https://{host}/i/status/{tweet_id}",
         "dnt": "false",
         "omit_script": "true",
         "hide_thread": "true",
-        "lang": "en",
+        "lang": lang,
     }
 
 
