@@ -1649,8 +1649,7 @@ def filter_canonical_x_urls(
     out: List[str] = []
     for u in raw_urls:
         if is_x_url(u):
-            cu = canonicalize_x_url(u)
-            append_unique_str(out, cu)
+            append_canonical_x_url(out, u, canonicalize_x_url=canonicalize_x_url)
     return out
 
 
@@ -1658,3 +1657,13 @@ def append_unique_str(items: List[str], value: str) -> None:
     """Append value to list only when it is not already present."""
     if value not in items:
         items.append(value)
+
+
+def append_canonical_x_url(
+    items: List[str],
+    url: str,
+    *,
+    canonicalize_x_url: Callable[[str], str],
+) -> None:
+    """Canonicalize URL then append uniquely to the target list."""
+    append_unique_str(items, canonicalize_x_url(url))
