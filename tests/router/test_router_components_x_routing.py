@@ -53,6 +53,7 @@ from bot.router_components.x_routing import (
     build_syndication_platform_host,
     build_syndication_fetch_accept,
     build_syndication_accept_json_mime,
+    build_syndication_accept_text_mime,
     build_syndication_accept_text_quality,
     build_syndication_accept_any_quality,
     build_syndication_lang,
@@ -868,6 +869,10 @@ def test_build_syndication_fetch_accept_constant() -> None:
 
 def test_build_syndication_accept_json_mime_constant() -> None:
     assert build_syndication_accept_json_mime() == "application/json"
+
+
+def test_build_syndication_accept_text_mime_constant() -> None:
+    assert build_syndication_accept_text_mime() == "text/javascript"
 
 
 def test_build_syndication_accept_text_quality_constant() -> None:

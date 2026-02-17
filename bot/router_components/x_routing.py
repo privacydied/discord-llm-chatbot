@@ -694,7 +694,7 @@ def build_syndication_platform_host() -> str:
 def build_syndication_fetch_accept() -> str:
     """Return canonical Accept header for CDN syndication fetches."""
     return (
-        f"{build_syndication_accept_json_mime()}, text/javascript;"
+        f"{build_syndication_accept_json_mime()}, {build_syndication_accept_text_mime()};"
         f"{build_syndication_accept_text_quality()}, */*;"
         f"{build_syndication_accept_any_quality()}"
     )
@@ -703,6 +703,11 @@ def build_syndication_fetch_accept() -> str:
 def build_syndication_accept_json_mime() -> str:
     """Return canonical application/json MIME token for Accept headers."""
     return "application/json"
+
+
+def build_syndication_accept_text_mime() -> str:
+    """Return canonical text/javascript MIME token for Accept headers."""
+    return "text/javascript"
 
 
 def build_syndication_accept_text_quality() -> str:
