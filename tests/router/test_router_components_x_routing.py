@@ -56,6 +56,7 @@ from bot.router_components.x_routing import (
     build_syndication_tweet_result_endpoint,
     build_syndication_widgets_tweet_path,
     build_syndication_tweet_result_path,
+    build_syndication_cache_ts_key,
     build_syndication_negative_cache_hit_label,
     build_syndication_data_cache_hit_label,
     build_syndication_oembed_params,
@@ -906,6 +907,10 @@ def test_syndication_cache_ttl_s_caps_negative_entries() -> None:
 
 def test_build_syndication_negative_cache_ttl_cap_s_constant() -> None:
     assert build_syndication_negative_cache_ttl_cap_s() == 300.0
+
+
+def test_build_syndication_cache_ts_key_constant() -> None:
+    assert build_syndication_cache_ts_key() == "ts"
 
 
 def test_build_syndication_cache_hit_label_constants() -> None:

@@ -832,10 +832,15 @@ def build_syndication_negative_cache_ttl_cap_s() -> float:
     return 300.0
 
 
+def build_syndication_cache_ts_key() -> str:
+    """Return canonical timestamp key used in syndication cache entries."""
+    return "ts"
+
+
 def syndication_cache_is_fresh(now_s: float, default_ttl_s: float, cached: Any) -> bool:
     """Return True when syndication cache entry is still fresh under TTL policy."""
     ttl = syndication_cache_ttl_s(default_ttl_s, cached)
-    return (now_s - float(cached.get("ts", 0))) < ttl
+    return (now_s - float(cached.get(build_syndication_cache_ts_key(), 0))) < ttl
 
 
 def classify_syndication_cache_hit(
@@ -855,12 +860,12 @@ def classify_syndication_cache_hit(
 
 def build_syndication_negative_cache_entry(now_s: float) -> Dict[str, Any]:
     """Build negative syndication cache entry with timestamp."""
-    return {"neg": True, "ts": now_s}
+    return {"neg": True, build_syndication_cache_ts_key(): now_s}
 
 
 def build_syndication_cache_entry(data: Any, now_s: float) -> Dict[str, Any]:
     """Build positive syndication cache entry with timestamp."""
-    return {"data": data, "ts": now_s}
+    return {"data": data, build_syndication_cache_ts_key(): now_s}
 
 
 def build_syndication_negative_cache_hit_label() -> str:
