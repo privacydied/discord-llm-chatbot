@@ -541,6 +541,53 @@ class Router:
         except Exception:
             pass
 
+    def _emit_caption_only_fallback_event(self) -> None:
+        """Emit caption-only fallback breadcrumb without synthesizing STT failure."""
+        try:
+            self.logger.info(
+                "fallback",
+                extra={
+                    "event": "fallback",
+                    "detail": {"kind": "caption_only"},
+                },
+            )
+        except Exception:
+            pass
+
+    def _extract_x_api_primary_text(self, api_data: Any) -> str:
+        """Extract canonical tweet text from X API payload variants."""
+        try:
+            if not isinstance(api_data, dict):
+                return ""
+            data = api_data.get("data")
+            tweet: Dict[str, Any]
+            if isinstance(data, list):
+                tweet = data[0] if data else {}
+            elif isinstance(data, dict):
+                tweet = data
+            else:
+                tweet = {}
+            return str((tweet or {}).get("text") or "").strip()
+        except Exception:
+            return ""
+
+    def _format_x_caption_only_transcription(
+        self,
+        *,
+        url: str,
+        base_text: Optional[str] = None,
+        tweet_text: Optional[str] = None,
+        api_data: Optional[Any] = None,
+    ) -> str:
+        """Format caption-only evidence when STT is unavailable."""
+        api_text = self._extract_x_api_primary_text(api_data)
+        safe_base_text = (api_text or tweet_text or base_text or "").strip()
+        return self._format_x_tweet_with_transcription(
+            base_text=safe_base_text,
+            url=url,
+            stt_res={},
+        )
+
     def _build_visual_anchored_system_prompt(
         self, content: str, *, fallback: bool = False
     ) -> Optional[str]:
@@ -6458,62 +6505,26 @@ class Router:
                                 if tweet_id and x_client is not None:
                                     pass
                                 else:
-                                    try:
-                                        self.logger.info(
-                                            "fallback",
-                                            extra={
-                                                "event": "fallback",
-                                                "detail": {"kind": "caption_only"},
-                                            },
-                                        )
-                                    except Exception:
-                                        pass
-                                    try:
-                                        base_text_api = (
-                                            (api_data.get("data") or [{}])[0].get("text")
-                                            if "api_data" in locals()
-                                            and isinstance(api_data, dict)
-                                            else ""
-                                        )
-                                    except Exception:
-                                        base_text_api = ""
-                                    safe_base_text = (
-                                        base_text_api or text or base or ""
-                                    ).strip()
-                                    return self._format_x_tweet_with_transcription(
-                                        base_text=safe_base_text,
+                                    self._emit_caption_only_fallback_event()
+                                    return self._format_x_caption_only_transcription(
                                         url=url,
-                                        stt_res={},
+                                        base_text=base,
+                                        tweet_text=text,
+                                        api_data=(
+                                            api_data if "api_data" in locals() else None
+                                        ),
                                     )
                             else:
                             # Fall back to text-only ONLY when video was NOT confirmed by syndication [REH]
-                                try:
-                                    self.logger.info(
-                                        "fallback",
-                                        extra={
-                                            "event": "fallback",
-                                            "detail": {"kind": "caption_only"},
-                                        },
-                                    )
-                                except Exception:
-                                    pass
+                                self._emit_caption_only_fallback_event()
                                 # Prefer API text if available; otherwise fall back to syndication text or composed evidence [REH]
-                                try:
-                                    base_text_api = (
-                                        (api_data.get("data") or [{}])[0].get("text")
-                                        if "api_data" in locals()
-                                        and isinstance(api_data, dict)
-                                        else ""
-                                    )
-                                except Exception:
-                                    base_text_api = ""
-                                safe_base_text = (
-                                    base_text_api or text or base or ""
-                                ).strip()
-                                return self._format_x_tweet_with_transcription(
-                                    base_text=safe_base_text,
+                                return self._format_x_caption_only_transcription(
                                     url=url,
-                                    stt_res={},
+                                    base_text=base,
+                                    tweet_text=text,
+                                    api_data=(
+                                        api_data if "api_data" in locals() else None
+                                    ),
                                 )
 
                         if has_any_images:
@@ -6669,26 +6680,7 @@ class Router:
                                     )
                                     return f"Video/audio content from {url}: {formatted}"
                                 # No-speech in API probe: log and continue with caption-only bundle [REH]
-                                try:
-                                    self.logger.info(
-                                        "stt.fail",
-                                        extra={
-                                            "event": "stt.fail",
-                                            "detail": {"reason": "no_speech"},
-                                        },
-                                    )
-                                except Exception:
-                                    pass
-                                try:
-                                    self.logger.info(
-                                        "fallback",
-                                        extra={
-                                            "event": "fallback",
-                                            "detail": {"kind": "caption_only"},
-                                        },
-                                    )
-                                except Exception:
-                                    pass
+                                self._emit_caption_only_fallback_breadcrumbs("no_speech")
                                 base = self._format_x_tweet_result(api_data, url)
                                 return self._format_x_tweet_with_transcription(
                                     base_text=base,
