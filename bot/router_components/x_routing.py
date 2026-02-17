@@ -1798,7 +1798,12 @@ def iter_url_matches(text: str, *, url_re: Any) -> Iterable[Any]:
 
 def url_scan_text(text: Any) -> str:
     """Return normalized text input used for URL regex scans."""
-    return text or ""
+    return text or url_scan_text_fallback()
+
+
+def url_scan_text_fallback() -> str:
+    """Return fallback text used when URL scan input is falsey."""
+    return ""
 
 
 def filter_canonical_x_urls(
