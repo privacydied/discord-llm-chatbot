@@ -757,7 +757,21 @@ def build_syndication_hide_thread_value() -> str:
 
 def build_syndication_oembed_metric_endpoint(host: str) -> str:
     """Return metric endpoint label for a given oEmbed host."""
-    return "oembed_x" if host == "x.com" else "oembed"
+    return (
+        build_syndication_oembed_x_metric_endpoint()
+        if host == "x.com"
+        else build_syndication_oembed_metric_default_endpoint()
+    )
+
+
+def build_syndication_oembed_metric_default_endpoint() -> str:
+    """Return default metric endpoint label for oEmbed fallback calls."""
+    return "oembed"
+
+
+def build_syndication_oembed_x_metric_endpoint() -> str:
+    """Return X-host metric endpoint label for oEmbed fallback calls."""
+    return "oembed_x"
 
 
 def build_syndication_oembed_fallback_params(

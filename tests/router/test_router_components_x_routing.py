@@ -67,6 +67,8 @@ from bot.router_components.x_routing import (
     build_syndication_oembed_options,
     build_syndication_oembed_hosts,
     build_syndication_oembed_metric_endpoint,
+    build_syndication_oembed_metric_default_endpoint,
+    build_syndication_oembed_x_metric_endpoint,
     build_syndication_oembed_fallback_params,
     build_syndication_oembed_fallback_plan,
     build_syndication_fetch_plan,
@@ -744,6 +746,11 @@ def test_build_syndication_oembed_metric_endpoint_mapping() -> None:
     assert build_syndication_oembed_metric_endpoint("twitter.com") == "oembed"
     assert build_syndication_oembed_metric_endpoint("x.com") == "oembed_x"
     assert build_syndication_oembed_metric_endpoint("unknown") == "oembed"
+
+
+def test_build_syndication_oembed_metric_endpoint_constants() -> None:
+    assert build_syndication_oembed_metric_default_endpoint() == "oembed"
+    assert build_syndication_oembed_x_metric_endpoint() == "oembed_x"
 
 
 def test_build_syndication_oembed_fallback_params_ordered_variants() -> None:
