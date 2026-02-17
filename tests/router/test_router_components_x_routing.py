@@ -144,6 +144,7 @@ from bot.router_components.x_routing import (
     build_syndication_negative_cache_entry,
     build_syndication_cache_entry,
     build_syndication_cache_timestamp_field,
+    build_syndication_negative_cache_flag_field,
     build_syndication_endpoint_url,
     build_syndication_endpoint_suffix,
     build_syndication_negative_cache_ttl_cap_s,
@@ -1506,6 +1507,10 @@ def test_build_syndication_negative_cache_entry_shape() -> None:
 
 def test_build_syndication_cache_timestamp_field_shape() -> None:
     assert build_syndication_cache_timestamp_field(123.45) == {"ts": 123.45}
+
+
+def test_build_syndication_negative_cache_flag_field_shape() -> None:
+    assert build_syndication_negative_cache_flag_field() == {"neg": True}
 
 
 def test_build_syndication_cache_entry_shape() -> None:
