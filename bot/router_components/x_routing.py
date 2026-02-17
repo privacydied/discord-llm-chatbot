@@ -1783,7 +1783,12 @@ def url_matches(text: str, *, url_re: Any) -> Iterable[Any]:
 
 def url_match_group_value(match: Any) -> str:
     """Return URL string value from one regex match object."""
-    return match.group(0)
+    return match.group(url_match_group_index())
+
+
+def url_match_group_index() -> int:
+    """Return regex group index used for URL match value extraction."""
+    return 0
 
 
 def iter_url_matches(text: str, *, url_re: Any) -> Iterable[Any]:
