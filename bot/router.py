@@ -133,6 +133,7 @@ from .router_components import (
     build_oembed_text_payload,
     build_syndication_oembed_params,
     build_syndication_fetch_plan,
+    build_syndication_endpoint_url,
     syndication_has_usable_payload,
     syndication_media_hint_keys,
     syndication_article_has_blocks,
@@ -1053,9 +1054,7 @@ class Router:
             try:
                 http_client = await get_http_client()
                 for endpoint, params in params_variants:
-                    url = base + (
-                        "widgets/tweet" if endpoint == "widgets" else "tweet-result"
-                    )
+                    url = build_syndication_endpoint_url(base, endpoint)
                     self._metric_inc("x.syndication.fetch", {"endpoint": endpoint})
                     resp = await http_client.get(url, headers=headers, params=params)
                     if resp.status_code != 200:

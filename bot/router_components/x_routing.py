@@ -637,6 +637,12 @@ def build_syndication_fetch_plan(
     return base, headers, params_variants
 
 
+def build_syndication_endpoint_url(base: str, endpoint: str) -> str:
+    """Build syndication endpoint URL preserving legacy endpoint mapping."""
+    suffix = "widgets/tweet" if endpoint == "widgets" else "tweet-result"
+    return base + suffix
+
+
 def syndication_has_usable_payload(
     node: Any,
     *,

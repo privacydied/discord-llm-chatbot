@@ -39,6 +39,7 @@ from bot.router_components.x_routing import (
     build_oembed_text_payload,
     build_syndication_oembed_params,
     build_syndication_fetch_plan,
+    build_syndication_endpoint_url,
     extract_oembed_html_text,
     syndication_has_usable_payload,
     syndication_media_hint_keys,
@@ -678,6 +679,20 @@ def test_build_syndication_fetch_plan_shape_and_values() -> None:
         ("tweet-result", {"id": "2022790791047823773", "lang": "en"}),
         ("widgets", {"id": "2022790791047823773", "lang": "en", "dnt": "false"}),
     ]
+
+
+def test_build_syndication_endpoint_url_mapping() -> None:
+    base = "https://cdn.syndication.twimg.com/"
+    assert build_syndication_endpoint_url(base, "widgets") == (
+        "https://cdn.syndication.twimg.com/widgets/tweet"
+    )
+    assert build_syndication_endpoint_url(base, "tweet-result") == (
+        "https://cdn.syndication.twimg.com/tweet-result"
+    )
+    # Preserve legacy fallback behavior for unknown endpoint values.
+    assert build_syndication_endpoint_url(base, "unknown") == (
+        "https://cdn.syndication.twimg.com/tweet-result"
+    )
 
 
 def test_syndication_has_usable_payload_with_text_or_media_hints() -> None:
