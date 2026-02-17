@@ -1205,7 +1205,15 @@ def build_syndication_fetch_plan_tuple(
 
 def build_syndication_fetch_metric_payload(endpoint: str) -> Dict[str, str]:
     """Build metric labels payload for syndication fetch endpoints."""
-    return {build_syndication_metric_endpoint_key(): endpoint}
+    return build_syndication_metric_payload_map(
+        build_syndication_metric_endpoint_key(),
+        endpoint,
+    )
+
+
+def build_syndication_metric_payload_map(key: str, value: str) -> Dict[str, str]:
+    """Build metric payload map from explicit key/value inputs."""
+    return {key: value}
 
 
 def build_syndication_metric_endpoint_key() -> str:

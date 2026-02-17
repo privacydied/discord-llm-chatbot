@@ -133,6 +133,7 @@ from bot.router_components.x_routing import (
     build_syndication_fetch_plan,
     build_syndication_fetch_plan_tuple,
     build_syndication_metric_endpoint_key,
+    build_syndication_metric_payload_map,
     build_syndication_fetch_metric_payload,
     syndication_cache_ttl_s,
     syndication_cache_is_fresh,
@@ -1376,6 +1377,12 @@ def test_build_syndication_fetch_metric_payload_shape() -> None:
     assert build_syndication_fetch_metric_payload("widgets") == {"endpoint": "widgets"}
     assert build_syndication_fetch_metric_payload("oembed_x") == {
         "endpoint": "oembed_x"
+    }
+
+
+def test_build_syndication_metric_payload_map_shape() -> None:
+    assert build_syndication_metric_payload_map("endpoint", "widgets") == {
+        "endpoint": "widgets"
     }
 
 
