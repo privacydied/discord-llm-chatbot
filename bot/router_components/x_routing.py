@@ -1775,6 +1775,11 @@ def x_url_extract_regex() -> Any:
 
 def x_url_extract_regex_pattern() -> str:
     """Return pattern string used by compiled X URL extraction regex."""
+    return x_url_extract_regex_pattern_source()
+
+
+def x_url_extract_regex_pattern_source() -> str:
+    """Return source pattern string used for X URL extraction regex."""
     return x_url_extract_pattern()
 
 
