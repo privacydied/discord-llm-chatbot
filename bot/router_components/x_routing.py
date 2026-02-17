@@ -173,7 +173,7 @@ def normalize_x_url(url: str) -> str:
         aliases = {
             "mobile.twitter.com",
             "www.twitter.com",
-            "twitter.com",
+            build_syndication_twitter_host(),
             "www.x.com",
             build_syndication_x_host(),
             "fxtwitter.com",
