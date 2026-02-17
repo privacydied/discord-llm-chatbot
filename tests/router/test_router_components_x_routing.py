@@ -138,6 +138,7 @@ from bot.router_components.x_routing import (
     syndication_cache_ttl_s,
     syndication_negative_cache_ttl_value,
     syndication_cache_is_fresh,
+    build_syndication_cache_hit_label,
     classify_syndication_cache_hit,
     build_syndication_negative_cache_entry,
     build_syndication_cache_entry,
@@ -1421,6 +1422,11 @@ def test_build_syndication_cache_data_key_constant() -> None:
 def test_build_syndication_cache_hit_label_constants() -> None:
     assert build_syndication_negative_cache_hit_label() == "neg"
     assert build_syndication_data_cache_hit_label() == "data"
+
+
+def test_build_syndication_cache_hit_label_variants() -> None:
+    assert build_syndication_cache_hit_label({"neg": True}) == "neg"
+    assert build_syndication_cache_hit_label({"neg": False, "data": {}}) == "data"
 
 
 def test_syndication_cache_ttl_s_preserves_attribute_error_for_bad_cache() -> None:

@@ -1288,6 +1288,11 @@ def classify_syndication_cache_hit(
     """Classify cache hit kind as `neg`, `data`, or None when stale."""
     if not syndication_cache_is_fresh(now_s, default_ttl_s, cached):
         return None
+    return build_syndication_cache_hit_label(cached)
+
+
+def build_syndication_cache_hit_label(cached: Any) -> str:
+    """Return cache-hit label for a fresh cache payload."""
     return (
         build_syndication_negative_cache_hit_label()
         if cached.get(build_syndication_negative_cache_key())
