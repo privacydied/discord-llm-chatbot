@@ -298,6 +298,16 @@ def test_build_x_syn_quick_request_config_uses_lower_timeout() -> None:
     assert cfg.max_retries == 0
 
 
+def test_extract_fxtwitter_tweet_node_handles_variants() -> None:
+    router = Router(DummyBot())
+
+    assert router._extract_fxtwitter_tweet_node({"tweet": {"id": "1"}}) == {"id": "1"}
+    assert router._extract_fxtwitter_tweet_node({"status": {"id": "2"}}) == {"id": "2"}
+    assert router._extract_fxtwitter_tweet_node({"tweet": "bad"}) == {}
+    assert router._extract_fxtwitter_tweet_node({"status": []}) == {}
+    assert router._extract_fxtwitter_tweet_node(None) == {}
+
+
 @pytest.mark.asyncio
 async def test_resolve_twitter_caption_text_prefers_syndication(monkeypatch) -> None:
     router = Router(DummyBot())

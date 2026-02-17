@@ -671,6 +671,13 @@ class Router:
             max_retries=0,
         )
 
+    def _extract_fxtwitter_tweet_node(self, payload: Any) -> Dict[str, Any]:
+        """Extract the canonical tweet/status node from fx/vx payloads."""
+        if not isinstance(payload, dict):
+            return {}
+        node = (payload.get("tweet") or payload.get("status")) or {}
+        return node if isinstance(node, dict) else {}
+
     async def _resolve_twitter_caption_text(self, status_id: Optional[str]) -> str:
         """Resolve tweet caption via syndication first, then fx/vx fallback."""
         if not status_id:
@@ -700,8 +707,8 @@ class Router:
                     fxj = r2.json()
                 except Exception:
                     fxj = {}
-                tnode = fxj.get("tweet") or fxj.get("status") or {}
-                if isinstance(tnode, dict):
+                tnode = self._extract_fxtwitter_tweet_node(fxj)
+                if tnode:
                     tweet_text = self._extract_syndication_text(tnode)
         except Exception:
             pass
@@ -1821,7 +1828,7 @@ class Router:
                                 data = {}
                         # Extract video URLs from common fx/vx payload shapes.
                         try:
-                            tweet = (data.get("tweet") or data.get("status")) or {}
+                            tweet = self._extract_fxtwitter_tweet_node(data)
                             media = tweet.get("media") or {}
                             video_nodes: List[Any] = []
                             for key in ("video", "videos", "video_info", "media"):
@@ -1865,7 +1872,7 @@ class Router:
 
                         # fx/vx often: {'tweet': {'media': {'photos':[{'url':...}]}}}
                         try:
-                            tweet = (data.get("tweet") or data.get("status")) or {}
+                            tweet = self._extract_fxtwitter_tweet_node(data)
                             media = tweet.get("media") or {}
                             photos = media.get("photos") or []
                             for p in photos:
@@ -2052,8 +2059,8 @@ class Router:
                 payload = resp.json()
             except Exception:
                 return None
-            tweet = (payload.get("tweet") or payload.get("status")) or {}
-            if not isinstance(tweet, dict):
+            tweet = self._extract_fxtwitter_tweet_node(payload)
+            if not tweet:
                 return None
             article = tweet.get("article")
             if not isinstance(article, dict) or not article:
