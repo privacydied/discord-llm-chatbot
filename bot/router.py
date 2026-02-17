@@ -123,6 +123,7 @@ from .router_components import (
     mentions_bot,
     normalize_x_url,
     parse_twitter_status_id,
+    stt_result_has_transcription,
     strip_leading_bot_mention,
     strip_discord_mentions_and_urls,
     strip_urls,
@@ -795,9 +796,7 @@ class Router:
 
     def _stt_result_has_transcription(self, stt_result: Any) -> bool:
         """Check whether an STT result payload contains non-empty transcription text."""
-        if not isinstance(stt_result, dict):
-            return False
-        return bool(stt_result.get("transcription"))
+        return stt_result_has_transcription(stt_result)
 
     def _extract_sparse_media_resolution(
         self, resolved_sparse: Any, *, default_url: str

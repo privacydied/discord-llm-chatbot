@@ -256,6 +256,13 @@ def extract_fxtwitter_tweet_node(payload: Any) -> Dict[str, Any]:
     return node if isinstance(node, dict) else {}
 
 
+def stt_result_has_transcription(stt_result: Any) -> bool:
+    """Check whether STT result payload has a transcription field."""
+    if not isinstance(stt_result, dict):
+        return False
+    return bool(stt_result.get("transcription"))
+
+
 def extract_x_status_urls_from_text(
     text: str,
     *,

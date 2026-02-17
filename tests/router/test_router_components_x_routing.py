@@ -16,6 +16,7 @@ from bot.router_components.x_routing import (
     is_twitter_url,
     normalize_x_url,
     parse_twitter_status_id,
+    stt_result_has_transcription,
     unwrap_x_media_url,
 )
 
@@ -163,3 +164,12 @@ def test_extract_fxtwitter_tweet_node_variants() -> None:
     assert extract_fxtwitter_tweet_node({"tweet": "bad"}) == {}
     assert extract_fxtwitter_tweet_node({"status": []}) == {}
     assert extract_fxtwitter_tweet_node(None) == {}
+
+
+def test_stt_result_has_transcription_matches_router_semantics() -> None:
+    assert stt_result_has_transcription({"transcription": "hello"}) is True
+    # Preserve bool() semantics used in router call sites.
+    assert stt_result_has_transcription({"transcription": "   "}) is True
+    assert stt_result_has_transcription({"transcription": ""}) is False
+    assert stt_result_has_transcription({"text": "fallback only"}) is False
+    assert stt_result_has_transcription(None) is False
