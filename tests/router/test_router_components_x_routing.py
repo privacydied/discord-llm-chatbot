@@ -3,6 +3,8 @@ from types import SimpleNamespace
 from bot.router_components.x_routing import (
     canonicalize_twitter_status_url,
     collect_x_candidate_urls,
+    extract_x_api_primary_text,
+    extract_x_api_primary_tweet,
     extract_raw_urls_from_texts,
     extract_x_status_urls_from_text,
     filter_canonical_x_urls,
@@ -119,3 +121,18 @@ def test_unwrap_x_media_url() -> None:
         == "https://video.twimg.com/ext_tw_video/abc/vid/720x1280/v.mp4"
     )
     assert unwrap_x_media_url("https://x.com/user/status/1") == "https://x.com/user/status/1"
+
+
+def test_extract_x_api_primary_tweet_variants() -> None:
+    assert extract_x_api_primary_tweet({"data": {"id": "1"}}) == {"id": "1"}
+    assert extract_x_api_primary_tweet({"data": [{"id": "2"}]}) == {"id": "2"}
+    assert extract_x_api_primary_tweet({"data": []}) == {}
+    assert extract_x_api_primary_tweet({"data": ["bad"]}) == {}
+    assert extract_x_api_primary_tweet(None) == {}
+
+
+def test_extract_x_api_primary_text_variants() -> None:
+    assert extract_x_api_primary_text({"data": {"text": "dict text"}}) == "dict text"
+    assert extract_x_api_primary_text({"data": [{"text": "list text"}]}) == "list text"
+    assert extract_x_api_primary_text({"data": []}) == ""
+    assert extract_x_api_primary_text(None) == ""

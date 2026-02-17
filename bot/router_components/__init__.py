@@ -27,6 +27,8 @@ from .runtime import RouterRuntimeCompat, load_router_runtime_compat
 from .x_routing import (
     canonicalize_twitter_status_url,
     collect_x_candidate_urls,
+    extract_x_api_primary_text,
+    extract_x_api_primary_tweet,
     extract_primary_tweet_id,
     extract_raw_urls_from_texts,
     extract_x_status_urls_from_text,
@@ -51,6 +53,8 @@ __all__ = [
     "existing_url_payloads",
     "extract_urls_loose",
     "extract_urls_strict",
+    "extract_x_api_primary_text",
+    "extract_x_api_primary_tweet",
     "extract_primary_tweet_id",
     "extract_raw_urls_from_texts",
     "extract_x_status_urls_from_text",

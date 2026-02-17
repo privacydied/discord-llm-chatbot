@@ -96,6 +96,8 @@ from .router_components import (
     canonicalize_twitter_status_url,
     collect_x_candidate_urls,
     existing_url_payloads,
+    extract_x_api_primary_text,
+    extract_x_api_primary_tweet,
     extract_primary_tweet_id,
     extract_raw_urls_from_texts,
     extract_x_status_urls_from_text,
@@ -567,23 +569,11 @@ class Router:
 
     def _extract_x_api_primary_tweet(self, api_data: Any) -> Dict[str, Any]:
         """Extract the primary tweet node from X API payload variants."""
-        if not isinstance(api_data, dict):
-            return {}
-        data = api_data.get("data")
-        if isinstance(data, list):
-            first = data[0] if data else {}
-            return first if isinstance(first, dict) else {}
-        if isinstance(data, dict):
-            return data
-        return {}
+        return extract_x_api_primary_tweet(api_data)
 
     def _extract_x_api_primary_text(self, api_data: Any) -> str:
         """Extract canonical tweet text from X API payload variants."""
-        try:
-            tweet = self._extract_x_api_primary_tweet(api_data)
-            return str((tweet or {}).get("text") or "").strip()
-        except Exception:
-            return ""
+        return extract_x_api_primary_text(api_data)
 
     def _format_x_caption_only_transcription(
         self,

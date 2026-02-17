@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Callable, Iterable, List, Optional
+from typing import Any, Callable, Dict, Iterable, List, Optional
 from urllib.parse import parse_qs, unquote, urlparse, urlunparse
 
 from bot.x_api_client import XApiClient
@@ -208,6 +208,28 @@ def unwrap_x_media_url(url: str) -> str:
         return url
     except Exception:
         return url
+
+
+def extract_x_api_primary_tweet(api_data: Any) -> Dict[str, Any]:
+    """Extract the primary tweet node from X API payload variants."""
+    if not isinstance(api_data, dict):
+        return {}
+    data = api_data.get("data")
+    if isinstance(data, list):
+        first = data[0] if data else {}
+        return first if isinstance(first, dict) else {}
+    if isinstance(data, dict):
+        return data
+    return {}
+
+
+def extract_x_api_primary_text(api_data: Any) -> str:
+    """Extract canonical tweet text from X API payload variants."""
+    try:
+        tweet = extract_x_api_primary_tweet(api_data)
+        return str((tweet or {}).get("text") or "").strip()
+    except Exception:
+        return ""
 
 
 def extract_x_status_urls_from_text(
