@@ -641,6 +641,39 @@ class Router:
             stt_res=stt_error_result,
         )
 
+    def _format_x_video_stt_probe_result(
+        self,
+        *,
+        url: str,
+        base_text: str,
+        tweet_text: Optional[str],
+        stt_res: Any,
+        stt_err: Optional[str],
+        emit_fail_event: bool = False,
+        fail_media_kind: str = "video",
+        msg_id: Optional[int] = None,
+    ) -> str:
+        """Format STT probe result for video routes, preserving video context on failure."""
+        formatted = self._format_x_transcription_if_present(
+            base_text=base_text,
+            url=url,
+            stt_res=stt_res,
+        )
+        if formatted:
+            return formatted
+        if emit_fail_event:
+            self._emit_stt_fail_event(
+                self._classify_stt_error_reason(stt_err),
+                media_kind=fail_media_kind,
+                msg_id=msg_id,
+            )
+        return self._format_x_video_stt_error_result(
+            url=url,
+            stt_error=stt_err,
+            base_text=base_text,
+            tweet_text=tweet_text,
+        )
+
     async def _format_x_with_resolved_base_text(
         self, *, url: str, stt_res: Any
     ) -> str:
@@ -6431,27 +6464,15 @@ class Router:
                                 "x.syndication.stt",
                                 {"url": url},
                             )
-                            formatted = self._format_x_transcription_if_present(
+                            return self._format_x_video_stt_probe_result(
                                 base_text=base,
                                 url=url,
                                 stt_res=stt_res,
-                            )
-                            if formatted:
-                                return formatted
-                            # STT failed for confirmed video content
-                            # Maintain video modality instead of collapsing to text [REH][IV]
-                            self._emit_stt_fail_event(
-                                self._classify_stt_error_reason(stt_err),
-                                media_kind="video",
-                                msg_id=(message.id if message else None),
-                            )
-                            # For confirmed video with STT failure, return structured error that maintains video context
-                            # Do NOT collapse to text-only - the video content is real, even if transcription failed [REH]
-                            return self._format_x_video_stt_error_result(
-                                url=url,
-                                stt_error=stt_err,
-                                base_text=base,
+                                stt_err=stt_err,
                                 tweet_text=text,
+                                emit_fail_event=True,
+                                fail_media_kind="video",
+                                msg_id=(message.id if message else None),
                             )
 
                         # No video confirmed. Probe for images only when none were extracted yet.
@@ -6544,17 +6565,11 @@ class Router:
                                         "x.syndication.sparse.stt",
                                         {"url": sparse_url},
                                     )
-                                    formatted = self._format_x_transcription_if_present(
+                                    return self._format_x_video_stt_probe_result(
                                         base_text=base,
                                         url=sparse_url,
                                         stt_res=stt_res,
-                                    )
-                                    if formatted:
-                                        return formatted
-                                    return self._format_x_video_stt_error_result(
-                                        url=sparse_url,
-                                        stt_error=stt_err,
-                                        base_text=base,
+                                        stt_err=stt_err,
                                         tweet_text=text,
                                     )
                                 if sparse_kind == "image" and sparse_images:

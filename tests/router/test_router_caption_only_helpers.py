@@ -219,6 +219,91 @@ def test_format_x_video_stt_error_result_defaults_error(monkeypatch) -> None:
     assert captured["stt_res"]["error"] == "transcription_failed"
 
 
+def test_format_x_video_stt_probe_result_returns_formatted_when_transcription_present(
+    monkeypatch,
+) -> None:
+    router = Router(DummyBot())
+
+    monkeypatch.setattr(
+        Router,
+        "_format_x_transcription_if_present",
+        lambda _self, **_kwargs: "formatted",
+    )
+    monkeypatch.setattr(
+        Router,
+        "_emit_stt_fail_event",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("emit should not be called on success")
+        ),
+    )
+    monkeypatch.setattr(
+        Router,
+        "_format_x_video_stt_error_result",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("error formatter should not be called on success")
+        ),
+    )
+
+    out = router._format_x_video_stt_probe_result(
+        url="https://x.com/u/status/1",
+        base_text="base",
+        tweet_text="tweet",
+        stt_res={"transcription": "hello"},
+        stt_err=None,
+        emit_fail_event=True,
+        msg_id=123,
+    )
+    assert out == "formatted"
+
+
+def test_format_x_video_stt_probe_result_emits_and_formats_error_when_missing_transcription(
+    monkeypatch,
+) -> None:
+    router = Router(DummyBot())
+    captured = {}
+
+    monkeypatch.setattr(
+        Router,
+        "_format_x_transcription_if_present",
+        lambda _self, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        Router,
+        "_classify_stt_error_reason",
+        lambda _self, _err: "classified",
+    )
+
+    def _emit(self, reason, media_kind=None, msg_id=None):
+        captured["emit"] = (reason, media_kind, msg_id)
+
+    def _fmt_error(self, **kwargs):
+        captured["error_kwargs"] = kwargs
+        return "error-formatted"
+
+    monkeypatch.setattr(Router, "_emit_stt_fail_event", _emit)
+    monkeypatch.setattr(Router, "_format_x_video_stt_error_result", _fmt_error)
+
+    out = router._format_x_video_stt_probe_result(
+        url="https://x.com/u/status/1",
+        base_text="base",
+        tweet_text="tweet",
+        stt_res={},
+        stt_err="error",
+        emit_fail_event=True,
+        fail_media_kind="video",
+        msg_id=123,
+    )
+
+    assert out == "error-formatted"
+    assert captured["emit"] == ("classified", "video", 123)
+    assert captured["error_kwargs"] == {
+        "url": "https://x.com/u/status/1",
+        "stt_error": "error",
+        "base_text": "base",
+        "tweet_text": "tweet",
+    }
+
+
 @pytest.mark.asyncio
 async def test_format_x_with_resolved_base_text_delegates(monkeypatch) -> None:
     router = Router(DummyBot())
