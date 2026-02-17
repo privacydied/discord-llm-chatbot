@@ -137,6 +137,7 @@ from bot.router_components.x_routing import (
     build_syndication_fetch_metric_payload,
     syndication_cache_ttl_s,
     syndication_negative_cache_ttl_value,
+    syndication_cache_timestamp_value,
     syndication_cache_is_fresh,
     build_syndication_cache_hit_label,
     classify_syndication_cache_hit,
@@ -1451,6 +1452,11 @@ def test_syndication_cache_is_fresh_respects_ttl_policy() -> None:
         )
         is False
     )
+
+
+def test_syndication_cache_timestamp_value() -> None:
+    assert syndication_cache_timestamp_value({"ts": 123.4}) == 123.4
+    assert syndication_cache_timestamp_value({}) == 0.0
 
 
 def test_syndication_cache_is_fresh_preserves_ts_parse_error() -> None:

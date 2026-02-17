@@ -1277,7 +1277,12 @@ def build_syndication_cache_data_key() -> str:
 def syndication_cache_is_fresh(now_s: float, default_ttl_s: float, cached: Any) -> bool:
     """Return True when syndication cache entry is still fresh under TTL policy."""
     ttl = syndication_cache_ttl_s(default_ttl_s, cached)
-    return (now_s - float(cached.get(build_syndication_cache_ts_key(), 0))) < ttl
+    return (now_s - syndication_cache_timestamp_value(cached)) < ttl
+
+
+def syndication_cache_timestamp_value(cached: Any) -> float:
+    """Return parsed cache timestamp value for freshness checks."""
+    return float(cached.get(build_syndication_cache_ts_key(), 0))
 
 
 def classify_syndication_cache_hit(
