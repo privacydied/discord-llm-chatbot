@@ -38,6 +38,7 @@ from bot.router_components.x_routing import (
     build_x_text_canon_payload,
     build_oembed_text_payload,
     build_syndication_oembed_params,
+    build_syndication_fetch_plan,
     extract_oembed_html_text,
     syndication_has_usable_payload,
     syndication_media_hint_keys,
@@ -665,6 +666,18 @@ def test_build_syndication_oembed_params_default_and_x_host() -> None:
         "hide_thread": "true",
         "lang": "en",
     }
+
+
+def test_build_syndication_fetch_plan_shape_and_values() -> None:
+    base, headers, variants = build_syndication_fetch_plan("2022790791047823773")
+    assert base == "https://cdn.syndication.twimg.com/"
+    assert headers["Referer"] == "https://platform.twitter.com/"
+    assert headers["Accept-Language"] == "en-US,en;q=0.9"
+    assert variants == [
+        ("widgets", {"id": "2022790791047823773", "lang": "en"}),
+        ("tweet-result", {"id": "2022790791047823773", "lang": "en"}),
+        ("widgets", {"id": "2022790791047823773", "lang": "en", "dnt": "false"}),
+    ]
 
 
 def test_syndication_has_usable_payload_with_text_or_media_hints() -> None:

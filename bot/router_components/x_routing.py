@@ -615,6 +615,28 @@ def build_syndication_oembed_params(
     }
 
 
+def build_syndication_fetch_plan(
+    tweet_id: str,
+) -> Tuple[str, Dict[str, str], List[Tuple[str, Dict[str, str]]]]:
+    """Build base URL, headers, and endpoint param variants for syndication fetch."""
+    base = "https://cdn.syndication.twimg.com/"
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+        ),
+        "Accept": "application/json, text/javascript;q=0.9, */*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Referer": "https://platform.twitter.com/",
+    }
+    params_variants = [
+        ("widgets", {"id": tweet_id, "lang": "en"}),
+        ("tweet-result", {"id": tweet_id, "lang": "en"}),
+        ("widgets", {"id": tweet_id, "lang": "en", "dnt": "false"}),
+    ]
+    return base, headers, params_variants
+
+
 def syndication_has_usable_payload(
     node: Any,
     *,

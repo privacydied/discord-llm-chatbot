@@ -132,6 +132,7 @@ from .router_components import (
     resolve_video_stt_error_base_text,
     build_oembed_text_payload,
     build_syndication_oembed_params,
+    build_syndication_fetch_plan,
     syndication_has_usable_payload,
     syndication_media_hint_keys,
     syndication_article_has_blocks,
@@ -1038,21 +1039,7 @@ class Router:
                     return cached.get("data")
 
             int(self.config.get("X_SYNDICATION_TIMEOUT_MS", 4000))
-            headers = {
-                "User-Agent": (
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                    "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
-                ),
-                "Accept": "application/json, text/javascript;q=0.9, */*;q=0.8",
-                "Accept-Language": "en-US,en;q=0.9",
-                "Referer": "https://platform.twitter.com/",
-            }
-            params_variants = [
-                ("widgets", {"id": tweet_id, "lang": "en"}),
-                ("tweet-result", {"id": tweet_id, "lang": "en"}),
-                ("widgets", {"id": tweet_id, "lang": "en", "dnt": "false"}),
-            ]
-            base = "https://cdn.syndication.twimg.com/"
+            base, headers, params_variants = build_syndication_fetch_plan(tweet_id)
             data = None
             media_hint_keys = syndication_media_hint_keys()
 
