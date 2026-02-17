@@ -29,6 +29,7 @@ from bot.router_components.x_routing import (
     syndication_needs_article_hydration,
     extract_syndication_base_text,
     merge_syndication_base_with_article,
+    extract_syndication_text,
     resolve_twitter_status_id,
     is_twitter_status_url,
     stt_result_has_transcription,
@@ -481,6 +482,28 @@ def test_merge_syndication_base_with_article_variants() -> None:
             article_text="article",
         )
         == "article"
+    )
+
+
+def test_extract_syndication_text_variants() -> None:
+    assert extract_syndication_text(None) == ""
+    assert extract_syndication_text({"text": " hello "}) == "hello"
+
+    merged = extract_syndication_text(
+        {"text": "base", "article": {"id": "1"}},
+        extract_article_text=lambda _article: "article",
+    )
+    assert merged == "base\n\n[Linked X Article]\narticle"
+
+    # Preserve fail-open behavior when article extractor errors.
+    assert (
+        extract_syndication_text(
+            {"text": "base", "article": {"id": "1"}},
+            extract_article_text=lambda _article: (_ for _ in ()).throw(
+                RuntimeError("boom")
+            ),
+        )
+        == "base"
     )
 
 

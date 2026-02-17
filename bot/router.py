@@ -134,8 +134,7 @@ from .router_components import (
     syndication_article_has_blocks,
     extract_x_article_text,
     syndication_needs_article_hydration,
-    extract_syndication_base_text,
-    merge_syndication_base_with_article,
+    extract_syndication_text,
     x_syn_probe_budget_timeout_s,
     x_syn_quick_request_timeouts,
     build_syndication_photo_payload,
@@ -1296,13 +1295,9 @@ class Router:
 
     def _extract_syndication_text(self, node: Dict[str, Any]) -> str:
         """Extract tweet body text from syndication-like payloads, including X Articles."""
-        if not isinstance(node, dict):
-            return ""
-        base_text = extract_syndication_base_text(node)
-        article_text = self._extract_x_article_text(node.get("article"))
-        return merge_syndication_base_with_article(
-            base_text=base_text,
-            article_text=article_text,
+        return extract_syndication_text(
+            node,
+            extract_article_text=self._extract_x_article_text,
         )
 
     @staticmethod

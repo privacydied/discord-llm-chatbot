@@ -462,6 +462,26 @@ def merge_syndication_base_with_article(
     return article_text
 
 
+def extract_syndication_text(
+    node: Any,
+    *,
+    extract_article_text: Optional[Callable[[Any], str]] = None,
+) -> str:
+    """Extract tweet body text from syndication payloads, including X article text."""
+    if not isinstance(node, dict):
+        return ""
+    article_extractor = extract_article_text or extract_x_article_text
+    base_text = extract_syndication_base_text(node)
+    try:
+        article_text = article_extractor(node.get("article"))
+    except Exception:
+        article_text = ""
+    return merge_syndication_base_with_article(
+        base_text=base_text,
+        article_text=article_text,
+    )
+
+
 def x_syn_probe_budget_timeout_s(x_syn_timeout_s: float) -> float:
     """Compute bounded timeout budget for image/media probe calls."""
     return min(float(x_syn_timeout_s) + 1.0, 4.5)
