@@ -41,6 +41,7 @@ from bot.router_components.x_routing import (
     build_syndication_fetch_plan,
     syndication_cache_ttl_s,
     syndication_cache_is_fresh,
+    classify_syndication_cache_hit,
     build_syndication_negative_cache_entry,
     build_syndication_cache_entry,
     build_syndication_endpoint_url,
@@ -718,6 +719,38 @@ def test_syndication_cache_is_fresh_respects_ttl_policy() -> None:
 def test_syndication_cache_is_fresh_preserves_ts_parse_error() -> None:
     with pytest.raises(ValueError):
         syndication_cache_is_fresh(1_000.0, 600.0, {"ts": "bad", "neg": False})
+
+
+def test_classify_syndication_cache_hit_variants() -> None:
+    assert (
+        classify_syndication_cache_hit(
+            1_000.0,
+            600.0,
+            {"ts": 500.0, "neg": False},
+        )
+        == "data"
+    )
+    assert (
+        classify_syndication_cache_hit(
+            1_000.0,
+            600.0,
+            {"ts": 850.0, "neg": True},
+        )
+        == "neg"
+    )
+    assert (
+        classify_syndication_cache_hit(
+            1_000.0,
+            120.0,
+            {"ts": 850.0, "neg": False},
+        )
+        is None
+    )
+
+
+def test_classify_syndication_cache_hit_preserves_ts_parse_error() -> None:
+    with pytest.raises(ValueError):
+        classify_syndication_cache_hit(1_000.0, 600.0, {"ts": "bad", "neg": False})
 
 
 def test_build_syndication_negative_cache_entry_shape() -> None:

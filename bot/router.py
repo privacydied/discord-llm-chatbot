@@ -133,7 +133,7 @@ from .router_components import (
     build_oembed_text_payload,
     build_syndication_oembed_params,
     build_syndication_fetch_plan,
-    syndication_cache_is_fresh,
+    classify_syndication_cache_hit,
     build_syndication_negative_cache_entry,
     build_syndication_cache_entry,
     build_syndication_endpoint_url,
@@ -1012,10 +1012,11 @@ class Router:
         now = time.time()
         cached = self._syn_cache.get(tweet_id)
         if cached:
-            if syndication_cache_is_fresh(now, self._syn_ttl_s, cached):
-                if cached.get("neg"):
-                    self._metric_inc("x.syndication.neg_cache_hit", None)
-                    return None
+            hit_kind = classify_syndication_cache_hit(now, self._syn_ttl_s, cached)
+            if hit_kind == "neg":
+                self._metric_inc("x.syndication.neg_cache_hit", None)
+                return None
+            if hit_kind == "data":
                 self._metric_inc("x.syndication.cache_hit", None)
                 return cached.get("data")
 
@@ -1028,10 +1029,11 @@ class Router:
             # Check cache again inside lock
             cached = self._syn_cache.get(tweet_id)
             if cached:
-                if syndication_cache_is_fresh(now, self._syn_ttl_s, cached):
-                    if cached.get("neg"):
-                        self._metric_inc("x.syndication.neg_cache_hit_locked", None)
-                        return None
+                hit_kind = classify_syndication_cache_hit(now, self._syn_ttl_s, cached)
+                if hit_kind == "neg":
+                    self._metric_inc("x.syndication.neg_cache_hit_locked", None)
+                    return None
+                if hit_kind == "data":
                     self._metric_inc("x.syndication.cache_hit_locked", None)
                     return cached.get("data")
 

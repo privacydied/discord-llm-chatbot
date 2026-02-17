@@ -651,6 +651,17 @@ def syndication_cache_is_fresh(now_s: float, default_ttl_s: float, cached: Any) 
     return (now_s - float(cached.get("ts", 0))) < ttl
 
 
+def classify_syndication_cache_hit(
+    now_s: float,
+    default_ttl_s: float,
+    cached: Any,
+) -> Optional[str]:
+    """Classify cache hit kind as `neg`, `data`, or None when stale."""
+    if not syndication_cache_is_fresh(now_s, default_ttl_s, cached):
+        return None
+    return "neg" if cached.get("neg") else "data"
+
+
 def build_syndication_negative_cache_entry(now_s: float) -> Dict[str, Any]:
     """Build negative syndication cache entry with timestamp."""
     return {"neg": True, "ts": now_s}
