@@ -107,6 +107,7 @@ from bot.router_components.x_routing import (
     build_syndication_status_path,
     build_syndication_oembed_options,
     build_syndication_oembed_options_map,
+    build_syndication_oembed_options_map_from_pairs,
     build_syndication_oembed_option_keys,
     build_syndication_oembed_option_values,
     build_syndication_oembed_dnt_key,
@@ -880,6 +881,17 @@ def test_build_syndication_oembed_options_constant() -> None:
 
 def test_build_syndication_oembed_options_map_constant() -> None:
     assert build_syndication_oembed_options_map() == {
+        "dnt": "false",
+        "omit_script": "true",
+        "hide_thread": "true",
+    }
+
+
+def test_build_syndication_oembed_options_map_from_pairs() -> None:
+    assert build_syndication_oembed_options_map_from_pairs(
+        ("dnt", "omit_script", "hide_thread"),
+        ("false", "true", "true"),
+    ) == {
         "dnt": "false",
         "omit_script": "true",
         "hide_thread": "true",

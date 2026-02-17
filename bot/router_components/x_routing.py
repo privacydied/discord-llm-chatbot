@@ -1005,6 +1005,19 @@ def build_syndication_oembed_options_map() -> Dict[str, str]:
     dnt_value, omit_script_value, hide_thread_value = (
         build_syndication_oembed_option_values()
     )
+    return build_syndication_oembed_options_map_from_pairs(
+        (dnt_key, omit_script_key, hide_thread_key),
+        (dnt_value, omit_script_value, hide_thread_value),
+    )
+
+
+def build_syndication_oembed_options_map_from_pairs(
+    keys: Tuple[str, str, str],
+    values: Tuple[str, str, str],
+) -> Dict[str, str]:
+    """Return oEmbed options map from aligned key/value tuples."""
+    dnt_key, omit_script_key, hide_thread_key = keys
+    dnt_value, omit_script_value, hide_thread_value = values
     return {
         dnt_key: dnt_value,
         omit_script_key: omit_script_value,
