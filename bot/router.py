@@ -89,6 +89,7 @@ from .memory.thread_tail import (
 from .router_components import (
     RouterRuntimeCompat,
     compose_x_tweet_with_visual_facts,
+    collect_x_candidate_urls,
     extract_urls_loose,
     extract_urls_strict,
     format_x_tweet_with_transcription,
@@ -96,8 +97,13 @@ from .router_components import (
     has_meaningful_text,
     is_reply_to_bot,
     is_text_attachment,
+    is_tweet_media_url,
+    is_twitter_media_cdn,
+    is_twitter_thumbnail_url,
+    is_twitter_url,
     load_router_runtime_compat,
     mentions_bot,
+    parse_twitter_status_id,
     strip_leading_bot_mention,
     strip_urls,
 )
@@ -1133,35 +1139,12 @@ class Router:
 
     @staticmethod
     def _is_twitter_url(url: str) -> bool:
-        try:
-            u = str(url)
-        except Exception:
-            return False
-        try:
-            # Tweet-id driven: accept any host if we can extract a valid tweet/status ID. [IV]
-            if XApiClient.extract_tweet_id(u):
-                return True
-        except Exception:
-            pass
-        try:
-            low = u.lower()
-        except Exception:
-            return False
-        return any(
-            d in low
-            for d in [
-                "twitter.com/",
-                "x.com/",
-                "vxtwitter.com/",
-                "fxtwitter.com/",
-                "fixupx.com/",
-            ]
-        )
+        return is_twitter_url(url)
 
     @staticmethod
     def _parse_twitter_status_id(url: str) -> Optional[str]:
         """Extract the tweet/status ID from a Twitter URL. Returns None if not found. [IV]"""
-        return XApiClient.extract_tweet_id(url)
+        return parse_twitter_status_id(url)
 
     def _is_twitter_status_url(self, url: str) -> bool:
         """Check if a URL is a Twitter status URL (contains a valid status ID). [IV]"""
@@ -1628,113 +1611,19 @@ class Router:
 
     @staticmethod
     def _collect_x_candidate_urls(item: InputItem) -> List[str]:
-        urls: List[str] = []
-        try:
-            if item.source_type == "url":
-                urls.append(str(item.payload))
-            elif item.source_type == "embed":
-                embed = item.payload
-                primary_url = getattr(embed, "url", None)
-                if primary_url:
-                    urls.append(primary_url)
-                video = getattr(embed, "video", None)
-                if video and getattr(video, "url", None):
-                    urls.append(video.url)
-                image = getattr(embed, "image", None)
-                if image and getattr(image, "url", None):
-                    urls.append(image.url)
-                thumb = getattr(embed, "thumbnail", None)
-                if thumb and getattr(thumb, "url", None):
-                    urls.append(thumb.url)
-            elif item.source_type == "attachment":
-                attachment = item.payload
-                url = getattr(attachment, "url", None)
-                if url:
-                    urls.append(url)
-                proxy = getattr(attachment, "proxy_url", None)
-                if proxy:
-                    urls.append(proxy)
-        except Exception:
-            pass
-        return [u for u in urls if u]
+        return collect_x_candidate_urls(item)
 
     @staticmethod
     def _is_twitter_thumbnail_url(url: str) -> bool:
-        try:
-            host = urlparse(url).netloc.lower()
-        except Exception:
-            return False
-        return host in {
-            "pbs.twimg.com",
-            "pbs-0.twimg.com",
-            "pbs-1.twimg.com",
-            "pbs-2.twimg.com",
-            "pbs-3.twimg.com",
-        }
+        return is_twitter_thumbnail_url(url)
 
     @staticmethod
     def _is_twitter_media_cdn(url: str) -> bool:
-        try:
-            host = urlparse(url).netloc.lower()
-        except Exception:
-            return False
-        return host in {
-            "pbs.twimg.com",
-            "pbs-0.twimg.com",
-            "pbs-1.twimg.com",
-            "pbs-2.twimg.com",
-            "pbs-3.twimg.com",
-            "video.twimg.com",
-            "ton.twimg.com",
-        }
+        return is_twitter_media_cdn(url)
 
     @staticmethod
     def _is_tweet_media_url(url: str) -> bool:
-        """Check if URL is valid tweet media, excluding profile/banner images. [IV]
-
-        Valid tweet media:
-        - /media/ paths (actual tweet attachments)
-        - Tweet-specific photo identifiers
-
-        Invalid (metadata only, not content):
-        - /profile_images/ (avatars)
-        - /profile_banners/ (banners)
-        - /card_img/ (card images)
-        - /ad_img/ (advertisements)
-
-        This is critical for correct routing: profile images must not trigger VL pipeline.
-        """
-        try:
-            u = str(url).lower()
-        except Exception:
-            return False
-        try:
-            path = urlparse(u).path or ""
-        except Exception:
-            return False
-
-        # Block non-media paths (metadata, not content) [IV]
-        blocked_prefixes = (
-            "/profile_images/",
-            "/profile_banners/",
-            "/card_img/",
-            "/ad_img/",
-            "/emoji/",
-        )
-        if any(path.startswith(prefix) for prefix in blocked_prefixes):
-            return False
-
-        # Video poster thumbnails are metadata, not primary content
-        poster_prefixes = (
-            "/amplify_video_thumb/",
-            "/ext_tw_video_thumb/",
-            "/tweet_video_thumb/",
-        )
-        if any(prefix in path for prefix in poster_prefixes):
-            return False
-
-        # Valid tweet media has /media/ in path
-        return "/media/" in path
+        return is_tweet_media_url(url)
 
     async def _resolve_x_media(
         self,

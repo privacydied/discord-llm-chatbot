@@ -56,3 +56,13 @@
   - Validation:
     - `./.venv/bin/python -m py_compile bot/router.py bot/router_components/__init__.py bot/router_components/gating.py bot/router_components/input_harvest.py`
     - `./.venv/bin/pytest -q tests/router/test_router_components_compose.py tests/router/test_router_components_gating.py tests/router/test_router_components_input_harvest.py tests/test_video_ingest.py` -> `19 passed`
+- 2026-02-17:
+  - Added `bot/router_components/x_routing.py` for pure X/Twitter URL/media helper extraction.
+  - Routed router wrapper methods through extracted X helper module:
+    - URL detection/status-id parse
+    - candidate URL collection
+    - twitter thumbnail/media-cdn/media-path checks
+  - Added focused tests: `tests/router/test_router_components_x_routing.py`.
+  - Validation:
+    - `./.venv/bin/python -m py_compile bot/router.py bot/router_components/__init__.py bot/router_components/x_routing.py`
+    - `./.venv/bin/pytest -q tests/router/test_router_components_compose.py tests/router/test_router_components_gating.py tests/router/test_router_components_input_harvest.py tests/router/test_router_components_x_routing.py tests/test_video_ingest.py` -> `22 passed`

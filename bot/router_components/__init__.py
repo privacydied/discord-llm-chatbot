@@ -14,6 +14,14 @@ from .input_harvest import (
     strip_urls,
 )
 from .runtime import RouterRuntimeCompat, load_router_runtime_compat
+from .x_routing import (
+    collect_x_candidate_urls,
+    is_tweet_media_url,
+    is_twitter_media_cdn,
+    is_twitter_thumbnail_url,
+    is_twitter_url,
+    parse_twitter_status_id,
+)
 
 __all__ = [
     "RouterRuntimeCompat",
@@ -25,8 +33,14 @@ __all__ = [
     "has_meaningful_text",
     "is_reply_to_bot",
     "is_text_attachment",
+    "is_tweet_media_url",
+    "is_twitter_media_cdn",
+    "is_twitter_thumbnail_url",
+    "is_twitter_url",
     "load_router_runtime_compat",
     "mentions_bot",
+    "parse_twitter_status_id",
     "strip_leading_bot_mention",
     "strip_urls",
+    "collect_x_candidate_urls",
 ]
