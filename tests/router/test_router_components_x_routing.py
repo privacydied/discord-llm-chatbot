@@ -193,6 +193,7 @@ from bot.router_components.x_routing import (
     format_twitter_syndication_host_label,
     format_twitter_syndication_image_count,
     resolve_first_image_host,
+    resolve_first_image_url,
     normalize_probed_image_urls,
     build_twitter_image_probe_result,
     resolve_and_probe_twitter_images,
@@ -2019,6 +2020,11 @@ def test_resolve_first_image_host_variants() -> None:
     assert resolve_first_image_host(["https://pbs.twimg.com/media/abc.jpg"]) == "pbs.twimg.com"
     assert resolve_first_image_host(["not a url"]) == ""
     assert resolve_first_image_host([]) == ""
+
+
+def test_resolve_first_image_url_variants() -> None:
+    assert resolve_first_image_url(["u1", "u2"]) == "u1"
+    assert resolve_first_image_url([]) == ""
 
 
 def test_normalize_probed_image_urls_variants() -> None:

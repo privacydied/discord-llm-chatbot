@@ -1568,11 +1568,22 @@ def resolve_first_image_host(image_urls: List[str]) -> str:
     """Resolve first parsed host from image URL list preserving legacy failures."""
     first_host = ""
     try:
-        if image_urls:
-            first_host = urlparse(image_urls[0]).netloc
+        first_image_url = resolve_first_image_url(image_urls)
+        if first_image_url:
+            first_host = urlparse(first_image_url).netloc
     except Exception:
         first_host = ""
     return first_host
+
+
+def resolve_first_image_url(image_urls: List[str]) -> str:
+    """Resolve first image URL from list preserving legacy failure behavior."""
+    try:
+        if image_urls:
+            return image_urls[0]
+    except Exception:
+        return ""
+    return ""
 
 
 async def resolve_and_probe_twitter_images(
