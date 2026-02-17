@@ -812,6 +812,14 @@ def build_syndication_fetch_params(
 ) -> Dict[str, str]:
     """Return canonical syndication fetch params for a tweet id."""
     params = build_syndication_fetch_params_core(tweet_id)
+    return build_syndication_fetch_params_with_optional_dnt(params, include_dnt)
+
+
+def build_syndication_fetch_params_with_optional_dnt(
+    params: Dict[str, str],
+    include_dnt: bool,
+) -> Dict[str, str]:
+    """Return params map with optional DNT flag mutation applied."""
     if include_dnt:
         params[build_syndication_dnt_key()] = build_syndication_dnt_value()
     return params
