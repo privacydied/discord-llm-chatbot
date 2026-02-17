@@ -212,6 +212,7 @@ from bot.router_components.x_routing import (
     status_url_items_buffer,
     status_url_items_result,
     collect_status_urls_from_candidates,
+    status_url_candidate_raw_value,
     status_url_candidates,
     x_url_extract_pattern,
     x_url_extract_pattern_value,
@@ -327,6 +328,10 @@ def test_status_url_items_buffer_starts_empty() -> None:
 
 def test_status_url_items_result_identity() -> None:
     assert status_url_items_result(["u1", "u2"]) == ["u1", "u2"]
+
+
+def test_status_url_candidate_raw_value_identity() -> None:
+    assert status_url_candidate_raw_value("https://x.com/u/status/1") == "https://x.com/u/status/1"
 
 
 def test_x_url_extract_pattern_constant() -> None:

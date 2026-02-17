@@ -1658,10 +1658,15 @@ def collect_status_urls_from_candidates(
     for raw in status_url_candidates(text):
         append_status_url_if_match(
             items,
-            raw,
+            status_url_candidate_raw_value(raw),
             is_status_url=is_status_url,
             canonicalize_status_url=canonicalize_status_url,
         )
+
+
+def status_url_candidate_raw_value(raw: str) -> str:
+    """Return raw candidate URL value used by status URL collector loop."""
+    return raw
 
 
 def status_url_candidates(text: str) -> Iterable[str]:
