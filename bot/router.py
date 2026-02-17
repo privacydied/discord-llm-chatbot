@@ -541,6 +541,31 @@ class Router:
         except Exception:
             pass
 
+    def _build_visual_anchored_system_prompt(
+        self, content: str, *, fallback: bool = False
+    ) -> Optional[str]:
+        """Build anchored system prompt when visual-facts evidence is present."""
+        try:
+            if not has_visual_facts_section(content):
+                return None
+
+            base_sys = self._get_system_prompt(
+                "text_prompt", "You are a helpful assistant."
+            )
+            anchored = build_visual_analysis_anchor_prompt(base_sys)
+            try:
+                if fallback:
+                    self.logger.info(
+                        "text.anchor | visual_facts_detected=true (fallback)"
+                    )
+                else:
+                    self.logger.info("text.anchor | visual_facts_detected=true")
+            except Exception:
+                pass
+            return anchored
+        except Exception:
+            return None
+
     async def _get_x_api_client(self) -> Optional[XApiClient]:
         """Create or return a cached XApiClient based on config. [CA][IV]"""
         cfg = self.config
@@ -8075,23 +8100,9 @@ class Router:
                     except Exception:
                         pass
                 # Anchor visual analysis when present to avoid "no image" drift while preserving persona [REH][IV]
-                anchored_system: Optional[str] = None
-                try:
-                    has_vl_section = has_visual_facts_section(content_str)
-                    if has_vl_section:
-                        base_sys = self._get_system_prompt(
-                            "text_prompt", "You are a helpful assistant."
-                        )
-                        anchored_system = build_visual_analysis_anchor_prompt(
-                            base_sys
-                        )
-                        try:
-                            self.logger.info("text.anchor | visual_facts_detected=true")
-                        except Exception:
-                            pass
-                except Exception as e:
-                    self.logger.debug(f"Contextual brain inference failed: {e}")
-                    anchored_system = None
+                anchored_system = self._build_visual_anchored_system_prompt(
+                    content_str
+                )
 
                 response_text = await contextual_brain_infer_simple(
                     message,
@@ -8230,24 +8241,9 @@ class Router:
             except Exception:
                 pass
         # Basic fallback: apply the same visual-analysis anchoring when present
-        anchored_system_fallback: Optional[str] = None
-        try:
-            has_vl_section = has_visual_facts_section(content_str)
-            if has_vl_section:
-                base_sys = self._get_system_prompt(
-                    "text_prompt", "You are a helpful assistant."
-                )
-                anchored_system_fallback = build_visual_analysis_anchor_prompt(
-                    base_sys
-                )
-                try:
-                    self.logger.info(
-                        "text.anchor | visual_facts_detected=true (fallback)"
-                    )
-                except Exception:
-                    pass
-        except Exception:
-            anchored_system_fallback = None
+        anchored_system_fallback = self._build_visual_anchored_system_prompt(
+            content_str, fallback=True
+        )
 
         return await brain_infer(
             content, context=enhanced_context, system_prompt=anchored_system_fallback

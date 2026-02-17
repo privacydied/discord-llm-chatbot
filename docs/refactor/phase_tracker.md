@@ -555,3 +555,19 @@
   - Validation:
     - `./.venv/bin/pytest -q tests/router/test_router_components_compose.py tests/router/test_router_components_compose_contract.py tests/router/test_x_api_routing.py` -> `25 passed`
     - `./.venv/bin/pytest -q tests/core tests/router tests/syndication tests/vision tests/test_hear_ffmpeg_resolution.py tests/test_hear_stream_abort.py tests/test_media_ingestion.py tests/test_video_ingest.py tests/router/test_router_x_result_format_contract.py tests/router/test_router_x_base_text_resolution.py tests/test_media_ingestion_compat_contracts.py tests/vision/test_money_contract.py tests/test_media_ingestion_helpers.py tests/test_stt_pipeline_runtime.py tests/test_stt_pipeline_ffmpeg_runtime.py tests/test_stt_pipeline_youtube_path.py tests/test_stt_pipeline_result_payload.py tests/test_stt_pipeline_spec_select.py tests/test_stt_pipeline_logging.py tests/test_stt_pipeline_lifecycle.py tests/test_stt_pipeline_url_ingest.py tests/test_stt_pipeline_transcribe_flow.py tests/test_stt_pipeline_stitch.py` -> `284 passed`
+- 2026-02-17:
+  - Refactor (behavior-preserving): extracted visual-anchor prompt selection in router into:
+    - `bot/router.py::_build_visual_anchored_system_prompt()`
+  - Rewired both text-generation call sites to use the helper:
+    - contextual-brain anchored path
+    - basic fallback anchored path
+  - Preserved existing marker detection + anchor prompt content by delegating to:
+    - `has_visual_facts_section()`
+    - `build_visual_analysis_anchor_prompt()`
+  - Added focused router tests in `tests/router/test_router_visual_anchor_prompt.py`:
+    - no-marker returns `None`
+    - primary marker path builds anchor + logs primary breadcrumb
+    - fallback marker path builds anchor + logs fallback breadcrumb
+  - Validation:
+    - `./.venv/bin/pytest -q tests/router/test_router_visual_anchor_prompt.py tests/router/test_x_api_routing.py tests/router/test_router_components_compose.py tests/router/test_router_components_compose_contract.py` -> `28 passed`
+    - `./.venv/bin/pytest -q tests/core tests/router tests/syndication tests/vision tests/test_hear_ffmpeg_resolution.py tests/test_hear_stream_abort.py tests/test_media_ingestion.py tests/test_video_ingest.py tests/router/test_router_x_result_format_contract.py tests/router/test_router_x_base_text_resolution.py tests/test_media_ingestion_compat_contracts.py tests/vision/test_money_contract.py tests/test_media_ingestion_helpers.py tests/test_stt_pipeline_runtime.py tests/test_stt_pipeline_ffmpeg_runtime.py tests/test_stt_pipeline_youtube_path.py tests/test_stt_pipeline_result_payload.py tests/test_stt_pipeline_spec_select.py tests/test_stt_pipeline_logging.py tests/test_stt_pipeline_lifecycle.py tests/test_stt_pipeline_url_ingest.py tests/test_stt_pipeline_transcribe_flow.py tests/test_stt_pipeline_stitch.py` -> `287 passed`
