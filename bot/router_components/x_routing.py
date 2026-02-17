@@ -1957,6 +1957,16 @@ def raw_url_items_result(items: List[str]) -> List[str]:
 
 def raw_url_extract_regex() -> Any:
     """Return compiled regex used for raw URL extraction flows."""
+    return raw_url_extract_regex_source()
+
+
+def raw_url_extract_regex_source() -> Any:
+    """Return source regex used by raw URL extraction helper."""
+    return raw_url_extract_regex_value()
+
+
+def raw_url_extract_regex_value() -> Any:
+    """Return upstream regex value used by raw URL extraction source helper."""
     return x_url_extract_regex()
 
 
