@@ -661,7 +661,14 @@ def build_syndication_fetch_user_agent() -> str:
 
 def build_syndication_fetch_accept_language() -> str:
     """Return canonical Accept-Language for CDN syndication fetches."""
-    return "en-US,en;q=0.9"
+    return (
+        f"{build_syndication_region_locale()},{build_syndication_lang()};q=0.9"
+    )
+
+
+def build_syndication_region_locale() -> str:
+    """Return canonical region-specific locale used in syndication headers."""
+    return "en-US"
 
 
 def build_syndication_fetch_referer() -> str:

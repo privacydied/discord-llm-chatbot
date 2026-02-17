@@ -46,6 +46,7 @@ from bot.router_components.x_routing import (
     build_syndication_base_url,
     build_syndication_fetch_user_agent,
     build_syndication_fetch_accept_language,
+    build_syndication_region_locale,
     build_syndication_fetch_referer,
     build_syndication_platform_host,
     build_syndication_fetch_accept,
@@ -832,6 +833,10 @@ def test_build_syndication_fetch_user_agent_shape() -> None:
 
 def test_build_syndication_fetch_accept_language_constant() -> None:
     assert build_syndication_fetch_accept_language() == "en-US,en;q=0.9"
+
+
+def test_build_syndication_region_locale_constant() -> None:
+    assert build_syndication_region_locale() == "en-US"
 
 
 def test_build_syndication_fetch_referer_constant() -> None:
