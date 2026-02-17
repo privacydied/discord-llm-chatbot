@@ -90,6 +90,7 @@ from bot.router_components.x_routing import (
     build_syndication_oembed_url_key,
     build_syndication_oembed_host_for_flag,
     build_syndication_oembed_status_url,
+    build_syndication_status_url_prefix,
     build_syndication_status_path,
     build_syndication_oembed_options,
     build_syndication_oembed_hosts,
@@ -789,6 +790,12 @@ def test_build_syndication_oembed_url_key_constant() -> None:
 
 def test_build_syndication_status_path_constant() -> None:
     assert build_syndication_status_path() == "i/status"
+
+
+def test_build_syndication_status_url_prefix_shape() -> None:
+    assert build_syndication_status_url_prefix("twitter.com") == (
+        "https://twitter.com/i/status/"
+    )
 
 
 def test_build_syndication_oembed_options_constant() -> None:
