@@ -1727,6 +1727,11 @@ def status_url_candidates_from_text(text: str) -> Iterable[str]:
 
 def status_url_candidates_regex() -> Any:
     """Return regex used when extracting status URL candidates from text."""
+    return status_url_candidates_regex_source()
+
+
+def status_url_candidates_regex_source() -> Any:
+    """Return underlying regex used for status URL candidate extraction."""
     return status_url_extract_regex()
 
 
