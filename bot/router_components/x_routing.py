@@ -1724,7 +1724,7 @@ def append_status_url_if_match(
 ) -> None:
     """Append canonical status URL only when raw URL matches status predicate."""
     if is_status_url_candidate(raw_url, is_status_url=is_status_url):
-        append_canonical_status_url(
+        append_matched_status_url(
             items,
             raw_url,
             canonicalize_status_url=canonicalize_status_url,
@@ -1738,3 +1738,17 @@ def is_status_url_candidate(
 ) -> bool:
     """Return True when raw URL is a candidate status URL by predicate."""
     return is_status_url(raw_url)
+
+
+def append_matched_status_url(
+    items: List[str],
+    raw_url: str,
+    *,
+    canonicalize_status_url: Callable[[str], str],
+) -> None:
+    """Append canonicalized status URL for a URL already known to match."""
+    append_canonical_status_url(
+        items,
+        raw_url,
+        canonicalize_status_url=canonicalize_status_url,
+    )
