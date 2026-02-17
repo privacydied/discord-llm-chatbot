@@ -2162,6 +2162,24 @@ def is_x_url_candidate(
     is_x_url: Callable[[str], bool],
 ) -> bool:
     """Return True when raw URL is an X/Twitter URL candidate by predicate."""
+    return is_x_url_candidate_source(raw_url, is_x_url=is_x_url)
+
+
+def is_x_url_candidate_source(
+    raw_url: str,
+    *,
+    is_x_url: Callable[[str], bool],
+) -> bool:
+    """Return source candidate predicate result for X URL helper."""
+    return is_x_url_candidate_result(raw_url, is_x_url=is_x_url)
+
+
+def is_x_url_candidate_result(
+    raw_url: str,
+    *,
+    is_x_url: Callable[[str], bool],
+) -> bool:
+    """Return value used by X URL candidate source helper."""
     return is_x_url(raw_url)
 
 
