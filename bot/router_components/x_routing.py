@@ -782,10 +782,15 @@ def build_syndication_fetch_params(
     include_dnt: bool = False,
 ) -> Dict[str, str]:
     """Return canonical syndication fetch params for a tweet id."""
-    params = {"id": tweet_id, "lang": build_syndication_lang()}
+    params = build_syndication_fetch_params_core(tweet_id)
     if include_dnt:
         params["dnt"] = build_syndication_dnt_value()
     return params
+
+
+def build_syndication_fetch_params_core(tweet_id: str) -> Dict[str, str]:
+    """Return core syndication fetch params for a tweet id (without DNT)."""
+    return {"id": tweet_id, "lang": build_syndication_lang()}
 
 
 def build_syndication_fetch_params_variants(tweet_id: str) -> List[Tuple[str, Dict[str, str]]]:

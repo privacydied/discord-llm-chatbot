@@ -71,6 +71,7 @@ from bot.router_components.x_routing import (
     build_syndication_bool_false_value,
     build_syndication_fetch_headers,
     build_syndication_fetch_headers_base,
+    build_syndication_fetch_params_core,
     build_syndication_fetch_params,
     build_syndication_fetch_params_variants,
     build_syndication_widgets_endpoint,
@@ -954,6 +955,10 @@ def test_build_syndication_bool_false_value_constant() -> None:
 
 
 def test_build_syndication_fetch_params_variants_with_and_without_dnt() -> None:
+    assert build_syndication_fetch_params_core("2022790791047823773") == {
+        "id": "2022790791047823773",
+        "lang": "en",
+    }
     assert build_syndication_fetch_params("2022790791047823773") == {
         "id": "2022790791047823773",
         "lang": "en",
