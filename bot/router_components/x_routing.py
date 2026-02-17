@@ -832,11 +832,7 @@ def build_syndication_oembed_params(
     use_x_host: bool = False,
 ) -> Dict[str, str]:
     """Build oEmbed request params for syndication fallback lookups."""
-    host = (
-        build_syndication_x_host()
-        if use_x_host
-        else build_syndication_twitter_host()
-    )
+    host = build_syndication_oembed_host_for_flag(use_x_host)
     lang = build_syndication_lang()
     return {
         build_syndication_oembed_url_key(): build_syndication_oembed_status_url(
@@ -850,6 +846,11 @@ def build_syndication_oembed_params(
 def build_syndication_oembed_url_key() -> str:
     """Return canonical url param key used in oEmbed request params."""
     return "url"
+
+
+def build_syndication_oembed_host_for_flag(use_x_host: bool) -> str:
+    """Return oEmbed host selected from use_x_host toggle."""
+    return build_syndication_x_host() if use_x_host else build_syndication_twitter_host()
 
 
 def build_syndication_oembed_status_url(host: str, tweet_id: str) -> str:
