@@ -25,7 +25,6 @@ import tempfile
 import time
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from html import unescape
 from unittest.mock import AsyncMock, MagicMock, Mock
 import json
 from pathlib import Path
@@ -102,6 +101,7 @@ from .router_components import (
     extract_sparse_media_resolution,
     extract_primary_tweet_id,
     extract_raw_urls_from_texts,
+    extract_oembed_html_text,
     extract_x_status_urls_from_text,
     extract_urls_loose,
     extract_urls_strict,
@@ -1132,10 +1132,7 @@ class Router:
                                 if isinstance(obj, dict):
                                     html = obj.get("html")
                                     if html:
-                                        # Very light HTML → text conversion
-                                        txt = re.sub(r"<br\\s*/?>", "\n", html)
-                                        txt = re.sub(r"<[^>]+>", "", txt)
-                                        txt = unescape(txt).strip()
+                                        txt = extract_oembed_html_text(html)
                                         if txt:
                                             data = {
                                                 "text": txt,
@@ -1166,9 +1163,7 @@ class Router:
                                     if isinstance(obj2, dict):
                                         html2 = obj2.get("html")
                                         if html2:
-                                            txt2 = re.sub(r"<br\\s*/?>", "\n", html2)
-                                            txt2 = re.sub(r"<[^>]+>", "", txt2)
-                                            txt2 = unescape(txt2).strip()
+                                            txt2 = extract_oembed_html_text(html2)
                                             if txt2:
                                                 data = {
                                                     "text": txt2,

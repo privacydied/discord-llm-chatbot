@@ -570,6 +570,15 @@ def build_x_text_resolve_payload(
     }
 
 
+def extract_oembed_html_text(html: Any) -> str:
+    """Convert oEmbed HTML snippet into plain text using legacy normalization."""
+    if not html:
+        return ""
+    txt = re.sub(r"<br\\s*/?>", "\n", html)
+    txt = re.sub(r"<[^>]+>", "", txt)
+    return unescape(txt).strip()
+
+
 def format_syndication_body_text(text: str) -> str:
     """Format syndication body text with legacy size limits and fallback copy."""
     if text and len(text) <= 4000:

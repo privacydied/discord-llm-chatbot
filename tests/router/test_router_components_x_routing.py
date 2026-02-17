@@ -36,6 +36,7 @@ from bot.router_components.x_routing import (
     build_syndication_non_200_log_payload,
     build_syndication_fetch_failed_payload,
     build_x_text_canon_payload,
+    extract_oembed_html_text,
     format_syndication_body_text,
     format_syndication_header_line,
     format_syndication_error_fallback,
@@ -605,6 +606,23 @@ def test_build_x_text_canon_payload_shape() -> None:
             "primary": "2022790791047823773",
         },
     }
+
+
+def test_extract_oembed_html_text_strips_tags_and_unescapes() -> None:
+    assert (
+        extract_oembed_html_text("<p>Hello <strong>world</strong> &amp; co</p>")
+        == "Hello world & co"
+    )
+
+
+def test_extract_oembed_html_text_empty_input_returns_empty_string() -> None:
+    assert extract_oembed_html_text("") == ""
+    assert extract_oembed_html_text(None) == ""
+
+
+def test_extract_oembed_html_text_non_string_truthy_input_raises() -> None:
+    with pytest.raises(TypeError):
+        extract_oembed_html_text({"html": "<p>bad</p>"})
 
 
 def test_format_syndication_body_text_variants() -> None:
