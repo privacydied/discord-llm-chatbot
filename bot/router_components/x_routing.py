@@ -1483,12 +1483,17 @@ def extract_syndication_photo_urls_from_item(photo: Any) -> List[str]:
     """Extract zero-or-more syndication photo URLs from one payload item."""
     if isinstance(photo, dict):
         img_url = extract_syndication_photo_url_from_dict(photo)
-        if img_url and isinstance(img_url, str):
+        if syndication_photo_url_is_usable(img_url):
             return [img_url]
         return []
     if isinstance(photo, str):
         return [photo]
     return []
+
+
+def syndication_photo_url_is_usable(img_url: Any) -> bool:
+    """Return True when extracted syndication photo URL can be appended."""
+    return bool(img_url) and isinstance(img_url, str)
 
 
 def x_syn_probe_budget_timeout_s(x_syn_timeout_s: float) -> float:
