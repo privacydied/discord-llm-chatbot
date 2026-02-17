@@ -520,23 +520,30 @@ class Router:
 
     def _emit_caption_only_fallback_breadcrumbs(self, reason: str) -> None:
         """Emit non-fatal stt/fallback breadcrumbs for caption-only degrade paths."""
+        self._emit_stt_fail_event(reason)
+        self._emit_caption_only_fallback_event()
+
+    def _emit_stt_fail_event(
+        self,
+        reason: str,
+        *,
+        media_kind: Optional[str] = None,
+        msg_id: Optional[int] = None,
+    ) -> None:
+        """Emit STT failure breadcrumb with optional media kind and message id."""
         try:
+            detail: Dict[str, Any] = {"reason": reason}
+            if media_kind:
+                detail["media_kind"] = media_kind
+            payload: Dict[str, Any] = {
+                "event": "stt.fail",
+                "detail": detail,
+            }
+            if msg_id is not None:
+                payload["msg_id"] = msg_id
             self.logger.info(
                 "stt.fail",
-                extra={
-                    "event": "stt.fail",
-                    "detail": {"reason": reason},
-                },
-            )
-        except Exception:
-            pass
-        try:
-            self.logger.info(
-                "fallback",
-                extra={
-                    "event": "fallback",
-                    "detail": {"kind": "caption_only"},
-                },
+                extra=payload,
             )
         except Exception:
             pass
@@ -3592,17 +3599,10 @@ class Router:
                                     message=message,
                                 )
                             except asyncio.TimeoutError:
-                                try:
-                                    self.logger.info(
-                                        "stt.fail",
-                                        extra={
-                                            "event": "stt.fail",
-                                            "detail": {"reason": "timeout"},
-                                            "msg_id": message.id,
-                                        },
-                                    )
-                                except Exception:
-                                    pass
+                                self._emit_stt_fail_event(
+                                    "timeout",
+                                    msg_id=message.id,
+                                )
                                 try:
                                     self.logger.info(
                                         "route.final",
@@ -3650,17 +3650,10 @@ class Router:
                                     )
                                 except Exception:
                                     pass
-                                try:
-                                    self.logger.info(
-                                        "stt.fail",
-                                        extra={
-                                            "event": "stt.fail",
-                                            "detail": {"reason": reason},
-                                            "msg_id": message.id,
-                                        },
-                                    )
-                                except Exception:
-                                    pass
+                                self._emit_stt_fail_event(
+                                    reason,
+                                    msg_id=message.id,
+                                )
                                 try:
                                     self.logger.info(
                                         "route.final",
@@ -6234,24 +6227,11 @@ class Router:
                                 )
                             # STT failed for confirmed video content
                             # Maintain video modality instead of collapsing to text [REH][IV]
-                            try:
-                                self.logger.info(
-                                    "stt.fail",
-                                    extra={
-                                        "event": "stt.fail",
-                                        "detail": {
-                                            "reason": (
-                                                "no_speech"
-                                                if stt_err != "error"
-                                                else "error"
-                                            ),
-                                            "media_kind": "video",
-                                        },
-                                        "msg_id": message.id if message else None,
-                                    },
-                                )
-                            except Exception:
-                                pass
+                            self._emit_stt_fail_event(
+                                "no_speech" if stt_err != "error" else "error",
+                                media_kind="video",
+                                msg_id=(message.id if message else None),
+                            )
                             # For confirmed video with STT failure, return structured error that maintains video context
                             # Do NOT collapse to text-only - the video content is real, even if transcription failed [REH]
                             safe_base_text = (text or base or "").strip()
@@ -6483,23 +6463,14 @@ class Router:
                                             url=url,
                                             stt_res=forced_stt_res,
                                         )
-                                    try:
-                                        self.logger.info(
-                                            "stt.fail",
-                                            extra={
-                                                "event": "stt.fail",
-                                                "detail": {
-                                                    "reason": (
-                                                        "no_speech"
-                                                        if forced_stt_err != "error"
-                                                        else "error"
-                                                    ),
-                                                    "media_kind": "unknown_sparse",
-                                                },
-                                            },
-                                        )
-                                    except Exception:
-                                        pass
+                                    self._emit_stt_fail_event(
+                                        (
+                                            "no_speech"
+                                            if forced_stt_err != "error"
+                                            else "error"
+                                        ),
+                                        media_kind="unknown_sparse",
+                                    )
 
                                 # If API is available, continue to Tier-2 API branch below.
                                 if tweet_id and x_client is not None:

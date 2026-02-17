@@ -587,3 +587,19 @@
   - Validation:
     - `./.venv/bin/pytest -q tests/router/test_router_caption_only_helpers.py tests/router/test_x_api_routing.py tests/router/test_router_x_base_text_resolution.py` -> `22 passed`
     - `./.venv/bin/pytest -q tests/core tests/router tests/syndication tests/vision tests/test_hear_ffmpeg_resolution.py tests/test_hear_stream_abort.py tests/test_media_ingestion.py tests/test_video_ingest.py tests/router/test_router_x_result_format_contract.py tests/router/test_router_x_base_text_resolution.py tests/test_media_ingestion_compat_contracts.py tests/vision/test_money_contract.py tests/test_media_ingestion_helpers.py tests/test_stt_pipeline_runtime.py tests/test_stt_pipeline_ffmpeg_runtime.py tests/test_stt_pipeline_youtube_path.py tests/test_stt_pipeline_result_payload.py tests/test_stt_pipeline_spec_select.py tests/test_stt_pipeline_logging.py tests/test_stt_pipeline_lifecycle.py tests/test_stt_pipeline_url_ingest.py tests/test_stt_pipeline_transcribe_flow.py tests/test_stt_pipeline_stitch.py` -> `291 passed`
+- 2026-02-17:
+  - Refactor (behavior-preserving): centralized `stt.fail` breadcrumb emission in router:
+    - `bot/router.py::_emit_stt_fail_event()`
+  - Rewired existing helpers:
+    - `_emit_caption_only_fallback_breadcrumbs()` now delegates to shared STT-fail + fallback emitters.
+  - Replaced duplicated inline `stt.fail` logging blocks in:
+    - X video STT timeout/error route
+    - syndication-confirmed video STT fail branch
+    - sparse-force-STT fail branch
+    - X API no-speech branch (via shared caption-only helper)
+  - Added focused helper coverage in `tests/router/test_router_caption_only_helpers.py`:
+    - `stt.fail` payload shape (reason/media_kind/msg_id)
+    - caption-only breadcrumb pair emits expected events
+  - Validation:
+    - `./.venv/bin/pytest -q tests/router/test_router_caption_only_helpers.py tests/router/test_x_api_routing.py tests/router/test_router_x_base_text_resolution.py` -> `24 passed`
+    - `./.venv/bin/pytest -q tests/core tests/router tests/syndication tests/vision tests/test_hear_ffmpeg_resolution.py tests/test_hear_stream_abort.py tests/test_media_ingestion.py tests/test_video_ingest.py tests/router/test_router_x_result_format_contract.py tests/router/test_router_x_base_text_resolution.py tests/test_media_ingestion_compat_contracts.py tests/vision/test_money_contract.py tests/test_media_ingestion_helpers.py tests/test_stt_pipeline_runtime.py tests/test_stt_pipeline_ffmpeg_runtime.py tests/test_stt_pipeline_youtube_path.py tests/test_stt_pipeline_result_payload.py tests/test_stt_pipeline_spec_select.py tests/test_stt_pipeline_logging.py tests/test_stt_pipeline_lifecycle.py tests/test_stt_pipeline_url_ingest.py tests/test_stt_pipeline_transcribe_flow.py tests/test_stt_pipeline_stitch.py` -> `293 passed`

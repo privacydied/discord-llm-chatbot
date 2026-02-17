@@ -11,11 +11,14 @@ class DummyBot:
 class CaptureLogger:
     def __init__(self):
         self.info_lines = []
+        self.calls = []
 
     def info(self, message, *args, **kwargs):
         if args:
             message = message % args
-        self.info_lines.append(str(message))
+        text = str(message)
+        self.info_lines.append(text)
+        self.calls.append({"message": text, "extra": kwargs.get("extra")})
 
     def debug(self, *args, **kwargs):
         return None
@@ -97,3 +100,35 @@ def test_emit_caption_only_fallback_event_logs_fallback_only() -> None:
     router._emit_caption_only_fallback_event()
 
     assert router.logger.info_lines == ["fallback"]
+
+
+def test_emit_stt_fail_event_populates_extra_fields() -> None:
+    router = Router(DummyBot())
+    router.logger = CaptureLogger()
+
+    router._emit_stt_fail_event(
+        "no_speech",
+        media_kind="video",
+        msg_id=123,
+    )
+
+    assert router.logger.info_lines == ["stt.fail"]
+    extra = router.logger.calls[0]["extra"]
+    assert isinstance(extra, dict)
+    assert extra["event"] == "stt.fail"
+    assert extra["detail"]["reason"] == "no_speech"
+    assert extra["detail"]["media_kind"] == "video"
+    assert extra["msg_id"] == 123
+
+
+def test_emit_caption_only_fallback_breadcrumbs_emits_stt_fail_and_fallback() -> None:
+    router = Router(DummyBot())
+    router.logger = CaptureLogger()
+
+    router._emit_caption_only_fallback_breadcrumbs("error")
+
+    assert router.logger.info_lines == ["stt.fail", "fallback"]
+    stt_extra = router.logger.calls[0]["extra"]
+    fallback_extra = router.logger.calls[1]["extra"]
+    assert stt_extra["detail"]["reason"] == "error"
+    assert fallback_extra["detail"]["kind"] == "caption_only"
