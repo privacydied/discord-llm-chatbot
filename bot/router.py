@@ -137,6 +137,7 @@ from .router_components import (
     extract_syndication_text,
     build_x_text_miss_log_payload,
     build_x_text_miss_payload,
+    build_x_text_resolve_payload,
     format_syndication_body_text,
     format_syndication_header_line,
     format_syndication_error_fallback,
@@ -1212,14 +1213,11 @@ class Router:
                 txt = self._extract_syndication_text(data)
                 self.logger.info(
                     "x.text.resolve",
-                    extra={
-                        "event": "x.text.resolve",
-                        "detail": {
-                            "primary": tweet_id,
-                            "source": "syndication",
-                            "chars": len(txt),
-                        },
-                    },
+                    extra=build_x_text_resolve_payload(
+                        primary=tweet_id,
+                        source="syndication",
+                        chars=len(txt),
+                    ),
                 )
             except Exception:
                 pass
@@ -1363,14 +1361,11 @@ class Router:
         try:
             self.logger.info(
                 "x.text.resolve",
-                extra={
-                    "event": "x.text.resolve",
-                    "detail": {
-                        "primary": bundle.primary_tweet_id or "",
-                        "source": "syndication",
-                        "chars": len(bundle.caption_text or ""),
-                    },
-                },
+                extra=build_x_text_resolve_payload(
+                    primary=bundle.primary_tweet_id or "",
+                    source="syndication",
+                    chars=len(bundle.caption_text or ""),
+                ),
             )
         except Exception:
             pass

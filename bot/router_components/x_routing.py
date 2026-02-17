@@ -524,6 +524,23 @@ def build_syndication_non_200_log_payload(
     }
 
 
+def build_x_text_resolve_payload(
+    *,
+    primary: str,
+    source: str,
+    chars: int,
+) -> Dict[str, Any]:
+    """Build structured payload for X text-resolution breadcrumbs."""
+    return {
+        "event": "x.text.resolve",
+        "detail": {
+            "primary": primary,
+            "source": source,
+            "chars": chars,
+        },
+    }
+
+
 def format_syndication_body_text(text: str) -> str:
     """Format syndication body text with legacy size limits and fallback copy."""
     if text and len(text) <= 4000:
