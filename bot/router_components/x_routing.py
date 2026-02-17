@@ -1688,7 +1688,7 @@ def append_canonical_x_url(
     canonicalize_x_url: Callable[[str], str],
 ) -> None:
     """Canonicalize URL then append uniquely to the target list."""
-    append_unique_str(items, canonicalize_x_url(url))
+    append_canonicalized_value(items, url, canonicalize=canonicalize_x_url)
 
 
 def append_canonical_status_url(
@@ -1698,7 +1698,21 @@ def append_canonical_status_url(
     canonicalize_status_url: Callable[[str], str],
 ) -> None:
     """Canonicalize status URL then append uniquely to target list."""
-    append_unique_str(items, canonicalize_status_url(raw_url))
+    append_canonicalized_value(
+        items,
+        raw_url,
+        canonicalize=canonicalize_status_url,
+    )
+
+
+def append_canonicalized_value(
+    items: List[str],
+    raw_value: str,
+    *,
+    canonicalize: Callable[[str], str],
+) -> None:
+    """Canonicalize raw value then append uniquely to target list."""
+    append_unique_str(items, canonicalize(raw_value))
 
 
 def append_status_url_if_match(

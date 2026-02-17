@@ -14,6 +14,7 @@ from bot.router_components.x_routing import (
     filter_canonical_x_urls,
     append_unique_str,
     append_raw_url_if_present,
+    append_canonicalized_value,
     append_canonical_x_url,
     append_canonical_status_url,
     append_status_url_if_match,
@@ -326,6 +327,13 @@ def test_append_raw_url_if_present_only_appends_non_empty_unique() -> None:
     append_raw_url_if_present(items, "https://x.com/a/status/1")
     append_raw_url_if_present(items, "https://x.com/b/status/2")
     assert items == ["https://x.com/a/status/1", "https://x.com/b/status/2"]
+
+
+def test_append_canonicalized_value_only_appends_unique_canonical() -> None:
+    items = ["x:a"]
+    append_canonicalized_value(items, "a", canonicalize=lambda s: f"x:{s}")
+    append_canonicalized_value(items, "b", canonicalize=lambda s: f"x:{s}")
+    assert items == ["x:a", "x:b"]
 
 
 def test_append_canonical_x_url_only_appends_unique_canonical() -> None:
