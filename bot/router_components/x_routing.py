@@ -724,14 +724,24 @@ def build_syndication_oembed_options() -> Dict[str, str]:
     """Return canonical oEmbed flags for privacy/script/thread behavior."""
     return {
         "dnt": build_syndication_dnt_value(),
-        "omit_script": "true",
-        "hide_thread": "true",
+        "omit_script": build_syndication_omit_script_value(),
+        "hide_thread": build_syndication_hide_thread_value(),
     }
 
 
 def build_syndication_dnt_value() -> str:
     """Return canonical DNT option value for syndication/oEmbed requests."""
     return "false"
+
+
+def build_syndication_omit_script_value() -> str:
+    """Return canonical omit-script option value for oEmbed requests."""
+    return "true"
+
+
+def build_syndication_hide_thread_value() -> str:
+    """Return canonical hide-thread option value for oEmbed requests."""
+    return "true"
 
 
 def build_syndication_oembed_metric_endpoint(host: str) -> str:

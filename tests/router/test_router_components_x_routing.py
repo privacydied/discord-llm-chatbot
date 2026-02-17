@@ -47,6 +47,8 @@ from bot.router_components.x_routing import (
     build_syndication_fetch_accept,
     build_syndication_lang,
     build_syndication_dnt_value,
+    build_syndication_omit_script_value,
+    build_syndication_hide_thread_value,
     build_syndication_fetch_headers,
     build_syndication_fetch_params,
     build_syndication_fetch_params_variants,
@@ -801,6 +803,14 @@ def test_build_syndication_lang_constant() -> None:
 
 def test_build_syndication_dnt_value_constant() -> None:
     assert build_syndication_dnt_value() == "false"
+
+
+def test_build_syndication_omit_script_value_constant() -> None:
+    assert build_syndication_omit_script_value() == "true"
+
+
+def test_build_syndication_hide_thread_value_constant() -> None:
+    assert build_syndication_hide_thread_value() == "true"
 
 
 def test_build_syndication_fetch_params_variants_with_and_without_dnt() -> None:
