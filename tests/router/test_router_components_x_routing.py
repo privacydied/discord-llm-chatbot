@@ -12,6 +12,7 @@ from bot.router_components.x_routing import (
     extract_raw_urls_from_texts,
     extract_x_status_urls_from_text,
     filter_canonical_x_urls,
+    canonical_x_url_items_buffer,
     is_x_url_candidate,
     append_x_url_if_match,
     append_unique_str,
@@ -354,6 +355,10 @@ def test_extract_raw_urls_and_filter_canonical_x_urls() -> None:
         canonicalize_x_url=lambda u: u.split("?")[0].replace("twitter.com", "x.com"),
     )
     assert filtered == ["https://x.com/a/status/1"]
+
+
+def test_canonical_x_url_items_buffer_starts_empty() -> None:
+    assert canonical_x_url_items_buffer() == []
 
 
 def test_append_unique_str_only_appends_new_values() -> None:

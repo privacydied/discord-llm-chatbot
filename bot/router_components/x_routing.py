@@ -1720,7 +1720,7 @@ def filter_canonical_x_urls(
     canonicalize_x_url: Callable[[str], str],
 ) -> List[str]:
     """Filter URL list to X/Twitter URLs and canonicalize with de-duplication."""
-    out: List[str] = []
+    out = canonical_x_url_items_buffer()
     for u in raw_urls:
         append_x_url_if_match(
             out,
@@ -1729,6 +1729,11 @@ def filter_canonical_x_urls(
             canonicalize_x_url=canonicalize_x_url,
         )
     return out
+
+
+def canonical_x_url_items_buffer() -> List[str]:
+    """Build mutable list buffer for canonicalized X URL collection."""
+    return []
 
 
 def is_x_url_candidate(
