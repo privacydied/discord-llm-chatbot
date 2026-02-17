@@ -2090,6 +2090,16 @@ def iter_url_matches_iter(text: str, *, url_re: Any) -> Iterable[Any]:
 
 def url_re_finditer(url_re: Any, text: Any) -> Iterable[Any]:
     """Yield regex matches for normalized text using provided compiled regex."""
+    yield from url_re_finditer_source(url_re, text)
+
+
+def url_re_finditer_source(url_re: Any, text: Any) -> Iterable[Any]:
+    """Yield source regex matches used by url_re_finditer helper."""
+    yield from url_re_finditer_iter(url_re, text)
+
+
+def url_re_finditer_iter(url_re: Any, text: Any) -> Iterable[Any]:
+    """Yield iterator used by url_re_finditer source helper."""
     yield from url_re.finditer(url_scan_text(text))
 
 
