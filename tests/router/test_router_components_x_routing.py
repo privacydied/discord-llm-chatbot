@@ -18,6 +18,7 @@ from bot.router_components.x_routing import (
     append_canonical_x_url,
     append_canonical_status_url,
     append_status_url_if_match,
+    is_status_url_candidate,
     is_tweet_media_url,
     is_twitter_media_cdn,
     is_twitter_thumbnail_url,
@@ -381,6 +382,11 @@ def test_append_status_url_if_match() -> None:
         canonicalize_status_url=lambda u: u.split("?")[0],
     )
     assert items == ["https://x.com/u/status/1"]
+
+
+def test_is_status_url_candidate_delegates_predicate() -> None:
+    assert is_status_url_candidate("https://x.com/u/status/1", is_status_url=lambda u: "/status/" in u)
+    assert not is_status_url_candidate("https://example.com", is_status_url=lambda u: "/status/" in u)
 
 
 def test_unwrap_x_media_url() -> None:
