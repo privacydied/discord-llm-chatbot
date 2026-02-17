@@ -167,3 +167,14 @@
   - Validation:
     - `./.venv/bin/python -m py_compile bot/router.py bot/router_components/__init__.py bot/router_components/input_harvest.py`
     - `./.venv/bin/pytest -q tests/router/test_router_components_input_harvest.py tests/router/test_router_components_compose_contract.py tests/router/test_router_components_compose.py tests/router/test_router_components_gating.py tests/router/test_router_components_x_routing.py tests/test_video_ingest.py tests/test_stt_pipeline_runtime.py tests/test_stt_pipeline_ffmpeg_runtime.py tests/test_stt_pipeline_youtube_path.py` -> `44 passed`
+- 2026-02-17:
+  - Added focused router reference-resolution tests:
+    - `tests/router/test_router_reference_resolution.py`
+  - Contract coverage for `_resolve_reference_message()` includes:
+    - fallback path
+    - no-reference path
+    - resolved-reference path
+    - fetch-on-demand path
+    - fetch-failure path
+  - Validation:
+    - `./.venv/bin/pytest -q tests/router/test_router_reference_resolution.py tests/router/test_router_components_compose_contract.py tests/router/test_router_components_compose.py tests/router/test_router_components_input_harvest.py tests/router/test_router_components_gating.py tests/router/test_router_components_x_routing.py tests/test_video_ingest.py tests/test_stt_pipeline_runtime.py tests/test_stt_pipeline_ffmpeg_runtime.py tests/test_stt_pipeline_youtube_path.py` -> `49 passed`
