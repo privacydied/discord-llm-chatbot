@@ -1732,10 +1732,20 @@ def extract_raw_urls_from_texts(texts: Iterable[str]) -> List[str]:
     raw_urls = raw_url_items_buffer()
     try:
         url_re = raw_url_extract_regex()
-        collect_raw_urls_from_texts(raw_urls, texts, url_re=url_re)
+        collect_raw_urls_into_items(raw_urls, texts, url_re=url_re)
     except Exception:
         pass
     return raw_url_items_result(raw_urls)
+
+
+def collect_raw_urls_into_items(
+    items: List[str],
+    texts: Iterable[str],
+    *,
+    url_re: Any,
+) -> None:
+    """Collect raw URLs into provided items list using compiled regex."""
+    collect_raw_urls_from_texts(items, texts, url_re=url_re)
 
 
 def raw_url_items_result(items: List[str]) -> List[str]:
