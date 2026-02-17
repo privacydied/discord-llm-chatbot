@@ -1720,9 +1720,14 @@ def collect_raw_urls_from_texts(
     url_re: Any,
 ) -> None:
     """Collect de-duplicated raw URLs from multiple text blobs."""
-    for t in texts:
+    for t in raw_url_source_texts(texts):
         for u in iter_text_urls(t, url_re=url_re):
             append_raw_url_if_present(items, u)
+
+
+def raw_url_source_texts(texts: Iterable[str]) -> Iterable[str]:
+    """Yield source text blobs consumed by raw URL collection."""
+    yield from texts
 
 
 def iter_text_urls(text: str, *, url_re: Any) -> Iterable[str]:

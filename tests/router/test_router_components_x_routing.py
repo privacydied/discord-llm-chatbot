@@ -219,6 +219,7 @@ from bot.router_components.x_routing import (
     iter_status_url_candidates,
     x_url_extract_regex,
     raw_url_items_buffer,
+    raw_url_source_texts,
     collect_raw_urls_from_texts,
     iter_url_matches,
     url_scan_text,
@@ -353,6 +354,10 @@ def test_x_url_extract_regex_matches_expected_urls() -> None:
 
 def test_raw_url_items_buffer_starts_empty() -> None:
     assert raw_url_items_buffer() == []
+
+
+def test_raw_url_source_texts_delegates_iterable() -> None:
+    assert list(raw_url_source_texts(["a", "b"])) == ["a", "b"]
 
 
 def test_iter_text_urls_yields_raw_matches() -> None:
