@@ -18,6 +18,7 @@ from bot.router_components.x_routing import (
     parse_twitter_status_id,
     classify_stt_error_reason,
     resolve_twitter_status_id,
+    is_twitter_status_url,
     stt_result_has_transcription,
     unwrap_x_media_url,
     x_syn_probe_budget_timeout_s,
@@ -207,6 +208,23 @@ def test_resolve_twitter_status_id_prefers_hint_then_parser() -> None:
             parse_status_id=lambda _url: None,
         )
         == ""
+    )
+
+
+def test_is_twitter_status_url_uses_parser() -> None:
+    assert (
+        is_twitter_status_url(
+            "https://x.com/user/status/111",
+            parse_status_id=lambda _url: "111",
+        )
+        is True
+    )
+    assert (
+        is_twitter_status_url(
+            "https://x.com/user/status/111",
+            parse_status_id=lambda _url: None,
+        )
+        is False
     )
 
 

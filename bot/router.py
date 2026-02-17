@@ -124,6 +124,7 @@ from .router_components import (
     normalize_x_url,
     parse_twitter_status_id,
     resolve_twitter_status_id,
+    is_twitter_status_url,
     classify_stt_error_reason,
     x_syn_probe_budget_timeout_s,
     x_syn_quick_request_timeouts,
@@ -1484,7 +1485,10 @@ class Router:
 
     def _is_twitter_status_url(self, url: str) -> bool:
         """Check if a URL is a Twitter status URL (contains a valid status ID). [IV]"""
-        return self._parse_twitter_status_id(url) is not None
+        return is_twitter_status_url(
+            url,
+            parse_status_id=self._parse_twitter_status_id,
+        )
 
     def _canonicalize_twitter_status_url(self, url: str) -> str:
         """Convert any Twitter status URL to canonical form https://x.com/i/status/{id}. [IV]"""
