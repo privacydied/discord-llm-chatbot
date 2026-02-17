@@ -1681,6 +1681,11 @@ def iter_status_url_candidates(text: str) -> Iterable[str]:
 
 def status_url_extract_regex() -> Any:
     """Return compiled regex used for status URL candidate extraction."""
+    return status_url_extract_regex_source()
+
+
+def status_url_extract_regex_source() -> Any:
+    """Return underlying regex object used for status URL extraction."""
     return x_url_extract_regex()
 
 
