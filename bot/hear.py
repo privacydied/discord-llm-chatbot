@@ -1944,7 +1944,6 @@ async def hear_infer(audio: Union[Path, "discord.Attachment"]) -> str:
                 job=job,
                 manager=stt_manager,
                 logger=logger,
-                downgrade_threshold_s=120.0,
                 preprocess_audio_with_retry=_preprocess_audio_with_retry,
                 run_whisper_with_fallback=_run_whisper_with_fallback,
             )
@@ -2037,7 +2036,6 @@ async def hear_infer_from_url(url: str, force_refresh: bool = False) -> Dict[str
                 job=job,
                 manager=stt_manager,
                 logger=logger,
-                downgrade_threshold_s=120.0,
                 preprocess_audio_with_retry=_preprocess_audio_with_retry,
                 run_whisper_with_fallback=_run_whisper_with_fallback,
             )
