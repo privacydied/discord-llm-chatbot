@@ -40,6 +40,7 @@ from bot.router_components.x_routing import (
     build_oembed_text_payload,
     extract_oembed_payload_from_response,
     build_syndication_oembed_url,
+    build_syndication_oembed_key,
     build_syndication_base_url,
     build_syndication_fetch_user_agent,
     build_syndication_fetch_accept_language,
@@ -758,6 +759,10 @@ def test_build_syndication_oembed_metric_endpoint_mapping() -> None:
 def test_build_syndication_oembed_metric_endpoint_constants() -> None:
     assert build_syndication_oembed_metric_default_endpoint() == "oembed"
     assert build_syndication_oembed_x_metric_endpoint() == "oembed_x"
+
+
+def test_build_syndication_oembed_key_constant() -> None:
+    assert build_syndication_oembed_key() == "oembed"
 
 
 def test_build_syndication_oembed_fallback_params_ordered_variants() -> None:
