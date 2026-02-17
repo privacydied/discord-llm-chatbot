@@ -2266,6 +2266,16 @@ def raw_url_should_append_result(raw_url: str) -> bool:
 
 def raw_url_is_present(raw_url: str) -> bool:
     """Return True when extracted raw URL is non-empty."""
+    return raw_url_is_present_source(raw_url)
+
+
+def raw_url_is_present_source(raw_url: str) -> bool:
+    """Return source non-empty check result for raw URL presence helper."""
+    return raw_url_is_present_result(raw_url)
+
+
+def raw_url_is_present_result(raw_url: str) -> bool:
+    """Return value used by raw URL is-present source helper."""
     return bool(raw_url)
 
 
