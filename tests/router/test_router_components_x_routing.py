@@ -18,6 +18,7 @@ from bot.router_components.x_routing import (
     is_x_url_candidate,
     append_x_url_if_match,
     append_unique_str,
+    unique_value_missing,
     append_raw_url_if_present,
     raw_url_should_append,
     raw_url_is_present,
@@ -402,6 +403,11 @@ def test_append_unique_str_only_appends_new_values() -> None:
     append_unique_str(items, "a")
     append_unique_str(items, "b")
     assert items == ["a", "b"]
+
+
+def test_unique_value_missing_checks_membership() -> None:
+    assert unique_value_missing(["a"], "b")
+    assert not unique_value_missing(["a"], "a")
 
 
 def test_append_raw_url_if_present_only_appends_non_empty_unique() -> None:

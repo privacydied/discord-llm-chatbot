@@ -1796,8 +1796,13 @@ def x_url_matches_predicate(
 
 def append_unique_str(items: List[str], value: str) -> None:
     """Append value to list only when it is not already present."""
-    if value not in items:
+    if unique_value_missing(items, value):
         items.append(value)
+
+
+def unique_value_missing(items: List[str], value: str) -> bool:
+    """Return whether value is missing from list used for unique append."""
+    return value not in items
 
 
 def append_raw_url_if_present(items: List[str], raw_url: str) -> None:
