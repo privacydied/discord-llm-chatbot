@@ -151,6 +151,7 @@ from bot.router_components.x_routing import (
     build_syndication_negative_cache_ttl_cap_s,
     extract_oembed_html_text,
     syndication_has_usable_payload,
+    syndication_node_has_media_hints,
     syndication_media_hint_keys,
     format_syndication_body_text,
     format_syndication_header_line,
@@ -1584,6 +1585,11 @@ def test_syndication_has_usable_payload_non_dict_returns_false() -> None:
         )
         is False
     )
+
+
+def test_syndication_node_has_media_hints_variants() -> None:
+    assert syndication_node_has_media_hints({"entities": {}}, ("entities", "media"))
+    assert not syndication_node_has_media_hints({"text": "x"}, ("entities", "media"))
 
 
 def test_syndication_media_hint_keys_matches_router_contract() -> None:

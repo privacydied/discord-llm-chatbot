@@ -1371,6 +1371,14 @@ def syndication_has_usable_payload(
         return False
     if extract_text(node):
         return True
+    return syndication_node_has_media_hints(node, media_hint_keys)
+
+
+def syndication_node_has_media_hints(
+    node: Dict[str, Any],
+    media_hint_keys: Iterable[str],
+) -> bool:
+    """Return True when a syndication payload contains any media-hint key."""
     return any(k in node for k in media_hint_keys)
 
 
