@@ -850,7 +850,12 @@ def build_syndication_oembed_url_key() -> str:
 
 def build_syndication_oembed_host_for_flag(use_x_host: bool) -> str:
     """Return oEmbed host selected from use_x_host toggle."""
-    return build_syndication_x_host() if use_x_host else build_syndication_twitter_host()
+    host = build_syndication_x_host() if use_x_host else build_syndication_twitter_host()
+    return (
+        build_syndication_twitter_host()
+        if is_syndication_twitter_host(host)
+        else build_syndication_x_host()
+    )
 
 
 def build_syndication_oembed_status_url(host: str, tweet_id: str) -> str:
@@ -924,6 +929,11 @@ def build_syndication_oembed_metric_endpoint(host: str) -> str:
 def is_syndication_x_host(host: str) -> bool:
     """Return True when host is the canonical X hostname."""
     return str(host) == build_syndication_x_host()
+
+
+def is_syndication_twitter_host(host: str) -> bool:
+    """Return True when host is the canonical Twitter hostname."""
+    return str(host) == build_syndication_twitter_host()
 
 
 def build_syndication_oembed_metric_default_endpoint() -> str:
