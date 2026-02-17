@@ -1725,7 +1725,12 @@ def extract_raw_urls_from_texts(texts: Iterable[str]) -> List[str]:
         collect_raw_urls_from_texts(raw_urls, texts, url_re=url_re)
     except Exception:
         pass
-    return raw_urls
+    return raw_url_items_result(raw_urls)
+
+
+def raw_url_items_result(items: List[str]) -> List[str]:
+    """Return collected raw URL items for extraction call sites."""
+    return items
 
 
 def raw_url_extract_regex() -> Any:
