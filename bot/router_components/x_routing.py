@@ -1820,6 +1820,11 @@ def x_url_extract_compile_flags() -> int:
 
 def x_url_extract_compile_flags_source() -> int:
     """Return source compile flags used by X URL extraction regex."""
+    return x_url_extract_compile_flags_input()
+
+
+def x_url_extract_compile_flags_input() -> int:
+    """Return upstream compile flags used by X compile-flags source helper."""
     return x_url_extract_flags()
 
 
