@@ -644,12 +644,17 @@ def build_syndication_fetch_user_agent() -> str:
     )
 
 
+def build_syndication_fetch_accept_language() -> str:
+    """Return canonical Accept-Language for CDN syndication fetches."""
+    return "en-US,en;q=0.9"
+
+
 def build_syndication_fetch_headers() -> Dict[str, str]:
     """Return canonical headers for CDN syndication fetches."""
     return {
         "User-Agent": build_syndication_fetch_user_agent(),
         "Accept": "application/json, text/javascript;q=0.9, */*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Language": build_syndication_fetch_accept_language(),
         "Referer": "https://platform.twitter.com/",
     }
 
