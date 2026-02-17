@@ -134,6 +134,7 @@ from .router_components import (
     syndication_article_has_blocks,
     extract_x_article_text,
     syndication_needs_article_hydration,
+    extract_syndication_base_text,
     x_syn_probe_budget_timeout_s,
     x_syn_quick_request_timeouts,
     build_syndication_photo_payload,
@@ -1296,15 +1297,7 @@ class Router:
         """Extract tweet body text from syndication-like payloads, including X Articles."""
         if not isinstance(node, dict):
             return ""
-        note = node.get("note_tweet") or {}
-        base_text = (
-            (note.get("text") if isinstance(note, dict) else None)
-            or (node.get("legacy", {}) or {}).get("full_text")
-            or node.get("full_text")
-            or node.get("text")
-            or ""
-        )
-        base_text = (base_text or "").strip()
+        base_text = extract_syndication_base_text(node)
         article_text = self._extract_x_article_text(node.get("article"))
         if article_text:
             if base_text and not re.search(r"https?://t\.co/[A-Za-z0-9]+", base_text):

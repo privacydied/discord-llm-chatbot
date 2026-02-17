@@ -432,6 +432,21 @@ def syndication_needs_article_hydration(
     return False
 
 
+def extract_syndication_base_text(node: Any) -> str:
+    """Extract base tweet text from syndication payload precedence."""
+    if not isinstance(node, dict):
+        return ""
+    note = node.get("note_tweet") or {}
+    base_text = (
+        (note.get("text") if isinstance(note, dict) else None)
+        or (node.get("legacy", {}) or {}).get("full_text")
+        or node.get("full_text")
+        or node.get("text")
+        or ""
+    )
+    return (base_text or "").strip()
+
+
 def x_syn_probe_budget_timeout_s(x_syn_timeout_s: float) -> float:
     """Compute bounded timeout budget for image/media probe calls."""
     return min(float(x_syn_timeout_s) + 1.0, 4.5)

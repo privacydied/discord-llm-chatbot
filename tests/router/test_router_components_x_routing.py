@@ -27,6 +27,7 @@ from bot.router_components.x_routing import (
     syndication_article_has_blocks,
     extract_x_article_text,
     syndication_needs_article_hydration,
+    extract_syndication_base_text,
     resolve_twitter_status_id,
     is_twitter_status_url,
     stt_result_has_transcription,
@@ -416,6 +417,32 @@ def test_syndication_needs_article_hydration_variants() -> None:
         )
         is False
     )
+
+
+def test_extract_syndication_base_text_precedence() -> None:
+    assert (
+        extract_syndication_base_text(
+            {
+                "note_tweet": {"text": "note"},
+                "legacy": {"full_text": "legacy"},
+                "full_text": "full",
+                "text": "text",
+            }
+        )
+        == "note"
+    )
+    assert (
+        extract_syndication_base_text(
+            {
+                "legacy": {"full_text": "legacy"},
+                "full_text": "full",
+                "text": "text",
+            }
+        )
+        == "legacy"
+    )
+    assert extract_syndication_base_text({"text": " text "}) == "text"
+    assert extract_syndication_base_text(None) == ""
 
 
 def test_x_syn_probe_budget_timeout_s_caps_and_offsets() -> None:
