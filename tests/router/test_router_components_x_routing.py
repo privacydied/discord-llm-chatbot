@@ -191,6 +191,7 @@ from bot.router_components.x_routing import (
     format_twitter_syndication_images_log_line,
     format_twitter_syndication_msg_suffix,
     format_twitter_syndication_host_label,
+    format_twitter_syndication_image_count,
     resolve_first_image_host,
     normalize_probed_image_urls,
     build_twitter_image_probe_result,
@@ -2007,6 +2008,11 @@ def test_format_twitter_syndication_msg_suffix_variants() -> None:
 def test_format_twitter_syndication_host_label_variants() -> None:
     assert format_twitter_syndication_host_label("pbs.twimg.com") == "pbs.twimg.com"
     assert format_twitter_syndication_host_label("") == "n/a"
+
+
+def test_format_twitter_syndication_image_count_variants() -> None:
+    assert format_twitter_syndication_image_count([]) == 0
+    assert format_twitter_syndication_image_count(["u1", "u2"]) == 2
 
 
 def test_resolve_first_image_host_variants() -> None:

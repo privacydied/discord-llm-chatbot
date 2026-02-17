@@ -1542,8 +1542,9 @@ def format_twitter_syndication_images_log_line(
     first_host = resolve_first_image_host(image_urls)
     suffix = format_twitter_syndication_msg_suffix(msg_id)
     host_label = format_twitter_syndication_host_label(first_host)
+    image_count = format_twitter_syndication_image_count(image_urls)
     return (
-        f"route.twitter.syndication | images={len(image_urls)} | "
+        f"route.twitter.syndication | images={image_count} | "
         f"{host_label}{suffix}"
     )
 
@@ -1556,6 +1557,11 @@ def format_twitter_syndication_msg_suffix(msg_id: Optional[int]) -> str:
 def format_twitter_syndication_host_label(first_host: str) -> str:
     """Return host label used in syndication image-route breadcrumb lines."""
     return first_host or "n/a"
+
+
+def format_twitter_syndication_image_count(image_urls: List[str]) -> int:
+    """Return image count used in syndication image-route breadcrumb lines."""
+    return len(image_urls)
 
 
 def resolve_first_image_host(image_urls: List[str]) -> str:
