@@ -1607,8 +1607,11 @@ def extract_x_status_urls_from_text(
         for m in re.finditer(x_url_extract_pattern(), text or "", re.IGNORECASE):
             raw = m.group(0)
             if is_status_url(raw):
-                cu = canonicalize_status_url(raw)
-                append_unique_str(urls, cu)
+                append_canonical_status_url(
+                    urls,
+                    raw,
+                    canonicalize_status_url=canonicalize_status_url,
+                )
     except Exception:
         pass
     return urls
@@ -1667,3 +1670,13 @@ def append_canonical_x_url(
 ) -> None:
     """Canonicalize URL then append uniquely to the target list."""
     append_unique_str(items, canonicalize_x_url(url))
+
+
+def append_canonical_status_url(
+    items: List[str],
+    raw_url: str,
+    *,
+    canonicalize_status_url: Callable[[str], str],
+) -> None:
+    """Canonicalize status URL then append uniquely to target list."""
+    append_unique_str(items, canonicalize_status_url(raw_url))

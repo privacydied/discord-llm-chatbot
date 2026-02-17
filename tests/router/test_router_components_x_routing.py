@@ -14,6 +14,7 @@ from bot.router_components.x_routing import (
     filter_canonical_x_urls,
     append_unique_str,
     append_canonical_x_url,
+    append_canonical_status_url,
     is_tweet_media_url,
     is_twitter_media_cdn,
     is_twitter_thumbnail_url,
@@ -312,6 +313,21 @@ def test_append_canonical_x_url_only_appends_unique_canonical() -> None:
         canonicalize_x_url=lambda u: u.split("?")[0].replace("twitter.com", "x.com"),
     )
     assert items == ["https://x.com/a/status/1", "https://x.com/b/status/2"]
+
+
+def test_append_canonical_status_url_only_appends_unique_canonical() -> None:
+    items = ["https://x.com/u/status/1"]
+    append_canonical_status_url(
+        items,
+        "https://twitter.com/u/status/1?s=20",
+        canonicalize_status_url=lambda u: u.split("?")[0].replace("twitter.com", "x.com"),
+    )
+    append_canonical_status_url(
+        items,
+        "https://twitter.com/v/status/2?s=20",
+        canonicalize_status_url=lambda u: u.split("?")[0].replace("twitter.com", "x.com"),
+    )
+    assert items == ["https://x.com/u/status/1", "https://x.com/v/status/2"]
 
 
 def test_unwrap_x_media_url() -> None:
