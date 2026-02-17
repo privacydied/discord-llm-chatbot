@@ -44,6 +44,7 @@ from bot.router_components.x_routing import (
     build_syndication_oembed_host,
     build_syndication_cdn_host,
     build_syndication_base_url,
+    build_syndication_user_agent_platform,
     build_syndication_fetch_user_agent,
     build_syndication_fetch_accept_language,
     build_syndication_region_locale,
@@ -829,6 +830,10 @@ def test_build_syndication_fetch_user_agent_shape() -> None:
     user_agent = build_syndication_fetch_user_agent()
     assert "Mozilla/5.0" in user_agent
     assert "Chrome/126.0.0.0" in user_agent
+
+
+def test_build_syndication_user_agent_platform_constant() -> None:
+    assert build_syndication_user_agent_platform() == "Windows NT 10.0; Win64; x64"
 
 
 def test_build_syndication_fetch_accept_language_constant() -> None:

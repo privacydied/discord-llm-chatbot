@@ -654,9 +654,14 @@ def build_syndication_base_url() -> str:
 def build_syndication_fetch_user_agent() -> str:
     """Return canonical user-agent for CDN syndication fetches."""
     return (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        f"Mozilla/5.0 ({build_syndication_user_agent_platform()}) AppleWebKit/537.36 "
         "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
     )
+
+
+def build_syndication_user_agent_platform() -> str:
+    """Return canonical platform token used in syndication User-Agent."""
+    return "Windows NT 10.0; Win64; x64"
 
 
 def build_syndication_fetch_accept_language() -> str:
