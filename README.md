@@ -39,7 +39,11 @@ flowchart LR
     C --> E["RAG: Hybrid Search (ChromaDB)"]
     C --> F["Vision Orchestrator: Together / Novita"]
     C --> G1[Media: STT Orchestrator]
-    G1 --> G2[faster-whisper / whispercpp]
+    G1 --> GY[YouTube transcript-first resolver]
+    GY -->|hit| GT[Transcript text]
+    GY -->|miss| G3[yt-dlp + python-ffmpeg preprocess]
+    G3 --> G2[faster-whisper / whispercpp]
+    G2 --> GT
     C --> H1["PDF / OCR: PyMuPDF"]
     H1 --> H2["Tesseract OCR (optional)"]
 
