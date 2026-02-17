@@ -37,6 +37,7 @@ from bot.router_components.x_routing import (
     build_syndication_fetch_failed_payload,
     build_x_text_canon_payload,
     build_oembed_text_payload,
+    extract_oembed_payload_from_response,
     build_syndication_oembed_params,
     build_syndication_fetch_plan,
     syndication_cache_ttl_s,
@@ -672,6 +673,31 @@ def test_build_syndication_oembed_params_default_and_x_host() -> None:
         "hide_thread": "true",
         "lang": "en",
     }
+
+
+def test_extract_oembed_payload_from_response_variants() -> None:
+    good = SimpleNamespace(
+        status_code=200,
+        json=lambda: {"html": "<p>Hello &amp; world</p>", "author_name": "alice"},
+    )
+    assert extract_oembed_payload_from_response(good) == {
+        "text": "Hello & world",
+        "user": {"name": "alice"},
+    }
+
+    non_200 = SimpleNamespace(status_code=404, json=lambda: {"html": "<p>x</p>"})
+    assert extract_oembed_payload_from_response(non_200) is None
+
+    bad_json = SimpleNamespace(
+        status_code=200,
+        json=lambda: (_ for _ in ()).throw(ValueError("boom")),
+    )
+    assert extract_oembed_payload_from_response(bad_json) is None
+
+
+def test_extract_oembed_payload_from_response_missing_status_raises() -> None:
+    with pytest.raises(AttributeError):
+        extract_oembed_payload_from_response(object())
 
 
 def test_build_syndication_fetch_plan_shape_and_values() -> None:

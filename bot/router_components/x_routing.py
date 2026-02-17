@@ -599,6 +599,21 @@ def build_oembed_text_payload(
     }
 
 
+def extract_oembed_payload_from_response(
+    response: Any,
+    *,
+    build_payload: Callable[[Any], Optional[Dict[str, Any]]] = build_oembed_text_payload,
+) -> Optional[Dict[str, Any]]:
+    """Extract oEmbed text payload from an HTTP response-like object."""
+    if response.status_code != 200:
+        return None
+    try:
+        obj = response.json()
+    except Exception:
+        return None
+    return build_payload(obj)
+
+
 def build_syndication_oembed_params(
     tweet_id: str,
     *,

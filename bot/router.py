@@ -130,7 +130,7 @@ from .router_components import (
     build_x_video_stt_error_result_payload,
     resolve_caption_only_base_text,
     resolve_video_stt_error_base_text,
-    build_oembed_text_payload,
+    extract_oembed_payload_from_response,
     build_syndication_oembed_params,
     build_syndication_fetch_plan,
     classify_syndication_cache_hit,
@@ -1087,14 +1087,9 @@ class Router:
                             resp_oe = await http_client.get(
                                 oembed_url, headers=headers, params=oembed_params
                             )
-                            if resp_oe.status_code == 200:
-                                try:
-                                    obj = resp_oe.json()
-                                except Exception:
-                                    obj = None
-                                oembed_data = build_oembed_text_payload(obj)
-                                if oembed_data:
-                                    data = oembed_data
+                            oembed_data = extract_oembed_payload_from_response(resp_oe)
+                            if oembed_data:
+                                data = oembed_data
                         except Exception:
                             pass
                         # Try x.com oembed variant if still no data
@@ -1110,14 +1105,11 @@ class Router:
                                 resp2 = await http_client.get(
                                     oembed_url, headers=headers, params=oembed_params_x
                                 )
-                                if resp2.status_code == 200:
-                                    try:
-                                        obj2 = resp2.json()
-                                    except Exception:
-                                        obj2 = None
-                                    oembed_data2 = build_oembed_text_payload(obj2)
-                                    if oembed_data2:
-                                        data = oembed_data2
+                                oembed_data2 = extract_oembed_payload_from_response(
+                                    resp2
+                                )
+                                if oembed_data2:
+                                    data = oembed_data2
                             except Exception:
                                 pass
                     # Break when we have usable data; otherwise continue to next variant
