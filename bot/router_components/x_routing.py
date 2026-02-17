@@ -1793,6 +1793,11 @@ def url_match_group_index() -> int:
 
 def iter_url_matches(text: str, *, url_re: Any) -> Iterable[Any]:
     """Yield raw regex match objects for URL pattern scans in one text blob."""
+    yield from url_re_finditer(url_re, text)
+
+
+def url_re_finditer(url_re: Any, text: Any) -> Iterable[Any]:
+    """Yield regex matches for normalized text using provided compiled regex."""
     yield from url_re.finditer(url_scan_text(text))
 
 
