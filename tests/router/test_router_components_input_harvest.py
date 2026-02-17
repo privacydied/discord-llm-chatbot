@@ -2,6 +2,9 @@ from types import SimpleNamespace
 
 from bot.router_components.input_harvest import (
     all_attachments_are_text,
+    append_embed_related_urls,
+    append_unique_url_items,
+    existing_url_payloads,
     extract_urls_loose,
     extract_urls_strict,
     has_explicit_media_intent,
@@ -59,3 +62,57 @@ def test_extract_urls_loose_and_strict_and_strip() -> None:
     cleaned = strip_urls(text)
     assert "https://x.com" not in cleaned
     assert "https://youtube.com" not in cleaned
+
+
+def test_existing_url_payloads_and_append_unique_url_items() -> None:
+    items = [
+        SimpleNamespace(source_type="url", payload="https://a.com/1", order_index=0),
+        SimpleNamespace(source_type="attachment", payload="file", order_index=1),
+    ]
+    assert existing_url_payloads(items) == {"https://a.com/1"}
+
+    def ctor(**kwargs):
+        return SimpleNamespace(**kwargs)
+
+    added = append_unique_url_items(
+        items,
+        ["https://a.com/1", "https://b.com/2"],
+        item_ctor=ctor,
+    )
+    assert added == 1
+    assert any(
+        getattr(it, "source_type", None) == "url"
+        and getattr(it, "payload", None) == "https://b.com/2"
+        for it in items
+    )
+
+    # strip_key behavior mirrors call sites that dedupe on stripped URL.
+    added_strip = append_unique_url_items(
+        items,
+        [" https://b.com/2 "],
+        item_ctor=ctor,
+        strip_key=True,
+        existing_urls={"https://b.com/2"},
+    )
+    assert added_strip == 0
+
+
+def test_append_embed_related_urls() -> None:
+    found_urls = ["https://x.com/u/status/1"]
+    embeds = [
+        SimpleNamespace(
+            url="https://x.com/u/status/1",
+            video=SimpleNamespace(url="https://video.twimg.com/ext_tw_video/1"),
+            author=SimpleNamespace(url="https://x.com/u"),
+        ),
+        SimpleNamespace(
+            url="https://x.com/u/status/2",
+            video=None,
+            author=None,
+        ),
+    ]
+
+    append_embed_related_urls(found_urls, embeds)
+    assert "https://video.twimg.com/ext_tw_video/1" in found_urls
+    assert "https://x.com/u" in found_urls
+    assert "https://x.com/u/status/2" in found_urls

@@ -7,6 +7,9 @@ from .compose import (
 from .gating import is_reply_to_bot, mentions_bot, strip_leading_bot_mention
 from .input_harvest import (
     all_attachments_are_text,
+    append_embed_related_urls,
+    append_unique_url_items,
+    existing_url_payloads,
     extract_urls_loose,
     extract_urls_strict,
     has_explicit_media_intent,
@@ -34,7 +37,10 @@ __all__ = [
     "RouterRuntimeCompat",
     "compose_x_tweet_with_visual_facts",
     "all_attachments_are_text",
+    "append_embed_related_urls",
+    "append_unique_url_items",
     "canonicalize_twitter_status_url",
+    "existing_url_payloads",
     "extract_urls_loose",
     "extract_urls_strict",
     "extract_raw_urls_from_texts",

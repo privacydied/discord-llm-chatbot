@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from typing import Any, List
+from typing import Any, Callable, Iterable, List, Sequence, Set
 
 _URL_STRICT_PATTERN = r"https?://[^\s<>\"'\[\]{}|\\^`]+"
 _URL_LOOSE_PATTERN = r"https?://\S+"
@@ -112,3 +112,62 @@ def strip_urls(text: str) -> str:
         return re.sub(_URL_STRICT_PATTERN, "", text or "").strip()
     except Exception:
         return (text or "").strip()
+
+
+def existing_url_payloads(items: Sequence[Any], *, strip_payload: bool = False) -> Set[str]:
+    """Collect URL payloads from InputItem-like entries into a dedupe set."""
+    urls: Set[str] = set()
+    for it in items or []:
+        try:
+            if getattr(it, "source_type", None) != "url":
+                continue
+            raw = str(getattr(it, "payload", ""))
+            urls.add(raw.strip() if strip_payload else raw)
+        except Exception:
+            continue
+    return urls
+
+
+def append_unique_url_items(
+    items: List[Any],
+    urls: Iterable[str],
+    *,
+    item_ctor: Callable[..., Any],
+    strip_key: bool = False,
+    existing_urls: Set[str] | None = None,
+) -> int:
+    """Append URL InputItem-like entries in-order, skipping duplicates."""
+    seen = existing_urls if existing_urls is not None else existing_url_payloads(items)
+    added = 0
+    for u in urls or []:
+        try:
+            key = str(u).strip() if strip_key else str(u)
+        except Exception:
+            key = ""
+        if not key or key in seen:
+            continue
+        items.append(item_ctor(source_type="url", payload=u, order_index=len(items) + 1))
+        seen.add(key)
+        added += 1
+    return added
+
+
+def append_embed_related_urls(found_urls: List[str], embeds: Iterable[Any]) -> None:
+    """Append URL/video/author URLs from embeds into list with in-list dedupe."""
+    for em in embeds or []:
+        try:
+            em_url = getattr(em, "url", None)
+            if em_url and em_url not in found_urls:
+                found_urls.append(em_url)
+            v = getattr(em, "video", None)
+            if v and hasattr(v, "url"):
+                vu = getattr(v, "url", None)
+                if vu and vu not in found_urls:
+                    found_urls.append(vu)
+            a = getattr(em, "author", None)
+            if a and hasattr(a, "url"):
+                au = getattr(a, "url", None)
+                if au and au not in found_urls:
+                    found_urls.append(au)
+        except Exception:
+            continue

@@ -88,10 +88,13 @@ from .memory.thread_tail import (
 )
 from .router_components import (
     RouterRuntimeCompat,
+    all_attachments_are_text,
+    append_embed_related_urls,
+    append_unique_url_items,
     compose_x_tweet_with_visual_facts,
     canonicalize_twitter_status_url,
     collect_x_candidate_urls,
-    all_attachments_are_text,
+    existing_url_payloads,
     extract_raw_urls_from_texts,
     extract_x_status_urls_from_text,
     extract_urls_loose,
@@ -4186,33 +4189,19 @@ class Router:
 
                 if ref_message:
                     # Build a set of existing payloads to avoid duplicates
-                    existing_urls = set()
-                    try:
-                        for it in items:
-                            if getattr(it, "source_type", None) == "url":
-                                existing_urls.add(
-                                    str(getattr(it, "payload", "")).strip()
-                                )
-                    except Exception:
-                        pass
+                    existing_urls = existing_url_payloads(items, strip_payload=True)
 
                     # 1) Harvest URLs from referenced message content
                     try:
                         ref_text = getattr(ref_message, "content", "") or ""
                         ref_urls = extract_urls_loose(ref_text)
-                        added = 0
-                        for u in ref_urls:
-                            key = u.strip()
-                            if key and key not in existing_urls:
-                                items.append(
-                                    InputItem(
-                                        source_type="url",
-                                        payload=u,
-                                        order_index=len(items) + 1,
-                                    )
-                                )
-                                existing_urls.add(key)
-                                added += 1
+                        added = append_unique_url_items(
+                            items,
+                            ref_urls,
+                            item_ctor=InputItem,
+                            strip_key=True,
+                            existing_urls=existing_urls,
+                        )
                         if added:
                             try:
                                 self.logger.info(
@@ -4272,26 +4261,13 @@ class Router:
                 found_urls = extract_urls_strict(ref_msg.content or "")
                 if found_urls:
                     # Deduplicate against existing url items
-                    try:
-                        existing_urls = {
-                            str(it.payload)
-                            for it in items
-                            if getattr(it, "source_type", None) == "url"
-                        }
-                    except Exception:
-                        existing_urls = set()
-                    added_urls = 0
-                    for u in found_urls:
-                        if u and u not in existing_urls:
-                            items.append(
-                                InputItem(
-                                    source_type="url",
-                                    payload=u,
-                                    order_index=len(items) + 1,
-                                )
-                            )
-                            existing_urls.add(u)
-                            added_urls += 1
+                    existing_urls = existing_url_payloads(items)
+                    added_urls = append_unique_url_items(
+                        items,
+                        found_urls,
+                        item_ctor=InputItem,
+                        existing_urls=existing_urls,
+                    )
                     if added_urls:
                         try:
                             self.logger.info(
@@ -4326,46 +4302,16 @@ class Router:
                         ref_embeds = list(getattr(ref_msg, "embeds", []) or [])
                     except Exception:
                         ref_embeds = []
-                    for em in ref_embeds:
-                        try:
-                            em_url = getattr(em, "url", None)
-                            if em_url and em_url not in found_urls:
-                                found_urls.append(em_url)
-                            # Some providers put URLs in video.url or author.url
-                            v = getattr(em, "video", None)
-                            if v and hasattr(v, "url"):
-                                vu = getattr(v, "url", None)
-                                if vu and vu not in found_urls:
-                                    found_urls.append(vu)
-                            a = getattr(em, "author", None)
-                            if a and hasattr(a, "url"):
-                                au = getattr(a, "url", None)
-                                if au and au not in found_urls:
-                                    found_urls.append(au)
-                        except Exception:
-                            continue
+                    append_embed_related_urls(found_urls, ref_embeds)
 
                     if found_urls:
-                        try:
-                            existing_urls = {
-                                str(it.payload)
-                                for it in items
-                                if getattr(it, "source_type", None) == "url"
-                            }
-                        except Exception:
-                            existing_urls = set()
-                        added_urls = 0
-                        for u in found_urls:
-                            if u and u not in existing_urls:
-                                items.append(
-                                    InputItem(
-                                        source_type="url",
-                                        payload=u,
-                                        order_index=len(items) + 1,
-                                    )
-                                )
-                                existing_urls.add(u)
-                                added_urls += 1
+                        existing_urls = existing_url_payloads(items)
+                        added_urls = append_unique_url_items(
+                            items,
+                            found_urls,
+                            item_ctor=InputItem,
+                            existing_urls=existing_urls,
+                        )
                         if added_urls:
                             try:
                                 self.logger.info(
