@@ -450,3 +450,60 @@ async def test_resolve_twitter_caption_text_empty_status_id() -> None:
 
     assert await router._resolve_twitter_caption_text("") == ""
     assert await router._resolve_twitter_caption_text(None) == ""
+
+
+@pytest.mark.asyncio
+async def test_resolve_twitter_caption_from_syndication_prefers_hydrated_text(
+    monkeypatch,
+) -> None:
+    router = Router(DummyBot())
+
+    async def _get_syn(self, status_id):
+        assert status_id == "123"
+        return {"text": "raw"}
+
+    async def _maybe_hydrate(self, tweet_id, payload, allow_tco_pointer=False):
+        assert tweet_id == "123"
+        assert payload == {"text": "raw"}
+        assert allow_tco_pointer is True
+        return {"text": "hydrated"}
+
+    monkeypatch.setattr(Router, "_get_tweet_via_syndication", _get_syn)
+    monkeypatch.setattr(Router, "_maybe_hydrate_syndication_payload", _maybe_hydrate)
+    monkeypatch.setattr(Router, "_extract_syndication_text", lambda _s, n: n.get("text", ""))
+
+    out = await router._resolve_twitter_caption_from_syndication(
+        "123",
+        fallback_text="fallback",
+    )
+
+    assert out == "hydrated"
+
+
+@pytest.mark.asyncio
+async def test_resolve_twitter_caption_from_syndication_returns_fallback_on_miss(
+    monkeypatch,
+) -> None:
+    router = Router(DummyBot())
+
+    async def _get_syn(self, _status_id):
+        return {}
+
+    async def _maybe_hydrate(self, _tweet_id, payload, allow_tco_pointer=False):
+        return payload
+
+    monkeypatch.setattr(Router, "_get_tweet_via_syndication", _get_syn)
+    monkeypatch.setattr(Router, "_maybe_hydrate_syndication_payload", _maybe_hydrate)
+    monkeypatch.setattr(Router, "_extract_syndication_text", lambda _s, _n: "")
+
+    out = await router._resolve_twitter_caption_from_syndication(
+        "123",
+        fallback_text="fallback",
+    )
+    assert out == "fallback"
+
+    out_empty = await router._resolve_twitter_caption_from_syndication(
+        "",
+        fallback_text="fallback",
+    )
+    assert out_empty == "fallback"

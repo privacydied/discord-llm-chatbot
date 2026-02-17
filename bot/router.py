@@ -741,6 +741,24 @@ class Router:
 
         return tweet_text
 
+    async def _resolve_twitter_caption_from_syndication(
+        self, status_id: Optional[str], fallback_text: str = ""
+    ) -> str:
+        """Resolve caption from syndication only; keep fallback text on miss/error."""
+        if not status_id:
+            return fallback_text
+        try:
+            syn = await self._get_tweet_via_syndication(status_id)
+            syn = await self._maybe_hydrate_syndication_payload(
+                status_id, syn, allow_tco_pointer=True
+            )
+            hydrated_text = self._extract_syndication_text(syn)
+            if hydrated_text:
+                return hydrated_text
+        except Exception:
+            pass
+        return fallback_text
+
     def _build_visual_anchored_system_prompt(
         self, content: str, *, fallback: bool = False
     ) -> Optional[str]:
@@ -6333,24 +6351,10 @@ class Router:
                                 if imgs:
                                     self._log_twitter_syndication_images(imgs)
                                     # Convert to syndication-like shape and route to VL
-                                    tweet_text = text
-                                    try:
-                                        syn2 = await self._get_tweet_via_syndication(
-                                            status_id
-                                        )
-                                        if syn2:
-                                            syn2 = await self._maybe_hydrate_syndication_payload(
-                                                status_id,
-                                                syn2,
-                                                allow_tco_pointer=True,
-                                            )
-                                            hydrated_text = self._extract_syndication_text(
-                                                syn2
-                                            )
-                                            if hydrated_text:
-                                                tweet_text = hydrated_text
-                                    except Exception:
-                                        pass
+                                    tweet_text = await self._resolve_twitter_caption_from_syndication(
+                                        status_id,
+                                        fallback_text=text,
+                                    )
                                     syn_like = self._build_syndication_photo_payload(
                                         tweet_text,
                                         imgs,
