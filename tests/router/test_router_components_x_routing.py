@@ -129,6 +129,7 @@ from bot.router_components.x_routing import (
     build_syndication_negative_cache_entry,
     build_syndication_cache_entry,
     build_syndication_endpoint_url,
+    build_syndication_endpoint_suffix,
     build_syndication_negative_cache_ttl_cap_s,
     extract_oembed_html_text,
     syndication_has_usable_payload,
@@ -1365,6 +1366,12 @@ def test_build_syndication_endpoint_url_mapping() -> None:
     assert build_syndication_endpoint_url(base, "unknown") == (
         "https://cdn.syndication.twimg.com/tweet-result"
     )
+
+
+def test_build_syndication_endpoint_suffix_mapping() -> None:
+    assert build_syndication_endpoint_suffix("widgets") == "widgets/tweet"
+    assert build_syndication_endpoint_suffix("tweet-result") == "tweet-result"
+    assert build_syndication_endpoint_suffix("unknown") == "tweet-result"
 
 
 def test_syndication_has_usable_payload_with_text_or_media_hints() -> None:

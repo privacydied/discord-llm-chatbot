@@ -1217,12 +1217,16 @@ def build_syndication_data_cache_hit_label() -> str:
 
 def build_syndication_endpoint_url(base: str, endpoint: str) -> str:
     """Build syndication endpoint URL preserving legacy endpoint mapping."""
-    suffix = (
+    return base + build_syndication_endpoint_suffix(endpoint)
+
+
+def build_syndication_endpoint_suffix(endpoint: str) -> str:
+    """Return endpoint path suffix preserving legacy endpoint fallback behavior."""
+    return (
         build_syndication_widgets_tweet_path()
         if endpoint == build_syndication_widgets_endpoint()
         else build_syndication_tweet_result_path()
     )
-    return base + suffix
 
 
 def syndication_has_usable_payload(
