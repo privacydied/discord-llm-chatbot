@@ -94,6 +94,7 @@ from bot.router_components.x_routing import (
     build_syndication_status_path,
     build_syndication_oembed_options,
     build_syndication_oembed_dnt_key,
+    build_syndication_oembed_omit_script_key,
     build_syndication_oembed_hosts,
     build_syndication_twitter_host,
     build_syndication_x_host,
@@ -810,6 +811,10 @@ def test_build_syndication_oembed_options_constant() -> None:
 
 def test_build_syndication_oembed_dnt_key_constant() -> None:
     assert build_syndication_oembed_dnt_key() == "dnt"
+
+
+def test_build_syndication_oembed_omit_script_key_constant() -> None:
+    assert build_syndication_oembed_omit_script_key() == "omit_script"
 
 
 def test_build_syndication_oembed_metric_endpoint_mapping() -> None:
