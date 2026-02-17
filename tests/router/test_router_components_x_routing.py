@@ -211,6 +211,7 @@ from bot.router_components.x_routing import (
     resolve_and_probe_twitter_images,
     status_url_items_buffer,
     status_url_items_result,
+    collect_status_urls_into_items,
     collect_status_urls_from_candidates,
     status_url_candidate_raw_value,
     status_url_candidates,
@@ -322,6 +323,17 @@ def test_collect_status_urls_from_candidates() -> None:
     collect_status_urls_from_candidates(
         items,
         "a https://x.com/u/status/1 and https://example.com b https://twitter.com/u/status/2?s=20",
+        is_status_url=lambda u: "/status/" in u,
+        canonicalize_status_url=lambda u: u.split("?")[0].replace("twitter.com", "x.com"),
+    )
+    assert items == ["https://x.com/u/status/1", "https://x.com/u/status/2"]
+
+
+def test_collect_status_urls_into_items_delegates_collection() -> None:
+    items = []
+    collect_status_urls_into_items(
+        items,
+        "a https://x.com/u/status/1 and https://twitter.com/u/status/2?s=20",
         is_status_url=lambda u: "/status/" in u,
         canonicalize_status_url=lambda u: u.split("?")[0].replace("twitter.com", "x.com"),
     )
