@@ -158,6 +158,8 @@ from bot.router_components.x_routing import (
     format_syndication_header_line,
     format_syndication_header_username,
     format_syndication_header_media_hint,
+    format_syndication_header_prefix,
+    format_syndication_header_stamp,
     format_syndication_error_fallback,
     format_syndication_error_payload_repr,
     extract_syndication_photo_urls,
@@ -1664,6 +1666,16 @@ def test_format_syndication_header_username_prefers_screen_name() -> None:
 def test_format_syndication_header_media_hint_variants() -> None:
     assert format_syndication_header_media_hint(["p1", "p2"]) == " • media:2"
     assert format_syndication_header_media_hint([]) == ""
+
+
+def test_format_syndication_header_prefix_variants() -> None:
+    assert format_syndication_header_prefix("alice") == "@alice"
+    assert format_syndication_header_prefix("") == "Tweet"
+
+
+def test_format_syndication_header_stamp_variants() -> None:
+    assert format_syndication_header_stamp("2026-02-17") == " • 2026-02-17"
+    assert format_syndication_header_stamp(None) == ""
 
 
 def test_format_syndication_header_line_preserves_len_error_behavior() -> None:

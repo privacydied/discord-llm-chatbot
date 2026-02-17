@@ -1429,8 +1429,8 @@ def format_syndication_header_line(
     """Format syndication header line preserving legacy field access semantics."""
     username = format_syndication_header_username(user)
     media_hint = format_syndication_header_media_hint(photos)
-    prefix = f"@{username}" if username else "Tweet"
-    stamp = f" • {created_at}" if created_at else ""
+    prefix = format_syndication_header_prefix(username)
+    stamp = format_syndication_header_stamp(created_at)
     return f"{prefix}{stamp}{media_hint} → {url}"
 
 
@@ -1442,6 +1442,16 @@ def format_syndication_header_username(user: Any) -> Any:
 def format_syndication_header_media_hint(photos: Any) -> str:
     """Return legacy media-count suffix for syndication header lines."""
     return f" • media:{len(photos)}" if photos else ""
+
+
+def format_syndication_header_prefix(username: Any) -> str:
+    """Return legacy header prefix for resolved syndication username."""
+    return f"@{username}" if username else "Tweet"
+
+
+def format_syndication_header_stamp(created_at: Any) -> str:
+    """Return legacy timestamp suffix for syndication header lines."""
+    return f" • {created_at}" if created_at else ""
 
 
 def format_syndication_error_fallback(url: str, syn_data: Any) -> str:
