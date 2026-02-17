@@ -461,6 +461,19 @@ class Router:
         sep = "\n\n" if text and not text.endswith("\n") else ""
         return f"{text}{sep}{note}".strip()
 
+    def _get_system_prompt(self, key: str, default: Optional[str] = None) -> Optional[str]:
+        """Safely read a prompt template from bot.system_prompts."""
+        try:
+            prompts = getattr(self.bot, "system_prompts", None) or {}
+            getter = getattr(prompts, "get", None)
+            if callable(getter):
+                value = getter(key, default)
+            else:
+                value = default
+            return value
+        except Exception:
+            return default
+
         # Queue non-blocking eager start to reduce first-check false negatives [PA]
         try:
             import asyncio
@@ -2179,14 +2192,51 @@ class Router:
     def _format_x_tweet_result(self, api_data: Dict[str, Any], url: str) -> str:
         """Format X API tweet response into concise text. [PA][IV]"""
         try:
-            data = api_data or {}
-            text = (data.get("full_text") or data.get("text") or "").strip()
-            user_obj = data.get("user") or {}
-            user = (user_obj.get("name") or user_obj.get("screen_name") or "").strip()
+            payload = api_data or {}
+            tweet = payload.get("data") if isinstance(payload.get("data"), dict) else payload
+            tweet = tweet or {}
+            includes = payload.get("includes") if isinstance(payload.get("includes"), dict) else {}
+            media_list = includes.get("media") if isinstance(includes.get("media"), list) else []
+
+            text = (tweet.get("full_text") or tweet.get("text") or "").strip()
+
+            user = ""
+            try:
+                users = includes.get("users") if isinstance(includes, dict) else None
+                if isinstance(users, list):
+                    author_id = str(tweet.get("author_id") or "").strip()
+                    for u in users:
+                        if not isinstance(u, dict):
+                            continue
+                        if author_id and str(u.get("id") or "").strip() != author_id:
+                            continue
+                        user = (
+                            u.get("name")
+                            or u.get("username")
+                            or u.get("screen_name")
+                            or ""
+                        ).strip()
+                        if user:
+                            break
+            except Exception:
+                user = ""
+            if not user:
+                user_obj = tweet.get("user") if isinstance(tweet.get("user"), dict) else {}
+                user = (user_obj.get("name") or user_obj.get("screen_name") or "").strip()
+
+            photo_count = 0
+            try:
+                photo_count = sum(
+                    1 for m in media_list if isinstance(m, dict) and m.get("type") == "photo"
+                )
+            except Exception:
+                photo_count = 0
 
             parts: List[str] = []
             if text:
                 parts.append(text)
+            if photo_count:
+                parts.append(f"Photos: {photo_count}")
             if user:
                 parts.append(f"— {user}")
             parts.append(self._canonicalize_twitter_status_url(url))
@@ -2751,6 +2801,28 @@ class Router:
 
         Tests may patch this with richer parsing; the default simply reads text.
         """
+        ext_l = str(ext or "").lower()
+        if ext_l == ".docx" and DOCX_SUPPORT:
+            try:
+                doc = docx.Document(path)
+                parts = []
+                for para in getattr(doc, "paragraphs", []) or []:
+                    txt = str(getattr(para, "text", "") or "").strip()
+                    if txt:
+                        parts.append(txt)
+                return "\n".join(parts)
+            except Exception:
+                pass
+
+        if ext_l == ".pdf" and PDF_SUPPORT and self.pdf_processor is not None:
+            try:
+                result = await self.pdf_processor.process(path)
+                if isinstance(result, dict):
+                    return str(result.get("text") or "")
+                return str(result or "")
+            except Exception:
+                pass
+
         try:
             with open(path, "r", encoding="utf-8", errors="ignore") as f:
                 return f.read()
@@ -2825,7 +2897,7 @@ class Router:
                         content="Error: No text was generated. Please try again.",
                         text="Error: No text was generated. Please try again.",
                     )
-                if len(text_out.split()) < 5:
+                if not raw_content.strip() and len(text_out.split()) < 5:
                     text_out = (text_out + " auto generated caption.").strip()
                 return ResponseMessage(
                     content=text_out, text=text_out, audio_path=audio_path
@@ -2851,7 +2923,7 @@ class Router:
                         content="Error: No text was generated. Please try again.",
                         text="Error: No text was generated. Please try again.",
                     )
-                if len(text_out.split()) < 5:
+                if not raw_content.strip() and len(text_out.split()) < 5:
                     text_out = (text_out + " auto generated caption.").strip()
                 return ResponseMessage(
                     content=text_out, text=text_out, audio_path=audio_path
@@ -3019,9 +3091,7 @@ class Router:
                 )
             except Exception:
                 has_attachments = False
-            cleaned_for_compat = re.sub(
-                mention_pattern, "", (message.content or "").strip()
-            )
+            cleaned_for_compat = re.sub(mention_pattern, "", content)
             cleaned_for_compat = strip_leading_bot_mention(
                 cleaned_for_compat, getattr(getattr(self.bot, "user", None), "id", None)
             )
@@ -3060,11 +3130,6 @@ class Router:
                                 content="Error: No text was generated. Please try again.",
                                 text="Error: No text was generated. Please try again.",
                             )
-                        if isinstance(self.bot, (Mock, MagicMock)) and text_out:
-                            if len(str(text_out).split()) < 5:
-                                text_out = (
-                                    str(text_out) + " auto generated caption."
-                                ).strip()
                         if isinstance(res, ResponseMessage):
                             res.text = res.content = text_out
                             return res
@@ -3152,11 +3217,9 @@ class Router:
                     is_mentioned = False
                 mention_pattern = rf"^<@!?{self.bot.user.id}>\s*"
                 try:
-                    cleaned = re.sub(
-                        mention_pattern, "", (message.content or "")
-                    ).strip()
+                    cleaned = re.sub(mention_pattern, "", content).strip()
                 except Exception:
-                    cleaned = (message.content or "").strip()
+                    cleaned = content.strip()
                 cleaned = strip_leading_bot_mention(
                     cleaned, getattr(getattr(self.bot, "user", None), "id", None)
                 )
@@ -3248,11 +3311,6 @@ class Router:
                                     content="Error: No text was generated. Please try again.",
                                     text="Error: No text was generated. Please try again.",
                                 )
-                            if isinstance(self.bot, (Mock, MagicMock)) and text_out:
-                                if len(str(text_out).split()) < 5:
-                                    text_out = (
-                                        str(text_out) + " auto generated caption."
-                                    ).strip()
                             if isinstance(res, ResponseMessage):
                                 res.text = res.content = text_out
                                 return res
@@ -5593,7 +5651,7 @@ class Router:
                                     syn_like,
                                     url,
                                     self._unified_vl_to_text_pipeline,
-                                    self.bot.system_prompts.get("vl_prompt"),
+                                    self._get_system_prompt("vl_prompt"),
                                     reply_style="ack+thoughts",
                                 )
                             except Exception:
@@ -6461,7 +6519,7 @@ class Router:
                                         syn_like,
                                         url,
                                         self._unified_vl_to_text_pipeline,
-                                        self.bot.system_prompts.get("vl_prompt"),
+                                        self._get_system_prompt("vl_prompt"),
                                         reply_style="ack+thoughts",
                                     )
                                     return result
@@ -6584,7 +6642,7 @@ class Router:
                                         syn_like,
                                         url,
                                         self._unified_vl_to_text_pipeline,
-                                        self.bot.system_prompts.get("vl_prompt"),
+                                        self._get_system_prompt("vl_prompt"),
                                         reply_style="ack+thoughts",
                                     )
                                 if sparse_kind not in ("video", "image"):
@@ -6722,7 +6780,7 @@ class Router:
                                 syn_for_vl,
                                 url,
                                 self._unified_vl_to_text_pipeline,
-                                self.bot.system_prompts.get("vl_prompt"),
+                                self._get_system_prompt("vl_prompt"),
                                 reply_style="ack+thoughts",
                             )
                             # Syndication handler returns final text; pass through as string for aggregator
@@ -6809,7 +6867,7 @@ class Router:
                                     syn_like,
                                     url,
                                     self._unified_vl_to_text_pipeline,
-                                    self.bot.system_prompts.get("vl_prompt"),
+                                    self._get_system_prompt("vl_prompt"),
                                     reply_style="ack+thoughts",
                                 )
                                 return result
@@ -6843,11 +6901,12 @@ class Router:
                                 )
                                 if stt_res and stt_res.get("transcription"):
                                     base = self._format_x_tweet_result(api_data, url)
-                                    return self._format_x_tweet_with_transcription(
+                                    formatted = self._format_x_tweet_with_transcription(
                                         base_text=base,
                                         url=url,
                                         stt_res=stt_res,
                                     )
+                                    return f"Video/audio content from {url}: {formatted}"
                                 # No-speech in API probe: log and continue with caption-only bundle [REH]
                                 try:
                                     self.logger.info(
@@ -6937,46 +6996,49 @@ class Router:
                                     url, api_as_syn, source="api"
                                 )
 
-                            # SURGICAL FIX: Always route photos to VL for X URLs (ignore the flag) [CA][REH]
-                            # This ensures native photos are analyzed instead of just counting them
-                            base = self._format_x_tweet_result(api_data, url)
+                            if not bool(cfg.get("X_API_ROUTE_PHOTOS_TO_VL", False)):
+                                return self._format_x_tweet_result(api_data, url)
 
                             self.logger.info(
                                 "🖼️🐦 Routing X photos to VL via API data",
                                 extra={
                                     "event": "x.photo_to_vl.start",
-                                    "detail": {
-                                        "url": url,
-                                        "photo_count": len(photos),
-                                    },
+                                    "detail": {"url": url, "photo_count": len(photos)},
                                 },
                             )
                             self._metric_inc("x.photo_to_vl.enabled", None)
 
-                            # Convert API data to syndication-like format for unified handling [CA][PA]
-                            api_as_syn = {
-                                "text": (tweet_data.get("text") or "").strip(),
-                                "photos": [
-                                    {"url": p.get("url")}
-                                    for p in photos
-                                    if p.get("url")
-                                ],
-                                "user": {"screen_name": "unknown"},
-                                "created_at": tweet_data.get("created_at"),
-                            }
+                            notes: List[str] = []
+                            analyzed = 0
+                            total = len(photos)
+                            for idx, photo in enumerate(photos, start=1):
+                                photo_url = str((photo.get("url") or "")).strip()
+                                if not photo_url:
+                                    notes.append(
+                                        f"📷 Photo {idx}/{total}: URL unavailable"
+                                    )
+                                    continue
+                                try:
+                                    desc = await self._vl_describe_image_from_url(
+                                        photo_url,
+                                        prompt=self._get_system_prompt("vl_prompt"),
+                                    )
+                                except Exception:
+                                    desc = None
+                                if desc:
+                                    analyzed += 1
+                                    notes.append(f"📷 Photo {idx}/{total}: {desc}")
+                                else:
+                                    notes.append(
+                                        f"📷 Photo {idx}/{total}: analysis unavailable"
+                                    )
 
-                            # Use new syndication handler for full-res images [CA][PA]
-                            from .syndication.handler import (
-                                handle_twitter_syndication_to_vl,
-                            )
-
-                            return await handle_twitter_syndication_to_vl(
-                                api_as_syn,
-                                url,
-                                self._vl_describe_image_from_url,
-                                self.bot.system_prompts.get("vl_prompt"),
-                                reply_style="ack+thoughts",
-                            )
+                            lines: List[str] = [f"Photos analyzed: {analyzed}/{total}"]
+                            if api_text:
+                                lines.extend(["[Tweet Caption]", api_text, ""])
+                            lines.extend(notes)
+                            lines.extend(["", self._canonicalize_twitter_status_url(url)])
+                            return "\n".join(lines).strip()
 
                         return self._format_x_tweet_result(api_data, url)
                     except APIError as e:
@@ -8293,7 +8355,7 @@ class Router:
                         or "tweet caption:" in content_lower
                     )
                     if has_vl_section:
-                        base_sys = self.bot.system_prompts.get(
+                        base_sys = self._get_system_prompt(
                             "text_prompt", "You are a helpful assistant."
                         )
                         anchored_system = (
@@ -8465,7 +8527,7 @@ class Router:
                 or "tweet caption:" in content_lower
             )
             if has_vl_section:
-                base_sys = self.bot.system_prompts.get(
+                base_sys = self._get_system_prompt(
                     "text_prompt", "You are a helpful assistant."
                 )
                 anchored_system_fallback = (
@@ -8981,10 +9043,10 @@ class Router:
                 )
 
             # Get prompts
-            vl_prompt = self.bot.system_prompts.get(
+            vl_prompt = self._get_system_prompt(
                 "vl_prompt", "Analyze and describe this image."
             )
-            text_prompt = self.bot.system_prompts.get(
+            text_prompt = self._get_system_prompt(
                 "text_prompt", "You are a helpful assistant."
             )
 

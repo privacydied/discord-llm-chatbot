@@ -16,6 +16,30 @@ from .action import BotAction
 
 logger = get_logger(__name__)
 
+try:
+    from .hear import hear_infer_from_url
+except Exception:  # pragma: no cover - compatibility fallback
+    async def hear_infer_from_url(*_args, **_kwargs):  # type: ignore[override]
+        raise RuntimeError("hear_infer_from_url unavailable")
+
+try:
+    from .brain import brain_infer
+except Exception:  # pragma: no cover - compatibility fallback
+    async def brain_infer(*_args, **_kwargs):  # type: ignore[override]
+        raise RuntimeError("brain_infer unavailable")
+
+try:
+    from .contextual_brain import contextual_brain_infer_simple
+except Exception:  # pragma: no cover - compatibility fallback
+    async def contextual_brain_infer_simple(*_args, **_kwargs):  # type: ignore[override]
+        raise RuntimeError("contextual_brain_infer_simple unavailable")
+
+try:
+    from .see import see_infer
+except Exception:  # pragma: no cover - compatibility fallback
+    async def see_infer(*_args, **_kwargs):  # type: ignore[override]
+        raise RuntimeError("see_infer unavailable")
+
 # Configuration
 MAX_CONCURRENT_MEDIA_DOWNLOADS = int(os.getenv("MEDIA_MAX_CONCURRENT", "2"))
 MEDIA_DOWNLOAD_TIMEOUT = int(os.getenv("MEDIA_DOWNLOAD_TIMEOUT", "60"))
@@ -83,7 +107,7 @@ class MediaIngestionManager:
                 if isinstance(value, str):
                     # Strip control characters and limit length
                     cleaned = "".join(
-                        char for char in value if ord(char) >= 32 or char in "\n\t"
+                        char for char in value if ord(char) >= 32 or char in "\n\t\r"
                     )
                     if max_length and len(cleaned) > max_length:
                         cleaned = cleaned[:max_length] + "..."
@@ -94,7 +118,7 @@ class MediaIngestionManager:
                     # Convert other types to string and sanitize
                     str_value = str(value)
                     cleaned = "".join(
-                        char for char in str_value if ord(char) >= 32 or char in "\n\t"
+                        char for char in str_value if ord(char) >= 32 or char in "\n\t\r"
                     )
                     if max_length and len(cleaned) > max_length:
                         cleaned = cleaned[:max_length] + "..."
@@ -116,9 +140,6 @@ class MediaIngestionManager:
 
         while attempt < MEDIA_RETRY_MAX_ATTEMPTS:
             try:
-                # Import here to avoid circular imports
-                from .hear import hear_infer_from_url
-
                 self.logger.debug(
                     f"🎵 Media extraction attempt {attempt + 1} for: {url}"
                 )
@@ -373,55 +394,17 @@ class MediaIngestionManager:
                     )
 
             if screenshot_path:
-                # Image processing: use vision-language model
-                self.logger.info(f"🖼️ Processing image via vision-language model: {url}")
-
-                try:
-                    from .see import see_infer
-
-                    # Use vision model to analyze the image
-                    vision_result = await see_infer(
-                        image_path=screenshot_path,
-                        prompt=message.content or "Describe this image",
-                    )
-
-                    # Extract content from BotAction if needed
-                    if hasattr(vision_result, "content"):
-                        vision_content = vision_result.content
-                    else:
-                        vision_content = str(vision_result)
-
-                    # Create enriched context combining vision analysis with any text
-                    context_parts = [f"Image analysis from {url}:", vision_content]
-                    if text_content:
-                        context_parts.extend(
-                            ["\nAdditional text content:", text_content]
-                        )
-
-                    enriched_content = "\n".join(context_parts)
-
-                    self.logger.info(
-                        f"✅ Vision processing completed in {processing_time:.1f}ms for: {url}"
-                    )
-
-                    return MediaIngestionResult(
-                        success=True,
-                        content=enriched_content,
-                        metadata={
-                            "fallback_reason": fallback_reason,
-                            "has_vision": True,
-                            "screenshot_path": screenshot_path,
-                        },
-                        fallback_triggered=True,
-                        source_type="vision",
-                        processing_time_ms=processing_time,
-                    )
-
-                except Exception as vision_error:
-                    self.logger.warning(
-                        f"⚠️ Vision processing failed: {vision_error}, falling back to text"
-                    )
-                    # Fall through to text processing
+                return MediaIngestionResult(
+                    success=True,
+                    content=f"Screenshot available at: {screenshot_path}",
+                    metadata={
+                        "fallback_reason": fallback_reason,
+                        "screenshot_path": screenshot_path,
+                    },
+                    fallback_triggered=True,
+                    source_type="scrape",
+                    processing_time_ms=processing_time,
+                )
 
             # Text-only processing (original fallback)
             if text_content:
@@ -574,9 +557,6 @@ class MediaIngestionManager:
     ) -> BotAction:
         """Create BotAction from successful media processing."""
         try:
-            # Import here to avoid circular imports
-            from bot.brain import brain_infer
-
             # Get conversation context
             context_str = await self.bot.context_manager.get_context_string(message)
 
@@ -595,8 +575,6 @@ class MediaIngestionManager:
                 and os.getenv("USE_ENHANCED_CONTEXT", "true").lower() == "true"
             ):
                 try:
-                    from bot.contextual_brain import contextual_brain_infer_simple
-
                     self.logger.debug(
                         f"🧠🎵 Using contextual brain for media analysis [msg_id={message.id}]"
                     )
@@ -660,11 +638,8 @@ class MediaIngestionManager:
                     "Screenshot available at: ", ""
                 ).strip()
 
-                # Route to vision flow
-                from .see import see_infer
-
                 prompt = (
-                    self.bot.system_prompts.get("VL_PROMPT_FILE")
+                    (getattr(self.bot, "system_prompts", {}) or {}).get("VL_PROMPT_FILE")
                     or "Describe this image based on the content of the URL."
                 )
                 vision_response = await see_infer(
@@ -681,9 +656,6 @@ class MediaIngestionManager:
                 if len(vl_content) > 1999:
                     vl_content = vl_content[:1999].rsplit("\n", 1)[0]
 
-                # Import here to avoid circular imports
-                from bot.brain import brain_infer
-
                 final_prompt = (
                     f"User provided this URL. The content of the URL is: {vl_content}"
                 )
@@ -696,15 +668,14 @@ class MediaIngestionManager:
                 # Use router's text flow logic
                 router = self.bot.router if hasattr(self.bot, "router") else None
                 if router and hasattr(router, "_invoke_text_flow"):
-                    return await router._invoke_text_flow(prompt, message, context_str)
-                else:
-                    # Fallback to direct brain inference
-                    from bot.brain import brain_infer
-
-                    full_context = (
-                        f"{context_str}\n\n{prompt}" if context_str else prompt
-                    )
-                    return await brain_infer(full_context)
+                    maybe = router._invoke_text_flow(prompt, message, context_str)
+                    if asyncio.iscoroutine(maybe):
+                        return await maybe
+                    if isinstance(maybe, BotAction):
+                        return maybe
+                # Fallback to direct brain inference
+                full_context = f"{context_str}\n\n{prompt}" if context_str else prompt
+                return await brain_infer(full_context)
 
         except Exception as e:
             self.logger.error(

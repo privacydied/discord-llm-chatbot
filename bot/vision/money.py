@@ -87,6 +87,10 @@ class Money:
         """Get float value (for legacy compatibility only)"""
         return float(self._amount)
 
+    def __float__(self) -> float:
+        """Allow float(Money(...)) for backward-compatible tests/callers."""
+        return self.to_float()
+
     def to_display_string(self, precision: int = 2) -> str:
         """Format for user display with $ symbol"""
         if precision == 2:

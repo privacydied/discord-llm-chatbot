@@ -200,7 +200,12 @@ def extract_text_and_images_from_syndication(tw: Dict[str, Any]) -> Dict[str, An
                 q_urls = _collect_from_entities(node)
             if q_urls:
                 primary_urls = q_urls
-                source = f"{node_name}_photos"
+                source_aliases = {
+                    "quoted_tweet": "quoted_photos",
+                    "quoted_status": "quoted_status_photos",
+                    "retweeted_status": "retweeted_status_photos",
+                }
+                source = source_aliases.get(node_name, f"{node_name}_photos")
                 had_card = had_card or bool(_extract_card_url(node))
                 break
 

@@ -198,3 +198,30 @@
     - `./.venv/bin/python -m py_compile bot/hear.py bot/router.py bot/router_components/__init__.py bot/router_components/x_routing.py`
     - `./.venv/bin/pytest -q tests/test_hear_ffmpeg_resolution.py tests/router/test_x_caption_transcript_concat.py tests/router/test_router_components_x_routing.py` -> `13 passed`
     - `./.venv/bin/pytest -q tests/core tests/router tests/syndication tests/vision tests/test_hear_ffmpeg_resolution.py tests/test_hear_stream_abort.py tests/test_media_ingestion.py tests/test_video_ingest.py` -> `30 failed, 171 passed` (improved from `32 failed`)
+- 2026-02-17:
+  - Router compatibility hardening:
+    - restored `_extract_primary_tweet_id()` wrapper plumbing through `router_components`
+    - normalized test-mode command/attachment handling for non-string `message.content`
+    - restored `.docx`/`.pdf` support in `_process_document()`
+    - added `_get_system_prompt()` safe accessor for missing `bot.system_prompts`
+    - aligned X API path contracts:
+      - wrapped API payload parsing in `_format_x_tweet_result()`
+      - `Photos: N` formatting
+      - gated photo→VL route behind `X_API_ROUTE_PHOTOS_TO_VL`
+      - deterministic direct URL VL analysis output for API photos
+      - preserved `"Video/audio content"` prefix in API video STT responses
+  - Media/syndication/pricing compatibility hardening:
+    - `bot/syndication/extract.py` source alias fix (`quoted_photos`)
+    - `Money.__float__()` added for float coercion compatibility
+    - `bot/media_ingestion.py` restored patchable module-level seams:
+      - `hear_infer_from_url`
+      - `brain_infer`
+      - `contextual_brain_infer_simple`
+      - `see_infer`
+    - preserved carriage returns in metadata sanitizer (`\r`)
+    - reverted fallback screenshot path to legacy `"Screenshot available at: ..."` result
+    - made router text-flow fallback robust to non-awaitable mocks
+  - Validation:
+    - `./.venv/bin/pytest -q tests/core/test_router.py tests/router/test_x_api_routing.py` -> `20 passed`
+    - `./.venv/bin/pytest -q tests/test_media_ingestion.py tests/core/test_empty_attachment.py tests/syndication/test_extract_policy.py tests/vision/test_pricing_calculations.py` -> `54 passed`
+    - `./.venv/bin/pytest -q tests/core tests/router tests/syndication tests/vision tests/test_hear_ffmpeg_resolution.py tests/test_hear_stream_abort.py tests/test_media_ingestion.py tests/test_video_ingest.py` -> `201 passed`
