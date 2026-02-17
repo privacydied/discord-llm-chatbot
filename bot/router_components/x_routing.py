@@ -916,9 +916,14 @@ def build_syndication_oembed_metric_endpoint(host: str) -> str:
     """Return metric endpoint label for a given oEmbed host."""
     return (
         build_syndication_oembed_x_metric_endpoint()
-        if host == build_syndication_x_host()
+        if is_syndication_x_host(host)
         else build_syndication_oembed_metric_default_endpoint()
     )
+
+
+def is_syndication_x_host(host: str) -> bool:
+    """Return True when host is the canonical X hostname."""
+    return str(host) == build_syndication_x_host()
 
 
 def build_syndication_oembed_metric_default_endpoint() -> str:
@@ -943,7 +948,7 @@ def build_syndication_oembed_fallback_params(
                 endpoint,
                 build_syndication_oembed_params(
                     tweet_id,
-                    use_x_host=(host == build_syndication_x_host()),
+                    use_x_host=is_syndication_x_host(host),
                 ),
             )
         )
