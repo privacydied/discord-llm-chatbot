@@ -34,6 +34,7 @@ from bot.router_components.x_routing import (
     format_syndication_body_text,
     format_syndication_header_line,
     format_syndication_error_fallback,
+    extract_syndication_photo_urls,
     resolve_twitter_status_id,
     is_twitter_status_url,
     stt_result_has_transcription,
@@ -580,6 +581,23 @@ def test_format_syndication_error_fallback_truncates_payload_repr() -> None:
     assert out.startswith("Tweet → https://x.com/u/status/1\n")
     payload_part = out.split("\n", 1)[1]
     assert len(payload_part) == 4000
+
+
+def test_extract_syndication_photo_urls_variants() -> None:
+    photos = [
+        {"url": "u1"},
+        {"media_url_https": "u2"},
+        {"media_url": "u3"},
+        {"url": None},
+        "u4",
+    ]
+    assert extract_syndication_photo_urls(photos) == ["u1", "u2", "u3", "u4"]
+
+    # Preserve current semantics for string payloads (iterates chars).
+    assert extract_syndication_photo_urls("ab") == ["a", "b"]
+
+    with pytest.raises(TypeError):
+        extract_syndication_photo_urls(1)
 
 
 def test_x_syn_probe_budget_timeout_s_caps_and_offsets() -> None:

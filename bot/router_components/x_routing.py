@@ -523,6 +523,19 @@ def format_syndication_error_fallback(url: str, syn_data: Any) -> str:
     return f"Tweet → {url}\n{str(syn_data)[:4000]}"
 
 
+def extract_syndication_photo_urls(photos: Any) -> List[str]:
+    """Extract photo URLs from syndication `photos` payload."""
+    urls: List[str] = []
+    for p in photos:
+        if isinstance(p, dict):
+            img_url = p.get("url") or p.get("media_url_https") or p.get("media_url")
+            if img_url and isinstance(img_url, str):
+                urls.append(img_url)
+        elif isinstance(p, str):
+            urls.append(p)
+    return urls
+
+
 def x_syn_probe_budget_timeout_s(x_syn_timeout_s: float) -> float:
     """Compute bounded timeout budget for image/media probe calls."""
     return min(float(x_syn_timeout_s) + 1.0, 4.5)

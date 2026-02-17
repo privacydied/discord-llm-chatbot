@@ -139,6 +139,7 @@ from .router_components import (
     format_syndication_body_text,
     format_syndication_header_line,
     format_syndication_error_fallback,
+    extract_syndication_photo_urls,
     x_syn_probe_budget_timeout_s,
     x_syn_quick_request_timeouts,
     build_syndication_photo_payload,
@@ -1239,17 +1240,7 @@ class Router:
             if not isinstance(syn, dict):
                 return []
             photos = syn.get("photos") or []
-            urls: List[str] = []
-            for p in photos:
-                if isinstance(p, dict):
-                    img_url = (
-                        p.get("url") or p.get("media_url_https") or p.get("media_url")
-                    )
-                    if img_url and isinstance(img_url, str):
-                        urls.append(img_url)
-                elif isinstance(p, str):
-                    urls.append(p)
-            return urls
+            return extract_syndication_photo_urls(photos)
         except Exception as e:
             self.logger.debug(f"Syndication image probe failed: {e}")
             return []
