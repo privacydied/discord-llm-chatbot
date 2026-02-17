@@ -221,6 +221,7 @@ from bot.router_components.x_routing import (
     raw_url_items_buffer,
     raw_url_source_texts,
     collect_raw_urls_from_texts,
+    url_matches,
     iter_url_matches,
     url_scan_text,
     url_match_group_value,
@@ -377,6 +378,11 @@ def test_collect_raw_urls_from_texts() -> None:
 
 def test_iter_url_matches_yields_match_objects() -> None:
     matches = list(iter_url_matches("a https://x.com/u/status/1 b", url_re=x_url_extract_regex()))
+    assert [m.group(0) for m in matches] == ["https://x.com/u/status/1"]
+
+
+def test_url_matches_delegates_iter_url_matches() -> None:
+    matches = list(url_matches("a https://x.com/u/status/1 b", url_re=x_url_extract_regex()))
     assert [m.group(0) for m in matches] == ["https://x.com/u/status/1"]
 
 
