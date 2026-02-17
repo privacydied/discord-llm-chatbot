@@ -54,7 +54,7 @@ from .stt import ModelSpec, stt_manager
 from .stt_module.failure_classifier import STTFailureClassifier
 from .stt_module.multimodal_fallback import multimodal_fallback_provider
 from .stt_pipeline import (
-    abort_job_stream_if_present,
+    abort_and_finish_failure,
     build_url_transcript_result,
     ensure_manager_ready_or_raise,
     ffmpeg_bin_has_aac,
@@ -1953,20 +1953,20 @@ async def hear_infer(audio: Union[Path, "discord.Attachment"]) -> str:
             )
             return await job.finish_success(result_text)
     except RAMGuardExceeded as exc:
-        await abort_job_stream_if_present(
+        await abort_and_finish_failure(
             job=job,
             logger=logger,
-            debug_message="⚠️ Stream abort failed after RAM guard trigger",
+            exc=exc,
+            abort_debug_message="⚠️ Stream abort failed after RAM guard trigger",
         )
-        await job.finish_failure(exc)
         raise InferenceError(str(exc)) from exc
     except Exception as exc:
-        await abort_job_stream_if_present(
+        await abort_and_finish_failure(
             job=job,
             logger=logger,
-            debug_message="⚠️ Stream abort failed after error",
+            exc=exc,
+            abort_debug_message="⚠️ Stream abort failed after error",
         )
-        await job.finish_failure(exc)
         raise
     finally:
         await job.close()
@@ -2055,20 +2055,20 @@ async def hear_infer_from_url(url: str, force_refresh: bool = False) -> Dict[str
 
             return await job.finish_success(result)
     except RAMGuardExceeded as exc:
-        await abort_job_stream_if_present(
+        await abort_and_finish_failure(
             job=job,
             logger=logger,
-            debug_message="⚠️ Stream abort failed after RAM guard trigger",
+            exc=exc,
+            abort_debug_message="⚠️ Stream abort failed after RAM guard trigger",
         )
-        await job.finish_failure(exc)
         raise InferenceError(str(exc)) from exc
     except Exception as exc:
-        await abort_job_stream_if_present(
+        await abort_and_finish_failure(
             job=job,
             logger=logger,
-            debug_message="⚠️ Stream abort failed in hear_infer_from_url",
+            exc=exc,
+            abort_debug_message="⚠️ Stream abort failed in hear_infer_from_url",
         )
-        await job.finish_failure(exc)
         raise
     finally:
         await job.close()

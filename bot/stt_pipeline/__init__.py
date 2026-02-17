@@ -17,7 +17,7 @@ from .youtube_path import build_youtube_transcript_result, try_youtube_transcrip
 from .result_payload import build_url_transcript_result
 from .logging import log_stt_job_complete, transcript_preview
 from .spec_select import select_initial_model_spec
-from .lifecycle import abort_job_stream_if_present
+from .lifecycle import abort_and_finish_failure, abort_job_stream_if_present
 from .url_ingest import (
     ensure_manager_ready_or_raise,
     fetch_url_audio_or_raise,
@@ -33,6 +33,7 @@ __all__ = [
     "build_url_transcript_result",
     "log_stt_job_complete",
     "abort_job_stream_if_present",
+    "abort_and_finish_failure",
     "fetch_url_audio_with_span",
     "ensure_manager_ready_or_raise",
     "fetch_url_audio_or_raise",
