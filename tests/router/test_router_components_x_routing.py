@@ -177,6 +177,7 @@ from bot.router_components.x_routing import (
     build_syndication_photo_payload,
     build_syndication_photo_items,
     format_twitter_syndication_images_log_line,
+    format_twitter_syndication_msg_suffix,
     resolve_first_image_host,
     normalize_probed_image_urls,
     resolve_and_probe_twitter_images,
@@ -1799,6 +1800,11 @@ def test_format_twitter_syndication_images_log_line_with_and_without_msg_id() ->
         format_twitter_syndication_images_log_line(["not a url"])
         == "route.twitter.syndication | images=1 | n/a"
     )
+
+
+def test_format_twitter_syndication_msg_suffix_variants() -> None:
+    assert format_twitter_syndication_msg_suffix(123) == " | msg_id=123"
+    assert format_twitter_syndication_msg_suffix(None) == ""
 
 
 def test_resolve_first_image_host_variants() -> None:

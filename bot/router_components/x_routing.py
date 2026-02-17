@@ -1540,11 +1540,16 @@ def format_twitter_syndication_images_log_line(
 ) -> str:
     """Format canonical breadcrumb line for Twitter image-route detection."""
     first_host = resolve_first_image_host(image_urls)
-    suffix = f" | msg_id={msg_id}" if msg_id is not None else ""
+    suffix = format_twitter_syndication_msg_suffix(msg_id)
     return (
         f"route.twitter.syndication | images={len(image_urls)} | "
         f"{first_host or 'n/a'}{suffix}"
     )
+
+
+def format_twitter_syndication_msg_suffix(msg_id: Optional[int]) -> str:
+    """Return optional log suffix with message id for syndication breadcrumbs."""
+    return f" | msg_id={msg_id}" if msg_id is not None else ""
 
 
 def resolve_first_image_host(image_urls: List[str]) -> str:
