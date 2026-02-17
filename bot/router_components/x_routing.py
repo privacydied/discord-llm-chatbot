@@ -846,7 +846,11 @@ def classify_syndication_cache_hit(
     """Classify cache hit kind as `neg`, `data`, or None when stale."""
     if not syndication_cache_is_fresh(now_s, default_ttl_s, cached):
         return None
-    return "neg" if cached.get("neg") else "data"
+    return (
+        build_syndication_negative_cache_hit_label()
+        if cached.get("neg")
+        else build_syndication_data_cache_hit_label()
+    )
 
 
 def build_syndication_negative_cache_entry(now_s: float) -> Dict[str, Any]:
@@ -857,6 +861,16 @@ def build_syndication_negative_cache_entry(now_s: float) -> Dict[str, Any]:
 def build_syndication_cache_entry(data: Any, now_s: float) -> Dict[str, Any]:
     """Build positive syndication cache entry with timestamp."""
     return {"data": data, "ts": now_s}
+
+
+def build_syndication_negative_cache_hit_label() -> str:
+    """Return cache-hit label for negative syndication cache entries."""
+    return "neg"
+
+
+def build_syndication_data_cache_hit_label() -> str:
+    """Return cache-hit label for data-backed syndication cache entries."""
+    return "data"
 
 
 def build_syndication_endpoint_url(base: str, endpoint: str) -> str:
