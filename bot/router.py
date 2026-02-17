@@ -152,6 +152,7 @@ from .router_components import (
     format_syndication_error_fallback,
     extract_syndication_photo_urls,
     build_syndication_non_200_log_payload,
+    build_syndication_non_200_metric_payload,
     build_syndication_fetch_failed_payload,
     build_x_text_canon_payload,
     x_syn_probe_budget_timeout_s,
@@ -1070,14 +1071,18 @@ class Router:
                         )
                         self._metric_inc(
                             "x.syndication.non_200",
-                            {"status": str(resp.status_code), "endpoint": endpoint},
+                            build_syndication_non_200_metric_payload(
+                                status=resp.status_code,
+                                endpoint=endpoint,
+                            ),
                         )
                         continue
                     try:
                         data = resp.json()
                     except Exception:
                         self._metric_inc(
-                            "x.syndication.invalid_json", {"endpoint": endpoint}
+                            "x.syndication.invalid_json",
+                            build_syndication_fetch_metric_payload(endpoint),
                         )
                         continue
                     # If the JSON lacks usable text, try oEmbed fallbacks before moving on

@@ -524,6 +524,18 @@ def build_syndication_non_200_log_payload(
     }
 
 
+def build_syndication_non_200_metric_payload(
+    *,
+    status: int,
+    endpoint: str,
+) -> Dict[str, str]:
+    """Build metrics payload for syndication non-200 counters."""
+    return {
+        "status": str(status),
+        "endpoint": endpoint,
+    }
+
+
 def build_syndication_fetch_failed_payload(
     *,
     tweet_id: str,

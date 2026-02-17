@@ -34,6 +34,7 @@ from bot.router_components.x_routing import (
     build_x_text_miss_payload,
     build_x_text_resolve_payload,
     build_syndication_non_200_log_payload,
+    build_syndication_non_200_metric_payload,
     build_syndication_fetch_failed_payload,
     build_x_text_canon_payload,
     build_oembed_text_payload,
@@ -593,6 +594,16 @@ def test_build_syndication_non_200_log_payload_shape() -> None:
             "status": 403,
             "endpoint": "widgets",
         }
+    }
+
+
+def test_build_syndication_non_200_metric_payload_shape() -> None:
+    assert build_syndication_non_200_metric_payload(
+        status=403,
+        endpoint="widgets",
+    ) == {
+        "status": "403",
+        "endpoint": "widgets",
     }
 
 
