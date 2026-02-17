@@ -925,3 +925,18 @@
   - Validation:
     - `./.venv/bin/pytest -q tests/router/test_router_caption_only_helpers.py tests/router/test_x_api_routing.py tests/router/test_router_x_base_text_resolution.py` -> `54 passed`
     - `./.venv/bin/pytest -q tests/core tests/router tests/syndication tests/vision tests/test_hear_ffmpeg_resolution.py tests/test_hear_stream_abort.py tests/test_media_ingestion.py tests/test_video_ingest.py tests/router/test_router_x_result_format_contract.py tests/router/test_router_x_base_text_resolution.py tests/test_media_ingestion_compat_contracts.py tests/vision/test_money_contract.py tests/test_media_ingestion_helpers.py tests/test_stt_pipeline_runtime.py tests/test_stt_pipeline_ffmpeg_runtime.py tests/test_stt_pipeline_youtube_path.py tests/test_stt_pipeline_result_payload.py tests/test_stt_pipeline_spec_select.py tests/test_stt_pipeline_logging.py tests/test_stt_pipeline_lifecycle.py tests/test_stt_pipeline_url_ingest.py tests/test_stt_pipeline_transcribe_flow.py tests/test_stt_pipeline_stitch.py` -> `323 passed`
+- 2026-02-17:
+  - Refactor (behavior-preserving): extracted shared X base-text+transcription formatter:
+    - `bot/router.py::_format_x_with_resolved_base_text()`
+  - Rewired duplicated Twitter branches in video URL handler:
+    - STT success branch in `_handle_video_url()`
+    - no-speech caption-only fallback branch in `_handle_video_url()`
+  - Preserved behavior:
+    - still resolves base text via `_resolve_x_base_text_for_url(url)`
+    - still formats via `_format_x_tweet_with_transcription(...)`
+    - no-speech branch still emits existing fallback breadcrumbs before formatting
+  - Extended tests in `tests/router/test_router_caption_only_helpers.py`:
+    - `test_format_x_with_resolved_base_text_delegates`
+  - Validation:
+    - `./.venv/bin/pytest -q tests/router/test_router_caption_only_helpers.py tests/router/test_x_api_routing.py tests/router/test_router_x_base_text_resolution.py` -> `55 passed`
+    - `./.venv/bin/pytest -q tests/core tests/router tests/syndication tests/vision tests/test_hear_ffmpeg_resolution.py tests/test_hear_stream_abort.py tests/test_media_ingestion.py tests/test_video_ingest.py tests/router/test_router_x_result_format_contract.py tests/router/test_router_x_base_text_resolution.py tests/test_media_ingestion_compat_contracts.py tests/vision/test_money_contract.py tests/test_media_ingestion_helpers.py tests/test_stt_pipeline_runtime.py tests/test_stt_pipeline_ffmpeg_runtime.py tests/test_stt_pipeline_youtube_path.py tests/test_stt_pipeline_result_payload.py tests/test_stt_pipeline_spec_select.py tests/test_stt_pipeline_logging.py tests/test_stt_pipeline_lifecycle.py tests/test_stt_pipeline_url_ingest.py tests/test_stt_pipeline_transcribe_flow.py tests/test_stt_pipeline_stitch.py` -> `324 passed`

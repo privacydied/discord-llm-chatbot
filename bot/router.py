@@ -624,6 +624,17 @@ class Router:
             stt_res=stt_error_result,
         )
 
+    async def _format_x_with_resolved_base_text(
+        self, *, url: str, stt_res: Any
+    ) -> str:
+        """Resolve X base text for URL and format with STT payload."""
+        base_text = await self._resolve_x_base_text_for_url(url)
+        return self._format_x_tweet_with_transcription(
+            base_text=base_text,
+            url=url,
+            stt_res=stt_res,
+        )
+
     async def _route_twitter_syndication_to_vl(
         self, syn_payload: Dict[str, Any], url: str
     ) -> str:
@@ -5578,9 +5589,7 @@ class Router:
 
             if transcription:
                 if is_twitter:
-                    base_text = await self._resolve_x_base_text_for_url(url)
-                    return self._format_x_tweet_with_transcription(
-                        base_text=base_text,
+                    return await self._format_x_with_resolved_base_text(
                         url=url,
                         stt_res={"transcription": transcription, "metadata": metadata},
                     )
@@ -5590,12 +5599,8 @@ class Router:
             else:
                 # No/low speech case: for Twitter, degrade to caption-only evidence and continue [REH]
                 if is_twitter:
-                    base_text = await self._resolve_x_base_text_for_url(url)
-
                     self._emit_caption_only_fallback_breadcrumbs("no_speech")
-
-                    composed = self._format_x_tweet_with_transcription(
-                        base_text=base_text,
+                    composed = await self._format_x_with_resolved_base_text(
                         url=url,
                         stt_res=(result or {}),
                     )

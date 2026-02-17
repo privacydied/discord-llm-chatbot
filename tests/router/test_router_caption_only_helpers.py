@@ -186,6 +186,36 @@ def test_format_x_video_stt_error_result_defaults_error(monkeypatch) -> None:
     assert captured["stt_res"]["error"] == "transcription_failed"
 
 
+@pytest.mark.asyncio
+async def test_format_x_with_resolved_base_text_delegates(monkeypatch) -> None:
+    router = Router(DummyBot())
+    captured = {}
+
+    async def _resolve_base(self, url):
+        captured["resolved_url"] = url
+        return "resolved base"
+
+    def _fmt(self, *, base_text=None, url="", stt_res=None, **kwargs):
+        captured["base_text"] = base_text
+        captured["format_url"] = url
+        captured["stt_res"] = stt_res
+        return "formatted"
+
+    monkeypatch.setattr(Router, "_resolve_x_base_text_for_url", _resolve_base)
+    monkeypatch.setattr(Router, "_format_x_tweet_with_transcription", _fmt)
+
+    out = await router._format_x_with_resolved_base_text(
+        url="https://x.com/u/status/1",
+        stt_res={"transcription": "hello"},
+    )
+
+    assert out == "formatted"
+    assert captured["resolved_url"] == "https://x.com/u/status/1"
+    assert captured["base_text"] == "resolved base"
+    assert captured["format_url"] == "https://x.com/u/status/1"
+    assert captured["stt_res"] == {"transcription": "hello"}
+
+
 def test_classify_stt_error_reason_matches_existing_semantics() -> None:
     router = Router(DummyBot())
 
