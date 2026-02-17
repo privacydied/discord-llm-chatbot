@@ -10,7 +10,6 @@ async def test_preprocess_and_transcribe_success() -> None:
     spans = object()
     download = object()
     ram_guard_calls = []
-    select_calls = []
 
     class _Job:
         def __init__(self) -> None:
@@ -23,20 +22,30 @@ async def test_preprocess_and_transcribe_success() -> None:
         def check(self, stage: str) -> None:
             ram_guard_calls.append(stage)
 
+    class _Logger:
+        def __init__(self) -> None:
+            self.info_calls = []
+
+        def info(self, msg, *args):
+            self.info_calls.append((msg, args))
+
     async def _preprocess(**kwargs):
         assert kwargs["spans"] is spans
         assert kwargs["download"] is download
         assert kwargs["voice_note"] is True
         return SimpleNamespace(duration_in=42.5)
 
-    def _select_model_spec(duration_in_s: float):
-        select_calls.append(duration_in_s)
-        return "spec"
+    base_spec = SimpleNamespace(size="base")
+    manager = SimpleNamespace(
+        default_spec=base_spec,
+        downgrade_spec=lambda _spec: None,
+    )
+    log = _Logger()
 
     async def _run_whisper(pre, spans_arg, spec, ram_guard, job=None):
         assert pre.duration_in == 42.5
         assert spans_arg is spans
-        assert spec == "spec"
+        assert spec is base_spec
         assert job is test_job
         return SimpleNamespace(text="hello")
 
@@ -48,8 +57,10 @@ async def test_preprocess_and_transcribe_success() -> None:
         voice_note=True,
         ram_guard=_Guard(),
         job=test_job,
+        manager=manager,
+        logger=log,
+        downgrade_threshold_s=120.0,
         preprocess_audio_with_retry=_preprocess,
-        select_model_spec=_select_model_spec,
         run_whisper_with_fallback=_run_whisper,
     )
 
@@ -57,7 +68,7 @@ async def test_preprocess_and_transcribe_success() -> None:
     assert transcript.text == "hello"
     assert test_job.pre is pre
     assert ram_guard_calls == ["pre-stage"]
-    assert select_calls == [42.5]
+    assert log.info_calls == []
 
 
 @pytest.mark.asyncio
@@ -84,7 +95,11 @@ async def test_preprocess_and_transcribe_propagates_preprocess_error() -> None:
             voice_note=False,
             ram_guard=_Guard(),
             job=_Job(),
+            manager=SimpleNamespace(
+                default_spec=SimpleNamespace(size="base"),
+                downgrade_spec=lambda _spec: None,
+            ),
+            logger=SimpleNamespace(info=lambda *_args, **_kwargs: None),
             preprocess_audio_with_retry=_preprocess,
-            select_model_spec=lambda _dur: "spec",
             run_whisper_with_fallback=_run_whisper,
         )

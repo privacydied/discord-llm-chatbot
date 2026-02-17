@@ -65,7 +65,6 @@ from .stt_pipeline import (
     load_stt_runtime_compat,
     parse_stt_max_ram_mb,
     preprocess_and_transcribe,
-    select_initial_model_spec,
     try_youtube_transcript_first,
 )
 from .youtube_transcript import resolve_youtube_transcript
@@ -1937,13 +1936,10 @@ async def hear_infer(audio: Union[Path, "discord.Attachment"]) -> str:
                 voice_note=voice_note,
                 ram_guard=ram_guard,
                 job=job,
+                manager=stt_manager,
+                logger=logger,
+                downgrade_threshold_s=120.0,
                 preprocess_audio_with_retry=_preprocess_audio_with_retry,
-                select_model_spec=lambda duration_in_s: select_initial_model_spec(
-                    manager=stt_manager,
-                    duration_in_s=duration_in_s,
-                    downgrade_threshold_s=120.0,
-                    logger=logger,
-                ),
                 run_whisper_with_fallback=_run_whisper_with_fallback,
             )
 
@@ -2029,13 +2025,10 @@ async def hear_infer_from_url(url: str, force_refresh: bool = False) -> Dict[str
                 voice_note=False,
                 ram_guard=ram_guard,
                 job=job,
+                manager=stt_manager,
+                logger=logger,
+                downgrade_threshold_s=120.0,
                 preprocess_audio_with_retry=_preprocess_audio_with_retry,
-                select_model_spec=lambda duration_in_s: select_initial_model_spec(
-                    manager=stt_manager,
-                    duration_in_s=duration_in_s,
-                    downgrade_threshold_s=120.0,
-                    logger=logger,
-                ),
                 run_whisper_with_fallback=_run_whisper_with_fallback,
             )
 
