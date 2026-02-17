@@ -171,6 +171,7 @@ from bot.router_components.x_routing import (
     x_syn_quick_request_timeouts,
     build_syndication_photo_payload,
     format_twitter_syndication_images_log_line,
+    resolve_first_image_host,
     resolve_and_probe_twitter_images,
 )
 
@@ -1750,6 +1751,12 @@ def test_format_twitter_syndication_images_log_line_with_and_without_msg_id() ->
         format_twitter_syndication_images_log_line(["not a url"])
         == "route.twitter.syndication | images=1 | n/a"
     )
+
+
+def test_resolve_first_image_host_variants() -> None:
+    assert resolve_first_image_host(["https://pbs.twimg.com/media/abc.jpg"]) == "pbs.twimg.com"
+    assert resolve_first_image_host(["not a url"]) == ""
+    assert resolve_first_image_host([]) == ""
 
 
 @pytest.mark.asyncio

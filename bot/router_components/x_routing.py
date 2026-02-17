@@ -1505,17 +1505,23 @@ def format_twitter_syndication_images_log_line(
     image_urls: List[str], *, msg_id: Optional[int] = None
 ) -> str:
     """Format canonical breadcrumb line for Twitter image-route detection."""
+    first_host = resolve_first_image_host(image_urls)
+    suffix = f" | msg_id={msg_id}" if msg_id is not None else ""
+    return (
+        f"route.twitter.syndication | images={len(image_urls)} | "
+        f"{first_host or 'n/a'}{suffix}"
+    )
+
+
+def resolve_first_image_host(image_urls: List[str]) -> str:
+    """Resolve first parsed host from image URL list preserving legacy failures."""
     first_host = ""
     try:
         if image_urls:
             first_host = urlparse(image_urls[0]).netloc
     except Exception:
         first_host = ""
-    suffix = f" | msg_id={msg_id}" if msg_id is not None else ""
-    return (
-        f"route.twitter.syndication | images={len(image_urls)} | "
-        f"{first_host or 'n/a'}{suffix}"
-    )
+    return first_host
 
 
 async def resolve_and_probe_twitter_images(
