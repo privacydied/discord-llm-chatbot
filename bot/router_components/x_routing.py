@@ -1180,10 +1180,18 @@ def build_syndication_fetch_plan_components(
     tweet_id: str,
 ) -> Tuple[str, Dict[str, str], List[Tuple[str, Dict[str, str]]]]:
     """Build canonical fetch plan components from tweet id."""
+    base, headers, params_variants = build_syndication_fetch_plan_values(tweet_id)
+    return build_syndication_fetch_plan_tuple(base, headers, params_variants)
+
+
+def build_syndication_fetch_plan_values(
+    tweet_id: str,
+) -> Tuple[str, Dict[str, str], List[Tuple[str, Dict[str, str]]]]:
+    """Return canonical fetch plan values tuple (base, headers, variants)."""
     base = build_syndication_base_url()
     headers = build_syndication_fetch_headers()
     params_variants = build_syndication_fetch_params_variants(tweet_id)
-    return build_syndication_fetch_plan_tuple(base, headers, params_variants)
+    return base, headers, params_variants
 
 
 def build_syndication_fetch_plan_tuple(
