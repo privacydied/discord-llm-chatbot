@@ -1838,11 +1838,21 @@ def compile_url_extract_regex(pattern: str, *, flags: int) -> Any:
 
 def compile_url_extract_pattern_argument(pattern: str) -> str:
     """Return normalized pattern argument for URL regex compilation."""
+    return compile_url_extract_pattern_value(pattern)
+
+
+def compile_url_extract_pattern_value(pattern: str) -> str:
+    """Return value used by URL extract pattern argument helper."""
     return pattern
 
 
 def compile_url_extract_flags_argument(flags: int) -> int:
     """Return normalized flags argument for URL regex compilation."""
+    return compile_url_extract_flags_value(flags)
+
+
+def compile_url_extract_flags_value(flags: int) -> int:
+    """Return value used by URL extract flags argument helper."""
     return flags
 
 
