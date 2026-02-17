@@ -203,6 +203,7 @@ from bot.router_components.x_routing import (
     x_url_extract_pattern,
     iter_status_url_candidates,
     x_url_extract_regex,
+    raw_url_items_buffer,
     collect_raw_urls_from_texts,
     iter_url_matches,
     iter_text_urls,
@@ -311,6 +312,10 @@ def test_iter_status_url_candidates_yields_raw_matches() -> None:
 def test_x_url_extract_regex_matches_expected_urls() -> None:
     matches = [m.group(0) for m in x_url_extract_regex().finditer("x https://x.com/u/status/1 y")]
     assert matches == ["https://x.com/u/status/1"]
+
+
+def test_raw_url_items_buffer_starts_empty() -> None:
+    assert raw_url_items_buffer() == []
 
 
 def test_iter_text_urls_yields_raw_matches() -> None:

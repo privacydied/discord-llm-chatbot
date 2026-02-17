@@ -1676,13 +1676,18 @@ def x_url_extract_regex() -> Any:
 
 def extract_raw_urls_from_texts(texts: Iterable[str]) -> List[str]:
     """Extract raw URLs from multiple text blobs in-order with de-duplication."""
-    raw_urls: List[str] = []
+    raw_urls = raw_url_items_buffer()
     try:
         url_re = x_url_extract_regex()
         collect_raw_urls_from_texts(raw_urls, texts, url_re=url_re)
     except Exception:
         pass
     return raw_urls
+
+
+def raw_url_items_buffer() -> List[str]:
+    """Build mutable list buffer for extracted raw URL collection."""
+    return []
 
 
 def collect_raw_urls_from_texts(
