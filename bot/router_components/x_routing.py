@@ -2230,6 +2230,16 @@ def append_unique_str(items: List[str], value: str) -> None:
 
 def unique_value_missing(items: List[str], value: str) -> bool:
     """Return whether value is missing from list used for unique append."""
+    return unique_value_missing_source(items, value)
+
+
+def unique_value_missing_source(items: List[str], value: str) -> bool:
+    """Return source membership check result for unique-value helper."""
+    return unique_value_missing_result(items, value)
+
+
+def unique_value_missing_result(items: List[str], value: str) -> bool:
+    """Return value used by unique-value-missing source helper."""
     return value not in items
 
 

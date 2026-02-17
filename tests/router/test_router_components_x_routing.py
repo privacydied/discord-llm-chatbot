@@ -25,6 +25,8 @@ from bot.router_components.x_routing import (
     append_x_url_if_match,
     append_unique_str,
     unique_value_missing,
+    unique_value_missing_source,
+    unique_value_missing_result,
     append_raw_url_if_present,
     raw_url_should_append,
     raw_url_is_present,
@@ -842,6 +844,16 @@ def test_append_unique_str_only_appends_new_values() -> None:
 def test_unique_value_missing_checks_membership() -> None:
     assert unique_value_missing(["a"], "b")
     assert not unique_value_missing(["a"], "a")
+
+
+def test_unique_value_missing_source_checks_membership() -> None:
+    assert unique_value_missing_source(["a"], "b")
+    assert not unique_value_missing_source(["a"], "a")
+
+
+def test_unique_value_missing_result_checks_membership() -> None:
+    assert unique_value_missing_result(["a"], "b")
+    assert not unique_value_missing_result(["a"], "a")
 
 
 def test_is_x_url_candidate_source_delegates_predicate() -> None:
