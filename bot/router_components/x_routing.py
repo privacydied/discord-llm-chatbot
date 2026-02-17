@@ -666,7 +666,10 @@ def build_syndication_user_agent_platform() -> str:
 
 def build_syndication_fetch_accept_language() -> str:
     """Return canonical Accept-Language for CDN syndication fetches."""
-    return f"{build_syndication_accept_language_pair()};{build_syndication_lang_quality()}"
+    return (
+        f"{build_syndication_region_locale()},"
+        f"{build_syndication_accept_language_secondary_entry()}"
+    )
 
 
 def build_syndication_region_locale() -> str:
@@ -682,6 +685,11 @@ def build_syndication_accept_language_pair() -> str:
 def build_syndication_lang_quality() -> str:
     """Return canonical quality token for secondary Accept-Language entries."""
     return "q=0.9"
+
+
+def build_syndication_accept_language_secondary_entry() -> str:
+    """Return canonical secondary Accept-Language entry with quality."""
+    return f"{build_syndication_lang()};{build_syndication_lang_quality()}"
 
 
 def build_syndication_fetch_referer() -> str:
