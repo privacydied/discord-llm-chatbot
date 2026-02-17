@@ -71,6 +71,7 @@ from bot.router_components.x_routing import (
     build_syndication_negative_cache_entry,
     build_syndication_cache_entry,
     build_syndication_endpoint_url,
+    build_syndication_negative_cache_ttl_cap_s,
     extract_oembed_html_text,
     syndication_has_usable_payload,
     syndication_media_hint_keys,
@@ -899,6 +900,10 @@ def test_syndication_cache_ttl_s_caps_negative_entries() -> None:
     assert syndication_cache_ttl_s(600.0, {"neg": True}) == 300.0
     assert syndication_cache_ttl_s(120.0, {"neg": True}) == 120.0
     assert syndication_cache_ttl_s(600.0, {"neg": False}) == 600.0
+
+
+def test_build_syndication_negative_cache_ttl_cap_s_constant() -> None:
+    assert build_syndication_negative_cache_ttl_cap_s() == 300.0
 
 
 def test_syndication_cache_ttl_s_preserves_attribute_error_for_bad_cache() -> None:
