@@ -524,6 +524,20 @@ def build_syndication_non_200_log_payload(
     }
 
 
+def build_syndication_fetch_failed_payload(
+    *,
+    tweet_id: str,
+    error: str,
+) -> Dict[str, Any]:
+    """Build structured payload for syndication fetch-failure breadcrumbs."""
+    return {
+        "detail": {
+            "tweet_id": tweet_id,
+            "error": error,
+        }
+    }
+
+
 def build_x_text_resolve_payload(
     *,
     primary: str,

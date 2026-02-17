@@ -34,6 +34,7 @@ from bot.router_components.x_routing import (
     build_x_text_miss_payload,
     build_x_text_resolve_payload,
     build_syndication_non_200_log_payload,
+    build_syndication_fetch_failed_payload,
     format_syndication_body_text,
     format_syndication_header_line,
     format_syndication_error_fallback,
@@ -576,6 +577,18 @@ def test_build_syndication_non_200_log_payload_shape() -> None:
             "tweet_id": "2022790791047823773",
             "status": 403,
             "endpoint": "widgets",
+        }
+    }
+
+
+def test_build_syndication_fetch_failed_payload_shape() -> None:
+    assert build_syndication_fetch_failed_payload(
+        tweet_id="2022790791047823773",
+        error="timeout",
+    ) == {
+        "detail": {
+            "tweet_id": "2022790791047823773",
+            "error": "timeout",
         }
     }
 
