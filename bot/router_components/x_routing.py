@@ -628,12 +628,17 @@ def extract_oembed_payload_from_response(
 
 def build_syndication_oembed_url() -> str:
     """Return the publish.twitter oEmbed endpoint used in syndication fallbacks."""
-    return f"https://publish.twitter.com/{build_syndication_oembed_key()}"
+    return f"https://{build_syndication_oembed_host()}/{build_syndication_oembed_key()}"
 
 
 def build_syndication_oembed_key() -> str:
     """Return canonical oEmbed key used in endpoint paths and metric labels."""
     return "oembed"
+
+
+def build_syndication_oembed_host() -> str:
+    """Return canonical host used for oEmbed fallback requests."""
+    return "publish.twitter.com"
 
 
 def build_syndication_base_url() -> str:

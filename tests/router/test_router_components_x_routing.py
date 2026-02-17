@@ -41,6 +41,7 @@ from bot.router_components.x_routing import (
     extract_oembed_payload_from_response,
     build_syndication_oembed_url,
     build_syndication_oembed_key,
+    build_syndication_oembed_host,
     build_syndication_base_url,
     build_syndication_fetch_user_agent,
     build_syndication_fetch_accept_language,
@@ -766,6 +767,10 @@ def test_build_syndication_oembed_metric_endpoint_constants() -> None:
 
 def test_build_syndication_oembed_key_constant() -> None:
     assert build_syndication_oembed_key() == "oembed"
+
+
+def test_build_syndication_oembed_host_constant() -> None:
+    assert build_syndication_oembed_host() == "publish.twitter.com"
 
 
 def test_build_syndication_oembed_fallback_params_ordered_variants() -> None:
