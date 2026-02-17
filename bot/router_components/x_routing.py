@@ -1924,9 +1924,14 @@ def append_matched_status_url(
     """Append canonicalized status URL for a URL already known to match."""
     append_canonical_status_url(
         items,
-        raw_url,
+        matched_status_raw_value(raw_url),
         canonicalize_status_url=canonicalize_status_url,
     )
+
+
+def matched_status_raw_value(raw_url: str) -> str:
+    """Return matched status raw URL value before canonical append."""
+    return raw_url
 
 
 def append_matched_x_url(

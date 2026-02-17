@@ -32,6 +32,7 @@ from bot.router_components.x_routing import (
     status_url_matches_predicate,
     is_status_url_candidate,
     append_matched_status_url,
+    matched_status_raw_value,
     append_matched_x_url,
     is_tweet_media_url,
     is_twitter_media_cdn,
@@ -525,6 +526,10 @@ def test_append_matched_status_url_only_appends_unique_canonical() -> None:
         canonicalize_status_url=lambda u: u.split("?")[0].replace("twitter.com", "x.com"),
     )
     assert items == ["https://x.com/u/status/1", "https://x.com/v/status/2"]
+
+
+def test_matched_status_raw_value_identity() -> None:
+    assert matched_status_raw_value("https://x.com/u/status/1") == "https://x.com/u/status/1"
 
 
 def test_append_matched_x_url_only_appends_unique_canonical() -> None:
