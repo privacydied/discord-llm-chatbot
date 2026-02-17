@@ -839,10 +839,17 @@ def build_syndication_oembed_params(
     )
     lang = build_syndication_lang()
     return {
-        "url": build_syndication_oembed_status_url(host, tweet_id),
+        build_syndication_oembed_url_key(): build_syndication_oembed_status_url(
+            host, tweet_id
+        ),
         **build_syndication_oembed_options(),
-        "lang": lang,
+        build_syndication_lang_key(): lang,
     }
+
+
+def build_syndication_oembed_url_key() -> str:
+    """Return canonical url param key used in oEmbed request params."""
+    return "url"
 
 
 def build_syndication_oembed_status_url(host: str, tweet_id: str) -> str:
