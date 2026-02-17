@@ -112,6 +112,7 @@ from .router_components import (
     parse_twitter_status_id,
     strip_leading_bot_mention,
     strip_urls,
+    unwrap_x_media_url,
 )
 
 if TYPE_CHECKING:
@@ -1556,20 +1557,7 @@ class Router:
     @staticmethod
     def _unwrap_x_media_url(url: str) -> str:
         """Unwrap proxy download URLs returned by fx/vx helpers back to the media CDN."""
-        try:
-            parsed = urlparse(url)
-            host = (parsed.netloc or "").lower()
-            if host in {"api.fxtwitter.com", "api.vxtwitter.com"}:
-                params = parse_qs(parsed.query or "")
-                for key in ("url", "media_url", "target", "u"):
-                    values = params.get(key)
-                    if values:
-                        candidate = unquote(values[0])
-                        if candidate.startswith("http"):
-                            return candidate
-            return url
-        except Exception:
-            return url
+        return unwrap_x_media_url(url)
 
     @staticmethod
     def _collect_x_candidate_urls(item: InputItem) -> List[str]:

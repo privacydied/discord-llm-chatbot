@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from typing import Any, Callable, Iterable, List, Optional
-from urllib.parse import urlparse, urlunparse
+from urllib.parse import parse_qs, unquote, urlparse, urlunparse
 
 from bot.x_api_client import XApiClient
 
@@ -166,6 +166,24 @@ def normalize_x_url(url: str) -> str:
         if path.endswith("/"):
             path = path[:-1]
         return urlunparse(("https", host, path, "", "", ""))
+    except Exception:
+        return url
+
+
+def unwrap_x_media_url(url: str) -> str:
+    """Unwrap fx/vx API proxy URLs back to the media CDN when possible."""
+    try:
+        parsed = urlparse(url)
+        host = (parsed.netloc or "").lower()
+        if host in {"api.fxtwitter.com", "api.vxtwitter.com"}:
+            params = parse_qs(parsed.query or "")
+            for key in ("url", "media_url", "target", "u"):
+                values = params.get(key)
+                if values:
+                    candidate = unquote(values[0])
+                    if candidate.startswith("http"):
+                        return candidate
+        return url
     except Exception:
         return url
 

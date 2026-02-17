@@ -12,6 +12,7 @@ from bot.router_components.x_routing import (
     is_twitter_url,
     normalize_x_url,
     parse_twitter_status_id,
+    unwrap_x_media_url,
 )
 
 
@@ -106,3 +107,15 @@ def test_extract_raw_urls_and_filter_canonical_x_urls() -> None:
         canonicalize_x_url=lambda u: u.split("?")[0].replace("twitter.com", "x.com"),
     )
     assert filtered == ["https://x.com/a/status/1"]
+
+
+def test_unwrap_x_media_url() -> None:
+    wrapped = (
+        "https://api.fxtwitter.com/dl?url="
+        "https%3A%2F%2Fvideo.twimg.com%2Fext_tw_video%2Fabc%2Fvid%2F720x1280%2Fv.mp4"
+    )
+    assert (
+        unwrap_x_media_url(wrapped)
+        == "https://video.twimg.com/ext_tw_video/abc/vid/720x1280/v.mp4"
+    )
+    assert unwrap_x_media_url("https://x.com/user/status/1") == "https://x.com/user/status/1"

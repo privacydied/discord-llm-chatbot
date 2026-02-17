@@ -27,6 +27,7 @@ from .x_routing import (
     is_twitter_url,
     normalize_x_url,
     parse_twitter_status_id,
+    unwrap_x_media_url,
 )
 
 __all__ = [
@@ -55,4 +56,5 @@ __all__ = [
     "strip_leading_bot_mention",
     "strip_urls",
     "collect_x_candidate_urls",
+    "unwrap_x_media_url",
 ]

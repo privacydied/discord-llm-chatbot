@@ -117,3 +117,10 @@
   - Validation:
     - `./.venv/bin/python -m py_compile bot/router.py bot/router_components/__init__.py bot/router_components/input_harvest.py`
     - `./.venv/bin/pytest -q tests/router/test_router_components_input_harvest.py tests/router/test_router_components_gating.py tests/router/test_router_components_x_routing.py tests/router/test_router_components_compose.py tests/test_video_ingest.py tests/test_stt_pipeline_runtime.py tests/test_stt_pipeline_ffmpeg_runtime.py tests/test_stt_pipeline_youtube_path.py` -> `34 passed`
+- 2026-02-17:
+  - Added `unwrap_x_media_url()` to `bot/router_components/x_routing.py`.
+  - Routed `Router._unwrap_x_media_url` through extracted helper.
+  - Expanded tests in `tests/router/test_router_components_x_routing.py`.
+  - Validation:
+    - `./.venv/bin/python -m py_compile bot/router.py bot/router_components/__init__.py bot/router_components/x_routing.py`
+    - `./.venv/bin/pytest -q tests/router/test_router_components_x_routing.py tests/router/test_router_components_input_harvest.py tests/router/test_router_components_gating.py tests/router/test_router_components_compose.py tests/test_video_ingest.py tests/test_stt_pipeline_runtime.py tests/test_stt_pipeline_ffmpeg_runtime.py tests/test_stt_pipeline_youtube_path.py` -> `35 passed`
