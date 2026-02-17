@@ -865,7 +865,7 @@ def build_syndication_fetch_params_variants_list(
     return [
         build_syndication_widgets_params_variant(tweet_id),
         build_syndication_tweet_result_params_variant(tweet_id),
-        build_syndication_widgets_params_variant(tweet_id, include_dnt=True),
+        build_syndication_widgets_params_variant_with_dnt(tweet_id),
     ]
 
 
@@ -879,6 +879,13 @@ def build_syndication_widgets_params_variant(
         build_syndication_widgets_endpoint(),
         build_syndication_fetch_params(tweet_id, include_dnt=include_dnt),
     )
+
+
+def build_syndication_widgets_params_variant_with_dnt(
+    tweet_id: str,
+) -> Tuple[str, Dict[str, str]]:
+    """Return widgets endpoint params variant with DNT flag enabled."""
+    return build_syndication_widgets_params_variant(tweet_id, include_dnt=True)
 
 
 def build_syndication_tweet_result_params_variant(

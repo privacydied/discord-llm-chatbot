@@ -84,6 +84,7 @@ from bot.router_components.x_routing import (
     build_syndication_fetch_params_variants_list,
     build_syndication_fetch_params_variants,
     build_syndication_widgets_params_variant,
+    build_syndication_widgets_params_variant_with_dnt,
     build_syndication_tweet_result_params_variant,
     build_syndication_widgets_endpoint,
     build_syndication_tweet_result_endpoint,
@@ -1214,6 +1215,15 @@ def test_build_syndication_widgets_params_variant_shape() -> None:
     assert build_syndication_widgets_params_variant(
         "2022790791047823773",
         include_dnt=True,
+    ) == (
+        "widgets",
+        {"id": "2022790791047823773", "lang": "en", "dnt": "false"},
+    )
+
+
+def test_build_syndication_widgets_params_variant_with_dnt_shape() -> None:
+    assert build_syndication_widgets_params_variant_with_dnt(
+        "2022790791047823773"
     ) == (
         "widgets",
         {"id": "2022790791047823773", "lang": "en", "dnt": "false"},
