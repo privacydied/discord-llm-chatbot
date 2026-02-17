@@ -322,6 +322,16 @@ def build_x_video_stt_error_result_payload(
     }
 
 
+def resolve_caption_only_base_text(
+    *,
+    api_text: Optional[str],
+    tweet_text: Optional[str],
+    base_text: Optional[str],
+) -> str:
+    """Resolve caption-only base text using legacy precedence and strip semantics."""
+    return (api_text or tweet_text or base_text or "").strip()
+
+
 def x_syn_probe_budget_timeout_s(x_syn_timeout_s: float) -> float:
     """Compute bounded timeout budget for image/media probe calls."""
     return min(float(x_syn_timeout_s) + 1.0, 4.5)

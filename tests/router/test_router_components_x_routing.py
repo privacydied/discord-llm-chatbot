@@ -21,6 +21,7 @@ from bot.router_components.x_routing import (
     classify_stt_error_reason,
     build_stt_fail_log_payload,
     build_x_video_stt_error_result_payload,
+    resolve_caption_only_base_text,
     resolve_twitter_status_id,
     is_twitter_status_url,
     stt_result_has_transcription,
@@ -278,6 +279,34 @@ def test_build_x_video_stt_error_result_payload_defaults_and_shape() -> None:
         "media_kind": "video",
         "url": "https://x.com/u/status/2",
     }
+
+
+def test_resolve_caption_only_base_text_preserves_router_precedence() -> None:
+    assert (
+        resolve_caption_only_base_text(
+            api_text="api text",
+            tweet_text="tweet text",
+            base_text="base text",
+        )
+        == "api text"
+    )
+    assert (
+        resolve_caption_only_base_text(
+            api_text="",
+            tweet_text="tweet text",
+            base_text="base text",
+        )
+        == "tweet text"
+    )
+    # Preserve legacy behavior: truthy whitespace API text still wins before strip().
+    assert (
+        resolve_caption_only_base_text(
+            api_text="   ",
+            tweet_text="tweet text",
+            base_text="base text",
+        )
+        == ""
+    )
 
 
 def test_x_syn_probe_budget_timeout_s_caps_and_offsets() -> None:
