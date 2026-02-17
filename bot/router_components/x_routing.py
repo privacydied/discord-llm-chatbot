@@ -689,6 +689,16 @@ def build_syndication_oembed_fallback_params(
     ]
 
 
+def build_syndication_oembed_fallback_plan(
+    tweet_id: str,
+) -> Tuple[str, List[Tuple[str, Dict[str, str]]]]:
+    """Return oEmbed fallback URL and ordered variant params."""
+    return (
+        build_syndication_oembed_url(),
+        build_syndication_oembed_fallback_params(tweet_id),
+    )
+
+
 def build_syndication_fetch_plan(
     tweet_id: str,
 ) -> Tuple[str, Dict[str, str], List[Tuple[str, Dict[str, str]]]]:

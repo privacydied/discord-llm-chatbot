@@ -131,8 +131,7 @@ from .router_components import (
     resolve_caption_only_base_text,
     resolve_video_stt_error_base_text,
     extract_oembed_payload_from_response,
-    build_syndication_oembed_url,
-    build_syndication_oembed_fallback_params,
+    build_syndication_oembed_fallback_plan,
     build_syndication_fetch_plan,
     build_syndication_fetch_metric_payload,
     classify_syndication_cache_hit,
@@ -1088,11 +1087,13 @@ class Router:
                         continue
                     # If the JSON lacks usable text, try oEmbed fallbacks before moving on
                     if not _has_usable_payload(data):
-                        oembed_url = build_syndication_oembed_url()
+                        oembed_url, oembed_fallbacks = (
+                            build_syndication_oembed_fallback_plan(tweet_id)
+                        )
                         for (
                             metric_endpoint,
                             oembed_params,
-                        ) in build_syndication_oembed_fallback_params(tweet_id):
+                        ) in oembed_fallbacks:
                             if _has_usable_payload(data):
                                 break
                             try:
