@@ -468,46 +468,6 @@ class Router:
         """Safely read a prompt template from bot.system_prompts."""
         return get_system_prompt(self.bot, key, default)
 
-        # Queue non-blocking eager start to reduce first-check false negatives [PA]
-        try:
-            import asyncio
-
-            loop = asyncio.get_running_loop()
-            if (
-                loop
-                and loop.is_running()
-                and self._vision_orchestrator
-                and not getattr(self._vision_orchestrator, "_started", False)
-            ):
-                asyncio.create_task(self._vision_orchestrator.start())
-                self.logger.debug("🚀 Vision Orchestrator start queued (router init)")
-        except RuntimeError:
-            # No running loop at construction time; lazy start path will cover this
-            pass
-
-        # Feature flags summary (treat missing as enabled) [CMV]
-        ve = bool(self.config.get("VISION_ENABLED", True))
-        vti = bool(self.config.get("VISION_T2I_ENABLED", True))
-        self.logger.info(
-            f"Vision flags | VISION_ENABLED={'on' if ve else 'off'} VISION_T2I_ENABLED={'on' if vti else 'off'}"
-        )
-
-        # Load centralized VL prompt guidelines if available [CA]
-        self._vl_prompt_guidelines: Optional[str] = None
-        try:
-            prompts_dir = (
-                Path(__file__).resolve().parents[1] / "prompts" / "vl-prompt.txt"
-            )
-            if prompts_dir.exists():
-                content = prompts_dir.read_text(encoding="utf-8").strip()
-                if content:
-                    self._vl_prompt_guidelines = content
-                    self.logger.debug(
-                        "Loaded VL prompt guidelines from prompts/vl-prompt.txt"
-                    )
-        except Exception:
-            pass
-
     def _format_x_tweet_with_transcription(
         self,
         *,
@@ -562,84 +522,6 @@ class Router:
         return await self._flow_process_text(
             content=fallback_content.strip(), context=context_str, message=message
         )
-
-        if VisionIntentRouter is not None and self.config.get("VISION_ENABLED", True):
-            try:
-                self.logger.info("🔧 Creating VisionIntentRouter...")
-                self._vision_intent_router = VisionIntentRouter(self.config)
-                if self._vision_orchestrator:
-                    self.logger.info("✔ Vision system initialized (using orchestrator)")
-                else:
-                    self.logger.warning(
-                        "⚠️ VisionOrchestrator missing; availability will be gated"
-                    )
-            except Exception as e:
-                self.logger.error(
-                    f"❌ Failed to initialize Vision intent router: {e}", exc_info=True
-                )
-                self._vision_intent_router = None
-        else:
-            # Use centralized parsed booleans instead of raw reads [CA]
-            ve_parsed = self.config.get("VISION_ENABLED", True)
-            self.logger.warning(
-                f"⚠️ Vision system NOT initialized - vision_enabled={ve_parsed}, reason=module_unavailable_or_disabled"
-            )
-
-        # --- X/Twitter syndication probe feature flags (read-once, cached) [CMV] ---
-        try:
-            self._x_syn_probe_enabled: bool = bool(
-                self.config.get("X_SYNDICATION_PROBE_ENABLED", True)
-            )
-        except Exception:
-            self._x_syn_probe_enabled = True
-        try:
-            self._x_syn_order: str = str(
-                self.config.get("X_SYNDICATION_ORDER", "yt_dlp,html,api")
-            ).strip()
-        except Exception:
-            self._x_syn_order = "yt_dlp,html,api"
-        try:
-            self._x_syn_timeout_s: float = float(
-                self.config.get("X_SYNDICATION_TIMEOUT_S", 3.0)
-            )
-        except Exception:
-            self._x_syn_timeout_s = 3.0
-        try:
-            self._x_syn_max_images: int = int(
-                self.config.get("X_SYNDICATION_MAX_IMAGES", 4)
-            )
-        except Exception:
-            self._x_syn_max_images = 4
-        try:
-            domains = (
-                self.config.get(
-                    "X_SYNDICATION_ACCEPT_DOMAINS",
-                    "pbs.twimg.com,video.twimg.com,fxtwitter.com,vxtwitter.com",
-                )
-                or ""
-            )
-            self._x_syn_accept_domains: set[str] = {
-                d.strip().lower() for d in str(domains).split(",") if d.strip()
-            }
-        except Exception:
-            self._x_syn_accept_domains = {
-                "pbs.twimg.com",
-                "pbs-0.twimg.com",
-                "pbs-1.twimg.com",
-                "pbs-2.twimg.com",
-                "pbs-3.twimg.com",
-                "video.twimg.com",
-                "fxtwitter.com",
-                "vxtwitter.com",
-            }
-
-        # Gate for early X-resolve (kept on by default to prioritize direct media probes) [KBT]
-        try:
-            self._x_early_resolve_enabled: bool = bool(
-                self.config.get("X_EARLY_RESOLVE_ENABLED", True)
-            )
-        except Exception:
-            self._x_early_resolve_enabled = True
 
     async def _get_x_api_client(self) -> Optional[XApiClient]:
         """Create or return a cached XApiClient based on config. [CA][IV]"""

@@ -270,3 +270,10 @@
   - Validation:
     - `./.venv/bin/pytest -q tests/router/test_router_components_input_harvest.py tests/core/test_router.py tests/router/test_x_api_routing.py tests/router/test_router_components_prompt_access.py` -> `33 passed`
     - `./.venv/bin/pytest -q tests/core tests/router tests/syndication tests/vision tests/test_hear_ffmpeg_resolution.py tests/test_hear_stream_abort.py tests/test_media_ingestion.py tests/test_video_ingest.py tests/router/test_router_x_result_format_contract.py tests/test_media_ingestion_compat_contracts.py tests/vision/test_money_contract.py` -> `221 passed`
+- 2026-02-17:
+  - Cleanup (behavior-preserving): removed unreachable dead code blocks in `bot/router.py`:
+    - stale post-return block in `_get_system_prompt()`
+    - stale post-return block in `_handle_x_twitter_fallback()`
+  - Validation:
+    - `./.venv/bin/pytest -q tests/core/test_router.py tests/router/test_x_api_routing.py tests/router/test_router_components_prompt_access.py tests/router/test_router_components_input_harvest.py` -> `33 passed`
+    - `./.venv/bin/pytest -q tests/core tests/router tests/syndication tests/vision tests/test_hear_ffmpeg_resolution.py tests/test_hear_stream_abort.py tests/test_media_ingestion.py tests/test_video_ingest.py tests/router/test_router_x_result_format_contract.py tests/test_media_ingestion_compat_contracts.py tests/vision/test_money_contract.py` -> `221 passed`
