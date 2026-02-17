@@ -624,6 +624,20 @@ class Router:
             stt_res=stt_error_result,
         )
 
+    async def _route_twitter_syndication_to_vl(
+        self, syn_payload: Dict[str, Any], url: str
+    ) -> str:
+        """Route a syndication-like tweet payload to the unified VL handler."""
+        from .syndication.handler import handle_twitter_syndication_to_vl
+
+        return await handle_twitter_syndication_to_vl(
+            syn_payload,
+            url,
+            self._unified_vl_to_text_pipeline,
+            self._get_system_prompt("vl_prompt"),
+            reply_style="ack+thoughts",
+        )
+
     def _build_visual_anchored_system_prompt(
         self, content: str, *, fallback: bool = False
     ) -> Optional[str]:
@@ -5509,16 +5523,9 @@ class Router:
                                     "text": tweet_text,
                                     "photos": [{"url": u} for u in imgs],
                                 }
-                                from .syndication.handler import (
-                                    handle_twitter_syndication_to_vl,
-                                )
-
-                                return await handle_twitter_syndication_to_vl(
+                                return await self._route_twitter_syndication_to_vl(
                                     syn_like,
                                     url,
-                                    self._unified_vl_to_text_pipeline,
-                                    self._get_system_prompt("vl_prompt"),
-                                    reply_style="ack+thoughts",
                                 )
                             except Exception:
                                 # Fallback: single-image VL without caption
@@ -6322,16 +6329,9 @@ class Router:
                                         "text": tweet_text,
                                         "photos": [{"url": u} for u in imgs],
                                     }
-                                    from .syndication.handler import (
-                                        handle_twitter_syndication_to_vl,
-                                    )
-
-                                    result = await handle_twitter_syndication_to_vl(
+                                    result = await self._route_twitter_syndication_to_vl(
                                         syn_like,
                                         url,
-                                        self._unified_vl_to_text_pipeline,
-                                        self._get_system_prompt("vl_prompt"),
-                                        reply_style="ack+thoughts",
                                     )
                                     return result
 
@@ -6439,16 +6439,9 @@ class Router:
                                         "text": image_text,
                                         "photos": [{"url": u} for u in sparse_images],
                                     }
-                                    from .syndication.handler import (
-                                        handle_twitter_syndication_to_vl,
-                                    )
-
-                                    return await handle_twitter_syndication_to_vl(
+                                    return await self._route_twitter_syndication_to_vl(
                                         syn_like,
                                         url,
-                                        self._unified_vl_to_text_pipeline,
-                                        self._get_system_prompt("vl_prompt"),
-                                        reply_style="ack+thoughts",
                                     )
                                 if sparse_kind not in ("video", "image"):
                                     # Last resort for sparse syndication: attempt STT directly on the tweet URL.
@@ -6513,10 +6506,6 @@ class Router:
 
                         if has_any_images:
                             # Images are present and no video is confirmed; route to unified syndication→VL handler.
-                            from .syndication.handler import (
-                                handle_twitter_syndication_to_vl,
-                            )
-
                             try:
                                 self.logger.info(
                                     "route=x_syndication | sending images to VL (hi-res)",
@@ -6532,12 +6521,9 @@ class Router:
                                         tweet_id, syn_for_vl, allow_tco_pointer=True
                                     )
                                 )
-                            result = await handle_twitter_syndication_to_vl(
+                            result = await self._route_twitter_syndication_to_vl(
                                 syn_for_vl,
                                 url,
-                                self._unified_vl_to_text_pipeline,
-                                self._get_system_prompt("vl_prompt"),
-                                reply_style="ack+thoughts",
                             )
                             # Syndication handler returns final text; pass through as string for aggregator
                             return result
@@ -6615,16 +6601,9 @@ class Router:
                                     "text": tweet_text,
                                     "photos": [{"url": u} for u in imgs],
                                 }
-                                from .syndication.handler import (
-                                    handle_twitter_syndication_to_vl,
-                                )
-
-                                result = await handle_twitter_syndication_to_vl(
+                                result = await self._route_twitter_syndication_to_vl(
                                     syn_like,
                                     url,
-                                    self._unified_vl_to_text_pipeline,
-                                    self._get_system_prompt("vl_prompt"),
-                                    reply_style="ack+thoughts",
                                 )
                                 return result
                         except Exception as e:

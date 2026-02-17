@@ -1,3 +1,5 @@
+import pytest
+
 from bot.router import Router
 
 
@@ -202,3 +204,38 @@ def test_extract_x_api_primary_tweet_handles_payload_variants() -> None:
     assert router._extract_x_api_primary_tweet({"data": []}) == {}
     assert router._extract_x_api_primary_tweet({"data": ["bad"]}) == {}
     assert router._extract_x_api_primary_tweet(None) == {}
+
+
+@pytest.mark.asyncio
+async def test_route_twitter_syndication_to_vl_delegates_to_handler(monkeypatch) -> None:
+    router = Router(DummyBot())
+    captured = {}
+
+    async def _handler(payload, url, pipeline, prompt, reply_style):
+        captured["payload"] = payload
+        captured["url"] = url
+        captured["pipeline"] = pipeline
+        captured["prompt"] = prompt
+        captured["reply_style"] = reply_style
+        return "handled"
+
+    import bot.syndication.handler as syndication_handler
+
+    monkeypatch.setattr(
+        syndication_handler,
+        "handle_twitter_syndication_to_vl",
+        _handler,
+    )
+
+    payload = {"text": "caption", "photos": [{"url": "https://pbs.twimg.com/a.jpg"}]}
+    out = await router._route_twitter_syndication_to_vl(
+        payload,
+        "https://x.com/u/status/1",
+    )
+
+    assert out == "handled"
+    assert captured["payload"] == payload
+    assert captured["url"] == "https://x.com/u/status/1"
+    assert captured["pipeline"] == router._unified_vl_to_text_pipeline
+    assert captured["prompt"] == router._get_system_prompt("vl_prompt")
+    assert captured["reply_style"] == "ack+thoughts"
