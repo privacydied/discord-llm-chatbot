@@ -2201,6 +2201,24 @@ def x_url_matches_predicate(
     is_x_url: Callable[[str], bool],
 ) -> bool:
     """Return whether raw URL matches X/Twitter predicate for append gating."""
+    return x_url_matches_predicate_source(raw_url, is_x_url=is_x_url)
+
+
+def x_url_matches_predicate_source(
+    raw_url: str,
+    *,
+    is_x_url: Callable[[str], bool],
+) -> bool:
+    """Return source predicate result used by X URL match helper."""
+    return x_url_matches_predicate_result(raw_url, is_x_url=is_x_url)
+
+
+def x_url_matches_predicate_result(
+    raw_url: str,
+    *,
+    is_x_url: Callable[[str], bool],
+) -> bool:
+    """Return value used by X URL match predicate source helper."""
     return is_x_url_candidate(raw_url, is_x_url=is_x_url)
 
 

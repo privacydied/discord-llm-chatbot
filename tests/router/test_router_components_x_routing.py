@@ -17,6 +17,8 @@ from bot.router_components.x_routing import (
     canonical_x_url_items_buffer_source,
     canonical_x_url_items_buffer_value,
     x_url_matches_predicate,
+    x_url_matches_predicate_source,
+    x_url_matches_predicate_result,
     is_x_url_candidate,
     is_x_url_candidate_source,
     is_x_url_candidate_result,
@@ -850,6 +852,16 @@ def test_is_x_url_candidate_source_delegates_predicate() -> None:
 def test_is_x_url_candidate_result_delegates_predicate() -> None:
     assert is_x_url_candidate_result("https://x.com/u/status/1", is_x_url=lambda _: True)
     assert not is_x_url_candidate_result("https://example.com", is_x_url=lambda _: False)
+
+
+def test_x_url_matches_predicate_source_delegates_predicate() -> None:
+    assert x_url_matches_predicate_source("https://x.com/u/status/1", is_x_url=lambda _: True)
+    assert not x_url_matches_predicate_source("https://example.com", is_x_url=lambda _: False)
+
+
+def test_x_url_matches_predicate_result_delegates_predicate() -> None:
+    assert x_url_matches_predicate_result("https://x.com/u/status/1", is_x_url=lambda _: True)
+    assert not x_url_matches_predicate_result("https://example.com", is_x_url=lambda _: False)
 
 
 def test_append_raw_url_if_present_only_appends_non_empty_unique() -> None:
