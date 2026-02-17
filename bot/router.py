@@ -456,14 +456,6 @@ class Router:
         # Gate for early X-resolve (enabled by default for correctness) [KBT]
         self._x_early_resolve_enabled = runtime_compat.x_early_resolve_enabled
 
-    def _append_note_once(self, text: str, note: str) -> str:
-        """Append a parenthetical note once, avoiding duplicates and preserving spacing."""
-        text = text or ""
-        if note in text:
-            return text
-        sep = "\n\n" if text and not text.endswith("\n") else ""
-        return f"{text}{sep}{note}".strip()
-
     def _get_system_prompt(self, key: str, default: Optional[str] = None) -> Optional[str]:
         """Safely read a prompt template from bot.system_prompts."""
         return get_system_prompt(self.bot, key, default)
@@ -495,32 +487,6 @@ class Router:
             user_text=user_text,
             tweet_caption=tweet_caption,
             vl_notes=vl_notes,
-        )
-
-    async def _handle_x_twitter_fallback(
-        self, tweet_url: str, message: Message, context_str: str
-    ) -> BotAction:
-        """Handle X/Twitter fallback to syndication/API for photos or text."""
-        try:
-            # Try to use existing _handle_general_url which already has syndication/VL logic
-            from .modality import InputItem
-
-            item = InputItem(source_type="url", payload=tweet_url)
-            result = await self._handle_general_url(item)
-
-            if result and result.strip():
-                return await self._flow_process_text(
-                    content=f"{message.content or ''}\n\n{result}".strip(),
-                    context=context_str,
-                    message=message,
-                )
-        except Exception as e:
-            self.logger.debug(f"X/Twitter syndication fallback failed: {e}")
-
-        # Final fallback: just return the original content with hint
-        fallback_content = f"{message.content or ''}\n\n(tweet content unavailable; proceeding without it)"
-        return await self._flow_process_text(
-            content=fallback_content.strip(), context=context_str, message=message
         )
 
     async def _get_x_api_client(self) -> Optional[XApiClient]:
