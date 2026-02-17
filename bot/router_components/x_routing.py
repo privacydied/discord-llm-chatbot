@@ -1750,6 +1750,11 @@ def compile_url_extract_regex(pattern: str, *, flags: int) -> Any:
 
 def x_url_extract_flags() -> int:
     """Return regex flags used by URL extraction pattern compiler."""
+    return x_url_extract_flags_value()
+
+
+def x_url_extract_flags_value() -> int:
+    """Return literal regex flags value used for URL extraction."""
     return re.IGNORECASE
 
 
