@@ -1737,7 +1737,12 @@ def status_url_candidates_regex_source() -> Any:
 
 def status_url_extract_regex() -> Any:
     """Return compiled regex used for status URL candidate extraction."""
-    return status_url_extract_regex_source()
+    return status_url_extract_regex_result(status_url_extract_regex_source())
+
+
+def status_url_extract_regex_result(regex: Any) -> Any:
+    """Return status URL extraction regex result for call-site symmetry."""
+    return regex
 
 
 def status_url_extract_regex_source() -> Any:
