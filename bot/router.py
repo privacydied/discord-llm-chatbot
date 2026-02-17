@@ -685,6 +685,14 @@ class Router:
             image_urls=image_urls,
         )
 
+    async def _resolve_and_probe_twitter_images(
+        self, *, url: str, tweet_id: Optional[str] = None
+    ) -> Tuple[str, List[str]]:
+        """Resolve status id and probe syndication for tweet images."""
+        status_id = self._resolve_twitter_status_id(url, tweet_id=tweet_id)
+        image_urls = await self._probe_twitter_syndication_images(url, status_id)
+        return status_id, (image_urls or [])
+
     def _log_twitter_syndication_images(
         self, image_urls: List[str], *, msg_id: Optional[int] = None
     ) -> None:
@@ -5656,9 +5664,8 @@ class Router:
                     self, "_x_syn_probe_enabled", True
                 ) and self._is_twitter_status_url(url):
                     try:
-                        status_id = self._resolve_twitter_status_id(url)
-                        imgs = await self._probe_twitter_syndication_images(
-                            url, status_id or ""
+                        status_id, imgs = await self._resolve_and_probe_twitter_images(
+                            url=url
                         )
                         if imgs:
                             # Prefer unified VL pipeline with caption when available [CA][REH]
@@ -6614,11 +6621,9 @@ class Router:
                         self, "_x_syn_probe_enabled", True
                     ) and self._is_twitter_status_url(url):
                         try:
-                            status_id = self._resolve_twitter_status_id(
-                                url, tweet_id=tweet_id
-                            )
-                            imgs = await self._probe_twitter_syndication_images(
-                                url, status_id
+                            status_id, imgs = await self._resolve_and_probe_twitter_images(
+                                url=url,
+                                tweet_id=tweet_id,
                             )
                             if imgs:
                                 result = await self._route_probed_twitter_images_with_caption(
