@@ -175,7 +175,7 @@ def normalize_x_url(url: str) -> str:
             "www.twitter.com",
             "twitter.com",
             "www.x.com",
-            "x.com",
+            build_syndication_x_host(),
             "fxtwitter.com",
             "www.fxtwitter.com",
             "vxtwitter.com",
@@ -184,7 +184,7 @@ def normalize_x_url(url: str) -> str:
             "www.fixupx.com",
         }
         if host in aliases:
-            host = "x.com"
+            host = build_syndication_x_host()
         path = p.path or ""
         if path.endswith("/"):
             path = path[:-1]
