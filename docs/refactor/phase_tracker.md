@@ -46,3 +46,13 @@
   - Validation:
     - `./.venv/bin/python -m py_compile bot/router.py bot/router_components/__init__.py bot/router_components/runtime.py bot/router_components/compose.py`
     - `./.venv/bin/pytest -q tests/router/test_router_components_compose.py tests/test_video_ingest.py` -> `11 passed`
+- 2026-02-17:
+  - Added `bot/router_components/gating.py` and `bot/router_components/input_harvest.py`.
+  - Routed router mention/reply checks through extracted gating helpers.
+  - Replaced duplicated text-attachment and URL cleanup helpers with shared input-harvest helpers.
+  - Added focused tests:
+    - `tests/router/test_router_components_gating.py`
+    - `tests/router/test_router_components_input_harvest.py`
+  - Validation:
+    - `./.venv/bin/python -m py_compile bot/router.py bot/router_components/__init__.py bot/router_components/gating.py bot/router_components/input_harvest.py`
+    - `./.venv/bin/pytest -q tests/router/test_router_components_compose.py tests/router/test_router_components_gating.py tests/router/test_router_components_input_harvest.py tests/test_video_ingest.py` -> `19 passed`

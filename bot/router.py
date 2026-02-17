@@ -89,8 +89,17 @@ from .memory.thread_tail import (
 from .router_components import (
     RouterRuntimeCompat,
     compose_x_tweet_with_visual_facts,
+    extract_urls_loose,
+    extract_urls_strict,
     format_x_tweet_with_transcription,
+    has_explicit_media_intent,
+    has_meaningful_text,
+    is_reply_to_bot,
+    is_text_attachment,
     load_router_runtime_compat,
+    mentions_bot,
+    strip_leading_bot_mention,
+    strip_urls,
 )
 
 if TYPE_CHECKING:
@@ -2344,31 +2353,11 @@ class Router:
 
     def _is_reply_to_bot(self, message: Message) -> bool:
         """Check if a message is a reply to the bot."""
-        if message.reference and message.reference.message_id:
-            # To check who the replied-to message is from, we might need to fetch the message
-            # This is a simplification. For a robust solution, you might need to fetch the message
-            # if it's not in the cache, which is an async operation.
-            # Here we assume a simple check is enough, or the logic is handled elsewhere.
-            ref_msg = getattr(message.reference, "resolved", None) or getattr(
-                message.reference, "cached_message", None
-            )
-            if ref_msg and ref_msg.author.id == self.bot.user.id:
-                return True
-        return False
+        return is_reply_to_bot(message, getattr(getattr(self.bot, "user", None), "id", None))
 
     def _mentions_bot(self, message: Message) -> bool:
         """Return True if the message explicitly mentions this bot."""
-        try:
-            mentions = getattr(message, "mentions", None) or []
-            bot_id = getattr(self.bot.user, "id", None)
-            if bot_id is None:
-                return False
-            for user in mentions:
-                if getattr(user, "id", None) == bot_id:
-                    return True
-        except Exception:
-            pass
-        return False
+        return mentions_bot(message, getattr(getattr(self.bot, "user", None), "id", None))
 
     def _update_dispatch_metadata(
         self,
@@ -3164,6 +3153,9 @@ class Router:
             cleaned_for_compat = re.sub(
                 mention_pattern, "", (message.content or "").strip()
             )
+            cleaned_for_compat = strip_leading_bot_mention(
+                cleaned_for_compat, getattr(getattr(self.bot, "user", None), "id", None)
+            )
             if (
                 has_attachments
                 and cleaned_for_compat == ""
@@ -3173,16 +3165,9 @@ class Router:
                 # attachment compat path so the text ingestion path can handle them.
                 try:
                     atts = list(getattr(message, "attachments", []) or [])
-
-                    def _is_text_att(a) -> bool:
-                        try:
-                            name = (getattr(a, "filename", "") or "").lower()
-                            ctype = (getattr(a, "content_type", "") or "").lower()
-                        except Exception:
-                            name, ctype = "", ""
-                        return name.endswith(".txt") or ctype.startswith("text/")
-
-                    all_text_files = bool(atts) and all(_is_text_att(a) for a in atts)
+                    all_text_files = bool(atts) and all(
+                        is_text_attachment(a) for a in atts
+                    )
                 except Exception:
                     all_text_files = False
 
@@ -3305,30 +3290,11 @@ class Router:
                     ).strip()
                 except Exception:
                     cleaned = (message.content or "").strip()
+                cleaned = strip_leading_bot_mention(
+                    cleaned, getattr(getattr(self.bot, "user", None), "id", None)
+                )
 
-                def _has_meaningful_text(s: str) -> bool:
-                    try:
-                        s = (s or "").strip()
-                        if not s:
-                            return False
-                        if re.search(r"[A-Za-z0-9]", s):
-                            return True
-                        if s in {"?", "!", "…", "??", "!!"}:
-                            return True
-                        # Emoji/pictographs fallback
-                        try:
-                            if re.search(r"[\U0001F300-\U0001FAFF\u2600-\u27BF]", s):
-                                return True
-                        except re.error:
-                            if re.search(r"[^\s\w]", s):
-                                return True
-                        if len(s) <= 3 and re.match(r"^[^\s]+$", s):
-                            return True
-                        return bool(s)
-                    except Exception:
-                        return bool(s and s.strip())
-
-                if is_mentioned and _has_meaningful_text(cleaned):
+                if is_mentioned and has_meaningful_text(cleaned):
                     try:
                         self.logger.info(
                             "text_default",
@@ -3378,6 +3344,9 @@ class Router:
                 cleaned_for_compat = re.sub(
                     mention_pattern, "", (message.content or "").strip()
                 )
+                cleaned_for_compat = strip_leading_bot_mention(
+                    cleaned_for_compat, getattr(getattr(self.bot, "user", None), "id", None)
+                )
                 if (
                     has_attachments
                     and cleaned_for_compat == ""
@@ -3386,17 +3355,8 @@ class Router:
                     # If all attachments are plain text (.txt/text/*), skip legacy compat path
                     try:
                         atts = list(getattr(message, "attachments", []) or [])
-
-                        def _is_text_att(a) -> bool:
-                            try:
-                                name = (getattr(a, "filename", "") or "").lower()
-                                ctype = (getattr(a, "content_type", "") or "").lower()
-                            except Exception:
-                                name, ctype = "", ""
-                            return name.endswith(".txt") or ctype.startswith("text/")
-
                         all_text_files = bool(atts) and all(
-                            _is_text_att(a) for a in atts
+                            is_text_attachment(a) for a in atts
                         )
                     except Exception:
                         all_text_files = False
@@ -3449,8 +3409,9 @@ class Router:
                 # Clean mention from content for processing
                 clean_content = content
                 if self._is_mentioned(message):
-                    mention_pattern = rf"^<@!?{self.bot.user.id}>\s*"
-                    clean_content = re.sub(mention_pattern, "", content).strip()
+                    clean_content = strip_leading_bot_mention(
+                        content, getattr(getattr(self.bot, "user", None), "id", None)
+                    )
 
                 # 5. Check for vision generation intent early (before multi-modal)
                 try:
@@ -4335,91 +4296,17 @@ class Router:
         items = collect_input_items(message)
         # Treat plain text attachments as prompt extensions, not standalone items
         try:
-
-            def _is_text_att(a) -> bool:
-                try:
-                    name = (getattr(a, "filename", "") or "").lower()
-                    ctype = (getattr(a, "content_type", "") or "").lower()
-                except Exception:
-                    name, ctype = "", ""
-                return name.endswith(".txt") or ctype.startswith("text/")
-
             items = [
                 it
                 for it in (items or [])
                 if not (
                     getattr(it, "source_type", None) == "attachment"
-                    and _is_text_att(getattr(it, "payload", None))
+                    and is_text_attachment(getattr(it, "payload", None))
                 )
             ]
         except Exception:
             # Non-fatal: fallback to original items list on any error
             pass
-
-        # Helper: relaxed chat signal check (accepts minimal tokens/emojis/punctuation)
-        def _has_meaningful_text(s: str) -> bool:
-            try:
-                s = (s or "").strip()
-                if not s:
-                    return False
-                # Letters/digits → yes
-                if re.search(r"[A-Za-z0-9]", s):
-                    return True
-                # Common punctuation tokens that imply a chat nudge
-                if s in {"?", "!", "…", "??", "!!"}:
-                    return True
-                # Emoji/pictographs
-                try:
-                    if re.search(r"[\U0001F300-\U0001FAFF\u2600-\u27BF]", s):
-                        return True
-                except re.error:
-                    # Narrow build fallback: any non-space symbol counts
-                    if re.search(r"[^\s\w]", s):
-                        return True
-                # Short word tokens like "ok", "yo", "hm"
-                if len(s) <= 3 and re.match(r"^[^\s]+$", s):
-                    return True
-                return bool(s)
-            except Exception:
-                return bool(s and s.strip())
-
-        # Helper: detect explicit media intent in user's words
-        def _explicit_media_intent(s: str) -> bool:
-            try:
-                s = (s or "").lower()
-                if not s:
-                    return False
-                keywords = (
-                    "summarize this video",
-                    "summarise this video",
-                    "summarize the video",
-                    "summarise the video",
-                    "summarize video",
-                    "analyze this video",
-                    "analyse this video",
-                    "analyze video",
-                    "analyse video",
-                    "what's in this pic",
-                    "whats in this pic",
-                    "what is in this pic",
-                    "what's in this image",
-                    "analyze this image",
-                    "analyse this image",
-                    "analyze this picture",
-                    "analyse this picture",
-                    "read this thread",
-                    "analyze this thread",
-                    "analyse this thread",
-                    "summarize this link",
-                    "summarise this link",
-                    "summarize the link",
-                    "summarise the link",
-                    "summarize this post",
-                    "summarise this post",
-                )
-                return any(k in s for k in keywords)
-            except Exception:
-                return False
 
         # Check for reply-image harvesting [VISION_REPLY_IMAGE_HARVEST]
         if message.reference and self.config.get("VISION_REPLY_IMAGE_HARVEST", True):
@@ -4477,7 +4364,7 @@ class Router:
                     # 1) Harvest URLs from referenced message content
                     try:
                         ref_text = getattr(ref_message, "content", "") or ""
-                        ref_urls = re.findall(r"https?://\S+", ref_text)
+                        ref_urls = extract_urls_loose(ref_text)
                         added = 0
                         for u in ref_urls:
                             key = u.strip()
@@ -4546,12 +4433,8 @@ class Router:
                 except Exception:
                     ref_msg = None
             if ref_msg and getattr(ref_msg, "content", None):
-                import re as _re
-
                 # Extract URLs from the referenced message
-                found_urls = _re.findall(
-                    r"https?://[^\s<>\"'\[\]{}|\\^`]+", ref_msg.content or ""
-                )
+                found_urls = extract_urls_strict(ref_msg.content or "")
                 if found_urls:
                     # Deduplicate against existing url items
                     try:
@@ -4597,13 +4480,9 @@ class Router:
                     except Exception:
                         ref_msg = None
                 if ref_msg:
-                    import re as _re
-
                     # 1) URLs present in the parent's text content
                     if getattr(ref_msg, "content", None):
-                        found_urls = _re.findall(
-                            r"https?://[^\s<>\"'\[\]{}|\\^`]+", ref_msg.content or ""
-                        )
+                        found_urls = extract_urls_strict(ref_msg.content or "")
                     else:
                         found_urls = []
 
@@ -4669,13 +4548,12 @@ class Router:
         except Exception:
             mentions = []
         if mentions and getattr(self.bot, "user", None) in mentions:
-            original_text = re.sub(
-                r"^<@!?{}>\s*".format(self.bot.user.id), "", original_text
-            ).strip()
+            original_text = strip_leading_bot_mention(
+                original_text, getattr(getattr(self.bot, "user", None), "id", None)
+            )
 
         # Remove URLs from text content since they will be processed separately
-        url_pattern = r'https?://[^\s<>"\'\'[\]{}|\\\^`]+'
-        original_text = re.sub(url_pattern, "", original_text).strip()
+        original_text = strip_urls(original_text)
 
         # Resolve inline [search(...)] directives inside the remaining text
         try:
@@ -4852,16 +4730,7 @@ class Router:
         # Ingest .txt attachments from the triggering message into the text prompt (first match only)
         try:
             atts = list(getattr(message, "attachments", []) or [])
-
-            def _is_text_att2(a) -> bool:
-                try:
-                    name = (getattr(a, "filename", "") or "").lower()
-                    ctype = (getattr(a, "content_type", "") or "").lower()
-                except Exception:
-                    name, ctype = "", ""
-                return name.endswith(".txt") or ctype.startswith("text/")
-
-            txt_atts = [a for a in atts if _is_text_att2(a)]
+            txt_atts = [a for a in atts if is_text_attachment(a)]
             loaded_count = 0
             bytes_total = 0
             truncated = False
@@ -5074,7 +4943,7 @@ class Router:
         if not items:
             # If user explicitly asked for media analysis but no media/URL is in scope → nag
             try:
-                wants_media = _explicit_media_intent(original_text)
+                wants_media = has_explicit_media_intent(original_text)
             except Exception:
                 wants_media = False
             if wants_media:
@@ -5179,7 +5048,7 @@ class Router:
         elif (
             vl_default_for_bare_image
             and image_attachment_items
-            and (not _has_meaningful_text(original_text))
+            and (not has_meaningful_text(original_text))
         ):
             # Backward-compat: legacy attachment-only messages with truly empty content remain supported by
             # the earlier fast-path. This branch handles minimal/implicit prompts too. [REH]
@@ -9184,17 +9053,9 @@ class Router:
                 attachments = getattr(message, "attachments", None)
                 if attachments and len(attachments) > 0:
                     # Prefer first non-text attachment; skip .txt/text/* so text ingestion can handle them
-                    def _is_text_att(a) -> bool:
-                        try:
-                            name = (getattr(a, "filename", "") or "").lower()
-                            ctype = (getattr(a, "content_type", "") or "").lower()
-                        except Exception:
-                            name, ctype = "", ""
-                        return name.endswith(".txt") or ctype.startswith("text/")
-
                     non_text = None
                     for a in attachments:
-                        if not _is_text_att(a):
+                        if not is_text_attachment(a):
                             non_text = a
                             break
                     attachment = non_text or attachments[0]
