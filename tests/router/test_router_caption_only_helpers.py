@@ -272,3 +272,76 @@ def test_build_syndication_photo_payload_shape() -> None:
 
     payload_none = router._build_syndication_photo_payload(None, [])
     assert payload_none == {"text": None, "photos": []}
+
+
+@pytest.mark.asyncio
+async def test_resolve_twitter_caption_text_prefers_syndication(monkeypatch) -> None:
+    router = Router(DummyBot())
+    calls = {"hydrated": False}
+
+    async def _get_syn(self, status_id):
+        assert status_id == "123"
+        return {"text": "from syndication"}
+
+    async def _hydrate(self, status_id, syn, allow_tco_pointer=True):
+        calls["hydrated"] = True
+        assert status_id == "123"
+        assert allow_tco_pointer is True
+        return syn
+
+    monkeypatch.setattr(Router, "_get_tweet_via_syndication", _get_syn)
+    monkeypatch.setattr(Router, "_hydrate_syndication_article_if_needed", _hydrate)
+    monkeypatch.setattr(Router, "_extract_syndication_text", lambda _s, n: n.get("text", ""))
+    monkeypatch.setattr(
+        "bot.router.get_http_client",
+        lambda: (_ for _ in ()).throw(AssertionError("http fallback should not be used")),
+    )
+
+    out = await router._resolve_twitter_caption_text("123")
+
+    assert out == "from syndication"
+    assert calls["hydrated"] is True
+
+
+@pytest.mark.asyncio
+async def test_resolve_twitter_caption_text_falls_back_to_fx(monkeypatch) -> None:
+    router = Router(DummyBot())
+
+    async def _get_syn(self, _status_id):
+        return {}
+
+    async def _hydrate(self, _status_id, syn, allow_tco_pointer=True):
+        return syn
+
+    class _Resp:
+        status_code = 200
+
+        @staticmethod
+        def json():
+            return {"tweet": {"text": "from fx"}}
+
+    class _Http:
+        async def get(self, url, config=None):
+            assert "api.fxtwitter.com/status/123" in url
+            assert config is not None
+            return _Resp()
+
+    async def _get_http():
+        return _Http()
+
+    monkeypatch.setattr(Router, "_get_tweet_via_syndication", _get_syn)
+    monkeypatch.setattr(Router, "_hydrate_syndication_article_if_needed", _hydrate)
+    monkeypatch.setattr(Router, "_extract_syndication_text", lambda _s, n: n.get("text", ""))
+    monkeypatch.setattr("bot.router.get_http_client", _get_http)
+
+    out = await router._resolve_twitter_caption_text("123")
+
+    assert out == "from fx"
+
+
+@pytest.mark.asyncio
+async def test_resolve_twitter_caption_text_empty_status_id() -> None:
+    router = Router(DummyBot())
+
+    assert await router._resolve_twitter_caption_text("") == ""
+    assert await router._resolve_twitter_caption_text(None) == ""

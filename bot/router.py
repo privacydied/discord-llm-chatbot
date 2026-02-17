@@ -662,6 +662,48 @@ class Router:
             "photos": [{"url": u} for u in image_urls],
         }
 
+    async def _resolve_twitter_caption_text(self, status_id: Optional[str]) -> str:
+        """Resolve tweet caption via syndication first, then fx/vx fallback."""
+        if not status_id:
+            return ""
+
+        tweet_text = ""
+        try:
+            syn = await self._get_tweet_via_syndication(status_id)
+            if isinstance(syn, dict):
+                syn = await self._hydrate_syndication_article_if_needed(
+                    status_id, syn, allow_tco_pointer=True
+                )
+                tweet_text = self._extract_syndication_text(syn)
+        except Exception:
+            tweet_text = ""
+
+        if tweet_text:
+            return tweet_text
+
+        try:
+            http2 = await get_http_client()
+            cfg2 = RequestConfig(
+                connect_timeout=min(self._x_syn_timeout_s, 3.0),
+                read_timeout=min(self._x_syn_timeout_s, 3.0),
+                total_timeout=min(self._x_syn_timeout_s + 0.5, 3.5),
+                max_retries=0,
+            )
+            fxu = f"https://api.fxtwitter.com/status/{status_id}"
+            r2 = await http2.get(fxu, config=cfg2)
+            if r2.status_code == 200:
+                try:
+                    fxj = r2.json()
+                except Exception:
+                    fxj = {}
+                tnode = fxj.get("tweet") or fxj.get("status") or {}
+                if isinstance(tnode, dict):
+                    tweet_text = self._extract_syndication_text(tnode)
+        except Exception:
+            pass
+
+        return tweet_text
+
     def _build_visual_anchored_system_prompt(
         self, content: str, *, fallback: bool = False
     ) -> Optional[str]:
@@ -5482,51 +5524,9 @@ class Router:
                             self._log_twitter_syndication_images(imgs)
                             # Prefer unified VL pipeline with caption when available [CA][REH]
                             try:
-                                tweet_text = ""
-                                try:
-                                    syn = await self._get_tweet_via_syndication(status_id)
-                                    if isinstance(syn, dict):
-                                        syn = await self._hydrate_syndication_article_if_needed(
-                                            status_id, syn, allow_tco_pointer=True
-                                        )
-                                        tweet_text = self._extract_syndication_text(syn)
-                                except Exception:
-                                    tweet_text = ""
-
-                                # If syndication text empty, fall back to fx/vx API text [REH]
-                                if not tweet_text:
-                                    try:
-                                        http2 = await get_http_client()
-                                        cfg2 = RequestConfig(
-                                            connect_timeout=min(
-                                                self._x_syn_timeout_s, 3.0
-                                            ),
-                                            read_timeout=min(
-                                                self._x_syn_timeout_s, 3.0
-                                            ),
-                                            total_timeout=min(
-                                                self._x_syn_timeout_s + 0.5, 3.5
-                                            ),
-                                            max_retries=0,
-                                        )
-                                        fxu = f"https://api.fxtwitter.com/status/{status_id}"
-                                        r2 = await http2.get(fxu, config=cfg2)
-                                        if r2.status_code == 200:
-                                            try:
-                                                fxj = r2.json()
-                                            except Exception:
-                                                fxj = {}
-                                            tnode = (
-                                                fxj.get("tweet")
-                                                or fxj.get("status")
-                                                or {}
-                                            )
-                                            if isinstance(tnode, dict):
-                                                tweet_text = self._extract_syndication_text(
-                                                    tnode
-                                                )
-                                    except Exception:
-                                        pass
+                                tweet_text = await self._resolve_twitter_caption_text(
+                                    status_id
+                                )
 
                                 syn_like = self._build_syndication_photo_payload(
                                     tweet_text,
@@ -6539,55 +6539,9 @@ class Router:
                             if imgs:
                                 self._log_twitter_syndication_images(imgs)
                                 # Convert to syndication-like shape and route to VL
-                                tweet_text = ""
-                                try:
-                                    if status_id:
-                                        syn = await self._get_tweet_via_syndication(
-                                            status_id
-                                        )
-                                        if isinstance(syn, dict):
-                                            syn = await self._hydrate_syndication_article_if_needed(
-                                                status_id, syn, allow_tco_pointer=True
-                                            )
-                                            tweet_text = self._extract_syndication_text(
-                                                syn
-                                            )
-                                except Exception:
-                                    tweet_text = ""
-                                # Fallback to fx/vx API for caption if still empty [REH]
-                                if not tweet_text:
-                                    try:
-                                        http2 = await get_http_client()
-                                        cfg2 = RequestConfig(
-                                            connect_timeout=min(
-                                                self._x_syn_timeout_s, 3.0
-                                            ),
-                                            read_timeout=min(
-                                                self._x_syn_timeout_s, 3.0
-                                            ),
-                                            total_timeout=min(
-                                                self._x_syn_timeout_s + 0.5, 3.5
-                                            ),
-                                            max_retries=0,
-                                        )
-                                        fxu = f"https://api.fxtwitter.com/status/{status_id}"
-                                        r2 = await http2.get(fxu, config=cfg2)
-                                        if r2.status_code == 200:
-                                            try:
-                                                fxj = r2.json()
-                                            except Exception:
-                                                fxj = {}
-                                            tnode = (
-                                                fxj.get("tweet")
-                                                or fxj.get("status")
-                                                or {}
-                                            )
-                                            if isinstance(tnode, dict):
-                                                tweet_text = self._extract_syndication_text(
-                                                    tnode
-                                                )
-                                    except Exception:
-                                        pass
+                                tweet_text = await self._resolve_twitter_caption_text(
+                                    status_id
+                                )
                                 syn_like = self._build_syndication_photo_payload(
                                     tweet_text,
                                     imgs,
