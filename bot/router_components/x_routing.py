@@ -1624,7 +1624,7 @@ def extract_x_status_urls_from_text(
     canonicalize_status_url: Callable[[str], str],
 ) -> List[str]:
     """Extract canonical X/Twitter status URLs from text preserving order."""
-    urls: List[str] = []
+    urls = status_url_items_buffer()
     try:
         collect_status_urls_from_candidates(
             urls,
@@ -1635,6 +1635,11 @@ def extract_x_status_urls_from_text(
     except Exception:
         pass
     return urls
+
+
+def status_url_items_buffer() -> List[str]:
+    """Build mutable list buffer for extracted status URL collection."""
+    return []
 
 
 def collect_status_urls_from_candidates(
