@@ -2014,6 +2014,16 @@ def raw_url_candidate_values_iter(text: str, *, url_re: Any) -> Iterable[str]:
 
 def raw_url_candidate_value(raw_url: str) -> str:
     """Return raw URL candidate value used by raw URL collector loop."""
+    return raw_url_candidate_value_source(raw_url)
+
+
+def raw_url_candidate_value_source(raw_url: str) -> str:
+    """Return source raw URL candidate value for collector helper."""
+    return raw_url_candidate_value_result(raw_url)
+
+
+def raw_url_candidate_value_result(raw_url: str) -> str:
+    """Return value used by raw URL candidate source helper."""
     return raw_url
 
 
