@@ -80,3 +80,15 @@
   - Validation:
     - `./.venv/bin/python -m py_compile bot/hear.py bot/stt_pipeline/__init__.py bot/stt_pipeline/ffmpeg_runtime.py`
     - `./.venv/bin/pytest -q tests/test_stt_pipeline_ffmpeg_runtime.py tests/test_stt_pipeline_youtube_path.py tests/test_video_ingest.py tests/router/test_router_components_compose.py tests/router/test_router_components_gating.py tests/router/test_router_components_input_harvest.py tests/router/test_router_components_x_routing.py` -> `27 passed`
+- 2026-02-17:
+  - Extended `bot/router_components/x_routing.py` with text URL extraction helpers:
+    - `extract_x_status_urls_from_text`
+    - `extract_raw_urls_from_texts`
+    - `filter_canonical_x_urls`
+  - Routed router methods through extracted helpers:
+    - `_extract_x_status_urls_from_text`
+    - `_extract_raw_x_urls`
+  - Expanded tests in `tests/router/test_router_components_x_routing.py`.
+  - Validation:
+    - `./.venv/bin/python -m py_compile bot/router.py bot/router_components/__init__.py bot/router_components/x_routing.py`
+    - `./.venv/bin/pytest -q tests/router/test_router_components_x_routing.py tests/router/test_router_components_compose.py tests/router/test_router_components_gating.py tests/router/test_router_components_input_harvest.py tests/test_video_ingest.py tests/test_stt_pipeline_youtube_path.py tests/test_stt_pipeline_ffmpeg_runtime.py` -> `29 passed`

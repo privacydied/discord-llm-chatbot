@@ -2,6 +2,9 @@ from types import SimpleNamespace
 
 from bot.router_components.x_routing import (
     collect_x_candidate_urls,
+    extract_raw_urls_from_texts,
+    extract_x_status_urls_from_text,
+    filter_canonical_x_urls,
     is_tweet_media_url,
     is_twitter_media_cdn,
     is_twitter_thumbnail_url,
@@ -59,3 +62,34 @@ def test_twitter_host_and_media_path_helpers() -> None:
         is_tweet_media_url("https://pbs.twimg.com/ext_tw_video_thumb/123/pu/img.jpg")
         is False
     )
+
+
+def test_extract_x_status_urls_from_text() -> None:
+    text = (
+        "a https://x.com/u/status/1 and b "
+        "https://twitter.com/u/status/2?s=20 and duplicate https://x.com/u/status/1"
+    )
+    urls = extract_x_status_urls_from_text(
+        text,
+        is_status_url=lambda u: "/status/" in u,
+        canonicalize_status_url=lambda u: u.split("?")[0].replace("twitter.com", "x.com"),
+    )
+    assert urls == ["https://x.com/u/status/1", "https://x.com/u/status/2"]
+
+
+def test_extract_raw_urls_and_filter_canonical_x_urls() -> None:
+    raw = extract_raw_urls_from_texts(
+        [
+            "one https://x.com/a/status/1",
+            "two https://example.com/z and https://twitter.com/a/status/1?s=20",
+        ]
+    )
+    assert "https://x.com/a/status/1" in raw
+    assert "https://example.com/z" in raw
+
+    filtered = filter_canonical_x_urls(
+        raw,
+        is_x_url=lambda u: ("x.com/" in u or "twitter.com/" in u),
+        canonicalize_x_url=lambda u: u.split("?")[0].replace("twitter.com", "x.com"),
+    )
+    assert filtered == ["https://x.com/a/status/1"]

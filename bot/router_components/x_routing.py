@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, List, Optional
+import re
+from typing import Any, Callable, Iterable, List, Optional
 from urllib.parse import urlparse
 
 from bot.x_api_client import XApiClient
@@ -131,3 +132,54 @@ def is_tweet_media_url(url: str) -> bool:
         return False
 
     return "/media/" in path
+
+
+def extract_x_status_urls_from_text(
+    text: str,
+    *,
+    is_status_url: Callable[[str], bool],
+    canonicalize_status_url: Callable[[str], str],
+) -> List[str]:
+    """Extract canonical X/Twitter status URLs from text preserving order."""
+    urls: List[str] = []
+    try:
+        for m in re.finditer(r"https?://[^\s<>\"'\[\]{}|\\^`]+", text or "", re.IGNORECASE):
+            raw = m.group(0)
+            if is_status_url(raw):
+                cu = canonicalize_status_url(raw)
+                if cu not in urls:
+                    urls.append(cu)
+    except Exception:
+        pass
+    return urls
+
+
+def extract_raw_urls_from_texts(texts: Iterable[str]) -> List[str]:
+    """Extract raw URLs from multiple text blobs in-order with de-duplication."""
+    raw_urls: List[str] = []
+    try:
+        url_re = re.compile(r"https?://[^\s<>\"'\[\]{}|\\^`]+", re.IGNORECASE)
+        for t in texts:
+            for m in url_re.finditer(t or ""):
+                u = m.group(0)
+                if u and u not in raw_urls:
+                    raw_urls.append(u)
+    except Exception:
+        pass
+    return raw_urls
+
+
+def filter_canonical_x_urls(
+    raw_urls: Iterable[str],
+    *,
+    is_x_url: Callable[[str], bool],
+    canonicalize_x_url: Callable[[str], str],
+) -> List[str]:
+    """Filter URL list to X/Twitter URLs and canonicalize with de-duplication."""
+    out: List[str] = []
+    for u in raw_urls:
+        if is_x_url(u):
+            cu = canonicalize_x_url(u)
+            if cu not in out:
+                out.append(cu)
+    return out

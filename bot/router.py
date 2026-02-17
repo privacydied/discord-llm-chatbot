@@ -90,8 +90,11 @@ from .router_components import (
     RouterRuntimeCompat,
     compose_x_tweet_with_visual_facts,
     collect_x_candidate_urls,
+    extract_raw_urls_from_texts,
+    extract_x_status_urls_from_text,
     extract_urls_loose,
     extract_urls_strict,
+    filter_canonical_x_urls,
     format_x_tweet_with_transcription,
     has_explicit_media_intent,
     has_meaningful_text,
@@ -1397,29 +1400,23 @@ class Router:
         """Extract canonical X/Twitter status URLs from a text blob in-order.
         Normalizes and de-dupes; emits a small log per normalized URL. [IV][PA]
         """
-        urls: List[str] = []
-        try:
-            for m in re.finditer(
-                r"https?://[^\s<>\"'\[\]{}|\\^`]+", text or "", re.IGNORECASE
-            ):
-                raw = m.group(0)
-                if self._is_twitter_status_url(raw):
-                    cu = self._canonicalize_twitter_status_url(raw)
-                    if cu not in urls:
-                        urls.append(cu)
-                        try:
-                            self.logger.info(
-                                "normalize_ok",
-                                extra={
-                                    "subsys": "tw",
-                                    "event": "normalize_ok",
-                                    "detail": {"url": cu},
-                                },
-                            )
-                        except Exception:
-                            pass
-        except Exception:
-            pass
+        urls = extract_x_status_urls_from_text(
+            text or "",
+            is_status_url=self._is_twitter_status_url,
+            canonicalize_status_url=self._canonicalize_twitter_status_url,
+        )
+        for cu in urls:
+            try:
+                self.logger.info(
+                    "normalize_ok",
+                    extra={
+                        "subsys": "tw",
+                        "event": "normalize_ok",
+                        "detail": {"url": cu},
+                    },
+                )
+            except Exception:
+                pass
         return urls
 
     async def _extract_raw_x_urls(self, message: Message) -> List[str]:
@@ -1450,24 +1447,13 @@ class Router:
         except Exception:
             pass
         # Extract URLs from combined text blobs
-        raw_urls: List[str] = []
-        try:
-            url_re = re.compile(r"https?://[^\s<>\"'\[\]{}|\\^`]+", re.IGNORECASE)
-            for t in texts:
-                for m in url_re.finditer(t or ""):
-                    u = m.group(0)
-                    if u and u not in raw_urls:
-                        raw_urls.append(u)
-        except Exception:
-            pass
+        raw_urls = extract_raw_urls_from_texts(texts)
         # Filter to X/Twitter domains only and canonicalize
-        out: List[str] = []
-        for u in raw_urls:
-            if self._is_twitter_url(u):
-                cu = self._canonicalize_x_url(u)
-                if cu not in out:
-                    out.append(cu)
-        return out
+        return filter_canonical_x_urls(
+            raw_urls,
+            is_x_url=self._is_twitter_url,
+            canonicalize_x_url=self._canonicalize_x_url,
+        )
 
     async def _gather_prioritized_x_urls(
         self, scope_case: str, message: Message, reply_target: Optional[Message]
