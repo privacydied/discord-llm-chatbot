@@ -19,6 +19,7 @@ from .input_harvest import (
     strip_discord_mentions_and_urls,
     strip_urls,
 )
+from .prompt_access import get_system_prompt
 from .runtime import RouterRuntimeCompat, load_router_runtime_compat
 from .x_routing import (
     canonicalize_twitter_status_url,
@@ -60,6 +61,7 @@ __all__ = [
     "is_twitter_media_cdn",
     "is_twitter_thumbnail_url",
     "is_twitter_url",
+    "get_system_prompt",
     "load_router_runtime_compat",
     "mentions_bot",
     "normalize_x_url",

@@ -103,6 +103,7 @@ from .router_components import (
     filter_canonical_x_urls,
     format_x_tweet_result,
     format_x_tweet_with_transcription,
+    get_system_prompt,
     has_explicit_media_intent,
     has_meaningful_text,
     is_reply_to_bot,
@@ -464,16 +465,7 @@ class Router:
 
     def _get_system_prompt(self, key: str, default: Optional[str] = None) -> Optional[str]:
         """Safely read a prompt template from bot.system_prompts."""
-        try:
-            prompts = getattr(self.bot, "system_prompts", None) or {}
-            getter = getattr(prompts, "get", None)
-            if callable(getter):
-                value = getter(key, default)
-            else:
-                value = default
-            return value
-        except Exception:
-            return default
+        return get_system_prompt(self.bot, key, default)
 
         # Queue non-blocking eager start to reduce first-check false negatives [PA]
         try:

@@ -249,3 +249,16 @@
   - Validation:
     - `./.venv/bin/pytest -q tests/router/test_router_components_compose.py tests/router/test_router_components_compose_contract.py tests/router/test_router_x_result_format_contract.py tests/core/test_router.py tests/router/test_x_api_routing.py` -> `33 passed`
     - `./.venv/bin/pytest -q tests/core tests/router tests/syndication tests/vision tests/test_hear_ffmpeg_resolution.py tests/test_hear_stream_abort.py tests/test_media_ingestion.py tests/test_video_ingest.py tests/router/test_router_x_result_format_contract.py tests/test_media_ingestion_compat_contracts.py tests/vision/test_money_contract.py` -> `216 passed`
+- 2026-02-17:
+  - Refactor (behavior-preserving): extracted safe prompt lookup into `bot/router_components/prompt_access.py` as `get_system_prompt()`.
+  - Wired `Router._get_system_prompt()` to delegate to extracted helper.
+  - Exported helper through `bot/router_components/__init__.py`.
+  - Added focused tests:
+    - `tests/router/test_router_components_prompt_access.py`
+      - missing prompt-map fallback
+      - dict prompt reads
+      - missing key defaulting
+      - getter exception fallback
+  - Validation:
+    - `./.venv/bin/pytest -q tests/router/test_router_components_prompt_access.py tests/router/test_router_x_result_format_contract.py tests/router/test_router_components_compose.py tests/router/test_router_components_compose_contract.py` -> `17 passed`
+    - `./.venv/bin/pytest -q tests/core tests/router tests/syndication tests/vision tests/test_hear_ffmpeg_resolution.py tests/test_hear_stream_abort.py tests/test_media_ingestion.py tests/test_video_ingest.py tests/router/test_router_x_result_format_contract.py tests/test_media_ingestion_compat_contracts.py tests/vision/test_money_contract.py` -> `220 passed`
