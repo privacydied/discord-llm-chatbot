@@ -49,6 +49,7 @@ from bot.router_components.x_routing import (
     build_syndication_fetch_headers,
     build_syndication_fetch_params_variants,
     build_syndication_oembed_params,
+    build_syndication_oembed_hosts,
     build_syndication_oembed_fallback_params,
     build_syndication_oembed_fallback_plan,
     build_syndication_fetch_plan,
@@ -696,6 +697,10 @@ def test_build_syndication_oembed_params_default_and_x_host() -> None:
         "hide_thread": "true",
         "lang": "en",
     }
+
+
+def test_build_syndication_oembed_hosts_order() -> None:
+    assert build_syndication_oembed_hosts() == ("twitter.com", "x.com")
 
 
 def test_build_syndication_oembed_fallback_params_ordered_variants() -> None:

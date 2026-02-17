@@ -701,14 +701,28 @@ def build_syndication_oembed_params(
     }
 
 
+def build_syndication_oembed_hosts() -> Tuple[str, str]:
+    """Return ordered oEmbed host fallbacks for tweet lookups."""
+    return ("twitter.com", "x.com")
+
+
 def build_syndication_oembed_fallback_params(
     tweet_id: str,
 ) -> List[Tuple[str, Dict[str, str]]]:
     """Return ordered oEmbed fallback variants and their metric endpoint labels."""
-    return [
-        ("oembed", build_syndication_oembed_params(tweet_id)),
-        ("oembed_x", build_syndication_oembed_params(tweet_id, use_x_host=True)),
-    ]
+    items: List[Tuple[str, Dict[str, str]]] = []
+    for host in build_syndication_oembed_hosts():
+        endpoint = "oembed_x" if host == "x.com" else "oembed"
+        items.append(
+            (
+                endpoint,
+                build_syndication_oembed_params(
+                    tweet_id,
+                    use_x_host=(host == "x.com"),
+                ),
+            )
+        )
+    return items
 
 
 def build_syndication_oembed_fallback_plan(
