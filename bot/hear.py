@@ -53,7 +53,11 @@ from .config import load_config
 from .stt import ModelSpec, stt_manager
 from .stt_module.failure_classifier import STTFailureClassifier
 from .stt_module.multimodal_fallback import multimodal_fallback_provider
-from .stt_pipeline import ensure_stt_manager_ready, load_stt_runtime_compat
+from .stt_pipeline import (
+    build_youtube_transcript_result,
+    ensure_stt_manager_ready,
+    load_stt_runtime_compat,
+)
 from .youtube_transcript import resolve_youtube_transcript
 
 if TYPE_CHECKING:
@@ -2040,27 +2044,16 @@ async def hear_infer_from_url(url: str, force_refresh: bool = False) -> Dict[str
                     )
 
                 if yt and yt.text:
-                    now_iso = datetime.now(timezone.utc).isoformat()
-                    result = {
-                        "transcription": yt.text,
-                        "partial": False,
-                        "abort_reason": "",
-                        "metadata": {
-                            "source": "youtube",
-                            "url": url,
-                            "title": yt.title,
-                            "uploader": yt.uploader,
-                            "upload_date": "",
-                            "original_duration_s": float(yt.duration_s or 0.0),
-                            "processed_duration_s": float(yt.duration_s or 0.0),
-                            "speedup_factor": 1.0,
-                            "cache_hit": bool(yt.cache_hit),
-                            "timestamp": now_iso,
-                            "demux_fallback": False,
-                            "transcription_source": yt.source,
-                            "transcription_language": yt.language,
-                        },
-                    }
+                    result = build_youtube_transcript_result(
+                        url=url,
+                        transcript_text=yt.text,
+                        title=yt.title,
+                        uploader=yt.uploader,
+                        duration_s=yt.duration_s,
+                        cache_hit=bool(yt.cache_hit),
+                        source=yt.source,
+                        language=yt.language,
+                    )
                     logger.info(
                         "stt.youtube_transcript.ok video_id=%s lang=%s source=%s chars=%d cache_hit=%s",
                         yt.video_id,

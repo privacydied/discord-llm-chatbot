@@ -66,3 +66,10 @@
   - Validation:
     - `./.venv/bin/python -m py_compile bot/router.py bot/router_components/__init__.py bot/router_components/x_routing.py`
     - `./.venv/bin/pytest -q tests/router/test_router_components_compose.py tests/router/test_router_components_gating.py tests/router/test_router_components_input_harvest.py tests/router/test_router_components_x_routing.py tests/test_video_ingest.py` -> `22 passed`
+- 2026-02-17:
+  - Added `bot/stt_pipeline/youtube_path.py` and extracted transcript-first result payload assembly from `bot/hear.py`.
+  - Router/STT behavior unchanged; extraction is a pure payload-builder seam for Phase 3.
+  - Added focused tests: `tests/test_stt_pipeline_youtube_path.py`.
+  - Validation:
+    - `./.venv/bin/python -m py_compile bot/hear.py bot/stt_pipeline/__init__.py bot/stt_pipeline/youtube_path.py`
+    - `./.venv/bin/pytest -q tests/router/test_router_components_compose.py tests/router/test_router_components_gating.py tests/router/test_router_components_input_harvest.py tests/router/test_router_components_x_routing.py tests/test_video_ingest.py tests/test_stt_pipeline_youtube_path.py` -> `24 passed`
