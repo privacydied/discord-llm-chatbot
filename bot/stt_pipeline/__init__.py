@@ -15,13 +15,16 @@ from .ffmpeg_runtime import (
 )
 from .youtube_path import build_youtube_transcript_result
 from .result_payload import build_url_transcript_result
+from .logging import log_stt_job_complete, transcript_preview
 from .spec_select import select_initial_model_spec
 
 __all__ = [
     "STTRuntimeCompat",
     "build_youtube_transcript_result",
     "build_url_transcript_result",
+    "log_stt_job_complete",
     "select_initial_model_spec",
+    "transcript_preview",
     "ensure_stt_manager_ready",
     "ffmpeg_bin_has_aac",
     "ffmpeg_candidates_from_env",

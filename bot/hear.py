@@ -60,6 +60,7 @@ from .stt_pipeline import (
     ffmpeg_bin_has_aac,
     ffmpeg_candidates_from_env,
     ffmpeg_supports_aac_decoder,
+    log_stt_job_complete,
     load_stt_runtime_compat,
     parse_stt_max_ram_mb,
     select_initial_model_spec,
@@ -2026,14 +2027,10 @@ async def hear_infer_from_url(url: str, force_refresh: bool = False) -> Dict[str
                         len(yt.text),
                         str(bool(yt.cache_hit)).lower(),
                     )
-                    transcript_preview = (
-                        (yt.text[:60] + "...") if len(yt.text) > 60 else yt.text
-                    )
-                    logger.info(
-                        "stt.job.complete url=%s chars=%d preview=%s",
-                        url[:80] if url else "none",
-                        len(yt.text),
-                        repr(transcript_preview),
+                    log_stt_job_complete(
+                        logger=logger,
+                        url=url,
+                        transcript_text=yt.text,
                     )
                     return await job.finish_success(result)
 
@@ -2089,16 +2086,10 @@ async def hear_infer_from_url(url: str, force_refresh: bool = False) -> Dict[str
             _log_summary(spans, pre, transcript, cache_hit=transcript.cache_hit)
 
             # Log transcript completion with URL identity for debugging [REH]
-            transcript_preview = (
-                (transcript.text[:60] + "...")
-                if len(transcript.text) > 60
-                else transcript.text
-            )
-            logger.info(
-                "stt.job.complete url=%s chars=%d preview=%s",
-                url[:80] if url else "none",
-                len(transcript.text),
-                repr(transcript_preview),
+            log_stt_job_complete(
+                logger=logger,
+                url=url,
+                transcript_text=transcript.text,
             )
 
             return await job.finish_success(result)
