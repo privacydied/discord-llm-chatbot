@@ -1691,7 +1691,12 @@ def iter_status_url_candidates(text: str) -> Iterable[str]:
 
 def status_url_candidates_from_text(text: str) -> Iterable[str]:
     """Yield status URL candidates using canonical status regex source."""
-    yield from iter_text_urls(text, url_re=status_url_extract_regex())
+    yield from iter_text_urls(text, url_re=status_url_candidates_regex())
+
+
+def status_url_candidates_regex() -> Any:
+    """Return regex used when extracting status URL candidates from text."""
+    return status_url_extract_regex()
 
 
 def status_url_extract_regex() -> Any:
