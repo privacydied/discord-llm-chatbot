@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Callable, Tuple
 
 
 async def abort_job_stream_if_present(
@@ -36,3 +36,18 @@ async def abort_and_finish_failure(
         debug_message=abort_debug_message,
     )
     await job.finish_failure(exc)
+
+
+def create_stt_job(
+    *,
+    kind: str,
+    stt_max_ram_mb: int | None,
+    spans_cls: Callable[[], Any],
+    ram_guard_cls: Callable[[int | None], Any],
+    job_cls: Callable[..., Any],
+) -> Tuple[Any, Any, Any]:
+    """Create STT spans/guard/job trio for an entrypoint."""
+    spans = spans_cls()
+    ram_guard = ram_guard_cls(stt_max_ram_mb)
+    job = job_cls(kind=kind, spans=spans, ram_guard=ram_guard)
+    return spans, ram_guard, job

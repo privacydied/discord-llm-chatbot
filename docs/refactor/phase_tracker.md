@@ -472,3 +472,18 @@
     - `./.venv/bin/python -m py_compile bot/hear.py bot/stt_pipeline/__init__.py bot/stt_pipeline/lifecycle.py`
     - `./.venv/bin/pytest -q tests/test_stt_pipeline_lifecycle.py tests/test_stt_pipeline_url_ingest.py tests/test_video_ingest.py tests/test_hear_ffmpeg_resolution.py` -> `23 passed`
     - `./.venv/bin/pytest -q tests/core tests/router tests/syndication tests/vision tests/test_hear_ffmpeg_resolution.py tests/test_hear_stream_abort.py tests/test_media_ingestion.py tests/test_video_ingest.py tests/router/test_router_x_result_format_contract.py tests/test_media_ingestion_compat_contracts.py tests/vision/test_money_contract.py tests/test_media_ingestion_helpers.py tests/test_stt_pipeline_runtime.py tests/test_stt_pipeline_ffmpeg_runtime.py tests/test_stt_pipeline_youtube_path.py tests/test_stt_pipeline_result_payload.py tests/test_stt_pipeline_spec_select.py tests/test_stt_pipeline_logging.py tests/test_stt_pipeline_lifecycle.py tests/test_stt_pipeline_url_ingest.py tests/test_stt_pipeline_transcribe_flow.py tests/test_stt_pipeline_stitch.py` -> `269 passed`
+- 2026-02-17:
+  - Refactor (behavior-preserving): extracted STT entrypoint job bootstrap into:
+    - `bot/stt_pipeline/lifecycle.py::create_stt_job()`
+  - Rewired both `bot/hear.py` entrypoints to delegate creation of:
+    - `SpanRecorder`
+    - `STTRAMGuard`
+    - `STTJob`
+  - Preserved test monkeypatch behavior by passing constructors from `bot/hear.py`.
+  - Exported helper via `bot/stt_pipeline/__init__.py`.
+  - Expanded contracts in `tests/test_stt_pipeline_lifecycle.py`:
+    - verifies spans/guard/job construction and wiring.
+  - Validation:
+    - `./.venv/bin/python -m py_compile bot/hear.py bot/stt_pipeline/__init__.py bot/stt_pipeline/lifecycle.py`
+    - `./.venv/bin/pytest -q tests/test_stt_pipeline_lifecycle.py tests/test_video_ingest.py tests/test_hear_ffmpeg_resolution.py tests/test_stt_pipeline_url_ingest.py` -> `24 passed`
+    - `./.venv/bin/pytest -q tests/core tests/router tests/syndication tests/vision tests/test_hear_ffmpeg_resolution.py tests/test_hear_stream_abort.py tests/test_media_ingestion.py tests/test_video_ingest.py tests/router/test_router_x_result_format_contract.py tests/test_media_ingestion_compat_contracts.py tests/vision/test_money_contract.py tests/test_media_ingestion_helpers.py tests/test_stt_pipeline_runtime.py tests/test_stt_pipeline_ffmpeg_runtime.py tests/test_stt_pipeline_youtube_path.py tests/test_stt_pipeline_result_payload.py tests/test_stt_pipeline_spec_select.py tests/test_stt_pipeline_logging.py tests/test_stt_pipeline_lifecycle.py tests/test_stt_pipeline_url_ingest.py tests/test_stt_pipeline_transcribe_flow.py tests/test_stt_pipeline_stitch.py` -> `270 passed`

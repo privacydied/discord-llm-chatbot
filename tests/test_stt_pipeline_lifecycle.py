@@ -5,6 +5,7 @@ import pytest
 from bot.stt_pipeline.lifecycle import (
     abort_and_finish_failure,
     abort_job_stream_if_present,
+    create_stt_job,
 )
 
 
@@ -139,3 +140,32 @@ async def test_abort_and_finish_failure_without_stream_records_failure() -> None
 
     assert job.failures == [exc]
     assert logger.debug_calls == []
+
+
+def test_create_stt_job_builds_spans_guard_and_job() -> None:
+    class _Spans:
+        pass
+
+    class _Guard:
+        def __init__(self, limit):
+            self.limit = limit
+
+    class _JobObj:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
+    spans, guard, job = create_stt_job(
+        kind="url",
+        stt_max_ram_mb=512,
+        spans_cls=_Spans,
+        ram_guard_cls=_Guard,
+        job_cls=_JobObj,
+    )
+
+    assert isinstance(spans, _Spans)
+    assert isinstance(guard, _Guard)
+    assert guard.limit == 512
+    assert isinstance(job, _JobObj)
+    assert job.kwargs["kind"] == "url"
+    assert job.kwargs["spans"] is spans
+    assert job.kwargs["ram_guard"] is guard

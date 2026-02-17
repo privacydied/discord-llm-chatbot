@@ -56,6 +56,7 @@ from .stt_module.multimodal_fallback import multimodal_fallback_provider
 from .stt_pipeline import (
     abort_and_finish_failure,
     build_url_transcript_result,
+    create_stt_job,
     ensure_manager_ready_or_raise,
     ffmpeg_bin_has_aac,
     ffmpeg_candidates_from_env,
@@ -1920,10 +1921,14 @@ async def hear_infer(audio: Union[Path, "discord.Attachment"]) -> str:
     """
     Transcribe an attachment or local audio file.
     """
-    spans = SpanRecorder()
-    ram_guard = STTRAMGuard(STT_MAX_RAM_MB)
+    spans, ram_guard, job = create_stt_job(
+        kind="attachment",
+        stt_max_ram_mb=STT_MAX_RAM_MB,
+        spans_cls=SpanRecorder,
+        ram_guard_cls=STTRAMGuard,
+        job_cls=STTJob,
+    )
     attachment = audio if not isinstance(audio, Path) else None
-    job = STTJob(kind="attachment", spans=spans, ram_guard=ram_guard)
 
     try:
         async with _JOB_SEMAPHORE:
@@ -1983,9 +1988,13 @@ async def hear_infer_from_url(url: str, force_refresh: bool = False) -> Dict[str
         force_refresh,
     )
 
-    spans = SpanRecorder()
-    ram_guard = STTRAMGuard(STT_MAX_RAM_MB)
-    job = STTJob(kind="url", spans=spans, ram_guard=ram_guard)
+    spans, ram_guard, job = create_stt_job(
+        kind="url",
+        stt_max_ram_mb=STT_MAX_RAM_MB,
+        spans_cls=SpanRecorder,
+        ram_guard_cls=STTRAMGuard,
+        job_cls=STTJob,
+    )
     download: Optional[DownloadedAudio] = None
     try:
         async with _JOB_SEMAPHORE:
