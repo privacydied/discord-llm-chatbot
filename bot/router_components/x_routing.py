@@ -693,10 +693,15 @@ def build_syndication_oembed_params(
     host = "x.com" if use_x_host else "twitter.com"
     lang = build_syndication_lang()
     return {
-        "url": f"https://{host}/i/status/{tweet_id}",
+        "url": build_syndication_oembed_status_url(host, tweet_id),
         **build_syndication_oembed_options(),
         "lang": lang,
     }
+
+
+def build_syndication_oembed_status_url(host: str, tweet_id: str) -> str:
+    """Return status URL used by oEmbed for the selected host."""
+    return f"https://{host}/i/status/{tweet_id}"
 
 
 def build_syndication_oembed_hosts() -> Tuple[str, str]:

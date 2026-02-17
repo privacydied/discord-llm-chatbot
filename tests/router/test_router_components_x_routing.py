@@ -49,6 +49,7 @@ from bot.router_components.x_routing import (
     build_syndication_fetch_headers,
     build_syndication_fetch_params_variants,
     build_syndication_oembed_params,
+    build_syndication_oembed_status_url,
     build_syndication_oembed_options,
     build_syndication_oembed_hosts,
     build_syndication_oembed_metric_endpoint,
@@ -703,6 +704,13 @@ def test_build_syndication_oembed_params_default_and_x_host() -> None:
 
 def test_build_syndication_oembed_hosts_order() -> None:
     assert build_syndication_oembed_hosts() == ("twitter.com", "x.com")
+
+
+def test_build_syndication_oembed_status_url_shape() -> None:
+    assert (
+        build_syndication_oembed_status_url("twitter.com", "2022790791047823773")
+        == "https://twitter.com/i/status/2022790791047823773"
+    )
 
 
 def test_build_syndication_oembed_options_constant() -> None:
