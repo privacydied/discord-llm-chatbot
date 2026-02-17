@@ -694,10 +694,15 @@ def build_syndication_platform_host() -> str:
 def build_syndication_fetch_accept() -> str:
     """Return canonical Accept header for CDN syndication fetches."""
     return (
-        f"{build_syndication_accept_json_mime()}, {build_syndication_accept_text_mime()};"
+        f"{build_syndication_accept_primary_mimes()};"
         f"{build_syndication_accept_text_quality()}, {build_syndication_accept_any_mime()};"
         f"{build_syndication_accept_any_quality()}"
     )
+
+
+def build_syndication_accept_primary_mimes() -> str:
+    """Return canonical primary MIME list for Accept headers."""
+    return f"{build_syndication_accept_json_mime()}, {build_syndication_accept_text_mime()}"
 
 
 def build_syndication_accept_json_mime() -> str:
