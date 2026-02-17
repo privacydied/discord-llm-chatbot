@@ -172,6 +172,7 @@ from bot.router_components.x_routing import (
     build_syndication_photo_payload,
     format_twitter_syndication_images_log_line,
     resolve_first_image_host,
+    normalize_probed_image_urls,
     resolve_and_probe_twitter_images,
 )
 
@@ -1757,6 +1758,12 @@ def test_resolve_first_image_host_variants() -> None:
     assert resolve_first_image_host(["https://pbs.twimg.com/media/abc.jpg"]) == "pbs.twimg.com"
     assert resolve_first_image_host(["not a url"]) == ""
     assert resolve_first_image_host([]) == ""
+
+
+def test_normalize_probed_image_urls_variants() -> None:
+    assert normalize_probed_image_urls(["u1"]) == ["u1"]
+    assert normalize_probed_image_urls(None) == []
+    assert normalize_probed_image_urls([]) == []
 
 
 @pytest.mark.asyncio
