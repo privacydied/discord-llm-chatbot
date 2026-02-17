@@ -579,6 +579,26 @@ def extract_oembed_html_text(html: Any) -> str:
     return unescape(txt).strip()
 
 
+def build_oembed_text_payload(
+    obj: Any,
+    *,
+    html_to_text: Callable[[Any], str] = extract_oembed_html_text,
+) -> Optional[Dict[str, Any]]:
+    """Build syndication-like payload from oEmbed response object."""
+    if not isinstance(obj, dict):
+        return None
+    html = obj.get("html")
+    if not html:
+        return None
+    txt = html_to_text(html)
+    if not txt:
+        return None
+    return {
+        "text": txt,
+        "user": {"name": obj.get("author_name")},
+    }
+
+
 def format_syndication_body_text(text: str) -> str:
     """Format syndication body text with legacy size limits and fallback copy."""
     if text and len(text) <= 4000:

@@ -101,7 +101,6 @@ from .router_components import (
     extract_sparse_media_resolution,
     extract_primary_tweet_id,
     extract_raw_urls_from_texts,
-    extract_oembed_html_text,
     extract_x_status_urls_from_text,
     extract_urls_loose,
     extract_urls_strict,
@@ -131,6 +130,7 @@ from .router_components import (
     build_x_video_stt_error_result_payload,
     resolve_caption_only_base_text,
     resolve_video_stt_error_base_text,
+    build_oembed_text_payload,
     syndication_article_has_blocks,
     extract_x_article_text,
     syndication_needs_article_hydration,
@@ -1129,17 +1129,9 @@ class Router:
                                     obj = resp_oe.json()
                                 except Exception:
                                     obj = None
-                                if isinstance(obj, dict):
-                                    html = obj.get("html")
-                                    if html:
-                                        txt = extract_oembed_html_text(html)
-                                        if txt:
-                                            data = {
-                                                "text": txt,
-                                                "user": {
-                                                    "name": obj.get("author_name")
-                                                },
-                                            }
+                                oembed_data = build_oembed_text_payload(obj)
+                                if oembed_data:
+                                    data = oembed_data
                         except Exception:
                             pass
                         # Try x.com oembed variant if still no data
@@ -1160,17 +1152,9 @@ class Router:
                                         obj2 = resp2.json()
                                     except Exception:
                                         obj2 = None
-                                    if isinstance(obj2, dict):
-                                        html2 = obj2.get("html")
-                                        if html2:
-                                            txt2 = extract_oembed_html_text(html2)
-                                            if txt2:
-                                                data = {
-                                                    "text": txt2,
-                                                    "user": {
-                                                        "name": obj2.get("author_name")
-                                                    },
-                                                }
+                                    oembed_data2 = build_oembed_text_payload(obj2)
+                                    if oembed_data2:
+                                        data = oembed_data2
                             except Exception:
                                 pass
                     # Break when we have usable data; otherwise continue to next variant

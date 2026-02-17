@@ -36,6 +36,7 @@ from bot.router_components.x_routing import (
     build_syndication_non_200_log_payload,
     build_syndication_fetch_failed_payload,
     build_x_text_canon_payload,
+    build_oembed_text_payload,
     extract_oembed_html_text,
     format_syndication_body_text,
     format_syndication_header_line,
@@ -623,6 +624,25 @@ def test_extract_oembed_html_text_empty_input_returns_empty_string() -> None:
 def test_extract_oembed_html_text_non_string_truthy_input_raises() -> None:
     with pytest.raises(TypeError):
         extract_oembed_html_text({"html": "<p>bad</p>"})
+
+
+def test_build_oembed_text_payload_happy_path_shape() -> None:
+    assert build_oembed_text_payload(
+        {"html": "<p>Hello &amp; co</p>", "author_name": "alice"}
+    ) == {
+        "text": "Hello & co",
+        "user": {"name": "alice"},
+    }
+
+
+def test_build_oembed_text_payload_returns_none_for_non_usable_obj() -> None:
+    assert build_oembed_text_payload(None) is None
+    assert build_oembed_text_payload({"html": ""}) is None
+
+
+def test_build_oembed_text_payload_non_string_html_raises() -> None:
+    with pytest.raises(TypeError):
+        build_oembed_text_payload({"html": {"bad": "value"}})
 
 
 def test_format_syndication_body_text_variants() -> None:
