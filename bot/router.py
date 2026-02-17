@@ -123,6 +123,7 @@ from .router_components import (
     mentions_bot,
     normalize_x_url,
     parse_twitter_status_id,
+    resolve_twitter_status_id,
     stt_result_has_transcription,
     strip_leading_bot_mention,
     strip_discord_mentions_and_urls,
@@ -1469,7 +1470,11 @@ class Router:
         self, url: str, tweet_id: Optional[str] = None
     ) -> str:
         """Return status ID from explicit hint first, otherwise parse from URL."""
-        return tweet_id or self._parse_twitter_status_id(url) or ""
+        return resolve_twitter_status_id(
+            url,
+            tweet_id=tweet_id,
+            parse_status_id=self._parse_twitter_status_id,
+        )
 
     @staticmethod
     def _extract_primary_tweet_id(url: str) -> Optional[str]:

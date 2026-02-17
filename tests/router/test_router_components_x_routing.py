@@ -16,6 +16,7 @@ from bot.router_components.x_routing import (
     is_twitter_url,
     normalize_x_url,
     parse_twitter_status_id,
+    resolve_twitter_status_id,
     stt_result_has_transcription,
     unwrap_x_media_url,
 )
@@ -173,3 +174,32 @@ def test_stt_result_has_transcription_matches_router_semantics() -> None:
     assert stt_result_has_transcription({"transcription": ""}) is False
     assert stt_result_has_transcription({"text": "fallback only"}) is False
     assert stt_result_has_transcription(None) is False
+
+
+def test_resolve_twitter_status_id_prefers_hint_then_parser() -> None:
+    assert (
+        resolve_twitter_status_id(
+            "https://x.com/user/status/111",
+            tweet_id="123",
+            parse_status_id=lambda _url: (_ for _ in ()).throw(
+                AssertionError("parser should not run when hint is provided")
+            ),
+        )
+        == "123"
+    )
+
+    assert (
+        resolve_twitter_status_id(
+            "https://x.com/user/status/111",
+            parse_status_id=lambda _url: "456",
+        )
+        == "456"
+    )
+
+    assert (
+        resolve_twitter_status_id(
+            "https://x.com/user/status/111",
+            parse_status_id=lambda _url: None,
+        )
+        == ""
+    )

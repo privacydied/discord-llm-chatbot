@@ -263,6 +263,17 @@ def stt_result_has_transcription(stt_result: Any) -> bool:
     return bool(stt_result.get("transcription"))
 
 
+def resolve_twitter_status_id(
+    url: str,
+    *,
+    tweet_id: Optional[str] = None,
+    parse_status_id: Optional[Callable[[str], Optional[str]]] = None,
+) -> str:
+    """Resolve status ID from explicit hint first, otherwise parse from URL."""
+    parser = parse_status_id or parse_twitter_status_id
+    return tweet_id or parser(url) or ""
+
+
 def extract_x_status_urls_from_text(
     text: str,
     *,
