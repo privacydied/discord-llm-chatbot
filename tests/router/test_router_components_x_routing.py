@@ -31,6 +31,7 @@ from bot.router_components.x_routing import (
     merge_syndication_base_with_article,
     extract_syndication_text,
     build_x_text_miss_log_payload,
+    format_syndication_body_text,
     resolve_twitter_status_id,
     is_twitter_status_url,
     stt_result_has_transcription,
@@ -527,6 +528,17 @@ def test_build_x_text_miss_log_payload_shape_and_primary_id() -> None:
             "reason": "empty_text",
         },
     }
+
+
+def test_format_syndication_body_text_variants() -> None:
+    assert format_syndication_body_text("short") == "short"
+    assert format_syndication_body_text("") == (
+        "(Tweet text not available. If you want analysis, paste the text or add a screenshot.)"
+    )
+    long_text = "a" * 5000
+    out = format_syndication_body_text(long_text)
+    assert len(out) == 3991
+    assert out.endswith("…")
 
 
 def test_x_syn_probe_budget_timeout_s_caps_and_offsets() -> None:

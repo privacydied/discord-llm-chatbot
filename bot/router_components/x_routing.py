@@ -494,6 +494,15 @@ def build_x_text_miss_log_payload(url: str) -> Dict[str, Any]:
     }
 
 
+def format_syndication_body_text(text: str) -> str:
+    """Format syndication body text with legacy size limits and fallback copy."""
+    if text and len(text) <= 4000:
+        return text
+    if text:
+        return text[:3990] + "…"
+    return "(Tweet text not available. If you want analysis, paste the text or add a screenshot.)"
+
+
 def x_syn_probe_budget_timeout_s(x_syn_timeout_s: float) -> float:
     """Compute bounded timeout budget for image/media probe calls."""
     return min(float(x_syn_timeout_s) + 1.0, 4.5)

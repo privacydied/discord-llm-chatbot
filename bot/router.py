@@ -136,6 +136,7 @@ from .router_components import (
     syndication_needs_article_hydration,
     extract_syndication_text,
     build_x_text_miss_log_payload,
+    format_syndication_body_text,
     x_syn_probe_budget_timeout_s,
     x_syn_quick_request_timeouts,
     build_syndication_photo_payload,
@@ -1270,15 +1271,7 @@ class Router:
                     )
                 except Exception:
                     pass
-            body = (
-                text
-                if text and len(text) <= 4000
-                else (
-                    (text[:3990] + "…")
-                    if text
-                    else "(Tweet text not available. If you want analysis, paste the text or add a screenshot.)"
-                )
-            )
+            body = format_syndication_body_text(text)
             return f"{prefix}{stamp}{media_hint} → {url}\n{body}"
         except Exception:
             return f"Tweet → {url}\n{str(syn_data)[:4000]}"
