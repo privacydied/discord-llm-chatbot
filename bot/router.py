@@ -665,6 +665,27 @@ class Router:
             stt_res=stt_res,
         )
 
+    async def _format_x_no_speech_fallback(
+        self,
+        *,
+        url: str,
+        stt_res: Any,
+        base_text: Optional[str] = None,
+    ) -> str:
+        """Emit no-speech breadcrumbs and format X caption-only evidence."""
+        self._emit_caption_only_fallback_breadcrumbs("no_speech")
+        stt_payload = stt_res or {}
+        if base_text is None:
+            return await self._format_x_with_resolved_base_text(
+                url=url,
+                stt_res=stt_payload,
+            )
+        return self._format_x_tweet_with_transcription(
+            base_text=base_text,
+            url=url,
+            stt_res=stt_payload,
+        )
+
     async def _route_twitter_syndication_to_vl(
         self, syn_payload: Dict[str, Any], url: str
     ) -> str:
@@ -5652,8 +5673,7 @@ class Router:
             else:
                 # No/low speech case: for Twitter, degrade to caption-only evidence and continue [REH]
                 if is_twitter:
-                    self._emit_caption_only_fallback_breadcrumbs("no_speech")
-                    composed = await self._format_x_with_resolved_base_text(
+                    composed = await self._format_x_no_speech_fallback(
                         url=url,
                         stt_res=(result or {}),
                     )
@@ -6681,8 +6701,7 @@ class Router:
                                 if formatted:
                                     return f"Video/audio content from {url}: {formatted}"
                                 # No-speech in API probe: log and continue with caption-only bundle [REH]
-                                self._emit_caption_only_fallback_breadcrumbs("no_speech")
-                                return self._format_x_tweet_with_transcription(
+                                return await self._format_x_no_speech_fallback(
                                     base_text=base,
                                     url=url,
                                     stt_res=(stt_res or {}),

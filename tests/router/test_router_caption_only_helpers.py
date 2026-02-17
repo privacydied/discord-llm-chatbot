@@ -306,6 +306,68 @@ async def test_format_x_with_resolved_base_text_if_available_returns_none_when_m
     assert out is None
 
 
+@pytest.mark.asyncio
+async def test_format_x_no_speech_fallback_resolves_base_and_emits_breadcrumbs(
+    monkeypatch,
+) -> None:
+    router = Router(DummyBot())
+    router.logger = CaptureLogger()
+    captured = {}
+
+    async def _fmt_resolved(self, *, url, stt_res):
+        captured["url"] = url
+        captured["stt_res"] = stt_res
+        return "formatted"
+
+    monkeypatch.setattr(Router, "_format_x_with_resolved_base_text", _fmt_resolved)
+
+    out = await router._format_x_no_speech_fallback(
+        url="https://x.com/u/status/1",
+        stt_res=None,
+    )
+
+    assert out == "formatted"
+    assert captured == {"url": "https://x.com/u/status/1", "stt_res": {}}
+    assert router.logger.info_lines == ["stt.fail", "fallback"]
+    assert router.logger.calls[0]["extra"]["detail"]["reason"] == "no_speech"
+
+
+@pytest.mark.asyncio
+async def test_format_x_no_speech_fallback_uses_explicit_base_without_resolve(
+    monkeypatch,
+) -> None:
+    router = Router(DummyBot())
+    router.logger = CaptureLogger()
+    captured = {}
+
+    async def _fmt_resolved(self, *, url, stt_res):
+        raise AssertionError("resolved-base formatter should not be called")
+
+    def _fmt(self, *, base_text=None, url="", stt_res=None, **kwargs):
+        captured["base_text"] = base_text
+        captured["url"] = url
+        captured["stt_res"] = stt_res
+        return "formatted"
+
+    monkeypatch.setattr(Router, "_format_x_with_resolved_base_text", _fmt_resolved)
+    monkeypatch.setattr(Router, "_format_x_tweet_with_transcription", _fmt)
+
+    out = await router._format_x_no_speech_fallback(
+        url="https://x.com/u/status/1",
+        stt_res={"transcription": ""},
+        base_text="base",
+    )
+
+    assert out == "formatted"
+    assert captured == {
+        "base_text": "base",
+        "url": "https://x.com/u/status/1",
+        "stt_res": {"transcription": ""},
+    }
+    assert router.logger.info_lines == ["stt.fail", "fallback"]
+    assert router.logger.calls[0]["extra"]["detail"]["reason"] == "no_speech"
+
+
 def test_classify_stt_error_reason_matches_existing_semantics() -> None:
     router = Router(DummyBot())
 
