@@ -116,6 +116,7 @@ from bot.router_components.x_routing import (
     build_syndication_oembed_fallback_params,
     build_syndication_oembed_fallback_plan,
     build_syndication_fetch_plan,
+    build_syndication_fetch_plan_tuple,
     build_syndication_metric_endpoint_key,
     build_syndication_fetch_metric_payload,
     syndication_cache_ttl_s,
@@ -1187,6 +1188,17 @@ def test_build_syndication_fetch_plan_shape_and_values() -> None:
         ("tweet-result", {"id": "2022790791047823773", "lang": "en"}),
         ("widgets", {"id": "2022790791047823773", "lang": "en", "dnt": "false"}),
     ]
+
+
+def test_build_syndication_fetch_plan_tuple_passthrough() -> None:
+    base = "https://cdn.syndication.twimg.com/"
+    headers = {"User-Agent": "ua"}
+    variants = [("widgets", {"id": "1", "lang": "en"})]
+    assert build_syndication_fetch_plan_tuple(base, headers, variants) == (
+        base,
+        headers,
+        variants,
+    )
 
 
 def test_build_syndication_fetch_metric_payload_shape() -> None:
