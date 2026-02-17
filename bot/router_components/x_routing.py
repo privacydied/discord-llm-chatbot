@@ -274,6 +274,11 @@ def resolve_twitter_status_id(
     return tweet_id or parser(url) or ""
 
 
+def classify_stt_error_reason(stt_err: Optional[str]) -> str:
+    """Map STT status token to canonical fallback reason."""
+    return "no_speech" if stt_err != "error" else "error"
+
+
 def extract_x_status_urls_from_text(
     text: str,
     *,

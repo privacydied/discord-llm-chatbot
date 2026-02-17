@@ -16,6 +16,7 @@ from bot.router_components.x_routing import (
     is_twitter_url,
     normalize_x_url,
     parse_twitter_status_id,
+    classify_stt_error_reason,
     resolve_twitter_status_id,
     stt_result_has_transcription,
     unwrap_x_media_url,
@@ -203,3 +204,11 @@ def test_resolve_twitter_status_id_prefers_hint_then_parser() -> None:
         )
         == ""
     )
+
+
+def test_classify_stt_error_reason_matches_router_semantics() -> None:
+    assert classify_stt_error_reason("error") == "error"
+    assert classify_stt_error_reason(None) == "no_speech"
+    assert classify_stt_error_reason("timeout") == "no_speech"
+    # Preserve legacy exact-match behavior (case-sensitive).
+    assert classify_stt_error_reason("ERROR") == "no_speech"

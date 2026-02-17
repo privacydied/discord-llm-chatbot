@@ -124,6 +124,7 @@ from .router_components import (
     normalize_x_url,
     parse_twitter_status_id,
     resolve_twitter_status_id,
+    classify_stt_error_reason,
     stt_result_has_transcription,
     strip_leading_bot_mention,
     strip_discord_mentions_and_urls,
@@ -569,7 +570,7 @@ class Router:
 
     def _classify_stt_error_reason(self, stt_err: Optional[str]) -> str:
         """Map STT status token to the canonical fallback reason."""
-        return "no_speech" if stt_err != "error" else "error"
+        return classify_stt_error_reason(stt_err)
 
     def _extract_x_api_primary_tweet(self, api_data: Any) -> Dict[str, Any]:
         """Extract the primary tweet node from X API payload variants."""
