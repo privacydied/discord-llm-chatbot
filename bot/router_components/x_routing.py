@@ -1073,6 +1073,13 @@ def build_syndication_fetch_plan(
     tweet_id: str,
 ) -> Tuple[str, Dict[str, str], List[Tuple[str, Dict[str, str]]]]:
     """Build base URL, headers, and endpoint param variants for syndication fetch."""
+    return build_syndication_fetch_plan_components(tweet_id)
+
+
+def build_syndication_fetch_plan_components(
+    tweet_id: str,
+) -> Tuple[str, Dict[str, str], List[Tuple[str, Dict[str, str]]]]:
+    """Build canonical fetch plan components from tweet id."""
     base = build_syndication_base_url()
     headers = build_syndication_fetch_headers()
     params_variants = build_syndication_fetch_params_variants(tweet_id)

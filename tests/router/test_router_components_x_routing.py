@@ -116,6 +116,7 @@ from bot.router_components.x_routing import (
     build_syndication_oembed_fallback_params,
     build_syndication_oembed_fallback_plan,
     build_syndication_oembed_fallback_plan_tuple,
+    build_syndication_fetch_plan_components,
     build_syndication_fetch_plan,
     build_syndication_fetch_plan_tuple,
     build_syndication_metric_endpoint_key,
@@ -1190,6 +1191,19 @@ def test_build_syndication_fetch_plan_shape_and_values() -> None:
     assert base == "https://cdn.syndication.twimg.com/"
     assert headers["Referer"] == "https://platform.twitter.com/"
     assert headers["Accept-Language"] == "en-US,en;q=0.9"
+    assert variants == [
+        ("widgets", {"id": "2022790791047823773", "lang": "en"}),
+        ("tweet-result", {"id": "2022790791047823773", "lang": "en"}),
+        ("widgets", {"id": "2022790791047823773", "lang": "en", "dnt": "false"}),
+    ]
+
+
+def test_build_syndication_fetch_plan_components_shape() -> None:
+    base, headers, variants = build_syndication_fetch_plan_components(
+        "2022790791047823773"
+    )
+    assert base == "https://cdn.syndication.twimg.com/"
+    assert headers["Referer"] == "https://platform.twitter.com/"
     assert variants == [
         ("widgets", {"id": "2022790791047823773", "lang": "en"}),
         ("tweet-result", {"id": "2022790791047823773", "lang": "en"}),
