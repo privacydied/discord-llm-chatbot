@@ -1822,8 +1822,13 @@ def collect_raw_urls_from_texts(
 ) -> None:
     """Collect de-duplicated raw URLs from multiple text blobs."""
     for t in raw_url_source_texts(texts):
-        for u in iter_text_urls(t, url_re=url_re):
+        for u in raw_url_candidate_values(t, url_re=url_re):
             append_raw_url_if_present(items, raw_url_candidate_value(u))
+
+
+def raw_url_candidate_values(text: str, *, url_re: Any) -> Iterable[str]:
+    """Yield raw URL candidate values for collector loops."""
+    yield from iter_text_urls(text, url_re=url_re)
 
 
 def raw_url_candidate_value(raw_url: str) -> str:
