@@ -54,6 +54,8 @@ from bot.router_components.x_routing import (
     build_syndication_fetch_params_variants,
     build_syndication_widgets_endpoint,
     build_syndication_tweet_result_endpoint,
+    build_syndication_widgets_tweet_path,
+    build_syndication_tweet_result_path,
     build_syndication_oembed_params,
     build_syndication_oembed_status_url,
     build_syndication_oembed_options,
@@ -842,6 +844,11 @@ def test_build_syndication_fetch_params_variants_shape() -> None:
 def test_build_syndication_endpoint_name_constants() -> None:
     assert build_syndication_widgets_endpoint() == "widgets"
     assert build_syndication_tweet_result_endpoint() == "tweet-result"
+
+
+def test_build_syndication_endpoint_path_constants() -> None:
+    assert build_syndication_widgets_tweet_path() == "widgets/tweet"
+    assert build_syndication_tweet_result_path() == "tweet-result"
 
 
 def test_extract_oembed_payload_from_response_variants() -> None:

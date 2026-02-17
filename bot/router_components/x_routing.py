@@ -809,6 +809,16 @@ def build_syndication_tweet_result_endpoint() -> str:
     return "tweet-result"
 
 
+def build_syndication_widgets_tweet_path() -> str:
+    """Return canonical widgets tweet path suffix."""
+    return "widgets/tweet"
+
+
+def build_syndication_tweet_result_path() -> str:
+    """Return canonical tweet-result path suffix."""
+    return "tweet-result"
+
+
 def syndication_cache_ttl_s(default_ttl_s: float, cached: Any) -> float:
     """Compute syndication cache TTL with shorter cap for negative entries."""
     ttl = default_ttl_s
@@ -847,9 +857,9 @@ def build_syndication_cache_entry(data: Any, now_s: float) -> Dict[str, Any]:
 def build_syndication_endpoint_url(base: str, endpoint: str) -> str:
     """Build syndication endpoint URL preserving legacy endpoint mapping."""
     suffix = (
-        "widgets/tweet"
+        build_syndication_widgets_tweet_path()
         if endpoint == build_syndication_widgets_endpoint()
-        else build_syndication_tweet_result_endpoint()
+        else build_syndication_tweet_result_path()
     )
     return base + suffix
 
