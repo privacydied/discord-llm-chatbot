@@ -718,6 +718,21 @@ class Router:
             return False
         return bool(stt_result.get("transcription"))
 
+    def _extract_sparse_media_resolution(
+        self, resolved_sparse: Any, *, default_url: str
+    ) -> Tuple[str, List[str], str]:
+        """Extract sparse media kind/images/url from resolved payload."""
+        if not isinstance(resolved_sparse, dict):
+            return ("unknown", [], default_url)
+        sparse_kind = (resolved_sparse.get("kind") or "unknown").strip() or "unknown"
+        sparse_images = resolved_sparse.get("images") or []
+        if not isinstance(sparse_images, list):
+            sparse_images = []
+        sparse_url = resolved_sparse.get("url") or default_url
+        if not isinstance(sparse_url, str) or not sparse_url:
+            sparse_url = default_url
+        return (sparse_kind, sparse_images, sparse_url)
+
     def _format_x_transcription_if_present(
         self,
         *,
@@ -6447,20 +6462,13 @@ class Router:
                                 except Exception:
                                     resolved_sparse = None
 
-                                sparse_kind = (
-                                    (resolved_sparse or {}).get("kind", "unknown")
-                                    if isinstance(resolved_sparse, dict)
-                                    else "unknown"
-                                )
-                                sparse_images = (
-                                    (resolved_sparse or {}).get("images") or []
-                                    if isinstance(resolved_sparse, dict)
-                                    else []
+                                sparse_kind, sparse_images, sparse_url = (
+                                    self._extract_sparse_media_resolution(
+                                        resolved_sparse,
+                                        default_url=url,
+                                    )
                                 )
                                 if sparse_kind == "video":
-                                    sparse_url = (
-                                        (resolved_sparse or {}).get("url") or url
-                                    )
                                     try:
                                         self.logger.info(
                                             "route=x_syndication.sparse.stt_start",

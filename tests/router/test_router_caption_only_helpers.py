@@ -467,6 +467,26 @@ def test_stt_result_has_transcription_matches_existing_truthiness() -> None:
     assert router._stt_result_has_transcription(None) is False
 
 
+def test_extract_sparse_media_resolution_defaults_and_sanitizes() -> None:
+    router = Router(DummyBot())
+
+    assert router._extract_sparse_media_resolution(None, default_url="https://x.com/a") == (
+        "unknown",
+        [],
+        "https://x.com/a",
+    )
+
+    assert router._extract_sparse_media_resolution(
+        {"kind": "video", "images": "bad", "url": ""},
+        default_url="https://x.com/b",
+    ) == ("video", [], "https://x.com/b")
+
+    assert router._extract_sparse_media_resolution(
+        {"kind": "", "images": ["i1"], "url": "https://x.com/c"},
+        default_url="https://x.com/d",
+    ) == ("unknown", ["i1"], "https://x.com/c")
+
+
 def test_format_x_transcription_if_present_returns_formatted_output(
     monkeypatch,
 ) -> None:
