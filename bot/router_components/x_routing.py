@@ -1828,7 +1828,16 @@ def append_canonical_x_url(
     canonicalize_x_url: Callable[[str], str],
 ) -> None:
     """Canonicalize URL then append uniquely to the target list."""
-    append_canonicalized_value(items, url, canonicalize=canonicalize_x_url)
+    append_canonicalized_value(
+        items,
+        canonical_x_raw_value(url),
+        canonicalize=canonicalize_x_url,
+    )
+
+
+def canonical_x_raw_value(url: str) -> str:
+    """Return raw X URL value used by canonical X append path."""
+    return url
 
 
 def append_canonical_status_url(
