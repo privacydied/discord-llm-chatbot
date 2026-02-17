@@ -45,6 +45,7 @@ from bot.router_components.x_routing import (
     build_syndication_fetch_user_agent,
     build_syndication_fetch_accept_language,
     build_syndication_fetch_referer,
+    build_syndication_platform_host,
     build_syndication_fetch_accept,
     build_syndication_lang,
     build_syndication_dnt_value,
@@ -825,6 +826,10 @@ def test_build_syndication_fetch_accept_language_constant() -> None:
 
 def test_build_syndication_fetch_referer_constant() -> None:
     assert build_syndication_fetch_referer() == "https://platform.twitter.com/"
+
+
+def test_build_syndication_platform_host_constant() -> None:
+    assert build_syndication_platform_host() == "platform.twitter.com"
 
 
 def test_build_syndication_fetch_accept_constant() -> None:

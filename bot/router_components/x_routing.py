@@ -656,7 +656,12 @@ def build_syndication_fetch_accept_language() -> str:
 
 def build_syndication_fetch_referer() -> str:
     """Return canonical Referer for CDN syndication fetches."""
-    return "https://platform.twitter.com/"
+    return f"https://{build_syndication_platform_host()}/"
+
+
+def build_syndication_platform_host() -> str:
+    """Return canonical platform host used for syndication referer headers."""
+    return "platform.twitter.com"
 
 
 def build_syndication_fetch_accept() -> str:
