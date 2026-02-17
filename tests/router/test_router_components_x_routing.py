@@ -42,6 +42,7 @@ from bot.router_components.x_routing import (
     build_syndication_oembed_url,
     build_syndication_base_url,
     build_syndication_fetch_headers,
+    build_syndication_fetch_params_variants,
     build_syndication_oembed_params,
     build_syndication_fetch_plan,
     build_syndication_fetch_metric_payload,
@@ -703,6 +704,15 @@ def test_build_syndication_fetch_headers_shape() -> None:
     assert headers["Referer"] == "https://platform.twitter.com/"
     assert headers["Accept-Language"] == "en-US,en;q=0.9"
     assert "Mozilla/5.0" in headers["User-Agent"]
+
+
+def test_build_syndication_fetch_params_variants_shape() -> None:
+    variants = build_syndication_fetch_params_variants("2022790791047823773")
+    assert variants == [
+        ("widgets", {"id": "2022790791047823773", "lang": "en"}),
+        ("tweet-result", {"id": "2022790791047823773", "lang": "en"}),
+        ("widgets", {"id": "2022790791047823773", "lang": "en", "dnt": "false"}),
+    ]
 
 
 def test_extract_oembed_payload_from_response_variants() -> None:

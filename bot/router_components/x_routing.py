@@ -649,6 +649,15 @@ def build_syndication_fetch_headers() -> Dict[str, str]:
     }
 
 
+def build_syndication_fetch_params_variants(tweet_id: str) -> List[Tuple[str, Dict[str, str]]]:
+    """Return endpoint+params variants for CDN syndication fetch attempts."""
+    return [
+        ("widgets", {"id": tweet_id, "lang": "en"}),
+        ("tweet-result", {"id": tweet_id, "lang": "en"}),
+        ("widgets", {"id": tweet_id, "lang": "en", "dnt": "false"}),
+    ]
+
+
 def build_syndication_oembed_params(
     tweet_id: str,
     *,
@@ -671,11 +680,7 @@ def build_syndication_fetch_plan(
     """Build base URL, headers, and endpoint param variants for syndication fetch."""
     base = build_syndication_base_url()
     headers = build_syndication_fetch_headers()
-    params_variants = [
-        ("widgets", {"id": tweet_id, "lang": "en"}),
-        ("tweet-result", {"id": tweet_id, "lang": "en"}),
-        ("widgets", {"id": tweet_id, "lang": "en", "dnt": "false"}),
-    ]
+    params_variants = build_syndication_fetch_params_variants(tweet_id)
     return base, headers, params_variants
 
 
