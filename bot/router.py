@@ -3507,9 +3507,10 @@ class Router:
                                     or {}
                                 )
                                 frontend = ctx.get("frontend")
-                                primary = ctx.get(
-                                    "primary"
-                                ) or self._parse_twitter_status_id(normalized_u)
+                                primary = self._resolve_twitter_status_id(
+                                    normalized_u,
+                                    tweet_id=ctx.get("primary"),
+                                )
                                 if frontend:
                                     frontend_hints[normalized_u] = frontend
                                 if primary:
@@ -3537,11 +3538,12 @@ class Router:
                         base_context_url = (
                             norm_urls[0] if norm_urls else (x_urls[0] if x_urls else "")
                         )
-                        primary_selected = (
-                            (resolved or {}).get("primary")
-                            or primary_hints.get(base_context_url)
-                            or self._parse_twitter_status_id(base_context_url)
-                            or ""
+                        primary_selected = self._resolve_twitter_status_id(
+                            base_context_url,
+                            tweet_id=(
+                                (resolved or {}).get("primary")
+                                or primary_hints.get(base_context_url)
+                            ),
                         )
                         frontend_selected = (resolved or {}).get(
                             "frontend"
