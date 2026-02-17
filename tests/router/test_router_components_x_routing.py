@@ -47,6 +47,7 @@ from bot.router_components.x_routing import (
     build_syndication_fetch_accept,
     build_syndication_lang,
     build_syndication_fetch_headers,
+    build_syndication_fetch_params,
     build_syndication_fetch_params_variants,
     build_syndication_oembed_params,
     build_syndication_oembed_status_url,
@@ -795,6 +796,21 @@ def test_build_syndication_fetch_accept_constant() -> None:
 
 def test_build_syndication_lang_constant() -> None:
     assert build_syndication_lang() == "en"
+
+
+def test_build_syndication_fetch_params_variants_with_and_without_dnt() -> None:
+    assert build_syndication_fetch_params("2022790791047823773") == {
+        "id": "2022790791047823773",
+        "lang": "en",
+    }
+    assert build_syndication_fetch_params(
+        "2022790791047823773",
+        include_dnt=True,
+    ) == {
+        "id": "2022790791047823773",
+        "lang": "en",
+        "dnt": "false",
+    }
 
 
 def test_build_syndication_fetch_params_variants_shape() -> None:

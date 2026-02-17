@@ -674,13 +674,24 @@ def build_syndication_fetch_headers() -> Dict[str, str]:
     }
 
 
+def build_syndication_fetch_params(
+    tweet_id: str,
+    *,
+    include_dnt: bool = False,
+) -> Dict[str, str]:
+    """Return canonical syndication fetch params for a tweet id."""
+    params = {"id": tweet_id, "lang": build_syndication_lang()}
+    if include_dnt:
+        params["dnt"] = "false"
+    return params
+
+
 def build_syndication_fetch_params_variants(tweet_id: str) -> List[Tuple[str, Dict[str, str]]]:
     """Return endpoint+params variants for CDN syndication fetch attempts."""
-    lang = build_syndication_lang()
     return [
-        ("widgets", {"id": tweet_id, "lang": lang}),
-        ("tweet-result", {"id": tweet_id, "lang": lang}),
-        ("widgets", {"id": tweet_id, "lang": lang, "dnt": "false"}),
+        ("widgets", build_syndication_fetch_params(tweet_id)),
+        ("tweet-result", build_syndication_fetch_params(tweet_id)),
+        ("widgets", build_syndication_fetch_params(tweet_id, include_dnt=True)),
     ]
 
 
