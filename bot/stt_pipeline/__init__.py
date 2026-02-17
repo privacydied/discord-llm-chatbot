@@ -24,6 +24,7 @@ from .lifecycle import (
 )
 from .url_ingest import (
     ensure_manager_ready_or_raise,
+    prepare_url_download_for_stt,
     fetch_url_audio_or_raise,
     fetch_url_audio_with_span,
 )
@@ -41,6 +42,7 @@ __all__ = [
     "create_stt_job",
     "fetch_url_audio_with_span",
     "ensure_manager_ready_or_raise",
+    "prepare_url_download_for_stt",
     "fetch_url_audio_or_raise",
     "preprocess_and_transcribe",
     "run_stitch_stage",

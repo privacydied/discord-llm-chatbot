@@ -61,3 +61,34 @@ async def fetch_url_audio_or_raise(
     except ingest_error_type as exc:
         await job.finish_failure(exc)
         raise InferenceError(str(exc)) from exc
+
+
+async def prepare_url_download_for_stt(
+    *,
+    url: str,
+    force_refresh: bool,
+    manager: Any,
+    job: Any,
+    spans: Any,
+    ram_guard: Any,
+    fetcher: Callable[..., Awaitable[Any]],
+    ingest_error_type: Any,
+    ensure_ready_or_raise: Callable[..., Awaitable[None]] = ensure_manager_ready_or_raise,
+    fetch_or_raise: Callable[..., Awaitable[Any]] = fetch_url_audio_or_raise,
+) -> Any:
+    """Run canonical URL download preparation for STT URL entrypoint."""
+    await ensure_ready_or_raise(
+        manager=manager,
+        job=job,
+    )
+    download = await fetch_or_raise(
+        url=url,
+        force_refresh=force_refresh,
+        fetcher=fetcher,
+        spans=spans,
+        job=job,
+        ingest_error_type=ingest_error_type,
+    )
+    job.register_download(download)
+    ram_guard.check("yt-dlp")
+    return download

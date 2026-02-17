@@ -494,3 +494,21 @@
     - `./.venv/bin/python -m py_compile bot/hear.py bot/stt_pipeline/transcribe_flow.py`
     - `./.venv/bin/pytest -q tests/test_stt_pipeline_transcribe_flow.py tests/test_video_ingest.py tests/test_hear_ffmpeg_resolution.py` -> `13 passed`
     - `./.venv/bin/pytest -q tests/core tests/router tests/syndication tests/vision tests/test_hear_ffmpeg_resolution.py tests/test_hear_stream_abort.py tests/test_media_ingestion.py tests/test_video_ingest.py tests/router/test_router_x_result_format_contract.py tests/test_media_ingestion_compat_contracts.py tests/vision/test_money_contract.py tests/test_media_ingestion_helpers.py tests/test_stt_pipeline_runtime.py tests/test_stt_pipeline_ffmpeg_runtime.py tests/test_stt_pipeline_youtube_path.py tests/test_stt_pipeline_result_payload.py tests/test_stt_pipeline_spec_select.py tests/test_stt_pipeline_logging.py tests/test_stt_pipeline_lifecycle.py tests/test_stt_pipeline_url_ingest.py tests/test_stt_pipeline_transcribe_flow.py tests/test_stt_pipeline_stitch.py` -> `270 passed`
+- 2026-02-17:
+  - Refactor (behavior-preserving): extracted URL-entry download preparation sequence into:
+    - `bot/stt_pipeline/url_ingest.py::prepare_url_download_for_stt()`
+  - Rewired `bot/hear.py::hear_infer_from_url()` to delegate:
+    - manager readiness gate
+    - URL audio fetch/error conversion
+    - `job.register_download(download)`
+    - `ram_guard.check("yt-dlp")`
+  - Preserved URL-path semantics and error contracts.
+  - Exported helper via `bot/stt_pipeline/__init__.py`.
+  - Expanded contracts in `tests/test_stt_pipeline_url_ingest.py`:
+    - success call ordering + registration + RAM check
+    - stop-on-ready-error
+    - stop-on-fetch-error
+  - Validation:
+    - `./.venv/bin/python -m py_compile bot/hear.py bot/stt_pipeline/__init__.py bot/stt_pipeline/url_ingest.py tests/test_stt_pipeline_url_ingest.py`
+    - `./.venv/bin/pytest -q tests/test_stt_pipeline_url_ingest.py tests/test_stt_pipeline_lifecycle.py` -> `16 passed`
+    - `./.venv/bin/pytest -q tests/core tests/router tests/syndication tests/vision tests/test_hear_ffmpeg_resolution.py tests/test_hear_stream_abort.py tests/test_media_ingestion.py tests/test_video_ingest.py tests/router/test_router_x_result_format_contract.py tests/test_media_ingestion_compat_contracts.py tests/vision/test_money_contract.py tests/test_media_ingestion_helpers.py tests/test_stt_pipeline_runtime.py tests/test_stt_pipeline_ffmpeg_runtime.py tests/test_stt_pipeline_youtube_path.py tests/test_stt_pipeline_result_payload.py tests/test_stt_pipeline_spec_select.py tests/test_stt_pipeline_logging.py tests/test_stt_pipeline_lifecycle.py tests/test_stt_pipeline_url_ingest.py tests/test_stt_pipeline_transcribe_flow.py tests/test_stt_pipeline_stitch.py` -> `273 passed`

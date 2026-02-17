@@ -5,6 +5,7 @@ from bot.stt_pipeline.url_ingest import (
     ensure_manager_ready_or_raise,
     fetch_url_audio_or_raise,
     fetch_url_audio_with_span,
+    prepare_url_download_for_stt,
 )
 
 
@@ -22,9 +23,21 @@ class _Spans:
 class _Job:
     def __init__(self) -> None:
         self.failures = []
+        self.downloads = []
 
     async def finish_failure(self, exc: Exception) -> None:
         self.failures.append(exc)
+
+    def register_download(self, download) -> None:
+        self.downloads.append(download)
+
+
+class _Guard:
+    def __init__(self) -> None:
+        self.calls = []
+
+    def check(self, stage: str) -> None:
+        self.calls.append(stage)
 
 
 @pytest.mark.asyncio
@@ -160,3 +173,103 @@ async def test_fetch_url_audio_or_raise_passthrough_non_ingest_error() -> None:
         ("start", "yt-dlp", {}),
         ("end", "yt-dlp", {"ok": False, "reason": "error"}),
     ]
+
+
+@pytest.mark.asyncio
+async def test_prepare_url_download_for_stt_success() -> None:
+    job = _Job()
+    guard = _Guard()
+    spans = _Spans()
+    manager = object()
+    order = []
+
+    async def _ensure_ready_or_raise(**kwargs):
+        assert kwargs["manager"] is manager
+        assert kwargs["job"] is job
+        order.append("ensure")
+
+    async def _fetch_or_raise(**kwargs):
+        assert kwargs["url"] == "https://x.com/user/status/1"
+        assert kwargs["force_refresh"] is True
+        assert kwargs["spans"] is spans
+        assert kwargs["job"] is job
+        order.append("fetch")
+        return {"ok": True}
+
+    result = await prepare_url_download_for_stt(
+        url="https://x.com/user/status/1",
+        force_refresh=True,
+        manager=manager,
+        job=job,
+        spans=spans,
+        ram_guard=guard,
+        fetcher=lambda *_args, **_kwargs: None,
+        ingest_error_type=RuntimeError,
+        ensure_ready_or_raise=_ensure_ready_or_raise,
+        fetch_or_raise=_fetch_or_raise,
+    )
+
+    assert result == {"ok": True}
+    assert order == ["ensure", "fetch"]
+    assert job.downloads == [{"ok": True}]
+    assert guard.calls == ["yt-dlp"]
+
+
+@pytest.mark.asyncio
+async def test_prepare_url_download_for_stt_stops_on_ready_error() -> None:
+    job = _Job()
+    guard = _Guard()
+    spans = _Spans()
+
+    async def _ensure_ready_or_raise(**kwargs):
+        raise RuntimeError("not ready")
+
+    async def _fetch_or_raise(**kwargs):
+        raise AssertionError("fetch should not run")
+
+    with pytest.raises(RuntimeError, match="not ready"):
+        await prepare_url_download_for_stt(
+            url="https://x.com/user/status/1",
+            force_refresh=False,
+            manager=object(),
+            job=job,
+            spans=spans,
+            ram_guard=guard,
+            fetcher=lambda *_args, **_kwargs: None,
+            ingest_error_type=RuntimeError,
+            ensure_ready_or_raise=_ensure_ready_or_raise,
+            fetch_or_raise=_fetch_or_raise,
+        )
+
+    assert job.downloads == []
+    assert guard.calls == []
+
+
+@pytest.mark.asyncio
+async def test_prepare_url_download_for_stt_stops_on_fetch_error() -> None:
+    job = _Job()
+    guard = _Guard()
+    spans = _Spans()
+
+    async def _ensure_ready_or_raise(**kwargs):
+        return None
+
+    async def _fetch_or_raise(**kwargs):
+        raise RuntimeError("fetch failed")
+
+    with pytest.raises(RuntimeError, match="fetch failed"):
+        await prepare_url_download_for_stt(
+            url="https://x.com/user/status/1",
+            force_refresh=False,
+            manager=object(),
+            job=job,
+            spans=spans,
+            ram_guard=guard,
+            fetcher=lambda *_args, **_kwargs: None,
+            ingest_error_type=RuntimeError,
+            ensure_ready_or_raise=_ensure_ready_or_raise,
+            fetch_or_raise=_fetch_or_raise,
+        )
+
+    assert job.downloads == []
+    assert guard.calls == []
