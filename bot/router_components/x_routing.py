@@ -1608,8 +1608,7 @@ def extract_x_status_urls_from_text(
             raw = m.group(0)
             if is_status_url(raw):
                 cu = canonicalize_status_url(raw)
-                if cu not in urls:
-                    urls.append(cu)
+                append_unique_str(urls, cu)
     except Exception:
         pass
     return urls
@@ -1633,8 +1632,8 @@ def extract_raw_urls_from_texts(texts: Iterable[str]) -> List[str]:
         for t in texts:
             for m in url_re.finditer(t or ""):
                 u = m.group(0)
-                if u and u not in raw_urls:
-                    raw_urls.append(u)
+                if u:
+                    append_unique_str(raw_urls, u)
     except Exception:
         pass
     return raw_urls
@@ -1651,6 +1650,11 @@ def filter_canonical_x_urls(
     for u in raw_urls:
         if is_x_url(u):
             cu = canonicalize_x_url(u)
-            if cu not in out:
-                out.append(cu)
+            append_unique_str(out, cu)
     return out
+
+
+def append_unique_str(items: List[str], value: str) -> None:
+    """Append value to list only when it is not already present."""
+    if value not in items:
+        items.append(value)

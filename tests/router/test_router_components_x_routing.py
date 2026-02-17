@@ -12,6 +12,7 @@ from bot.router_components.x_routing import (
     extract_raw_urls_from_texts,
     extract_x_status_urls_from_text,
     filter_canonical_x_urls,
+    append_unique_str,
     is_tweet_media_url,
     is_twitter_media_cdn,
     is_twitter_thumbnail_url,
@@ -288,6 +289,13 @@ def test_extract_raw_urls_and_filter_canonical_x_urls() -> None:
         canonicalize_x_url=lambda u: u.split("?")[0].replace("twitter.com", "x.com"),
     )
     assert filtered == ["https://x.com/a/status/1"]
+
+
+def test_append_unique_str_only_appends_new_values() -> None:
+    items = ["a"]
+    append_unique_str(items, "a")
+    append_unique_str(items, "b")
+    assert items == ["a", "b"]
 
 
 def test_unwrap_x_media_url() -> None:
