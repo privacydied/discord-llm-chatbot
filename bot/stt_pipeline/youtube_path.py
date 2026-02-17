@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Awaitable, Callable, Dict, Optional
+
+from .logging import log_stt_job_complete
 
 
 def build_youtube_transcript_result(
@@ -41,3 +43,50 @@ def build_youtube_transcript_result(
             "transcription_language": language,
         },
     }
+
+
+async def try_youtube_transcript_first(
+    *,
+    url: str,
+    force_refresh: bool,
+    resolver: Callable[..., Awaitable[Any]],
+    logger: Any,
+) -> Optional[Dict[str, Any]]:
+    """Resolve transcript-first payload for YouTube URLs, fail-open on resolver errors."""
+    try:
+        yt = await resolver(url, force_refresh=force_refresh)
+    except Exception as exc:
+        logger.debug(
+            "stt.youtube_transcript.fail_open url=%s err=%s",
+            url[:120] if url else "none",
+            exc,
+        )
+        return None
+
+    if not (yt and getattr(yt, "text", "")):
+        return None
+
+    result = build_youtube_transcript_result(
+        url=url,
+        transcript_text=yt.text,
+        title=yt.title,
+        uploader=yt.uploader,
+        duration_s=yt.duration_s,
+        cache_hit=bool(yt.cache_hit),
+        source=yt.source,
+        language=yt.language,
+    )
+    logger.info(
+        "stt.youtube_transcript.ok video_id=%s lang=%s source=%s chars=%d cache_hit=%s",
+        yt.video_id,
+        yt.language or "unknown",
+        yt.source,
+        len(yt.text),
+        str(bool(yt.cache_hit)).lower(),
+    )
+    log_stt_job_complete(
+        logger=logger,
+        url=url,
+        transcript_text=yt.text,
+    )
+    return result

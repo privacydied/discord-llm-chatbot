@@ -13,7 +13,7 @@ from .ffmpeg_runtime import (
     resolve_ffmpeg_bin,
     reset_ffmpeg_runtime_cache,
 )
-from .youtube_path import build_youtube_transcript_result
+from .youtube_path import build_youtube_transcript_result, try_youtube_transcript_first
 from .result_payload import build_url_transcript_result
 from .logging import log_stt_job_complete, transcript_preview
 from .spec_select import select_initial_model_spec
@@ -22,6 +22,7 @@ from .lifecycle import abort_job_stream_if_present
 __all__ = [
     "STTRuntimeCompat",
     "build_youtube_transcript_result",
+    "try_youtube_transcript_first",
     "build_url_transcript_result",
     "log_stt_job_complete",
     "abort_job_stream_if_present",

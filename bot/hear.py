@@ -56,7 +56,6 @@ from .stt_module.multimodal_fallback import multimodal_fallback_provider
 from .stt_pipeline import (
     abort_job_stream_if_present,
     build_url_transcript_result,
-    build_youtube_transcript_result,
     ensure_stt_manager_ready,
     ffmpeg_bin_has_aac,
     ffmpeg_candidates_from_env,
@@ -65,6 +64,7 @@ from .stt_pipeline import (
     load_stt_runtime_compat,
     parse_stt_max_ram_mb,
     select_initial_model_spec,
+    try_youtube_transcript_first,
 )
 from .youtube_transcript import resolve_youtube_transcript
 
@@ -1995,42 +1995,13 @@ async def hear_infer_from_url(url: str, force_refresh: bool = False) -> Dict[str
             # YouTube transcript-first: try caption tracks before yt-dlp/ffmpeg/whisper.
             # On failure/unavailable captions we fail open to the existing STT pipeline.
             if runtime_compat.youtube_transcript_first:
-                try:
-                    yt = await resolve_youtube_transcript(
-                        url, force_refresh=force_refresh
-                    )
-                except Exception as exc:
-                    yt = None
-                    logger.debug(
-                        "stt.youtube_transcript.fail_open url=%s err=%s",
-                        url[:120] if url else "none",
-                        exc,
-                    )
-
-                if yt and yt.text:
-                    result = build_youtube_transcript_result(
-                        url=url,
-                        transcript_text=yt.text,
-                        title=yt.title,
-                        uploader=yt.uploader,
-                        duration_s=yt.duration_s,
-                        cache_hit=bool(yt.cache_hit),
-                        source=yt.source,
-                        language=yt.language,
-                    )
-                    logger.info(
-                        "stt.youtube_transcript.ok video_id=%s lang=%s source=%s chars=%d cache_hit=%s",
-                        yt.video_id,
-                        yt.language or "unknown",
-                        yt.source,
-                        len(yt.text),
-                        str(bool(yt.cache_hit)).lower(),
-                    )
-                    log_stt_job_complete(
-                        logger=logger,
-                        url=url,
-                        transcript_text=yt.text,
-                    )
+                result = await try_youtube_transcript_first(
+                    url=url,
+                    force_refresh=force_refresh,
+                    resolver=resolve_youtube_transcript,
+                    logger=logger,
+                )
+                if result:
                     return await job.finish_success(result)
 
             ready = await ensure_stt_manager_ready(stt_manager)

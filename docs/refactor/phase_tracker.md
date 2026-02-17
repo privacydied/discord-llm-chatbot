@@ -361,3 +361,20 @@
     - `./.venv/bin/python -m py_compile bot/hear.py bot/stt_pipeline/__init__.py bot/stt_pipeline/lifecycle.py`
     - `./.venv/bin/pytest -q tests/test_stt_pipeline_lifecycle.py tests/test_stt_pipeline_logging.py tests/test_stt_pipeline_spec_select.py tests/test_stt_pipeline_result_payload.py tests/test_video_ingest.py tests/test_hear_ffmpeg_resolution.py` -> `21 passed`
     - `./.venv/bin/pytest -q tests/core tests/router tests/syndication tests/vision tests/test_hear_ffmpeg_resolution.py tests/test_hear_stream_abort.py tests/test_media_ingestion.py tests/test_video_ingest.py tests/router/test_router_x_result_format_contract.py tests/test_media_ingestion_compat_contracts.py tests/vision/test_money_contract.py tests/test_media_ingestion_helpers.py tests/test_stt_pipeline_runtime.py tests/test_stt_pipeline_ffmpeg_runtime.py tests/test_stt_pipeline_youtube_path.py tests/test_stt_pipeline_result_payload.py tests/test_stt_pipeline_spec_select.py tests/test_stt_pipeline_logging.py tests/test_stt_pipeline_lifecycle.py` -> `253 passed`
+- 2026-02-17:
+  - Refactor (behavior-preserving): extracted transcript-first YouTube resolver flow into:
+    - `bot/stt_pipeline/youtube_path.py::try_youtube_transcript_first()`
+  - Rewired `bot/hear.py::hear_infer_from_url()` to delegate transcript-first branch to the helper.
+  - Preserved existing fail-open behavior and breadcrumbs:
+    - `stt.youtube_transcript.fail_open`
+    - `stt.youtube_transcript.ok`
+    - `stt.job.complete`
+  - Exported helper via `bot/stt_pipeline/__init__.py`.
+  - Expanded contracts in `tests/test_stt_pipeline_youtube_path.py`:
+    - success payload + logging path
+    - resolver error fail-open path
+    - empty transcript no-op path
+  - Validation:
+    - `./.venv/bin/python -m py_compile bot/hear.py bot/stt_pipeline/__init__.py bot/stt_pipeline/youtube_path.py`
+    - `./.venv/bin/pytest -q tests/test_stt_pipeline_youtube_path.py tests/test_video_ingest.py tests/test_hear_ffmpeg_resolution.py tests/test_stt_pipeline_logging.py tests/test_stt_pipeline_lifecycle.py` -> `22 passed`
+    - `./.venv/bin/pytest -q tests/core tests/router tests/syndication tests/vision tests/test_hear_ffmpeg_resolution.py tests/test_hear_stream_abort.py tests/test_media_ingestion.py tests/test_video_ingest.py tests/router/test_router_x_result_format_contract.py tests/test_media_ingestion_compat_contracts.py tests/vision/test_money_contract.py tests/test_media_ingestion_helpers.py tests/test_stt_pipeline_runtime.py tests/test_stt_pipeline_ffmpeg_runtime.py tests/test_stt_pipeline_youtube_path.py tests/test_stt_pipeline_result_payload.py tests/test_stt_pipeline_spec_select.py tests/test_stt_pipeline_logging.py tests/test_stt_pipeline_lifecycle.py` -> `256 passed`
