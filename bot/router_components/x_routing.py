@@ -2251,6 +2251,16 @@ def append_raw_url_if_present(items: List[str], raw_url: str) -> None:
 
 def raw_url_should_append(raw_url: str) -> bool:
     """Return whether raw URL should be appended by presence gating."""
+    return raw_url_should_append_source(raw_url)
+
+
+def raw_url_should_append_source(raw_url: str) -> bool:
+    """Return source presence-gating result for raw URL append helper."""
+    return raw_url_should_append_result(raw_url)
+
+
+def raw_url_should_append_result(raw_url: str) -> bool:
+    """Return value used by raw URL should-append source helper."""
     return raw_url_is_present(raw_url)
 
 
