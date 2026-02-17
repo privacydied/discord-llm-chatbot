@@ -595,6 +595,28 @@ class Router:
             stt_res={},
         )
 
+    def _format_x_video_stt_error_result(
+        self,
+        *,
+        url: str,
+        stt_error: Optional[str],
+        base_text: Optional[str] = None,
+        tweet_text: Optional[str] = None,
+    ) -> str:
+        """Format video STT failure while preserving video modality context."""
+        safe_base_text = (tweet_text or base_text or "").strip()
+        stt_error_result = {
+            "transcription": None,
+            "error": stt_error or "transcription_failed",
+            "media_kind": "video",
+            "url": url,
+        }
+        return self._format_x_tweet_with_transcription(
+            base_text=safe_base_text,
+            url=url,
+            stt_res=stt_error_result,
+        )
+
     def _build_visual_anchored_system_prompt(
         self, content: str, *, fallback: bool = False
     ) -> Optional[str]:
@@ -6234,17 +6256,11 @@ class Router:
                             )
                             # For confirmed video with STT failure, return structured error that maintains video context
                             # Do NOT collapse to text-only - the video content is real, even if transcription failed [REH]
-                            safe_base_text = (text or base or "").strip()
-                            stt_error_result = {
-                                "transcription": None,
-                                "error": stt_err or "transcription_failed",
-                                "media_kind": "video",
-                                "url": url,
-                            }
-                            return self._format_x_tweet_with_transcription(
-                                base_text=safe_base_text,
+                            return self._format_x_video_stt_error_result(
                                 url=url,
-                                stt_res=stt_error_result,
+                                stt_error=stt_err,
+                                base_text=base,
+                                tweet_text=text,
                             )
 
                         # No video confirmed. Probe for images only when none were extracted yet.
@@ -6386,17 +6402,11 @@ class Router:
                                             url=sparse_url,
                                             stt_res=stt_res,
                                         )
-                                    safe_base_text = (text or base or "").strip()
-                                    stt_error_result = {
-                                        "transcription": None,
-                                        "error": stt_err or "transcription_failed",
-                                        "media_kind": "video",
-                                        "url": sparse_url,
-                                    }
-                                    return self._format_x_tweet_with_transcription(
-                                        base_text=safe_base_text,
+                                    return self._format_x_video_stt_error_result(
                                         url=sparse_url,
-                                        stt_res=stt_error_result,
+                                        stt_error=stt_err,
+                                        base_text=base,
+                                        tweet_text=text,
                                     )
                                 if sparse_kind == "image" and sparse_images:
                                     try:

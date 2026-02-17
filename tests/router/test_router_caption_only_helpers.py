@@ -132,3 +132,53 @@ def test_emit_caption_only_fallback_breadcrumbs_emits_stt_fail_and_fallback() ->
     fallback_extra = router.logger.calls[1]["extra"]
     assert stt_extra["detail"]["reason"] == "error"
     assert fallback_extra["detail"]["kind"] == "caption_only"
+
+
+def test_format_x_video_stt_error_result_preserves_video_context(monkeypatch) -> None:
+    router = Router(DummyBot())
+    captured = {}
+
+    def _fmt(self, *, base_text=None, url="", stt_res=None, **kwargs):
+        captured["base_text"] = base_text
+        captured["url"] = url
+        captured["stt_res"] = stt_res
+        return "ok"
+
+    monkeypatch.setattr(Router, "_format_x_tweet_with_transcription", _fmt)
+
+    out = router._format_x_video_stt_error_result(
+        url="https://x.com/u/status/1",
+        stt_error="error",
+        base_text="base text",
+        tweet_text="tweet text",
+    )
+
+    assert out == "ok"
+    assert captured["base_text"] == "tweet text"
+    assert captured["url"] == "https://x.com/u/status/1"
+    assert captured["stt_res"]["transcription"] is None
+    assert captured["stt_res"]["error"] == "error"
+    assert captured["stt_res"]["media_kind"] == "video"
+    assert captured["stt_res"]["url"] == "https://x.com/u/status/1"
+
+
+def test_format_x_video_stt_error_result_defaults_error(monkeypatch) -> None:
+    router = Router(DummyBot())
+    captured = {}
+
+    def _fmt(self, *, base_text=None, url="", stt_res=None, **kwargs):
+        captured["base_text"] = base_text
+        captured["stt_res"] = stt_res
+        return "ok"
+
+    monkeypatch.setattr(Router, "_format_x_tweet_with_transcription", _fmt)
+
+    router._format_x_video_stt_error_result(
+        url="https://x.com/u/status/1",
+        stt_error="",
+        base_text="base text",
+        tweet_text="",
+    )
+
+    assert captured["base_text"] == "base text"
+    assert captured["stt_res"]["error"] == "transcription_failed"
