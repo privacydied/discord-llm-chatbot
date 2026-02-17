@@ -2324,6 +2324,16 @@ def append_canonical_status_url(
 
 def canonical_status_raw_value(raw_url: str) -> str:
     """Return raw status URL value used by canonical status append path."""
+    return canonical_status_raw_value_source(raw_url)
+
+
+def canonical_status_raw_value_source(raw_url: str) -> str:
+    """Return source raw status URL value for canonical append helper."""
+    return canonical_status_raw_value_result(raw_url)
+
+
+def canonical_status_raw_value_result(raw_url: str) -> str:
+    """Return value used by canonical status raw-value source helper."""
     return raw_url
 
 
