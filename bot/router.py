@@ -126,6 +126,7 @@ from .router_components import (
     resolve_twitter_status_id,
     is_twitter_status_url,
     classify_stt_error_reason,
+    build_stt_fail_log_payload,
     x_syn_probe_budget_timeout_s,
     x_syn_quick_request_timeouts,
     build_syndication_photo_payload,
@@ -545,15 +546,11 @@ class Router:
     ) -> None:
         """Emit STT failure breadcrumb with optional media kind and message id."""
         try:
-            detail: Dict[str, Any] = {"reason": reason}
-            if media_kind:
-                detail["media_kind"] = media_kind
-            payload: Dict[str, Any] = {
-                "event": "stt.fail",
-                "detail": detail,
-            }
-            if msg_id is not None:
-                payload["msg_id"] = msg_id
+            payload = build_stt_fail_log_payload(
+                reason,
+                media_kind=media_kind,
+                msg_id=msg_id,
+            )
             self.logger.info(
                 "stt.fail",
                 extra=payload,

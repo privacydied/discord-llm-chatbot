@@ -19,6 +19,7 @@ from bot.router_components.x_routing import (
     normalize_x_url,
     parse_twitter_status_id,
     classify_stt_error_reason,
+    build_stt_fail_log_payload,
     resolve_twitter_status_id,
     is_twitter_status_url,
     stt_result_has_transcription,
@@ -237,6 +238,23 @@ def test_classify_stt_error_reason_matches_router_semantics() -> None:
     assert classify_stt_error_reason("timeout") == "no_speech"
     # Preserve legacy exact-match behavior (case-sensitive).
     assert classify_stt_error_reason("ERROR") == "no_speech"
+
+
+def test_build_stt_fail_log_payload_includes_optional_fields() -> None:
+    assert build_stt_fail_log_payload("no_speech") == {
+        "event": "stt.fail",
+        "detail": {"reason": "no_speech"},
+    }
+
+    assert build_stt_fail_log_payload(
+        "error",
+        media_kind="video",
+        msg_id=123,
+    ) == {
+        "event": "stt.fail",
+        "detail": {"reason": "error", "media_kind": "video"},
+        "msg_id": 123,
+    }
 
 
 def test_x_syn_probe_budget_timeout_s_caps_and_offsets() -> None:

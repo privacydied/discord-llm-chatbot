@@ -289,6 +289,25 @@ def classify_stt_error_reason(stt_err: Optional[str]) -> str:
     return "no_speech" if stt_err != "error" else "error"
 
 
+def build_stt_fail_log_payload(
+    reason: str,
+    *,
+    media_kind: Optional[str] = None,
+    msg_id: Optional[int] = None,
+) -> Dict[str, Any]:
+    """Build structured payload for STT failure breadcrumb logging."""
+    detail: Dict[str, Any] = {"reason": reason}
+    if media_kind:
+        detail["media_kind"] = media_kind
+    payload: Dict[str, Any] = {
+        "event": "stt.fail",
+        "detail": detail,
+    }
+    if msg_id is not None:
+        payload["msg_id"] = msg_id
+    return payload
+
+
 def x_syn_probe_budget_timeout_s(x_syn_timeout_s: float) -> float:
     """Compute bounded timeout budget for image/media probe calls."""
     return min(float(x_syn_timeout_s) + 1.0, 4.5)
