@@ -22,6 +22,7 @@ from bot.router_components.x_routing import (
     unwrap_x_media_url,
     x_syn_probe_budget_timeout_s,
     x_syn_quick_request_timeouts,
+    build_syndication_photo_payload,
 )
 
 
@@ -224,3 +225,14 @@ def test_x_syn_probe_budget_timeout_s_caps_and_offsets() -> None:
 def test_x_syn_quick_request_timeouts_caps_and_offsets() -> None:
     assert x_syn_quick_request_timeouts(9.0) == (3.0, 3.0, 3.5)
     assert x_syn_quick_request_timeouts(1.2) == (1.2, 1.2, 1.7)
+
+
+def test_build_syndication_photo_payload_shape() -> None:
+    payload = build_syndication_photo_payload("caption text", ["u1", "u2"])
+    assert payload == {
+        "text": "caption text",
+        "photos": [{"url": "u1"}, {"url": "u2"}],
+    }
+
+    payload_none = build_syndication_photo_payload(None, [])
+    assert payload_none == {"text": None, "photos": []}

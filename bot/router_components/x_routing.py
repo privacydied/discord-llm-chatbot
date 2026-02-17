@@ -293,6 +293,16 @@ def x_syn_quick_request_timeouts(x_syn_timeout_s: float) -> tuple[float, float, 
     )
 
 
+def build_syndication_photo_payload(
+    text: Optional[str], image_urls: List[str]
+) -> Dict[str, Any]:
+    """Build syndication-like payload consumed by the unified VL handler."""
+    return {
+        "text": text,
+        "photos": [{"url": url} for url in image_urls],
+    }
+
+
 def extract_x_status_urls_from_text(
     text: str,
     *,

@@ -127,6 +127,7 @@ from .router_components import (
     classify_stt_error_reason,
     x_syn_probe_budget_timeout_s,
     x_syn_quick_request_timeouts,
+    build_syndication_photo_payload,
     stt_result_has_transcription,
     strip_leading_bot_mention,
     strip_discord_mentions_and_urls,
@@ -776,10 +777,7 @@ class Router:
         self, text: Optional[str], image_urls: List[str]
     ) -> Dict[str, Any]:
         """Build syndication-like payload consumed by the unified VL handler."""
-        return {
-            "text": text,
-            "photos": [{"url": u} for u in image_urls],
-        }
+        return build_syndication_photo_payload(text, image_urls)
 
     def _build_x_syn_quick_request_config(self) -> RequestConfig:
         """Build short-budget HTTP config for quick X syndication probes."""
