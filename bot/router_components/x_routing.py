@@ -1715,7 +1715,12 @@ def url_match_group_value(match: Any) -> str:
 
 def iter_url_matches(text: str, *, url_re: Any) -> Iterable[Any]:
     """Yield raw regex match objects for URL pattern scans in one text blob."""
-    yield from url_re.finditer(text or "")
+    yield from url_re.finditer(url_scan_text(text))
+
+
+def url_scan_text(text: Any) -> str:
+    """Return normalized text input used for URL regex scans."""
+    return text or ""
 
 
 def filter_canonical_x_urls(
