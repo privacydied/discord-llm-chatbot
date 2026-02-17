@@ -184,6 +184,7 @@ from bot.router_components.x_routing import (
     build_twitter_image_probe_result,
     resolve_and_probe_twitter_images,
     x_url_extract_pattern,
+    x_url_extract_regex,
 )
 
 
@@ -264,6 +265,11 @@ def test_extract_x_status_urls_from_text() -> None:
 
 def test_x_url_extract_pattern_constant() -> None:
     assert x_url_extract_pattern() == r"https?://[^\s<>\"'\[\]{}|\\^`]+"
+
+
+def test_x_url_extract_regex_matches_expected_urls() -> None:
+    matches = [m.group(0) for m in x_url_extract_regex().finditer("x https://x.com/u/status/1 y")]
+    assert matches == ["https://x.com/u/status/1"]
 
 
 def test_extract_raw_urls_and_filter_canonical_x_urls() -> None:

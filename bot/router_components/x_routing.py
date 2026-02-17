@@ -1620,11 +1620,16 @@ def x_url_extract_pattern() -> str:
     return r"https?://[^\s<>\"'\[\]{}|\\^`]+"
 
 
+def x_url_extract_regex() -> Any:
+    """Return compiled URL extraction regex used for broad URL harvesting."""
+    return re.compile(x_url_extract_pattern(), re.IGNORECASE)
+
+
 def extract_raw_urls_from_texts(texts: Iterable[str]) -> List[str]:
     """Extract raw URLs from multiple text blobs in-order with de-duplication."""
     raw_urls: List[str] = []
     try:
-        url_re = re.compile(r"https?://[^\s<>\"'\[\]{}|\\^`]+", re.IGNORECASE)
+        url_re = x_url_extract_regex()
         for t in texts:
             for m in url_re.finditer(t or ""):
                 u = m.group(0)
