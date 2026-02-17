@@ -1579,12 +1579,20 @@ async def resolve_and_probe_twitter_images(
     """Resolve status id and probe syndication image URLs with normalized defaults."""
     status_id = resolve_status_id(url, tweet_id=tweet_id)
     image_urls = await probe_images(url, status_id)
-    return status_id, normalize_probed_image_urls(image_urls)
+    return build_twitter_image_probe_result(status_id, image_urls)
 
 
 def normalize_probed_image_urls(image_urls: Optional[List[str]]) -> List[str]:
     """Normalize probed image URL payload to an always-list value."""
     return image_urls or []
+
+
+def build_twitter_image_probe_result(
+    status_id: str,
+    image_urls: Optional[List[str]],
+) -> Tuple[str, List[str]]:
+    """Build normalized `(status_id, image_urls)` tuple for Twitter image probes."""
+    return status_id, normalize_probed_image_urls(image_urls)
 
 
 def extract_x_status_urls_from_text(

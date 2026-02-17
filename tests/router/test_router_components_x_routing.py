@@ -181,6 +181,7 @@ from bot.router_components.x_routing import (
     format_twitter_syndication_host_label,
     resolve_first_image_host,
     normalize_probed_image_urls,
+    build_twitter_image_probe_result,
     resolve_and_probe_twitter_images,
 )
 
@@ -1823,6 +1824,11 @@ def test_normalize_probed_image_urls_variants() -> None:
     assert normalize_probed_image_urls(["u1"]) == ["u1"]
     assert normalize_probed_image_urls(None) == []
     assert normalize_probed_image_urls([]) == []
+
+
+def test_build_twitter_image_probe_result_normalizes_urls() -> None:
+    assert build_twitter_image_probe_result("123", ["u1"]) == ("123", ["u1"])
+    assert build_twitter_image_probe_result("123", None) == ("123", [])
 
 
 @pytest.mark.asyncio
