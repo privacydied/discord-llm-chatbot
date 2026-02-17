@@ -231,6 +231,7 @@ from bot.router_components.x_routing import (
     status_url_extract_regex_source_input,
     x_url_extract_regex_source,
     x_url_extract_regex_source_value,
+    x_url_extract_regex_source_input,
     status_url_extract_regex_result,
     status_url_extract_regex,
     status_url_candidates_regex_value,
@@ -449,6 +450,11 @@ def test_x_url_extract_regex_source_matches_x_url_extract_regex() -> None:
 def test_x_url_extract_regex_source_value_matches_x_url_extract_regex() -> None:
     assert x_url_extract_regex_source_value().pattern == x_url_extract_regex().pattern
     assert x_url_extract_regex_source_value().flags == x_url_extract_regex().flags
+
+
+def test_x_url_extract_regex_source_input_matches_x_url_extract_regex() -> None:
+    assert x_url_extract_regex_source_input().pattern == x_url_extract_regex().pattern
+    assert x_url_extract_regex_source_input().flags == x_url_extract_regex().flags
 
 
 def test_status_url_candidates_regex_matches_status_url_extract_regex() -> None:
