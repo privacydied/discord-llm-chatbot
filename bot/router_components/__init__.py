@@ -1,9 +1,11 @@
 """Router modularization components (compatibility-first extraction layer)."""
 
 from .compose import (
+    build_visual_analysis_anchor_prompt,
     compose_x_tweet_with_visual_facts,
     format_x_tweet_result,
     format_x_tweet_with_transcription,
+    has_visual_facts_section,
 )
 from .gating import is_reply_to_bot, mentions_bot, strip_leading_bot_mention
 from .input_harvest import (
@@ -40,6 +42,7 @@ from .x_routing import (
 
 __all__ = [
     "RouterRuntimeCompat",
+    "build_visual_analysis_anchor_prompt",
     "compose_x_tweet_with_visual_facts",
     "all_attachments_are_text",
     "append_embed_related_urls",
@@ -55,6 +58,7 @@ __all__ = [
     "format_x_tweet_result",
     "format_x_tweet_with_transcription",
     "has_explicit_media_intent",
+    "has_visual_facts_section",
     "has_meaningful_text",
     "is_direct_image_url",
     "is_reply_to_bot",

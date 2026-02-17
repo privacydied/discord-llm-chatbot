@@ -195,6 +195,33 @@ def format_x_tweet_result(
         return canonicalize_status_url(url)
 
 
+def has_visual_facts_section(content: str) -> bool:
+    """Detect whether prompt content already contains visual-facts evidence blocks."""
+    text = content or ""
+    text_lower = text.lower()
+    return (
+        "visual_facts:" in text_lower
+        or "vl prompt output:" in text_lower
+        or bool(re.search(r"^image\s+\d+:", text, re.IGNORECASE | re.MULTILINE))
+        or "tweet caption:" in text_lower
+    )
+
+
+def build_visual_analysis_anchor_prompt(base_system_prompt: str) -> str:
+    """Build the canonical visual-analysis anchoring instruction block."""
+    base_sys = base_system_prompt or "You are a helpful assistant."
+    return (
+        f"{base_sys}\n\n[VISUAL-ANALYSIS-ANCHOR]\n"
+        "- If the user prompt includes a section titled 'vl prompt output:' or lines beginning with 'Image n:',\n"
+        "  treat these as non-negotiable visual facts extracted from the image(s).\n"
+        "- Base your reply on those facts and the user's request.\n"
+        "- Do not claim there is no image or that you cannot see images when such analysis is provided.\n"
+        "- Screenshots of documents or text are still images; do not dismiss them as 'not a pic'.\n"
+        "- Do not ask the user to resend or post the image; assume the VISUAL_FACTS reflect what was shown.\n"
+        "- Keep persona, tone, and safety rules intact."
+    )
+
+
 def compose_x_tweet_with_visual_facts(
     *,
     user_text: Optional[str],

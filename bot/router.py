@@ -91,6 +91,7 @@ from .router_components import (
     all_attachments_are_text,
     append_embed_related_urls,
     append_unique_url_items,
+    build_visual_analysis_anchor_prompt,
     compose_x_tweet_with_visual_facts,
     canonicalize_twitter_status_url,
     collect_x_candidate_urls,
@@ -105,6 +106,7 @@ from .router_components import (
     format_x_tweet_with_transcription,
     get_system_prompt,
     has_explicit_media_intent,
+    has_visual_facts_section,
     has_meaningful_text,
     is_direct_image_url,
     is_reply_to_bot,
@@ -8075,32 +8077,13 @@ class Router:
                 # Anchor visual analysis when present to avoid "no image" drift while preserving persona [REH][IV]
                 anchored_system: Optional[str] = None
                 try:
-                    content_lower = (content_str or "").lower()
-                    has_vl_section = (
-                        "visual_facts:" in content_lower
-                        or "vl prompt output:" in content_lower
-                        or bool(
-                            re.search(
-                                r"^image\s+\d+:",
-                                content_str,
-                                re.IGNORECASE | re.MULTILINE,
-                            )
-                        )
-                        or "tweet caption:" in content_lower
-                    )
+                    has_vl_section = has_visual_facts_section(content_str)
                     if has_vl_section:
                         base_sys = self._get_system_prompt(
                             "text_prompt", "You are a helpful assistant."
                         )
-                        anchored_system = (
-                            f"{base_sys}\n\n[VISUAL-ANALYSIS-ANCHOR]\n"
-                            "- If the user prompt includes a section titled 'vl prompt output:' or lines beginning with 'Image n:',\n"
-                            "  treat these as non-negotiable visual facts extracted from the image(s).\n"
-                            "- Base your reply on those facts and the user's request.\n"
-                            "- Do not claim there is no image or that you cannot see images when such analysis is provided.\n"
-                            "- Screenshots of documents or text are still images; do not dismiss them as 'not a pic'.\n"
-                            "- Do not ask the user to resend or post the image; assume the VISUAL_FACTS reflect what was shown.\n"
-                            "- Keep persona, tone, and safety rules intact."
+                        anchored_system = build_visual_analysis_anchor_prompt(
+                            base_sys
                         )
                         try:
                             self.logger.info("text.anchor | visual_facts_detected=true")
@@ -8249,30 +8232,13 @@ class Router:
         # Basic fallback: apply the same visual-analysis anchoring when present
         anchored_system_fallback: Optional[str] = None
         try:
-            content_lower = (content_str or "").lower()
-            has_vl_section = (
-                "visual_facts:" in content_lower
-                or "vl prompt output:" in content_lower
-                or bool(
-                    re.search(
-                        r"^image\s+\d+:", content_str, re.IGNORECASE | re.MULTILINE
-                    )
-                )
-                or "tweet caption:" in content_lower
-            )
+            has_vl_section = has_visual_facts_section(content_str)
             if has_vl_section:
                 base_sys = self._get_system_prompt(
                     "text_prompt", "You are a helpful assistant."
                 )
-                anchored_system_fallback = (
-                    f"{base_sys}\n\n[VISUAL-ANALYSIS-ANCHOR]\n"
-                    "- If the user prompt includes a section titled 'vl prompt output:' or lines beginning with 'Image n:',\n"
-                    "  treat these as non-negotiable visual facts extracted from the image(s).\n"
-                    "- Base your reply on those facts and the user's request.\n"
-                    "- Do not claim there is no image or that you cannot see images when such analysis is provided.\n"
-                    "- Screenshots of documents or text are still images; do not dismiss them as 'not a pic'.\n"
-                    "- Do not ask the user to resend or post the image; assume the VISUAL_FACTS reflect what was shown.\n"
-                    "- Keep persona, tone, and safety rules intact."
+                anchored_system_fallback = build_visual_analysis_anchor_prompt(
+                    base_sys
                 )
                 try:
                     self.logger.info(

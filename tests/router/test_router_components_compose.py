@@ -1,7 +1,9 @@
 from bot.router_components.compose import (
+    build_visual_analysis_anchor_prompt,
     compose_x_tweet_with_visual_facts,
     format_x_tweet_result,
     format_x_tweet_with_transcription,
+    has_visual_facts_section,
 )
 
 
@@ -70,3 +72,21 @@ def test_format_x_tweet_result_falls_back_to_canonical_url() -> None:
     )
 
     assert result == "https://x.com/i/status/1"
+
+
+def test_has_visual_facts_section_detects_expected_markers() -> None:
+    assert has_visual_facts_section("VISUAL_FACTS:\nfoo")
+    assert has_visual_facts_section("vl prompt output:\nfoo")
+    assert has_visual_facts_section("Image 2: the scene is dark")
+    assert has_visual_facts_section("tweet caption:\nfoo")
+    assert not has_visual_facts_section("plain text without markers")
+
+
+def test_build_visual_analysis_anchor_prompt_includes_anchor_block() -> None:
+    base = "SYSTEM BASE"
+    out = build_visual_analysis_anchor_prompt(base)
+
+    assert out.startswith(base)
+    assert "[VISUAL-ANALYSIS-ANCHOR]" in out
+    assert "vl prompt output:" in out
+    assert "Do not claim there is no image" in out
