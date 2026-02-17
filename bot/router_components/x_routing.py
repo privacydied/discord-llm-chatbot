@@ -631,6 +631,11 @@ def build_syndication_oembed_url() -> str:
     return "https://publish.twitter.com/oembed"
 
 
+def build_syndication_base_url() -> str:
+    """Return the canonical CDN syndication base URL."""
+    return "https://cdn.syndication.twimg.com/"
+
+
 def build_syndication_oembed_params(
     tweet_id: str,
     *,
@@ -651,7 +656,7 @@ def build_syndication_fetch_plan(
     tweet_id: str,
 ) -> Tuple[str, Dict[str, str], List[Tuple[str, Dict[str, str]]]]:
     """Build base URL, headers, and endpoint param variants for syndication fetch."""
-    base = "https://cdn.syndication.twimg.com/"
+    base = build_syndication_base_url()
     headers = {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "

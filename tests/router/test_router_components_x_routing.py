@@ -40,6 +40,7 @@ from bot.router_components.x_routing import (
     build_oembed_text_payload,
     extract_oembed_payload_from_response,
     build_syndication_oembed_url,
+    build_syndication_base_url,
     build_syndication_oembed_params,
     build_syndication_fetch_plan,
     build_syndication_fetch_metric_payload,
@@ -690,6 +691,10 @@ def test_build_syndication_oembed_params_default_and_x_host() -> None:
 
 def test_build_syndication_oembed_url_constant() -> None:
     assert build_syndication_oembed_url() == "https://publish.twitter.com/oembed"
+
+
+def test_build_syndication_base_url_constant() -> None:
+    assert build_syndication_base_url() == "https://cdn.syndication.twimg.com/"
 
 
 def test_extract_oembed_payload_from_response_variants() -> None:
