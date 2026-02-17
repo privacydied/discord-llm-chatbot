@@ -26,6 +26,7 @@ from bot.router_components.x_routing import (
     resolve_video_stt_error_base_text,
     syndication_article_has_blocks,
     extract_x_article_text,
+    syndication_needs_article_hydration,
     resolve_twitter_status_id,
     is_twitter_status_url,
     stt_result_has_transcription,
@@ -385,6 +386,36 @@ def test_extract_x_article_text_truncates_at_12000_chars() -> None:
     out = extract_x_article_text({"title": huge})
     assert len(out) == 12000
     assert out.endswith("…")
+
+
+def test_syndication_needs_article_hydration_variants() -> None:
+    assert syndication_needs_article_hydration({}) is False
+    assert syndication_needs_article_hydration({"news_action_type": "article"}) is True
+    assert (
+        syndication_needs_article_hydration(
+            {"text": "https://t.co/abc123"},
+            allow_tco_pointer=True,
+        )
+        is True
+    )
+    assert (
+        syndication_needs_article_hydration(
+            {
+                "article": {"id": "1"},
+            },
+            article_has_blocks=lambda _article: False,
+        )
+        is True
+    )
+    assert (
+        syndication_needs_article_hydration(
+            {
+                "article": {"id": "1"},
+            },
+            article_has_blocks=lambda _article: True,
+        )
+        is False
+    )
 
 
 def test_x_syn_probe_budget_timeout_s_caps_and_offsets() -> None:

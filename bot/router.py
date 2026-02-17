@@ -133,6 +133,7 @@ from .router_components import (
     resolve_video_stt_error_base_text,
     syndication_article_has_blocks,
     extract_x_article_text,
+    syndication_needs_article_hydration,
     x_syn_probe_budget_timeout_s,
     x_syn_quick_request_timeouts,
     build_syndication_photo_payload,
@@ -1320,30 +1321,11 @@ class Router:
     def _syndication_needs_article_hydration(
         self, syn: Dict[str, Any], *, allow_tco_pointer: bool = False
     ) -> bool:
-        if not isinstance(syn, dict) or not syn:
-            return False
-        article = syn.get("article")
-        if isinstance(article, dict) and article:
-            if self._syndication_article_has_blocks(article):
-                return False
-            if any(
-                str(article.get(k) or "").strip()
-                for k in ("id", "rest_id", "title", "preview_text")
-            ):
-                return True
-
-        # X article syndication can surface as a t.co pointer and optional news action metadata.
-        if str(syn.get("news_action_type") or "").strip():
-            return True
-        if allow_tco_pointer:
-            txt = (
-                str(syn.get("text") or "").strip()
-                or str(syn.get("full_text") or "").strip()
-                or str((syn.get("legacy") or {}).get("full_text") or "").strip()
-            )
-            if bool(re.fullmatch(r"https?://t\.co/[A-Za-z0-9]+", txt)):
-                return True
-        return False
+        return syndication_needs_article_hydration(
+            syn,
+            allow_tco_pointer=allow_tco_pointer,
+            article_has_blocks=self._syndication_article_has_blocks,
+        )
 
     async def _hydrate_syndication_article_if_needed(
         self,

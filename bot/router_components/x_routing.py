@@ -398,6 +398,40 @@ def extract_x_article_text(article_node: Any) -> str:
     return merged
 
 
+def syndication_needs_article_hydration(
+    syn: Dict[str, Any],
+    *,
+    allow_tco_pointer: bool = False,
+    article_has_blocks: Optional[Callable[[Any], bool]] = None,
+) -> bool:
+    """Check whether a syndication payload should trigger X article hydration."""
+    if not isinstance(syn, dict) or not syn:
+        return False
+    article = syn.get("article")
+    has_blocks = article_has_blocks or syndication_article_has_blocks
+    if isinstance(article, dict) and article:
+        if has_blocks(article):
+            return False
+        if any(
+            str(article.get(k) or "").strip()
+            for k in ("id", "rest_id", "title", "preview_text")
+        ):
+            return True
+
+    # X article syndication can surface as a t.co pointer and optional news action metadata.
+    if str(syn.get("news_action_type") or "").strip():
+        return True
+    if allow_tco_pointer:
+        txt = (
+            str(syn.get("text") or "").strip()
+            or str(syn.get("full_text") or "").strip()
+            or str((syn.get("legacy") or {}).get("full_text") or "").strip()
+        )
+        if bool(re.fullmatch(r"https?://t\.co/[A-Za-z0-9]+", txt)):
+            return True
+    return False
+
+
 def x_syn_probe_budget_timeout_s(x_syn_timeout_s: float) -> float:
     """Compute bounded timeout budget for image/media probe calls."""
     return min(float(x_syn_timeout_s) + 1.0, 4.5)
