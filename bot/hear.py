@@ -54,6 +54,7 @@ from .stt import ModelSpec, stt_manager
 from .stt_module.failure_classifier import STTFailureClassifier
 from .stt_module.multimodal_fallback import multimodal_fallback_provider
 from .stt_pipeline import (
+    build_url_transcript_result,
     build_youtube_transcript_result,
     ensure_stt_manager_ready,
     ffmpeg_bin_has_aac,
@@ -2085,25 +2086,12 @@ async def hear_infer_from_url(url: str, force_refresh: bool = False) -> Dict[str
             )
 
             spans.start("stitch")
-            metadata = download.metadata
-            result = {
-                "transcription": transcript.text,
-                "partial": transcript.aborted,
-                "abort_reason": transcript.abort_reason or "",
-                "metadata": {
-                    "source": metadata.source_type,
-                    "url": metadata.url,
-                    "title": metadata.title,
-                    "uploader": metadata.uploader,
-                    "upload_date": metadata.upload_date,
-                    "original_duration_s": metadata.duration_seconds,
-                    "processed_duration_s": pre.duration_out,
-                    "speedup_factor": ATEMPO_FACTOR if pre.atempo_applied else 1.0,
-                    "cache_hit": download.cache_hit or transcript.cache_hit,
-                    "timestamp": download.timestamp.isoformat(),
-                    "demux_fallback": bool(getattr(download, "demux_fallback", False)),
-                },
-            }
+            result = build_url_transcript_result(
+                transcript=transcript,
+                download=download,
+                pre=pre,
+                atempo_factor=ATEMPO_FACTOR,
+            )
             spans.end("stitch", ok=True)
             _log_summary(spans, pre, transcript, cache_hit=transcript.cache_hit)
 
