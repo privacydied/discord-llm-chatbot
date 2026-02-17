@@ -12,6 +12,7 @@ from urllib.parse import urlparse
 
 from .utils.logging import get_logger
 from .media_capability import media_detector, ProbeResult
+from .media_ingestion_helpers import sanitize_metadata
 from .action import BotAction
 
 logger = get_logger(__name__)
@@ -85,46 +86,7 @@ class MediaIngestionManager:
         Returns:
             Sanitized metadata safe for LLM context
         """
-        if not metadata:
-            return {}
-
-        sanitized = {}
-
-        # Define safe fields and their max lengths
-        safe_fields = {
-            "title": 200,
-            "uploader": 100,
-            "source": 50,
-            "duration_seconds": None,  # Numeric, no length limit
-            "upload_date": 20,
-            "url": 500,
-        }
-
-        for field, max_length in safe_fields.items():
-            if field in metadata:
-                value = metadata[field]
-
-                if isinstance(value, str):
-                    # Strip control characters and limit length
-                    cleaned = "".join(
-                        char for char in value if ord(char) >= 32 or char in "\n\t\r"
-                    )
-                    if max_length and len(cleaned) > max_length:
-                        cleaned = cleaned[:max_length] + "..."
-                    sanitized[field] = cleaned
-                elif isinstance(value, (int, float)):
-                    sanitized[field] = value
-                else:
-                    # Convert other types to string and sanitize
-                    str_value = str(value)
-                    cleaned = "".join(
-                        char for char in str_value if ord(char) >= 32 or char in "\n\t\r"
-                    )
-                    if max_length and len(cleaned) > max_length:
-                        cleaned = cleaned[:max_length] + "..."
-                    sanitized[field] = cleaned
-
-        return sanitized
+        return sanitize_metadata(metadata)
 
     async def _extract_media_with_retry(
         self, url: str

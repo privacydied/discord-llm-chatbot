@@ -277,3 +277,15 @@
   - Validation:
     - `./.venv/bin/pytest -q tests/core/test_router.py tests/router/test_x_api_routing.py tests/router/test_router_components_prompt_access.py tests/router/test_router_components_input_harvest.py` -> `33 passed`
     - `./.venv/bin/pytest -q tests/core tests/router tests/syndication tests/vision tests/test_hear_ffmpeg_resolution.py tests/test_hear_stream_abort.py tests/test_media_ingestion.py tests/test_video_ingest.py tests/router/test_router_x_result_format_contract.py tests/test_media_ingestion_compat_contracts.py tests/vision/test_money_contract.py` -> `221 passed`
+- 2026-02-17:
+  - Refactor (behavior-preserving): extracted metadata sanitization into new helper module:
+    - `bot/media_ingestion_helpers.py::sanitize_metadata()`
+  - Kept `MediaIngestionManager._sanitize_metadata()` as a compatibility delegate.
+  - Added focused helper tests:
+    - `tests/test_media_ingestion_helpers.py`
+      - safe-field filtering contract
+      - control-character sanitization with newline/tab/carriage-return preservation
+      - length-limit truncation contract
+  - Validation:
+    - `./.venv/bin/pytest -q tests/test_media_ingestion_helpers.py tests/test_media_ingestion.py` -> `33 passed`
+    - `./.venv/bin/pytest -q tests/core tests/router tests/syndication tests/vision tests/test_hear_ffmpeg_resolution.py tests/test_hear_stream_abort.py tests/test_media_ingestion.py tests/test_video_ingest.py tests/router/test_router_x_result_format_contract.py tests/test_media_ingestion_compat_contracts.py tests/vision/test_money_contract.py tests/test_media_ingestion_helpers.py` -> `224 passed`
