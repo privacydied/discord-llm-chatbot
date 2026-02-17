@@ -20,6 +20,7 @@ from bot.router_components.x_routing import (
     parse_twitter_status_id,
     classify_stt_error_reason,
     build_stt_fail_log_payload,
+    build_caption_only_fallback_log_payload,
     build_x_video_stt_error_result_payload,
     resolve_caption_only_base_text,
     resolve_twitter_status_id,
@@ -256,6 +257,13 @@ def test_build_stt_fail_log_payload_includes_optional_fields() -> None:
         "event": "stt.fail",
         "detail": {"reason": "error", "media_kind": "video"},
         "msg_id": 123,
+    }
+
+
+def test_build_caption_only_fallback_log_payload_shape() -> None:
+    assert build_caption_only_fallback_log_payload() == {
+        "event": "fallback",
+        "detail": {"kind": "caption_only"},
     }
 
 

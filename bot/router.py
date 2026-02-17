@@ -127,6 +127,7 @@ from .router_components import (
     is_twitter_status_url,
     classify_stt_error_reason,
     build_stt_fail_log_payload,
+    build_caption_only_fallback_log_payload,
     build_x_video_stt_error_result_payload,
     resolve_caption_only_base_text,
     x_syn_probe_budget_timeout_s,
@@ -565,10 +566,7 @@ class Router:
         try:
             self.logger.info(
                 "fallback",
-                extra={
-                    "event": "fallback",
-                    "detail": {"kind": "caption_only"},
-                },
+                extra=build_caption_only_fallback_log_payload(),
             )
         except Exception:
             pass
