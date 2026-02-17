@@ -6230,6 +6230,7 @@ class Router:
                 syndication_first = bool(cfg.get("X_SYNDICATION_FIRST", True))
                 tweet_id = XApiClient.extract_tweet_id(str(url))
                 x_client = await self._get_x_api_client()
+                api_data = None
 
                 # Syndication-first: must confirm video content before STT is attempted [IV][REH]
                 # Removed STT probe-first path - it was unreliable and ran STT on image-only tweets
@@ -6622,26 +6623,20 @@ class Router:
                                 if tweet_id and x_client is not None:
                                     pass
                                 else:
-                                    api_data_for_caption = (
-                                        api_data if "api_data" in locals() else None
-                                    )
                                     return self._format_x_caption_only_fallback_result(
                                         url=url,
                                         base_text=base,
                                         tweet_text=text,
-                                        api_data=api_data_for_caption,
+                                        api_data=api_data,
                                     )
                             else:
                             # Fall back to text-only ONLY when video was NOT confirmed by syndication [REH]
-                                api_data_for_caption = (
-                                    api_data if "api_data" in locals() else None
-                                )
                                 # Prefer API text if available; otherwise fall back to syndication text or composed evidence [REH]
                                 return self._format_x_caption_only_fallback_result(
                                     url=url,
                                     base_text=base,
                                     tweet_text=text,
-                                    api_data=api_data_for_caption,
+                                    api_data=api_data,
                                 )
 
                         if has_any_images:
