@@ -73,6 +73,7 @@ from bot.router_components.x_routing import (
     build_syndication_fetch_headers,
     build_syndication_fetch_headers_base,
     build_syndication_fetch_header_keys,
+    build_syndication_fetch_header_values,
     build_syndication_dnt_key,
     build_syndication_id_key,
     build_syndication_lang_key,
@@ -1017,6 +1018,16 @@ def test_build_syndication_fetch_header_keys_constant() -> None:
         "Accept-Language",
         "Referer",
     )
+
+
+def test_build_syndication_fetch_header_values_shape() -> None:
+    user_agent, accept, accept_language, referer = (
+        build_syndication_fetch_header_values()
+    )
+    assert "Mozilla/5.0" in user_agent
+    assert accept == "application/json, text/javascript;q=0.9, */*;q=0.8"
+    assert accept_language == "en-US,en;q=0.9"
+    assert referer == "https://platform.twitter.com/"
 
 
 def test_build_syndication_fetch_user_agent_shape() -> None:

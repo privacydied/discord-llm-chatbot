@@ -779,17 +779,30 @@ def build_syndication_fetch_headers_base() -> Dict[str, str]:
     user_agent_key, accept_key, accept_language_key, referer_key = (
         build_syndication_fetch_header_keys()
     )
+    user_agent, accept, accept_language, referer = (
+        build_syndication_fetch_header_values()
+    )
     return {
-        user_agent_key: build_syndication_fetch_user_agent(),
-        accept_key: build_syndication_fetch_accept(),
-        accept_language_key: build_syndication_fetch_accept_language(),
-        referer_key: build_syndication_fetch_referer(),
+        user_agent_key: user_agent,
+        accept_key: accept,
+        accept_language_key: accept_language,
+        referer_key: referer,
     }
 
 
 def build_syndication_fetch_header_keys() -> Tuple[str, str, str, str]:
     """Return canonical header key tuple for syndication CDN fetches."""
     return ("User-Agent", "Accept", "Accept-Language", "Referer")
+
+
+def build_syndication_fetch_header_values() -> Tuple[str, str, str, str]:
+    """Return canonical header value tuple for syndication CDN fetches."""
+    return (
+        build_syndication_fetch_user_agent(),
+        build_syndication_fetch_accept(),
+        build_syndication_fetch_accept_language(),
+        build_syndication_fetch_referer(),
+    )
 
 
 def build_syndication_fetch_params(
