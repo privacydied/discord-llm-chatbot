@@ -19,6 +19,15 @@ def is_text_attachment(attachment: Any) -> bool:
     return name.endswith(".txt") or ctype.startswith("text/")
 
 
+def all_attachments_are_text(attachments: Any) -> bool:
+    """Return True when a non-empty attachment iterable contains only text files."""
+    try:
+        atts = list(attachments or [])
+    except Exception:
+        return False
+    return bool(atts) and all(is_text_attachment(a) for a in atts)
+
+
 def has_meaningful_text(text: str) -> bool:
     """Relaxed chat signal check for routing defaults."""
     try:

@@ -6,6 +6,7 @@ from .compose import (
 )
 from .gating import is_reply_to_bot, mentions_bot, strip_leading_bot_mention
 from .input_harvest import (
+    all_attachments_are_text,
     extract_urls_loose,
     extract_urls_strict,
     has_explicit_media_intent,
@@ -31,6 +32,7 @@ from .x_routing import (
 __all__ = [
     "RouterRuntimeCompat",
     "compose_x_tweet_with_visual_facts",
+    "all_attachments_are_text",
     "canonicalize_twitter_status_url",
     "extract_urls_loose",
     "extract_urls_strict",

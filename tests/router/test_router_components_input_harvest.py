@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 from bot.router_components.input_harvest import (
+    all_attachments_are_text,
     extract_urls_loose,
     extract_urls_strict,
     has_explicit_media_intent,
@@ -18,6 +19,20 @@ def test_is_text_attachment_by_filename_or_content_type() -> None:
     assert not is_text_attachment(
         SimpleNamespace(filename="image.png", content_type="image/png")
     )
+
+
+def test_all_attachments_are_text() -> None:
+    text_atts = [
+        SimpleNamespace(filename="a.txt", content_type=None),
+        SimpleNamespace(filename="b.md", content_type="text/markdown"),
+    ]
+    mixed_atts = [
+        SimpleNamespace(filename="a.txt", content_type=None),
+        SimpleNamespace(filename="image.png", content_type="image/png"),
+    ]
+    assert all_attachments_are_text(text_atts) is True
+    assert all_attachments_are_text(mixed_atts) is False
+    assert all_attachments_are_text([]) is False
 
 
 def test_has_meaningful_text_variants() -> None:

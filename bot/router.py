@@ -91,6 +91,7 @@ from .router_components import (
     compose_x_tweet_with_visual_facts,
     canonicalize_twitter_status_url,
     collect_x_candidate_urls,
+    all_attachments_are_text,
     extract_raw_urls_from_texts,
     extract_x_status_urls_from_text,
     extract_urls_loose,
@@ -3015,9 +3016,7 @@ class Router:
                 # attachment compat path so the text ingestion path can handle them.
                 try:
                     atts = list(getattr(message, "attachments", []) or [])
-                    all_text_files = bool(atts) and all(
-                        is_text_attachment(a) for a in atts
-                    )
+                    all_text_files = all_attachments_are_text(atts)
                 except Exception:
                     all_text_files = False
 
@@ -3205,9 +3204,7 @@ class Router:
                     # If all attachments are plain text (.txt/text/*), skip legacy compat path
                     try:
                         atts = list(getattr(message, "attachments", []) or [])
-                        all_text_files = bool(atts) and all(
-                            is_text_attachment(a) for a in atts
-                        )
+                        all_text_files = all_attachments_are_text(atts)
                     except Exception:
                         all_text_files = False
 
