@@ -38,6 +38,8 @@ from bot.router_components.x_routing import (
     canonicalized_value,
     append_canonical_x_url,
     canonical_x_raw_value,
+    canonical_x_raw_value_source,
+    canonical_x_raw_value_result,
     append_canonical_status_url,
     canonical_status_raw_value,
     append_status_url_if_match,
@@ -946,6 +948,14 @@ def test_append_canonical_x_url_only_appends_unique_canonical() -> None:
 
 def test_canonical_x_raw_value_identity() -> None:
     assert canonical_x_raw_value("https://x.com/u/status/1") == "https://x.com/u/status/1"
+
+
+def test_canonical_x_raw_value_source_identity() -> None:
+    assert canonical_x_raw_value_source("https://x.com/u/status/1") == "https://x.com/u/status/1"
+
+
+def test_canonical_x_raw_value_result_identity() -> None:
+    assert canonical_x_raw_value_result("https://x.com/u/status/1") == "https://x.com/u/status/1"
 
 
 def test_append_canonical_status_url_only_appends_unique_canonical() -> None:

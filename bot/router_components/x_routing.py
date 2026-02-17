@@ -2295,6 +2295,16 @@ def append_canonical_x_url(
 
 def canonical_x_raw_value(url: str) -> str:
     """Return raw X URL value used by canonical X append path."""
+    return canonical_x_raw_value_source(url)
+
+
+def canonical_x_raw_value_source(url: str) -> str:
+    """Return source raw X URL value for canonical append helper."""
+    return canonical_x_raw_value_result(url)
+
+
+def canonical_x_raw_value_result(url: str) -> str:
+    """Return value used by canonical X raw-value source helper."""
     return url
 
 
