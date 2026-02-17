@@ -43,6 +43,7 @@ from bot.router_components.x_routing import (
     build_syndication_base_url,
     build_syndication_fetch_user_agent,
     build_syndication_fetch_accept_language,
+    build_syndication_fetch_referer,
     build_syndication_fetch_headers,
     build_syndication_fetch_params_variants,
     build_syndication_oembed_params,
@@ -749,6 +750,10 @@ def test_build_syndication_fetch_user_agent_shape() -> None:
 
 def test_build_syndication_fetch_accept_language_constant() -> None:
     assert build_syndication_fetch_accept_language() == "en-US,en;q=0.9"
+
+
+def test_build_syndication_fetch_referer_constant() -> None:
+    assert build_syndication_fetch_referer() == "https://platform.twitter.com/"
 
 
 def test_build_syndication_fetch_params_variants_shape() -> None:
