@@ -2197,6 +2197,26 @@ class Router:
         """Check if a message is a reply to the bot."""
         return is_reply_to_bot(message, getattr(getattr(self.bot, "user", None), "id", None))
 
+    async def _resolve_reference_message(
+        self, message: Message, fallback: Optional[Message] = None
+    ) -> Optional[Message]:
+        """Resolve referenced message from cache first, then fetch if needed."""
+        if fallback is not None:
+            return fallback
+        ref = getattr(message, "reference", None)
+        if not ref:
+            return None
+        ref_msg = getattr(ref, "resolved", None)
+        if ref_msg is not None:
+            return ref_msg
+        ref_id = getattr(ref, "message_id", None)
+        if not ref_id:
+            return None
+        try:
+            return await message.channel.fetch_message(ref_id)
+        except Exception:
+            return None
+
     def _mentions_bot(self, message: Message) -> bool:
         """Return True if the message explicitly mentions this bot."""
         return mentions_bot(message, getattr(getattr(self.bot, "user", None), "id", None))
@@ -4146,13 +4166,17 @@ class Router:
             # Non-fatal: fallback to original items list on any error
             pass
 
+        ref_message: Optional[Message] = None
+
         # Check for reply-image harvesting [VISION_REPLY_IMAGE_HARVEST]
         if message.reference and self.config.get("VISION_REPLY_IMAGE_HARVEST", True):
             try:
                 # Fetch the referenced message to harvest images
-                ref_message = await message.channel.fetch_message(
-                    message.reference.message_id
+                ref_message = await self._resolve_reference_message(
+                    message, fallback=ref_message
                 )
+                if ref_message is None:
+                    raise RuntimeError("reference_unavailable")
                 reply_images = collect_image_urls_from_message(ref_message)
 
                 if reply_images:
@@ -4180,12 +4204,9 @@ class Router:
         # Reply link/attachment harvest (non-image) so reply chains route correctly [REH][IV]
         try:
             if message.reference:
-                try:
-                    ref_message = ref_message  # reuse if available
-                except NameError:
-                    ref_message = await message.channel.fetch_message(
-                        message.reference.message_id
-                    )
+                ref_message = await self._resolve_reference_message(
+                    message, fallback=ref_message
+                )
 
                 if ref_message:
                     # Build a set of existing payloads to avoid duplicates
@@ -4249,13 +4270,9 @@ class Router:
         # Note: This block lives inside the image-harvest section for historical reasons, but URL harvest
         # must NOT depend on the VISION_REPLY_IMAGE_HARVEST flag. We add an unconditional safety harvest below.
         try:
-            ref = getattr(message, "reference", None)
-            ref_msg = getattr(ref, "resolved", None)
-            if ref_msg is None and getattr(ref, "message_id", None):
-                try:
-                    ref_msg = await message.channel.fetch_message(ref.message_id)
-                except Exception:
-                    ref_msg = None
+            ref_msg = await self._resolve_reference_message(
+                message, fallback=ref_message
+            )
             if ref_msg and getattr(ref_msg, "content", None):
                 # Extract URLs from the referenced message
                 found_urls = extract_urls_strict(ref_msg.content or "")
@@ -4283,13 +4300,9 @@ class Router:
         # Ensures reply→video (YouTube/TikTok/X) routes always collect the URL even when image harvest is disabled. [REH]
         try:
             if getattr(message, "reference", None):
-                ref = getattr(message, "reference", None)
-                ref_msg = getattr(ref, "resolved", None)
-                if ref_msg is None and getattr(ref, "message_id", None):
-                    try:
-                        ref_msg = await message.channel.fetch_message(ref.message_id)
-                    except Exception:
-                        ref_msg = None
+                ref_msg = await self._resolve_reference_message(
+                    message, fallback=ref_message
+                )
                 if ref_msg:
                     # 1) URLs present in the parent's text content
                     if getattr(ref_msg, "content", None):

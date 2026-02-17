@@ -144,3 +144,9 @@
   - Validation:
     - `./.venv/bin/python -m py_compile bot/hear.py bot/stt_pipeline/__init__.py bot/stt_pipeline/ffmpeg_runtime.py`
     - `./.venv/bin/pytest -q tests/test_stt_pipeline_ffmpeg_runtime.py tests/test_stt_pipeline_runtime.py tests/test_stt_pipeline_youtube_path.py tests/test_video_ingest.py tests/router/test_router_components_input_harvest.py tests/router/test_router_components_gating.py tests/router/test_router_components_x_routing.py tests/router/test_router_components_compose.py` -> `39 passed`
+- 2026-02-17:
+  - Added `Router._resolve_reference_message()` to centralize cache/fetch resolution for reply targets.
+  - Rewired multimodal reply-harvest call sites to use centralized resolver helper.
+  - Validation:
+    - `./.venv/bin/python -m py_compile bot/router.py`
+    - `./.venv/bin/pytest -q tests/router/test_router_components_input_harvest.py tests/router/test_router_components_gating.py tests/router/test_router_components_x_routing.py tests/router/test_router_components_compose.py tests/test_video_ingest.py tests/test_stt_pipeline_runtime.py tests/test_stt_pipeline_ffmpeg_runtime.py tests/test_stt_pipeline_youtube_path.py` -> `39 passed`
