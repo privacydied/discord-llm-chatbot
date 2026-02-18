@@ -313,8 +313,7 @@ def normalize_x_url(url: str) -> str:
     """Normalize X/Twitter URLs to canonical host/path, dropping query/fragment."""
     try:
         p = parse_url_for_normalization(url)
-        host = normalize_x_host(normalize_parsed_netloc(p))
-        path = normalize_x_path(normalize_parsed_path(p))
+        host, path = resolve_normalized_x_parts(p)
         return compose_normalized_x_url(host, path)
     except Exception:
         return url
@@ -323,6 +322,13 @@ def normalize_x_url(url: str) -> str:
 def parse_url_for_normalization(url: str) -> Any:
     """Parse URL for normalization helpers."""
     return urlparse(url)
+
+
+def resolve_normalized_x_parts(parsed: Any) -> Tuple[str, str]:
+    """Resolve normalized host/path parts for a parsed X/Twitter URL."""
+    host = normalize_x_host(normalize_parsed_netloc(parsed))
+    path = normalize_x_path(normalize_parsed_path(parsed))
+    return host, path
 
 
 def compose_normalized_x_url(host: str, path: str) -> str:
@@ -379,21 +385,42 @@ def normalize_x_path(path: str) -> str:
 def unwrap_x_media_url(url: str) -> str:
     """Unwrap fx/vx API proxy URLs back to the media CDN when possible."""
     try:
-        parsed = urlparse(url)
-        host = extract_url_host_lower(url)
-        if is_unwrap_x_media_proxy_host(host):
-            params = parse_unwrap_x_media_params(parsed)
-            candidate = first_unwrap_x_media_candidate(params)
-            if is_unwrap_x_media_candidate_url(candidate):
-                return candidate
+        parsed = parse_unwrap_x_media_url(url)
+        host = resolve_unwrap_x_media_host(url)
+        if not should_unwrap_x_media_host(host):
+            return url
+        candidate = resolve_unwrap_x_media_candidate(parsed)
+        if is_unwrap_x_media_candidate_url(candidate):
+            return candidate
         return url
     except Exception:
         return url
 
 
+def parse_unwrap_x_media_url(url: str) -> Any:
+    """Parse URL for unwrap-x media helpers."""
+    return urlparse(url)
+
+
+def resolve_unwrap_x_media_host(url: str) -> str:
+    """Resolve lowercase host used to decide unwrap-x media behavior."""
+    return extract_url_host_lower(url)
+
+
+def should_unwrap_x_media_host(host: str) -> bool:
+    """Return True when host should run through unwrap-x media logic."""
+    return is_unwrap_x_media_proxy_host(host)
+
+
 def parse_unwrap_x_media_params(parsed: Any) -> Dict[str, List[str]]:
     """Parse query params used for unwrap-x media resolution."""
     return parse_qs(str(getattr(parsed, "query", "") or ""))
+
+
+def resolve_unwrap_x_media_candidate(parsed: Any) -> str:
+    """Resolve first decoded unwrap-x media candidate URL from parsed query."""
+    params = parse_unwrap_x_media_params(parsed)
+    return first_unwrap_x_media_candidate(params)
 
 
 def first_unwrap_x_media_candidate(params: Dict[str, List[str]]) -> str:

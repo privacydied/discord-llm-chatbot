@@ -110,6 +110,7 @@ from bot.router_components.x_routing import (
     normalize_parsed_netloc,
     normalize_parsed_path,
     parse_url_for_normalization,
+    resolve_normalized_x_parts,
     normalize_x_path,
     normalize_x_url,
     compose_normalized_x_url,
@@ -122,7 +123,11 @@ from bot.router_components.x_routing import (
     unwrap_x_media_proxy_hosts,
     unwrap_x_media_candidate_url_prefix,
     is_unwrap_x_media_candidate_url,
+    parse_unwrap_x_media_url,
+    resolve_unwrap_x_media_host,
+    should_unwrap_x_media_host,
     parse_unwrap_x_media_params,
+    resolve_unwrap_x_media_candidate,
     first_unwrap_x_media_candidate,
     unwrap_x_media_param_keys,
     classify_stt_error_reason,
@@ -495,6 +500,13 @@ def test_parse_url_for_normalization() -> None:
     parsed = parse_url_for_normalization("https://x.com/user/status/1?s=20#frag")
     assert parsed.netloc == "x.com"
     assert parsed.path == "/user/status/1"
+
+
+def test_resolve_normalized_x_parts() -> None:
+    parsed = urlparse("https://mobile.twitter.com/user/status/1/?s=20")
+    host, path = resolve_normalized_x_parts(parsed)
+    assert host == "x.com"
+    assert path == "/user/status/1"
 
 
 def test_normalize_x_host() -> None:
@@ -1735,6 +1747,26 @@ def test_parse_unwrap_x_media_params() -> None:
     parsed = urlparse("https://api.fxtwitter.com/dl?u=https%3A%2F%2Fvideo.twimg.com%2Fv.mp4")
     params = parse_unwrap_x_media_params(parsed)
     assert params.get("u") == ["https://video.twimg.com/v.mp4"]
+
+
+def test_parse_unwrap_x_media_url() -> None:
+    parsed = parse_unwrap_x_media_url("https://api.fxtwitter.com/dl?u=https%3A%2F%2Fvideo.twimg.com%2Fv.mp4")
+    assert parsed.netloc == "api.fxtwitter.com"
+    assert parsed.path == "/dl"
+
+
+def test_resolve_unwrap_x_media_host() -> None:
+    assert resolve_unwrap_x_media_host("https://API.VXTwitter.com/dl?u=x") == "api.vxtwitter.com"
+
+
+def test_should_unwrap_x_media_host() -> None:
+    assert should_unwrap_x_media_host("api.fxtwitter.com")
+    assert not should_unwrap_x_media_host("x.com")
+
+
+def test_resolve_unwrap_x_media_candidate() -> None:
+    parsed = urlparse("https://api.fxtwitter.com/dl?target=https%3A%2F%2Fvideo.twimg.com%2Fv.mp4")
+    assert resolve_unwrap_x_media_candidate(parsed) == "https://video.twimg.com/v.mp4"
 
 
 def test_unwrap_x_media_proxy_hosts() -> None:
