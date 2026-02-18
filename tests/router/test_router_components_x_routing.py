@@ -83,6 +83,7 @@ from bot.router_components.x_routing import (
     is_twitter_thumbnail_host,
     is_twitter_thumbnail_url,
     extract_url_host_lower,
+    extract_url_path,
     is_twitter_url,
     normalize_x_host,
     normalize_x_path,
@@ -446,6 +447,11 @@ def test_is_twitter_media_cdn_host() -> None:
 def test_extract_url_host_lower() -> None:
     assert extract_url_host_lower("https://Video.TWIMG.com/ext_tw_video/abc") == "video.twimg.com"
     assert extract_url_host_lower("not-a-url") == ""
+
+
+def test_extract_url_path() -> None:
+    assert extract_url_path("https://x.com/user/status/123?x=1") == "/user/status/123"
+    assert extract_url_path("not-a-url") == "not-a-url"
 
 
 def test_collect_x_candidate_urls_for_source_types() -> None:

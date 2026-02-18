@@ -111,6 +111,14 @@ def extract_url_host_lower(url: str) -> str:
         return ""
 
 
+def extract_url_path(url: str) -> str:
+    """Parse a URL path; return empty string on failure."""
+    try:
+        return urlparse(url).path or ""
+    except Exception:
+        return ""
+
+
 def is_twitter_thumbnail_url(url: str) -> bool:
     host = extract_url_host_lower(url)
     if not host:
@@ -155,10 +163,7 @@ def is_tweet_media_url(url: str) -> bool:
         u = str(url).lower()
     except Exception:
         return False
-    try:
-        path = urlparse(u).path or ""
-    except Exception:
-        return False
+    path = extract_url_path(u)
 
     if is_blocked_tweet_media_path(path):
         return False
