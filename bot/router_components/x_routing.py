@@ -228,7 +228,7 @@ def unwrap_x_media_url(url: str) -> str:
     try:
         parsed = urlparse(url)
         host = (parsed.netloc or "").lower()
-        if host in {"api.fxtwitter.com", "api.vxtwitter.com"}:
+        if is_unwrap_x_media_proxy_host(host):
             params = parse_qs(parsed.query or "")
             for key in unwrap_x_media_param_keys():
                 values = params.get(key)
@@ -244,6 +244,11 @@ def unwrap_x_media_url(url: str) -> str:
 def unwrap_x_media_param_keys() -> tuple[str, ...]:
     """Return query parameter keys checked when unwrapping proxy media URLs."""
     return ("url", "media_url", "target", "u")
+
+
+def is_unwrap_x_media_proxy_host(host: str) -> bool:
+    """Return True when host is a supported fx/vx media proxy endpoint."""
+    return host in {"api.fxtwitter.com", "api.vxtwitter.com"}
 
 
 def extract_x_api_primary_tweet(api_data: Any) -> Dict[str, Any]:

@@ -73,6 +73,7 @@ from bot.router_components.x_routing import (
     normalize_x_path,
     normalize_x_url,
     parse_twitter_status_id,
+    is_unwrap_x_media_proxy_host,
     unwrap_x_media_param_keys,
     classify_stt_error_reason,
     build_stt_fail_log_payload,
@@ -1221,6 +1222,12 @@ def test_unwrap_x_media_url() -> None:
 
 def test_unwrap_x_media_param_keys() -> None:
     assert unwrap_x_media_param_keys() == ("url", "media_url", "target", "u")
+
+
+def test_is_unwrap_x_media_proxy_host() -> None:
+    assert is_unwrap_x_media_proxy_host("api.fxtwitter.com")
+    assert is_unwrap_x_media_proxy_host("api.vxtwitter.com")
+    assert not is_unwrap_x_media_proxy_host("api.twitter.com")
 
 
 def test_extract_x_api_primary_tweet_variants() -> None:
