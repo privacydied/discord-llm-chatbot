@@ -310,11 +310,16 @@ from bot.router_components.x_routing import (
     build_syndication_negative_cache_flag_field,
     build_syndication_cache_data_field,
     build_syndication_endpoint_url,
+    compose_syndication_endpoint_url,
     build_syndication_endpoint_suffix,
+    build_syndication_endpoint_suffix_for_widgets_flag,
     build_syndication_negative_cache_ttl_cap_s,
     extract_oembed_html_text,
     syndication_has_usable_payload,
     syndication_node_has_media_hints,
+    syndication_payload_is_mapping,
+    syndication_payload_has_text,
+    has_any_mapping_key,
     syndication_media_hint_keys,
     format_syndication_body_text,
     format_syndication_truncated_text,
@@ -3548,10 +3553,27 @@ def test_build_syndication_endpoint_url_mapping() -> None:
     )
 
 
+def test_compose_syndication_endpoint_url() -> None:
+    assert (
+        compose_syndication_endpoint_url(
+            "https://cdn.syndication.twimg.com/",
+            "widgets/tweet",
+        )
+        == "https://cdn.syndication.twimg.com/widgets/tweet"
+    )
+
+
 def test_build_syndication_endpoint_suffix_mapping() -> None:
     assert build_syndication_endpoint_suffix("widgets") == "widgets/tweet"
     assert build_syndication_endpoint_suffix("tweet-result") == "tweet-result"
     assert build_syndication_endpoint_suffix("unknown") == "tweet-result"
+
+
+def test_build_syndication_endpoint_suffix_for_widgets_flag() -> None:
+    assert build_syndication_endpoint_suffix_for_widgets_flag(True) == "widgets/tweet"
+    assert (
+        build_syndication_endpoint_suffix_for_widgets_flag(False) == "tweet-result"
+    )
 
 
 def test_syndication_has_usable_payload_with_text_or_media_hints() -> None:
@@ -3595,6 +3617,33 @@ def test_syndication_has_usable_payload_non_dict_returns_false() -> None:
 def test_syndication_node_has_media_hints_variants() -> None:
     assert syndication_node_has_media_hints({"entities": {}}, ("entities", "media"))
     assert not syndication_node_has_media_hints({"text": "x"}, ("entities", "media"))
+
+
+def test_syndication_payload_is_mapping() -> None:
+    assert syndication_payload_is_mapping({"text": "x"}) is True
+    assert syndication_payload_is_mapping(["x"]) is False
+
+
+def test_syndication_payload_has_text() -> None:
+    assert (
+        syndication_payload_has_text(
+            {"text": "hello"},
+            extract_text=lambda node: str(node.get("text", "")),
+        )
+        is True
+    )
+    assert (
+        syndication_payload_has_text(
+            {"text": ""},
+            extract_text=lambda node: str(node.get("text", "")),
+        )
+        is False
+    )
+
+
+def test_has_any_mapping_key() -> None:
+    assert has_any_mapping_key({"entities": {}}, ("entities", "media")) is True
+    assert has_any_mapping_key({"text": "x"}, ("entities", "media")) is False
 
 
 def test_syndication_media_hint_keys_matches_router_contract() -> None:

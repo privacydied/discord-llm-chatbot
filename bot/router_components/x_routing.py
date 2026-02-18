@@ -1966,14 +1966,29 @@ def syndication_cache_age_is_fresh(age_s: float, ttl_s: float) -> bool:
 
 def build_syndication_endpoint_url(base: str, endpoint: str) -> str:
     """Build syndication endpoint URL preserving legacy endpoint mapping."""
-    return base + build_syndication_endpoint_suffix(endpoint)
+    return compose_syndication_endpoint_url(
+        base,
+        build_syndication_endpoint_suffix(endpoint),
+    )
 
 
 def build_syndication_endpoint_suffix(endpoint: str) -> str:
     """Return endpoint path suffix preserving legacy endpoint fallback behavior."""
+    return build_syndication_endpoint_suffix_for_widgets_flag(
+        endpoint == build_syndication_widgets_endpoint()
+    )
+
+
+def compose_syndication_endpoint_url(base: str, suffix: str) -> str:
+    """Compose syndication endpoint URL from base URL and endpoint suffix."""
+    return base + suffix
+
+
+def build_syndication_endpoint_suffix_for_widgets_flag(is_widgets: bool) -> str:
+    """Resolve endpoint suffix from widgets-selection flag."""
     return (
         build_syndication_widgets_tweet_path()
-        if endpoint == build_syndication_widgets_endpoint()
+        if is_widgets
         else build_syndication_tweet_result_path()
     )
 
@@ -1985,9 +2000,9 @@ def syndication_has_usable_payload(
     media_hint_keys: Iterable[str],
 ) -> bool:
     """Return True when syndication payload includes usable text in current schema."""
-    if not isinstance(node, dict):
+    if not syndication_payload_is_mapping(node):
         return False
-    if extract_text(node):
+    if syndication_payload_has_text(node, extract_text):
         return True
     return syndication_node_has_media_hints(node, media_hint_keys)
 
@@ -1997,7 +2012,25 @@ def syndication_node_has_media_hints(
     media_hint_keys: Iterable[str],
 ) -> bool:
     """Return True when a syndication payload contains any media-hint key."""
-    return any(k in node for k in media_hint_keys)
+    return has_any_mapping_key(node, media_hint_keys)
+
+
+def syndication_payload_is_mapping(node: Any) -> bool:
+    """Return True when payload node is a dictionary-like mapping."""
+    return isinstance(node, dict)
+
+
+def syndication_payload_has_text(
+    node: Dict[str, Any],
+    extract_text: Callable[[Any], str],
+) -> bool:
+    """Return True when extracted syndication text is non-empty."""
+    return bool(extract_text(node))
+
+
+def has_any_mapping_key(node: Dict[str, Any], keys: Iterable[str]) -> bool:
+    """Return True when any key from iterable exists in a mapping."""
+    return any(k in node for k in keys)
 
 
 def syndication_media_hint_keys() -> Tuple[str, ...]:
