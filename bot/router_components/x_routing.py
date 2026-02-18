@@ -2656,6 +2656,11 @@ def raw_url_is_present_source(raw_url: str) -> bool:
 
 def raw_url_is_present_result(raw_url: str) -> bool:
     """Return value used by raw URL is-present source helper."""
+    return raw_url_is_present_for_result(raw_url)
+
+
+def raw_url_is_present_for_result(raw_url: str) -> bool:
+    """Return raw URL presence via is-present result handoff helper."""
     return bool(raw_url)
 
 
