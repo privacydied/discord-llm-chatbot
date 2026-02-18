@@ -94,6 +94,7 @@ from bot.router_components.x_routing import (
     normalize_base_text_value,
     syndication_article_has_blocks,
     has_non_empty_block_text,
+    normalize_article_block_text,
     extract_x_article_text,
     syndication_needs_article_hydration,
     extract_syndication_base_text,
@@ -1544,6 +1545,12 @@ def test_has_non_empty_block_text() -> None:
     assert has_non_empty_block_text({"text": "hello"}) is True
     assert has_non_empty_block_text({"text": "   "}) is False
     assert has_non_empty_block_text({"x": 1}) is False
+
+
+def test_normalize_article_block_text() -> None:
+    assert normalize_article_block_text({"text": "Body &amp; B"}) == "Body & B"
+    assert normalize_article_block_text({"text": "   "}) == ""
+    assert normalize_article_block_text({"x": 1}) == ""
 
 
 def test_extract_x_article_text_dedupes_unescapes_and_caps() -> None:

@@ -495,7 +495,7 @@ def extract_x_article_text(article_node: Any) -> str:
             for block in raw_blocks:
                 if not isinstance(block, dict):
                     continue
-                btxt = unescape(str(block.get("text") or "")).strip()
+                btxt = normalize_article_block_text(block)
                 if btxt:
                     blocks.append(btxt)
     parts: List[str] = []
@@ -511,6 +511,11 @@ def extract_x_article_text(article_node: Any) -> str:
     if len(merged) > max_chars:
         return merged[: max_chars - 1].rstrip() + "…"
     return merged
+
+
+def normalize_article_block_text(block: Dict[str, Any]) -> str:
+    """Normalize article content-block text by unescaping and stripping."""
+    return unescape(str(block.get("text") or "")).strip()
 
 
 def syndication_needs_article_hydration(
