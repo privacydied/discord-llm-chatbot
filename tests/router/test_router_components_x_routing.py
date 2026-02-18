@@ -447,6 +447,7 @@ from bot.router_components.x_routing import (
     compile_url_extract_flags_for_argument,
     compile_url_extract_flags_value,
     compile_regex,
+    build_compiled_regex,
     compile_regex_pattern_argument,
     compile_regex_pattern_for_argument,
     compile_regex_pattern_value,
@@ -480,15 +481,18 @@ from bot.router_components.x_routing import (
     iter_url_matches_for_url_matches,
     iter_url_matches_source,
     iter_url_matches_iter,
+    iter_url_matches_from_finditer,
     iter_url_matches,
     url_re_finditer_source,
     url_re_finditer_iter,
     url_re_finditer,
     url_scan_text_for_finditer,
+    resolve_url_scan_text_for_finditer,
     iter_url_re_finditer_matches,
     url_scan_text_source,
     url_scan_text_value,
     url_scan_text,
+    resolve_url_scan_text,
     url_scan_text_fallback,
     url_match_group_index,
     url_match_group_value,
@@ -1211,6 +1215,12 @@ def test_compile_regex_uses_pattern_and_flags() -> None:
     assert compiled.flags & re.IGNORECASE
 
 
+def test_build_compiled_regex_uses_pattern_and_flags() -> None:
+    compiled = build_compiled_regex(r"https?://x\\.com", re.IGNORECASE)
+    assert compiled.pattern == r"https?://x\\.com"
+    assert compiled.flags & re.IGNORECASE
+
+
 def test_compile_regex_pattern_argument_identity() -> None:
     assert compile_regex_pattern_argument(r"https?://x\\.com") == r"https?://x\\.com"
 
@@ -1494,6 +1504,12 @@ def test_url_scan_text_for_finditer_normalizes_falsey_inputs() -> None:
     assert url_scan_text_for_finditer(None) == ""
 
 
+def test_resolve_url_scan_text_for_finditer_normalizes_falsey_inputs() -> None:
+    assert resolve_url_scan_text_for_finditer("abc") == "abc"
+    assert resolve_url_scan_text_for_finditer("") == ""
+    assert resolve_url_scan_text_for_finditer(None) == ""
+
+
 def test_url_scan_text_source_normalizes_falsey_inputs() -> None:
     assert url_scan_text_source("abc") == "abc"
     assert url_scan_text_source("") == ""
@@ -1504,6 +1520,12 @@ def test_url_scan_text_value_normalizes_falsey_inputs() -> None:
     assert url_scan_text_value("abc") == "abc"
     assert url_scan_text_value("") == ""
     assert url_scan_text_value(None) == ""
+
+
+def test_resolve_url_scan_text_normalizes_falsey_inputs() -> None:
+    assert resolve_url_scan_text("abc") == "abc"
+    assert resolve_url_scan_text("") == ""
+    assert resolve_url_scan_text(None) == ""
 
 
 def test_url_scan_text_fallback_empty_string() -> None:

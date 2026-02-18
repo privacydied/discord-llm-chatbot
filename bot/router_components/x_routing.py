@@ -2745,10 +2745,15 @@ def compile_url_extract_flags_value(flags: int) -> int:
 
 def compile_regex(pattern: str, *, flags: int) -> Any:
     """Compile regex from pattern and flags for shared extraction helpers."""
-    return re.compile(
+    return build_compiled_regex(
         compile_regex_pattern_argument(pattern),
         compile_regex_flags_argument(flags),
     )
+
+
+def build_compiled_regex(pattern: str, flags: int) -> Any:
+    """Build compiled regex from normalized pattern and flags inputs."""
+    return re.compile(pattern, flags)
 
 
 def compile_regex_pattern_argument(pattern: str) -> str:
@@ -3003,6 +3008,11 @@ def iter_url_matches_source(text: str, *, url_re: Any) -> Iterable[Any]:
 
 def iter_url_matches_iter(text: str, *, url_re: Any) -> Iterable[Any]:
     """Yield iterator used by iter_url_matches source helper."""
+    yield from iter_url_matches_from_finditer(url_re, text)
+
+
+def iter_url_matches_from_finditer(url_re: Any, text: Any) -> Iterable[Any]:
+    """Yield URL matches by delegating into url_re.finditer helper chain."""
     yield from url_re_finditer(url_re, text)
 
 
@@ -3023,7 +3033,12 @@ def url_re_finditer_source(url_re: Any, text: Any) -> Iterable[Any]:
 
 def url_re_finditer_iter(url_re: Any, text: Any) -> Iterable[Any]:
     """Yield iterator used by url_re_finditer source helper."""
-    yield from url_re.finditer(url_scan_text_for_finditer(text))
+    yield from url_re.finditer(resolve_url_scan_text_for_finditer(text))
+
+
+def resolve_url_scan_text_for_finditer(text: Any) -> str:
+    """Resolve normalized scan text used specifically for url_re.finditer calls."""
+    return url_scan_text_for_finditer(text)
 
 
 def url_scan_text_for_finditer(text: Any) -> str:
@@ -3033,6 +3048,11 @@ def url_scan_text_for_finditer(text: Any) -> str:
 
 def url_scan_text(text: Any) -> str:
     """Return normalized text input used for URL regex scans."""
+    return resolve_url_scan_text(text)
+
+
+def resolve_url_scan_text(text: Any) -> str:
+    """Resolve normalized text value used for URL scanning."""
     return url_scan_text_source(text)
 
 
