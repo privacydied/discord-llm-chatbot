@@ -1443,10 +1443,27 @@ def build_syndication_oembed_params(
 
 def build_syndication_oembed_params_bundle(host: str, tweet_id: str) -> Dict[str, str]:
     """Return merged core+options oEmbed params for a resolved host."""
-    return {
-        **build_syndication_oembed_params_core(host, tweet_id),
-        **build_syndication_oembed_options(),
-    }
+    core, options = build_syndication_oembed_params_components(host, tweet_id)
+    return build_syndication_oembed_params_map(core, options)
+
+
+def build_syndication_oembed_params_components(
+    host: str,
+    tweet_id: str,
+) -> Tuple[Dict[str, str], Dict[str, str]]:
+    """Return core/options component maps for oEmbed params assembly."""
+    return (
+        build_syndication_oembed_params_core(host, tweet_id),
+        build_syndication_oembed_options(),
+    )
+
+
+def build_syndication_oembed_params_map(
+    core: Dict[str, str],
+    options: Dict[str, str],
+) -> Dict[str, str]:
+    """Return merged oEmbed params map from core and options maps."""
+    return {**core, **options}
 
 
 def build_syndication_oembed_params_core(host: str, tweet_id: str) -> Dict[str, str]:
@@ -1464,11 +1481,36 @@ def build_syndication_oembed_params_core_map(
     lang: str,
 ) -> Dict[str, str]:
     """Return core oEmbed params map for explicit host/tweet/lang values."""
+    return build_syndication_oembed_params_core_from_pairs(
+        build_syndication_oembed_params_core_keys(),
+        build_syndication_oembed_params_core_values(host, tweet_id, lang),
+    )
+
+
+def build_syndication_oembed_params_core_keys() -> Tuple[str, str]:
+    """Return stable key tuple for core oEmbed params."""
+    return (build_syndication_oembed_url_key(), build_syndication_lang_key())
+
+
+def build_syndication_oembed_params_core_values(
+    host: str,
+    tweet_id: str,
+    lang: str,
+) -> Tuple[str, str]:
+    """Return stable value tuple for core oEmbed params."""
+    return (build_syndication_oembed_status_url(host, tweet_id), lang)
+
+
+def build_syndication_oembed_params_core_from_pairs(
+    keys: Tuple[str, str],
+    values: Tuple[str, str],
+) -> Dict[str, str]:
+    """Return core oEmbed params map from aligned key/value tuples."""
+    url_key, lang_key = keys
+    url_value, lang_value = values
     return {
-        build_syndication_oembed_url_key(): build_syndication_oembed_status_url(
-            host, tweet_id
-        ),
-        build_syndication_lang_key(): lang,
+        url_key: url_value,
+        lang_key: lang_value,
     }
 
 
@@ -1534,13 +1576,9 @@ def build_syndication_oembed_options() -> Dict[str, str]:
 
 def build_syndication_oembed_options_map() -> Dict[str, str]:
     """Return canonical oEmbed option key/value map."""
-    dnt_key, omit_script_key, hide_thread_key = build_syndication_oembed_option_keys()
-    dnt_value, omit_script_value, hide_thread_value = (
-        build_syndication_oembed_option_values()
-    )
     return build_syndication_oembed_options_map_from_pairs(
-        (dnt_key, omit_script_key, hide_thread_key),
-        (dnt_value, omit_script_value, hide_thread_value),
+        build_syndication_oembed_option_keys(),
+        build_syndication_oembed_option_values(),
     )
 
 
@@ -1549,13 +1587,30 @@ def build_syndication_oembed_options_map_from_pairs(
     values: Tuple[str, str, str],
 ) -> Dict[str, str]:
     """Return oEmbed options map from aligned key/value tuples."""
+    return build_syndication_oembed_options_map_from_entries(
+        build_syndication_oembed_option_entries(keys, values),
+    )
+
+
+def build_syndication_oembed_option_entries(
+    keys: Tuple[str, str, str],
+    values: Tuple[str, str, str],
+) -> Tuple[Tuple[str, str], Tuple[str, str], Tuple[str, str]]:
+    """Return aligned option key/value entry tuples."""
     dnt_key, omit_script_key, hide_thread_key = keys
     dnt_value, omit_script_value, hide_thread_value = values
-    return {
-        dnt_key: dnt_value,
-        omit_script_key: omit_script_value,
-        hide_thread_key: hide_thread_value,
-    }
+    return (
+        (dnt_key, dnt_value),
+        (omit_script_key, omit_script_value),
+        (hide_thread_key, hide_thread_value),
+    )
+
+
+def build_syndication_oembed_options_map_from_entries(
+    entries: Tuple[Tuple[str, str], ...],
+) -> Dict[str, str]:
+    """Return oEmbed options map from key/value entries."""
+    return dict(entries)
 
 
 def build_syndication_oembed_option_keys() -> Tuple[str, str, str]:

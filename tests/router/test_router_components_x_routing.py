@@ -248,8 +248,13 @@ from bot.router_components.x_routing import (
     build_syndication_data_cache_hit_label,
     build_syndication_oembed_params,
     build_syndication_oembed_params_bundle,
+    build_syndication_oembed_params_components,
+    build_syndication_oembed_params_map,
     build_syndication_oembed_params_core,
     build_syndication_oembed_params_core_map,
+    build_syndication_oembed_params_core_keys,
+    build_syndication_oembed_params_core_values,
+    build_syndication_oembed_params_core_from_pairs,
     build_syndication_oembed_url_key,
     build_syndication_oembed_host_for_flag,
     build_syndication_oembed_status_url,
@@ -259,6 +264,8 @@ from bot.router_components.x_routing import (
     build_syndication_oembed_options,
     build_syndication_oembed_options_map,
     build_syndication_oembed_options_map_from_pairs,
+    build_syndication_oembed_option_entries,
+    build_syndication_oembed_options_map_from_entries,
     build_syndication_oembed_option_keys,
     build_syndication_oembed_option_values,
     build_syndication_oembed_dnt_key,
@@ -2604,10 +2611,64 @@ def test_build_syndication_oembed_params_core_map_shape() -> None:
     }
 
 
+def test_build_syndication_oembed_params_core_keys() -> None:
+    assert build_syndication_oembed_params_core_keys() == ("url", "lang")
+
+
+def test_build_syndication_oembed_params_core_values() -> None:
+    assert build_syndication_oembed_params_core_values(
+        "twitter.com",
+        "2022790791047823773",
+        "en",
+    ) == (
+        "https://twitter.com/i/status/2022790791047823773",
+        "en",
+    )
+
+
+def test_build_syndication_oembed_params_core_from_pairs() -> None:
+    assert build_syndication_oembed_params_core_from_pairs(
+        ("url", "lang"),
+        ("https://twitter.com/i/status/2022790791047823773", "en"),
+    ) == {
+        "url": "https://twitter.com/i/status/2022790791047823773",
+        "lang": "en",
+    }
+
+
 def test_build_syndication_oembed_params_bundle_shape() -> None:
     assert build_syndication_oembed_params_bundle(
         "twitter.com",
         "2022790791047823773",
+    ) == {
+        "url": "https://twitter.com/i/status/2022790791047823773",
+        "lang": "en",
+        "dnt": "false",
+        "omit_script": "true",
+        "hide_thread": "true",
+    }
+
+
+def test_build_syndication_oembed_params_components_shape() -> None:
+    core, options = build_syndication_oembed_params_components(
+        "twitter.com",
+        "2022790791047823773",
+    )
+    assert core == {
+        "url": "https://twitter.com/i/status/2022790791047823773",
+        "lang": "en",
+    }
+    assert options == {
+        "dnt": "false",
+        "omit_script": "true",
+        "hide_thread": "true",
+    }
+
+
+def test_build_syndication_oembed_params_map_shape() -> None:
+    assert build_syndication_oembed_params_map(
+        {"url": "https://twitter.com/i/status/2022790791047823773", "lang": "en"},
+        {"dnt": "false", "omit_script": "true", "hide_thread": "true"},
     ) == {
         "url": "https://twitter.com/i/status/2022790791047823773",
         "lang": "en",
@@ -2695,6 +2756,27 @@ def test_build_syndication_oembed_options_map_from_pairs() -> None:
     assert build_syndication_oembed_options_map_from_pairs(
         ("dnt", "omit_script", "hide_thread"),
         ("false", "true", "true"),
+    ) == {
+        "dnt": "false",
+        "omit_script": "true",
+        "hide_thread": "true",
+    }
+
+
+def test_build_syndication_oembed_option_entries() -> None:
+    assert build_syndication_oembed_option_entries(
+        ("dnt", "omit_script", "hide_thread"),
+        ("false", "true", "true"),
+    ) == (
+        ("dnt", "false"),
+        ("omit_script", "true"),
+        ("hide_thread", "true"),
+    )
+
+
+def test_build_syndication_oembed_options_map_from_entries() -> None:
+    assert build_syndication_oembed_options_map_from_entries(
+        (("dnt", "false"), ("omit_script", "true"), ("hide_thread", "true"))
     ) == {
         "dnt": "false",
         "omit_script": "true",
