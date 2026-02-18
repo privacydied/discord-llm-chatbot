@@ -1,5 +1,6 @@
 import re
 from types import SimpleNamespace
+from urllib.parse import urlparse
 
 import pytest
 
@@ -92,6 +93,7 @@ from bot.router_components.x_routing import (
     normalize_x_host,
     x_host_aliases,
     x_path_has_trailing_slash,
+    normalize_parsed_netloc,
     normalize_x_path,
     normalize_x_url,
     parse_twitter_status_id,
@@ -428,6 +430,11 @@ def test_normalize_x_path() -> None:
 def test_x_path_has_trailing_slash() -> None:
     assert x_path_has_trailing_slash("/user/status/1/") is True
     assert x_path_has_trailing_slash("/user/status/1") is False
+
+
+def test_normalize_parsed_netloc() -> None:
+    parsed = urlparse("https://Mobile.Twitter.com/user/status/1?s=20")
+    assert normalize_parsed_netloc(parsed) == "mobile.twitter.com"
 
 
 def test_normalize_x_host() -> None:

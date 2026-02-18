@@ -223,11 +223,16 @@ def normalize_x_url(url: str) -> str:
     """Normalize X/Twitter URLs to canonical host/path, dropping query/fragment."""
     try:
         p = urlparse(url)
-        host = normalize_x_host((p.netloc or "").lower())
+        host = normalize_x_host(normalize_parsed_netloc(p))
         path = normalize_x_path(p.path or "")
         return urlunparse(("https", host, path, "", "", ""))
     except Exception:
         return url
+
+
+def normalize_parsed_netloc(parsed: Any) -> str:
+    """Normalize parsed URL netloc to lowercase string."""
+    return str(getattr(parsed, "netloc", "") or "").lower()
 
 
 def x_host_aliases() -> set[str]:
