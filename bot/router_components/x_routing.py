@@ -1930,13 +1930,19 @@ def collect_status_urls_from_candidates(
     canonicalize_status_url: Callable[[str], str],
 ) -> None:
     """Collect canonical status URLs from candidate URLs found in text."""
-    for raw in status_url_candidate_values(text):
+    for raw in status_url_raw_candidates(text):
         append_status_url_if_match(
             items,
-            status_url_candidate_raw_value(raw),
+            raw,
             is_status_url=is_status_url,
             canonicalize_status_url=canonicalize_status_url,
         )
+
+
+def status_url_raw_candidates(text: str) -> Iterable[str]:
+    """Yield raw URL candidates normalized through candidate-raw-value helper."""
+    for raw in status_url_candidate_values(text):
+        yield status_url_candidate_raw_value(raw)
 
 
 def status_url_candidate_values(text: str) -> Iterable[str]:
