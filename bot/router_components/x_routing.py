@@ -1803,10 +1803,15 @@ def resolve_first_image_host(image_urls: List[str]) -> str:
     try:
         first_image_url = resolve_first_image_url(image_urls)
         if first_image_url:
-            first_host = urlparse(first_image_url).netloc
+            first_host = parse_image_host(first_image_url)
     except Exception:
         first_host = ""
     return first_host
+
+
+def parse_image_host(image_url: str) -> str:
+    """Parse netloc host from an image URL string."""
+    return urlparse(image_url).netloc
 
 
 def resolve_first_image_url(image_urls: List[str]) -> str:
