@@ -241,6 +241,7 @@ from bot.router_components.x_routing import (
     format_syndication_header_media_hint,
     format_syndication_header_prefix,
     format_syndication_header_stamp,
+    format_syndication_header_compose,
     format_syndication_error_fallback,
     format_syndication_error_payload_repr,
     format_syndication_error_payload_max_chars,
@@ -2870,6 +2871,18 @@ def test_format_syndication_header_prefix_variants() -> None:
 def test_format_syndication_header_stamp_variants() -> None:
     assert format_syndication_header_stamp("2026-02-17") == " • 2026-02-17"
     assert format_syndication_header_stamp(None) == ""
+
+
+def test_format_syndication_header_compose_shape() -> None:
+    assert (
+        format_syndication_header_compose(
+            prefix="@alice",
+            stamp=" • 2026-02-17",
+            media_hint=" • media:2",
+            url="https://x.com/u/status/1",
+        )
+        == "@alice • 2026-02-17 • media:2 → https://x.com/u/status/1"
+    )
 
 
 def test_format_syndication_header_line_preserves_len_error_behavior() -> None:

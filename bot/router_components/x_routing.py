@@ -1622,7 +1622,12 @@ def format_syndication_header_line(
     media_hint = format_syndication_header_media_hint(photos)
     prefix = format_syndication_header_prefix(username)
     stamp = format_syndication_header_stamp(created_at)
-    return f"{prefix}{stamp}{media_hint} → {url}"
+    return format_syndication_header_compose(
+        prefix=prefix,
+        stamp=stamp,
+        media_hint=media_hint,
+        url=url,
+    )
 
 
 def format_syndication_header_username(user: Any) -> Any:
@@ -1643,6 +1648,17 @@ def format_syndication_header_prefix(username: Any) -> str:
 def format_syndication_header_stamp(created_at: Any) -> str:
     """Return legacy timestamp suffix for syndication header lines."""
     return f" • {created_at}" if created_at else ""
+
+
+def format_syndication_header_compose(
+    *,
+    prefix: str,
+    stamp: str,
+    media_hint: str,
+    url: str,
+) -> str:
+    """Compose a complete syndication header line from normalized fragments."""
+    return f"{prefix}{stamp}{media_hint} → {url}"
 
 
 def format_syndication_error_fallback(url: str, syn_data: Any) -> str:
