@@ -1978,6 +1978,11 @@ def status_url_candidate_raw_value(raw: str) -> str:
 
 def status_url_candidates(text: str) -> Iterable[str]:
     """Yield status URL candidates from text for collector loops."""
+    yield from iter_status_url_candidates_source(text)
+
+
+def iter_status_url_candidates_source(text: str) -> Iterable[str]:
+    """Yield candidates through source iterator wrapper for status URL extraction."""
     yield from status_url_candidates_source(text)
 
 
