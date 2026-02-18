@@ -2184,6 +2184,11 @@ def compile_url_extract_pattern_value(pattern: str) -> str:
 
 def compile_url_extract_flags_argument(flags: int) -> int:
     """Return normalized flags argument for URL regex compilation."""
+    return compile_url_extract_flags_for_argument(flags)
+
+
+def compile_url_extract_flags_for_argument(flags: int) -> int:
+    """Return URL-extract compile flags via argument handoff helper."""
     return compile_url_extract_flags_value(flags)
 
 

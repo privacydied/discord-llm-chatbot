@@ -334,6 +334,7 @@ from bot.router_components.x_routing import (
     compile_url_extract_pattern_argument,
     compile_url_extract_pattern_value,
     compile_url_extract_flags_argument,
+    compile_url_extract_flags_for_argument,
     compile_url_extract_flags_value,
     compile_regex,
     compile_regex_pattern_argument,
@@ -814,6 +815,10 @@ def test_compile_regex_flags_value_identity() -> None:
 
 def test_compile_url_extract_flags_argument_identity() -> None:
     assert compile_url_extract_flags_argument(re.IGNORECASE) == re.IGNORECASE
+
+
+def test_compile_url_extract_flags_for_argument_identity() -> None:
+    assert compile_url_extract_flags_for_argument(re.IGNORECASE) == re.IGNORECASE
 
 
 def test_compile_url_extract_flags_value_identity() -> None:
