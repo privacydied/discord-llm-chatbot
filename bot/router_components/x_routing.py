@@ -127,6 +127,11 @@ def is_twitter_media_cdn(url: str) -> bool:
         host = urlparse(url).netloc.lower()
     except Exception:
         return False
+    return is_twitter_media_cdn_host(host)
+
+
+def is_twitter_media_cdn_host(host: str) -> bool:
+    """Return True when host is a known Twitter media CDN host."""
     return host in {
         "pbs.twimg.com",
         "pbs-0.twimg.com",
