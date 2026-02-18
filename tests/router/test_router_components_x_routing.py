@@ -73,6 +73,7 @@ from bot.router_components.x_routing import (
     canonical_status_raw_value_source,
     canonical_status_raw_value_result,
     append_status_url_if_match,
+    should_append_status_url,
     status_url_matches_predicate,
     status_url_matches_predicate_source,
     status_url_matches_predicate_result,
@@ -81,11 +82,13 @@ from bot.router_components.x_routing import (
     is_status_url_candidate_result,
     is_status_url_candidate_for_result,
     append_matched_status_url,
+    resolve_matched_status_raw_url,
     matched_status_raw_value,
     matched_status_raw_value_source,
     matched_status_raw_value_result,
     matched_status_raw_value_for_result,
     append_matched_x_url,
+    resolve_matched_x_raw_url,
     matched_x_raw_value,
     matched_x_raw_value_source,
     matched_x_raw_value_result,
@@ -1771,6 +1774,11 @@ def test_append_status_url_if_match() -> None:
     assert items == ["https://x.com/u/status/1"]
 
 
+def test_should_append_status_url_delegates_predicate() -> None:
+    assert should_append_status_url("https://x.com/u/status/1", is_status_url=lambda u: "/status/" in u)
+    assert not should_append_status_url("https://example.com", is_status_url=lambda u: "/status/" in u)
+
+
 def test_is_status_url_candidate_delegates_predicate() -> None:
     assert is_status_url_candidate("https://x.com/u/status/1", is_status_url=lambda u: "/status/" in u)
     assert not is_status_url_candidate("https://example.com", is_status_url=lambda u: "/status/" in u)
@@ -1843,6 +1851,10 @@ def test_append_matched_status_url_only_appends_unique_canonical() -> None:
     assert items == ["https://x.com/u/status/1", "https://x.com/v/status/2"]
 
 
+def test_resolve_matched_status_raw_url_identity() -> None:
+    assert resolve_matched_status_raw_url("https://x.com/u/status/1") == "https://x.com/u/status/1"
+
+
 def test_matched_status_raw_value_identity() -> None:
     assert matched_status_raw_value("https://x.com/u/status/1") == "https://x.com/u/status/1"
 
@@ -1872,6 +1884,10 @@ def test_append_matched_x_url_only_appends_unique_canonical() -> None:
         canonicalize_x_url=lambda u: u.split("?")[0].replace("twitter.com", "x.com"),
     )
     assert items == ["https://x.com/u/status/1", "https://x.com/v/status/2"]
+
+
+def test_resolve_matched_x_raw_url_identity() -> None:
+    assert resolve_matched_x_raw_url("https://x.com/u/status/1") == "https://x.com/u/status/1"
 
 
 def test_matched_x_raw_value_identity() -> None:

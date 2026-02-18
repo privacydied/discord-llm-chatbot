@@ -3371,12 +3371,21 @@ def append_status_url_if_match(
     canonicalize_status_url: Callable[[str], str],
 ) -> None:
     """Append canonical status URL only when raw URL matches status predicate."""
-    if status_url_matches_predicate(raw_url, is_status_url=is_status_url):
+    if should_append_status_url(raw_url, is_status_url=is_status_url):
         append_matched_status_url(
             items,
             raw_url,
             canonicalize_status_url=canonicalize_status_url,
         )
+
+
+def should_append_status_url(
+    raw_url: str,
+    *,
+    is_status_url: Callable[[str], bool],
+) -> bool:
+    """Return True when a raw URL should flow through status append path."""
+    return status_url_matches_predicate(raw_url, is_status_url=is_status_url)
 
 
 def status_url_matches_predicate(
@@ -3454,9 +3463,14 @@ def append_matched_status_url(
     """Append canonicalized status URL for a URL already known to match."""
     append_canonical_status_url(
         items,
-        matched_status_raw_value(raw_url),
+        resolve_matched_status_raw_url(raw_url),
         canonicalize_status_url=canonicalize_status_url,
     )
+
+
+def resolve_matched_status_raw_url(raw_url: str) -> str:
+    """Resolve raw URL value used by matched-status append flow."""
+    return matched_status_raw_value(raw_url)
 
 
 def matched_status_raw_value(raw_url: str) -> str:
@@ -3488,9 +3502,14 @@ def append_matched_x_url(
     """Append canonicalized X/Twitter URL for a URL already known to match."""
     append_canonical_x_url(
         items,
-        matched_x_raw_value(raw_url),
+        resolve_matched_x_raw_url(raw_url),
         canonicalize_x_url=canonicalize_x_url,
     )
+
+
+def resolve_matched_x_raw_url(raw_url: str) -> str:
+    """Resolve raw URL value used by matched-X append flow."""
+    return matched_x_raw_value(raw_url)
 
 
 def matched_x_raw_value(raw_url: str) -> str:
