@@ -95,6 +95,7 @@ from bot.router_components.x_routing import (
     x_path_has_trailing_slash,
     normalize_parsed_netloc,
     normalize_parsed_path,
+    parse_url_for_normalization,
     normalize_x_path,
     normalize_x_url,
     compose_normalized_x_url,
@@ -446,6 +447,12 @@ def test_normalize_parsed_netloc() -> None:
 def test_normalize_parsed_path() -> None:
     parsed = urlparse("https://mobile.twitter.com/user/status/1?s=20")
     assert normalize_parsed_path(parsed) == "/user/status/1"
+
+
+def test_parse_url_for_normalization() -> None:
+    parsed = parse_url_for_normalization("https://x.com/user/status/1?s=20#frag")
+    assert parsed.netloc == "x.com"
+    assert parsed.path == "/user/status/1"
 
 
 def test_normalize_x_host() -> None:

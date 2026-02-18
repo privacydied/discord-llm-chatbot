@@ -222,12 +222,17 @@ def is_poster_tweet_media_path(path: str) -> bool:
 def normalize_x_url(url: str) -> str:
     """Normalize X/Twitter URLs to canonical host/path, dropping query/fragment."""
     try:
-        p = urlparse(url)
+        p = parse_url_for_normalization(url)
         host = normalize_x_host(normalize_parsed_netloc(p))
         path = normalize_x_path(normalize_parsed_path(p))
         return compose_normalized_x_url(host, path)
     except Exception:
         return url
+
+
+def parse_url_for_normalization(url: str) -> Any:
+    """Parse URL for normalization helpers."""
+    return urlparse(url)
 
 
 def compose_normalized_x_url(host: str, path: str) -> str:
