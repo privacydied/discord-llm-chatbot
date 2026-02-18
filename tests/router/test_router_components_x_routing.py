@@ -62,6 +62,7 @@ from bot.router_components.x_routing import (
     matched_x_raw_value_source,
     matched_x_raw_value_result,
     is_tweet_media_url,
+    is_blocked_tweet_media_path,
     is_twitter_media_cdn,
     is_twitter_media_cdn_host,
     is_twitter_thumbnail_host,
@@ -406,6 +407,12 @@ def test_twitter_host_and_media_path_helpers() -> None:
         is_tweet_media_url("https://pbs.twimg.com/ext_tw_video_thumb/123/pu/img.jpg")
         is False
     )
+
+
+def test_is_blocked_tweet_media_path() -> None:
+    assert is_blocked_tweet_media_path("/profile_images/123/avatar.jpg")
+    assert is_blocked_tweet_media_path("/emoji/v2/72x72/1f525.png")
+    assert not is_blocked_tweet_media_path("/media/abc123.jpg")
 
 
 def test_extract_x_status_urls_from_text() -> None:

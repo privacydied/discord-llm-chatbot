@@ -154,14 +154,7 @@ def is_tweet_media_url(url: str) -> bool:
     except Exception:
         return False
 
-    blocked_prefixes = (
-        "/profile_images/",
-        "/profile_banners/",
-        "/card_img/",
-        "/ad_img/",
-        "/emoji/",
-    )
-    if any(path.startswith(prefix) for prefix in blocked_prefixes):
+    if is_blocked_tweet_media_path(path):
         return False
 
     poster_prefixes = (
@@ -173,6 +166,18 @@ def is_tweet_media_url(url: str) -> bool:
         return False
 
     return "/media/" in path
+
+
+def is_blocked_tweet_media_path(path: str) -> bool:
+    """Return True when path matches a blocked tweet-media metadata prefix."""
+    blocked_prefixes = (
+        "/profile_images/",
+        "/profile_banners/",
+        "/card_img/",
+        "/ad_img/",
+        "/emoji/",
+    )
+    return any(path.startswith(prefix) for prefix in blocked_prefixes)
 
 
 def normalize_x_url(url: str) -> str:
