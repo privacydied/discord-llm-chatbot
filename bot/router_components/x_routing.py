@@ -23,7 +23,7 @@ def extract_primary_tweet_id(url: str) -> Optional[str]:
 
     try:
         parsed = urlparse(raw_url)
-        for params in (parse_qs(parsed.fragment or ""), parse_qs(parsed.query or "")):
+        for params in primary_tweet_id_param_sources(parsed):
             for key in primary_tweet_id_hint_keys():
                 values = params.get(key) or []
                 if not values:
@@ -40,6 +40,14 @@ def extract_primary_tweet_id(url: str) -> Optional[str]:
 def primary_tweet_id_hint_keys() -> Tuple[str, ...]:
     """Return ordered hint keys checked for explicit tweet-id URL fragments."""
     return ("ptid", "primary", "tweet_id", "status_id", "id")
+
+
+def primary_tweet_id_param_sources(parsed: Any) -> Tuple[Dict[str, List[str]], Dict[str, List[str]]]:
+    """Return parsed fragment/query param maps checked for tweet-id hints."""
+    return (
+        parse_qs(str(getattr(parsed, "fragment", "") or "")),
+        parse_qs(str(getattr(parsed, "query", "") or "")),
+    )
 
 
 def canonicalize_twitter_status_url(url: str) -> str:

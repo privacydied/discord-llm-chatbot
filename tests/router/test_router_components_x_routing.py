@@ -100,6 +100,7 @@ from bot.router_components.x_routing import (
     normalize_x_url,
     compose_normalized_x_url,
     primary_tweet_id_hint_keys,
+    primary_tweet_id_param_sources,
     parse_twitter_status_id,
     is_unwrap_x_media_proxy_host,
     unwrap_x_media_proxy_hosts,
@@ -420,6 +421,13 @@ def test_is_twitter_url_and_status_id_parsing() -> None:
 
 def test_primary_tweet_id_hint_keys() -> None:
     assert primary_tweet_id_hint_keys() == ("ptid", "primary", "tweet_id", "status_id", "id")
+
+
+def test_primary_tweet_id_param_sources() -> None:
+    parsed = urlparse("https://x.com/u/status/1?tweet_id=2#primary=3")
+    fragment_params, query_params = primary_tweet_id_param_sources(parsed)
+    assert fragment_params.get("primary") == ["3"]
+    assert query_params.get("tweet_id") == ["2"]
 
 
 def test_canonicalize_and_normalize_x_urls() -> None:
