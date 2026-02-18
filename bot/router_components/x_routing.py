@@ -278,9 +278,14 @@ def extract_x_api_primary_text(api_data: Any) -> str:
     """Extract canonical tweet text from X API payload variants."""
     try:
         tweet = extract_x_api_primary_tweet(api_data)
-        return str((tweet or {}).get("text") or "").strip()
+        return normalize_x_api_text((tweet or {}).get("text"))
     except Exception:
         return ""
+
+
+def normalize_x_api_text(text: Any) -> str:
+    """Normalize X API text field to a stripped string."""
+    return str(text or "").strip()
 
 
 def extract_sparse_media_resolution(

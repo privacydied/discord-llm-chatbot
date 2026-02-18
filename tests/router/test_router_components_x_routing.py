@@ -8,6 +8,7 @@ from bot.router_components.x_routing import (
     collect_x_candidate_urls,
     extract_fxtwitter_tweet_node,
     extract_x_api_primary_text,
+    normalize_x_api_text,
     extract_x_api_first_item,
     extract_x_api_primary_tweet,
     extract_sparse_media_resolution,
@@ -1255,6 +1256,11 @@ def test_extract_x_api_primary_text_variants() -> None:
     assert extract_x_api_primary_text({"data": [{"text": "list text"}]}) == "list text"
     assert extract_x_api_primary_text({"data": []}) == ""
     assert extract_x_api_primary_text(None) == ""
+
+
+def test_normalize_x_api_text() -> None:
+    assert normalize_x_api_text("  hello ") == "hello"
+    assert normalize_x_api_text(None) == ""
 
 
 def test_extract_sparse_media_resolution_defaults_and_sanitizes() -> None:
