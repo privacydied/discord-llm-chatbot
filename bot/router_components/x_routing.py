@@ -2207,6 +2207,11 @@ def compile_regex(pattern: str, *, flags: int) -> Any:
 
 def compile_regex_pattern_argument(pattern: str) -> str:
     """Return normalized pattern argument for generic regex compilation."""
+    return compile_regex_pattern_for_argument(pattern)
+
+
+def compile_regex_pattern_for_argument(pattern: str) -> str:
+    """Return generic compile pattern via argument handoff helper."""
     return compile_regex_pattern_value(pattern)
 
 
