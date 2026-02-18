@@ -2028,6 +2028,11 @@ def status_url_candidates_from_text(text: str) -> Iterable[str]:
 
 def status_url_candidates_regex_value() -> Any:
     """Return regex value used by status URL candidates-from-text helper."""
+    return status_url_candidates_regex_for_extraction()
+
+
+def status_url_candidates_regex_for_extraction() -> Any:
+    """Return candidate-extraction regex via status URL regex helper chain."""
     return status_url_candidates_regex()
 
 
