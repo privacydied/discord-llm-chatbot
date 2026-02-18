@@ -99,6 +99,7 @@ from bot.router_components.x_routing import (
     syndication_needs_article_hydration,
     extract_syndication_base_text,
     merge_syndication_base_with_article,
+    base_text_contains_tco_link,
     extract_syndication_text,
     build_x_text_miss_log_payload,
     build_x_text_miss_payload,
@@ -1670,6 +1671,12 @@ def test_merge_syndication_base_with_article_variants() -> None:
         )
         == "article"
     )
+
+
+def test_base_text_contains_tco_link() -> None:
+    assert base_text_contains_tco_link("https://t.co/abc123")
+    assert base_text_contains_tco_link("hello https://t.co/abc123 world")
+    assert not base_text_contains_tco_link("hello world")
 
 
 def test_extract_syndication_text_variants() -> None:

@@ -575,11 +575,16 @@ def merge_syndication_base_with_article(
     """Merge syndication base tweet text with hydrated article text."""
     if not article_text:
         return base_text
-    if base_text and not re.search(r"https?://t\.co/[A-Za-z0-9]+", base_text):
+    if base_text and not base_text_contains_tco_link(base_text):
         if article_text in base_text:
             return base_text
         return f"{base_text}\n\n[Linked X Article]\n{article_text}"
     return article_text
+
+
+def base_text_contains_tco_link(base_text: str) -> bool:
+    """Return True when base text includes a t.co link token."""
+    return bool(re.search(r"https?://t\.co/[A-Za-z0-9]+", base_text))
 
 
 def extract_syndication_text(
