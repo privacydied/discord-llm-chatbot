@@ -360,6 +360,7 @@ from bot.router_components.x_routing import (
     iter_raw_url_source_texts,
     raw_url_source_texts_iter,
     collect_raw_urls_from_texts,
+    iter_url_matches_for_source,
     url_matches_source,
     url_matches_iter,
     url_matches,
@@ -991,6 +992,13 @@ def test_iter_url_matches_iter_yields_match_objects() -> None:
 
 def test_url_matches_source_yields_match_objects() -> None:
     matches = list(url_matches_source("a https://x.com/u/status/1 b", url_re=x_url_extract_regex()))
+    assert [m.group(0) for m in matches] == ["https://x.com/u/status/1"]
+
+
+def test_iter_url_matches_for_source_yields_match_objects() -> None:
+    matches = list(
+        iter_url_matches_for_source("a https://x.com/u/status/1 b", url_re=x_url_extract_regex())
+    )
     assert [m.group(0) for m in matches] == ["https://x.com/u/status/1"]
 
 

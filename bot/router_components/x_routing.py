@@ -2401,6 +2401,11 @@ def iter_url_matches_for_url_matches(text: str, *, url_re: Any) -> Iterable[Any]
 
 def url_matches_source(text: str, *, url_re: Any) -> Iterable[Any]:
     """Yield source URL matches used by url_matches helper."""
+    yield from iter_url_matches_for_source(text, url_re=url_re)
+
+
+def iter_url_matches_for_source(text: str, *, url_re: Any) -> Iterable[Any]:
+    """Yield URL matches via url-matches-source handoff helper."""
     yield from url_matches_iter(text, url_re=url_re)
 
 
