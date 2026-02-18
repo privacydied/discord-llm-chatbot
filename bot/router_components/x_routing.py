@@ -938,12 +938,20 @@ def build_syndication_fetch_headers() -> Dict[str, str]:
 
 def build_syndication_fetch_headers_base() -> Dict[str, str]:
     """Return canonical base headers map for CDN syndication fetches."""
-    user_agent_key, accept_key, accept_language_key, referer_key = (
-        build_syndication_fetch_header_keys()
+    return build_syndication_fetch_header_map(
+        keys=build_syndication_fetch_header_keys(),
+        values=build_syndication_fetch_header_values(),
     )
-    user_agent, accept, accept_language, referer = (
-        build_syndication_fetch_header_values()
-    )
+
+
+def build_syndication_fetch_header_map(
+    *,
+    keys: Tuple[str, str, str, str],
+    values: Tuple[str, str, str, str],
+) -> Dict[str, str]:
+    """Build syndication header map from ordered keys and values tuples."""
+    user_agent_key, accept_key, accept_language_key, referer_key = keys
+    user_agent, accept, accept_language, referer = values
     return {
         user_agent_key: user_agent,
         accept_key: accept,

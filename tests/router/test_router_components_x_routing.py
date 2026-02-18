@@ -149,6 +149,7 @@ from bot.router_components.x_routing import (
     build_syndication_bool_false_value,
     build_syndication_fetch_headers,
     build_syndication_fetch_headers_base,
+    build_syndication_fetch_header_map,
     build_syndication_fetch_header_keys,
     build_syndication_fetch_header_values,
     build_syndication_dnt_key,
@@ -2232,6 +2233,19 @@ def test_build_syndication_fetch_headers_base_shape() -> None:
     assert headers["Referer"] == "https://platform.twitter.com/"
     assert headers["Accept-Language"] == "en-US,en;q=0.9"
     assert "Mozilla/5.0" in headers["User-Agent"]
+
+
+def test_build_syndication_fetch_header_map_shape() -> None:
+    headers = build_syndication_fetch_header_map(
+        keys=("User-Agent", "Accept", "Accept-Language", "Referer"),
+        values=("ua", "accept", "al", "ref"),
+    )
+    assert headers == {
+        "User-Agent": "ua",
+        "Accept": "accept",
+        "Accept-Language": "al",
+        "Referer": "ref",
+    }
 
 
 def test_build_syndication_fetch_header_keys_constant() -> None:
