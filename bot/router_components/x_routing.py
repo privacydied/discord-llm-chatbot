@@ -179,16 +179,20 @@ def has_tweet_media_path_segment(path: str) -> bool:
     return "/media/" in path
 
 
-def is_blocked_tweet_media_path(path: str) -> bool:
-    """Return True when path matches a blocked tweet-media metadata prefix."""
-    blocked_prefixes = (
+def blocked_tweet_media_prefixes() -> Tuple[str, ...]:
+    """Return blocked tweet-media metadata path prefixes."""
+    return (
         "/profile_images/",
         "/profile_banners/",
         "/card_img/",
         "/ad_img/",
         "/emoji/",
     )
-    return any(path.startswith(prefix) for prefix in blocked_prefixes)
+
+
+def is_blocked_tweet_media_path(path: str) -> bool:
+    """Return True when path matches a blocked tweet-media metadata prefix."""
+    return any(path.startswith(prefix) for prefix in blocked_tweet_media_prefixes())
 
 
 def is_poster_tweet_media_path(path: str) -> bool:

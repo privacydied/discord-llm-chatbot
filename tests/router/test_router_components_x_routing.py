@@ -76,6 +76,7 @@ from bot.router_components.x_routing import (
     matched_x_raw_value_for_result,
     is_tweet_media_url,
     is_blocked_tweet_media_path,
+    blocked_tweet_media_prefixes,
     is_poster_tweet_media_path,
     has_tweet_media_path_segment,
     is_twitter_media_cdn,
@@ -502,6 +503,12 @@ def test_is_blocked_tweet_media_path() -> None:
     assert is_blocked_tweet_media_path("/profile_images/123/avatar.jpg")
     assert is_blocked_tweet_media_path("/emoji/v2/72x72/1f525.png")
     assert not is_blocked_tweet_media_path("/media/abc123.jpg")
+
+
+def test_blocked_tweet_media_prefixes() -> None:
+    prefixes = blocked_tweet_media_prefixes()
+    assert "/profile_images/" in prefixes
+    assert "/emoji/" in prefixes
 
 
 def test_is_poster_tweet_media_path() -> None:
