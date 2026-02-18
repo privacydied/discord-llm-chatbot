@@ -38,6 +38,7 @@ from bot.router_components.x_routing import (
     raw_url_should_append,
     raw_url_should_append_source,
     raw_url_should_append_result,
+    raw_url_should_append_for_result,
     raw_url_is_present,
     raw_url_is_present_source,
     raw_url_is_present_result,
@@ -1201,6 +1202,11 @@ def test_raw_url_should_append_source_delegates_presence_check() -> None:
 def test_raw_url_should_append_result_delegates_presence_check() -> None:
     assert raw_url_should_append_result("https://x.com/u/status/1")
     assert not raw_url_should_append_result("")
+
+
+def test_raw_url_should_append_for_result_delegates_presence_check() -> None:
+    assert raw_url_should_append_for_result("https://x.com/u/status/1")
+    assert not raw_url_should_append_for_result("")
 
 
 def test_append_canonicalized_value_only_appends_unique_canonical() -> None:

@@ -2636,6 +2636,11 @@ def raw_url_should_append_source(raw_url: str) -> bool:
 
 def raw_url_should_append_result(raw_url: str) -> bool:
     """Return value used by raw URL should-append source helper."""
+    return raw_url_should_append_for_result(raw_url)
+
+
+def raw_url_should_append_for_result(raw_url: str) -> bool:
+    """Return raw URL append-gating result via result handoff helper."""
     return raw_url_is_present(raw_url)
 
 
