@@ -98,9 +98,7 @@ def collect_x_candidate_urls(item: Any) -> List[str]:
             urls.append(str(item.payload))
         elif item.source_type == "embed":
             embed = item.payload
-            primary_url = getattr(embed, "url", None)
-            if primary_url:
-                urls.append(primary_url)
+            append_embed_primary_url_if_present(urls, embed)
             append_embed_attr_url_if_present(urls, embed, "video")
             append_embed_attr_url_if_present(urls, embed, "image")
             append_embed_attr_url_if_present(urls, embed, "thumbnail")
@@ -118,6 +116,13 @@ def append_embed_attr_url_if_present(urls: List[str], embed: Any, attr_name: str
     url = getattr(attr, "url", None) if attr else None
     if url:
         urls.append(url)
+
+
+def append_embed_primary_url_if_present(urls: List[str], embed: Any) -> None:
+    """Append embed primary URL when present."""
+    primary_url = getattr(embed, "url", None)
+    if primary_url:
+        urls.append(primary_url)
 
 
 def append_attachment_urls_if_present(urls: List[str], attachment: Any) -> None:

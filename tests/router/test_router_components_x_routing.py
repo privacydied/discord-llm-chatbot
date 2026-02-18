@@ -7,6 +7,7 @@ import pytest
 from bot.router_components.x_routing import (
     canonicalize_twitter_status_url,
     collect_x_candidate_urls,
+    append_embed_primary_url_if_present,
     append_embed_attr_url_if_present,
     append_attachment_urls_if_present,
     extract_fxtwitter_tweet_node,
@@ -569,6 +570,13 @@ def test_append_embed_attr_url_if_present() -> None:
     append_embed_attr_url_if_present(urls, embed, "thumbnail")
     assert "https://video.twimg.com/ext_tw_video/abc" in urls
     assert "https://pbs.twimg.com/media/xyz.jpg" in urls
+
+
+def test_append_embed_primary_url_if_present() -> None:
+    urls: list[str] = []
+    embed = SimpleNamespace(url="https://x.com/u/status/2")
+    append_embed_primary_url_if_present(urls, embed)
+    assert "https://x.com/u/status/2" in urls
 
 
 def test_append_attachment_urls_if_present() -> None:
