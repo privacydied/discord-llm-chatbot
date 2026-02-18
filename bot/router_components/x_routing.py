@@ -1868,15 +1868,12 @@ def extract_x_status_urls_from_text(
 ) -> List[str]:
     """Extract canonical X/Twitter status URLs from text preserving order."""
     urls = status_url_items_buffer()
-    try:
-        collect_status_urls_into_items(
-            urls,
-            text,
-            is_status_url=is_status_url,
-            canonicalize_status_url=canonicalize_status_url,
-        )
-    except Exception:
-        pass
+    collect_status_urls_fail_open(
+        items=urls,
+        text=text,
+        is_status_url=is_status_url,
+        canonicalize_status_url=canonicalize_status_url,
+    )
     return status_url_items_result(urls)
 
 
@@ -1894,6 +1891,25 @@ def collect_status_urls_into_items(
         is_status_url=is_status_url,
         canonicalize_status_url=canonicalize_status_url,
     )
+
+
+def collect_status_urls_fail_open(
+    *,
+    items: List[str],
+    text: str,
+    is_status_url: Callable[[str], bool],
+    canonicalize_status_url: Callable[[str], str],
+) -> None:
+    """Collect status URLs while preserving fail-open behavior on parse errors."""
+    try:
+        collect_status_urls_into_items(
+            items,
+            text,
+            is_status_url=is_status_url,
+            canonicalize_status_url=canonicalize_status_url,
+        )
+    except Exception:
+        pass
 
 
 def status_url_items_result(urls: List[str]) -> List[str]:

@@ -279,6 +279,7 @@ from bot.router_components.x_routing import (
     status_url_items_buffer,
     status_url_items_result,
     collect_status_urls_into_items,
+    collect_status_urls_fail_open,
     collect_status_urls_from_candidates,
     status_url_candidate_values,
     status_url_candidate_raw_value,
@@ -757,6 +758,27 @@ def test_collect_raw_urls_into_items_delegates_collection() -> None:
         url_re=x_url_extract_regex(),
     )
     assert items == ["https://x.com/u/status/1"]
+
+
+def test_collect_status_urls_fail_open_variants() -> None:
+    items: List[str] = []
+    collect_status_urls_fail_open(
+        items=items,
+        text="https://x.com/u/status/1",
+        is_status_url=lambda _url: True,
+        canonicalize_status_url=lambda url: url,
+    )
+    assert items == ["https://x.com/u/status/1"]
+
+    # Fail-open behavior must swallow collector exceptions.
+    items_err: List[str] = []
+    collect_status_urls_fail_open(
+        items=items_err,
+        text="x",
+        is_status_url=lambda _url: (_ for _ in ()).throw(RuntimeError("boom")),
+        canonicalize_status_url=lambda url: url,
+    )
+    assert items_err == []
 
 
 def test_raw_url_items_result_identity() -> None:
