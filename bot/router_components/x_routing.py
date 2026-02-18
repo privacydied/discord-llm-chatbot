@@ -320,9 +320,14 @@ def unwrap_x_media_param_keys() -> tuple[str, ...]:
     return ("url", "media_url", "target", "u")
 
 
+def unwrap_x_media_proxy_hosts() -> set[str]:
+    """Return supported fx/vx proxy hosts for media unwrapping."""
+    return {"api.fxtwitter.com", "api.vxtwitter.com"}
+
+
 def is_unwrap_x_media_proxy_host(host: str) -> bool:
     """Return True when host is a supported fx/vx media proxy endpoint."""
-    return host in {"api.fxtwitter.com", "api.vxtwitter.com"}
+    return host in unwrap_x_media_proxy_hosts()
 
 
 def is_unwrap_x_media_candidate_url(candidate: str) -> bool:
