@@ -106,12 +106,7 @@ def collect_x_candidate_urls(item: Any) -> List[str]:
             append_embed_attr_url_if_present(urls, embed, "thumbnail")
         elif item.source_type == "attachment":
             attachment = item.payload
-            url = getattr(attachment, "url", None)
-            if url:
-                urls.append(url)
-            proxy = getattr(attachment, "proxy_url", None)
-            if proxy:
-                urls.append(proxy)
+            append_attachment_urls_if_present(urls, attachment)
     except Exception:
         pass
     return [u for u in urls if u]
@@ -123,6 +118,16 @@ def append_embed_attr_url_if_present(urls: List[str], embed: Any, attr_name: str
     url = getattr(attr, "url", None) if attr else None
     if url:
         urls.append(url)
+
+
+def append_attachment_urls_if_present(urls: List[str], attachment: Any) -> None:
+    """Append attachment URL and proxy URL when present."""
+    url = getattr(attachment, "url", None)
+    if url:
+        urls.append(url)
+    proxy = getattr(attachment, "proxy_url", None)
+    if proxy:
+        urls.append(proxy)
 
 
 def extract_url_host_lower(url: str) -> str:

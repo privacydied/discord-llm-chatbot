@@ -28,6 +28,7 @@ from .x_routing import (
     canonicalize_twitter_status_url,
     collect_x_candidate_urls,
     append_embed_attr_url_if_present,
+    append_attachment_urls_if_present,
     extract_x_api_primary_text,
     normalize_x_api_text,
     extract_x_api_first_item,
@@ -862,5 +863,6 @@ __all__ = [
     "strip_urls",
     "collect_x_candidate_urls",
     "append_embed_attr_url_if_present",
+    "append_attachment_urls_if_present",
     "unwrap_x_media_url",
 ]

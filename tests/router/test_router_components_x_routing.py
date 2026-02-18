@@ -8,6 +8,7 @@ from bot.router_components.x_routing import (
     canonicalize_twitter_status_url,
     collect_x_candidate_urls,
     append_embed_attr_url_if_present,
+    append_attachment_urls_if_present,
     extract_fxtwitter_tweet_node,
     extract_x_api_primary_text,
     normalize_x_api_text,
@@ -568,6 +569,17 @@ def test_append_embed_attr_url_if_present() -> None:
     append_embed_attr_url_if_present(urls, embed, "thumbnail")
     assert "https://video.twimg.com/ext_tw_video/abc" in urls
     assert "https://pbs.twimg.com/media/xyz.jpg" in urls
+
+
+def test_append_attachment_urls_if_present() -> None:
+    urls: list[str] = []
+    attachment = SimpleNamespace(
+        url="https://video.twimg.com/ext_tw_video/att.mp4",
+        proxy_url="https://cdn.discordapp.com/proxy",
+    )
+    append_attachment_urls_if_present(urls, attachment)
+    assert "https://video.twimg.com/ext_tw_video/att.mp4" in urls
+    assert "https://cdn.discordapp.com/proxy" in urls
 
 
 def test_twitter_host_and_media_path_helpers() -> None:
