@@ -236,16 +236,26 @@ def extract_url_path(url: str) -> str:
         return ""
 
 
-def is_twitter_thumbnail_url(url: str) -> bool:
+def host_in_set(host: str, hosts: set[str]) -> bool:
+    """Return True when host exists in the provided host set."""
+    return host in hosts
+
+
+def url_host_is_in_set(url: str, hosts: set[str]) -> bool:
+    """Return True when parsed URL host exists in the provided host set."""
     host = extract_url_host_lower(url)
     if not host:
         return False
-    return is_twitter_thumbnail_host(host)
+    return host_in_set(host, hosts)
+
+
+def is_twitter_thumbnail_url(url: str) -> bool:
+    return url_host_is_in_set(url, twitter_thumbnail_hosts())
 
 
 def is_twitter_thumbnail_host(host: str) -> bool:
     """Return True when host is a known Twitter thumbnail CDN host."""
-    return host in twitter_thumbnail_hosts()
+    return host_in_set(host, twitter_thumbnail_hosts())
 
 
 def twitter_thumbnail_hosts() -> set[str]:
@@ -260,15 +270,12 @@ def twitter_thumbnail_hosts() -> set[str]:
 
 
 def is_twitter_media_cdn(url: str) -> bool:
-    host = extract_url_host_lower(url)
-    if not host:
-        return False
-    return is_twitter_media_cdn_host(host)
+    return url_host_is_in_set(url, twitter_media_cdn_hosts())
 
 
 def is_twitter_media_cdn_host(host: str) -> bool:
     """Return True when host is a known Twitter media CDN host."""
-    return host in twitter_media_cdn_hosts()
+    return host_in_set(host, twitter_media_cdn_hosts())
 
 
 def twitter_media_cdn_hosts() -> set[str]:
@@ -286,19 +293,31 @@ def twitter_media_cdn_hosts() -> set[str]:
 
 def is_tweet_media_url(url: str) -> bool:
     """Check if URL is valid tweet media, excluding profile/banner metadata images."""
-    try:
-        u = str(url).lower()
-    except Exception:
+    path = tweet_media_url_path(url)
+    if not path:
         return False
-    path = extract_url_path(u)
+    if not tweet_media_path_is_allowed(path):
+        return False
+    return has_tweet_media_path_segment(path)
 
+
+def tweet_media_url_path(url: Any) -> str:
+    """Resolve lowercase URL path for tweet-media checks."""
+    if url is None:
+        return ""
+    try:
+        return extract_url_path(str(url).lower())
+    except Exception:
+        return ""
+
+
+def tweet_media_path_is_allowed(path: str) -> bool:
+    """Return True when tweet-media path is not blocked or poster-only."""
     if is_blocked_tweet_media_path(path):
         return False
-
     if is_poster_tweet_media_path(path):
         return False
-
-    return has_tweet_media_path_segment(path)
+    return True
 
 
 def has_tweet_media_path_segment(path: str) -> bool:

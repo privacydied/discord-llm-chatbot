@@ -95,12 +95,16 @@ from bot.router_components.x_routing import (
     has_tweet_media_path_segment,
     tweet_media_path_segment,
     path_contains_tweet_media_segment,
+    tweet_media_url_path,
+    tweet_media_path_is_allowed,
     is_twitter_media_cdn,
     is_twitter_media_cdn_host,
     twitter_media_cdn_hosts,
     is_twitter_thumbnail_host,
     is_twitter_thumbnail_url,
     twitter_thumbnail_hosts,
+    host_in_set,
+    url_host_is_in_set,
     extract_url_host_lower,
     extract_url_path,
     is_twitter_url,
@@ -577,6 +581,16 @@ def test_twitter_thumbnail_hosts() -> None:
     assert "pbs-3.twimg.com" in hosts
 
 
+def test_host_in_set() -> None:
+    assert host_in_set("pbs.twimg.com", {"pbs.twimg.com"})
+    assert not host_in_set("example.com", {"pbs.twimg.com"})
+
+
+def test_url_host_is_in_set() -> None:
+    assert url_host_is_in_set("https://pbs.twimg.com/media/a.jpg", {"pbs.twimg.com"})
+    assert not url_host_is_in_set("https://example.com/a.jpg", {"pbs.twimg.com"})
+
+
 def test_is_twitter_thumbnail_url() -> None:
     assert is_twitter_thumbnail_url("https://pbs.twimg.com/media/abc.jpg")
     assert is_twitter_thumbnail_url("https://pbs-1.twimg.com/media/abc.jpg")
@@ -737,6 +751,17 @@ def test_twitter_host_and_media_path_helpers() -> None:
         is_tweet_media_url("https://pbs.twimg.com/ext_tw_video_thumb/123/pu/img.jpg")
         is False
     )
+
+
+def test_tweet_media_url_path() -> None:
+    assert tweet_media_url_path("https://pbs.twimg.com/media/abc123.jpg?x=1") == "/media/abc123.jpg"
+    assert tweet_media_url_path(None) == ""
+
+
+def test_tweet_media_path_is_allowed() -> None:
+    assert tweet_media_path_is_allowed("/media/abc123.jpg")
+    assert not tweet_media_path_is_allowed("/profile_images/123/avatar.jpg")
+    assert not tweet_media_path_is_allowed("/ext_tw_video_thumb/123/pu/img.jpg")
 
 
 def test_is_blocked_tweet_media_path() -> None:
