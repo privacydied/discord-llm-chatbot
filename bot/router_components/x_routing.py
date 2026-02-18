@@ -198,7 +198,12 @@ def is_twitter_thumbnail_url(url: str) -> bool:
 
 def is_twitter_thumbnail_host(host: str) -> bool:
     """Return True when host is a known Twitter thumbnail CDN host."""
-    return host in {
+    return host in twitter_thumbnail_hosts()
+
+
+def twitter_thumbnail_hosts() -> set[str]:
+    """Return known Twitter thumbnail CDN hosts."""
+    return {
         "pbs.twimg.com",
         "pbs-0.twimg.com",
         "pbs-1.twimg.com",
@@ -216,7 +221,12 @@ def is_twitter_media_cdn(url: str) -> bool:
 
 def is_twitter_media_cdn_host(host: str) -> bool:
     """Return True when host is a known Twitter media CDN host."""
-    return host in {
+    return host in twitter_media_cdn_hosts()
+
+
+def twitter_media_cdn_hosts() -> set[str]:
+    """Return known Twitter media CDN hosts."""
+    return {
         "pbs.twimg.com",
         "pbs-0.twimg.com",
         "pbs-1.twimg.com",
@@ -272,7 +282,7 @@ def blocked_tweet_media_prefixes() -> Tuple[str, ...]:
 
 def is_blocked_tweet_media_path(path: str) -> bool:
     """Return True when path matches a blocked tweet-media metadata prefix."""
-    return any(path.startswith(prefix) for prefix in blocked_tweet_media_prefixes())
+    return path_starts_with_any_prefix(path, blocked_tweet_media_prefixes())
 
 
 def poster_tweet_media_prefixes() -> Tuple[str, ...]:
@@ -286,7 +296,17 @@ def poster_tweet_media_prefixes() -> Tuple[str, ...]:
 
 def is_poster_tweet_media_path(path: str) -> bool:
     """Return True when path points to poster/thumbnail tweet-media assets."""
-    return any(prefix in path for prefix in poster_tweet_media_prefixes())
+    return path_contains_any_fragment(path, poster_tweet_media_prefixes())
+
+
+def path_starts_with_any_prefix(path: str, prefixes: Tuple[str, ...]) -> bool:
+    """Return True when path starts with any prefix in the given tuple."""
+    return any(path.startswith(prefix) for prefix in prefixes)
+
+
+def path_contains_any_fragment(path: str, fragments: Tuple[str, ...]) -> bool:
+    """Return True when path contains any fragment in the given tuple."""
+    return any(fragment in path for fragment in fragments)
 
 
 def normalize_x_url(url: str) -> str:

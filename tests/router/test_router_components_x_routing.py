@@ -90,13 +90,17 @@ from bot.router_components.x_routing import (
     blocked_tweet_media_prefixes,
     poster_tweet_media_prefixes,
     is_poster_tweet_media_path,
+    path_starts_with_any_prefix,
+    path_contains_any_fragment,
     has_tweet_media_path_segment,
     tweet_media_path_segment,
     path_contains_tweet_media_segment,
     is_twitter_media_cdn,
     is_twitter_media_cdn_host,
+    twitter_media_cdn_hosts,
     is_twitter_thumbnail_host,
     is_twitter_thumbnail_url,
+    twitter_thumbnail_hosts,
     extract_url_host_lower,
     extract_url_path,
     is_twitter_url,
@@ -512,6 +516,12 @@ def test_is_twitter_thumbnail_host() -> None:
     assert not is_twitter_thumbnail_host("example.com")
 
 
+def test_twitter_thumbnail_hosts() -> None:
+    hosts = twitter_thumbnail_hosts()
+    assert "pbs.twimg.com" in hosts
+    assert "pbs-3.twimg.com" in hosts
+
+
 def test_is_twitter_thumbnail_url() -> None:
     assert is_twitter_thumbnail_url("https://pbs.twimg.com/media/abc.jpg")
     assert is_twitter_thumbnail_url("https://pbs-1.twimg.com/media/abc.jpg")
@@ -523,6 +533,12 @@ def test_is_twitter_media_cdn_host() -> None:
     assert is_twitter_media_cdn_host("video.twimg.com")
     assert is_twitter_media_cdn_host("pbs.twimg.com")
     assert not is_twitter_media_cdn_host("example.com")
+
+
+def test_twitter_media_cdn_hosts() -> None:
+    hosts = twitter_media_cdn_hosts()
+    assert "video.twimg.com" in hosts
+    assert "ton.twimg.com" in hosts
 
 
 def test_extract_url_host_lower() -> None:
@@ -684,6 +700,16 @@ def test_is_poster_tweet_media_path() -> None:
     assert is_poster_tweet_media_path("/ext_tw_video_thumb/123/pu/img.jpg")
     assert is_poster_tweet_media_path("/tweet_video_thumb/123/img.jpg")
     assert not is_poster_tweet_media_path("/media/abc123.jpg")
+
+
+def test_path_starts_with_any_prefix() -> None:
+    assert path_starts_with_any_prefix("/profile_images/123/a.jpg", ("/profile_images/",))
+    assert not path_starts_with_any_prefix("/media/abc123.jpg", ("/profile_images/",))
+
+
+def test_path_contains_any_fragment() -> None:
+    assert path_contains_any_fragment("/ext_tw_video_thumb/123/pu/img.jpg", ("/ext_tw_video_thumb/",))
+    assert not path_contains_any_fragment("/media/abc123.jpg", ("/ext_tw_video_thumb/",))
 
 
 def test_poster_tweet_media_prefixes() -> None:
