@@ -3059,14 +3059,19 @@ def filter_canonical_x_urls(
 ) -> List[str]:
     """Filter URL list to X/Twitter URLs and canonicalize with de-duplication."""
     out = canonical_x_url_items_buffer()
-    for u in raw_urls:
+    for raw_url in iter_raw_urls_for_canonical_filter(raw_urls):
         append_x_url_if_match(
             out,
-            u,
+            raw_url,
             is_x_url=is_x_url,
             canonicalize_x_url=canonicalize_x_url,
         )
     return out
+
+
+def iter_raw_urls_for_canonical_filter(raw_urls: Iterable[str]) -> Iterable[str]:
+    """Yield raw URL values used by canonical X URL filter loops."""
+    yield from raw_urls
 
 
 def canonical_x_url_items_buffer() -> List[str]:
@@ -3166,8 +3171,18 @@ def x_url_matches_predicate_result(
 
 def append_unique_str(items: List[str], value: str) -> None:
     """Append value to list only when it is not already present."""
+    maybe_append_unique_value(items, value)
+
+
+def maybe_append_unique_value(items: List[str], value: str) -> None:
+    """Append one value only when unique under current membership rules."""
     if unique_value_missing(items, value):
-        items.append(value)
+        append_value(items, value)
+
+
+def append_value(items: List[str], value: str) -> None:
+    """Append one value to list preserving native list append semantics."""
+    items.append(value)
 
 
 def unique_value_missing(items: List[str], value: str) -> bool:
@@ -3188,7 +3203,12 @@ def unique_value_missing_result(items: List[str], value: str) -> bool:
 def append_raw_url_if_present(items: List[str], raw_url: str) -> None:
     """Append extracted raw URL only when non-empty and not yet present."""
     if raw_url_should_append(raw_url):
-        append_unique_str(items, raw_url)
+        append_present_raw_url(items, raw_url)
+
+
+def append_present_raw_url(items: List[str], raw_url: str) -> None:
+    """Append a raw URL already verified as present/non-empty."""
+    append_unique_str(items, raw_url)
 
 
 def raw_url_should_append(raw_url: str) -> bool:
@@ -3296,10 +3316,15 @@ def append_canonicalized_value(
     canonicalize: Callable[[str], str],
 ) -> None:
     """Canonicalize raw value then append uniquely to target list."""
-    append_unique_str(
-        items,
-        canonicalized_value(raw_value, canonicalize=canonicalize),
+    append_canonicalized_unique_value(
+        items=items,
+        canonical_value=canonicalized_value(raw_value, canonicalize=canonicalize),
     )
+
+
+def append_canonicalized_unique_value(*, items: List[str], canonical_value: str) -> None:
+    """Append canonical value with uniqueness gating."""
+    append_unique_str(items, canonical_value)
 
 
 def canonicalized_value(

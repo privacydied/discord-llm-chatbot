@@ -29,6 +29,7 @@ from bot.router_components.x_routing import (
     extract_raw_urls_from_texts,
     extract_x_status_urls_from_text,
     filter_canonical_x_urls,
+    iter_raw_urls_for_canonical_filter,
     canonical_x_url_items_buffer,
     canonical_x_url_items_buffer_source,
     canonical_x_url_items_buffer_for_source,
@@ -42,10 +43,13 @@ from bot.router_components.x_routing import (
     is_x_url_candidate_for_result,
     append_x_url_if_match,
     append_unique_str,
+    maybe_append_unique_value,
+    append_value,
     unique_value_missing,
     unique_value_missing_source,
     unique_value_missing_result,
     append_raw_url_if_present,
+    append_present_raw_url,
     raw_url_should_append,
     raw_url_should_append_source,
     raw_url_should_append_result,
@@ -55,6 +59,7 @@ from bot.router_components.x_routing import (
     raw_url_is_present_result,
     raw_url_is_present_for_result,
     append_canonicalized_value,
+    append_canonicalized_unique_value,
     canonicalized_value,
     canonicalized_value_source,
     canonicalized_value_result,
@@ -1529,6 +1534,10 @@ def test_extract_raw_urls_and_filter_canonical_x_urls() -> None:
     assert filtered == ["https://x.com/a/status/1"]
 
 
+def test_iter_raw_urls_for_canonical_filter_delegates_iterable() -> None:
+    assert list(iter_raw_urls_for_canonical_filter(["a", "b"])) == ["a", "b"]
+
+
 def test_canonical_x_url_items_buffer_starts_empty() -> None:
     assert canonical_x_url_items_buffer() == []
 
@@ -1550,6 +1559,20 @@ def test_append_unique_str_only_appends_new_values() -> None:
     append_unique_str(items, "a")
     append_unique_str(items, "b")
     assert items == ["a", "b"]
+
+
+def test_maybe_append_unique_value_only_appends_new_values() -> None:
+    items: List[str] = ["a"]
+    maybe_append_unique_value(items, "a")
+    maybe_append_unique_value(items, "b")
+    assert items == ["a", "b"]
+
+
+def test_append_value_appends_without_uniqueness_guard() -> None:
+    items: List[str] = []
+    append_value(items, "a")
+    append_value(items, "a")
+    assert items == ["a", "a"]
 
 
 def test_unique_value_missing_checks_membership() -> None:
@@ -1600,6 +1623,13 @@ def test_append_raw_url_if_present_only_appends_non_empty_unique() -> None:
     assert items == ["https://x.com/a/status/1", "https://x.com/b/status/2"]
 
 
+def test_append_present_raw_url_only_appends_unique() -> None:
+    items: List[str] = []
+    append_present_raw_url(items, "https://x.com/a/status/1")
+    append_present_raw_url(items, "https://x.com/a/status/1")
+    assert items == ["https://x.com/a/status/1"]
+
+
 def test_raw_url_is_present() -> None:
     assert raw_url_is_present("https://x.com/u/status/1")
     assert not raw_url_is_present("")
@@ -1644,6 +1674,13 @@ def test_append_canonicalized_value_only_appends_unique_canonical() -> None:
     items = ["x:a"]
     append_canonicalized_value(items, "a", canonicalize=lambda s: f"x:{s}")
     append_canonicalized_value(items, "b", canonicalize=lambda s: f"x:{s}")
+    assert items == ["x:a", "x:b"]
+
+
+def test_append_canonicalized_unique_value_only_appends_unique() -> None:
+    items: List[str] = ["x:a"]
+    append_canonicalized_unique_value(items=items, canonical_value="x:a")
+    append_canonicalized_unique_value(items=items, canonical_value="x:b")
     assert items == ["x:a", "x:b"]
 
 
