@@ -225,9 +225,14 @@ def normalize_x_url(url: str) -> str:
         p = urlparse(url)
         host = normalize_x_host(normalize_parsed_netloc(p))
         path = normalize_x_path(normalize_parsed_path(p))
-        return urlunparse(("https", host, path, "", "", ""))
+        return compose_normalized_x_url(host, path)
     except Exception:
         return url
+
+
+def compose_normalized_x_url(host: str, path: str) -> str:
+    """Compose canonical HTTPS URL without query or fragment."""
+    return urlunparse(("https", host, path, "", "", ""))
 
 
 def normalize_parsed_netloc(parsed: Any) -> str:

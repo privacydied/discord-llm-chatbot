@@ -97,6 +97,7 @@ from bot.router_components.x_routing import (
     normalize_parsed_path,
     normalize_x_path,
     normalize_x_url,
+    compose_normalized_x_url,
     parse_twitter_status_id,
     is_unwrap_x_media_proxy_host,
     is_unwrap_x_media_candidate_url,
@@ -421,6 +422,10 @@ def test_canonicalize_and_normalize_x_urls() -> None:
     assert normalize_x_url("https://mobile.twitter.com/user/status/1?s=20#frag") == (
         "https://x.com/user/status/1"
     )
+
+
+def test_compose_normalized_x_url() -> None:
+    assert compose_normalized_x_url("x.com", "/user/status/1") == "https://x.com/user/status/1"
 
 
 def test_normalize_x_path() -> None:
