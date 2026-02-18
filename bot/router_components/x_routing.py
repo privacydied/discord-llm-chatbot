@@ -2509,6 +2509,11 @@ def canonical_x_url_items_buffer() -> List[str]:
 
 def canonical_x_url_items_buffer_source() -> List[str]:
     """Return source list buffer used by canonical X URL helper."""
+    return canonical_x_url_items_buffer_for_source()
+
+
+def canonical_x_url_items_buffer_for_source() -> List[str]:
+    """Return canonical X URL list buffer via source handoff helper."""
     return canonical_x_url_items_buffer_value()
 
 

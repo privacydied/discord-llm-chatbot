@@ -20,6 +20,7 @@ from bot.router_components.x_routing import (
     filter_canonical_x_urls,
     canonical_x_url_items_buffer,
     canonical_x_url_items_buffer_source,
+    canonical_x_url_items_buffer_for_source,
     canonical_x_url_items_buffer_value,
     x_url_matches_predicate,
     x_url_matches_predicate_source,
@@ -1106,6 +1107,10 @@ def test_canonical_x_url_items_buffer_starts_empty() -> None:
 
 def test_canonical_x_url_items_buffer_source_starts_empty() -> None:
     assert canonical_x_url_items_buffer_source() == []
+
+
+def test_canonical_x_url_items_buffer_for_source_starts_empty() -> None:
+    assert canonical_x_url_items_buffer_for_source() == []
 
 
 def test_canonical_x_url_items_buffer_value_starts_empty() -> None:
