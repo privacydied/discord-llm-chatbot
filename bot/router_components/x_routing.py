@@ -101,15 +101,9 @@ def collect_x_candidate_urls(item: Any) -> List[str]:
             primary_url = getattr(embed, "url", None)
             if primary_url:
                 urls.append(primary_url)
-            video = getattr(embed, "video", None)
-            if video and getattr(video, "url", None):
-                urls.append(video.url)
-            image = getattr(embed, "image", None)
-            if image and getattr(image, "url", None):
-                urls.append(image.url)
-            thumb = getattr(embed, "thumbnail", None)
-            if thumb and getattr(thumb, "url", None):
-                urls.append(thumb.url)
+            append_embed_attr_url_if_present(urls, embed, "video")
+            append_embed_attr_url_if_present(urls, embed, "image")
+            append_embed_attr_url_if_present(urls, embed, "thumbnail")
         elif item.source_type == "attachment":
             attachment = item.payload
             url = getattr(attachment, "url", None)
@@ -121,6 +115,14 @@ def collect_x_candidate_urls(item: Any) -> List[str]:
     except Exception:
         pass
     return [u for u in urls if u]
+
+
+def append_embed_attr_url_if_present(urls: List[str], embed: Any, attr_name: str) -> None:
+    """Append nested embed attribute URL when present (e.g., video/image/thumbnail)."""
+    attr = getattr(embed, attr_name, None)
+    url = getattr(attr, "url", None) if attr else None
+    if url:
+        urls.append(url)
 
 
 def extract_url_host_lower(url: str) -> str:

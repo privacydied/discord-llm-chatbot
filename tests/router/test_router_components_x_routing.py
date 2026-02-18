@@ -7,6 +7,7 @@ import pytest
 from bot.router_components.x_routing import (
     canonicalize_twitter_status_url,
     collect_x_candidate_urls,
+    append_embed_attr_url_if_present,
     extract_fxtwitter_tweet_node,
     extract_x_api_primary_text,
     normalize_x_api_text,
@@ -553,6 +554,20 @@ def test_collect_x_candidate_urls_for_source_types() -> None:
     att_urls = collect_x_candidate_urls(att_item)
     assert "https://video.twimg.com/ext_tw_video/att.mp4" in att_urls
     assert "https://cdn.discordapp.com/proxy" in att_urls
+
+
+def test_append_embed_attr_url_if_present() -> None:
+    urls: list[str] = []
+    embed = SimpleNamespace(
+        video=SimpleNamespace(url="https://video.twimg.com/ext_tw_video/abc"),
+        image=SimpleNamespace(url="https://pbs.twimg.com/media/xyz.jpg"),
+        thumbnail=None,
+    )
+    append_embed_attr_url_if_present(urls, embed, "video")
+    append_embed_attr_url_if_present(urls, embed, "image")
+    append_embed_attr_url_if_present(urls, embed, "thumbnail")
+    assert "https://video.twimg.com/ext_tw_video/abc" in urls
+    assert "https://pbs.twimg.com/media/xyz.jpg" in urls
 
 
 def test_twitter_host_and_media_path_helpers() -> None:
