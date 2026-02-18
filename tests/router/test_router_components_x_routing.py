@@ -88,6 +88,7 @@ from bot.router_components.x_routing import (
     extract_url_path,
     is_twitter_url,
     normalize_x_host,
+    x_host_aliases,
     normalize_x_path,
     normalize_x_url,
     parse_twitter_status_id,
@@ -424,6 +425,12 @@ def test_normalize_x_host() -> None:
     assert normalize_x_host("mobile.twitter.com") == "x.com"
     assert normalize_x_host("www.fxtwitter.com") == "x.com"
     assert normalize_x_host("example.com") == "example.com"
+
+
+def test_x_host_aliases() -> None:
+    aliases = x_host_aliases()
+    assert "mobile.twitter.com" in aliases
+    assert "vxtwitter.com" in aliases
 
 
 def test_is_twitter_thumbnail_host() -> None:

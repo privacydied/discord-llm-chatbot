@@ -220,9 +220,9 @@ def normalize_x_url(url: str) -> str:
         return url
 
 
-def normalize_x_host(host: str) -> str:
-    """Normalize known Twitter/X alias hosts to canonical x.com host."""
-    aliases = {
+def x_host_aliases() -> set[str]:
+    """Return hosts that normalize to canonical x.com."""
+    return {
         "mobile.twitter.com",
         "www.twitter.com",
         build_syndication_twitter_host(),
@@ -235,7 +235,11 @@ def normalize_x_host(host: str) -> str:
         "fixupx.com",
         "www.fixupx.com",
     }
-    if host in aliases:
+
+
+def normalize_x_host(host: str) -> str:
+    """Normalize known Twitter/X alias hosts to canonical x.com host."""
+    if host in x_host_aliases():
         return build_syndication_x_host()
     return host
 
