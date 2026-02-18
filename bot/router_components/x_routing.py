@@ -568,13 +568,18 @@ def extract_syndication_base_text(node: Any) -> str:
         return ""
     note = node.get("note_tweet") or {}
     base_text = (
-        (note.get("text") if isinstance(note, dict) else None)
+        extract_note_tweet_text(note)
         or (node.get("legacy", {}) or {}).get("full_text")
         or node.get("full_text")
         or node.get("text")
         or ""
     )
     return (base_text or "").strip()
+
+
+def extract_note_tweet_text(note: Any) -> Optional[str]:
+    """Extract text field from note_tweet payload when it is a dict."""
+    return note.get("text") if isinstance(note, dict) else None
 
 
 def merge_syndication_base_with_article(

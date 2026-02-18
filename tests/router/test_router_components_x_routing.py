@@ -100,6 +100,7 @@ from bot.router_components.x_routing import (
     has_news_action_type,
     is_tco_pointer_text,
     extract_syndication_base_text,
+    extract_note_tweet_text,
     merge_syndication_base_with_article,
     base_text_contains_tco_link,
     extract_syndication_text,
@@ -1648,6 +1649,12 @@ def test_extract_syndication_base_text_precedence() -> None:
     )
     assert extract_syndication_base_text({"text": " text "}) == "text"
     assert extract_syndication_base_text(None) == ""
+
+
+def test_extract_note_tweet_text() -> None:
+    assert extract_note_tweet_text({"text": "note"}) == "note"
+    assert extract_note_tweet_text({"x": 1}) is None
+    assert extract_note_tweet_text("bad") is None
 
 
 def test_merge_syndication_base_with_article_variants() -> None:
