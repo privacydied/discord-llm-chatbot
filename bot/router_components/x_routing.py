@@ -547,7 +547,7 @@ def syndication_needs_article_hydration(
             or str(syn.get("full_text") or "").strip()
             or str((syn.get("legacy") or {}).get("full_text") or "").strip()
         )
-        if bool(re.fullmatch(r"https?://t\.co/[A-Za-z0-9]+", txt)):
+        if is_tco_pointer_text(txt):
             return True
     return False
 
@@ -555,6 +555,11 @@ def syndication_needs_article_hydration(
 def has_news_action_type(syn: Dict[str, Any]) -> bool:
     """Return True when syndication payload includes a non-empty news action type."""
     return bool(str(syn.get("news_action_type") or "").strip())
+
+
+def is_tco_pointer_text(text: str) -> bool:
+    """Return True when text is exactly one t.co pointer URL."""
+    return bool(re.fullmatch(r"https?://t\.co/[A-Za-z0-9]+", text))
 
 
 def extract_syndication_base_text(node: Any) -> str:

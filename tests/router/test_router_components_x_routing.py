@@ -98,6 +98,7 @@ from bot.router_components.x_routing import (
     extract_x_article_text,
     syndication_needs_article_hydration,
     has_news_action_type,
+    is_tco_pointer_text,
     extract_syndication_base_text,
     merge_syndication_base_with_article,
     base_text_contains_tco_link,
@@ -1614,6 +1615,13 @@ def test_has_news_action_type() -> None:
     assert has_news_action_type({"news_action_type": "article"}) is True
     assert has_news_action_type({"news_action_type": "   "}) is False
     assert has_news_action_type({}) is False
+
+
+def test_is_tco_pointer_text() -> None:
+    assert is_tco_pointer_text("https://t.co/abc123") is True
+    assert is_tco_pointer_text("http://t.co/abc123") is True
+    assert is_tco_pointer_text("https://t.co/abc123 extra") is False
+    assert is_tco_pointer_text("hello https://t.co/abc123") is False
 
 
 def test_extract_syndication_base_text_precedence() -> None:
