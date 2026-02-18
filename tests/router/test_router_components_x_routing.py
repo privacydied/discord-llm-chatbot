@@ -91,6 +91,7 @@ from bot.router_components.x_routing import (
     normalize_stt_error_value,
     resolve_caption_only_base_text,
     resolve_video_stt_error_base_text,
+    normalize_base_text_value,
     syndication_article_has_blocks,
     extract_x_article_text,
     syndication_needs_article_hydration,
@@ -1513,6 +1514,12 @@ def test_resolve_video_stt_error_base_text_preserves_router_precedence() -> None
         )
         == ""
     )
+
+
+def test_normalize_base_text_value() -> None:
+    assert normalize_base_text_value("  hello ") == "hello"
+    assert normalize_base_text_value("") == ""
+    assert normalize_base_text_value(None) == ""
 
 
 def test_syndication_article_has_blocks_variants() -> None:

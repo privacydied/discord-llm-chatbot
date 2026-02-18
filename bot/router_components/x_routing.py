@@ -443,7 +443,7 @@ def resolve_caption_only_base_text(
     base_text: Optional[str],
 ) -> str:
     """Resolve caption-only base text using legacy precedence and strip semantics."""
-    return (api_text or tweet_text or base_text or "").strip()
+    return normalize_base_text_value(api_text or tweet_text or base_text or "")
 
 
 def resolve_video_stt_error_base_text(
@@ -452,7 +452,12 @@ def resolve_video_stt_error_base_text(
     base_text: Optional[str],
 ) -> str:
     """Resolve video STT-error base text using legacy precedence and strip semantics."""
-    return (tweet_text or base_text or "").strip()
+    return normalize_base_text_value(tweet_text or base_text or "")
+
+
+def normalize_base_text_value(value: Optional[str]) -> str:
+    """Normalize base text value using router strip semantics."""
+    return (value or "").strip()
 
 
 def syndication_article_has_blocks(article_node: Any) -> bool:
