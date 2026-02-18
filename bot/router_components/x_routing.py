@@ -160,6 +160,11 @@ def is_tweet_media_url(url: str) -> bool:
     if is_poster_tweet_media_path(path):
         return False
 
+    return has_tweet_media_path_segment(path)
+
+
+def has_tweet_media_path_segment(path: str) -> bool:
+    """Return True when path contains the canonical /media/ segment."""
     return "/media/" in path
 
 
