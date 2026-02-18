@@ -1816,9 +1816,14 @@ def parse_image_host(image_url: str) -> str:
 
 def resolve_first_image_url(image_urls: List[str]) -> str:
     """Resolve first image URL from list preserving legacy failure behavior."""
+    return first_list_item_or_empty(image_urls)
+
+
+def first_list_item_or_empty(items: List[str]) -> str:
+    """Return first list item when present; otherwise empty string."""
     try:
-        if image_urls:
-            return image_urls[0]
+        if items:
+            return items[0]
     except Exception:
         return ""
     return ""

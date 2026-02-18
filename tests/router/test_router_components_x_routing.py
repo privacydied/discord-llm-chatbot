@@ -271,6 +271,7 @@ from bot.router_components.x_routing import (
     resolve_first_image_host,
     parse_image_host,
     resolve_first_image_url,
+    first_list_item_or_empty,
     probed_image_urls_or_empty,
     normalize_probed_image_urls,
     build_twitter_image_probe_result,
@@ -3061,6 +3062,11 @@ def test_parse_image_host_variants() -> None:
 def test_resolve_first_image_url_variants() -> None:
     assert resolve_first_image_url(["u1", "u2"]) == "u1"
     assert resolve_first_image_url([]) == ""
+
+
+def test_first_list_item_or_empty_variants() -> None:
+    assert first_list_item_or_empty(["u1", "u2"]) == "u1"
+    assert first_list_item_or_empty([]) == ""
 
 
 def test_normalize_probed_image_urls_variants() -> None:
