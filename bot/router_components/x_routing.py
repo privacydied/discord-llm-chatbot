@@ -1831,10 +1831,9 @@ def build_syndication_tweet_result_path() -> str:
 
 def syndication_cache_ttl_s(default_ttl_s: float, cached: Any) -> float:
     """Compute syndication cache TTL with shorter cap for negative entries."""
-    ttl = default_ttl_s
-    if cached.get(build_syndication_negative_cache_key()):
-        ttl = syndication_negative_cache_ttl_value(default_ttl_s)
-    return ttl
+    if syndication_cache_has_negative_flag(cached):
+        return syndication_negative_cache_ttl_value(default_ttl_s)
+    return default_ttl_s
 
 
 def syndication_negative_cache_ttl_value(default_ttl_s: float) -> float:
@@ -1865,7 +1864,8 @@ def build_syndication_cache_data_key() -> str:
 def syndication_cache_is_fresh(now_s: float, default_ttl_s: float, cached: Any) -> bool:
     """Return True when syndication cache entry is still fresh under TTL policy."""
     ttl = syndication_cache_ttl_s(default_ttl_s, cached)
-    return (now_s - syndication_cache_timestamp_value(cached)) < ttl
+    age_s = syndication_cache_age_s(now_s, cached)
+    return syndication_cache_age_is_fresh(age_s, ttl)
 
 
 def syndication_cache_timestamp_value(cached: Any) -> float:
@@ -1886,27 +1886,33 @@ def classify_syndication_cache_hit(
 
 def build_syndication_cache_hit_label(cached: Any) -> str:
     """Return cache-hit label for a fresh cache payload."""
-    return (
-        build_syndication_negative_cache_hit_label()
-        if cached.get(build_syndication_negative_cache_key())
-        else build_syndication_data_cache_hit_label()
+    return syndication_cache_hit_label_for_negative_flag(
+        syndication_cache_has_negative_flag(cached)
     )
 
 
 def build_syndication_negative_cache_entry(now_s: float) -> Dict[str, Any]:
     """Build negative syndication cache entry with timestamp."""
-    return {
-        **build_syndication_negative_cache_flag_field(),
-        **build_syndication_cache_timestamp_field(now_s),
-    }
+    return build_syndication_cache_entry_from_fields(
+        build_syndication_negative_cache_flag_field(),
+        build_syndication_cache_timestamp_field(now_s),
+    )
 
 
 def build_syndication_cache_entry(data: Any, now_s: float) -> Dict[str, Any]:
     """Build positive syndication cache entry with timestamp."""
-    return {
-        **build_syndication_cache_data_field(data),
-        **build_syndication_cache_timestamp_field(now_s),
-    }
+    return build_syndication_cache_entry_from_fields(
+        build_syndication_cache_data_field(data),
+        build_syndication_cache_timestamp_field(now_s),
+    )
+
+
+def build_syndication_cache_entry_from_fields(*fields: Dict[str, Any]) -> Dict[str, Any]:
+    """Build cache entry map by merging ordered field fragments."""
+    entry: Dict[str, Any] = {}
+    for field in fields:
+        entry.update(field)
+    return entry
 
 
 def build_syndication_cache_timestamp_field(now_s: float) -> Dict[str, float]:
@@ -1932,6 +1938,30 @@ def build_syndication_negative_cache_hit_label() -> str:
 def build_syndication_data_cache_hit_label() -> str:
     """Return cache-hit label for data-backed syndication cache entries."""
     return build_syndication_cache_data_key()
+
+
+def syndication_cache_hit_label_for_negative_flag(is_negative: bool) -> str:
+    """Resolve cache-hit label from a negative-cache boolean flag."""
+    return (
+        build_syndication_negative_cache_hit_label()
+        if is_negative
+        else build_syndication_data_cache_hit_label()
+    )
+
+
+def syndication_cache_has_negative_flag(cached: Any) -> bool:
+    """Return True when cache payload has a truthy negative-cache flag."""
+    return bool(cached.get(build_syndication_negative_cache_key()))
+
+
+def syndication_cache_age_s(now_s: float, cached: Any) -> float:
+    """Return cache age in seconds from current time and cached timestamp."""
+    return now_s - syndication_cache_timestamp_value(cached)
+
+
+def syndication_cache_age_is_fresh(age_s: float, ttl_s: float) -> bool:
+    """Return True when cache age falls strictly under TTL budget."""
+    return age_s < ttl_s
 
 
 def build_syndication_endpoint_url(base: str, endpoint: str) -> str:

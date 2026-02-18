@@ -298,9 +298,14 @@ from bot.router_components.x_routing import (
     syndication_cache_timestamp_value,
     syndication_cache_is_fresh,
     build_syndication_cache_hit_label,
+    syndication_cache_hit_label_for_negative_flag,
+    syndication_cache_has_negative_flag,
+    syndication_cache_age_s,
+    syndication_cache_age_is_fresh,
     classify_syndication_cache_hit,
     build_syndication_negative_cache_entry,
     build_syndication_cache_entry,
+    build_syndication_cache_entry_from_fields,
     build_syndication_cache_timestamp_field,
     build_syndication_negative_cache_flag_field,
     build_syndication_cache_data_field,
@@ -3392,6 +3397,18 @@ def test_build_syndication_cache_hit_label_constants() -> None:
 def test_build_syndication_cache_hit_label_variants() -> None:
     assert build_syndication_cache_hit_label({"neg": True}) == "neg"
     assert build_syndication_cache_hit_label({"neg": False, "data": {}}) == "data"
+    assert build_syndication_cache_hit_label({"data": {}}) == "data"
+
+
+def test_syndication_cache_hit_label_for_negative_flag() -> None:
+    assert syndication_cache_hit_label_for_negative_flag(True) == "neg"
+    assert syndication_cache_hit_label_for_negative_flag(False) == "data"
+
+
+def test_syndication_cache_has_negative_flag() -> None:
+    assert syndication_cache_has_negative_flag({"neg": True}) is True
+    assert syndication_cache_has_negative_flag({"neg": False}) is False
+    assert syndication_cache_has_negative_flag({}) is False
 
 
 def test_syndication_cache_ttl_s_preserves_attribute_error_for_bad_cache() -> None:
@@ -3418,9 +3435,26 @@ def test_syndication_cache_is_fresh_respects_ttl_policy() -> None:
     )
 
 
+def test_syndication_cache_is_fresh_at_ttl_boundary() -> None:
+    assert (
+        syndication_cache_is_fresh(
+            1_000.0,
+            600.0,
+            {"ts": 400.0, "neg": False},
+        )
+        is False
+    )
+
+
 def test_syndication_cache_timestamp_value() -> None:
     assert syndication_cache_timestamp_value({"ts": 123.4}) == 123.4
     assert syndication_cache_timestamp_value({}) == 0.0
+
+
+def test_syndication_cache_age_helpers() -> None:
+    assert syndication_cache_age_s(1_000.0, {"ts": 850.0}) == 150.0
+    assert syndication_cache_age_is_fresh(150.0, 200.0) is True
+    assert syndication_cache_age_is_fresh(200.0, 200.0) is False
 
 
 def test_syndication_cache_is_fresh_preserves_ts_parse_error() -> None:
@@ -3485,6 +3519,17 @@ def test_build_syndication_cache_entry_shape() -> None:
     data = {"text": "hello"}
     assert build_syndication_cache_entry(data, 321.0) == {
         build_syndication_cache_data_key(): data,
+        "ts": 321.0,
+    }
+
+
+def test_build_syndication_cache_entry_from_fields_merges_in_order() -> None:
+    assert build_syndication_cache_entry_from_fields(
+        {"data": {"text": "hello"}},
+        {"ts": 321.0},
+        {"data": {"text": "updated"}},
+    ) == {
+        "data": {"text": "updated"},
         "ts": 321.0,
     }
 
