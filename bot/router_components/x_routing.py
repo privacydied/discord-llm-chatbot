@@ -2879,6 +2879,11 @@ def matched_status_raw_value_source(raw_url: str) -> str:
 
 def matched_status_raw_value_result(raw_url: str) -> str:
     """Return value used by matched-status raw-value source helper."""
+    return matched_status_raw_value_for_result(raw_url)
+
+
+def matched_status_raw_value_for_result(raw_url: str) -> str:
+    """Return matched status raw URL via result handoff helper."""
     return raw_url
 
 

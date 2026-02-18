@@ -68,6 +68,7 @@ from bot.router_components.x_routing import (
     matched_status_raw_value,
     matched_status_raw_value_source,
     matched_status_raw_value_result,
+    matched_status_raw_value_for_result,
     append_matched_x_url,
     matched_x_raw_value,
     matched_x_raw_value_source,
@@ -1393,6 +1394,10 @@ def test_matched_status_raw_value_source_identity() -> None:
 
 def test_matched_status_raw_value_result_identity() -> None:
     assert matched_status_raw_value_result("https://x.com/u/status/1") == "https://x.com/u/status/1"
+
+
+def test_matched_status_raw_value_for_result_identity() -> None:
+    assert matched_status_raw_value_for_result("https://x.com/u/status/1") == "https://x.com/u/status/1"
 
 
 def test_append_matched_x_url_only_appends_unique_canonical() -> None:
