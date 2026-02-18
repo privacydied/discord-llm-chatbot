@@ -100,6 +100,7 @@ from bot.router_components.x_routing import (
     normalize_x_url,
     compose_normalized_x_url,
     compose_canonical_status_url,
+    twitter_url_domain_markers,
     primary_tweet_id_hint_keys,
     primary_tweet_id_param_sources,
     parse_twitter_status_id,
@@ -418,6 +419,12 @@ def test_is_twitter_url_and_status_id_parsing() -> None:
     assert is_twitter_url(url) is True
     assert parse_twitter_status_id(url) == "2022790791047823773"
     assert is_twitter_url("https://example.com/page") is False
+
+
+def test_twitter_url_domain_markers() -> None:
+    markers = twitter_url_domain_markers()
+    assert "x.com/" in markers
+    assert "twitter.com/" in markers
 
 
 def test_primary_tweet_id_hint_keys() -> None:

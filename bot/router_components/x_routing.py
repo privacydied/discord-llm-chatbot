@@ -77,15 +77,17 @@ def is_twitter_url(url: str) -> bool:
         low = u.lower()
     except Exception:
         return False
-    return any(
-        d in low
-        for d in (
-            "twitter.com/",
-            "x.com/",
-            "vxtwitter.com/",
-            "fxtwitter.com/",
-            "fixupx.com/",
-        )
+    return any(d in low for d in twitter_url_domain_markers())
+
+
+def twitter_url_domain_markers() -> Tuple[str, ...]:
+    """Return domain markers used for lightweight Twitter/X URL detection."""
+    return (
+        "twitter.com/",
+        "x.com/",
+        "vxtwitter.com/",
+        "fxtwitter.com/",
+        "fixupx.com/",
     )
 
 
