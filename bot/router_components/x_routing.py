@@ -348,7 +348,7 @@ def resolve_twitter_status_id(
     parse_status_id: Optional[Callable[[str], Optional[str]]] = None,
 ) -> str:
     """Resolve status ID from explicit hint first, otherwise parse from URL."""
-    parser = parse_status_id or parse_twitter_status_id
+    parser = resolve_twitter_status_parser(parse_status_id)
     return tweet_id or parser(url) or ""
 
 
@@ -358,8 +358,15 @@ def is_twitter_status_url(
     parse_status_id: Optional[Callable[[str], Optional[str]]] = None,
 ) -> bool:
     """Check whether URL contains a parseable Twitter/X status id."""
-    parser = parse_status_id or parse_twitter_status_id
+    parser = resolve_twitter_status_parser(parse_status_id)
     return parser(url) is not None
+
+
+def resolve_twitter_status_parser(
+    parse_status_id: Optional[Callable[[str], Optional[str]]] = None,
+) -> Callable[[str], Optional[str]]:
+    """Resolve status ID parser, defaulting to built-in Twitter status parser."""
+    return parse_status_id or parse_twitter_status_id
 
 
 def classify_stt_error_reason(stt_err: Optional[str]) -> str:

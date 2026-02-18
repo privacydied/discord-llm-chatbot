@@ -231,6 +231,7 @@ from bot.router_components.x_routing import (
     syndication_photo_url_is_usable,
     resolve_twitter_status_id,
     is_twitter_status_url,
+    resolve_twitter_status_parser,
     stt_result_has_transcription,
     stt_transcription_value_is_present,
     unwrap_x_media_url,
@@ -1369,6 +1370,14 @@ def test_is_twitter_status_url_uses_parser() -> None:
         )
         is False
     )
+
+
+def test_resolve_twitter_status_parser_default_and_override() -> None:
+    default_parser = resolve_twitter_status_parser()
+    assert default_parser is parse_twitter_status_id
+
+    custom = lambda _u: "999"
+    assert resolve_twitter_status_parser(custom) is custom
 
 
 def test_classify_stt_error_reason_matches_router_semantics() -> None:
