@@ -262,11 +262,16 @@ def extract_x_api_primary_tweet(api_data: Any) -> Dict[str, Any]:
         return {}
     data = api_data.get("data")
     if isinstance(data, list):
-        first = data[0] if data else {}
+        first = extract_x_api_first_item(data)
         return first if isinstance(first, dict) else {}
     if isinstance(data, dict):
         return data
     return {}
+
+
+def extract_x_api_first_item(data: List[Any]) -> Any:
+    """Return first item from API data list or empty dict when list is empty."""
+    return data[0] if data else {}
 
 
 def extract_x_api_primary_text(api_data: Any) -> str:

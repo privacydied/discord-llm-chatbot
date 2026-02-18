@@ -8,6 +8,7 @@ from bot.router_components.x_routing import (
     collect_x_candidate_urls,
     extract_fxtwitter_tweet_node,
     extract_x_api_primary_text,
+    extract_x_api_first_item,
     extract_x_api_primary_tweet,
     extract_sparse_media_resolution,
     extract_raw_urls_from_texts,
@@ -1242,6 +1243,11 @@ def test_extract_x_api_primary_tweet_variants() -> None:
     assert extract_x_api_primary_tweet({"data": []}) == {}
     assert extract_x_api_primary_tweet({"data": ["bad"]}) == {}
     assert extract_x_api_primary_tweet(None) == {}
+
+
+def test_extract_x_api_first_item_variants() -> None:
+    assert extract_x_api_first_item([{"id": "1"}]) == {"id": "1"}
+    assert extract_x_api_first_item([]) == {}
 
 
 def test_extract_x_api_primary_text_variants() -> None:
