@@ -408,8 +408,13 @@ def build_caption_only_fallback_log_payload() -> Dict[str, Any]:
     """Build structured payload for caption-only fallback breadcrumb logging."""
     return {
         "event": "fallback",
-        "detail": {"kind": "caption_only"},
+        "detail": build_caption_only_fallback_detail(),
     }
+
+
+def build_caption_only_fallback_detail() -> Dict[str, Any]:
+    """Build detail object for caption-only fallback breadcrumb payloads."""
+    return {"kind": "caption_only"}
 
 
 def build_x_video_stt_error_result_payload(

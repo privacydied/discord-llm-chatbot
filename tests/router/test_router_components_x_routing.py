@@ -86,6 +86,7 @@ from bot.router_components.x_routing import (
     build_stt_fail_log_payload,
     build_stt_fail_detail,
     build_caption_only_fallback_log_payload,
+    build_caption_only_fallback_detail,
     build_x_video_stt_error_result_payload,
     resolve_caption_only_base_text,
     resolve_video_stt_error_base_text,
@@ -1426,6 +1427,10 @@ def test_build_caption_only_fallback_log_payload_shape() -> None:
         "event": "fallback",
         "detail": {"kind": "caption_only"},
     }
+
+
+def test_build_caption_only_fallback_detail_shape() -> None:
+    assert build_caption_only_fallback_detail() == {"kind": "caption_only"}
 
 
 def test_build_x_video_stt_error_result_payload_defaults_and_shape() -> None:
