@@ -102,6 +102,7 @@ from bot.router_components.x_routing import (
     parse_twitter_status_id,
     is_unwrap_x_media_proxy_host,
     is_unwrap_x_media_candidate_url,
+    parse_unwrap_x_media_params,
     first_unwrap_x_media_candidate,
     unwrap_x_media_param_keys,
     classify_stt_error_reason,
@@ -1576,6 +1577,12 @@ def test_first_unwrap_x_media_candidate() -> None:
         == "https://video.twimg.com/ext_tw_video/abc.mp4"
     )
     assert first_unwrap_x_media_candidate({}) == ""
+
+
+def test_parse_unwrap_x_media_params() -> None:
+    parsed = urlparse("https://api.fxtwitter.com/dl?u=https%3A%2F%2Fvideo.twimg.com%2Fv.mp4")
+    params = parse_unwrap_x_media_params(parsed)
+    assert params.get("u") == ["https://video.twimg.com/v.mp4"]
 
 
 def test_is_unwrap_x_media_proxy_host() -> None:

@@ -292,13 +292,18 @@ def unwrap_x_media_url(url: str) -> str:
         parsed = urlparse(url)
         host = extract_url_host_lower(url)
         if is_unwrap_x_media_proxy_host(host):
-            params = parse_qs(parsed.query or "")
+            params = parse_unwrap_x_media_params(parsed)
             candidate = first_unwrap_x_media_candidate(params)
             if is_unwrap_x_media_candidate_url(candidate):
                 return candidate
         return url
     except Exception:
         return url
+
+
+def parse_unwrap_x_media_params(parsed: Any) -> Dict[str, List[str]]:
+    """Parse query params used for unwrap-x media resolution."""
+    return parse_qs(str(getattr(parsed, "query", "") or ""))
 
 
 def first_unwrap_x_media_candidate(params: Dict[str, List[str]]) -> str:
