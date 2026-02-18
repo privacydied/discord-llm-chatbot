@@ -1652,7 +1652,12 @@ def format_syndication_error_fallback(url: str, syn_data: Any) -> str:
 
 def format_syndication_error_payload_repr(syn_data: Any) -> str:
     """Return truncated string representation for syndication fallback payloads."""
-    return str(syn_data)[:4000]
+    return str(syn_data)[:format_syndication_error_payload_max_chars()]
+
+
+def format_syndication_error_payload_max_chars() -> int:
+    """Return legacy max payload repr length for syndication fallback formatting."""
+    return 4000
 
 
 def extract_syndication_photo_urls(photos: Any) -> List[str]:

@@ -243,6 +243,7 @@ from bot.router_components.x_routing import (
     format_syndication_header_stamp,
     format_syndication_error_fallback,
     format_syndication_error_payload_repr,
+    format_syndication_error_payload_max_chars,
     extract_syndication_photo_urls,
     extract_syndication_photo_url_from_dict,
     extract_syndication_photo_urls_from_item,
@@ -2891,6 +2892,10 @@ def test_format_syndication_error_fallback_truncates_payload_repr() -> None:
 
 def test_format_syndication_error_payload_repr_truncates() -> None:
     assert len(format_syndication_error_payload_repr({"blob": "a" * 5000})) == 4000
+
+
+def test_format_syndication_error_payload_max_chars_constant() -> None:
+    assert format_syndication_error_payload_max_chars() == 4000
 
 
 def test_extract_syndication_photo_urls_variants() -> None:
