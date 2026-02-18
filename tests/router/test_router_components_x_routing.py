@@ -157,6 +157,7 @@ from bot.router_components.x_routing import (
     build_syndication_fetch_params_core,
     build_syndication_fetch_params_core_map,
     build_syndication_fetch_params_with_optional_dnt,
+    maybe_add_syndication_dnt_param,
     build_syndication_fetch_params,
     build_syndication_fetch_params_variants_list,
     build_syndication_fetch_params_variants,
@@ -2401,6 +2402,16 @@ def test_build_syndication_fetch_params_with_optional_dnt() -> None:
     core = {"id": "2022790791047823773", "lang": "en"}
     assert build_syndication_fetch_params_with_optional_dnt(dict(core), False) == core
     assert build_syndication_fetch_params_with_optional_dnt(dict(core), True) == {
+        "id": "2022790791047823773",
+        "lang": "en",
+        "dnt": "false",
+    }
+
+
+def test_maybe_add_syndication_dnt_param() -> None:
+    core = {"id": "2022790791047823773", "lang": "en"}
+    assert maybe_add_syndication_dnt_param(params=dict(core), include_dnt=False) == core
+    assert maybe_add_syndication_dnt_param(params=dict(core), include_dnt=True) == {
         "id": "2022790791047823773",
         "lang": "en",
         "dnt": "false",

@@ -982,6 +982,18 @@ def build_syndication_fetch_params_with_optional_dnt(
     include_dnt: bool,
 ) -> Dict[str, str]:
     """Return params map with optional DNT flag mutation applied."""
+    return maybe_add_syndication_dnt_param(
+        params=params,
+        include_dnt=include_dnt,
+    )
+
+
+def maybe_add_syndication_dnt_param(
+    *,
+    params: Dict[str, str],
+    include_dnt: bool,
+) -> Dict[str, str]:
+    """Mutate params with DNT entry when include_dnt is enabled."""
     if include_dnt:
         params[build_syndication_dnt_key()] = build_syndication_dnt_value()
     return params
