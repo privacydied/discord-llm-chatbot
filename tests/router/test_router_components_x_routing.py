@@ -81,6 +81,7 @@ from bot.router_components.x_routing import (
     is_poster_tweet_media_path,
     has_tweet_media_path_segment,
     tweet_media_path_segment,
+    path_contains_tweet_media_segment,
     is_twitter_media_cdn,
     is_twitter_media_cdn_host,
     is_twitter_thumbnail_host,
@@ -546,6 +547,11 @@ def test_tweet_media_path_segment() -> None:
 def test_has_tweet_media_path_segment() -> None:
     assert has_tweet_media_path_segment("/media/abc123.jpg")
     assert not has_tweet_media_path_segment("/tweet_video_thumb/123/img.jpg")
+
+
+def test_path_contains_tweet_media_segment() -> None:
+    assert path_contains_tweet_media_segment("/media/abc123.jpg")
+    assert not path_contains_tweet_media_segment("/profile_images/123/avatar.jpg")
 
 
 def test_extract_x_status_urls_from_text() -> None:
