@@ -102,6 +102,7 @@ from bot.router_components.x_routing import (
     parse_twitter_status_id,
     is_unwrap_x_media_proxy_host,
     unwrap_x_media_proxy_hosts,
+    unwrap_x_media_candidate_url_prefix,
     is_unwrap_x_media_candidate_url,
     parse_unwrap_x_media_params,
     first_unwrap_x_media_candidate,
@@ -1596,6 +1597,10 @@ def test_is_unwrap_x_media_proxy_host() -> None:
     assert is_unwrap_x_media_proxy_host("api.fxtwitter.com")
     assert is_unwrap_x_media_proxy_host("api.vxtwitter.com")
     assert not is_unwrap_x_media_proxy_host("api.twitter.com")
+
+
+def test_unwrap_x_media_candidate_url_prefix() -> None:
+    assert unwrap_x_media_candidate_url_prefix() == "http"
 
 
 def test_is_unwrap_x_media_candidate_url() -> None:

@@ -330,9 +330,14 @@ def is_unwrap_x_media_proxy_host(host: str) -> bool:
     return host in unwrap_x_media_proxy_hosts()
 
 
+def unwrap_x_media_candidate_url_prefix() -> str:
+    """Return required prefix for absolute unwrap-x media URLs."""
+    return "http"
+
+
 def is_unwrap_x_media_candidate_url(candidate: str) -> bool:
     """Return True when unwrapped candidate looks like an absolute HTTP URL."""
-    return candidate.startswith("http")
+    return candidate.startswith(unwrap_x_media_candidate_url_prefix())
 
 
 def extract_x_api_primary_tweet(api_data: Any) -> Dict[str, Any]:
