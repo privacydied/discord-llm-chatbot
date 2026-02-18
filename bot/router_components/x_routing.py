@@ -425,10 +425,15 @@ def build_x_video_stt_error_result_payload(
     """Build the canonical STT error payload for video tweet formatting."""
     return {
         "transcription": None,
-        "error": stt_error or "transcription_failed",
+        "error": normalize_stt_error_value(stt_error),
         "media_kind": "video",
         "url": url,
     }
+
+
+def normalize_stt_error_value(stt_error: Optional[str]) -> str:
+    """Normalize STT error token to canonical fallback value."""
+    return stt_error or "transcription_failed"
 
 
 def resolve_caption_only_base_text(

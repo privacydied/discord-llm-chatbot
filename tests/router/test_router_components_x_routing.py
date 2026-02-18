@@ -88,6 +88,7 @@ from bot.router_components.x_routing import (
     build_caption_only_fallback_log_payload,
     build_caption_only_fallback_detail,
     build_x_video_stt_error_result_payload,
+    normalize_stt_error_value,
     resolve_caption_only_base_text,
     resolve_video_stt_error_base_text,
     syndication_article_has_blocks,
@@ -1453,6 +1454,12 @@ def test_build_x_video_stt_error_result_payload_defaults_and_shape() -> None:
         "media_kind": "video",
         "url": "https://x.com/u/status/2",
     }
+
+
+def test_normalize_stt_error_value() -> None:
+    assert normalize_stt_error_value("network_error") == "network_error"
+    assert normalize_stt_error_value("") == "transcription_failed"
+    assert normalize_stt_error_value(None) == "transcription_failed"
 
 
 def test_resolve_caption_only_base_text_preserves_router_precedence() -> None:
