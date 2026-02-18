@@ -12,6 +12,7 @@ from bot.router_components.x_routing import (
     extract_x_api_first_item,
     extract_x_api_primary_tweet,
     extract_sparse_media_resolution,
+    normalize_sparse_url_value,
     extract_raw_urls_from_texts,
     extract_x_status_urls_from_text,
     filter_canonical_x_urls,
@@ -1278,6 +1279,12 @@ def test_extract_sparse_media_resolution_defaults_and_sanitizes() -> None:
         {"kind": "", "images": ["i1"], "url": "https://x.com/c"},
         default_url="https://x.com/d",
     ) == ("unknown", ["i1"], "https://x.com/c")
+
+
+def test_normalize_sparse_url_value() -> None:
+    assert normalize_sparse_url_value("https://x.com/a", default_url="https://x.com/b") == "https://x.com/a"
+    assert normalize_sparse_url_value("", default_url="https://x.com/b") == "https://x.com/b"
+    assert normalize_sparse_url_value(None, default_url="https://x.com/b") == "https://x.com/b"
 
 
 def test_extract_fxtwitter_tweet_node_variants() -> None:
