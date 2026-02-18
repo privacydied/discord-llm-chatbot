@@ -157,12 +157,7 @@ def is_tweet_media_url(url: str) -> bool:
     if is_blocked_tweet_media_path(path):
         return False
 
-    poster_prefixes = (
-        "/amplify_video_thumb/",
-        "/ext_tw_video_thumb/",
-        "/tweet_video_thumb/",
-    )
-    if any(prefix in path for prefix in poster_prefixes):
+    if is_poster_tweet_media_path(path):
         return False
 
     return "/media/" in path
@@ -178,6 +173,16 @@ def is_blocked_tweet_media_path(path: str) -> bool:
         "/emoji/",
     )
     return any(path.startswith(prefix) for prefix in blocked_prefixes)
+
+
+def is_poster_tweet_media_path(path: str) -> bool:
+    """Return True when path points to poster/thumbnail tweet-media assets."""
+    poster_prefixes = (
+        "/amplify_video_thumb/",
+        "/ext_tw_video_thumb/",
+        "/tweet_video_thumb/",
+    )
+    return any(prefix in path for prefix in poster_prefixes)
 
 
 def normalize_x_url(url: str) -> str:
