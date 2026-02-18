@@ -257,6 +257,7 @@ from bot.router_components.x_routing import (
     stt_transcription_value_is_present,
     unwrap_x_media_url,
     x_syn_probe_budget_timeout_s,
+    x_syn_connect_read_timeout_s,
     x_syn_timeout_cap,
     x_syn_timeout_with_offset_and_cap,
     x_syn_quick_request_timeouts,
@@ -2971,6 +2972,11 @@ def test_x_syn_probe_budget_timeout_s_caps_and_offsets() -> None:
 def test_x_syn_timeout_cap() -> None:
     assert x_syn_timeout_cap(9.0, 3.0) == 3.0
     assert x_syn_timeout_cap(1.2, 3.0) == 1.2
+
+
+def test_x_syn_connect_read_timeout_s() -> None:
+    assert x_syn_connect_read_timeout_s(9.0) == 3.0
+    assert x_syn_connect_read_timeout_s(1.2) == 1.2
 
 
 def test_x_syn_timeout_with_offset_and_cap() -> None:
