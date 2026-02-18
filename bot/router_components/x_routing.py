@@ -637,7 +637,7 @@ def extract_syndication_article_text(
 def build_x_text_miss_log_payload(url: str) -> Dict[str, Any]:
     """Build structured breadcrumb payload when syndication text is empty."""
     return build_x_text_miss_payload(
-        primary=XApiClient.extract_tweet_id(url) or "",
+        primary=extract_primary_tweet_id(url) or "",
         layer="format",
         reason="empty_text",
     )

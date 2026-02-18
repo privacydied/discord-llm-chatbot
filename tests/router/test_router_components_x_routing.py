@@ -1762,6 +1762,16 @@ def test_build_x_text_miss_log_payload_shape_and_primary_id() -> None:
             "reason": "empty_text",
         },
     }
+    assert build_x_text_miss_log_payload(
+        "https://x.com/u/status/123#ptid=2023475721184907773"
+    ) == {
+        "event": "x.text.miss",
+        "detail": {
+            "primary": "2023475721184907773",
+            "layer": "format",
+            "reason": "empty_text",
+        },
+    }
 
 
 def test_build_x_text_miss_payload_accepts_explicit_fields() -> None:
