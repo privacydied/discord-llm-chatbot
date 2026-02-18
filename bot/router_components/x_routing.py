@@ -371,7 +371,12 @@ def resolve_twitter_status_parser(
 
 def classify_stt_error_reason(stt_err: Optional[str]) -> str:
     """Map STT status token to canonical fallback reason."""
-    return "no_speech" if stt_err != "error" else "error"
+    return "error" if is_stt_hard_error(stt_err) else "no_speech"
+
+
+def is_stt_hard_error(stt_err: Optional[str]) -> bool:
+    """Return True when STT status token is the canonical hard-error value."""
+    return stt_err == "error"
 
 
 def build_stt_fail_log_payload(

@@ -82,6 +82,7 @@ from bot.router_components.x_routing import (
     is_unwrap_x_media_candidate_url,
     unwrap_x_media_param_keys,
     classify_stt_error_reason,
+    is_stt_hard_error,
     build_stt_fail_log_payload,
     build_caption_only_fallback_log_payload,
     build_x_video_stt_error_result_payload,
@@ -1386,6 +1387,12 @@ def test_classify_stt_error_reason_matches_router_semantics() -> None:
     assert classify_stt_error_reason("timeout") == "no_speech"
     # Preserve legacy exact-match behavior (case-sensitive).
     assert classify_stt_error_reason("ERROR") == "no_speech"
+
+
+def test_is_stt_hard_error_matches_router_semantics() -> None:
+    assert is_stt_hard_error("error") is True
+    assert is_stt_hard_error("ERROR") is False
+    assert is_stt_hard_error(None) is False
 
 
 def test_build_stt_fail_log_payload_includes_optional_fields() -> None:
