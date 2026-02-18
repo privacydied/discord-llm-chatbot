@@ -224,7 +224,7 @@ def normalize_x_url(url: str) -> str:
     try:
         p = urlparse(url)
         host = normalize_x_host(normalize_parsed_netloc(p))
-        path = normalize_x_path(p.path or "")
+        path = normalize_x_path(normalize_parsed_path(p))
         return urlunparse(("https", host, path, "", "", ""))
     except Exception:
         return url
@@ -233,6 +233,11 @@ def normalize_x_url(url: str) -> str:
 def normalize_parsed_netloc(parsed: Any) -> str:
     """Normalize parsed URL netloc to lowercase string."""
     return str(getattr(parsed, "netloc", "") or "").lower()
+
+
+def normalize_parsed_path(parsed: Any) -> str:
+    """Normalize parsed URL path to a plain string."""
+    return str(getattr(parsed, "path", "") or "")
 
 
 def x_host_aliases() -> set[str]:
