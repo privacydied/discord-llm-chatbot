@@ -102,6 +102,9 @@ from bot.router_components.x_routing import (
     twitter_media_cdn_hosts,
     is_twitter_thumbnail_host,
     is_twitter_thumbnail_url,
+    parse_url_value,
+    parsed_netloc_lower_or_empty,
+    parsed_path_or_empty,
     twitter_thumbnail_hosts,
     host_in_set,
     url_host_is_in_set,
@@ -547,6 +550,22 @@ def test_parse_url_for_normalization() -> None:
     parsed = parse_url_for_normalization("https://x.com/user/status/1?s=20#frag")
     assert parsed.netloc == "x.com"
     assert parsed.path == "/user/status/1"
+
+
+def test_parse_url_value() -> None:
+    parsed = parse_url_value("https://x.com/user/status/1?s=20#frag")
+    assert parsed.netloc == "x.com"
+    assert parsed.path == "/user/status/1"
+
+
+def test_parsed_netloc_lower_or_empty() -> None:
+    parsed = urlparse("https://Mobile.Twitter.com/user/status/1?s=20")
+    assert parsed_netloc_lower_or_empty(parsed) == "mobile.twitter.com"
+
+
+def test_parsed_path_or_empty() -> None:
+    parsed = urlparse("https://x.com/user/status/1?s=20")
+    assert parsed_path_or_empty(parsed) == "/user/status/1"
 
 
 def test_resolve_normalized_x_parts() -> None:

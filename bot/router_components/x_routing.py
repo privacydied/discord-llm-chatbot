@@ -220,10 +220,25 @@ def append_attachment_urls_if_present(urls: List[str], attachment: Any) -> None:
         urls.append(proxy)
 
 
+def parse_url_value(url: Any) -> Any:
+    """Parse URL-like input into a parsed URL object."""
+    return urlparse(str(url))
+
+
+def parsed_netloc_lower_or_empty(parsed: Any) -> str:
+    """Return lowercase parsed netloc or empty string."""
+    return str(getattr(parsed, "netloc", "") or "").lower()
+
+
+def parsed_path_or_empty(parsed: Any) -> str:
+    """Return parsed path or empty string."""
+    return str(getattr(parsed, "path", "") or "")
+
+
 def extract_url_host_lower(url: str) -> str:
     """Parse a URL host and normalize to lowercase; return empty string on failure."""
     try:
-        return urlparse(url).netloc.lower()
+        return parsed_netloc_lower_or_empty(parse_url_value(url))
     except Exception:
         return ""
 
@@ -231,7 +246,7 @@ def extract_url_host_lower(url: str) -> str:
 def extract_url_path(url: str) -> str:
     """Parse a URL path; return empty string on failure."""
     try:
-        return urlparse(url).path or ""
+        return parsed_path_or_empty(parse_url_value(url))
     except Exception:
         return ""
 
@@ -387,7 +402,7 @@ def normalize_x_url(url: str) -> str:
 
 def parse_url_for_normalization(url: str) -> Any:
     """Parse URL for normalization helpers."""
-    return urlparse(url)
+    return parse_url_value(url)
 
 
 def resolve_normalized_x_parts(parsed: Any) -> Tuple[str, str]:
@@ -404,12 +419,12 @@ def compose_normalized_x_url(host: str, path: str) -> str:
 
 def normalize_parsed_netloc(parsed: Any) -> str:
     """Normalize parsed URL netloc to lowercase string."""
-    return str(getattr(parsed, "netloc", "") or "").lower()
+    return parsed_netloc_lower_or_empty(parsed)
 
 
 def normalize_parsed_path(parsed: Any) -> str:
     """Normalize parsed URL path to a plain string."""
-    return str(getattr(parsed, "path", "") or "")
+    return parsed_path_or_empty(parsed)
 
 
 def x_host_aliases() -> set[str]:
@@ -465,7 +480,7 @@ def unwrap_x_media_url(url: str) -> str:
 
 def parse_unwrap_x_media_url(url: str) -> Any:
     """Parse URL for unwrap-x media helpers."""
-    return urlparse(url)
+    return parse_url_value(url)
 
 
 def resolve_unwrap_x_media_host(url: str) -> str:
