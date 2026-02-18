@@ -322,6 +322,10 @@ from bot.router_components.x_routing import (
     has_any_mapping_key,
     syndication_media_hint_keys,
     format_syndication_body_text,
+    syndication_text_exceeds_body_limit,
+    syndication_body_max_chars,
+    syndication_body_truncate_chars,
+    syndication_ellipsis,
     format_syndication_truncated_text,
     format_syndication_missing_text_fallback,
     format_syndication_header_line,
@@ -329,6 +333,7 @@ from bot.router_components.x_routing import (
     format_syndication_header_media_hint,
     format_syndication_header_prefix,
     format_syndication_header_stamp,
+    format_syndication_header_parts,
     format_syndication_header_compose,
     format_syndication_error_fallback,
     format_syndication_error_payload_repr,
@@ -3679,6 +3684,14 @@ def test_format_syndication_body_text_variants() -> None:
     assert out.endswith("…")
 
 
+def test_syndication_body_text_limits() -> None:
+    assert syndication_body_max_chars() == 4000
+    assert syndication_body_truncate_chars() == 3990
+    assert syndication_ellipsis() == "…"
+    assert syndication_text_exceeds_body_limit("x" * 4000) is False
+    assert syndication_text_exceeds_body_limit("x" * 4001) is True
+
+
 def test_format_syndication_truncated_text_shape() -> None:
     out = format_syndication_truncated_text("x" * 5000)
     assert len(out) == 3991
@@ -3730,6 +3743,14 @@ def test_format_syndication_header_prefix_variants() -> None:
 def test_format_syndication_header_stamp_variants() -> None:
     assert format_syndication_header_stamp("2026-02-17") == " • 2026-02-17"
     assert format_syndication_header_stamp(None) == ""
+
+
+def test_format_syndication_header_parts_shape() -> None:
+    assert format_syndication_header_parts(
+        user={"screen_name": "alice"},
+        created_at="2026-02-17",
+        photos=["p1", "p2"],
+    ) == ("@alice", " • 2026-02-17", " • media:2")
 
 
 def test_format_syndication_header_compose_shape() -> None:

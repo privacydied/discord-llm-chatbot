@@ -2058,7 +2058,7 @@ def syndication_media_hint_keys() -> Tuple[str, ...]:
 
 def format_syndication_body_text(text: str) -> str:
     """Format syndication body text with legacy size limits and fallback copy."""
-    if text and len(text) <= 4000:
+    if text and not syndication_text_exceeds_body_limit(text):
         return text
     if text:
         return format_syndication_truncated_text(text)
@@ -2067,7 +2067,27 @@ def format_syndication_body_text(text: str) -> str:
 
 def format_syndication_truncated_text(text: str) -> str:
     """Return legacy-truncated syndication body text with ellipsis suffix."""
-    return text[:3990] + "…"
+    return text[:syndication_body_truncate_chars()] + syndication_ellipsis()
+
+
+def syndication_text_exceeds_body_limit(text: str) -> bool:
+    """Return True when syndication body text exceeds max passthrough length."""
+    return len(text) > syndication_body_max_chars()
+
+
+def syndication_body_max_chars() -> int:
+    """Return max syndication body chars before truncation is applied."""
+    return 4000
+
+
+def syndication_body_truncate_chars() -> int:
+    """Return truncation boundary for syndication body text."""
+    return 3990
+
+
+def syndication_ellipsis() -> str:
+    """Return canonical ellipsis suffix used for truncation."""
+    return "…"
 
 
 def format_syndication_missing_text_fallback() -> str:
@@ -2083,10 +2103,11 @@ def format_syndication_header_line(
     url: str,
 ) -> str:
     """Format syndication header line preserving legacy field access semantics."""
-    username = format_syndication_header_username(user)
-    media_hint = format_syndication_header_media_hint(photos)
-    prefix = format_syndication_header_prefix(username)
-    stamp = format_syndication_header_stamp(created_at)
+    prefix, stamp, media_hint = format_syndication_header_parts(
+        user=user,
+        created_at=created_at,
+        photos=photos,
+    )
     return format_syndication_header_compose(
         prefix=prefix,
         stamp=stamp,
@@ -2113,6 +2134,21 @@ def format_syndication_header_prefix(username: Any) -> str:
 def format_syndication_header_stamp(created_at: Any) -> str:
     """Return legacy timestamp suffix for syndication header lines."""
     return f" • {created_at}" if created_at else ""
+
+
+def format_syndication_header_parts(
+    *,
+    user: Any,
+    created_at: Any,
+    photos: Any,
+) -> Tuple[str, str, str]:
+    """Resolve header prefix/stamp/media fragments before composing final line."""
+    username = format_syndication_header_username(user)
+    return (
+        format_syndication_header_prefix(username),
+        format_syndication_header_stamp(created_at),
+        format_syndication_header_media_hint(photos),
+    )
 
 
 def format_syndication_header_compose(
