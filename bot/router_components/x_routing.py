@@ -2913,4 +2913,9 @@ def matched_x_raw_value_source(raw_url: str) -> str:
 
 def matched_x_raw_value_result(raw_url: str) -> str:
     """Return value used by matched-X raw-value source helper."""
+    return matched_x_raw_value_for_result(raw_url)
+
+
+def matched_x_raw_value_for_result(raw_url: str) -> str:
+    """Return matched X raw URL via result handoff helper."""
     return raw_url
