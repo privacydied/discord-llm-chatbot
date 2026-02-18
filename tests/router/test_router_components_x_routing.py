@@ -28,7 +28,11 @@ from bot.router_components.x_routing import (
     normalize_x_api_text,
     extract_x_api_first_item,
     extract_x_api_primary_tweet,
+    extract_x_api_data_field,
+    x_api_data_is_list,
+    x_api_data_is_dict,
     extract_sparse_media_resolution,
+    sparse_media_resolution_tuple,
     normalize_sparse_kind_value,
     normalize_sparse_url_value,
     normalize_sparse_images_value,
@@ -179,6 +183,8 @@ from bot.router_components.x_routing import (
     build_stt_fail_detail,
     build_caption_only_fallback_log_payload,
     build_caption_only_fallback_detail,
+    build_event_with_detail_payload,
+    build_detail_payload,
     build_x_video_stt_error_result_payload,
     normalize_stt_error_value,
     resolve_caption_only_base_text,
@@ -2223,6 +2229,14 @@ def test_extract_x_api_primary_tweet_variants() -> None:
     assert extract_x_api_primary_tweet(None) == {}
 
 
+def test_extract_x_api_data_field_and_kind_helpers() -> None:
+    assert extract_x_api_data_field({"data": {"id": "1"}}) == {"id": "1"}
+    assert x_api_data_is_list([{"id": "1"}]) is True
+    assert x_api_data_is_list({"id": "1"}) is False
+    assert x_api_data_is_dict({"id": "1"}) is True
+    assert x_api_data_is_dict([{"id": "1"}]) is False
+
+
 def test_extract_x_api_first_item_variants() -> None:
     assert extract_x_api_first_item([{"id": "1"}]) == {"id": "1"}
     assert extract_x_api_first_item([]) == {}
@@ -2255,6 +2269,14 @@ def test_extract_sparse_media_resolution_defaults_and_sanitizes() -> None:
         {"kind": "", "images": ["i1"], "url": "https://x.com/c"},
         default_url="https://x.com/d",
     ) == ("unknown", ["i1"], "https://x.com/c")
+
+
+def test_sparse_media_resolution_tuple() -> None:
+    assert sparse_media_resolution_tuple("video", ["i1"], "https://x.com/c") == (
+        "video",
+        ["i1"],
+        "https://x.com/c",
+    )
 
 
 def test_normalize_sparse_url_value() -> None:
@@ -2396,6 +2418,17 @@ def test_build_caption_only_fallback_log_payload_shape() -> None:
         "event": "fallback",
         "detail": {"kind": "caption_only"},
     }
+
+
+def test_build_event_with_detail_payload() -> None:
+    assert build_event_with_detail_payload("evt", {"k": "v"}) == {
+        "event": "evt",
+        "detail": {"k": "v"},
+    }
+
+
+def test_build_detail_payload() -> None:
+    assert build_detail_payload({"k": "v"}) == {"detail": {"k": "v"}}
 
 
 def test_build_caption_only_fallback_detail_shape() -> None:

@@ -649,13 +649,28 @@ def extract_x_api_primary_tweet(api_data: Any) -> Dict[str, Any]:
     """Extract the primary tweet node from X API payload variants."""
     if not isinstance(api_data, dict):
         return {}
-    data = api_data.get("data")
-    if isinstance(data, list):
+    data = extract_x_api_data_field(api_data)
+    if x_api_data_is_list(data):
         first = extract_x_api_first_item(data)
         return first if isinstance(first, dict) else {}
-    if isinstance(data, dict):
+    if x_api_data_is_dict(data):
         return data
     return {}
+
+
+def extract_x_api_data_field(api_data: Dict[str, Any]) -> Any:
+    """Extract raw `data` field from X API payload."""
+    return api_data.get("data")
+
+
+def x_api_data_is_list(data: Any) -> bool:
+    """Return True when X API `data` field is a list payload."""
+    return isinstance(data, list)
+
+
+def x_api_data_is_dict(data: Any) -> bool:
+    """Return True when X API `data` field is a dict payload."""
+    return isinstance(data, dict)
 
 
 def extract_x_api_first_item(data: List[Any]) -> Any:
@@ -686,6 +701,15 @@ def extract_sparse_media_resolution(
     sparse_kind = normalize_sparse_kind_value(resolved_sparse.get("kind"))
     sparse_images = normalize_sparse_images_value(resolved_sparse.get("images"))
     sparse_url = normalize_sparse_url_value(resolved_sparse.get("url"), default_url=default_url)
+    return sparse_media_resolution_tuple(sparse_kind, sparse_images, sparse_url)
+
+
+def sparse_media_resolution_tuple(
+    sparse_kind: str,
+    sparse_images: List[str],
+    sparse_url: str,
+) -> tuple[str, List[str], str]:
+    """Build normalized sparse media resolution tuple."""
     return (sparse_kind, sparse_images, sparse_url)
 
 
@@ -776,10 +800,7 @@ def build_stt_fail_log_payload(
 ) -> Dict[str, Any]:
     """Build structured payload for STT failure breadcrumb logging."""
     detail = build_stt_fail_detail(reason, media_kind=media_kind)
-    payload: Dict[str, Any] = {
-        "event": "stt.fail",
-        "detail": detail,
-    }
+    payload: Dict[str, Any] = build_event_with_detail_payload("stt.fail", detail)
     if msg_id is not None:
         payload["msg_id"] = msg_id
     return payload
@@ -795,10 +816,10 @@ def build_stt_fail_detail(reason: str, *, media_kind: Optional[str] = None) -> D
 
 def build_caption_only_fallback_log_payload() -> Dict[str, Any]:
     """Build structured payload for caption-only fallback breadcrumb logging."""
-    return {
-        "event": "fallback",
-        "detail": build_caption_only_fallback_detail(),
-    }
+    return build_event_with_detail_payload(
+        "fallback",
+        build_caption_only_fallback_detail(),
+    )
 
 
 def build_caption_only_fallback_detail() -> Dict[str, Any]:
@@ -1053,14 +1074,14 @@ def build_x_text_miss_payload(
     reason: str,
 ) -> Dict[str, Any]:
     """Build structured breadcrumb payload for X text-miss events."""
-    return {
-        "event": "x.text.miss",
-        "detail": {
+    return build_event_with_detail_payload(
+        "x.text.miss",
+        {
             "primary": primary,
             "layer": layer,
             "reason": reason,
         },
-    }
+    )
 
 
 def build_syndication_non_200_log_payload(
@@ -1070,13 +1091,13 @@ def build_syndication_non_200_log_payload(
     endpoint: str,
 ) -> Dict[str, Any]:
     """Build structured payload for syndication non-200 breadcrumb logging."""
-    return {
-        "detail": {
+    return build_detail_payload(
+        {
             "tweet_id": tweet_id,
             "status": status,
             "endpoint": endpoint,
         }
-    }
+    )
 
 
 def build_syndication_non_200_metric_payload(
@@ -1097,12 +1118,12 @@ def build_syndication_fetch_failed_payload(
     error: str,
 ) -> Dict[str, Any]:
     """Build structured payload for syndication fetch-failure breadcrumbs."""
-    return {
-        "detail": {
+    return build_detail_payload(
+        {
             "tweet_id": tweet_id,
             "error": error,
         }
-    }
+    )
 
 
 def build_x_text_canon_payload(
@@ -1111,13 +1132,13 @@ def build_x_text_canon_payload(
     primary: str,
 ) -> Dict[str, Any]:
     """Build structured payload for X canonical-text breadcrumbs."""
-    return {
-        "event": "x.text.canon",
-        "detail": {
+    return build_event_with_detail_payload(
+        "x.text.canon",
+        {
             "url": url,
             "primary": primary,
         },
-    }
+    )
 
 
 def build_x_text_resolve_payload(
@@ -1127,14 +1148,27 @@ def build_x_text_resolve_payload(
     chars: int,
 ) -> Dict[str, Any]:
     """Build structured payload for X text-resolution breadcrumbs."""
-    return {
-        "event": "x.text.resolve",
-        "detail": {
+    return build_event_with_detail_payload(
+        "x.text.resolve",
+        {
             "primary": primary,
             "source": source,
             "chars": chars,
         },
+    )
+
+
+def build_event_with_detail_payload(event: str, detail: Dict[str, Any]) -> Dict[str, Any]:
+    """Build payload with canonical event/detail shape."""
+    return {
+        "event": event,
+        "detail": detail,
     }
+
+
+def build_detail_payload(detail: Dict[str, Any]) -> Dict[str, Any]:
+    """Build payload containing only a detail object."""
+    return {"detail": detail}
 
 
 def extract_oembed_html_text(html: Any) -> str:
