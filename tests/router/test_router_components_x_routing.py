@@ -97,6 +97,7 @@ from bot.router_components.x_routing import (
     normalize_article_block_text,
     extract_x_article_text,
     syndication_needs_article_hydration,
+    has_news_action_type,
     extract_syndication_base_text,
     merge_syndication_base_with_article,
     base_text_contains_tco_link,
@@ -1607,6 +1608,12 @@ def test_syndication_needs_article_hydration_variants() -> None:
         )
         is False
     )
+
+
+def test_has_news_action_type() -> None:
+    assert has_news_action_type({"news_action_type": "article"}) is True
+    assert has_news_action_type({"news_action_type": "   "}) is False
+    assert has_news_action_type({}) is False
 
 
 def test_extract_syndication_base_text_precedence() -> None:

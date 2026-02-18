@@ -539,7 +539,7 @@ def syndication_needs_article_hydration(
             return True
 
     # X article syndication can surface as a t.co pointer and optional news action metadata.
-    if str(syn.get("news_action_type") or "").strip():
+    if has_news_action_type(syn):
         return True
     if allow_tco_pointer:
         txt = (
@@ -550,6 +550,11 @@ def syndication_needs_article_hydration(
         if bool(re.fullmatch(r"https?://t\.co/[A-Za-z0-9]+", txt)):
             return True
     return False
+
+
+def has_news_action_type(syn: Dict[str, Any]) -> bool:
+    """Return True when syndication payload includes a non-empty news action type."""
+    return bool(str(syn.get("news_action_type") or "").strip())
 
 
 def extract_syndication_base_text(node: Any) -> str:
