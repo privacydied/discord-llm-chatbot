@@ -11,21 +11,19 @@
 |---|---|---|---|---|
 | 0 | Baseline + guardrails | DONE | Medium baseline captured | commit `d4ba459` |
 | 1 | Scaffolding + compat seams | DONE | compile + targeted tests | router + STT compat loaders added |
-| 2 | Router decomposition | IN_PROGRESS | compile + targeted tests | composition helpers extracted |
-| 3 | STT/media boundary cleanup | PENDING | pending | preserve transcript-first + fail-open |
-| 4 | Text/vision prompt composition unification | PENDING | pending | preserve concat invariants |
-| 5 | Reliability hardening | PENDING | pending | dead model handling + timeout consistency |
-| 6 | Contract tests + cleanup | PENDING | pending | finalize diagram + docs parity |
+| 2 | Router decomposition | DONE | compile + targeted tests | router helper seams extracted and stabilized |
+| 3 | STT/media boundary cleanup | DONE | compile + targeted tests | transcript-first + ffmpeg runtime seams extracted |
+| 4 | Text/vision prompt composition unification | DONE | compile + targeted tests | caption/transcript and caption/VL concat invariants enforced |
+| 5 | Reliability hardening | DONE | retry + fallback tests | dead-model circuit handling + timeout consistency validated |
+| 6 | Contract tests + cleanup | DONE | baseline + targeted suites green | README diagram parity + phase tracker finalized |
 
-## Current Slice (Phase 1)
-- Goal: introduce neutral scaffolding files and compatibility entry points.
-- Planned changes:
-  - create shared constants module for pipeline budgets/timeouts
-  - create compatibility context dataclass
-  - wire reads through compatibility helpers (no semantic changes)
-- Exit criteria:
-  - changed files compile
-  - no new behavior branches introduced
+Status snapshot updated 2026-02-18 after final validation pass.
+
+## Final Status
+- All planned phases (0-6) are complete.
+- Final validation (targeted refactor/reliability suites):
+  - `./.venv/bin/pytest -q tests/router/test_router_components_compose.py tests/router/test_router_components_compose_contract.py tests/router/test_router_components_gating.py tests/router/test_router_components_input_harvest.py tests/router/test_router_components_prompt_access.py tests/router/test_router_components_x_routing.py tests/test_syndication_extract.py tests/test_syndication_url_utils.py tests/syndication/test_extract_policy.py tests/syndication/test_handler_vl_cap.py tests/backend/test_openai_backend_retry.py tests/backend/test_vision_ladder_fallback.py tests/test_stt_pipeline_runtime.py tests/test_stt_pipeline_ffmpeg_runtime.py tests/test_stt_pipeline_youtube_path.py tests/test_video_ingest.py`
+  - Result: `623 passed`
 
 ## Slice Log
 - 2026-02-17:
