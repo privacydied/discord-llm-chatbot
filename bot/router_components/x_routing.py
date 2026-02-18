@@ -2488,8 +2488,18 @@ def append_status_url_candidate(
 
 def status_url_raw_candidates(text: str) -> Iterable[str]:
     """Yield raw URL candidates normalized through candidate-raw-value helper."""
-    for raw in iter_status_url_candidate_values(text):
-        yield status_url_candidate_raw_value(raw)
+    for raw in iter_status_url_raw_candidates(text):
+        yield normalize_status_url_candidate_raw(raw)
+
+
+def iter_status_url_raw_candidates(text: str) -> Iterable[str]:
+    """Yield raw status URL candidates from normalized candidate value iterator."""
+    yield from iter_status_url_candidate_values(text)
+
+
+def normalize_status_url_candidate_raw(raw: str) -> str:
+    """Normalize one raw status URL candidate value."""
+    return status_url_candidate_raw_value(raw)
 
 
 def iter_status_url_candidate_values(text: str) -> Iterable[str]:
@@ -2859,9 +2869,25 @@ def collect_raw_urls_from_texts(
     url_re: Any,
 ) -> None:
     """Collect de-duplicated raw URLs from multiple text blobs."""
-    for t in raw_url_source_texts(texts):
-        for u in raw_url_candidate_values(t, url_re=url_re):
-            append_raw_url_if_present(items, raw_url_candidate_value(u))
+    for text in raw_url_source_texts(texts):
+        for raw_url in iter_raw_url_candidates_for_text(text, url_re=url_re):
+            append_raw_url_candidate_to_items(items, raw_url)
+
+
+def iter_raw_url_candidates_for_text(text: str, *, url_re: Any) -> Iterable[str]:
+    """Yield normalized raw URL candidates for one text input."""
+    for raw_url in raw_url_candidate_values(text, url_re=url_re):
+        yield normalize_raw_url_candidate(raw_url)
+
+
+def normalize_raw_url_candidate(raw_url: str) -> str:
+    """Normalize one raw URL candidate value."""
+    return raw_url_candidate_value(raw_url)
+
+
+def append_raw_url_candidate_to_items(items: List[str], raw_url: str) -> None:
+    """Append one normalized raw URL candidate into collection items."""
+    append_raw_url_if_present(items, raw_url)
 
 
 def raw_url_candidate_values(text: str, *, url_re: Any) -> Iterable[str]:
@@ -2911,8 +2937,13 @@ def raw_url_source_texts_iter(texts: Iterable[str]) -> Iterable[str]:
 
 def iter_text_urls(text: str, *, url_re: Any) -> Iterable[str]:
     """Yield raw URL matches from one text blob using provided compiled regex."""
-    for m in iter_text_url_matches(text, url_re=url_re):
-        yield url_match_group_value(m)
+    yield from iter_url_values_from_matches(iter_text_url_matches(text, url_re=url_re))
+
+
+def iter_url_values_from_matches(matches: Iterable[Any]) -> Iterable[str]:
+    """Yield URL string values extracted from regex match iterables."""
+    for match in matches:
+        yield url_match_group_value(match)
 
 
 def iter_text_url_matches(text: str, *, url_re: Any) -> Iterable[Any]:
@@ -2942,6 +2973,11 @@ def iter_url_matches_for_source(text: str, *, url_re: Any) -> Iterable[Any]:
 
 def url_matches_iter(text: str, *, url_re: Any) -> Iterable[Any]:
     """Yield iterator used by url_matches source helper."""
+    yield from iter_url_matches_from_regex(text, url_re=url_re)
+
+
+def iter_url_matches_from_regex(text: str, *, url_re: Any) -> Iterable[Any]:
+    """Yield regex match objects from provided text and compiled regex."""
     yield from iter_url_matches(text, url_re=url_re)
 
 

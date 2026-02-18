@@ -382,6 +382,8 @@ from bot.router_components.x_routing import (
     collect_status_urls_from_candidates,
     append_status_url_candidate,
     status_url_raw_candidates,
+    iter_status_url_raw_candidates,
+    normalize_status_url_candidate_raw,
     iter_status_url_candidate_values,
     status_url_candidate_values,
     iter_status_url_candidates_source,
@@ -459,9 +461,13 @@ from bot.router_components.x_routing import (
     iter_raw_url_source_texts,
     raw_url_source_texts_iter,
     collect_raw_urls_from_texts,
+    iter_raw_url_candidates_for_text,
+    normalize_raw_url_candidate,
+    append_raw_url_candidate_to_items,
     iter_url_matches_for_source,
     url_matches_source,
     url_matches_iter,
+    iter_url_matches_from_regex,
     url_matches,
     iter_url_matches_for_url_matches,
     iter_url_matches_source,
@@ -480,6 +486,7 @@ from bot.router_components.x_routing import (
     url_match_group_value,
     iter_text_url_matches,
     iter_text_urls,
+    iter_url_values_from_matches,
 )
 
 
@@ -946,6 +953,18 @@ def test_status_url_raw_candidates_normalizes_raw_values() -> None:
     assert urls == ["https://x.com/u/status/1"]
 
 
+def test_iter_status_url_raw_candidates_delegates_values() -> None:
+    urls = list(iter_status_url_raw_candidates("a https://x.com/u/status/1 b"))
+    assert urls == ["https://x.com/u/status/1"]
+
+
+def test_normalize_status_url_candidate_raw_identity() -> None:
+    assert (
+        normalize_status_url_candidate_raw("https://x.com/u/status/1")
+        == "https://x.com/u/status/1"
+    )
+
+
 def test_iter_status_url_candidate_values_delegates_values() -> None:
     urls = list(iter_status_url_candidate_values("a https://x.com/u/status/1 b"))
     assert urls == ["https://x.com/u/status/1"]
@@ -1311,6 +1330,27 @@ def test_raw_url_candidate_values_iter_delegates_iter_text_urls() -> None:
     assert urls == ["https://x.com/u/status/1"]
 
 
+def test_iter_raw_url_candidates_for_text_normalizes_values() -> None:
+    urls = list(
+        iter_raw_url_candidates_for_text(
+            "a https://x.com/u/status/1 b",
+            url_re=x_url_extract_regex(),
+        )
+    )
+    assert urls == ["https://x.com/u/status/1"]
+
+
+def test_normalize_raw_url_candidate_identity() -> None:
+    assert normalize_raw_url_candidate("https://x.com/u/status/1") == "https://x.com/u/status/1"
+
+
+def test_append_raw_url_candidate_to_items_delegates_append() -> None:
+    items: List[str] = []
+    append_raw_url_candidate_to_items(items, "https://x.com/u/status/1")
+    append_raw_url_candidate_to_items(items, "https://x.com/u/status/1")
+    assert items == ["https://x.com/u/status/1"]
+
+
 def test_raw_url_items_buffer_starts_empty() -> None:
     assert raw_url_items_buffer() == []
 
@@ -1340,6 +1380,12 @@ def test_iter_text_urls_yields_raw_matches() -> None:
     assert urls == ["https://x.com/u/status/1"]
 
 
+def test_iter_url_values_from_matches_yields_group_values() -> None:
+    matches = iter_text_url_matches("a https://x.com/u/status/1 b", url_re=x_url_extract_regex())
+    urls = list(iter_url_values_from_matches(matches))
+    assert urls == ["https://x.com/u/status/1"]
+
+
 def test_iter_text_url_matches_yields_match_objects() -> None:
     matches = list(iter_text_url_matches("a https://x.com/u/status/1 b", url_re=x_url_extract_regex()))
     assert [m.group(0) for m in matches] == ["https://x.com/u/status/1"]
@@ -1362,6 +1408,11 @@ def test_iter_url_matches_yields_match_objects() -> None:
 
 def test_iter_url_matches_source_yields_match_objects() -> None:
     matches = list(iter_url_matches_source("a https://x.com/u/status/1 b", url_re=x_url_extract_regex()))
+    assert [m.group(0) for m in matches] == ["https://x.com/u/status/1"]
+
+
+def test_iter_url_matches_from_regex_yields_match_objects() -> None:
+    matches = list(iter_url_matches_from_regex("a https://x.com/u/status/1 b", url_re=x_url_extract_regex()))
     assert [m.group(0) for m in matches] == ["https://x.com/u/status/1"]
 
 
