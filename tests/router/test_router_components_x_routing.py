@@ -114,14 +114,20 @@ from bot.router_components.x_routing import (
     is_twitter_media_cdn,
     is_twitter_media_cdn_host,
     twitter_media_cdn_hosts,
+    twitter_media_cdn_host_set,
     is_twitter_thumbnail_host,
     is_twitter_thumbnail_url,
     parse_url_value,
+    parse_url_from_text,
     parsed_netloc_lower_or_empty,
     parsed_path_or_empty,
+    parsed_host_lower,
+    parsed_url_path,
     twitter_thumbnail_hosts,
+    twitter_thumbnail_host_set,
     host_in_set,
     url_host_is_in_set,
+    host_is_present_and_in_set,
     extract_url_host_lower,
     extract_url_path,
     is_twitter_url,
@@ -619,14 +625,30 @@ def test_parse_url_value() -> None:
     assert parsed.path == "/user/status/1"
 
 
+def test_parse_url_from_text() -> None:
+    parsed = parse_url_from_text("https://x.com/user/status/1?s=20#frag")
+    assert parsed.netloc == "x.com"
+    assert parsed.path == "/user/status/1"
+
+
 def test_parsed_netloc_lower_or_empty() -> None:
     parsed = urlparse("https://Mobile.Twitter.com/user/status/1?s=20")
     assert parsed_netloc_lower_or_empty(parsed) == "mobile.twitter.com"
 
 
+def test_parsed_host_lower() -> None:
+    parsed = urlparse("https://Mobile.Twitter.com/user/status/1?s=20")
+    assert parsed_host_lower(parsed) == "mobile.twitter.com"
+
+
 def test_parsed_path_or_empty() -> None:
     parsed = urlparse("https://x.com/user/status/1?s=20")
     assert parsed_path_or_empty(parsed) == "/user/status/1"
+
+
+def test_parsed_url_path() -> None:
+    parsed = urlparse("https://x.com/user/status/1?s=20")
+    assert parsed_url_path(parsed) == "/user/status/1"
 
 
 def test_resolve_normalized_x_parts() -> None:
@@ -661,9 +683,21 @@ def test_twitter_thumbnail_hosts() -> None:
     assert "pbs-3.twimg.com" in hosts
 
 
+def test_twitter_thumbnail_host_set() -> None:
+    hosts = twitter_thumbnail_host_set()
+    assert "pbs.twimg.com" in hosts
+    assert "pbs-3.twimg.com" in hosts
+
+
 def test_host_in_set() -> None:
     assert host_in_set("pbs.twimg.com", {"pbs.twimg.com"})
     assert not host_in_set("example.com", {"pbs.twimg.com"})
+
+
+def test_host_is_present_and_in_set() -> None:
+    assert host_is_present_and_in_set("pbs.twimg.com", {"pbs.twimg.com"}) is True
+    assert host_is_present_and_in_set("", {"pbs.twimg.com"}) is False
+    assert host_is_present_and_in_set("example.com", {"pbs.twimg.com"}) is False
 
 
 def test_url_host_is_in_set() -> None:
@@ -686,6 +720,12 @@ def test_is_twitter_media_cdn_host() -> None:
 
 def test_twitter_media_cdn_hosts() -> None:
     hosts = twitter_media_cdn_hosts()
+    assert "video.twimg.com" in hosts
+    assert "ton.twimg.com" in hosts
+
+
+def test_twitter_media_cdn_host_set() -> None:
+    hosts = twitter_media_cdn_host_set()
     assert "video.twimg.com" in hosts
     assert "ton.twimg.com" in hosts
 

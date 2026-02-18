@@ -254,7 +254,12 @@ def append_attachment_url_attr_if_present(
 
 def parse_url_value(url: Any) -> Any:
     """Parse URL-like input into a parsed URL object."""
-    return urlparse(str(url))
+    return parse_url_from_text(str(url))
+
+
+def parse_url_from_text(url_text: str) -> Any:
+    """Parse URL from already-stringified URL input."""
+    return urlparse(url_text)
 
 
 def parsed_netloc_lower_or_empty(parsed: Any) -> str:
@@ -270,17 +275,27 @@ def parsed_path_or_empty(parsed: Any) -> str:
 def extract_url_host_lower(url: str) -> str:
     """Parse a URL host and normalize to lowercase; return empty string on failure."""
     try:
-        return parsed_netloc_lower_or_empty(parse_url_value(url))
+        return parsed_host_lower(parse_url_value(url))
     except Exception:
         return ""
+
+
+def parsed_host_lower(parsed: Any) -> str:
+    """Resolve lowercase host from parsed URL value."""
+    return parsed_netloc_lower_or_empty(parsed)
 
 
 def extract_url_path(url: str) -> str:
     """Parse a URL path; return empty string on failure."""
     try:
-        return parsed_path_or_empty(parse_url_value(url))
+        return parsed_url_path(parse_url_value(url))
     except Exception:
         return ""
+
+
+def parsed_url_path(parsed: Any) -> str:
+    """Resolve path string from parsed URL value."""
+    return parsed_path_or_empty(parsed)
 
 
 def host_in_set(host: str, hosts: set[str]) -> bool:
@@ -291,22 +306,32 @@ def host_in_set(host: str, hosts: set[str]) -> bool:
 def url_host_is_in_set(url: str, hosts: set[str]) -> bool:
     """Return True when parsed URL host exists in the provided host set."""
     host = extract_url_host_lower(url)
+    return host_is_present_and_in_set(host, hosts)
+
+
+def host_is_present_and_in_set(host: str, hosts: set[str]) -> bool:
+    """Return True when host is non-empty and contained in host set."""
     if not host:
         return False
     return host_in_set(host, hosts)
 
 
 def is_twitter_thumbnail_url(url: str) -> bool:
-    return url_host_is_in_set(url, twitter_thumbnail_hosts())
+    return url_host_is_in_set(url, twitter_thumbnail_host_set())
 
 
 def is_twitter_thumbnail_host(host: str) -> bool:
     """Return True when host is a known Twitter thumbnail CDN host."""
-    return host_in_set(host, twitter_thumbnail_hosts())
+    return host_in_set(host, twitter_thumbnail_host_set())
 
 
 def twitter_thumbnail_hosts() -> set[str]:
     """Return known Twitter thumbnail CDN hosts."""
+    return twitter_thumbnail_host_set()
+
+
+def twitter_thumbnail_host_set() -> set[str]:
+    """Return canonical host set for Twitter thumbnail CDN checks."""
     return {
         "pbs.twimg.com",
         "pbs-0.twimg.com",
@@ -317,16 +342,21 @@ def twitter_thumbnail_hosts() -> set[str]:
 
 
 def is_twitter_media_cdn(url: str) -> bool:
-    return url_host_is_in_set(url, twitter_media_cdn_hosts())
+    return url_host_is_in_set(url, twitter_media_cdn_host_set())
 
 
 def is_twitter_media_cdn_host(host: str) -> bool:
     """Return True when host is a known Twitter media CDN host."""
-    return host_in_set(host, twitter_media_cdn_hosts())
+    return host_in_set(host, twitter_media_cdn_host_set())
 
 
 def twitter_media_cdn_hosts() -> set[str]:
     """Return known Twitter media CDN hosts."""
+    return twitter_media_cdn_host_set()
+
+
+def twitter_media_cdn_host_set() -> set[str]:
+    """Return canonical host set for Twitter media CDN checks."""
     return {
         "pbs.twimg.com",
         "pbs-0.twimg.com",
