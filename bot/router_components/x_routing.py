@@ -2759,6 +2759,15 @@ def canonicalized_value_result(
     canonicalize: Callable[[str], str],
 ) -> str:
     """Return value used by canonicalized-value source helper."""
+    return canonicalized_value_for_result(raw_value, canonicalize=canonicalize)
+
+
+def canonicalized_value_for_result(
+    raw_value: str,
+    *,
+    canonicalize: Callable[[str], str],
+) -> str:
+    """Return canonicalized value via canonicalized-result handoff helper."""
     return canonicalize(raw_value)
 
 
