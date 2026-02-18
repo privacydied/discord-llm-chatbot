@@ -1307,9 +1307,14 @@ def build_syndication_fetch_params_with_optional_dnt(
 ) -> Dict[str, str]:
     """Return params map with optional DNT flag mutation applied."""
     return maybe_add_syndication_dnt_param(
-        params=params,
+        params=copy_syndication_params(params),
         include_dnt=include_dnt,
     )
+
+
+def copy_syndication_params(params: Dict[str, str]) -> Dict[str, str]:
+    """Return a shallow copy of syndication params map."""
+    return dict(params)
 
 
 def maybe_add_syndication_dnt_param(
@@ -1319,7 +1324,13 @@ def maybe_add_syndication_dnt_param(
 ) -> Dict[str, str]:
     """Mutate params with DNT entry when include_dnt is enabled."""
     if include_dnt:
-        params[build_syndication_dnt_key()] = build_syndication_dnt_value()
+        return with_syndication_dnt_param(params)
+    return params
+
+
+def with_syndication_dnt_param(params: Dict[str, str]) -> Dict[str, str]:
+    """Return params map with canonical DNT key/value set."""
+    params[build_syndication_dnt_key()] = build_syndication_dnt_value()
     return params
 
 
@@ -1340,7 +1351,15 @@ def build_syndication_lang_key() -> str:
 
 def build_syndication_fetch_params_core(tweet_id: str) -> Dict[str, str]:
     """Return core syndication fetch params for a tweet id (without DNT)."""
-    return build_syndication_fetch_params_core_map(tweet_id, build_syndication_lang())
+    return build_syndication_fetch_params_core_map(
+        tweet_id,
+        build_syndication_fetch_params_default_lang(),
+    )
+
+
+def build_syndication_fetch_params_default_lang() -> str:
+    """Return default language used for syndication fetch params."""
+    return build_syndication_lang()
 
 
 def build_syndication_fetch_params_core_map(tweet_id: str, lang: str) -> Dict[str, str]:
@@ -1360,11 +1379,27 @@ def build_syndication_fetch_params_variants_list(
     tweet_id: str,
 ) -> List[Tuple[str, Dict[str, str]]]:
     """Return canonical ordered list of syndication fetch param variants."""
-    return [
+    return build_syndication_fetch_params_variant_list(
+        build_syndication_fetch_params_variant_entries(tweet_id),
+    )
+
+
+def build_syndication_fetch_params_variant_entries(
+    tweet_id: str,
+) -> Tuple[Tuple[str, Dict[str, str]], Tuple[str, Dict[str, str]], Tuple[str, Dict[str, str]]]:
+    """Return canonical syndication fetch variant tuple entries."""
+    return (
         build_syndication_widgets_params_variant(tweet_id),
         build_syndication_tweet_result_params_variant(tweet_id),
         build_syndication_widgets_params_variant_with_dnt(tweet_id),
-    ]
+    )
+
+
+def build_syndication_fetch_params_variant_list(
+    entries: Tuple[Tuple[str, Dict[str, str]], ...],
+) -> List[Tuple[str, Dict[str, str]]]:
+    """Return list materialization for syndication fetch variant entries."""
+    return list(entries)
 
 
 def build_syndication_widgets_params_variant(

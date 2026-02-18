@@ -222,13 +222,18 @@ from bot.router_components.x_routing import (
     build_syndication_dnt_key,
     build_syndication_id_key,
     build_syndication_lang_key,
+    build_syndication_fetch_params_default_lang,
     build_syndication_fetch_params_core,
     build_syndication_fetch_params_core_map,
+    copy_syndication_params,
     build_syndication_fetch_params_with_optional_dnt,
     maybe_add_syndication_dnt_param,
+    with_syndication_dnt_param,
     build_syndication_fetch_params,
     build_syndication_fetch_params_variants_list,
     build_syndication_fetch_params_variants,
+    build_syndication_fetch_params_variant_entries,
+    build_syndication_fetch_params_variant_list,
     build_syndication_widgets_params_variant,
     build_syndication_widgets_params_variant_with_dnt,
     build_syndication_tweet_result_params_variant,
@@ -3035,6 +3040,10 @@ def test_build_syndication_lang_key_constant() -> None:
     assert build_syndication_lang_key() == "lang"
 
 
+def test_build_syndication_fetch_params_default_lang_constant() -> None:
+    assert build_syndication_fetch_params_default_lang() == "en"
+
+
 def test_build_syndication_fetch_params_variants_with_and_without_dnt() -> None:
     assert build_syndication_fetch_params_core("2022790791047823773") == {
         "id": "2022790791047823773",
@@ -3061,6 +3070,13 @@ def test_build_syndication_fetch_params_core_map() -> None:
     }
 
 
+def test_copy_syndication_params() -> None:
+    core = {"id": "2022790791047823773", "lang": "en"}
+    copied = copy_syndication_params(core)
+    assert copied == core
+    assert copied is not core
+
+
 def test_build_syndication_fetch_params_with_optional_dnt() -> None:
     core = {"id": "2022790791047823773", "lang": "en"}
     assert build_syndication_fetch_params_with_optional_dnt(dict(core), False) == core
@@ -3075,6 +3091,15 @@ def test_maybe_add_syndication_dnt_param() -> None:
     core = {"id": "2022790791047823773", "lang": "en"}
     assert maybe_add_syndication_dnt_param(params=dict(core), include_dnt=False) == core
     assert maybe_add_syndication_dnt_param(params=dict(core), include_dnt=True) == {
+        "id": "2022790791047823773",
+        "lang": "en",
+        "dnt": "false",
+    }
+
+
+def test_with_syndication_dnt_param() -> None:
+    core = {"id": "2022790791047823773", "lang": "en"}
+    assert with_syndication_dnt_param(dict(core)) == {
         "id": "2022790791047823773",
         "lang": "en",
         "dnt": "false",
@@ -3096,6 +3121,26 @@ def test_build_syndication_fetch_params_variants_list_shape() -> None:
         ("widgets", {"id": "2022790791047823773", "lang": "en"}),
         ("tweet-result", {"id": "2022790791047823773", "lang": "en"}),
         ("widgets", {"id": "2022790791047823773", "lang": "en", "dnt": "false"}),
+    ]
+
+
+def test_build_syndication_fetch_params_variant_entries_shape() -> None:
+    entries = build_syndication_fetch_params_variant_entries("2022790791047823773")
+    assert entries == (
+        ("widgets", {"id": "2022790791047823773", "lang": "en"}),
+        ("tweet-result", {"id": "2022790791047823773", "lang": "en"}),
+        ("widgets", {"id": "2022790791047823773", "lang": "en", "dnt": "false"}),
+    )
+
+
+def test_build_syndication_fetch_params_variant_list_shape() -> None:
+    entries = (
+        ("widgets", {"id": "2022790791047823773", "lang": "en"}),
+        ("tweet-result", {"id": "2022790791047823773", "lang": "en"}),
+    )
+    assert build_syndication_fetch_params_variant_list(entries) == [
+        ("widgets", {"id": "2022790791047823773", "lang": "en"}),
+        ("tweet-result", {"id": "2022790791047823773", "lang": "en"}),
     ]
 
 
