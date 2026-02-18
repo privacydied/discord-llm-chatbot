@@ -1604,6 +1604,14 @@ def build_syndication_oembed_params_map(
     options: Dict[str, str],
 ) -> Dict[str, str]:
     """Return merged oEmbed params map from core and options maps."""
+    return merge_syndication_param_maps(core, options)
+
+
+def merge_syndication_param_maps(
+    core: Dict[str, str],
+    options: Dict[str, str],
+) -> Dict[str, str]:
+    """Merge syndication parameter maps preserving options override semantics."""
     return {**core, **options}
 
 
@@ -1853,9 +1861,23 @@ def build_syndication_oembed_fallback_items_list(
 ) -> List[Tuple[str, Dict[str, str]]]:
     """Return ordered list of oEmbed fallback items for a tweet id."""
     items: List[Tuple[str, Dict[str, str]]] = []
-    for host in build_syndication_oembed_hosts():
-        items.append(build_syndication_oembed_fallback_item(host, tweet_id))
+    for host in iter_syndication_oembed_fallback_hosts():
+        append_syndication_oembed_fallback_item(items, host, tweet_id)
     return items
+
+
+def iter_syndication_oembed_fallback_hosts() -> Iterable[str]:
+    """Iterate host fallbacks used by syndication oEmbed fallback planning."""
+    yield from build_syndication_oembed_hosts()
+
+
+def append_syndication_oembed_fallback_item(
+    items: List[Tuple[str, Dict[str, str]]],
+    host: str,
+    tweet_id: str,
+) -> None:
+    """Append one oEmbed fallback item for host/tweet into items list."""
+    items.append(build_syndication_oembed_fallback_item(host, tweet_id))
 
 
 def build_syndication_oembed_fallback_item(
@@ -1917,10 +1939,27 @@ def build_syndication_fetch_plan_values(
     tweet_id: str,
 ) -> Tuple[str, Dict[str, str], List[Tuple[str, Dict[str, str]]]]:
     """Return canonical fetch plan values tuple (base, headers, variants)."""
-    base = build_syndication_base_url()
-    headers = build_syndication_fetch_headers()
-    params_variants = build_syndication_fetch_params_variants(tweet_id)
+    base = resolve_syndication_fetch_plan_base_url()
+    headers = resolve_syndication_fetch_plan_headers()
+    params_variants = resolve_syndication_fetch_plan_params_variants(tweet_id)
     return base, headers, params_variants
+
+
+def resolve_syndication_fetch_plan_base_url() -> str:
+    """Resolve base URL used by syndication fetch plan values."""
+    return build_syndication_base_url()
+
+
+def resolve_syndication_fetch_plan_headers() -> Dict[str, str]:
+    """Resolve header map used by syndication fetch plan values."""
+    return build_syndication_fetch_headers()
+
+
+def resolve_syndication_fetch_plan_params_variants(
+    tweet_id: str,
+) -> List[Tuple[str, Dict[str, str]]]:
+    """Resolve endpoint/params variants used by syndication fetch plan values."""
+    return build_syndication_fetch_params_variants(tweet_id)
 
 
 def build_syndication_fetch_plan_tuple(

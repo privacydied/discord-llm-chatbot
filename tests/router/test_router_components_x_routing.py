@@ -285,6 +285,7 @@ from bot.router_components.x_routing import (
     build_syndication_oembed_params_bundle,
     build_syndication_oembed_params_components,
     build_syndication_oembed_params_map,
+    merge_syndication_param_maps,
     build_syndication_oembed_params_core,
     build_syndication_oembed_params_core_map,
     build_syndication_oembed_params_core_keys,
@@ -317,12 +318,17 @@ from bot.router_components.x_routing import (
     build_syndication_oembed_x_metric_endpoint,
     build_syndication_oembed_fallback_item,
     build_syndication_oembed_fallback_items_list,
+    iter_syndication_oembed_fallback_hosts,
+    append_syndication_oembed_fallback_item,
     build_syndication_oembed_fallback_params,
     build_syndication_oembed_fallback_plan,
     build_syndication_oembed_fallback_plan_components,
     build_syndication_oembed_fallback_plan_tuple,
     build_syndication_fetch_plan_components,
     build_syndication_fetch_plan_values,
+    resolve_syndication_fetch_plan_base_url,
+    resolve_syndication_fetch_plan_headers,
+    resolve_syndication_fetch_plan_params_variants,
     build_syndication_fetch_plan,
     build_syndication_fetch_plan_tuple,
     build_syndication_metric_endpoint_key,
@@ -3034,6 +3040,19 @@ def test_build_syndication_oembed_params_map_shape() -> None:
     }
 
 
+def test_merge_syndication_param_maps_shape() -> None:
+    assert merge_syndication_param_maps(
+        {"url": "https://twitter.com/i/status/2022790791047823773", "lang": "en"},
+        {"dnt": "false", "omit_script": "true", "hide_thread": "true"},
+    ) == {
+        "url": "https://twitter.com/i/status/2022790791047823773",
+        "lang": "en",
+        "dnt": "false",
+        "omit_script": "true",
+        "hide_thread": "true",
+    }
+
+
 def test_build_syndication_oembed_hosts_order() -> None:
     assert build_syndication_oembed_hosts() == ("twitter.com", "x.com")
 
@@ -3234,6 +3253,27 @@ def test_build_syndication_oembed_fallback_items_list_ordered_variants() -> None
                 "lang": "en",
             },
         ),
+    ]
+
+
+def test_iter_syndication_oembed_fallback_hosts() -> None:
+    assert list(iter_syndication_oembed_fallback_hosts()) == ["twitter.com", "x.com"]
+
+
+def test_append_syndication_oembed_fallback_item() -> None:
+    items = []
+    append_syndication_oembed_fallback_item(items, "twitter.com", "2022790791047823773")
+    assert items == [
+        (
+            "oembed",
+            {
+                "url": "https://twitter.com/i/status/2022790791047823773",
+                "dnt": "false",
+                "omit_script": "true",
+                "hide_thread": "true",
+                "lang": "en",
+            },
+        )
     ]
 
 
@@ -3679,6 +3719,17 @@ def test_build_syndication_fetch_plan_values_shape() -> None:
     assert base == "https://cdn.syndication.twimg.com/"
     assert headers["Referer"] == "https://platform.twitter.com/"
     assert variants == [
+        ("widgets", {"id": "2022790791047823773", "lang": "en"}),
+        ("tweet-result", {"id": "2022790791047823773", "lang": "en"}),
+        ("widgets", {"id": "2022790791047823773", "lang": "en", "dnt": "false"}),
+    ]
+
+
+def test_resolve_syndication_fetch_plan_value_helpers() -> None:
+    assert resolve_syndication_fetch_plan_base_url() == "https://cdn.syndication.twimg.com/"
+    headers = resolve_syndication_fetch_plan_headers()
+    assert headers["Referer"] == "https://platform.twitter.com/"
+    assert resolve_syndication_fetch_plan_params_variants("2022790791047823773") == [
         ("widgets", {"id": "2022790791047823773", "lang": "en"}),
         ("tweet-result", {"id": "2022790791047823773", "lang": "en"}),
         ("widgets", {"id": "2022790791047823773", "lang": "en", "dnt": "false"}),
