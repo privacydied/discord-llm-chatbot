@@ -194,6 +194,7 @@ from bot.router_components.x_routing import (
     build_syndication_accept_language_pair,
     build_syndication_lang_quality,
     build_syndication_accept_language_secondary_entry,
+    join_accept_language_entries,
     build_syndication_fetch_referer,
     build_syndication_platform_host,
     build_syndication_fetch_accept,
@@ -202,6 +203,7 @@ from bot.router_components.x_routing import (
     build_syndication_accept_text_mime,
     build_syndication_accept_text_quality,
     build_syndication_accept_text_entry,
+    compose_entry_with_quality,
     build_syndication_accept_any_mime,
     build_syndication_accept_any_quality,
     build_syndication_accept_any_entry,
@@ -214,6 +216,7 @@ from bot.router_components.x_routing import (
     build_syndication_fetch_headers,
     build_syndication_fetch_headers_base,
     build_syndication_fetch_header_map,
+    build_ordered_header_map,
     build_syndication_fetch_header_keys,
     build_syndication_fetch_header_values,
     build_syndication_dnt_key,
@@ -2906,6 +2909,10 @@ def test_build_syndication_fetch_accept_language_constant() -> None:
     assert build_syndication_fetch_accept_language() == "en-US,en;q=0.9"
 
 
+def test_join_accept_language_entries() -> None:
+    assert join_accept_language_entries("en-US", "en;q=0.9") == "en-US,en;q=0.9"
+
+
 def test_build_syndication_region_locale_constant() -> None:
     assert build_syndication_region_locale() == "en-US"
 
@@ -2963,6 +2970,10 @@ def test_build_syndication_accept_text_entry_constant() -> None:
     assert build_syndication_accept_text_entry() == "text/javascript;q=0.9"
 
 
+def test_compose_entry_with_quality() -> None:
+    assert compose_entry_with_quality("text/javascript", "q=0.9") == "text/javascript;q=0.9"
+
+
 def test_build_syndication_accept_any_mime_constant() -> None:
     assert build_syndication_accept_any_mime() == "*/*"
 
@@ -2973,6 +2984,19 @@ def test_build_syndication_accept_any_quality_constant() -> None:
 
 def test_build_syndication_accept_any_entry_constant() -> None:
     assert build_syndication_accept_any_entry() == "*/*;q=0.8"
+
+
+def test_build_ordered_header_map_shape() -> None:
+    headers = build_ordered_header_map(
+        ("User-Agent", "Accept", "Accept-Language", "Referer"),
+        ("UA", "A", "AL", "R"),
+    )
+    assert headers == {
+        "User-Agent": "UA",
+        "Accept": "A",
+        "Accept-Language": "AL",
+        "Referer": "R",
+    }
 
 
 def test_build_syndication_lang_constant() -> None:

@@ -1122,9 +1122,9 @@ def build_syndication_user_agent_platform() -> str:
 
 def build_syndication_fetch_accept_language() -> str:
     """Return canonical Accept-Language for CDN syndication fetches."""
-    return (
-        f"{build_syndication_accept_language_primary_entry()},"
-        f"{build_syndication_accept_language_secondary_entry()}"
+    return join_accept_language_entries(
+        build_syndication_accept_language_primary_entry(),
+        build_syndication_accept_language_secondary_entry(),
     )
 
 
@@ -1140,7 +1140,10 @@ def build_syndication_accept_language_primary_entry() -> str:
 
 def build_syndication_accept_language_pair() -> str:
     """Return canonical locale pair used in Accept-Language headers."""
-    return f"{build_syndication_region_locale()},{build_syndication_lang()}"
+    return join_accept_language_entries(
+        build_syndication_region_locale(),
+        build_syndication_lang(),
+    )
 
 
 def build_syndication_lang_quality() -> str:
@@ -1150,7 +1153,10 @@ def build_syndication_lang_quality() -> str:
 
 def build_syndication_accept_language_secondary_entry() -> str:
     """Return canonical secondary Accept-Language entry with quality."""
-    return f"{build_syndication_lang()};{build_syndication_lang_quality()}"
+    return compose_entry_with_quality(
+        build_syndication_lang(),
+        build_syndication_lang_quality(),
+    )
 
 
 def build_syndication_fetch_referer() -> str:
@@ -1194,7 +1200,10 @@ def build_syndication_accept_text_quality() -> str:
 
 def build_syndication_accept_text_entry() -> str:
     """Return canonical text/javascript entry with quality for Accept headers."""
-    return f"{build_syndication_accept_text_mime()};{build_syndication_accept_text_quality()}"
+    return compose_entry_with_quality(
+        build_syndication_accept_text_mime(),
+        build_syndication_accept_text_quality(),
+    )
 
 
 def build_syndication_accept_any_mime() -> str:
@@ -1209,7 +1218,20 @@ def build_syndication_accept_any_quality() -> str:
 
 def build_syndication_accept_any_entry() -> str:
     """Return canonical wildcard entry with quality for Accept headers."""
-    return f"{build_syndication_accept_any_mime()};{build_syndication_accept_any_quality()}"
+    return compose_entry_with_quality(
+        build_syndication_accept_any_mime(),
+        build_syndication_accept_any_quality(),
+    )
+
+
+def compose_entry_with_quality(entry: str, quality: str) -> str:
+    """Compose a header entry token with a quality suffix."""
+    return f"{entry};{quality}"
+
+
+def join_accept_language_entries(primary: str, secondary: str) -> str:
+    """Join primary/secondary Accept-Language entries."""
+    return f"{primary},{secondary}"
 
 
 def build_syndication_lang() -> str:
@@ -1236,6 +1258,14 @@ def build_syndication_fetch_header_map(
     values: Tuple[str, str, str, str],
 ) -> Dict[str, str]:
     """Build syndication header map from ordered keys and values tuples."""
+    return build_ordered_header_map(keys, values)
+
+
+def build_ordered_header_map(
+    keys: Tuple[str, str, str, str],
+    values: Tuple[str, str, str, str],
+) -> Dict[str, str]:
+    """Build ordered header map from aligned key/value tuples."""
     user_agent_key, accept_key, accept_language_key, referer_key = keys
     user_agent, accept, accept_language, referer = values
     return {
