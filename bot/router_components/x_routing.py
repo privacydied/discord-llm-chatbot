@@ -2492,4 +2492,14 @@ def append_matched_x_url(
 
 def matched_x_raw_value(raw_url: str) -> str:
     """Return matched X raw URL value before canonical append."""
+    return matched_x_raw_value_source(raw_url)
+
+
+def matched_x_raw_value_source(raw_url: str) -> str:
+    """Return source matched X raw URL value for append helper."""
+    return matched_x_raw_value_result(raw_url)
+
+
+def matched_x_raw_value_result(raw_url: str) -> str:
+    """Return value used by matched-X raw-value source helper."""
     return raw_url
