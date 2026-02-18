@@ -189,26 +189,31 @@ def normalize_x_url(url: str) -> str:
     """Normalize X/Twitter URLs to canonical host/path, dropping query/fragment."""
     try:
         p = urlparse(url)
-        host = (p.netloc or "").lower()
-        aliases = {
-            "mobile.twitter.com",
-            "www.twitter.com",
-            build_syndication_twitter_host(),
-            "www.x.com",
-            build_syndication_x_host(),
-            "fxtwitter.com",
-            "www.fxtwitter.com",
-            "vxtwitter.com",
-            "www.vxtwitter.com",
-            "fixupx.com",
-            "www.fixupx.com",
-        }
-        if host in aliases:
-            host = build_syndication_x_host()
+        host = normalize_x_host((p.netloc or "").lower())
         path = normalize_x_path(p.path or "")
         return urlunparse(("https", host, path, "", "", ""))
     except Exception:
         return url
+
+
+def normalize_x_host(host: str) -> str:
+    """Normalize known Twitter/X alias hosts to canonical x.com host."""
+    aliases = {
+        "mobile.twitter.com",
+        "www.twitter.com",
+        build_syndication_twitter_host(),
+        "www.x.com",
+        build_syndication_x_host(),
+        "fxtwitter.com",
+        "www.fxtwitter.com",
+        "vxtwitter.com",
+        "www.vxtwitter.com",
+        "fixupx.com",
+        "www.fixupx.com",
+    }
+    if host in aliases:
+        return build_syndication_x_host()
+    return host
 
 
 def normalize_x_path(path: str) -> str:

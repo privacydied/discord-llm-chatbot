@@ -69,6 +69,7 @@ from bot.router_components.x_routing import (
     is_twitter_thumbnail_host,
     is_twitter_thumbnail_url,
     is_twitter_url,
+    normalize_x_host,
     normalize_x_path,
     normalize_x_url,
     parse_twitter_status_id,
@@ -350,6 +351,12 @@ def test_canonicalize_and_normalize_x_urls() -> None:
 def test_normalize_x_path() -> None:
     assert normalize_x_path("/user/status/1/") == "/user/status/1"
     assert normalize_x_path("/user/status/1") == "/user/status/1"
+
+
+def test_normalize_x_host() -> None:
+    assert normalize_x_host("mobile.twitter.com") == "x.com"
+    assert normalize_x_host("www.fxtwitter.com") == "x.com"
+    assert normalize_x_host("example.com") == "example.com"
 
 
 def test_is_twitter_thumbnail_host() -> None:
