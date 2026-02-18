@@ -2456,7 +2456,12 @@ def url_re_finditer_source(url_re: Any, text: Any) -> Iterable[Any]:
 
 def url_re_finditer_iter(url_re: Any, text: Any) -> Iterable[Any]:
     """Yield iterator used by url_re_finditer source helper."""
-    yield from url_re.finditer(url_scan_text(text))
+    yield from url_re.finditer(url_scan_text_for_finditer(text))
+
+
+def url_scan_text_for_finditer(text: Any) -> str:
+    """Return normalized text used specifically by url_re.finditer calls."""
+    return url_scan_text(text)
 
 
 def url_scan_text(text: Any) -> str:
