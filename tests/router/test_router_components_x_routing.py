@@ -77,6 +77,7 @@ from bot.router_components.x_routing import (
     is_tweet_media_url,
     is_blocked_tweet_media_path,
     blocked_tweet_media_prefixes,
+    poster_tweet_media_prefixes,
     is_poster_tweet_media_path,
     has_tweet_media_path_segment,
     is_twitter_media_cdn,
@@ -515,6 +516,12 @@ def test_is_poster_tweet_media_path() -> None:
     assert is_poster_tweet_media_path("/ext_tw_video_thumb/123/pu/img.jpg")
     assert is_poster_tweet_media_path("/tweet_video_thumb/123/img.jpg")
     assert not is_poster_tweet_media_path("/media/abc123.jpg")
+
+
+def test_poster_tweet_media_prefixes() -> None:
+    prefixes = poster_tweet_media_prefixes()
+    assert "/ext_tw_video_thumb/" in prefixes
+    assert "/tweet_video_thumb/" in prefixes
 
 
 def test_has_tweet_media_path_segment() -> None:
