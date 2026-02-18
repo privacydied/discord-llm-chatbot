@@ -99,6 +99,7 @@ from bot.router_components.x_routing import (
     normalize_x_path,
     normalize_x_url,
     compose_normalized_x_url,
+    compose_canonical_status_url,
     primary_tweet_id_hint_keys,
     primary_tweet_id_param_sources,
     parse_twitter_status_id,
@@ -439,6 +440,10 @@ def test_canonicalize_and_normalize_x_urls() -> None:
     assert normalize_x_url("https://mobile.twitter.com/user/status/1?s=20#frag") == (
         "https://x.com/user/status/1"
     )
+
+
+def test_compose_canonical_status_url() -> None:
+    assert compose_canonical_status_url("2022790791047823773") == "https://x.com/i/status/2022790791047823773"
 
 
 def test_compose_normalized_x_url() -> None:

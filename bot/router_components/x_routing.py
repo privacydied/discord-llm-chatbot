@@ -54,8 +54,13 @@ def canonicalize_twitter_status_url(url: str) -> str:
     """Convert any Twitter status URL to canonical form https://x.com/i/status/{id}."""
     status_id = parse_twitter_status_id(url)
     if status_id:
-        return f"https://x.com/{build_syndication_status_path()}/{status_id}"
+        return compose_canonical_status_url(status_id)
     return url
+
+
+def compose_canonical_status_url(status_id: str) -> str:
+    """Compose canonical x.com status URL from tweet ID."""
+    return f"https://x.com/{build_syndication_status_path()}/{status_id}"
 
 
 def is_twitter_url(url: str) -> bool:
