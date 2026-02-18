@@ -1597,12 +1597,17 @@ def format_syndication_body_text(text: str) -> str:
         return text
     if text:
         return format_syndication_truncated_text(text)
-    return "(Tweet text not available. If you want analysis, paste the text or add a screenshot.)"
+    return format_syndication_missing_text_fallback()
 
 
 def format_syndication_truncated_text(text: str) -> str:
     """Return legacy-truncated syndication body text with ellipsis suffix."""
     return text[:3990] + "…"
+
+
+def format_syndication_missing_text_fallback() -> str:
+    """Return legacy fallback copy when syndication text is unavailable."""
+    return "(Tweet text not available. If you want analysis, paste the text or add a screenshot.)"
 
 
 def format_syndication_header_line(

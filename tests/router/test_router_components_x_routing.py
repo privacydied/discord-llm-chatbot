@@ -235,6 +235,7 @@ from bot.router_components.x_routing import (
     syndication_media_hint_keys,
     format_syndication_body_text,
     format_syndication_truncated_text,
+    format_syndication_missing_text_fallback,
     format_syndication_header_line,
     format_syndication_header_username,
     format_syndication_header_media_hint,
@@ -2821,6 +2822,12 @@ def test_format_syndication_truncated_text_shape() -> None:
     out = format_syndication_truncated_text("x" * 5000)
     assert len(out) == 3991
     assert out.endswith("…")
+
+
+def test_format_syndication_missing_text_fallback_shape() -> None:
+    assert format_syndication_missing_text_fallback() == (
+        "(Tweet text not available. If you want analysis, paste the text or add a screenshot.)"
+    )
 
 
 def test_format_syndication_header_line_variants() -> None:
