@@ -333,7 +333,12 @@ def stt_result_has_transcription(stt_result: Any) -> bool:
     """Check whether STT result payload has a transcription field."""
     if not isinstance(stt_result, dict):
         return False
-    return bool(stt_result.get("transcription"))
+    return stt_transcription_value_is_present(stt_result.get("transcription"))
+
+
+def stt_transcription_value_is_present(value: Any) -> bool:
+    """Return whether STT transcription value is present/non-empty."""
+    return bool(value)
 
 
 def resolve_twitter_status_id(

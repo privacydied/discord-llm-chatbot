@@ -232,6 +232,7 @@ from bot.router_components.x_routing import (
     resolve_twitter_status_id,
     is_twitter_status_url,
     stt_result_has_transcription,
+    stt_transcription_value_is_present,
     unwrap_x_media_url,
     x_syn_probe_budget_timeout_s,
     x_syn_timeout_cap,
@@ -1316,6 +1317,12 @@ def test_stt_result_has_transcription_matches_router_semantics() -> None:
     assert stt_result_has_transcription({"transcription": ""}) is False
     assert stt_result_has_transcription({"text": "fallback only"}) is False
     assert stt_result_has_transcription(None) is False
+
+
+def test_stt_transcription_value_is_present() -> None:
+    assert stt_transcription_value_is_present("hello") is True
+    assert stt_transcription_value_is_present("   ") is True
+    assert stt_transcription_value_is_present("") is False
 
 
 def test_resolve_twitter_status_id_prefers_hint_then_parser() -> None:
