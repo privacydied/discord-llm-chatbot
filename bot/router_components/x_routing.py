@@ -2399,6 +2399,24 @@ def status_url_matches_predicate(
     is_status_url: Callable[[str], bool],
 ) -> bool:
     """Return whether raw URL matches status predicate for append gating."""
+    return status_url_matches_predicate_source(raw_url, is_status_url=is_status_url)
+
+
+def status_url_matches_predicate_source(
+    raw_url: str,
+    *,
+    is_status_url: Callable[[str], bool],
+) -> bool:
+    """Return source predicate result used by status URL match helper."""
+    return status_url_matches_predicate_result(raw_url, is_status_url=is_status_url)
+
+
+def status_url_matches_predicate_result(
+    raw_url: str,
+    *,
+    is_status_url: Callable[[str], bool],
+) -> bool:
+    """Return value used by status URL match predicate source helper."""
     return is_status_url_candidate(raw_url, is_status_url=is_status_url)
 
 
