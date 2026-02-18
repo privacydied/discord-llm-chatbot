@@ -612,14 +612,26 @@ def extract_syndication_text(
         return ""
     article_extractor = extract_article_text or extract_x_article_text
     base_text = extract_syndication_base_text(node)
-    try:
-        article_text = article_extractor(node.get("article"))
-    except Exception:
-        article_text = ""
+    article_text = extract_syndication_article_text(
+        node=node,
+        article_extractor=article_extractor,
+    )
     return merge_syndication_base_with_article(
         base_text=base_text,
         article_text=article_text,
     )
+
+
+def extract_syndication_article_text(
+    *,
+    node: Dict[str, Any],
+    article_extractor: Callable[[Any], str],
+) -> str:
+    """Extract hydrated article text from syndication payload; fail open on extractor errors."""
+    try:
+        return article_extractor(node.get("article"))
+    except Exception:
+        return ""
 
 
 def build_x_text_miss_log_payload(url: str) -> Dict[str, Any]:

@@ -104,6 +104,7 @@ from bot.router_components.x_routing import (
     merge_syndication_base_with_article,
     base_text_contains_tco_link,
     extract_syndication_text,
+    extract_syndication_article_text,
     build_x_text_miss_log_payload,
     build_x_text_miss_payload,
     build_x_text_resolve_payload,
@@ -1720,6 +1721,25 @@ def test_extract_syndication_text_variants() -> None:
             ),
         )
         == "base"
+    )
+
+
+def test_extract_syndication_article_text_variants() -> None:
+    assert (
+        extract_syndication_article_text(
+            node={"article": {"id": "1"}},
+            article_extractor=lambda article: str(article.get("id") or ""),
+        )
+        == "1"
+    )
+    assert (
+        extract_syndication_article_text(
+            node={"article": {"id": "1"}},
+            article_extractor=lambda _article: (_ for _ in ()).throw(
+                RuntimeError("boom")
+            ),
+        )
+        == ""
     )
 
 
