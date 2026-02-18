@@ -2113,6 +2113,11 @@ def x_url_extract_regex_source_value() -> Any:
 
 def x_url_extract_regex_source_input() -> Any:
     """Return upstream regex source used by X regex source value helper."""
+    return x_url_extract_regex_for_source_input()
+
+
+def x_url_extract_regex_for_source_input() -> Any:
+    """Return X URL extraction regex used by source-input helper."""
     return x_url_extract_regex()
 
 
