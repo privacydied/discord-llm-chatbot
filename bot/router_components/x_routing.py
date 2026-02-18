@@ -17,24 +17,52 @@ def parse_twitter_status_id(url: str) -> Optional[str]:
 
 def extract_primary_tweet_id(url: str) -> Optional[str]:
     """Extract stable primary tweet ID, preferring explicit URL hint fragments."""
-    raw_url = str(url or "").strip()
+    raw_url = normalize_raw_url(url)
     if not raw_url:
         return None
 
     try:
         parsed = urlparse(raw_url)
-        for params in primary_tweet_id_param_sources(parsed):
-            for key in primary_tweet_id_hint_keys():
-                values = params.get(key) or []
-                if not values:
-                    continue
-                candidate = str(values[0] or "").strip()
-                if candidate and candidate.isdigit():
-                    return candidate
+        candidate = parsed_primary_tweet_id(parsed)
+        if candidate:
+            return candidate
     except Exception:
         pass
 
     return parse_twitter_status_id(raw_url)
+
+
+def normalize_raw_url(url: Any) -> str:
+    """Normalize arbitrary URL input to a stripped string."""
+    return str(url or "").strip()
+
+
+def parsed_primary_tweet_id(parsed: Any) -> Optional[str]:
+    """Resolve primary tweet-id candidate from parsed fragment/query params."""
+    for params in primary_tweet_id_param_sources(parsed):
+        candidate = primary_tweet_id_from_params(params)
+        if candidate:
+            return candidate
+    return None
+
+
+def primary_tweet_id_from_params(params: Dict[str, List[str]]) -> Optional[str]:
+    """Resolve first valid tweet-id candidate from one params map."""
+    for key in primary_tweet_id_hint_keys():
+        candidate = first_digit_candidate(params.get(key) or [])
+        if candidate:
+            return candidate
+    return None
+
+
+def first_digit_candidate(values: List[str]) -> Optional[str]:
+    """Return first stripped all-digit candidate value."""
+    if not values:
+        return None
+    candidate = str(values[0] or "").strip()
+    if candidate and candidate.isdigit():
+        return candidate
+    return None
 
 
 def primary_tweet_id_hint_keys() -> Tuple[str, ...]:
@@ -68,16 +96,35 @@ def is_twitter_url(url: str) -> bool:
         u = str(url)
     except Exception:
         return False
+    if has_twitter_status_id(u):
+        return True
+    low = lower_or_empty(u)
+    if not low:
+        return False
+    return twitter_url_contains_domain_marker(low)
+
+
+def has_twitter_status_id(url: str) -> bool:
+    """Return True when URL contains a parseable status ID."""
     try:
-        if parse_twitter_status_id(u):
-            return True
-    except Exception:
-        pass
-    try:
-        low = u.lower()
+        return bool(parse_twitter_status_id(url))
     except Exception:
         return False
-    return any(d in low for d in twitter_url_domain_markers())
+
+
+def lower_or_empty(value: Any) -> str:
+    """Lowercase string value; return empty string on failure."""
+    if value is None:
+        return ""
+    try:
+        return str(value).lower()
+    except Exception:
+        return ""
+
+
+def twitter_url_contains_domain_marker(lower_url: str) -> bool:
+    """Return True when lowercase URL contains a known Twitter/X domain marker."""
+    return any(d in lower_url for d in twitter_url_domain_markers())
 
 
 def twitter_url_domain_markers() -> Tuple[str, ...]:

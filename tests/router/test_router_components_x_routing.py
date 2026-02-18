@@ -116,6 +116,13 @@ from bot.router_components.x_routing import (
     compose_normalized_x_url,
     compose_canonical_status_url,
     twitter_url_domain_markers,
+    twitter_url_contains_domain_marker,
+    has_twitter_status_id,
+    lower_or_empty,
+    normalize_raw_url,
+    parsed_primary_tweet_id,
+    primary_tweet_id_from_params,
+    first_digit_candidate,
     primary_tweet_id_hint_keys,
     primary_tweet_id_param_sources,
     parse_twitter_status_id,
@@ -446,8 +453,39 @@ def test_twitter_url_domain_markers() -> None:
     assert "twitter.com/" in markers
 
 
+def test_twitter_url_contains_domain_marker() -> None:
+    assert twitter_url_contains_domain_marker("https://x.com/u/status/1")
+    assert not twitter_url_contains_domain_marker("https://example.com/page")
+
+
+def test_has_twitter_status_id() -> None:
+    assert has_twitter_status_id("https://x.com/u/status/2022790791047823773?s=20")
+    assert not has_twitter_status_id("https://example.com/page")
+
+
+def test_lower_or_empty() -> None:
+    assert lower_or_empty("ABC") == "abc"
+    assert lower_or_empty(None) == ""
+
+
+def test_normalize_raw_url() -> None:
+    assert normalize_raw_url("  https://x.com/u/status/1  ") == "https://x.com/u/status/1"
+    assert normalize_raw_url(None) == ""
+
+
 def test_primary_tweet_id_hint_keys() -> None:
     assert primary_tweet_id_hint_keys() == ("ptid", "primary", "tweet_id", "status_id", "id")
+
+
+def test_first_digit_candidate() -> None:
+    assert first_digit_candidate([" 123 "]) == "123"
+    assert first_digit_candidate(["abc"]) is None
+    assert first_digit_candidate([]) is None
+
+
+def test_primary_tweet_id_from_params() -> None:
+    assert primary_tweet_id_from_params({"tweet_id": ["123"]}) == "123"
+    assert primary_tweet_id_from_params({"tweet_id": ["abc"]}) is None
 
 
 def test_primary_tweet_id_param_sources() -> None:
@@ -455,6 +493,11 @@ def test_primary_tweet_id_param_sources() -> None:
     fragment_params, query_params = primary_tweet_id_param_sources(parsed)
     assert fragment_params.get("primary") == ["3"]
     assert query_params.get("tweet_id") == ["2"]
+
+
+def test_parsed_primary_tweet_id() -> None:
+    parsed = urlparse("https://x.com/u/status/1?tweet_id=2#primary=3")
+    assert parsed_primary_tweet_id(parsed) == "3"
 
 
 def test_canonicalize_and_normalize_x_urls() -> None:
