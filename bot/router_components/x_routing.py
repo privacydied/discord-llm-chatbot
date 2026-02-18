@@ -2838,6 +2838,18 @@ def is_status_url_candidate_result(
     is_status_url: Callable[[str], bool],
 ) -> bool:
     """Return value used by status URL candidate source helper."""
+    return is_status_url_candidate_for_result(
+        raw_url,
+        is_status_url=is_status_url,
+    )
+
+
+def is_status_url_candidate_for_result(
+    raw_url: str,
+    *,
+    is_status_url: Callable[[str], bool],
+) -> bool:
+    """Return status URL predicate result via candidate-result handoff helper."""
     return is_status_url(raw_url)
 
 
