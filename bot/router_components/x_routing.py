@@ -386,9 +386,7 @@ def build_stt_fail_log_payload(
     msg_id: Optional[int] = None,
 ) -> Dict[str, Any]:
     """Build structured payload for STT failure breadcrumb logging."""
-    detail: Dict[str, Any] = {"reason": reason}
-    if media_kind:
-        detail["media_kind"] = media_kind
+    detail = build_stt_fail_detail(reason, media_kind=media_kind)
     payload: Dict[str, Any] = {
         "event": "stt.fail",
         "detail": detail,
@@ -396,6 +394,14 @@ def build_stt_fail_log_payload(
     if msg_id is not None:
         payload["msg_id"] = msg_id
     return payload
+
+
+def build_stt_fail_detail(reason: str, *, media_kind: Optional[str] = None) -> Dict[str, Any]:
+    """Build detail object for STT failure breadcrumb payloads."""
+    detail: Dict[str, Any] = {"reason": reason}
+    if media_kind:
+        detail["media_kind"] = media_kind
+    return detail
 
 
 def build_caption_only_fallback_log_payload() -> Dict[str, Any]:

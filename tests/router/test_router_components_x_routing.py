@@ -84,6 +84,7 @@ from bot.router_components.x_routing import (
     classify_stt_error_reason,
     is_stt_hard_error,
     build_stt_fail_log_payload,
+    build_stt_fail_detail,
     build_caption_only_fallback_log_payload,
     build_x_video_stt_error_result_payload,
     resolve_caption_only_base_text,
@@ -1409,6 +1410,14 @@ def test_build_stt_fail_log_payload_includes_optional_fields() -> None:
         "event": "stt.fail",
         "detail": {"reason": "error", "media_kind": "video"},
         "msg_id": 123,
+    }
+
+
+def test_build_stt_fail_detail_includes_optional_media_kind() -> None:
+    assert build_stt_fail_detail("no_speech") == {"reason": "no_speech"}
+    assert build_stt_fail_detail("error", media_kind="video") == {
+        "reason": "error",
+        "media_kind": "video",
     }
 
 
