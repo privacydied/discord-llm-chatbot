@@ -2058,6 +2058,11 @@ def status_url_extract_regex() -> Any:
 
 def status_url_extract_regex_source_call() -> Any:
     """Return regex source call result used by status URL extraction helper."""
+    return status_url_extract_regex_source_for_call()
+
+
+def status_url_extract_regex_source_for_call() -> Any:
+    """Return status URL extraction regex source used by source-call helper."""
     return status_url_extract_regex_source()
 
 
