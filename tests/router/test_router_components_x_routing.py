@@ -7,7 +7,13 @@ import pytest
 from bot.router_components.x_routing import (
     canonicalize_twitter_status_url,
     collect_x_candidate_urls,
+    collect_url_item_candidate_urls,
+    collect_embed_candidate_urls,
+    collect_attachment_candidate_urls,
     append_url_item_payload,
+    filter_non_empty_urls,
+    x_candidate_embed_attr_names,
+    append_embed_candidate_attr_urls,
     append_embed_primary_url_if_present,
     append_embed_attr_url_if_present,
     append_attachment_urls_if_present,
@@ -566,6 +572,44 @@ def test_append_url_item_payload() -> None:
     assert urls == ["https://x.com/u/status/1"]
 
 
+def test_collect_url_item_candidate_urls() -> None:
+    item = SimpleNamespace(payload="https://x.com/u/status/1")
+    assert collect_url_item_candidate_urls(item) == ["https://x.com/u/status/1"]
+
+
+def test_filter_non_empty_urls() -> None:
+    assert filter_non_empty_urls(["https://x.com/u/status/1", "", None]) == [
+        "https://x.com/u/status/1"
+    ]
+
+
+def test_x_candidate_embed_attr_names() -> None:
+    assert x_candidate_embed_attr_names() == ("video", "image", "thumbnail")
+
+
+def test_collect_embed_candidate_urls() -> None:
+    embed = SimpleNamespace(
+        url="https://x.com/u/status/2",
+        video=SimpleNamespace(url="https://video.twimg.com/ext_tw_video/abc"),
+        image=SimpleNamespace(url="https://pbs.twimg.com/media/xyz.jpg"),
+        thumbnail=None,
+    )
+    urls = collect_embed_candidate_urls(embed)
+    assert "https://x.com/u/status/2" in urls
+    assert "https://video.twimg.com/ext_tw_video/abc" in urls
+    assert "https://pbs.twimg.com/media/xyz.jpg" in urls
+
+
+def test_collect_attachment_candidate_urls() -> None:
+    attachment = SimpleNamespace(
+        url="https://video.twimg.com/ext_tw_video/att.mp4",
+        proxy_url="https://cdn.discordapp.com/proxy",
+    )
+    urls = collect_attachment_candidate_urls(attachment)
+    assert "https://video.twimg.com/ext_tw_video/att.mp4" in urls
+    assert "https://cdn.discordapp.com/proxy" in urls
+
+
 def test_append_embed_attr_url_if_present() -> None:
     urls: list[str] = []
     embed = SimpleNamespace(
@@ -576,6 +620,18 @@ def test_append_embed_attr_url_if_present() -> None:
     append_embed_attr_url_if_present(urls, embed, "video")
     append_embed_attr_url_if_present(urls, embed, "image")
     append_embed_attr_url_if_present(urls, embed, "thumbnail")
+    assert "https://video.twimg.com/ext_tw_video/abc" in urls
+    assert "https://pbs.twimg.com/media/xyz.jpg" in urls
+
+
+def test_append_embed_candidate_attr_urls() -> None:
+    urls: list[str] = []
+    embed = SimpleNamespace(
+        video=SimpleNamespace(url="https://video.twimg.com/ext_tw_video/abc"),
+        image=SimpleNamespace(url="https://pbs.twimg.com/media/xyz.jpg"),
+        thumbnail=None,
+    )
+    append_embed_candidate_attr_urls(urls, embed)
     assert "https://video.twimg.com/ext_tw_video/abc" in urls
     assert "https://pbs.twimg.com/media/xyz.jpg" in urls
 

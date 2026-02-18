@@ -95,24 +95,57 @@ def collect_x_candidate_urls(item: Any) -> List[str]:
     urls: List[str] = []
     try:
         if item.source_type == "url":
-            append_url_item_payload(urls, item)
+            urls.extend(collect_url_item_candidate_urls(item))
         elif item.source_type == "embed":
-            embed = item.payload
-            append_embed_primary_url_if_present(urls, embed)
-            append_embed_attr_url_if_present(urls, embed, "video")
-            append_embed_attr_url_if_present(urls, embed, "image")
-            append_embed_attr_url_if_present(urls, embed, "thumbnail")
+            urls.extend(collect_embed_candidate_urls(item.payload))
         elif item.source_type == "attachment":
-            attachment = item.payload
-            append_attachment_urls_if_present(urls, attachment)
+            urls.extend(collect_attachment_candidate_urls(item.payload))
     except Exception:
         pass
-    return [u for u in urls if u]
+    return filter_non_empty_urls(urls)
 
 
 def append_url_item_payload(urls: List[str], item: Any) -> None:
     """Append normalized URL-item payload."""
     urls.append(str(item.payload))
+
+
+def filter_non_empty_urls(urls: List[str]) -> List[str]:
+    """Return URLs with falsy entries removed."""
+    return [u for u in urls if u]
+
+
+def collect_url_item_candidate_urls(item: Any) -> List[str]:
+    """Collect candidate URLs from a URL source item."""
+    urls: List[str] = []
+    append_url_item_payload(urls, item)
+    return urls
+
+
+def collect_embed_candidate_urls(embed: Any) -> List[str]:
+    """Collect candidate URLs from an embed payload."""
+    urls: List[str] = []
+    append_embed_primary_url_if_present(urls, embed)
+    append_embed_candidate_attr_urls(urls, embed)
+    return urls
+
+
+def collect_attachment_candidate_urls(attachment: Any) -> List[str]:
+    """Collect candidate URLs from an attachment payload."""
+    urls: List[str] = []
+    append_attachment_urls_if_present(urls, attachment)
+    return urls
+
+
+def x_candidate_embed_attr_names() -> Tuple[str, ...]:
+    """Return embed attribute names probed for candidate URLs."""
+    return ("video", "image", "thumbnail")
+
+
+def append_embed_candidate_attr_urls(urls: List[str], embed: Any) -> None:
+    """Append candidate URLs for all supported embed media attributes."""
+    for attr_name in x_candidate_embed_attr_names():
+        append_embed_attr_url_if_present(urls, embed, attr_name)
 
 
 def append_embed_attr_url_if_present(urls: List[str], embed: Any, attr_name: str) -> None:
