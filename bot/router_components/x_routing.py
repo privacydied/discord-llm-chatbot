@@ -234,7 +234,7 @@ def unwrap_x_media_url(url: str) -> str:
                 values = params.get(key)
                 if values:
                     candidate = unquote(values[0])
-                    if candidate.startswith("http"):
+                    if is_unwrap_x_media_candidate_url(candidate):
                         return candidate
         return url
     except Exception:
@@ -249,6 +249,11 @@ def unwrap_x_media_param_keys() -> tuple[str, ...]:
 def is_unwrap_x_media_proxy_host(host: str) -> bool:
     """Return True when host is a supported fx/vx media proxy endpoint."""
     return host in {"api.fxtwitter.com", "api.vxtwitter.com"}
+
+
+def is_unwrap_x_media_candidate_url(candidate: str) -> bool:
+    """Return True when unwrapped candidate looks like an absolute HTTP URL."""
+    return candidate.startswith("http")
 
 
 def extract_x_api_primary_tweet(api_data: Any) -> Dict[str, Any]:
