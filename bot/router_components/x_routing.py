@@ -2391,6 +2391,11 @@ def iter_text_url_matches(text: str, *, url_re: Any) -> Iterable[Any]:
 
 def url_matches(text: str, *, url_re: Any) -> Iterable[Any]:
     """Yield URL regex match objects for text URL extraction loops."""
+    yield from iter_url_matches_for_url_matches(text, url_re=url_re)
+
+
+def iter_url_matches_for_url_matches(text: str, *, url_re: Any) -> Iterable[Any]:
+    """Yield URL matches via url-matches handoff helper."""
     yield from url_matches_source(text, url_re=url_re)
 
 
