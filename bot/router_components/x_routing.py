@@ -371,11 +371,9 @@ def twitter_media_cdn_host_set() -> set[str]:
 def is_tweet_media_url(url: str) -> bool:
     """Check if URL is valid tweet media, excluding profile/banner metadata images."""
     path = tweet_media_url_path(url)
-    if not path:
+    if not tweet_media_path_present(path):
         return False
-    if not tweet_media_path_is_allowed(path):
-        return False
-    return has_tweet_media_path_segment(path)
+    return tweet_media_path_accepted(path)
 
 
 def tweet_media_url_path(url: Any) -> str:
@@ -383,18 +381,40 @@ def tweet_media_url_path(url: Any) -> str:
     if url is None:
         return ""
     try:
-        return extract_url_path(str(url).lower())
+        return extract_url_path(lower_url_text_for_media_path(url))
     except Exception:
         return ""
 
 
+def lower_url_text_for_media_path(url: Any) -> str:
+    """Return lowercase URL text used for tweet-media path extraction."""
+    return str(url).lower()
+
+
+def tweet_media_path_present(path: str) -> bool:
+    """Return True when tweet-media path string is non-empty."""
+    return bool(path)
+
+
+def tweet_media_path_accepted(path: str) -> bool:
+    """Return True when path is allowed and contains tweet media segment."""
+    if not tweet_media_path_is_allowed(path):
+        return False
+    return has_tweet_media_path_segment(path)
+
+
 def tweet_media_path_is_allowed(path: str) -> bool:
     """Return True when tweet-media path is not blocked or poster-only."""
+    return not is_disallowed_tweet_media_path(path)
+
+
+def is_disallowed_tweet_media_path(path: str) -> bool:
+    """Return True when path is blocked metadata or poster/thumbnail asset."""
     if is_blocked_tweet_media_path(path):
-        return False
+        return True
     if is_poster_tweet_media_path(path):
-        return False
-    return True
+        return True
+    return False
 
 
 def has_tweet_media_path_segment(path: str) -> bool:
@@ -456,10 +476,15 @@ def normalize_x_url(url: str) -> str:
     """Normalize X/Twitter URLs to canonical host/path, dropping query/fragment."""
     try:
         p = parse_url_for_normalization(url)
-        host, path = resolve_normalized_x_parts(p)
-        return compose_normalized_x_url(host, path)
+        return compose_normalized_x_url_from_parsed(p)
     except Exception:
         return url
+
+
+def compose_normalized_x_url_from_parsed(parsed: Any) -> str:
+    """Compose normalized X URL directly from a parsed URL object."""
+    host, path = resolve_normalized_x_parts(parsed)
+    return compose_normalized_x_url(host, path)
 
 
 def parse_url_for_normalization(url: str) -> Any:
@@ -469,9 +494,19 @@ def parse_url_for_normalization(url: str) -> Any:
 
 def resolve_normalized_x_parts(parsed: Any) -> Tuple[str, str]:
     """Resolve normalized host/path parts for a parsed X/Twitter URL."""
-    host = normalize_x_host(normalize_parsed_netloc(parsed))
-    path = normalize_x_path(normalize_parsed_path(parsed))
+    host = resolve_normalized_x_host(parsed)
+    path = resolve_normalized_x_path(parsed)
     return host, path
+
+
+def resolve_normalized_x_host(parsed: Any) -> str:
+    """Resolve normalized host value from parsed URL."""
+    return normalize_x_host(normalize_parsed_netloc(parsed))
+
+
+def resolve_normalized_x_path(parsed: Any) -> str:
+    """Resolve normalized path value from parsed URL."""
+    return normalize_x_path(normalize_parsed_path(parsed))
 
 
 def compose_normalized_x_url(host: str, path: str) -> str:
@@ -533,11 +568,16 @@ def unwrap_x_media_url(url: str) -> str:
         if not should_unwrap_x_media_host(host):
             return url
         candidate = resolve_unwrap_x_media_candidate(parsed)
-        if is_unwrap_x_media_candidate_url(candidate):
-            return candidate
-        return url
+        return resolved_unwrap_x_media_url(candidate, fallback=url)
     except Exception:
         return url
+
+
+def resolved_unwrap_x_media_url(candidate: str, *, fallback: str) -> str:
+    """Resolve final unwrap URL from candidate with fallback passthrough."""
+    if is_unwrap_x_media_candidate_url(candidate):
+        return candidate
+    return fallback
 
 
 def parse_unwrap_x_media_url(url: str) -> Any:
@@ -557,7 +597,12 @@ def should_unwrap_x_media_host(host: str) -> bool:
 
 def parse_unwrap_x_media_params(parsed: Any) -> Dict[str, List[str]]:
     """Parse query params used for unwrap-x media resolution."""
-    return parse_qs(str(getattr(parsed, "query", "") or ""))
+    return parse_qs(extract_unwrap_x_media_query(parsed))
+
+
+def extract_unwrap_x_media_query(parsed: Any) -> str:
+    """Extract query string used for unwrap-x media parameter parsing."""
+    return str(getattr(parsed, "query", "") or "")
 
 
 def resolve_unwrap_x_media_candidate(parsed: Any) -> str:

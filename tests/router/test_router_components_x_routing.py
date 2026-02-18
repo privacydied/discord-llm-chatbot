@@ -110,7 +110,11 @@ from bot.router_components.x_routing import (
     tweet_media_path_segment,
     path_contains_tweet_media_segment,
     tweet_media_url_path,
+    lower_url_text_for_media_path,
+    tweet_media_path_present,
+    tweet_media_path_accepted,
     tweet_media_path_is_allowed,
+    is_disallowed_tweet_media_path,
     is_twitter_media_cdn,
     is_twitter_media_cdn_host,
     twitter_media_cdn_hosts,
@@ -137,7 +141,10 @@ from bot.router_components.x_routing import (
     normalize_parsed_netloc,
     normalize_parsed_path,
     parse_url_for_normalization,
+    compose_normalized_x_url_from_parsed,
     resolve_normalized_x_parts,
+    resolve_normalized_x_host,
+    resolve_normalized_x_path,
     normalize_x_path,
     normalize_x_url,
     compose_normalized_x_url,
@@ -160,7 +167,9 @@ from bot.router_components.x_routing import (
     parse_unwrap_x_media_url,
     resolve_unwrap_x_media_host,
     should_unwrap_x_media_host,
+    resolved_unwrap_x_media_url,
     parse_unwrap_x_media_params,
+    extract_unwrap_x_media_query,
     resolve_unwrap_x_media_candidate,
     first_unwrap_x_media_candidate,
     unwrap_x_media_param_keys,
@@ -619,6 +628,11 @@ def test_parse_url_for_normalization() -> None:
     assert parsed.path == "/user/status/1"
 
 
+def test_compose_normalized_x_url_from_parsed() -> None:
+    parsed = urlparse("https://mobile.twitter.com/user/status/1/?s=20")
+    assert compose_normalized_x_url_from_parsed(parsed) == "https://x.com/user/status/1"
+
+
 def test_parse_url_value() -> None:
     parsed = parse_url_value("https://x.com/user/status/1?s=20#frag")
     assert parsed.netloc == "x.com"
@@ -656,6 +670,16 @@ def test_resolve_normalized_x_parts() -> None:
     host, path = resolve_normalized_x_parts(parsed)
     assert host == "x.com"
     assert path == "/user/status/1"
+
+
+def test_resolve_normalized_x_host() -> None:
+    parsed = urlparse("https://mobile.twitter.com/user/status/1/?s=20")
+    assert resolve_normalized_x_host(parsed) == "x.com"
+
+
+def test_resolve_normalized_x_path() -> None:
+    parsed = urlparse("https://mobile.twitter.com/user/status/1/?s=20")
+    assert resolve_normalized_x_path(parsed) == "/user/status/1"
 
 
 def test_normalize_x_host() -> None:
@@ -945,6 +969,26 @@ def test_twitter_host_and_media_path_helpers() -> None:
 def test_tweet_media_url_path() -> None:
     assert tweet_media_url_path("https://pbs.twimg.com/media/abc123.jpg?x=1") == "/media/abc123.jpg"
     assert tweet_media_url_path(None) == ""
+
+
+def test_lower_url_text_for_media_path() -> None:
+    assert lower_url_text_for_media_path("HTTPS://PBS.TWIMG.COM/MEDIA/ABC.JPG") == (
+        "https://pbs.twimg.com/media/abc.jpg"
+    )
+
+
+def test_tweet_media_path_presence_and_acceptance_helpers() -> None:
+    assert tweet_media_path_present("/media/abc.jpg") is True
+    assert tweet_media_path_present("") is False
+    assert tweet_media_path_accepted("/media/abc.jpg") is True
+    assert tweet_media_path_accepted("/profile_images/123/a.jpg") is False
+    assert tweet_media_path_accepted("/ext_tw_video_thumb/123/a.jpg") is False
+
+
+def test_is_disallowed_tweet_media_path() -> None:
+    assert is_disallowed_tweet_media_path("/profile_images/123/a.jpg") is True
+    assert is_disallowed_tweet_media_path("/ext_tw_video_thumb/123/a.jpg") is True
+    assert is_disallowed_tweet_media_path("/media/abc.jpg") is False
 
 
 def test_tweet_media_path_is_allowed() -> None:
@@ -2113,6 +2157,11 @@ def test_parse_unwrap_x_media_params() -> None:
     assert params.get("u") == ["https://video.twimg.com/v.mp4"]
 
 
+def test_extract_unwrap_x_media_query() -> None:
+    parsed = urlparse("https://api.fxtwitter.com/dl?u=https%3A%2F%2Fvideo.twimg.com%2Fv.mp4")
+    assert extract_unwrap_x_media_query(parsed) == "u=https%3A%2F%2Fvideo.twimg.com%2Fv.mp4"
+
+
 def test_parse_unwrap_x_media_url() -> None:
     parsed = parse_unwrap_x_media_url("https://api.fxtwitter.com/dl?u=https%3A%2F%2Fvideo.twimg.com%2Fv.mp4")
     assert parsed.netloc == "api.fxtwitter.com"
@@ -2131,6 +2180,18 @@ def test_should_unwrap_x_media_host() -> None:
 def test_resolve_unwrap_x_media_candidate() -> None:
     parsed = urlparse("https://api.fxtwitter.com/dl?target=https%3A%2F%2Fvideo.twimg.com%2Fv.mp4")
     assert resolve_unwrap_x_media_candidate(parsed) == "https://video.twimg.com/v.mp4"
+
+
+def test_resolved_unwrap_x_media_url() -> None:
+    fallback = "https://api.fxtwitter.com/dl?u=x"
+    assert (
+        resolved_unwrap_x_media_url(
+            "https://video.twimg.com/ext_tw_video/abc.mp4",
+            fallback=fallback,
+        )
+        == "https://video.twimg.com/ext_tw_video/abc.mp4"
+    )
+    assert resolved_unwrap_x_media_url("/ext_tw_video/abc.mp4", fallback=fallback) == fallback
 
 
 def test_unwrap_x_media_proxy_hosts() -> None:
