@@ -51,6 +51,8 @@ from bot.router_components.x_routing import (
     status_url_matches_predicate_source,
     status_url_matches_predicate_result,
     is_status_url_candidate,
+    is_status_url_candidate_source,
+    is_status_url_candidate_result,
     append_matched_status_url,
     matched_status_raw_value,
     append_matched_x_url,
@@ -1019,6 +1021,16 @@ def test_append_status_url_if_match() -> None:
 def test_is_status_url_candidate_delegates_predicate() -> None:
     assert is_status_url_candidate("https://x.com/u/status/1", is_status_url=lambda u: "/status/" in u)
     assert not is_status_url_candidate("https://example.com", is_status_url=lambda u: "/status/" in u)
+
+
+def test_is_status_url_candidate_source_delegates_predicate() -> None:
+    assert is_status_url_candidate_source("https://x.com/u/status/1", is_status_url=lambda u: "/status/" in u)
+    assert not is_status_url_candidate_source("https://example.com", is_status_url=lambda u: "/status/" in u)
+
+
+def test_is_status_url_candidate_result_delegates_predicate() -> None:
+    assert is_status_url_candidate_result("https://x.com/u/status/1", is_status_url=lambda u: "/status/" in u)
+    assert not is_status_url_candidate_result("https://example.com", is_status_url=lambda u: "/status/" in u)
 
 
 def test_status_url_matches_predicate_delegates_candidate_check() -> None:

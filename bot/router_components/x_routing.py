@@ -2426,6 +2426,24 @@ def is_status_url_candidate(
     is_status_url: Callable[[str], bool],
 ) -> bool:
     """Return True when raw URL is a candidate status URL by predicate."""
+    return is_status_url_candidate_source(raw_url, is_status_url=is_status_url)
+
+
+def is_status_url_candidate_source(
+    raw_url: str,
+    *,
+    is_status_url: Callable[[str], bool],
+) -> bool:
+    """Return source candidate predicate result for status URL helper."""
+    return is_status_url_candidate_result(raw_url, is_status_url=is_status_url)
+
+
+def is_status_url_candidate_result(
+    raw_url: str,
+    *,
+    is_status_url: Callable[[str], bool],
+) -> bool:
+    """Return value used by status URL candidate source helper."""
     return is_status_url(raw_url)
 
 
