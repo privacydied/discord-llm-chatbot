@@ -532,10 +532,7 @@ def syndication_needs_article_hydration(
     if isinstance(article, dict) and article:
         if has_blocks(article):
             return False
-        if any(
-            str(article.get(k) or "").strip()
-            for k in ("id", "rest_id", "title", "preview_text")
-        ):
+        if article_has_metadata_hints(article):
             return True
 
     # X article syndication can surface as a t.co pointer and optional news action metadata.
@@ -550,6 +547,14 @@ def syndication_needs_article_hydration(
         if is_tco_pointer_text(txt):
             return True
     return False
+
+
+def article_has_metadata_hints(article: Dict[str, Any]) -> bool:
+    """Return True when article payload contains identifying metadata fields."""
+    return any(
+        str(article.get(key) or "").strip()
+        for key in ("id", "rest_id", "title", "preview_text")
+    )
 
 
 def has_news_action_type(syn: Dict[str, Any]) -> bool:

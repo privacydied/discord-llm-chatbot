@@ -97,6 +97,7 @@ from bot.router_components.x_routing import (
     normalize_article_block_text,
     extract_x_article_text,
     syndication_needs_article_hydration,
+    article_has_metadata_hints,
     has_news_action_type,
     is_tco_pointer_text,
     extract_syndication_base_text,
@@ -1611,6 +1612,14 @@ def test_syndication_needs_article_hydration_variants() -> None:
         )
         is False
     )
+
+
+def test_article_has_metadata_hints_variants() -> None:
+    assert article_has_metadata_hints({}) is False
+    assert article_has_metadata_hints({"id": "1"}) is True
+    assert article_has_metadata_hints({"rest_id": "2"}) is True
+    assert article_has_metadata_hints({"title": "headline"}) is True
+    assert article_has_metadata_hints({"preview_text": " "}) is False
 
 
 def test_has_news_action_type() -> None:
