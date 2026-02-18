@@ -244,9 +244,14 @@ def normalize_x_host(host: str) -> str:
     return host
 
 
+def x_path_has_trailing_slash(path: str) -> bool:
+    """Return True when path ends with a slash."""
+    return path.endswith("/")
+
+
 def normalize_x_path(path: str) -> str:
     """Normalize X/Twitter path by trimming one trailing slash."""
-    if path.endswith("/"):
+    if x_path_has_trailing_slash(path):
         return path[:-1]
     return path
 

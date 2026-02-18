@@ -89,6 +89,7 @@ from bot.router_components.x_routing import (
     is_twitter_url,
     normalize_x_host,
     x_host_aliases,
+    x_path_has_trailing_slash,
     normalize_x_path,
     normalize_x_url,
     parse_twitter_status_id,
@@ -419,6 +420,11 @@ def test_canonicalize_and_normalize_x_urls() -> None:
 def test_normalize_x_path() -> None:
     assert normalize_x_path("/user/status/1/") == "/user/status/1"
     assert normalize_x_path("/user/status/1") == "/user/status/1"
+
+
+def test_x_path_has_trailing_slash() -> None:
+    assert x_path_has_trailing_slash("/user/status/1/") is True
+    assert x_path_has_trailing_slash("/user/status/1") is False
 
 
 def test_normalize_x_host() -> None:
