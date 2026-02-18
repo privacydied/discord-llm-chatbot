@@ -1531,6 +1531,11 @@ def test_unwrap_x_media_url() -> None:
         unwrap_x_media_url(wrapped)
         == "https://video.twimg.com/ext_tw_video/abc/vid/720x1280/v.mp4"
     )
+    wrapped_mixed_case = (
+        "https://API.VXTwitter.com/dl?u="
+        "https%3A%2F%2Fvideo.twimg.com%2Fext_tw_video%2Fmixed%2Fv.mp4"
+    )
+    assert unwrap_x_media_url(wrapped_mixed_case) == "https://video.twimg.com/ext_tw_video/mixed/v.mp4"
     assert unwrap_x_media_url("https://x.com/user/status/1") == "https://x.com/user/status/1"
 
 

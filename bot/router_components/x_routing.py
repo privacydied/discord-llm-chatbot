@@ -270,7 +270,7 @@ def unwrap_x_media_url(url: str) -> str:
     """Unwrap fx/vx API proxy URLs back to the media CDN when possible."""
     try:
         parsed = urlparse(url)
-        host = (parsed.netloc or "").lower()
+        host = extract_url_host_lower(url)
         if is_unwrap_x_media_proxy_host(host):
             params = parse_qs(parsed.query or "")
             candidate = first_unwrap_x_media_candidate(params)
