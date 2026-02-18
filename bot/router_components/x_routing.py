@@ -2441,6 +2441,11 @@ def iter_url_matches_iter(text: str, *, url_re: Any) -> Iterable[Any]:
 
 def url_re_finditer(url_re: Any, text: Any) -> Iterable[Any]:
     """Yield regex matches for normalized text using provided compiled regex."""
+    yield from iter_url_re_finditer_matches(url_re, text)
+
+
+def iter_url_re_finditer_matches(url_re: Any, text: Any) -> Iterable[Any]:
+    """Yield URL-regex matches via url_re_finditer handoff helper."""
     yield from url_re_finditer_source(url_re, text)
 
 
