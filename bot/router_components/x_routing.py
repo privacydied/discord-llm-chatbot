@@ -176,7 +176,12 @@ def is_tweet_media_url(url: str) -> bool:
 
 def has_tweet_media_path_segment(path: str) -> bool:
     """Return True when path contains the canonical /media/ segment."""
-    return "/media/" in path
+    return tweet_media_path_segment() in path
+
+
+def tweet_media_path_segment() -> str:
+    """Return canonical media path segment used for tweet media assets."""
+    return "/media/"
 
 
 def blocked_tweet_media_prefixes() -> Tuple[str, ...]:

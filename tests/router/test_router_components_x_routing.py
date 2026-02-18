@@ -80,6 +80,7 @@ from bot.router_components.x_routing import (
     poster_tweet_media_prefixes,
     is_poster_tweet_media_path,
     has_tweet_media_path_segment,
+    tweet_media_path_segment,
     is_twitter_media_cdn,
     is_twitter_media_cdn_host,
     is_twitter_thumbnail_host,
@@ -536,6 +537,10 @@ def test_poster_tweet_media_prefixes() -> None:
     prefixes = poster_tweet_media_prefixes()
     assert "/ext_tw_video_thumb/" in prefixes
     assert "/tweet_video_thumb/" in prefixes
+
+
+def test_tweet_media_path_segment() -> None:
+    assert tweet_media_path_segment() == "/media/"
 
 
 def test_has_tweet_media_path_segment() -> None:
