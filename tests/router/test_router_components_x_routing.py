@@ -339,10 +339,15 @@ from bot.router_components.x_routing import (
     format_syndication_error_payload_repr,
     format_syndication_error_payload_max_chars,
     extract_syndication_photo_urls,
+    collect_syndication_photo_urls,
     append_syndication_photo_item_urls,
     extract_syndication_photo_url_from_dict,
     extract_syndication_photo_urls_from_item,
     syndication_photo_url_is_usable,
+    syndication_photo_item_is_mapping,
+    syndication_photo_item_is_url_string,
+    syndication_photo_url_list_from_mapping,
+    syndication_photo_url_list_from_string,
     resolve_twitter_status_id,
     is_twitter_status_url,
     resolve_twitter_status_parser,
@@ -365,6 +370,7 @@ from bot.router_components.x_routing import (
     parse_image_host,
     resolve_first_image_url,
     first_list_item_or_empty,
+    list_has_items,
     probed_image_urls_or_empty,
     normalize_probed_image_urls,
     build_twitter_image_probe_result,
@@ -3808,6 +3814,11 @@ def test_extract_syndication_photo_urls_variants() -> None:
         extract_syndication_photo_urls(1)
 
 
+def test_collect_syndication_photo_urls_variants() -> None:
+    photos = [{"url": "u1"}, "u2", {"url": None}]
+    assert collect_syndication_photo_urls(photos) == ["u1", "u2"]
+
+
 def test_append_syndication_photo_item_urls_variants() -> None:
     urls: List[str] = []
     append_syndication_photo_item_urls(urls=urls, photo={"url": "u1"})
@@ -3833,6 +3844,19 @@ def test_extract_syndication_photo_urls_from_item_variants() -> None:
     assert extract_syndication_photo_urls_from_item("u2") == ["u2"]
     assert extract_syndication_photo_urls_from_item({"url": None}) == []
     assert extract_syndication_photo_urls_from_item(1) == []
+
+
+def test_syndication_photo_item_shape_helpers() -> None:
+    assert syndication_photo_item_is_mapping({"url": "u1"}) is True
+    assert syndication_photo_item_is_mapping("u1") is False
+    assert syndication_photo_item_is_url_string("u1") is True
+    assert syndication_photo_item_is_url_string({"url": "u1"}) is False
+
+
+def test_syndication_photo_url_list_helpers() -> None:
+    assert syndication_photo_url_list_from_mapping({"url": "u1"}) == ["u1"]
+    assert syndication_photo_url_list_from_mapping({"url": None}) == []
+    assert syndication_photo_url_list_from_string("u2") == ["u2"]
 
 
 def test_syndication_photo_url_is_usable_variants() -> None:
@@ -3942,6 +3966,11 @@ def test_resolve_first_image_url_variants() -> None:
 def test_first_list_item_or_empty_variants() -> None:
     assert first_list_item_or_empty(["u1", "u2"]) == "u1"
     assert first_list_item_or_empty([]) == ""
+
+
+def test_list_has_items() -> None:
+    assert list_has_items(["u1"]) is True
+    assert list_has_items([]) is False
 
 
 def test_normalize_probed_image_urls_variants() -> None:

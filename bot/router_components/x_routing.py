@@ -2179,9 +2179,14 @@ def format_syndication_error_payload_max_chars() -> int:
 
 def extract_syndication_photo_urls(photos: Any) -> List[str]:
     """Extract photo URLs from syndication `photos` payload."""
+    return collect_syndication_photo_urls(photos)
+
+
+def collect_syndication_photo_urls(photos: Any) -> List[str]:
+    """Collect normalized syndication photo URLs from iterable payload items."""
     urls: List[str] = []
-    for p in photos:
-        append_syndication_photo_item_urls(urls=urls, photo=p)
+    for photo in photos:
+        append_syndication_photo_item_urls(urls=urls, photo=photo)
     return urls
 
 
@@ -2199,19 +2204,39 @@ def extract_syndication_photo_url_from_dict(photo: Dict[str, Any]) -> Any:
 
 def extract_syndication_photo_urls_from_item(photo: Any) -> List[str]:
     """Extract zero-or-more syndication photo URLs from one payload item."""
-    if isinstance(photo, dict):
-        img_url = extract_syndication_photo_url_from_dict(photo)
-        if syndication_photo_url_is_usable(img_url):
-            return [img_url]
-        return []
-    if isinstance(photo, str):
-        return [photo]
+    if syndication_photo_item_is_mapping(photo):
+        return syndication_photo_url_list_from_mapping(photo)
+    if syndication_photo_item_is_url_string(photo):
+        return syndication_photo_url_list_from_string(photo)
     return []
 
 
 def syndication_photo_url_is_usable(img_url: Any) -> bool:
     """Return True when extracted syndication photo URL can be appended."""
     return bool(img_url) and isinstance(img_url, str)
+
+
+def syndication_photo_item_is_mapping(photo: Any) -> bool:
+    """Return True when syndication photo payload item is dictionary-shaped."""
+    return isinstance(photo, dict)
+
+
+def syndication_photo_item_is_url_string(photo: Any) -> bool:
+    """Return True when syndication photo payload item is a direct URL string."""
+    return isinstance(photo, str)
+
+
+def syndication_photo_url_list_from_mapping(photo: Dict[str, Any]) -> List[str]:
+    """Return zero-or-one URL list extracted from a mapping-shaped photo item."""
+    img_url = extract_syndication_photo_url_from_dict(photo)
+    if syndication_photo_url_is_usable(img_url):
+        return [img_url]
+    return []
+
+
+def syndication_photo_url_list_from_string(photo: str) -> List[str]:
+    """Return URL list for string-shaped photo items."""
+    return [photo]
 
 
 def x_syn_probe_budget_timeout_s(x_syn_timeout_s: float) -> float:
@@ -2323,11 +2348,16 @@ def resolve_first_image_url(image_urls: List[str]) -> str:
 def first_list_item_or_empty(items: List[str]) -> str:
     """Return first list item when present; otherwise empty string."""
     try:
-        if items:
+        if list_has_items(items):
             return items[0]
     except Exception:
         return ""
     return ""
+
+
+def list_has_items(items: List[Any]) -> bool:
+    """Return True when list-like value contains at least one item."""
+    return bool(items)
 
 
 async def resolve_and_probe_twitter_images(
