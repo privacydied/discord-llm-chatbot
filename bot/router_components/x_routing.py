@@ -1931,12 +1931,28 @@ def collect_status_urls_from_candidates(
 ) -> None:
     """Collect canonical status URLs from candidate URLs found in text."""
     for raw in status_url_raw_candidates(text):
-        append_status_url_if_match(
-            items,
-            raw,
+        append_status_url_candidate(
+            items=items,
+            raw=raw,
             is_status_url=is_status_url,
             canonicalize_status_url=canonicalize_status_url,
         )
+
+
+def append_status_url_candidate(
+    *,
+    items: List[str],
+    raw: str,
+    is_status_url: Callable[[str], bool],
+    canonicalize_status_url: Callable[[str], str],
+) -> None:
+    """Append one raw status URL candidate when it matches status predicate."""
+    append_status_url_if_match(
+        items,
+        raw,
+        is_status_url=is_status_url,
+        canonicalize_status_url=canonicalize_status_url,
+    )
 
 
 def status_url_raw_candidates(text: str) -> Iterable[str]:

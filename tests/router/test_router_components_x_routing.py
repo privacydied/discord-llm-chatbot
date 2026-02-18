@@ -281,6 +281,7 @@ from bot.router_components.x_routing import (
     collect_status_urls_into_items,
     collect_status_urls_fail_open,
     collect_status_urls_from_candidates,
+    append_status_url_candidate,
     status_url_raw_candidates,
     status_url_candidate_values,
     status_url_candidate_raw_value,
@@ -494,6 +495,23 @@ def test_collect_status_urls_from_candidates() -> None:
         canonicalize_status_url=lambda u: u.split("?")[0].replace("twitter.com", "x.com"),
     )
     assert items == ["https://x.com/u/status/1", "https://x.com/u/status/2"]
+
+
+def test_append_status_url_candidate() -> None:
+    items: List[str] = []
+    append_status_url_candidate(
+        items=items,
+        raw="https://x.com/u/status/1",
+        is_status_url=lambda u: "/status/" in u,
+        canonicalize_status_url=lambda u: u.split("?")[0].replace("twitter.com", "x.com"),
+    )
+    append_status_url_candidate(
+        items=items,
+        raw="https://example.com",
+        is_status_url=lambda u: "/status/" in u,
+        canonicalize_status_url=lambda u: u.split("?")[0].replace("twitter.com", "x.com"),
+    )
+    assert items == ["https://x.com/u/status/1"]
 
 
 def test_collect_status_urls_into_items_delegates_collection() -> None:
