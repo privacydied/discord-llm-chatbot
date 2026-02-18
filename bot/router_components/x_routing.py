@@ -2013,6 +2013,11 @@ def x_url_extract_pattern_value() -> str:
 
 def iter_status_url_candidates(text: str) -> Iterable[str]:
     """Yield raw URL candidates for status extraction from one text blob."""
+    yield from iter_status_url_candidates_from_text(text)
+
+
+def iter_status_url_candidates_from_text(text: str) -> Iterable[str]:
+    """Yield status URL candidates via from-text iterator wrapper."""
     yield from status_url_candidates_from_text(text)
 
 
