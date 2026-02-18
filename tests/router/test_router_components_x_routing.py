@@ -63,6 +63,7 @@ from bot.router_components.x_routing import (
     matched_x_raw_value_result,
     is_tweet_media_url,
     is_twitter_media_cdn,
+    is_twitter_thumbnail_host,
     is_twitter_thumbnail_url,
     is_twitter_url,
     normalize_x_url,
@@ -340,6 +341,20 @@ def test_canonicalize_and_normalize_x_urls() -> None:
     assert normalize_x_url("https://mobile.twitter.com/user/status/1?s=20#frag") == (
         "https://x.com/user/status/1"
     )
+
+
+def test_is_twitter_thumbnail_host() -> None:
+    assert is_twitter_thumbnail_host("pbs.twimg.com")
+    assert is_twitter_thumbnail_host("pbs-2.twimg.com")
+    assert not is_twitter_thumbnail_host("video.twimg.com")
+    assert not is_twitter_thumbnail_host("example.com")
+
+
+def test_is_twitter_thumbnail_url() -> None:
+    assert is_twitter_thumbnail_url("https://pbs.twimg.com/media/abc.jpg")
+    assert is_twitter_thumbnail_url("https://pbs-1.twimg.com/media/abc.jpg")
+    assert not is_twitter_thumbnail_url("https://video.twimg.com/ext_tw_video/abc.mp4")
+    assert not is_twitter_thumbnail_url("not-a-url")
 
 
 def test_collect_x_candidate_urls_for_source_types() -> None:

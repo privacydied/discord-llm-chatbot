@@ -108,6 +108,11 @@ def is_twitter_thumbnail_url(url: str) -> bool:
         host = urlparse(url).netloc.lower()
     except Exception:
         return False
+    return is_twitter_thumbnail_host(host)
+
+
+def is_twitter_thumbnail_host(host: str) -> bool:
+    """Return True when host is a known Twitter thumbnail CDN host."""
     return host in {
         "pbs.twimg.com",
         "pbs-0.twimg.com",
