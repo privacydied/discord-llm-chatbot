@@ -97,6 +97,7 @@ from bot.router_components.x_routing import (
     normalize_article_block_text,
     extract_x_article_text,
     syndication_needs_article_hydration,
+    resolve_syndication_pointer_text,
     article_has_metadata_hints,
     has_news_action_type,
     is_tco_pointer_text,
@@ -1612,6 +1613,36 @@ def test_syndication_needs_article_hydration_variants() -> None:
         )
         is False
     )
+
+
+def test_resolve_syndication_pointer_text_precedence() -> None:
+    assert (
+        resolve_syndication_pointer_text(
+            {
+                "text": "primary",
+                "full_text": "secondary",
+                "legacy": {"full_text": "tertiary"},
+            }
+        )
+        == "primary"
+    )
+    assert (
+        resolve_syndication_pointer_text(
+            {
+                "text": " ",
+                "full_text": "secondary",
+                "legacy": {"full_text": "tertiary"},
+            }
+        )
+        == "secondary"
+    )
+    assert (
+        resolve_syndication_pointer_text(
+            {"text": " ", "full_text": " ", "legacy": {"full_text": "tertiary"}}
+        )
+        == "tertiary"
+    )
+    assert resolve_syndication_pointer_text({}) == ""
 
 
 def test_article_has_metadata_hints_variants() -> None:

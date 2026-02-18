@@ -539,14 +539,19 @@ def syndication_needs_article_hydration(
     if has_news_action_type(syn):
         return True
     if allow_tco_pointer:
-        txt = (
-            str(syn.get("text") or "").strip()
-            or str(syn.get("full_text") or "").strip()
-            or str((syn.get("legacy") or {}).get("full_text") or "").strip()
-        )
+        txt = resolve_syndication_pointer_text(syn)
         if is_tco_pointer_text(txt):
             return True
     return False
+
+
+def resolve_syndication_pointer_text(syn: Dict[str, Any]) -> str:
+    """Resolve pointer-probe text from syndication precedence (text/full_text/legacy.full_text)."""
+    return (
+        str(syn.get("text") or "").strip()
+        or str(syn.get("full_text") or "").strip()
+        or str((syn.get("legacy") or {}).get("full_text") or "").strip()
+    )
 
 
 def article_has_metadata_hints(article: Dict[str, Any]) -> bool:
