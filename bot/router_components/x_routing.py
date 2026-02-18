@@ -95,7 +95,7 @@ def collect_x_candidate_urls(item: Any) -> List[str]:
     urls: List[str] = []
     try:
         if item.source_type == "url":
-            urls.append(str(item.payload))
+            append_url_item_payload(urls, item)
         elif item.source_type == "embed":
             embed = item.payload
             append_embed_primary_url_if_present(urls, embed)
@@ -108,6 +108,11 @@ def collect_x_candidate_urls(item: Any) -> List[str]:
     except Exception:
         pass
     return [u for u in urls if u]
+
+
+def append_url_item_payload(urls: List[str], item: Any) -> None:
+    """Append normalized URL-item payload."""
+    urls.append(str(item.payload))
 
 
 def append_embed_attr_url_if_present(urls: List[str], embed: Any, attr_name: str) -> None:

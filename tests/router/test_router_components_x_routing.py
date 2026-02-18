@@ -7,6 +7,7 @@ import pytest
 from bot.router_components.x_routing import (
     canonicalize_twitter_status_url,
     collect_x_candidate_urls,
+    append_url_item_payload,
     append_embed_primary_url_if_present,
     append_embed_attr_url_if_present,
     append_attachment_urls_if_present,
@@ -556,6 +557,13 @@ def test_collect_x_candidate_urls_for_source_types() -> None:
     att_urls = collect_x_candidate_urls(att_item)
     assert "https://video.twimg.com/ext_tw_video/att.mp4" in att_urls
     assert "https://cdn.discordapp.com/proxy" in att_urls
+
+
+def test_append_url_item_payload() -> None:
+    urls: list[str] = []
+    item = SimpleNamespace(payload="https://x.com/u/status/1")
+    append_url_item_payload(urls, item)
+    assert urls == ["https://x.com/u/status/1"]
 
 
 def test_append_embed_attr_url_if_present() -> None:

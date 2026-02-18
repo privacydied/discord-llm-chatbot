@@ -27,6 +27,7 @@ from .runtime import RouterRuntimeCompat, load_router_runtime_compat
 from .x_routing import (
     canonicalize_twitter_status_url,
     collect_x_candidate_urls,
+    append_url_item_payload,
     append_embed_primary_url_if_present,
     append_embed_attr_url_if_present,
     append_attachment_urls_if_present,
@@ -863,6 +864,7 @@ __all__ = [
     "strip_discord_mentions_and_urls",
     "strip_urls",
     "collect_x_candidate_urls",
+    "append_url_item_payload",
     "append_embed_primary_url_if_present",
     "append_embed_attr_url_if_present",
     "append_attachment_urls_if_present",
