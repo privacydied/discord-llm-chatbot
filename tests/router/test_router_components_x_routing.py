@@ -73,6 +73,7 @@ from bot.router_components.x_routing import (
     normalize_x_path,
     normalize_x_url,
     parse_twitter_status_id,
+    unwrap_x_media_param_keys,
     classify_stt_error_reason,
     build_stt_fail_log_payload,
     build_caption_only_fallback_log_payload,
@@ -1216,6 +1217,10 @@ def test_unwrap_x_media_url() -> None:
         == "https://video.twimg.com/ext_tw_video/abc/vid/720x1280/v.mp4"
     )
     assert unwrap_x_media_url("https://x.com/user/status/1") == "https://x.com/user/status/1"
+
+
+def test_unwrap_x_media_param_keys() -> None:
+    assert unwrap_x_media_param_keys() == ("url", "media_url", "target", "u")
 
 
 def test_extract_x_api_primary_tweet_variants() -> None:

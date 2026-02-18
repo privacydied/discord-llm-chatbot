@@ -230,7 +230,7 @@ def unwrap_x_media_url(url: str) -> str:
         host = (parsed.netloc or "").lower()
         if host in {"api.fxtwitter.com", "api.vxtwitter.com"}:
             params = parse_qs(parsed.query or "")
-            for key in ("url", "media_url", "target", "u"):
+            for key in unwrap_x_media_param_keys():
                 values = params.get(key)
                 if values:
                     candidate = unquote(values[0])
@@ -239,6 +239,11 @@ def unwrap_x_media_url(url: str) -> str:
         return url
     except Exception:
         return url
+
+
+def unwrap_x_media_param_keys() -> tuple[str, ...]:
+    """Return query parameter keys checked when unwrapping proxy media URLs."""
+    return ("url", "media_url", "target", "u")
 
 
 def extract_x_api_primary_tweet(api_data: Any) -> Dict[str, Any]:
