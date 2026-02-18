@@ -332,6 +332,7 @@ from bot.router_components.x_routing import (
     raw_url_extract_regex_source,
     raw_url_extract_regex_value,
     compile_url_extract_pattern_argument,
+    compile_url_extract_pattern_for_argument,
     compile_url_extract_pattern_value,
     compile_url_extract_flags_argument,
     compile_url_extract_flags_for_argument,
@@ -837,6 +838,10 @@ def test_compile_url_extract_flags_value_identity() -> None:
 
 def test_compile_url_extract_pattern_argument_identity() -> None:
     assert compile_url_extract_pattern_argument(r"https?://x\\.com") == r"https?://x\\.com"
+
+
+def test_compile_url_extract_pattern_for_argument_identity() -> None:
+    assert compile_url_extract_pattern_for_argument(r"https?://x\\.com") == r"https?://x\\.com"
 
 
 def test_compile_url_extract_pattern_value_identity() -> None:

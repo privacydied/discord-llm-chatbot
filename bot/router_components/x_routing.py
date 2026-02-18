@@ -2174,6 +2174,11 @@ def compile_url_extract_regex(pattern: str, *, flags: int) -> Any:
 
 def compile_url_extract_pattern_argument(pattern: str) -> str:
     """Return normalized pattern argument for URL regex compilation."""
+    return compile_url_extract_pattern_for_argument(pattern)
+
+
+def compile_url_extract_pattern_for_argument(pattern: str) -> str:
+    """Return URL-extract compile pattern via argument handoff helper."""
     return compile_url_extract_pattern_value(pattern)
 
 
