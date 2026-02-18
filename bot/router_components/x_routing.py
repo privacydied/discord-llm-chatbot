@@ -2463,6 +2463,16 @@ def append_matched_status_url(
 
 def matched_status_raw_value(raw_url: str) -> str:
     """Return matched status raw URL value before canonical append."""
+    return matched_status_raw_value_source(raw_url)
+
+
+def matched_status_raw_value_source(raw_url: str) -> str:
+    """Return source matched status raw URL value for append helper."""
+    return matched_status_raw_value_result(raw_url)
+
+
+def matched_status_raw_value_result(raw_url: str) -> str:
+    """Return value used by matched-status raw-value source helper."""
     return raw_url
 
 

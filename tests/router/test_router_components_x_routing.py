@@ -55,6 +55,8 @@ from bot.router_components.x_routing import (
     is_status_url_candidate_result,
     append_matched_status_url,
     matched_status_raw_value,
+    matched_status_raw_value_source,
+    matched_status_raw_value_result,
     append_matched_x_url,
     matched_x_raw_value,
     is_tweet_media_url,
@@ -1083,6 +1085,14 @@ def test_append_matched_status_url_only_appends_unique_canonical() -> None:
 
 def test_matched_status_raw_value_identity() -> None:
     assert matched_status_raw_value("https://x.com/u/status/1") == "https://x.com/u/status/1"
+
+
+def test_matched_status_raw_value_source_identity() -> None:
+    assert matched_status_raw_value_source("https://x.com/u/status/1") == "https://x.com/u/status/1"
+
+
+def test_matched_status_raw_value_result_identity() -> None:
+    assert matched_status_raw_value_result("https://x.com/u/status/1") == "https://x.com/u/status/1"
 
 
 def test_append_matched_x_url_only_appends_unique_canonical() -> None:
