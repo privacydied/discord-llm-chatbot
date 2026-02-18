@@ -507,10 +507,14 @@ def extract_x_article_text(article_node: Any) -> str:
         if btxt not in parts:
             parts.append(btxt)
     merged = "\n\n".join(parts).strip()
-    max_chars = 12000
-    if len(merged) > max_chars:
-        return merged[: max_chars - 1].rstrip() + "…"
-    return merged
+    return truncate_x_article_text(merged)
+
+
+def truncate_x_article_text(text: str, *, max_chars: int = 12000) -> str:
+    """Truncate extracted X article text to max_chars with ellipsis suffix."""
+    if len(text) > max_chars:
+        return text[: max_chars - 1].rstrip() + "…"
+    return text
 
 
 def normalize_article_block_text(block: Dict[str, Any]) -> str:

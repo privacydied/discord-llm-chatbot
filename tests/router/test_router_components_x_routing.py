@@ -96,6 +96,7 @@ from bot.router_components.x_routing import (
     has_non_empty_block_text,
     normalize_article_block_text,
     extract_x_article_text,
+    truncate_x_article_text,
     syndication_needs_article_hydration,
     resolve_syndication_pointer_text,
     article_has_metadata_hints,
@@ -1585,6 +1586,13 @@ def test_extract_x_article_text_truncates_at_12000_chars() -> None:
     out = extract_x_article_text({"title": huge})
     assert len(out) == 12000
     assert out.endswith("…")
+
+
+def test_truncate_x_article_text_variants() -> None:
+    assert truncate_x_article_text("abc") == "abc"
+    assert truncate_x_article_text("a" * 12, max_chars=12) == ("a" * 12)
+    out = truncate_x_article_text("a" * 13, max_chars=12)
+    assert out == ("a" * 11) + "…"
 
 
 def test_syndication_needs_article_hydration_variants() -> None:
