@@ -471,9 +471,14 @@ def syndication_article_has_blocks(article_node: Any) -> bool:
     for block in blocks:
         if not isinstance(block, dict):
             continue
-        if str(block.get("text") or "").strip():
+        if has_non_empty_block_text(block):
             return True
     return False
+
+
+def has_non_empty_block_text(block: Dict[str, Any]) -> bool:
+    """Return True when article/content block has non-empty text payload."""
+    return bool(str(block.get("text") or "").strip())
 
 
 def extract_x_article_text(article_node: Any) -> str:

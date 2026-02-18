@@ -93,6 +93,7 @@ from bot.router_components.x_routing import (
     resolve_video_stt_error_base_text,
     normalize_base_text_value,
     syndication_article_has_blocks,
+    has_non_empty_block_text,
     extract_x_article_text,
     syndication_needs_article_hydration,
     extract_syndication_base_text,
@@ -1537,6 +1538,12 @@ def test_syndication_article_has_blocks_variants() -> None:
         syndication_article_has_blocks({"content": {"blocks": [{"x": 1}, "bad"]}})
         is False
     )
+
+
+def test_has_non_empty_block_text() -> None:
+    assert has_non_empty_block_text({"text": "hello"}) is True
+    assert has_non_empty_block_text({"text": "   "}) is False
+    assert has_non_empty_block_text({"x": 1}) is False
 
 
 def test_extract_x_article_text_dedupes_unescapes_and_caps() -> None:
