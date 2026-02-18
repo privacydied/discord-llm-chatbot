@@ -36,7 +36,7 @@ flowchart TD
     B --> SH["setup_hook()"]
 
     SH --> COGS["Command Cogs"]
-    SH --> ROUTER["Router"]
+    SH --> ROUTER["Router (orchestration)"]
     SH --> VO["VisionOrchestrator"]
     SH --> TTS["TTSManager"]
     SH --> RAGINIT["RAG init (optional eager load)"]
@@ -92,6 +92,24 @@ flowchart TD
     B --> LOG["Rich console + JSONL logging"]
     ROUTER --> LOG
     B --> MET
+
+    subgraph RC["Router Components (refactored helper layer)"]
+        XR["x_routing.py: URL/X/media/syndication helpers"]
+        CMP["compose.py: perception/text composition"]
+        GT["gating.py: mention/reply guards"]
+        IH["input_harvest.py: item extraction + normalization"]
+        PA["prompt_access.py: prompt loading"]
+        RT["runtime.py: compat/runtime access"]
+    end
+
+    ROUTER --> RC
+    XS --> XR
+    URL --> XR
+    MM --> IH
+    TF --> CMP
+    RD --> GT
+    TF --> PA
+    ROUTER --> RT
 
     subgraph Storage["Files / Storage"]
         KB["kb/ + chroma_db/"]
