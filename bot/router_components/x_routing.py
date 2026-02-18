@@ -1765,10 +1765,21 @@ def format_twitter_syndication_images_log_line(
     suffix = format_twitter_syndication_msg_suffix(msg_id)
     host_label = format_twitter_syndication_host_label(first_host)
     image_count = format_twitter_syndication_image_count(image_urls)
-    return (
-        f"route.twitter.syndication | images={image_count} | "
-        f"{host_label}{suffix}"
+    return format_twitter_syndication_images_detail(
+        image_count=image_count,
+        host_label=host_label,
+        suffix=suffix,
     )
+
+
+def format_twitter_syndication_images_detail(
+    *,
+    image_count: int,
+    host_label: str,
+    suffix: str,
+) -> str:
+    """Compose canonical syndication image-route breadcrumb detail string."""
+    return f"route.twitter.syndication | images={image_count} | {host_label}{suffix}"
 
 
 def format_twitter_syndication_msg_suffix(msg_id: Optional[int]) -> str:

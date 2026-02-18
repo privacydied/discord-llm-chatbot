@@ -264,6 +264,7 @@ from bot.router_components.x_routing import (
     build_syndication_photo_payload,
     build_syndication_photo_items,
     format_twitter_syndication_images_log_line,
+    format_twitter_syndication_images_detail,
     format_twitter_syndication_msg_suffix,
     format_twitter_syndication_host_label,
     format_twitter_syndication_image_count,
@@ -3016,6 +3017,17 @@ def test_format_twitter_syndication_images_log_line_with_and_without_msg_id() ->
     assert (
         format_twitter_syndication_images_log_line(["not a url"])
         == "route.twitter.syndication | images=1 | n/a"
+    )
+
+
+def test_format_twitter_syndication_images_detail_shape() -> None:
+    assert (
+        format_twitter_syndication_images_detail(
+            image_count=2,
+            host_label="pbs.twimg.com",
+            suffix=" | msg_id=123",
+        )
+        == "route.twitter.syndication | images=2 | pbs.twimg.com | msg_id=123"
     )
 
 
