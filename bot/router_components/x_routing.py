@@ -263,15 +263,21 @@ def unwrap_x_media_url(url: str) -> str:
         host = (parsed.netloc or "").lower()
         if is_unwrap_x_media_proxy_host(host):
             params = parse_qs(parsed.query or "")
-            for key in unwrap_x_media_param_keys():
-                values = params.get(key)
-                if values:
-                    candidate = unquote(values[0])
-                    if is_unwrap_x_media_candidate_url(candidate):
-                        return candidate
+            candidate = first_unwrap_x_media_candidate(params)
+            if is_unwrap_x_media_candidate_url(candidate):
+                return candidate
         return url
     except Exception:
         return url
+
+
+def first_unwrap_x_media_candidate(params: Dict[str, List[str]]) -> str:
+    """Return first decoded candidate from supported unwrap query params."""
+    for key in unwrap_x_media_param_keys():
+        values = params.get(key)
+        if values:
+            return unquote(values[0])
+    return ""
 
 
 def unwrap_x_media_param_keys() -> tuple[str, ...]:

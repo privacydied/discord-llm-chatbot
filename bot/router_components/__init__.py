@@ -414,6 +414,7 @@ from .x_routing import (
     parse_twitter_status_id,
     is_unwrap_x_media_proxy_host,
     is_unwrap_x_media_candidate_url,
+    first_unwrap_x_media_candidate,
     unwrap_x_media_param_keys,
     unwrap_x_media_url,
 )
@@ -827,6 +828,7 @@ __all__ = [
     "parse_twitter_status_id",
     "is_unwrap_x_media_proxy_host",
     "is_unwrap_x_media_candidate_url",
+    "first_unwrap_x_media_candidate",
     "unwrap_x_media_param_keys",
     "strip_leading_bot_mention",
     "strip_discord_mentions_and_urls",

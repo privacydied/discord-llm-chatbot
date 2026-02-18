@@ -95,6 +95,7 @@ from bot.router_components.x_routing import (
     parse_twitter_status_id,
     is_unwrap_x_media_proxy_host,
     is_unwrap_x_media_candidate_url,
+    first_unwrap_x_media_candidate,
     unwrap_x_media_param_keys,
     classify_stt_error_reason,
     is_stt_hard_error,
@@ -1524,6 +1525,16 @@ def test_unwrap_x_media_url() -> None:
 
 def test_unwrap_x_media_param_keys() -> None:
     assert unwrap_x_media_param_keys() == ("url", "media_url", "target", "u")
+
+
+def test_first_unwrap_x_media_candidate() -> None:
+    assert (
+        first_unwrap_x_media_candidate(
+            {"target": ["https%3A%2F%2Fvideo.twimg.com%2Fext_tw_video%2Fabc.mp4"]}
+        )
+        == "https://video.twimg.com/ext_tw_video/abc.mp4"
+    )
+    assert first_unwrap_x_media_candidate({}) == ""
 
 
 def test_is_unwrap_x_media_proxy_host() -> None:
