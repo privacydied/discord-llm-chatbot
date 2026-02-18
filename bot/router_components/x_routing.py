@@ -141,14 +141,31 @@ def twitter_url_domain_markers() -> Tuple[str, ...]:
 def collect_x_candidate_urls(item: Any) -> List[str]:
     urls: List[str] = []
     try:
-        if item.source_type == "url":
-            urls.extend(collect_url_item_candidate_urls(item))
-        elif item.source_type == "embed":
-            urls.extend(collect_embed_candidate_urls(item.payload))
-        elif item.source_type == "attachment":
-            urls.extend(collect_attachment_candidate_urls(item.payload))
+        source_type = x_candidate_source_type(item)
+        urls.extend(collect_candidate_urls_for_item_source(item, source_type))
     except Exception:
         pass
+    return filtered_candidate_urls(urls)
+
+
+def x_candidate_source_type(item: Any) -> Any:
+    """Resolve source_type field used by X candidate URL collection."""
+    return item.source_type
+
+
+def collect_candidate_urls_for_item_source(item: Any, source_type: Any) -> List[str]:
+    """Collect candidate URLs for one item using resolved source-type dispatch."""
+    if source_type == "url":
+        return collect_url_item_candidate_urls(item)
+    if source_type == "embed":
+        return collect_embed_candidate_urls(item.payload)
+    if source_type == "attachment":
+        return collect_attachment_candidate_urls(item.payload)
+    return []
+
+
+def filtered_candidate_urls(urls: List[str]) -> List[str]:
+    """Return candidate URL list with empty/falsy values removed."""
     return filter_non_empty_urls(urls)
 
 
@@ -172,16 +189,26 @@ def collect_url_item_candidate_urls(item: Any) -> List[str]:
 def collect_embed_candidate_urls(embed: Any) -> List[str]:
     """Collect candidate URLs from an embed payload."""
     urls: List[str] = []
-    append_embed_primary_url_if_present(urls, embed)
-    append_embed_candidate_attr_urls(urls, embed)
+    collect_embed_urls_into(urls, embed)
     return urls
 
 
 def collect_attachment_candidate_urls(attachment: Any) -> List[str]:
     """Collect candidate URLs from an attachment payload."""
     urls: List[str] = []
-    append_attachment_urls_if_present(urls, attachment)
+    collect_attachment_urls_into(urls, attachment)
     return urls
+
+
+def collect_embed_urls_into(urls: List[str], embed: Any) -> None:
+    """Collect embed primary and nested attribute URLs into target list."""
+    append_embed_primary_url_if_present(urls, embed)
+    append_embed_candidate_attr_urls(urls, embed)
+
+
+def collect_attachment_urls_into(urls: List[str], attachment: Any) -> None:
+    """Collect attachment URL fields into target list."""
+    append_attachment_urls_if_present(urls, attachment)
 
 
 def x_candidate_embed_attr_names() -> Tuple[str, ...]:
@@ -212,12 +239,17 @@ def append_embed_primary_url_if_present(urls: List[str], embed: Any) -> None:
 
 def append_attachment_urls_if_present(urls: List[str], attachment: Any) -> None:
     """Append attachment URL and proxy URL when present."""
-    url = getattr(attachment, "url", None)
-    if url:
-        urls.append(url)
-    proxy = getattr(attachment, "proxy_url", None)
-    if proxy:
-        urls.append(proxy)
+    append_attachment_url_attr_if_present(urls, attachment, "url")
+    append_attachment_url_attr_if_present(urls, attachment, "proxy_url")
+
+
+def append_attachment_url_attr_if_present(
+    urls: List[str], attachment: Any, attr_name: str
+) -> None:
+    """Append one attachment URL attribute when present."""
+    value = getattr(attachment, attr_name, None)
+    if value:
+        urls.append(value)
 
 
 def parse_url_value(url: Any) -> Any:

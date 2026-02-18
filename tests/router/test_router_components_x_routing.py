@@ -7,9 +7,14 @@ import pytest
 from bot.router_components.x_routing import (
     canonicalize_twitter_status_url,
     collect_x_candidate_urls,
+    x_candidate_source_type,
+    collect_candidate_urls_for_item_source,
+    filtered_candidate_urls,
     collect_url_item_candidate_urls,
     collect_embed_candidate_urls,
     collect_attachment_candidate_urls,
+    collect_embed_urls_into,
+    collect_attachment_urls_into,
     append_url_item_payload,
     filter_non_empty_urls,
     x_candidate_embed_attr_names,
@@ -17,6 +22,7 @@ from bot.router_components.x_routing import (
     append_embed_primary_url_if_present,
     append_embed_attr_url_if_present,
     append_attachment_urls_if_present,
+    append_attachment_url_attr_if_present,
     extract_fxtwitter_tweet_node,
     extract_x_api_primary_text,
     normalize_x_api_text,
@@ -724,6 +730,31 @@ def test_collect_x_candidate_urls_for_source_types() -> None:
     assert "https://cdn.discordapp.com/proxy" in att_urls
 
 
+def test_x_candidate_source_type() -> None:
+    item = SimpleNamespace(source_type="url")
+    assert x_candidate_source_type(item) == "url"
+
+
+def test_collect_candidate_urls_for_item_source_dispatch() -> None:
+    url_item = SimpleNamespace(source_type="url", payload="https://x.com/u/status/1")
+    assert collect_candidate_urls_for_item_source(url_item, "url") == [
+        "https://x.com/u/status/1"
+    ]
+
+    embed = SimpleNamespace(url="https://x.com/u/status/2", video=None, image=None, thumbnail=None)
+    embed_item = SimpleNamespace(source_type="embed", payload=embed)
+    assert collect_candidate_urls_for_item_source(embed_item, "embed") == [
+        "https://x.com/u/status/2"
+    ]
+
+    att = SimpleNamespace(url="https://video.twimg.com/ext_tw_video/att.mp4", proxy_url=None)
+    att_item = SimpleNamespace(source_type="attachment", payload=att)
+    assert collect_candidate_urls_for_item_source(att_item, "attachment") == [
+        "https://video.twimg.com/ext_tw_video/att.mp4"
+    ]
+    assert collect_candidate_urls_for_item_source(att_item, "unknown") == []
+
+
 def test_append_url_item_payload() -> None:
     urls: list[str] = []
     item = SimpleNamespace(payload="https://x.com/u/status/1")
@@ -738,6 +769,12 @@ def test_collect_url_item_candidate_urls() -> None:
 
 def test_filter_non_empty_urls() -> None:
     assert filter_non_empty_urls(["https://x.com/u/status/1", "", None]) == [
+        "https://x.com/u/status/1"
+    ]
+
+
+def test_filtered_candidate_urls() -> None:
+    assert filtered_candidate_urls(["https://x.com/u/status/1", "", None]) == [
         "https://x.com/u/status/1"
     ]
 
@@ -759,12 +796,37 @@ def test_collect_embed_candidate_urls() -> None:
     assert "https://pbs.twimg.com/media/xyz.jpg" in urls
 
 
+def test_collect_embed_urls_into() -> None:
+    urls: list[str] = []
+    embed = SimpleNamespace(
+        url="https://x.com/u/status/2",
+        video=SimpleNamespace(url="https://video.twimg.com/ext_tw_video/abc"),
+        image=SimpleNamespace(url="https://pbs.twimg.com/media/xyz.jpg"),
+        thumbnail=None,
+    )
+    collect_embed_urls_into(urls, embed)
+    assert "https://x.com/u/status/2" in urls
+    assert "https://video.twimg.com/ext_tw_video/abc" in urls
+    assert "https://pbs.twimg.com/media/xyz.jpg" in urls
+
+
 def test_collect_attachment_candidate_urls() -> None:
     attachment = SimpleNamespace(
         url="https://video.twimg.com/ext_tw_video/att.mp4",
         proxy_url="https://cdn.discordapp.com/proxy",
     )
     urls = collect_attachment_candidate_urls(attachment)
+    assert "https://video.twimg.com/ext_tw_video/att.mp4" in urls
+    assert "https://cdn.discordapp.com/proxy" in urls
+
+
+def test_collect_attachment_urls_into() -> None:
+    urls: list[str] = []
+    attachment = SimpleNamespace(
+        url="https://video.twimg.com/ext_tw_video/att.mp4",
+        proxy_url="https://cdn.discordapp.com/proxy",
+    )
+    collect_attachment_urls_into(urls, attachment)
     assert "https://video.twimg.com/ext_tw_video/att.mp4" in urls
     assert "https://cdn.discordapp.com/proxy" in urls
 
@@ -809,6 +871,19 @@ def test_append_attachment_urls_if_present() -> None:
         proxy_url="https://cdn.discordapp.com/proxy",
     )
     append_attachment_urls_if_present(urls, attachment)
+    assert "https://video.twimg.com/ext_tw_video/att.mp4" in urls
+    assert "https://cdn.discordapp.com/proxy" in urls
+
+
+def test_append_attachment_url_attr_if_present() -> None:
+    urls: list[str] = []
+    attachment = SimpleNamespace(
+        url="https://video.twimg.com/ext_tw_video/att.mp4",
+        proxy_url="https://cdn.discordapp.com/proxy",
+    )
+    append_attachment_url_attr_if_present(urls, attachment, "url")
+    append_attachment_url_attr_if_present(urls, attachment, "proxy_url")
+    append_attachment_url_attr_if_present(urls, attachment, "missing")
     assert "https://video.twimg.com/ext_tw_video/att.mp4" in urls
     assert "https://cdn.discordapp.com/proxy" in urls
 
