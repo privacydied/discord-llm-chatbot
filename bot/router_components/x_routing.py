@@ -103,10 +103,17 @@ def collect_x_candidate_urls(item: Any) -> List[str]:
     return [u for u in urls if u]
 
 
-def is_twitter_thumbnail_url(url: str) -> bool:
+def extract_url_host_lower(url: str) -> str:
+    """Parse a URL host and normalize to lowercase; return empty string on failure."""
     try:
-        host = urlparse(url).netloc.lower()
+        return urlparse(url).netloc.lower()
     except Exception:
+        return ""
+
+
+def is_twitter_thumbnail_url(url: str) -> bool:
+    host = extract_url_host_lower(url)
+    if not host:
         return False
     return is_twitter_thumbnail_host(host)
 
@@ -123,9 +130,8 @@ def is_twitter_thumbnail_host(host: str) -> bool:
 
 
 def is_twitter_media_cdn(url: str) -> bool:
-    try:
-        host = urlparse(url).netloc.lower()
-    except Exception:
+    host = extract_url_host_lower(url)
+    if not host:
         return False
     return is_twitter_media_cdn_host(host)
 
