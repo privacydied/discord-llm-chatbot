@@ -14,6 +14,7 @@ from bot.router_components.x_routing import (
     extract_sparse_media_resolution,
     normalize_sparse_kind_value,
     normalize_sparse_url_value,
+    normalize_sparse_images_value,
     extract_raw_urls_from_texts,
     extract_x_status_urls_from_text,
     filter_canonical_x_urls,
@@ -1292,6 +1293,12 @@ def test_normalize_sparse_kind_value() -> None:
     assert normalize_sparse_kind_value("video") == "video"
     assert normalize_sparse_kind_value("") == "unknown"
     assert normalize_sparse_kind_value(None) == "unknown"
+
+
+def test_normalize_sparse_images_value() -> None:
+    assert normalize_sparse_images_value(["i1"]) == ["i1"]
+    assert normalize_sparse_images_value(None) == []
+    assert normalize_sparse_images_value("bad") == []
 
 
 def test_extract_fxtwitter_tweet_node_variants() -> None:

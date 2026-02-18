@@ -295,9 +295,7 @@ def extract_sparse_media_resolution(
     if not isinstance(resolved_sparse, dict):
         return ("unknown", [], default_url)
     sparse_kind = normalize_sparse_kind_value(resolved_sparse.get("kind"))
-    sparse_images = resolved_sparse.get("images") or []
-    if not isinstance(sparse_images, list):
-        sparse_images = []
+    sparse_images = normalize_sparse_images_value(resolved_sparse.get("images"))
     sparse_url = normalize_sparse_url_value(resolved_sparse.get("url"), default_url=default_url)
     return (sparse_kind, sparse_images, sparse_url)
 
@@ -313,6 +311,14 @@ def normalize_sparse_url_value(value: Any, *, default_url: str) -> str:
     if not isinstance(sparse_url, str) or not sparse_url:
         return default_url
     return sparse_url
+
+
+def normalize_sparse_images_value(value: Any) -> List[Any]:
+    """Normalize sparse media images field to a list value."""
+    sparse_images = value or []
+    if not isinstance(sparse_images, list):
+        return []
+    return sparse_images
 
 
 def extract_fxtwitter_tweet_node(payload: Any) -> Dict[str, Any]:
