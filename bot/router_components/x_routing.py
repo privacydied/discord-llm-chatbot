@@ -1680,10 +1680,15 @@ def extract_syndication_photo_urls(photos: Any) -> List[str]:
     """Extract photo URLs from syndication `photos` payload."""
     urls: List[str] = []
     for p in photos:
-        item_urls = extract_syndication_photo_urls_from_item(p)
-        if item_urls:
-            urls.extend(item_urls)
+        append_syndication_photo_item_urls(urls=urls, photo=p)
     return urls
+
+
+def append_syndication_photo_item_urls(*, urls: List[str], photo: Any) -> None:
+    """Append URLs extracted from one syndication photo payload item."""
+    item_urls = extract_syndication_photo_urls_from_item(photo)
+    if item_urls:
+        urls.extend(item_urls)
 
 
 def extract_syndication_photo_url_from_dict(photo: Dict[str, Any]) -> Any:

@@ -246,6 +246,7 @@ from bot.router_components.x_routing import (
     format_syndication_error_payload_repr,
     format_syndication_error_payload_max_chars,
     extract_syndication_photo_urls,
+    append_syndication_photo_item_urls,
     extract_syndication_photo_url_from_dict,
     extract_syndication_photo_urls_from_item,
     syndication_photo_url_is_usable,
@@ -2926,6 +2927,14 @@ def test_extract_syndication_photo_urls_variants() -> None:
 
     with pytest.raises(TypeError):
         extract_syndication_photo_urls(1)
+
+
+def test_append_syndication_photo_item_urls_variants() -> None:
+    urls: List[str] = []
+    append_syndication_photo_item_urls(urls=urls, photo={"url": "u1"})
+    append_syndication_photo_item_urls(urls=urls, photo="u2")
+    append_syndication_photo_item_urls(urls=urls, photo={"url": None})
+    assert urls == ["u1", "u2"]
 
 
 def test_extract_syndication_photo_url_from_dict_priority() -> None:
