@@ -294,12 +294,17 @@ def extract_sparse_media_resolution(
     """Extract sparse media kind/images/url from resolved payload."""
     if not isinstance(resolved_sparse, dict):
         return ("unknown", [], default_url)
-    sparse_kind = (resolved_sparse.get("kind") or "unknown").strip() or "unknown"
+    sparse_kind = normalize_sparse_kind_value(resolved_sparse.get("kind"))
     sparse_images = resolved_sparse.get("images") or []
     if not isinstance(sparse_images, list):
         sparse_images = []
     sparse_url = normalize_sparse_url_value(resolved_sparse.get("url"), default_url=default_url)
     return (sparse_kind, sparse_images, sparse_url)
+
+
+def normalize_sparse_kind_value(value: Any) -> str:
+    """Normalize sparse media kind field to a non-empty lower-level token."""
+    return (value or "unknown").strip() or "unknown"
 
 
 def normalize_sparse_url_value(value: Any, *, default_url: str) -> str:
