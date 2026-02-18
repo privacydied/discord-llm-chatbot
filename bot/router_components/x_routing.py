@@ -2546,6 +2546,15 @@ def is_x_url_candidate_result(
     is_x_url: Callable[[str], bool],
 ) -> bool:
     """Return value used by X URL candidate source helper."""
+    return is_x_url_candidate_for_result(raw_url, is_x_url=is_x_url)
+
+
+def is_x_url_candidate_for_result(
+    raw_url: str,
+    *,
+    is_x_url: Callable[[str], bool],
+) -> bool:
+    """Return X URL predicate result via candidate-result handoff helper."""
     return is_x_url(raw_url)
 
 

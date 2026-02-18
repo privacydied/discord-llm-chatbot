@@ -28,6 +28,7 @@ from bot.router_components.x_routing import (
     is_x_url_candidate,
     is_x_url_candidate_source,
     is_x_url_candidate_result,
+    is_x_url_candidate_for_result,
     append_x_url_if_match,
     append_unique_str,
     unique_value_missing,
@@ -1147,6 +1148,11 @@ def test_is_x_url_candidate_source_delegates_predicate() -> None:
 def test_is_x_url_candidate_result_delegates_predicate() -> None:
     assert is_x_url_candidate_result("https://x.com/u/status/1", is_x_url=lambda _: True)
     assert not is_x_url_candidate_result("https://example.com", is_x_url=lambda _: False)
+
+
+def test_is_x_url_candidate_for_result_delegates_predicate() -> None:
+    assert is_x_url_candidate_for_result("https://x.com/u/status/1", is_x_url=lambda _: True)
+    assert not is_x_url_candidate_for_result("https://example.com", is_x_url=lambda _: False)
 
 
 def test_x_url_matches_predicate_source_delegates_predicate() -> None:
