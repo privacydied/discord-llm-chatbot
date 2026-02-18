@@ -192,8 +192,18 @@ from bot.router_components.x_routing import (
     normalize_base_text_value,
     syndication_article_has_blocks,
     has_non_empty_block_text,
+    iter_article_blocks,
+    extract_article_blocks,
+    extract_article_content,
     normalize_article_block_text,
     extract_x_article_text,
+    build_article_text_parts,
+    append_article_header_parts,
+    normalized_article_header_text,
+    append_unique_article_block_texts,
+    iter_article_block_texts,
+    append_unique_article_text_part,
+    join_article_text_parts,
     truncate_x_article_text,
     syndication_needs_article_hydration,
     resolve_syndication_pointer_text,
@@ -203,6 +213,9 @@ from bot.router_components.x_routing import (
     extract_syndication_base_text,
     extract_note_tweet_text,
     merge_syndication_base_with_article,
+    should_merge_base_with_article,
+    article_text_already_in_base,
+    merged_base_with_article_text,
     base_text_contains_tco_link,
     extract_syndication_text,
     extract_syndication_article_text,
@@ -2545,6 +2558,15 @@ def test_syndication_article_has_blocks_variants() -> None:
     )
 
 
+def test_extract_article_content_and_blocks() -> None:
+    article = {"content": {"blocks": [{"text": "hello"}, {"x": 1}, "bad"]}}
+    assert extract_article_content(article) == {"blocks": [{"text": "hello"}, {"x": 1}, "bad"]}
+    assert extract_article_blocks(article) == [{"text": "hello"}, {"x": 1}, "bad"]
+    assert list(iter_article_blocks(article)) == [{"text": "hello"}, {"x": 1}]
+    assert extract_article_content({"content": "bad"}) == {}
+    assert extract_article_blocks({"content": "bad"}) == []
+
+
 def test_has_non_empty_block_text() -> None:
     assert has_non_empty_block_text({"text": "hello"}) is True
     assert has_non_empty_block_text({"text": "   "}) is False
@@ -2573,6 +2595,31 @@ def test_extract_x_article_text_dedupes_unescapes_and_caps() -> None:
     }
     out = extract_x_article_text(article)
     assert out == "Title & Co\n\nPreview\n\nBody A\n\nBody & B"
+
+
+def test_article_text_part_helpers() -> None:
+    article = {
+        "title": "Title",
+        "preview_text": "Preview",
+        "content": {"blocks": [{"text": "Body A"}, {"text": "Body A"}, {"text": "Body B"}]},
+    }
+    parts = build_article_text_parts(article)
+    assert parts == ["Title", "Preview", "Body A", "Body B"]
+
+    header_parts: List[str] = []
+    append_article_header_parts(header_parts, article)
+    assert header_parts == ["Title", "Preview"]
+    assert normalized_article_header_text(article, "title") == "Title"
+
+    block_parts: List[str] = []
+    append_unique_article_block_texts(block_parts, article)
+    assert block_parts == ["Body A", "Body B"]
+    assert list(iter_article_block_texts(article)) == ["Body A", "Body A", "Body B"]
+
+    append_unique_article_text_part(block_parts, "Body B")
+    append_unique_article_text_part(block_parts, "Body C")
+    assert block_parts == ["Body A", "Body B", "Body C"]
+    assert join_article_text_parts(["Title", "Body A"]) == "Title\n\nBody A"
 
 
 def test_extract_x_article_text_truncates_at_12000_chars() -> None:
@@ -2737,6 +2784,18 @@ def test_merge_syndication_base_with_article_variants() -> None:
             article_text="article",
         )
         == "article"
+    )
+
+
+def test_merge_syndication_base_with_article_helper_paths() -> None:
+    assert should_merge_base_with_article("base text") is True
+    assert should_merge_base_with_article("see https://t.co/abc") is False
+    assert should_merge_base_with_article("") is False
+    assert article_text_already_in_base("base article", "article") is True
+    assert article_text_already_in_base("base", "article") is False
+    assert (
+        merged_base_with_article_text("base text", "article body")
+        == "base text\n\n[Linked X Article]\narticle body"
     )
 
 

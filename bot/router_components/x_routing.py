@@ -874,13 +874,7 @@ def syndication_article_has_blocks(article_node: Any) -> bool:
     """Check whether a syndication article payload contains at least one non-empty block."""
     if not isinstance(article_node, dict):
         return False
-    content = article_node.get("content") or {}
-    blocks = content.get("blocks") if isinstance(content, dict) else []
-    if not isinstance(blocks, list):
-        return False
-    for block in blocks:
-        if not isinstance(block, dict):
-            continue
+    for block in iter_article_blocks(article_node):
         if has_non_empty_block_text(block):
             return True
     return False
@@ -895,29 +889,77 @@ def extract_x_article_text(article_node: Any) -> str:
     """Extract normalized text from an X article payload."""
     if not isinstance(article_node, dict):
         return ""
-    title = str(article_node.get("title") or "").strip()
-    preview = str(article_node.get("preview_text") or "").strip()
-    blocks: List[str] = []
-    content = article_node.get("content") or {}
-    if isinstance(content, dict):
-        raw_blocks = content.get("blocks") or []
-        if isinstance(raw_blocks, list):
-            for block in raw_blocks:
-                if not isinstance(block, dict):
-                    continue
-                btxt = normalize_article_block_text(block)
-                if btxt:
-                    blocks.append(btxt)
-    parts: List[str] = []
-    if title:
-        parts.append(unescape(title))
-    if preview:
-        parts.append(unescape(preview))
-    for btxt in blocks:
-        if btxt not in parts:
-            parts.append(btxt)
-    merged = "\n\n".join(parts).strip()
+    parts = build_article_text_parts(article_node)
+    merged = join_article_text_parts(parts)
     return truncate_x_article_text(merged)
+
+
+def build_article_text_parts(article_node: Dict[str, Any]) -> List[str]:
+    """Build de-duplicated article text parts from title/preview/blocks."""
+    parts: List[str] = []
+    append_article_header_parts(parts, article_node)
+    append_unique_article_block_texts(parts, article_node)
+    return parts
+
+
+def append_article_header_parts(parts: List[str], article_node: Dict[str, Any]) -> None:
+    """Append title/preview text parts when present."""
+    title = normalized_article_header_text(article_node, "title")
+    preview = normalized_article_header_text(article_node, "preview_text")
+    if title:
+        parts.append(title)
+    if preview:
+        parts.append(preview)
+
+
+def normalized_article_header_text(article_node: Dict[str, Any], key: str) -> str:
+    """Normalize article header text field by key using unescape+strip."""
+    return unescape(str(article_node.get(key) or "").strip())
+
+
+def append_unique_article_block_texts(parts: List[str], article_node: Dict[str, Any]) -> None:
+    """Append unique normalized block texts to article text parts."""
+    for text in iter_article_block_texts(article_node):
+        append_unique_article_text_part(parts, text)
+
+
+def iter_article_block_texts(article_node: Dict[str, Any]) -> Iterable[str]:
+    """Iterate normalized non-empty article block text values."""
+    for block in iter_article_blocks(article_node):
+        btxt = normalize_article_block_text(block)
+        if btxt:
+            yield btxt
+
+
+def append_unique_article_text_part(parts: List[str], text: str) -> None:
+    """Append article text part only when not already present."""
+    if text not in parts:
+        parts.append(text)
+
+
+def join_article_text_parts(parts: List[str]) -> str:
+    """Join article text parts with blank-line separators."""
+    return "\n\n".join(parts).strip()
+
+
+def iter_article_blocks(article_node: Dict[str, Any]) -> Iterable[Dict[str, Any]]:
+    """Iterate dict-shaped article blocks from article content payload."""
+    for block in extract_article_blocks(article_node):
+        if isinstance(block, dict):
+            yield block
+
+
+def extract_article_blocks(article_node: Dict[str, Any]) -> List[Any]:
+    """Extract raw blocks list from article content; fallback to empty list."""
+    content = extract_article_content(article_node)
+    blocks = content.get("blocks")
+    return blocks if isinstance(blocks, list) else []
+
+
+def extract_article_content(article_node: Dict[str, Any]) -> Dict[str, Any]:
+    """Extract article content node as dict; fallback to empty dict."""
+    content = article_node.get("content") or {}
+    return content if isinstance(content, dict) else {}
 
 
 def truncate_x_article_text(text: str, *, max_chars: int = 12000) -> str:
@@ -1014,11 +1056,26 @@ def merge_syndication_base_with_article(
     """Merge syndication base tweet text with hydrated article text."""
     if not article_text:
         return base_text
-    if base_text and not base_text_contains_tco_link(base_text):
-        if article_text in base_text:
+    if should_merge_base_with_article(base_text):
+        if article_text_already_in_base(base_text, article_text):
             return base_text
-        return f"{base_text}\n\n[Linked X Article]\n{article_text}"
+        return merged_base_with_article_text(base_text, article_text)
     return article_text
+
+
+def should_merge_base_with_article(base_text: str) -> bool:
+    """Return True when base text should be merged with article body."""
+    return bool(base_text) and not base_text_contains_tco_link(base_text)
+
+
+def article_text_already_in_base(base_text: str, article_text: str) -> bool:
+    """Return True when article text already appears in base tweet text."""
+    return article_text in base_text
+
+
+def merged_base_with_article_text(base_text: str, article_text: str) -> str:
+    """Return merged base+article text using linked article marker block."""
+    return f"{base_text}\n\n[Linked X Article]\n{article_text}"
 
 
 def base_text_contains_tco_link(base_text: str) -> bool:
