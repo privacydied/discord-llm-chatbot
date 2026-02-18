@@ -1957,8 +1957,13 @@ def append_status_url_candidate(
 
 def status_url_raw_candidates(text: str) -> Iterable[str]:
     """Yield raw URL candidates normalized through candidate-raw-value helper."""
-    for raw in status_url_candidate_values(text):
+    for raw in iter_status_url_candidate_values(text):
         yield status_url_candidate_raw_value(raw)
+
+
+def iter_status_url_candidate_values(text: str) -> Iterable[str]:
+    """Yield candidate URL values for status collector normalization loops."""
+    yield from status_url_candidate_values(text)
 
 
 def status_url_candidate_values(text: str) -> Iterable[str]:
