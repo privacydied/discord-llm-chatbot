@@ -2263,12 +2263,17 @@ def x_url_extract_flags_literal() -> int:
 def extract_raw_urls_from_texts(texts: Iterable[str]) -> List[str]:
     """Extract raw URLs from multiple text blobs in-order with de-duplication."""
     raw_urls = raw_url_items_buffer()
+    collect_raw_urls_fail_open(items=raw_urls, texts=texts)
+    return raw_url_items_result(raw_urls)
+
+
+def collect_raw_urls_fail_open(*, items: List[str], texts: Iterable[str]) -> None:
+    """Collect raw URLs while preserving fail-open behavior on extraction errors."""
     try:
         url_re = raw_url_extract_regex()
-        collect_raw_urls_into_items(raw_urls, texts, url_re=url_re)
+        collect_raw_urls_into_items(items, texts, url_re=url_re)
     except Exception:
         pass
-    return raw_url_items_result(raw_urls)
 
 
 def collect_raw_urls_into_items(

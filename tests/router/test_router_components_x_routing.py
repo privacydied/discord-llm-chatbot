@@ -345,6 +345,7 @@ from bot.router_components.x_routing import (
     compile_regex_flags_for_argument,
     compile_regex_flags_value,
     collect_raw_urls_into_items,
+    collect_raw_urls_fail_open,
     raw_url_items_result,
     raw_url_items_buffer,
     raw_url_items_buffer_source,
@@ -856,6 +857,23 @@ def test_collect_raw_urls_into_items_delegates_collection() -> None:
         url_re=x_url_extract_regex(),
     )
     assert items == ["https://x.com/u/status/1"]
+
+
+def test_collect_raw_urls_fail_open_variants() -> None:
+    items: List[str] = []
+    collect_raw_urls_fail_open(
+        items=items,
+        texts=["a https://x.com/u/status/1 b"],
+    )
+    assert items == ["https://x.com/u/status/1"]
+
+    class _BadTexts:
+        def __iter__(self):
+            raise RuntimeError("boom")
+
+    items_err: List[str] = []
+    collect_raw_urls_fail_open(items=items_err, texts=_BadTexts())
+    assert items_err == []
 
 
 def test_collect_status_urls_fail_open_variants() -> None:
