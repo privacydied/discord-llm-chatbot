@@ -205,12 +205,17 @@ def normalize_x_url(url: str) -> str:
         }
         if host in aliases:
             host = build_syndication_x_host()
-        path = p.path or ""
-        if path.endswith("/"):
-            path = path[:-1]
+        path = normalize_x_path(p.path or "")
         return urlunparse(("https", host, path, "", "", ""))
     except Exception:
         return url
+
+
+def normalize_x_path(path: str) -> str:
+    """Normalize X/Twitter path by trimming one trailing slash."""
+    if path.endswith("/"):
+        return path[:-1]
+    return path
 
 
 def unwrap_x_media_url(url: str) -> str:
