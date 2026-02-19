@@ -536,6 +536,23 @@ class EnhancedRetryManager:
             return False
         if "404" in error_str and "model not found" in error_str:
             return False
+        # Hard non-retryable auth/authorization failures.
+        # These are configuration/account issues, not transient provider blips.
+        if "401" in error_str or "403" in error_str:
+            if any(
+                pat in error_str
+                for pat in (
+                    "authentication",
+                    "unauthorized",
+                    "forbidden",
+                    "user not found",
+                    "invalid api key",
+                    "bad api key",
+                )
+            ):
+                return False
+        if "authenticationerror" in error_type or "permission" in error_type:
+            return False
 
         # Check both error message and error type name
         return any(pattern in error_str for pattern in retryable_patterns) or any(
@@ -632,6 +649,12 @@ class EnhancedRetryManager:
                     )
 
                 except Exception as e:
+                    # Preserve provider identity on all downstream error paths.
+                    try:
+                        if not getattr(e, "provider_key", None):
+                            setattr(e, "provider_key", provider_key)
+                    except Exception:
+                        pass
                     # Normalize timeouts to a descriptive message [REH]
                     try:
                         if isinstance(e, (asyncio.TimeoutError, TimeoutError)):
@@ -666,6 +689,33 @@ class EnhancedRetryManager:
                             max(60.0, dead_model_cooldown),
                         )
                         break
+                    # Auth failures should short-circuit the entire ladder: trying more models
+                    # with the same bad credentials just burns budget and latency.
+                    if not self._is_retryable_error(e):
+                        msg_lower = f"{type(e).__name__}: {e}".lower()
+                        if any(
+                            pat in msg_lower
+                            for pat in (
+                                "authentication",
+                                "unauthorized",
+                                "forbidden",
+                                "user not found",
+                                "invalid api key",
+                                "bad api key",
+                            )
+                        ) and ("401" in msg_lower or "403" in msg_lower):
+                            logger.error(
+                                f"❌ Authentication failure for {provider_key}; aborting ladder: {type(e).__name__}: {e}"
+                            )
+                            total_time = time.time() - start_time
+                            return RetryResult(
+                                success=False,
+                                error=e,
+                                attempts=total_attempts,
+                                total_time=total_time,
+                                provider_used=provider_key,
+                                fallback_occurred=fallback_occurred or provider_idx > 0,
+                            )
 
                     logger.warning(
                         f"⚠️ Attempt {attempt + 1} failed with {provider_key}: {type(e).__name__}: {e}"
@@ -744,6 +794,9 @@ class EnhancedRetryManager:
             error=last_exception or Exception("All providers exhausted"),
             attempts=total_attempts,
             total_time=total_time,
+            provider_used=getattr(last_exception, "provider_key", None)
+            if last_exception is not None
+            else None,
             fallback_occurred=fallback_occurred,
         )
 

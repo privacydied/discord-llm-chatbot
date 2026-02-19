@@ -321,6 +321,21 @@ Server Context: {server_context}"""
                                 f"after {attempts} attempt(s) in {total_time:.2f}s "
                                 f"(last_provider={prov}). Last error: {type(base_err).__name__}: {base_err}"
                             )
+                        elif (
+                            ("401" in err_str or "403" in err_str)
+                            and (
+                                "authentication" in err_str
+                                or "unauthorized" in err_str
+                                or "forbidden" in err_str
+                                or "user not found" in err_str
+                                or "invalid api key" in err_str
+                            )
+                        ):
+                            msg = (
+                                "Text provider authentication failed "
+                                f"(last_provider={prov}). Check OPENAI_API_KEY / OpenRouter account. "
+                                f"Last error: {type(base_err).__name__}: {base_err}"
+                            )
                         elif "timeout" in err_str:
                             msg = (
                                 f"Text generation timeout after {total_time:.2f}s across "
@@ -336,6 +351,17 @@ Server Context: {server_context}"""
                         try:
                             if "no endpoints found" in err_str or (
                                 "404" in err_str and "endpoint" in err_str
+                            ):
+                                setattr(api_err, "retryable", False)
+                            if (
+                                ("401" in err_str or "403" in err_str)
+                                and (
+                                    "authentication" in err_str
+                                    or "unauthorized" in err_str
+                                    or "forbidden" in err_str
+                                    or "user not found" in err_str
+                                    or "invalid api key" in err_str
+                                )
                             ):
                                 setattr(api_err, "retryable", False)
                         except Exception:
@@ -775,6 +801,21 @@ async def _generate_vl_response_with_retry(
                             f"after {attempts} attempt(s) in {total_time:.2f}s "
                             f"(last_provider={prov}). Last error: {type(base_err).__name__}: {base_err}"
                         )
+                    elif (
+                        ("401" in err_str or "403" in err_str)
+                        and (
+                            "authentication" in err_str
+                            or "unauthorized" in err_str
+                            or "forbidden" in err_str
+                            or "user not found" in err_str
+                            or "invalid api key" in err_str
+                        )
+                    ):
+                        msg = (
+                            "Vision provider authentication failed "
+                            f"(last_provider={prov}). Check OPENAI_API_KEY / OpenRouter account. "
+                            f"Last error: {type(base_err).__name__}: {base_err}"
+                        )
                     elif "timeout" in err_str:
                         msg = (
                             f"Vision generation timeout after {total_time:.2f}s across "
@@ -797,6 +838,17 @@ async def _generate_vl_response_with_retry(
                     try:
                         if "no endpoints found" in err_str or (
                             "404" in err_str and "endpoint" in err_str
+                        ):
+                            setattr(api_err, "retryable", False)
+                        if (
+                            ("401" in err_str or "403" in err_str)
+                            and (
+                                "authentication" in err_str
+                                or "unauthorized" in err_str
+                                or "forbidden" in err_str
+                                or "user not found" in err_str
+                                or "invalid api key" in err_str
+                            )
                         ):
                             setattr(api_err, "retryable", False)
                     except Exception:

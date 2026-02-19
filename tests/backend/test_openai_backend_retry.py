@@ -367,3 +367,34 @@ async def test_circuit_probe_window_prevents_zero_attempt_exhaustion(monkeypatch
     assert res.attempts >= 1
     assert calls["a"] >= 1
     assert calls["b"] == 1
+
+
+@pytest.mark.asyncio
+async def test_auth_401_aborts_ladder_and_sets_provider_used():
+    mgr = EnhancedRetryManager()
+    mgr.circuit_breakers.clear()
+    mgr.provider_configs["text"] = [
+        ProviderConfig("openrouter", "auth-fail-model", timeout=1.0, max_attempts=2),
+        ProviderConfig("openrouter", "should-not-run", timeout=1.0, max_attempts=1),
+    ]
+
+    calls = {"auth": 0, "next": 0}
+
+    def factory(pc: ProviderConfig):
+        async def run():
+            if pc.model == "auth-fail-model":
+                calls["auth"] += 1
+                raise Exception(
+                    "AuthenticationError: Error code: 401 - {'error': {'message': 'User not found.', 'code': 401}}"
+                )
+            calls["next"] += 1
+            return "OK"
+
+        return run
+
+    res = await mgr.run_with_fallback("text", factory, per_item_budget=10.0)
+    assert res.success is False
+    assert res.attempts == 1
+    assert res.provider_used == "openrouter:auth-fail-model"
+    assert calls["auth"] == 1
+    assert calls["next"] == 0

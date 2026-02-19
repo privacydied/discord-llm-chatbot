@@ -89,6 +89,16 @@ async def generate_response(
             ("404" in err_str and ("endpoint" in err_str or "no endpoints" in err_str))
             or "providers unavailable" in err_str
             or "all text providers exhausted" in err_str
+            or (
+                ("401" in err_str or "403" in err_str)
+                and (
+                    "authentication" in err_str
+                    or "unauthorized" in err_str
+                    or "forbidden" in err_str
+                    or "user not found" in err_str
+                    or "invalid api key" in err_str
+                )
+            )
         )
 
         if is_expected_failure:
@@ -176,6 +186,16 @@ async def generate_vl_response(
             ("404" in err_str and ("endpoint" in err_str or "no endpoints" in err_str))
             or "providers unavailable" in err_str
             or "all vision providers exhausted" in err_str
+            or (
+                ("401" in err_str or "403" in err_str)
+                and (
+                    "authentication" in err_str
+                    or "unauthorized" in err_str
+                    or "forbidden" in err_str
+                    or "user not found" in err_str
+                    or "invalid api key" in err_str
+                )
+            )
         )
 
         if is_expected_failure:
