@@ -26,6 +26,12 @@ async def test_reply_anchors_to_triggering_user(monkeypatch):
     bot.user.bot = True
     bot.config = {"MEM_LOG_SUBSYS": "mem.test"}
     bot.logger = MagicMock()
+    bot._is_retryable_discord_http_error = LLMBot._is_retryable_discord_http_error.__get__(
+        bot, LLMBot
+    )
+    bot._discord_retry_delay = LLMBot._discord_retry_delay.__get__(bot, LLMBot)
+    bot._call_with_discord_retry = LLMBot._call_with_discord_retry.__get__(bot, LLMBot)
+    bot._optional_typing = LLMBot._optional_typing.__get__(bot, LLMBot)
     # Satisfy readiness check in _execute_action
     bot._is_ready = MagicMock()
     bot._is_ready.is_set.return_value = True
@@ -87,6 +93,12 @@ async def test_reply_missing_parent_still_targets_triggering_user(monkeypatch):
     bot.user.bot = True
     bot.config = {"MEM_LOG_SUBSYS": "mem.test"}
     bot.logger = MagicMock()
+    bot._is_retryable_discord_http_error = LLMBot._is_retryable_discord_http_error.__get__(
+        bot, LLMBot
+    )
+    bot._discord_retry_delay = LLMBot._discord_retry_delay.__get__(bot, LLMBot)
+    bot._call_with_discord_retry = LLMBot._call_with_discord_retry.__get__(bot, LLMBot)
+    bot._optional_typing = LLMBot._optional_typing.__get__(bot, LLMBot)
 
     # Satisfy readiness check in _execute_action
     bot._is_ready = MagicMock()

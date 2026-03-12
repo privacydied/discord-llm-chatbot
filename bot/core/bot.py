@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import os
 import sys
+from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Optional, Dict, List, Tuple, Any
 
 import discord
@@ -146,6 +147,135 @@ class LLMBot(commands.Bot):
 
         # Idempotency guard to prevent duplicate initialization [DRY][REH]
         self._boot_completed = False
+
+    def _is_retryable_discord_http_error(self, error: Exception) -> bool:
+        """Return True for transient Discord transport or upstream failures."""
+        if not isinstance(error, discord.HTTPException):
+            return False
+
+        status = getattr(error, "status", None)
+        if status == 429:
+            return True
+        if isinstance(status, int) and status >= 500:
+            return True
+
+        details = str(error).lower()
+        transient_markers = (
+            "service unavailable",
+            "upstream connect error",
+            "disconnect/reset before headers",
+            "reset reason: overflow",
+        )
+        return any(marker in details for marker in transient_markers)
+
+    def _discord_retry_delay(self, error: discord.HTTPException, attempt: int) -> float:
+        """Compute a bounded retry delay using Retry-After when Discord provides one."""
+        retry_after = getattr(error, "retry_after", None)
+        if retry_after is None:
+            response = getattr(error, "response", None)
+            headers = getattr(response, "headers", None)
+            if headers:
+                raw_retry_after = headers.get("retry-after") or headers.get("Retry-After")
+                if raw_retry_after is not None:
+                    try:
+                        retry_after = float(raw_retry_after)
+                    except (TypeError, ValueError):
+                        retry_after = None
+
+        if retry_after is not None:
+            return max(0.0, min(float(retry_after), 5.0))
+
+        return min(0.5 * (2 ** (attempt - 1)), 2.0)
+
+    async def _call_with_discord_retry(
+        self,
+        operation: str,
+        func,
+        *,
+        base_extra: Optional[Dict[str, Any]] = None,
+        attempts: int = 3,
+    ):
+        """Retry transient Discord HTTP failures with short bounded backoff."""
+        extra = base_extra or {}
+
+        for attempt in range(1, attempts + 1):
+            try:
+                return await func()
+            except discord.HTTPException as exc:
+                if not self._is_retryable_discord_http_error(exc) or attempt >= attempts:
+                    raise
+
+                delay = self._discord_retry_delay(exc, attempt)
+                try:
+                    self.logger.warning(
+                        f"discord.retry | op={operation} attempt={attempt}/{attempts} "
+                        f"status={getattr(exc, 'status', 'n/a')} delay={delay:.2f}s "
+                        f"details={str(exc)}",
+                        extra={**extra, "event": "discord.retry", "op": operation},
+                    )
+                except Exception:
+                    pass
+                await asyncio.sleep(delay)
+
+    @asynccontextmanager
+    async def _optional_typing(
+        self, channel, *, base_extra: Optional[Dict[str, Any]] = None
+    ):
+        """Enter typing() when available, but don't fail the send path if it errors."""
+        typing_factory = getattr(channel, "typing", None)
+        if not callable(typing_factory):
+            yield
+            return
+
+        ctx = None
+        entered = False
+        for attempt in range(1, 4):
+            try:
+                ctx = typing_factory()
+                await ctx.__aenter__()
+                entered = True
+                break
+            except discord.HTTPException as exc:
+                if not self._is_retryable_discord_http_error(exc):
+                    try:
+                        self.logger.warning(
+                            "discord.typing.skip | non_retryable_error",
+                            extra={**(base_extra or {}), "event": "discord.typing.skip"},
+                        )
+                    except Exception:
+                        pass
+                    ctx = None
+                    break
+
+                if attempt >= 3:
+                    try:
+                        self.logger.warning(
+                            f"discord.typing.skip | retries_exhausted status={getattr(exc, 'status', 'n/a')}",
+                            extra={**(base_extra or {}), "event": "discord.typing.skip"},
+                        )
+                    except Exception:
+                        pass
+                    ctx = None
+                    break
+
+                delay = self._discord_retry_delay(exc, attempt)
+                try:
+                    self.logger.warning(
+                        f"discord.retry | op=typing attempt={attempt}/3 status={getattr(exc, 'status', 'n/a')} delay={delay:.2f}s details={str(exc)}",
+                        extra={**(base_extra or {}), "event": "discord.retry", "op": "typing"},
+                    )
+                except Exception:
+                    pass
+                await asyncio.sleep(delay)
+
+        try:
+            yield
+        finally:
+            if entered and ctx is not None:
+                try:
+                    await ctx.__aexit__(None, None, None)
+                except Exception:
+                    pass
 
         # Rich console for enhanced command setup logging
         self.console = Console()
@@ -1359,7 +1489,7 @@ class LLMBot(commands.Bot):
 
         sent_message = None
         # Show typing indicator while sending the message
-        async with message.channel.typing():
+        async with self._optional_typing(message.channel, base_extra=base_extra):
             try:
                 if needs_chunking and (content or action.embeds or files):
                     sent_message = await self._send_chunked_reply(
@@ -1567,7 +1697,13 @@ class LLMBot(commands.Bot):
                     if target_message and not files and not must_retarget:
                         # Edit the existing streaming message in-place
                         sent_message = target_message
-                        await sent_message.edit(content=content, embeds=action.embeds)
+                        await self._call_with_discord_retry(
+                            "edit_message",
+                            lambda: sent_message.edit(
+                                content=content, embeds=action.embeds
+                            ),
+                            base_extra=base_extra,
+                        )
                         self.logger.info(
                             f"dispatch:edit.ok | discord_msg_id={getattr(sent_message, 'id', None)} embeds={embed_count} files={file_count}",
                             extra={**base_extra, "event": "dispatch.edit.ok"},
@@ -1581,7 +1717,11 @@ class LLMBot(commands.Bot):
                         # Remove placeholder if present, then send a proper reply with desired target
                         if target_message:
                             try:
-                                await target_message.delete()
+                                await self._call_with_discord_retry(
+                                    "delete_message",
+                                    target_message.delete,
+                                    base_extra=base_extra,
+                                )
                             except Exception:
                                 pass
 
@@ -1605,28 +1745,40 @@ class LLMBot(commands.Bot):
 
                         if reply_target is None and _is_thread_channel(ch):
                             # Send to thread without a reply reference (no reply-to-self loops available)
-                            sent_message = await message.channel.send(
-                                content=content,
-                                embeds=action.embeds,
-                                files=files,
-                                allowed_mentions=allowed_mentions,
+                            sent_message = await self._call_with_discord_retry(
+                                "channel_send",
+                                lambda: message.channel.send(
+                                    content=content,
+                                    embeds=action.embeds,
+                                    files=files,
+                                    allowed_mentions=allowed_mentions,
+                                ),
+                                base_extra=base_extra,
                             )
                         elif reply_target is not None:
-                            sent_message = await reply_target.reply(
-                                content=content,
-                                embeds=action.embeds,
-                                files=files,
-                                mention_author=False,
-                                allowed_mentions=allowed_mentions,
+                            sent_message = await self._call_with_discord_retry(
+                                "reply_send",
+                                lambda: reply_target.reply(
+                                    content=content,
+                                    embeds=action.embeds,
+                                    files=files,
+                                    mention_author=False,
+                                    allowed_mentions=allowed_mentions,
+                                ),
+                                base_extra=base_extra,
                             )
                         else:
                             # Non-thread or fallback: reply to triggering message
-                            sent_message = await message.reply(
-                                content=content,
-                                embeds=action.embeds,
-                                files=files,
-                                mention_author=False,
-                                allowed_mentions=allowed_mentions,
+                            sent_message = await self._call_with_discord_retry(
+                                "reply_send",
+                                lambda: message.reply(
+                                    content=content,
+                                    embeds=action.embeds,
+                                    files=files,
+                                    mention_author=False,
+                                    allowed_mentions=allowed_mentions,
+                                ),
+                                base_extra=base_extra,
                             )
 
                         self.logger.info(
@@ -1646,8 +1798,12 @@ class LLMBot(commands.Bot):
                         "dispatch:fallback | reason=unknown_message",
                         extra={**base_extra, "event": "dispatch.send.reply_fallback"},
                     )
-                    sent_message = await message.channel.send(
-                        content=content, embeds=action.embeds, files=files
+                    sent_message = await self._call_with_discord_retry(
+                        "channel_send",
+                        lambda: message.channel.send(
+                            content=content, embeds=action.embeds, files=files
+                        ),
+                        base_extra=base_extra,
                     )
 
                     self.logger.info(
@@ -1763,7 +1919,9 @@ class LLMBot(commands.Bot):
         # Any existing placeholder should be removed; multi-part replies always target the user message directly.
         if target_message is not None:
             try:
-                await target_message.delete()
+                await self._call_with_discord_retry(
+                    "delete_message", target_message.delete, base_extra=base_extra
+                )
             except Exception:
                 pass
 
@@ -1916,27 +2074,39 @@ class LLMBot(commands.Bot):
 
             try:
                 if reply_target is None and _is_thread_channel(ch):
-                    sent = await message.channel.send(
-                        content=chunk_content,
-                        embeds=part_embeds,
-                        files=part_files,
-                        allowed_mentions=part_allowed_mentions,
+                    sent = await self._call_with_discord_retry(
+                        "channel_send",
+                        lambda: message.channel.send(
+                            content=chunk_content,
+                            embeds=part_embeds,
+                            files=part_files,
+                            allowed_mentions=part_allowed_mentions,
+                        ),
+                        base_extra=base_extra,
                     )
                 elif reply_target is not None:
-                    sent = await reply_target.reply(
-                        content=chunk_content,
-                        embeds=part_embeds,
-                        files=part_files,
-                        mention_author=False,
-                        allowed_mentions=part_allowed_mentions,
+                    sent = await self._call_with_discord_retry(
+                        "reply_send",
+                        lambda: reply_target.reply(
+                            content=chunk_content,
+                            embeds=part_embeds,
+                            files=part_files,
+                            mention_author=False,
+                            allowed_mentions=part_allowed_mentions,
+                        ),
+                        base_extra=base_extra,
                     )
                 else:
-                    sent = await message.reply(
-                        content=chunk_content,
-                        embeds=part_embeds,
-                        files=part_files,
-                        mention_author=False,
-                        allowed_mentions=part_allowed_mentions,
+                    sent = await self._call_with_discord_retry(
+                        "reply_send",
+                        lambda: message.reply(
+                            content=chunk_content,
+                            embeds=part_embeds,
+                            files=part_files,
+                            mention_author=False,
+                            allowed_mentions=part_allowed_mentions,
+                        ),
+                        base_extra=base_extra,
                     )
 
                 last_sent = sent

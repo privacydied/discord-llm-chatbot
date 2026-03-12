@@ -1,5 +1,6 @@
 import asyncio
 from typing import Optional, List
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -61,7 +62,14 @@ class FakeMessage:
         self._deleted = False
         self._edits: List[tuple] = []
 
-    async def reply(self, content=None, embeds=None, files=None, mention_author=True):
+    async def reply(
+        self,
+        content=None,
+        embeds=None,
+        files=None,
+        mention_author=True,
+        allowed_mentions=None,
+    ):
         # Simulate creating a new message in channel
         m = FakeMessage(
             channel=self.channel,
@@ -85,6 +93,14 @@ class FakeMessage:
     async def delete(self):
         self._deleted = True
         return True
+
+
+def _make_discord_server_error(status: int = 503, message: str = "service unavailable"):
+    response = MagicMock()
+    response.status = status
+    response.reason = "Service Unavailable"
+    response.headers = {}
+    return discord.DiscordServerError(response, message)
 
 
 @pytest.mark.asyncio
@@ -183,3 +199,73 @@ async def test_replace_placeholder_when_files_present():
     assert placeholder._deleted
     # There should be at least two messages: placeholder + final new message
     assert len(ch.sent_messages) >= 2
+
+
+@pytest.mark.asyncio
+async def test_execute_action_skips_failed_typing_and_still_replies(monkeypatch):
+    intents = discord.Intents.none()
+    bot = LLMBot(
+        command_prefix="!",
+        intents=intents,
+        config={"STREAMING_ENABLE": False},
+    )
+    bot.enhanced_context_manager = None
+    monkeypatch.setattr(bot, "_discord_retry_delay", lambda error, attempt: 0.0)
+
+    class FlakyTyping:
+        call_count = 0
+
+        async def __aenter__(self):
+            type(self).call_count += 1
+            raise _make_discord_server_error(
+                message="upstream connect error or disconnect/reset before headers. reset reason: overflow"
+            )
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    class TypingFailChannel(FakeChannel):
+        def typing(self):
+            return FlakyTyping()
+
+    ch = TypingFailChannel()
+    incoming = FakeMessage(channel=ch, content="hello")
+    action = BotAction(content="Recovered response", embeds=[])
+
+    await bot._execute_action(incoming, action)
+
+    assert len(ch.sent_messages) == 1
+    assert ch.sent_messages[0].content == "Recovered response"
+
+
+@pytest.mark.asyncio
+async def test_execute_action_retries_transient_reply_failure(monkeypatch):
+    intents = discord.Intents.none()
+    bot = LLMBot(
+        command_prefix="!",
+        intents=intents,
+        config={"STREAMING_ENABLE": False},
+    )
+    bot.enhanced_context_manager = None
+    monkeypatch.setattr(bot, "_discord_retry_delay", lambda error, attempt: 0.0)
+
+    ch = FakeChannel()
+    incoming = FakeMessage(channel=ch, content="hello")
+    action = BotAction(content="Recovered after retry", embeds=[])
+
+    original_reply = incoming.reply
+    attempts = {"count": 0}
+
+    async def flaky_reply(*args, **kwargs):
+        attempts["count"] += 1
+        if attempts["count"] == 1:
+            raise _make_discord_server_error(message="service unavailable")
+        return await original_reply(*args, **kwargs)
+
+    incoming.reply = flaky_reply
+
+    await bot._execute_action(incoming, action)
+
+    assert attempts["count"] == 2
+    assert len(ch.sent_messages) == 1
+    assert ch.sent_messages[0].content == "Recovered after retry"
