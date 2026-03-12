@@ -18,6 +18,16 @@ _background_tasks: Dict[str, tasks.Loop] = {}
 _running_tasks: List[asyncio.Task] = []
 
 
+def _persist_profiles_sync() -> tuple[bool, bool]:
+    """Persist profile caches to disk."""
+    return save_all_profiles(), save_all_server_profiles()
+
+
+async def _persist_profiles_nonblocking() -> tuple[bool, bool]:
+    """Persist profile caches without blocking the event loop."""
+    return await asyncio.to_thread(_persist_profiles_sync)
+
+
 def setup_memory_save_task(bot: commands.Bot) -> tasks.Loop:
     """
     Set up a task to periodically save memory profiles.
@@ -49,8 +59,16 @@ def setup_memory_save_task(bot: commands.Bot) -> tasks.Loop:
                     },
                 )
 
-            save_all_profiles()
-            save_all_server_profiles()
+            user_ok, server_ok = await _persist_profiles_nonblocking()
+            if not user_ok or not server_ok:
+                logger.warning(
+                    "Auto-save completed with failures",
+                    extra={
+                        "subsys": "memory",
+                        "event": "autosave_partial_failure",
+                        "detail": {"user_ok": user_ok, "server_ok": server_ok},
+                    },
+                )
             logger.debug(
                 "Auto-saved all profiles",
                 extra={"subsys": "memory", "event": "autosave"},
@@ -155,8 +173,16 @@ class TaskManager:
                         },
                     )
 
-                save_all_profiles()
-                save_all_server_profiles()
+                user_ok, server_ok = await _persist_profiles_nonblocking()
+                if not user_ok or not server_ok:
+                    logger.warning(
+                        "Auto-save completed with failures",
+                        extra={
+                            "subsys": "memory",
+                            "event": "autosave_partial_failure",
+                            "detail": {"user_ok": user_ok, "server_ok": server_ok},
+                        },
+                    )
                 logger.debug("Auto-saved all profiles")
             except Exception as e:
                 logger.error(f"Error during profile autosave: {e}", exc_info=True)
