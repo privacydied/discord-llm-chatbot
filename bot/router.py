@@ -5945,8 +5945,11 @@ class Router:
                     res = await asyncio.wait_for(coro, timeout=timeout_s)
                     try:
                         dt_ms = int((_t.time() - t0) * 1000)
+                        ok_msg = f"{tag}.ok ms={dt_ms}"
+                        if hasattr(res, "success") and not getattr(res, "success", False):
+                            ok_msg += " (extraction returned no content)"
                         self.logger.info(
-                            f"{tag}.ok ms={dt_ms}",
+                            ok_msg,
                             extra={
                                 "event": f"{tag}.ok",
                                 "detail": (detail or {}) | {"ms": dt_ms},

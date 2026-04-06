@@ -6,7 +6,9 @@ import discord
 from discord.ext import commands
 import hashlib
 import os
+import socket
 import subprocess
+import urllib.parse
 from pathlib import Path
 from typing import Optional
 
@@ -31,15 +33,37 @@ def _get_playwright_chromium_path() -> Optional[Path]:
         return None
 
 
-def check_playwright_browsers(logger) -> None:
-    """Checks for Playwright browsers and attempts to install them if missing.
+def _validate_remote_playwright_url(raw_url: str, logger) -> None:
+    """Validate that PW_SERVER_URL is reachable.
 
-    When PW_SERVER_URL is set (remote Playwright server), we skip local binary
-    checks entirely -- the remote server provides the browser.
+    Raises ConfigurationError when the remote server cannot be reached.
+    """
+    parsed = urllib.parse.urlparse(raw_url)
+    host = parsed.hostname or "localhost"
+    port = parsed.port or 3006
+
+    try:
+        sock = socket.create_connection((host, port), timeout=5)
+        sock.close()
+        logger.info(f"Playwright remote server reachable at {host}:{port}")
+    except (ConnectionRefusedError, socket.timeout, OSError) as exc:
+        raise ConfigurationError(
+            f"Playwright remote server at {host}:{port} is unreachable: {exc}. "
+            f"Check that the Docker container is running and PW_SERVER_URL is correct."
+        )
+
+
+def check_playwright_browsers(logger) -> None:
+    """Checks for Playwright browsers and validates the configured path.
+
+    When PW_SERVER_URL is set (remote Playwright server), we validate
+    that the remote server is reachable.  When not set, we check for
+    local browser binaries.
     """
     pw_server = os.getenv("PW_SERVER_URL", "").strip()
     if pw_server:
-        logger.info(f"Playwright remote server configured ({pw_server}); skipping local browser check")
+        logger.info(f"Playwright remote server configured ({pw_server}); validating reachability")
+        _validate_remote_playwright_url(pw_server, logger)
         return
 
     logger.info("Checking for Playwright browser binaries...")

@@ -404,7 +404,7 @@ async def _fetch_html_with_playwright(url: str, timeout_s: float) -> Optional[st
     timeout_ms = int(max(1.0, timeout_s) * 1000)
     try:
         async with async_playwright() as p:
-            browser = await _pw_connect_browser(p)
+            browser = await _pw_connect_browser(p.chromium)
             if browser is None:
                 try:
                     logger.warning(
@@ -436,11 +436,10 @@ async def _fetch_html_with_playwright(url: str, timeout_s: float) -> Optional[st
                     pass
                 return html
             finally:
-                if not getattr(browser, "_is_remote", False):
-                    try:
-                        await browser.close()
-                    except Exception:
-                        pass
+                try:
+                    await context.close()
+                except Exception:
+                    pass
     except Exception as e:
         # Launch/navigation failure: log at DEBUG and fallback cleanly
         try:

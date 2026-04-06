@@ -88,6 +88,13 @@ class WebExtractionService:
 
     @staticmethod
     def _is_playwright_fatal_error(message: str) -> bool:
+        """Return True when the error indicates the browser tier is
+        unrecoverable for this process lifetime (e.g. missing system
+        libraries, missing binary).  Connection failures to a remote
+        server are also treated as fatal -- if the configured server
+        is unreachable, the infrastructure is wrong and retrying will
+        not help.
+        """
         m = (message or "").lower()
         fatal_markers = (
             "error while loading shared libraries",
@@ -100,7 +107,16 @@ class WebExtractionService:
             "cannot find module",
             "no such file or directory",
         )
-        return any(tok in m for tok in fatal_markers)
+        if any(tok in m for tok in fatal_markers):
+            return True
+        # Remote connection failures: the service is down / unreachable.
+        from .utils.playwright_helpers import _pw_server_url
+
+        if _pw_server_url() is not None and (
+            "connect" in m or "ws://" in m or "websocket" in m or "connection" in m
+        ):
+            return True
+        return False
 
     async def aclose(self) -> None:
         if self._client is not None:
@@ -191,63 +207,64 @@ class WebExtractionService:
         except Exception:
             return None
         timeout_ms = int(TIER_B_TIMEOUT_S * 1000)
-        async with async_playwright() as p:
-            browser = await _pw_connect_browser(p)
-            if browser is None:
-                return None
-            context = None
-            try:
-                context = await browser.new_context(
-                    user_agent=USER_AGENT, java_script_enabled=True
-                )
-                page = await context.new_page()
-                page.set_default_timeout(timeout_ms)
 
-                async def _route_handler(route, request):
-                    try:
-                        if request.resource_type in {
-                            "document",
-                            "xhr",
-                            "fetch",
-                            "script",
-                        }:
-                            await route.continue_()
-                        else:
-                            await route.abort()
-                    except Exception:
+        try:
+            async with async_playwright() as p:
+                browser = await _pw_connect_browser(p.chromium)
+                if browser is None:
+                    # No PW_SERVER_URL configured; browser tier is unavailable.
+                    return None
+                context = None
+                try:
+                    context = await browser.new_context(
+                        user_agent=USER_AGENT, java_script_enabled=True
+                    )
+                    page = await context.new_page()
+                    page.set_default_timeout(timeout_ms)
+
+                    async def _route_handler(route, request):
                         try:
-                            await route.abort()
+                            if request.resource_type in {
+                                "document",
+                                "xhr",
+                                "fetch",
+                                "script",
+                            }:
+                                await route.continue_()
+                            else:
+                                await route.abort()
+                        except Exception:
+                            try:
+                                await route.abort()
+                            except Exception:
+                                pass
+
+                    await page.route("**/*", _route_handler)
+                    await page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
+                    html_doc = await page.content()
+                    final_url = await page.evaluate("() => document.location.href")
+                    parsed = self._parse_html_for_text(html_doc, final_url)
+                    if parsed.get("text"):
+                        return ExtractionResult(
+                            success=True,
+                            tier_used="B",
+                            canonical_url=parsed.get("canonical_url"),
+                            text=parsed.get("text"),
+                            author=parsed.get("author"),
+                            raw_json_present=parsed.get("raw_json_present", False),
+                        )
+                    return ExtractionResult(
+                        success=False, tier_used="B", error="no text extracted"
+                    )
+                finally:
+                    if context is not None:
+                        try:
+                            await context.close()
                         except Exception:
                             pass
-
-                await page.route("**/*", _route_handler)
-                await page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
-                html_doc = await page.content()
-                final_url = await page.evaluate("() => document.location.href")
-                parsed = self._parse_html_for_text(html_doc, final_url)
-                if parsed.get("text"):
-                    return ExtractionResult(
-                        success=True,
-                        tier_used="B",
-                        canonical_url=parsed.get("canonical_url"),
-                        text=parsed.get("text"),
-                        author=parsed.get("author"),
-                        raw_json_present=parsed.get("raw_json_present", False),
-                    )
-                return ExtractionResult(
-                    success=False, tier_used="B", error="no text extracted"
-                )
-            finally:
-                if context is not None:
-                    try:
-                        await context.close()
-                    except Exception:
-                        pass
-                if not getattr(browser, "_is_remote", False):
-                    try:
-                        await browser.close()
-                    except Exception:
-                        pass
+        except Exception as exc:
+            logger.warning(f"Tier B Playwright failed for {url}: {exc}")
+            raise
 
     # --- Parsers --- [CSD]
     @staticmethod
