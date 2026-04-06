@@ -10,6 +10,7 @@ from typing import Any, Dict, Optional
 import httpx
 from bs4 import BeautifulSoup
 
+from .utils.playwright_helpers import connect_browser as _pw_connect_browser
 from .utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -191,7 +192,9 @@ class WebExtractionService:
             return None
         timeout_ms = int(TIER_B_TIMEOUT_S * 1000)
         async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
+            browser = await _pw_connect_browser(p)
+            if browser is None:
+                return None
             context = None
             try:
                 context = await browser.new_context(
@@ -240,10 +243,11 @@ class WebExtractionService:
                         await context.close()
                     except Exception:
                         pass
-                try:
-                    await browser.close()
-                except Exception:
-                    pass
+                if not getattr(browser, "_is_remote", False):
+                    try:
+                        await browser.close()
+                    except Exception:
+                        pass
 
     # --- Parsers --- [CSD]
     @staticmethod

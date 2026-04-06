@@ -177,9 +177,10 @@ async def external_screenshot(url: str) -> str | None:
 
 
 async def _playwright_screenshot(url: str) -> str | None:
-    """Local fallback: use Playwright to capture a screenshot. [REH][IV]
+    """Fallback screenshot via Playwright (remote server preferred, local fallback).
 
     Respects env config:
+      - PW_SERVER_URL (remote Playwright server on port 3006)
       - SCREENSHOT_PW_VIEWPORT (e.g., 1280x1024)
       - SCREENSHOT_PW_USER_AGENT (optional)
       - SCREENSHOT_PW_TIMEOUT_MS (default 15000)
@@ -191,6 +192,8 @@ async def _playwright_screenshot(url: str) -> str | None:
         logger.error(f"Playwright not available for fallback: {e}")
         return None
 
+    from .playwright_helpers import connect_browser as _pw_connect_browser
+
     vp = os.getenv("SCREENSHOT_PW_VIEWPORT", "1280x1024")
     ua = os.getenv("SCREENSHOT_PW_USER_AGENT", "")
     timeout_ms = int(os.getenv("SCREENSHOT_PW_TIMEOUT_MS", "15000"))
@@ -201,31 +204,44 @@ async def _playwright_screenshot(url: str) -> str | None:
     except Exception:
         width, height = 1280, 1024
 
-    logger.info(f"🧭 Playwright fallback starting for {url} [{width}x{height}]")
+    logger.info(f"Playwright screenshot starting for {url} [{width}x{height}]")
     try:
         async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
-            context = await browser.new_context(
-                viewport={"width": width, "height": height},
-                user_agent=ua or None,
-            )
-            page = await context.new_page()
-            await page.goto(url, wait_until="networkidle", timeout=timeout_ms)
+            browser = await _pw_connect_browser(p)
+            if browser is None:
+                logger.error("No browser available for screenshot (remote and local both failed)")
+                return None
+            try:
+                context = await browser.new_context(
+                    viewport={"width": width, "height": height},
+                    user_agent=ua or None,
+                )
+                page = await context.new_page()
+                await page.goto(url, wait_until="networkidle", timeout=timeout_ms)
 
-            # Produce filename similar to API path building
-            parsed = urlparse(url)
-            domain = parsed.netloc.replace(".", "_")
-            path = parsed.path.replace("/", "_").strip("_") or "index"
-            filename = f"{domain}_{path}.png"
-            filepath = SCREENSHOT_CACHE_DIR / filename
+                # Produce filename similar to API path building
+                parsed = urlparse(url)
+                domain = parsed.netloc.replace(".", "_")
+                path = parsed.path.replace("/", "_").strip("_") or "index"
+                filename = f"{domain}_{path}.png"
+                filepath = SCREENSHOT_CACHE_DIR / filename
 
-            await page.screenshot(path=str(filepath), full_page=True)
-            await context.close()
-            await browser.close()
+                await page.screenshot(path=str(filepath), full_page=True)
 
-            logger.info(f"✅ Playwright screenshot saved to {filepath}")
-            return str(filepath)
+                logger.info(f"Playwright screenshot saved to {filepath}")
+                return str(filepath)
+            finally:
+                try:
+                    await context.close()
+                except Exception:
+                    pass
+                # Don't close remote browser; only close locally-launched ones
+                if not getattr(browser, "_is_remote", False):
+                    try:
+                        await browser.close()
+                    except Exception:
+                        pass
 
     except Exception as e:
-        logger.error(f"❌ Playwright fallback failed for {url}: {e}", exc_info=True)
+        logger.error(f"Playwright fallback failed for {url}: {e}", exc_info=True)
         return None

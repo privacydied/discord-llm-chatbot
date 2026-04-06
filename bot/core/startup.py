@@ -32,7 +32,16 @@ def _get_playwright_chromium_path() -> Optional[Path]:
 
 
 def check_playwright_browsers(logger) -> None:
-    """Checks for Playwright browsers and attempts to install them if missing."""
+    """Checks for Playwright browsers and attempts to install them if missing.
+
+    When PW_SERVER_URL is set (remote Playwright server), we skip local binary
+    checks entirely -- the remote server provides the browser.
+    """
+    pw_server = os.getenv("PW_SERVER_URL", "").strip()
+    if pw_server:
+        logger.info(f"Playwright remote server configured ({pw_server}); skipping local browser check")
+        return
+
     logger.info("Checking for Playwright browser binaries...")
 
     if _get_playwright_chromium_path():

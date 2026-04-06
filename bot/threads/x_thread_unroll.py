@@ -11,6 +11,7 @@ from bs4 import BeautifulSoup
 
 from bot.http_client import RequestConfig, get_http_client
 from bot.utils.logging import get_logger
+from bot.utils.playwright_helpers import connect_browser as _pw_connect_browser
 
 
 logger = get_logger(__name__)
@@ -403,7 +404,20 @@ async def _fetch_html_with_playwright(url: str, timeout_s: float) -> Optional[st
     timeout_ms = int(max(1.0, timeout_s) * 1000)
     try:
         async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
+            browser = await _pw_connect_browser(p)
+            if browser is None:
+                try:
+                    logger.warning(
+                        "threads.x: playwright_browser_unavailable",
+                        extra={
+                            "subsys": "threads.x",
+                            "event": "playwright_browser_unavailable",
+                            "detail": {"url": url},
+                        },
+                    )
+                except Exception:
+                    pass
+                return None
             try:
                 context = await browser.new_context(java_script_enabled=True)
                 page = await context.new_page()
@@ -422,10 +436,11 @@ async def _fetch_html_with_playwright(url: str, timeout_s: float) -> Optional[st
                     pass
                 return html
             finally:
-                try:
-                    await browser.close()
-                except Exception:
-                    pass
+                if not getattr(browser, "_is_remote", False):
+                    try:
+                        await browser.close()
+                    except Exception:
+                        pass
     except Exception as e:
         # Launch/navigation failure: log at DEBUG and fallback cleanly
         try:

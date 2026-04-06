@@ -26,7 +26,7 @@ async def test_single_tweet_minimal(monkeypatch):
     monkeypatch.setattr(xu, "_expand_tco_if_needed", no_expand)
 
     ctx, reason = await unroll_author_thread(
-        "https://x.com/author/status/9999", timeout_s=5, max_tweets=30, max_chars=6000
+        "https://x.com/author/status/99999", timeout_s=5, max_tweets=30, max_chars=6000
     )
     assert ctx is not None, reason
     assert ctx.tweet_count == 1
@@ -49,7 +49,7 @@ async def test_mid_thread_collects_all_in_order(monkeypatch):
 
     # Linked to the 4/7 tweet
     ctx, reason = await unroll_author_thread(
-        "https://x.com/author/status/4444", timeout_s=5, max_tweets=30, max_chars=6000
+        "https://x.com/author/status/44444", timeout_s=5, max_tweets=30, max_chars=6000
     )
     assert ctx is not None, reason
     assert ctx.tweet_count == 7
@@ -74,7 +74,7 @@ async def test_non_author_replies_are_skipped(monkeypatch):
     monkeypatch.setattr(xu, "_expand_tco_if_needed", no_expand)
 
     ctx, reason = await unroll_author_thread(
-        "https://x.com/author/status/1001", timeout_s=5, max_tweets=30, max_chars=6000
+        "https://x.com/author/status/10001", timeout_s=5, max_tweets=30, max_chars=6000
     )
     assert ctx is not None, reason
     # Only two author tweets should be present (other user's reply ignored)
@@ -154,10 +154,10 @@ async def test_mirrors_and_mobile_urls_normalize(monkeypatch):
     monkeypatch.setattr(xu, "_expand_tco_if_needed", no_expand)
 
     for u in [
-        "https://mobile.twitter.com/author/status/9999",
-        "https://fxtwitter.com/author/status/9999",
-        "https://vxtwitter.com/author/status/9999",
-        "https://fixupx.com/author/status/9999",
+        "https://mobile.twitter.com/author/status/99999",
+        "https://fxtwitter.com/author/status/99999",
+        "https://vxtwitter.com/author/status/99999",
+        "https://fixupx.com/author/status/99999",
     ]:
         ctx, reason = await unroll_author_thread(
             u, timeout_s=5, max_tweets=30, max_chars=6000
