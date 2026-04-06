@@ -148,6 +148,24 @@ class LLMBot(commands.Bot):
         # Idempotency guard to prevent duplicate initialization [DRY][REH]
         self._boot_completed = False
 
+        # Rich console for enhanced command setup logging
+        self.console = Console()
+
+        self.context_manager = ContextManager(
+            self,
+            filepath=self.config.get("CONTEXT_FILE_PATH", "context.json"),
+            max_messages=self.config.get("MAX_CONTEXT_MESSAGES", 10),
+        )
+        # Enhanced context manager for multi-user conversation tracking
+        self.enhanced_context_manager = EnhancedContextManager(
+            self,
+            filepath=self.config.get(
+                "ENHANCED_CONTEXT_FILE_PATH", "enhanced_context.json"
+            ),
+            history_window=int(os.getenv("HISTORY_WINDOW", "10")),
+            max_token_limit=self.config.get("MAX_CONTEXT_TOKENS", 4000),
+        )
+
     def _is_retryable_discord_http_error(self, error: Exception) -> bool:
         """Return True for transient Discord transport or upstream failures."""
         if not isinstance(error, discord.HTTPException):
@@ -276,24 +294,6 @@ class LLMBot(commands.Bot):
                     await ctx.__aexit__(None, None, None)
                 except Exception:
                     pass
-
-        # Rich console for enhanced command setup logging
-        self.console = Console()
-
-        self.context_manager = ContextManager(
-            self,
-            filepath=self.config.get("CONTEXT_FILE_PATH", "context.json"),
-            max_messages=self.config.get("MAX_CONTEXT_MESSAGES", 10),
-        )
-        # Enhanced context manager for multi-user conversation tracking
-        self.enhanced_context_manager = EnhancedContextManager(
-            self,
-            filepath=self.config.get(
-                "ENHANCED_CONTEXT_FILE_PATH", "enhanced_context.json"
-            ),
-            history_window=int(os.getenv("HISTORY_WINDOW", "10")),
-            max_token_limit=self.config.get("MAX_CONTEXT_TOKENS", 4000),
-        )
 
     async def process_commands(self, message: discord.Message) -> Optional[Any]:
         """

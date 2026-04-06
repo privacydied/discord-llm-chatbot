@@ -69,14 +69,22 @@ class ResultAggregator:
         """
         Generate a single aggregated prompt for the text flow.
 
+        FAILED items (success=False) are NOT included in the prompt output.
+        If all items failed and there is no original text, returns empty string.
+
         Args:
             original_text: Original message text content (after removing URLs)
 
         Returns:
-            Single aggregated prompt containing all item results
+            Single aggregated prompt containing only successful item results,
+            or empty string if nothing usable was produced.
         """
         if not self.results:
             return original_text
+
+        # Separate successful and failed items early
+        successful = [r for r in self.results if r.success]
+        failed = [r for r in self.results if not r.success]
 
         # Build the aggregated prompt
         parts = []
@@ -87,7 +95,8 @@ class ResultAggregator:
         has_original_text = bool(original_text and original_text.strip())
 
         has_visual_media = any(
-            r.modality
+            r.success
+            and r.modality
             in (
                 InputModality.SINGLE_IMAGE,
                 InputModality.MULTI_IMAGE,
@@ -97,7 +106,8 @@ class ResultAggregator:
         )
 
         has_document_modality = any(
-            r.modality in (InputModality.PDF_DOCUMENT, InputModality.PDF_OCR)
+            r.success
+            and r.modality in (InputModality.PDF_DOCUMENT, InputModality.PDF_OCR)
             for r in self.results
         )
 
@@ -121,7 +131,9 @@ class ResultAggregator:
         # Treat successful GENERAL_URL text as an additional text source so that
         # scraped link/tweet/document text prevents media-only ack injection. [CA][REH]
         has_scraped_text = any(
-            r.modality == InputModality.GENERAL_URL and bool(r.result_text.strip())
+            r.success
+            and r.modality == InputModality.GENERAL_URL
+            and bool(r.result_text.strip())
             for r in self.results
         )
 
@@ -136,11 +148,15 @@ class ResultAggregator:
         )
 
         # Low-noise debug snapshot for multimodal aggregation state. [RAT]
+        # Filter prompt-construction to only successful results with real content [REH][PA]
+        # This is critical: failed extraction items must NOT contaminate downstream model input
         try:
             text_snippets = []
             if original_text and original_text.strip():
                 text_snippets.append(original_text.strip())
             for r in self.results:
+                if not r.success or not r.result_text.strip():
+                    continue
                 if (
                     r.modality
                     in (
@@ -150,14 +166,14 @@ class ResultAggregator:
                         InputModality.AUDIO_VIDEO_FILE,
                         InputModality.VIDEO_URL,
                     )
-                    and r.result_text.strip()
                 ):
                     text_snippets.append(r.result_text.strip())
 
             media_snippets = [
                 r.result_text.strip()
                 for r in self.results
-                if r.modality
+                if r.success
+                and r.modality
                 in (
                     InputModality.SINGLE_IMAGE,
                     InputModality.MULTI_IMAGE,
@@ -214,6 +230,11 @@ class ResultAggregator:
         successful_items = sum(1 for r in self.results if r.success)
         failed_items = total_items - successful_items
 
+        # Only count as successful those with actually successful flag AND non-empty content
+        truly_successful = [
+            r for r in self.results if r.success and r.result_text.strip()
+        ]
+
         if total_items == 1:
             parts.append("I processed 1 input from your message:")
         else:
@@ -227,7 +248,7 @@ class ResultAggregator:
         parts.append("")  # Empty line
 
         # Add each item result with provenance
-        for result in self.results:
+        for result in truly_successful:
             # Create section header
             status_emoji = "✅" if result.success else "❌"
             modality_display = self._get_modality_display_name(result.modality)

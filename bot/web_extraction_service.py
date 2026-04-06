@@ -90,10 +90,11 @@ class WebExtractionService:
     def _is_playwright_fatal_error(message: str) -> bool:
         """Return True when the error indicates the browser tier is
         unrecoverable for this process lifetime (e.g. missing system
-        libraries, missing binary).  Connection failures to a remote
-        server are also treated as fatal -- if the configured server
-        is unreachable, the infrastructure is wrong and retrying will
-        not help.
+        libraries, missing binary).
+
+        Version-mismatch (428) and transient connection errors are NOT
+        fatal -- they should be re-attempted once the version is aligned
+        or the server comes back.
         """
         m = (message or "").lower()
         fatal_markers = (
@@ -107,16 +108,7 @@ class WebExtractionService:
             "cannot find module",
             "no such file or directory",
         )
-        if any(tok in m for tok in fatal_markers):
-            return True
-        # Remote connection failures: the service is down / unreachable.
-        from .utils.playwright_helpers import _pw_server_url
-
-        if _pw_server_url() is not None and (
-            "connect" in m or "ws://" in m or "websocket" in m or "connection" in m
-        ):
-            return True
-        return False
+        return any(tok in m for tok in fatal_markers)
 
     async def aclose(self) -> None:
         if self._client is not None:

@@ -47,7 +47,7 @@ from discord import DMChannel, Message
 from .brain import brain_infer
 from .enhanced_retry import ProviderConfig, get_retry_manager
 from .evidence import EvidenceBundle
-from .exceptions import APIError
+from .exceptions import APIError, DispatchEmptyError
 from .http_client import get_http_client, RequestConfig
 from .modality import (
     InputItem,
@@ -5945,16 +5945,24 @@ class Router:
                     res = await asyncio.wait_for(coro, timeout=timeout_s)
                     try:
                         dt_ms = int((_t.time() - t0) * 1000)
-                        ok_msg = f"{tag}.ok ms={dt_ms}"
                         if hasattr(res, "success") and not getattr(res, "success", False):
-                            ok_msg += " (extraction returned no content)"
-                        self.logger.info(
-                            ok_msg,
-                            extra={
-                                "event": f"{tag}.ok",
-                                "detail": (detail or {}) | {"ms": dt_ms},
-                            },
-                        )
+                            err = getattr(res, "error", "") or "unknown"
+                            self.logger.warning(
+                                f"{tag}.fail extraction_no_content ms={dt_ms} ({err})",
+                                extra={
+                                    "event": f"{tag}.fail",
+                                    "detail": (detail or {})
+                                    | {"ms": dt_ms, "error": err},
+                                },
+                            )
+                        else:
+                            self.logger.info(
+                                f"{tag}.ok ms={dt_ms}",
+                                extra={
+                                    "event": f"{tag}.ok",
+                                    "detail": (detail or {}) | {"ms": dt_ms},
+                                },
+                            )
                     except Exception:
                         pass
                     return res, None
@@ -6730,12 +6738,20 @@ class Router:
                     "url.extract",
                     {"url": url},
                 )
-                if extract_res.success:
+                if extract_res and extract_res.success:
                     return f"Web content from {extract_res.canonical_url or url}:\n{extract_res.to_message()}"
-                # If tiered extractor also failed, return original error if present
-                if url_result and url_result.get("error"):
-                    return f"Could not extract content from URL: {url} (Error: {url_result['error']})"
-                return f"Could not extract content from URL: {url}"
+                # Both process_url and tiered extractor failed — propagate as real failure [REH][PA]
+                err_detail = url_result.get("error", "none") if url_result else "none"
+                self.logger.warning(
+                    f"url.extract.all_failed url={url[:120]} error={getattr(extract_res, 'error', err_detail)}",
+                    extra={
+                        "event": "url.extract.all_failed",
+                        "detail": {"url": url[:200], "error": getattr(extract_res, "error", err_detail)},
+                    },
+                )
+                raise DispatchEmptyError(
+                    f"Could not extract content from URL: {url} (Error: {err_detail})"
+                )
 
             # Extract text content from result dictionary
             content = url_result.get("text", "")
@@ -6753,9 +6769,19 @@ class Router:
                     "url.extract",
                     {"url": url},
                 )
-                if extract_res.success:
+                if extract_res and extract_res.success:
                     return f"Web content from {extract_res.canonical_url or url}:\n{extract_res.to_message()}"
-                return f"Could not extract content from URL: {url}"
+                # process_url returned empty/no-text AND tiered extractor also failed — real failure [REH][PA]
+                self.logger.warning(
+                    f"url.extract.all_failed url={url[:120]} error={getattr(extract_res, 'error', 'no_result')}",
+                    extra={
+                        "event": "url.extract.all_failed",
+                        "detail": {"url": url[:200], "error": getattr(extract_res, "error", "no_result")},
+                    },
+                )
+                raise DispatchEmptyError(
+                    f"Could not extract content from URL: {url}"
+                )
 
             # Check if smart routing detected media and should route to yt-dlp
             route_to_ytdlp = url_result.get("route_to_ytdlp", False)
@@ -6775,11 +6801,15 @@ class Router:
 
                         return f"Video/audio content from {url} ('{title}'): {transcription}"
                     else:
-                        return f"Successfully detected media in {url} but transcription failed"
+                        self.logger.warning(
+                            f"url.ytdlp.stt_failed url={url[:120]}",
+                            extra={"event": "url.ytdlp.stt_failed", "detail": {"url": url[:200]}},
+                        )
+                        return ""
 
                 except Exception as e:
-                    self.logger.error(f"yt-dlp processing failed for {url}: {e}")
-                    return f"Successfully detected media in {url} but could not process it: {str(e)}"
+                    self.logger.warning(f"url.ytdlp.failed url={url[:120]} error={e}")
+                    return ""
 
             # Prefer text from process_url when available.
             content = url_result.get("text", "")
@@ -6796,14 +6826,27 @@ class Router:
                 "url.extract",
                 {"url": url},
             )
-            if extract_res.success:
+            if extract_res and extract_res.success:
                 return f"Web content from {extract_res.canonical_url or url}:\n{extract_res.to_message()}"
-            else:
-                return f"Could not extract content from URL: {url}"
+            # Both tiered extraction tiers failed — propagate as real failure [REH][PA]
+            self.logger.warning(
+                f"url.extract.all_failed url={url[:120]} error={getattr(extract_res, 'error', 'no_result')}",
+                extra={
+                    "event": "url.extract.all_failed",
+                    "detail": {"url": url[:200], "error": getattr(extract_res, "error", "no_result")},
+                },
+            )
+            raise DispatchEmptyError(
+                f"Could not extract content from URL: {url}"
+            )
 
+        except DispatchEmptyError:
+            raise
         except Exception as e:
-            self.logger.error(f"Error processing general URL: {e}", exc_info=True)
-            return f"Failed to process URL: {item.payload}"
+            self.logger.error(f"Error processing general url: {e}", exc_info=True)
+            raise DispatchEmptyError(
+                f"Failed to process URL: {item.payload}"
+            )
 
     # ---------------------------------------------------------------------------
     # URL-based media/document handlers (routes URLs through attachment pipelines) [CA][REH]

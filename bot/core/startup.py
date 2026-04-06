@@ -34,18 +34,38 @@ def _get_playwright_chromium_path() -> Optional[Path]:
 
 
 def _validate_remote_playwright_url(raw_url: str, logger) -> None:
-    """Validate that PW_SERVER_URL is reachable.
+    """Validate that PW_SERVER_URL is reachable and version is aligned.
 
-    Raises ConfigurationError when the remote server cannot be reached.
+    Raises ConfigurationError when the remote server cannot be reached
+    or the client/server Playwright versions are mismatched.
     """
+    import importlib.metadata as _meta
+
     parsed = urllib.parse.urlparse(raw_url)
     host = parsed.hostname or "localhost"
     port = parsed.port or 3006
 
+    # Verify that the client Playwright version matches the Docker server
+    # (must be updated in lockstep with requirements.txt).
+    try:
+        client_ver = _meta.version("playwright")
+    except Exception:
+        client_ver = "(unknown)"
+    expected_server_ver = "1.59"  # must track requirements.txt
+    if not client_ver.startswith(expected_server_ver.split(".")[0] + "."):
+        logger.warning(
+            f"Playwright version mismatch: client={client_ver}, "
+            f"expected~=server {expected_server_ver}. "
+            f"Run: pip install playwright=={expected_server_ver}"
+        )
+
     try:
         sock = socket.create_connection((host, port), timeout=5)
         sock.close()
-        logger.info(f"Playwright remote server reachable at {host}:{port}")
+        logger.info(
+            f"Playwright remote server reachable at {host}:{port} "
+            f"(client v{client_ver}, expected server v{expected_server_ver})"
+        )
     except (ConnectionRefusedError, socket.timeout, OSError) as exc:
         raise ConfigurationError(
             f"Playwright remote server at {host}:{port} is unreachable: {exc}. "

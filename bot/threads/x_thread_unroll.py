@@ -441,9 +441,10 @@ async def _fetch_html_with_playwright(url: str, timeout_s: float) -> Optional[st
                 except Exception:
                     pass
     except Exception as e:
-        # Launch/navigation failure: log at DEBUG and fallback cleanly
+        # Launch/navigation failure: log at WARNING so it is visible in
+        # production, not buried at DEBUG.
         try:
-            logger.debug(
+            logger.warning(
                 "threads.x: playwright_fetch_error",
                 extra={
                     "subsys": "threads.x",
