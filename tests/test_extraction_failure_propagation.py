@@ -133,3 +133,66 @@ def test_extraction_result_success_message():
     msg = er.to_message()
     assert "Hello" in msg
     assert "failed" not in msg.lower()
+
+
+# -- Router text-flow gate tests --
+
+def test_all_failed_url_produces_empty_prompt_no_original_text():
+    """When a single GENERAL_URL item fails and there is no original text,
+    get_aggregated_prompt must return empty string so the router gate
+    (not aggregated_prompt.strip()) will NOT invoke _invoke_text_flow."""
+    agg = ResultAggregator()
+    agg.add_result(0, DummyItem("https://financetwitter.com/some-link"),
+                   InputModality.GENERAL_URL,
+                   result_text="Could not extract content",
+                   success=False)
+    # No original text — just the mention-stripped message content
+    prompt = agg.get_aggregated_prompt("")
+    assert prompt == "", f"Expected empty prompt, got: {prompt!r}"
+
+    # Verify the router gate condition would correctly skip text flow
+    assert not prompt.strip(), "Prompt must not be routable"
+
+
+def test_all_failed_item_with_only_whitespace_original_text():
+    """When original_text is just whitespace, it should not count as routable content."""
+    agg = ResultAggregator()
+    agg.add_result(0, DummyItem("https://example.com/document"),
+                   InputModality.PDF_DOCUMENT,
+                   result_text="Could not extract content",
+                   success=False)
+    prompt = agg.get_aggregated_prompt("   ")
+    assert prompt == "", f"Expected empty prompt, got: {prompt!r}"
+
+
+def test_failed_item_with_meaningful_original_text_still_routes():
+    """When there IS meaningful original text alongside failed items,
+    the prompt should be non-empty so text flow can still answer the user text."""
+    agg = ResultAggregator()
+    agg.add_result(0, DummyItem("https://bad.com"),
+                   InputModality.GENERAL_URL,
+                   result_text="Could not extract content",
+                   success=False)
+    prompt = agg.get_aggregated_prompt("what do you think about this?")
+    # Should include the original question — user asked a real question
+    assert "what do you think" in prompt
+    # Should NOT include the failed extraction content
+    assert "Could not extract" not in prompt
+
+
+def test_mixed_failure_prompts_only_successful_content():
+    """When some items succeeded and some failed, the prompt should only
+    contain successful content — never failed extraction residue."""
+    agg = ResultAggregator()
+    agg.add_result(0, DummyItem("https://good.com"),
+                   InputModality.GENERAL_URL,
+                   result_text="Web content from https://good.com: Python is great",
+                   success=True)
+    agg.add_result(1, DummyItem("https://bad.com"),
+                   InputModality.GENERAL_URL,
+                   result_text="Could not extract content from URL: https://bad.com",
+                   success=False)
+    prompt = agg.get_aggregated_prompt("")
+    assert "Python is great" in prompt
+    assert "Could not extract content" not in prompt
+    assert "https://bad.com" not in prompt

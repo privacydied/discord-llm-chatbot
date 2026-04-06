@@ -235,6 +235,14 @@ class ResultAggregator:
             r for r in self.results if r.success and r.result_text.strip()
         ]
 
+        # All-item failure gate: when every item failed AND there is no original text,
+        # the aggregation produced zero routable content. Return empty to prevent
+        # downstream text-flow generation from the summary header alone. [REH][PA]
+        has_original = bool(original_text and original_text.strip())
+        if len(truly_successful) == 0 and failed_items > 0 and not has_original:
+            logger.debug("ResultAggregator: all items failed, no original_text — returning empty prompt")
+            return ""
+
         if total_items == 1:
             parts.append("I processed 1 input from your message:")
         else:

@@ -5109,66 +5109,98 @@ class Router:
                 # Never break dispatch due to budgeting heuristics
                 pass
 
-            # Create coroutine factory for this item
-            def create_handler_coro(provider_config: ProviderConfig):
-                async def handler_coro():
-                    return await self._handle_item_with_provider(
-                        item, modality, provider_config, message=message
-                    )
+            # Extraction-only modalities (URL scraping, document ingest, STT) do not
+            # benefit from the model-provider fallback ladder. DispatchEmptyError from
+            # extraction-side failure (403, version mismatch, etc.) is deterministic —
+            # re-running the same extraction against different model providers burns
+            # budget and latency with identical results. [REH][PA]
+            extraction_only_modalities = (
+                InputModality.GENERAL_URL,
+                InputModality.SCREENSHOT_URL,
+                InputModality.VIDEO_URL,
+                InputModality.AUDIO_VIDEO_FILE,
+                InputModality.PDF_DOCUMENT,
+                InputModality.PDF_OCR,
+            )
 
-                return handler_coro
-
-            try:
-                result = await retry_manager.run_with_fallback(
-                    modality=retry_modality,
-                    coro_factory=create_handler_coro,
-                    per_item_budget=selected_budget,
-                )
-
-                if result.success:
-                    self.logger.info(
-                        f"✅ Item {i} completed successfully ({result.total_time:.2f}s)"
-                    )
-                    success = True
-                    result_text = result.result
-                    duration = result.total_time
-                    attempts = result.attempts
-                else:
-                    msg = f"❌ Failed after {result.attempts} attempts: {result.error}"
-                    if result.fallback_occurred:
-                        msg += " (fallback attempted)"
-                    self.logger.warning(
-                        f"❌ Item {i} failed ({result.total_time:.2f}s)"
-                    )
-                    success = False
-                    result_text = msg
-                    duration = result.total_time
-                    attempts = result.attempts
-
-                # Only mark X status processed for true URL items.
-                # Never mark for embeds/thumbnails/images. [REH][CA]
-                should_mark_x_status = bool(status_keys and item.source_type == "url")
-                if should_mark_x_status:
-                    status_label = "consumed" if success else "failed"
-                    for key in status_keys:
-                        x_media_state["processed"][key] = status_label
-                    if success and modality == InputModality.VIDEO_URL:
-                        x_media_state["allow_vision"] = False
-                        try:
-                            self.logger.info("x.media.consumed by=stt")
-                        except Exception:
-                            pass
-                    elif not success:
-                        x_media_state["allow_vision"] = True
-            except Exception as e:
-                self.logger.error(f"❌ Item {i} exception: {e}")
+            if modality in extraction_only_modalities:
+                # Direct handler call — no provider ladder
+                result_text = ""
                 success = False
-                result_text = f"❌ Exception: {e}"
                 duration = 0.0
                 attempts = 0
-                if should_mark_x_status:
-                    for key in status_keys:
-                        x_media_state["processed"][key] = "failed"
+                try:
+                    result_text = await self._handle_item_with_provider(
+                        item, modality, None, message=message
+                    )
+                    success = True
+                    duration = time.time() - start_time
+                    self.logger.info(
+                        f"✅ Item {i} completed (extraction-only, no provider ladder) ({duration:.2f}s)"
+                    )
+                except Exception as e:
+                    self.logger.warning(f"❌ Item {i} failed: {e}")
+                    success = False
+                    result_text = f"❌ Failed: {e}"
+                    duration = time.time() - start_time
+                    attempts = 1
+            else:
+                # Vision/image modalities benefit from model-provider fallback
+                def create_handler_coro(provider_config: ProviderConfig):
+                    async def handler_coro():
+                        return await self._handle_item_with_provider(
+                            item, modality, provider_config, message=message
+                        )
+
+                    return handler_coro
+
+                try:
+                    result = await retry_manager.run_with_fallback(
+                        modality=retry_modality,
+                        coro_factory=create_handler_coro,
+                        per_item_budget=selected_budget,
+                    )
+
+                    if result.success:
+                        self.logger.info(
+                            f"✅ Item {i} completed successfully ({result.total_time:.2f}s)"
+                        )
+                        success = True
+                        result_text = result.result
+                        duration = result.total_time
+                        attempts = result.attempts
+                    else:
+                        msg = f"❌ Failed after {result.attempts} attempts: {result.error}"
+                        if result.fallback_occurred:
+                            msg += " (fallback attempted)"
+                        self.logger.warning(
+                            f"❌ Item {i} failed ({result.total_time:.2f}s)"
+                        )
+                        success = False
+                        result_text = msg
+                        duration = result.total_time
+                        attempts = result.attempts
+                except Exception as e:
+                    self.logger.error(f"❌ Item {i} exception: {e}")
+                    success = False
+                    result_text = f"❌ Exception: {e}"
+                    duration = 0.0
+                    attempts = 0
+
+            # Mark X status processed for true URL items (shared after both branches).
+            # Never mark for embeds/thumbnails/images. [REH][CA]
+            should_mark_x_status = bool(status_keys and item.source_type == "url")
+            if should_mark_x_status:
+                status_label = "consumed" if success else "failed"
+                for key in status_keys:
+                    x_media_state["processed"][key] = status_label
+                if success and modality == InputModality.VIDEO_URL:
+                    x_media_state["allow_vision"] = False
+                    try:
+                        self.logger.info("x.media.consumed by=stt")
+                    except Exception:
+                        pass
+                elif not success:
                     x_media_state["allow_vision"] = True
 
             aggregator.add_result(
@@ -5194,25 +5226,30 @@ class Router:
         )
 
         # Generate single aggregated response through text flow (1 IN → 1 OUT)
-        if aggregated_prompt.strip():
-            response_action = await self._invoke_text_flow(
-                aggregated_prompt, message, context_str
-            )
-            if response_action and response_action.has_payload:
-                self.logger.info(
-                    f"✅ Multimodal response generated successfully (msg_id: {message.id})"
-                )
-                return response_action
-            else:
-                self.logger.warning(
-                    f"No response generated from text flow (msg_id: {message.id})"
-                )
-                return None
-        else:
+        # Gate out early if all multimodal items failed and no meaningful text remains.
+        # A summary-only prompt ("I processed 1 input, 0 successful") is not real input
+        # and must not trigger LLM generation. [REH][PA]
+        if not aggregated_prompt or not aggregated_prompt.strip():
             self.logger.warning(
                 f"No content to process after multimodal aggregation (msg_id: {message.id})"
             )
-            return None
+            return BotAction(
+                content="I couldn't access that URL to extract content. The site may be blocking automated requests or temporarily unavailable.",
+                error=True,
+            )
+
+        response_action = await self._invoke_text_flow(
+            aggregated_prompt, message, context_str
+        )
+        if response_action and response_action.has_payload:
+            self.logger.info(
+                f"✅ Multimodal response generated successfully (msg_id: {message.id})"
+            )
+            return response_action
+        self.logger.warning(
+            f"No response generated from text flow (msg_id: {message.id})"
+        )
+        return None
 
     async def _handle_item_with_provider(
         self,
