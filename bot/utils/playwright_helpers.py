@@ -41,14 +41,18 @@ def _pw_server_url() -> Optional[str]:
 async def connect_browser(browser_type: BrowserType) -> Optional[Browser]:
     """Connect to the remote Playwright server if configured.
 
-    Returns a Browser on success, None if PW_SERVER_URL is not set.
-    Raises whatever exception the Playwright driver throws on connection failure.
+    Returns a Browser on success, None if PW_SERVER_URL is not set or
+    the server is unreachable.
     """
     ws_url = _pw_server_url()
     if ws_url is None:
         return None
 
     logger.info(f"Connecting to remote Playwright server at {ws_url}")
-    browser = await browser_type.connect(ws_url, timeout=30_000)
-    logger.info("Connected to remote Playwright server")
-    return browser
+    try:
+        browser = await browser_type.connect(ws_url, timeout=30_000)
+        logger.info("Connected to remote Playwright server")
+        return browser
+    except Exception as exc:
+        logger.warning(f"Playwright remote server unreachable at {ws_url}: {exc}")
+        return None

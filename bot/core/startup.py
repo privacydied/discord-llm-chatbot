@@ -67,9 +67,10 @@ def _validate_remote_playwright_url(raw_url: str, logger) -> None:
             f"(client v{client_ver}, expected server v{expected_server_ver})"
         )
     except (ConnectionRefusedError, socket.timeout, OSError) as exc:
-        raise ConfigurationError(
+        logger.warning(
             f"Playwright remote server at {host}:{port} is unreachable: {exc}. "
-            f"Check that the Docker container is running and PW_SERVER_URL is correct."
+            f"Features requiring Playwright (web scraping, screenshots) will be unavailable. "
+            f"Start the container to restore: sudo docker restart playwright"
         )
 
 
