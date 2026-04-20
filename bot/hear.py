@@ -68,7 +68,7 @@ from .stt_pipeline import (
     run_stitch_stage,
     try_youtube_transcript_first,
 )
-from .youtube_transcript import resolve_youtube_transcript
+from .youtube_transcript import is_youtube_shorts, resolve_youtube_transcript
 
 if TYPE_CHECKING:
     import discord
@@ -1975,6 +1975,103 @@ async def hear_infer(audio: Union[Path, "discord.Attachment"]) -> str:
         await job.close()
 
 
+_SUMMARIZE_BIN = shutil.which("summarize")
+
+
+async def _resolve_via_summarize(url: str) -> Optional[Dict[str, Any]]:
+    """
+    Fetch YouTube transcript via the summarize CLI (--extract-only --youtube web).
+    Returns a result dict matching the STT pipeline shape, or None on failure.
+    """
+    if not _SUMMARIZE_BIN:
+        logger.debug("stt.summarize.skip reason=not_installed")
+        return None
+
+    cmd = [
+        _SUMMARIZE_BIN,
+        url,
+        "--extract-only",
+        "--youtube", "web",
+        "--timeout", "30s",
+    ]
+    logger.info("stt.summarize.start url=%s", url[:120])
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+    except Exception as exc:
+        logger.debug("stt.summarize.spawn_failed err=%s", exc)
+        return None
+
+    try:
+        stdout_bytes, stderr_bytes = await asyncio.wait_for(
+            proc.communicate(), timeout=45.0
+        )
+    except asyncio.TimeoutError:
+        try:
+            proc.kill()
+        except Exception:
+            pass
+        try:
+            await proc.communicate()
+        except Exception:
+            pass
+        logger.info("stt.summarize.timeout url=%s", url[:120])
+        return None
+
+    stderr_text = (stderr_bytes or b"").decode("utf-8", errors="ignore").strip()
+    if proc.returncode != 0:
+        logger.info(
+            "stt.summarize.failed url=%s code=%s stderr=%s",
+            url[:120],
+            proc.returncode,
+            stderr_text[:200],
+        )
+        return None
+
+    text = (stdout_bytes or b"").decode("utf-8", errors="ignore").strip()
+    if not text or len(text) < 20:
+        logger.info("stt.summarize.empty url=%s", url[:120])
+        return None
+
+    # Extract title from stderr if available (summarize logs title to stderr)
+    title = "Unknown"
+    for line in stderr_text.splitlines():
+        if "title" in line.lower():
+            title = line.split(":", 1)[-1].strip() if ":" in line else line
+            break
+
+    logger.info(
+        "stt.summarize.ok url=%s chars=%d",
+        url[:120],
+        len(text),
+    )
+
+    return {
+        "transcription": text,
+        "partial": False,
+        "abort_reason": "",
+        "metadata": {
+            "source": "youtube",
+            "url": url,
+            "title": title,
+            "uploader": "Unknown",
+            "upload_date": "",
+            "original_duration_s": 0.0,
+            "processed_duration_s": 0.0,
+            "speedup_factor": 1.0,
+            "cache_hit": False,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "demux_fallback": False,
+            "transcription_source": "summarize",
+            "transcription_language": "en",
+        },
+    }
+
+
 async def hear_infer_from_url(url: str, force_refresh: bool = False) -> Dict[str, Any]:
     """
     Transcribe audio fetched via yt-dlp for the given URL.
@@ -1997,9 +2094,14 @@ async def hear_infer_from_url(url: str, force_refresh: bool = False) -> Dict[str
     try:
         async with _JOB_SEMAPHORE:
             runtime_compat = load_stt_runtime_compat()
-            # YouTube transcript-first: try caption tracks before yt-dlp/ffmpeg/whisper.
-            # On failure/unavailable captions we fail open to the existing STT pipeline.
-            if runtime_compat.youtube_transcript_first:
+            # YouTube routing: Shorts → yt-dlp STT, long-form → summarize CLI.
+            # On failure we fail open to the existing yt-dlp/whisper pipeline.
+            if runtime_compat.youtube_transcript_first and not is_youtube_shorts(url):
+                # Long-form YouTube: try summarize CLI first (fast transcript extraction)
+                result = await _resolve_via_summarize(url)
+                if result:
+                    return await job.finish_success(result)
+                # Fallback: try caption-track resolver (original path)
                 result = await try_youtube_transcript_first(
                     url=url,
                     force_refresh=force_refresh,

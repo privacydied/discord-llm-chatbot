@@ -107,6 +107,19 @@ def is_youtube_url(url: str) -> bool:
         return False
 
 
+def is_youtube_shorts(url: str) -> bool:
+    """Check if a YouTube URL is a Shorts video."""
+    try:
+        parsed = urlparse(url)
+        host = (parsed.netloc or "").lower()
+        if host not in _YT_HOSTS:
+            return False
+        path = (parsed.path or "").strip()
+        return path.startswith("/shorts/")
+    except Exception:
+        return False
+
+
 def extract_youtube_video_id(url: str) -> Optional[str]:
     try:
         parsed = urlparse(url)
