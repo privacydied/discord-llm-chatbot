@@ -4,6 +4,7 @@ OpenAI/OpenRouter Backend - Handles OpenAI API calls including OpenRouter.
 
 from typing import Any, AsyncGenerator, Dict, Union
 import base64
+import inspect
 import os
 import time
 
@@ -21,6 +22,34 @@ from bot.utils.logging import get_logger
 from bot.enhanced_retry import get_retry_manager
 
 logger = get_logger(__name__)
+
+
+async def _safe_aclose_openai_client(client: Any) -> None:
+    """Best-effort close for OpenAI/httpx async clients without leaking __del__ tasks.
+
+    OpenAI's AsyncHttpxClientWrapper schedules `aclose()` from `__del__` when a
+    client is GC'd open. On some partially-initialized wrapper instances that
+    close path raises AttributeError("... has no attribute '_transport'"), which
+    appears as an unretrieved task exception. Explicitly closing clients on our
+    awaited path prevents the destructor path; this helper also suppresses that
+    known close-only AttributeError if the wrapper is already malformed. [REH]
+    """
+    if client is None:
+        return
+    closer = getattr(client, "aclose", None) or getattr(client, "close", None)
+    if closer is None:
+        return
+    try:
+        result = closer()
+        if inspect.isawaitable(result):
+            await result
+    except AttributeError as exc:
+        if "_transport" in str(exc) and "AsyncHttpxClientWrapper" in str(exc):
+            logger.debug("openai.client.close_ignored missing_transport")
+            return
+        raise
+    except Exception as exc:
+        logger.debug(f"openai.client.close_failed | {type(exc).__name__}: {exc}")
 
 
 @with_retry(API_RETRY_CONFIG)
@@ -184,17 +213,20 @@ Server Context: {server_context}"""
 
             async def stream_generator():
                 chunk_count = 0
-                async for chunk in response:
-                    chunk_count += 1
-                    if chunk.choices and chunk.choices[0].delta.content:
-                        yield {
-                            "text": chunk.choices[0].delta.content,
-                            "finished": False,
-                        }
-                logger.debug(
-                    f"[OpenAI] ✅ Streaming complete, processed {chunk_count} chunks"
-                )
-                yield {"text": "", "finished": True}
+                try:
+                    async for chunk in response:
+                        chunk_count += 1
+                        if chunk.choices and chunk.choices[0].delta.content:
+                            yield {
+                                "text": chunk.choices[0].delta.content,
+                                "finished": False,
+                            }
+                    logger.debug(
+                        f"[OpenAI] ✅ Streaming complete, processed {chunk_count} chunks"
+                    )
+                    yield {"text": "", "finished": True}
+                finally:
+                    await _safe_aclose_openai_client(client)
 
             return stream_generator()
 
@@ -297,9 +329,12 @@ Server Context: {server_context}"""
                 logger.info(f"[OpenAI] text.budget seconds={per_item_budget}")
             except Exception:
                 pass
-            rr = await retry_mgr.run_with_fallback(
-                "text", _coro_factory, per_item_budget=per_item_budget
-            )
+            try:
+                rr = await retry_mgr.run_with_fallback(
+                    "text", _coro_factory, per_item_budget=per_item_budget
+                )
+            finally:
+                await _safe_aclose_openai_client(client)
             if not rr.success:
                 # Enrich error with ladder context for better observability [REH]
                 if rr.error:
@@ -379,27 +414,30 @@ Server Context: {server_context}"""
         logger.debug("[OpenAI] 🔄 Sending request to API...")
 
         try:
-            response = await client.chat.completions.create(
-                model=model,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                stream=False,
-                **kwargs,
-            )
-        except Exception as e:
-            if "timeout" in str(e).lower() or "TimeoutError" in str(type(e).__name__):
-                logger.warning(
-                    f"[OpenAI] ⏰ Request timeout after {config.get('TEXT_REQUEST_TIMEOUT', 30)}s: {e}"
+            try:
+                response = await client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    stream=False,
+                    **kwargs,
                 )
-                raise APIError(f"Request timeout: {str(e)}")
-            else:
-                logger.error(f"[OpenAI] ❌ API request failed: {e}")
-                raise
-        logger.debug("[OpenAI] ✅ Received response from API")
-        # Handle non-streaming response
-        result = _normalize_nonstream_response(response, model)
-        return result
+            except Exception as e:
+                if "timeout" in str(e).lower() or "TimeoutError" in str(type(e).__name__):
+                    logger.warning(
+                        f"[OpenAI] ⏰ Request timeout after {config.get('TEXT_REQUEST_TIMEOUT', 30)}s: {e}"
+                    )
+                    raise APIError(f"Request timeout: {str(e)}")
+                else:
+                    logger.error(f"[OpenAI] ❌ API request failed: {e}")
+                    raise
+            logger.debug("[OpenAI] ✅ Received response from API")
+            # Handle non-streaming response
+            result = _normalize_nonstream_response(response, model)
+            return result
+        finally:
+            await _safe_aclose_openai_client(client)
 
     except openai.AuthenticationError as e:
         logger.error(f"OpenAI authentication failed: {e}")
@@ -765,6 +803,8 @@ async def _generate_vl_response_with_retry(
                             f"Request timeout after ~{elapsed_ms}ms for model {selected_model}"
                         )
                     raise
+                finally:
+                    await _safe_aclose_openai_client(client)
 
             return _run
 
@@ -909,60 +949,63 @@ async def _generate_vl_response_with_retry(
 
     start = time.monotonic()
     try:
-        response = await client.chat.completions.create(**api_params)
-        if response is None:
-            raise APIError("VL API returned None response")
-        if not (
-            hasattr(response, "choices")
-            and response.choices
-            and hasattr(response.choices[0], "message")
-            and response.choices[0].message
-        ):
-            raise APIError("Invalid VL API response structure")
-    except Exception as exc:
+        try:
+            response = await client.chat.completions.create(**api_params)
+            if response is None:
+                raise APIError("VL API returned None response")
+            if not (
+                hasattr(response, "choices")
+                and response.choices
+                and hasattr(response.choices[0], "message")
+                and response.choices[0].message
+            ):
+                raise APIError("Invalid VL API response structure")
+        except Exception as exc:
+            elapsed_ms = int((time.monotonic() - start) * 1000)
+            logger.warning(
+                "vl.fail model=%s latency_ms=%d error=%s",
+                model_name,
+                elapsed_ms,
+                str(exc)[:200],
+            )
+            exhaustion_error = APIError("Vision request failed")
+            exhaustion_error.vl_exhausted = True
+            exhaustion_error.vl_ladder_summary = f"{model_name}:fail"
+            exhaustion_error.vl_attempts = 1
+            exhaustion_error.vl_provider_base = base_url
+            raise exhaustion_error from exc
+
         elapsed_ms = int((time.monotonic() - start) * 1000)
-        logger.warning(
-            "vl.fail model=%s latency_ms=%d error=%s",
+        usage = getattr(response, "usage", None)
+        total_tokens = getattr(usage, "total_tokens", None)
+
+        logger.info(
+            "vl.ok model=%s ms=%d tokens_total=%s",
             model_name,
             elapsed_ms,
-            str(exc)[:200],
+            total_tokens if total_tokens is not None else "na",
         )
-        exhaustion_error = APIError("Vision request failed")
-        exhaustion_error.vl_exhausted = True
-        exhaustion_error.vl_ladder_summary = f"{model_name}:fail"
-        exhaustion_error.vl_attempts = 1
-        exhaustion_error.vl_provider_base = base_url
-        raise exhaustion_error from exc
 
-    elapsed_ms = int((time.monotonic() - start) * 1000)
-    usage = getattr(response, "usage", None)
-    total_tokens = getattr(usage, "total_tokens", None)
+        try:
+            response_text = response.choices[0].message.content or ""
+        except Exception:
+            response_text = ""
 
-    logger.info(
-        "vl.ok model=%s ms=%d tokens_total=%s",
-        model_name,
-        elapsed_ms,
-        total_tokens if total_tokens is not None else "na",
-    )
+        usage_info = {
+            "prompt_tokens": getattr(usage, "prompt_tokens", 0),
+            "completion_tokens": getattr(usage, "completion_tokens", 0),
+            "total_tokens": total_tokens or 0,
+        }
 
-    try:
-        response_text = response.choices[0].message.content or ""
-    except Exception:
-        response_text = ""
-
-    usage_info = {
-        "prompt_tokens": getattr(usage, "prompt_tokens", 0),
-        "completion_tokens": getattr(usage, "completion_tokens", 0),
-        "total_tokens": total_tokens or 0,
-    }
-
-    return {
-        "text": response_text,
-        "model": model_name,
-        "usage": usage_info,
-        "backend": "openai",
-        "telemetry": {"provider_base": base_url, "ladder_attempts": 1},
-    }
+        return {
+            "text": response_text,
+            "model": model_name,
+            "usage": usage_info,
+            "backend": "openai",
+            "telemetry": {"provider_base": base_url, "ladder_attempts": 1},
+        }
+    finally:
+        await _safe_aclose_openai_client(client)
 
 
 async def generate_vl_response(
