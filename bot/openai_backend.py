@@ -808,8 +808,12 @@ async def _generate_vl_response_with_retry(
 
             return _run
 
-        # Use default per-item budget of 45s for vision (consistent with EnhancedRetryManager default)
-        per_item_budget = 45.0
+        # Use configurable VL budget; reply-image perception has its own outer timeout,
+        # so this must be long enough for large images and slow free OpenRouter VL models. [REH]
+        try:
+            per_item_budget = float(config.get("VISION_PER_ITEM_BUDGET", 45.0))
+        except Exception:
+            per_item_budget = 45.0
         try:
             logger.info(f"[VL] vision.budget seconds={per_item_budget}")
         except Exception:

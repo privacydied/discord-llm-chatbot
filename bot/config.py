@@ -727,6 +727,15 @@ def load_config():
             "1000",
             "VISION_PROVIDER_RETRY_DELAY_MS",
         ),
+        "VL_NOTES_TIMEOUT_S": _safe_float(
+            os.getenv("VL_NOTES_TIMEOUT_S"), "25.0", "VL_NOTES_TIMEOUT_S"
+        ),
+        "VISION_PER_ITEM_BUDGET": _safe_float(
+            os.getenv("VISION_PER_ITEM_BUDGET"), "45.0", "VISION_PER_ITEM_BUDGET"
+        ),
+        "VL_REQUEST_TIMEOUT": _safe_float(
+            os.getenv("VL_REQUEST_TIMEOUT"), "30.0", "VL_REQUEST_TIMEOUT"
+        ),
         # Discord integration
         "VISION_PROGRESS_UPDATE_INTERVAL_S": _safe_int(
             os.getenv("VISION_PROGRESS_UPDATE_INTERVAL_S"),
