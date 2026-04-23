@@ -39,7 +39,7 @@ from typing import (
     TYPE_CHECKING,
     Union,
 )
-from urllib.parse import parse_qs, parse_qsl, urlencode, urlparse, urlunparse, unquote
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 import discord
 from discord import DMChannel, Message
@@ -952,11 +952,18 @@ class Router:
         return fallback_text
 
     def _build_visual_anchored_system_prompt(
-        self, content: str, *, fallback: bool = False
+        self,
+        content: str,
+        *,
+        fallback: bool = False,
+        perception_notes: Optional[str] = None,
     ) -> Optional[str]:
         """Build anchored system prompt when visual-facts evidence is present."""
         try:
-            if not has_visual_facts_section(content):
+            has_visual_evidence = has_visual_facts_section(content) or bool(
+                perception_notes and perception_notes.strip()
+            )
+            if not has_visual_evidence:
                 return None
 
             base_sys = self._get_system_prompt(
@@ -8048,7 +8055,7 @@ class Router:
                         pass
                 # Anchor visual analysis when present to avoid "no image" drift while preserving persona [REH][IV]
                 anchored_system = self._build_visual_anchored_system_prompt(
-                    content_str
+                    content_str, perception_notes=perception_notes
                 )
 
                 response_text = await contextual_brain_infer_simple(
@@ -8148,18 +8155,30 @@ class Router:
                     except Exception as _e:
                         self.logger.debug(f"text.anchor.guard.regen_failed | {_e}")
 
-                    # Fallback: extract VL summary directly from aggregated content
+                    # Fallback: return the available visual evidence directly instead of letting
+                    # a contradictory text draft hide a successful VL read. Covers Twitter
+                    # VISUAL_FACTS, direct image URL [IMAGE:] blocks, attachment Image Analysis,
+                    # and reply/direct-mention perception notes. [REH]
                     try:
                         vl_section = ""
-                        s = content or ""
-                        start = s.lower().find("vl prompt output:")
-                        if start != -1:
-                            vl_section = s[start:]
-                            # Trim at next header if present
-                            for marker in ("###", "tweet caption:"):
+                        s = content_str or ""
+                        lower_s = s.lower()
+                        markers = (
+                            "visual_facts:",
+                            "vl prompt output:",
+                            "[image:",
+                            "image analysis",
+                        )
+                        starts = [lower_s.find(m) for m in markers if lower_s.find(m) != -1]
+                        if starts:
+                            vl_section = s[min(starts):]
+                            # Trim at next aggregation/original-text header if present.
+                            for marker in ("\n### original message text:",):
                                 pos = vl_section.lower().find(marker)
                                 if pos > 0:
                                     vl_section = vl_section[:pos]
+                        if not vl_section.strip() and perception_notes:
+                            vl_section = f"Perception notes:\n{perception_notes.strip()}"
                         vl_section = (
                             vl_section.strip()
                             or "Visual analysis available, but failed to synthesize."
@@ -8189,7 +8208,7 @@ class Router:
                 pass
         # Basic fallback: apply the same visual-analysis anchoring when present
         anchored_system_fallback = self._build_visual_anchored_system_prompt(
-            content_str, fallback=True
+            content_str, fallback=True, perception_notes=perception_notes
         )
 
         return await brain_infer(

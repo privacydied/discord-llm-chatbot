@@ -204,6 +204,12 @@ def has_visual_facts_section(content: str) -> bool:
         or "vl prompt output:" in text_lower
         or bool(re.search(r"^image\s+\d+:", text, re.IGNORECASE | re.MULTILINE))
         or "tweet caption:" in text_lower
+        # Attachment and direct image URL routes put successful VL output into
+        # these labels before the text flow synthesizes a final reply. Treat
+        # them as visual facts too, otherwise the downstream model can still
+        # drift into "I can't see the image" even after VL succeeded. [REH]
+        or "image analysis" in text_lower
+        or bool(re.search(r"^\[image:\s*[^\]]+\]", text, re.IGNORECASE | re.MULTILINE))
     )
 
 
@@ -212,8 +218,9 @@ def build_visual_analysis_anchor_prompt(base_system_prompt: str) -> str:
     base_sys = base_system_prompt or "You are a helpful assistant."
     return (
         f"{base_sys}\n\n[VISUAL-ANALYSIS-ANCHOR]\n"
-        "- If the user prompt includes a section titled 'vl prompt output:' or lines beginning with 'Image n:',\n"
-        "  treat these as non-negotiable visual facts extracted from the image(s).\n"
+        "- If the user prompt includes a section titled 'vl prompt output:', lines beginning with 'Image n:',\n"
+        "  '[IMAGE: ...]' blocks, 'Image Analysis' blocks, or perception notes, treat these as\n"
+        "  non-negotiable visual facts extracted from the image(s).\n"
         "- Base your reply on those facts and the user's request.\n"
         "- Do not claim there is no image or that you cannot see images when such analysis is provided.\n"
         "- Screenshots of documents or text are still images; do not dismiss them as 'not a pic'.\n"

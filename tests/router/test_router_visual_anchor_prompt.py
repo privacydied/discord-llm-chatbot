@@ -31,6 +31,46 @@ def test_build_visual_anchored_system_prompt_returns_none_without_visual_facts()
     assert router.logger.info_lines == []
 
 
+def test_build_visual_anchored_system_prompt_detects_attachment_image_analysis() -> None:
+    router = Router(DummyBot())
+    router.logger = CaptureLogger()
+
+    out = router._build_visual_anchored_system_prompt(
+        "I processed 1 input from your message:\n\n"
+        "### [2/1] ✅ Image: photo.jpg\n\n"
+        "🖼️ **Image Analysis (photo.jpg)**\nA black cat is sitting on a sofa."
+    )
+
+    assert out is not None
+    assert "[VISUAL-ANALYSIS-ANCHOR]" in out
+
+
+def test_build_visual_anchored_system_prompt_detects_direct_image_url_analysis() -> None:
+    router = Router(DummyBot())
+    router.logger = CaptureLogger()
+
+    out = router._build_visual_anchored_system_prompt(
+        "I processed 1 input from your message:\n\n"
+        "### [2/1] ✅ URL: image.jpg\n\n"
+        "[IMAGE: image.jpg]\nA red car is parked outside."
+    )
+
+    assert out is not None
+    assert "[VISUAL-ANALYSIS-ANCHOR]" in out
+
+
+def test_build_visual_anchored_system_prompt_detects_perception_notes() -> None:
+    router = Router(DummyBot())
+    router.logger = CaptureLogger()
+
+    out = router._build_visual_anchored_system_prompt(
+        "what is this?", perception_notes="A dog is wearing sunglasses."
+    )
+
+    assert out is not None
+    assert "[VISUAL-ANALYSIS-ANCHOR]" in out
+
+
 def test_build_visual_anchored_system_prompt_builds_anchor_and_logs_primary() -> None:
     router = Router(DummyBot())
     router.logger = CaptureLogger()

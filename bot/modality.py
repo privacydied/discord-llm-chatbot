@@ -31,7 +31,10 @@ logger = get_logger(__name__)
 
 # Pre-compile and cache regex patterns for performance [PA]
 _URL_PATTERN = re.compile(r'https?://[^\s<>"\'\'\[\]{}|\\^`]+')
-_IMAGE_EXT_PATTERN = re.compile(r"\.(jpg|jpeg|png|gif|webp|bmp)(\?.*)?$", re.IGNORECASE)
+_IMAGE_EXT_PATTERN = re.compile(
+    r"(?:\.(jpg|jpeg|png|gif|webp|bmp)(\?.*)?$|[?&]format=(jpg|jpeg|png|gif|webp|bmp)(?:&|$))",
+    re.IGNORECASE,
+)
 _PDF_EXT_PATTERN = re.compile(r"\.pdf(\?.*)?$", re.IGNORECASE)
 
 # Cache for video patterns - loaded once and reused [PA]

@@ -79,6 +79,8 @@ def test_has_visual_facts_section_detects_expected_markers() -> None:
     assert has_visual_facts_section("vl prompt output:\nfoo")
     assert has_visual_facts_section("Image 2: the scene is dark")
     assert has_visual_facts_section("tweet caption:\nfoo")
+    assert has_visual_facts_section("🖼️ **Image Analysis (photo.jpg)**\ncat")
+    assert has_visual_facts_section("[IMAGE: image.jpg]\nred car")
     assert not has_visual_facts_section("plain text without markers")
 
 

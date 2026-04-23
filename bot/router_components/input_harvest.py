@@ -97,7 +97,10 @@ def is_direct_image_url(url: str) -> bool:
         u = str(url).lower()
     except Exception:
         return False
-    return bool(re.search(r"\.(jpe?g|png|webp)(?:\?|#|$)", u))
+    return bool(
+        re.search(r"\.(jpe?g|png|webp)(?:\?|#|$)", u)
+        or re.search(r"[?&]format=(jpe?g|png|webp)(?:&|$)", u)
+    )
 
 
 def extract_urls_loose(text: str) -> List[str]:
