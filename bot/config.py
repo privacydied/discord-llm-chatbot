@@ -728,10 +728,10 @@ def load_config():
             "VISION_PROVIDER_RETRY_DELAY_MS",
         ),
         "VL_NOTES_TIMEOUT_S": _safe_float(
-            os.getenv("VL_NOTES_TIMEOUT_S"), "25.0", "VL_NOTES_TIMEOUT_S"
+            os.getenv("VL_NOTES_TIMEOUT_S"), "120.0", "VL_NOTES_TIMEOUT_S"
         ),
         "VISION_PER_ITEM_BUDGET": _safe_float(
-            os.getenv("VISION_PER_ITEM_BUDGET"), "45.0", "VISION_PER_ITEM_BUDGET"
+            os.getenv("VISION_PER_ITEM_BUDGET"), "120.0", "VISION_PER_ITEM_BUDGET"
         ),
         "VL_REQUEST_TIMEOUT": _safe_float(
             os.getenv("VL_REQUEST_TIMEOUT"), "30.0", "VL_REQUEST_TIMEOUT"

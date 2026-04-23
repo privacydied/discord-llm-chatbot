@@ -4845,12 +4845,24 @@ class Router:
                 notes, reason = await self._run_perception_notes(message, original_text)
                 perception_injection = notes
                 if not perception_injection:
-                    # Per acceptance: still run text flow with a small hint
-                    perception_injection = (
-                        "The user replied to an image, but I couldn’t fetch it."
-                    )
+                    # Do not feed a fake "couldn't fetch it" note into text flow: the
+                    # text model will treat that as visual evidence and can reply with
+                    # "drop a pic" even though an image was actually received. [REH]
+                    reason_label = reason or "unknown"
                     self.logger.info(
-                        f"❌ perception unavailable | reason={reason or 'unknown'}"
+                        f"❌ perception unavailable | reason={reason_label}"
+                    )
+                    if reason_label == "timeout":
+                        return BotAction(
+                            content=(
+                                "I got the image, but the vision model timed out before it could analyze it. "
+                                "Try again, or send a smaller/compressed image if it keeps happening."
+                            ),
+                            error=True,
+                        )
+                    return BotAction(
+                        content="I got the image, but couldn’t analyze it. Please try again or re-upload it.",
+                        error=True,
                     )
 
                 # Invoke TEXT flow with injected perception notes (context unchanged here)
@@ -7878,9 +7890,9 @@ class Router:
             try:
                 # Prevent long hangs: cap VL notes time budget with a small timeout [REH][PA]
                 try:
-                    timeout_s = float(self.config.get("VL_NOTES_TIMEOUT_S", 25.0))
+                    timeout_s = float(self.config.get("VL_NOTES_TIMEOUT_S", 120.0))
                 except Exception:
-                    timeout_s = 25.0
+                    timeout_s = 120.0
                 vision_result = await asyncio.wait_for(
                     see_infer(image_path=downloaded_path, prompt=prompt),
                     timeout=timeout_s,
