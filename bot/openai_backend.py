@@ -6,9 +6,12 @@ from typing import Any, AsyncGenerator, Dict, Union
 import base64
 import inspect
 import os
+import ssl
 import time
 
 import aiohttp
+import certifi
+import httpx
 import openai
 
 from bot.config import load_config, get_vl_model_ladder
@@ -22,6 +25,74 @@ from bot.utils.logging import get_logger
 from bot.enhanced_retry import get_retry_manager
 
 logger = get_logger(__name__)
+
+
+def _patch_openai_httpx_wrapper_destructor() -> None:
+    """Prevent OpenAI's wrapper __del__ from scheduling a broken close task.
+
+    On Synology the default SSL cafile can be missing. If AsyncOpenAI creation
+    fails during httpx transport init, OpenAI may leave a partially initialized
+    AsyncHttpxClientWrapper whose __del__ schedules aclose(); httpx then raises
+    AttributeError('_transport') in a background task. [REH]
+    """
+    try:
+        wrapper_cls = openai._base_client.AsyncHttpxClientWrapper
+    except Exception:
+        return
+
+    if getattr(wrapper_cls, "_hermes_safe_del", False):
+        return
+
+    def _safe_del(self) -> None:
+        try:
+            if not hasattr(self, "_transport"):
+                return
+            if self.is_closed:
+                return
+            import asyncio
+
+            asyncio.get_running_loop().create_task(self.aclose())
+        except Exception:
+            return
+
+    wrapper_cls.__del__ = _safe_del
+    wrapper_cls._hermes_safe_del = True
+
+
+_patch_openai_httpx_wrapper_destructor()
+
+
+def _make_openai_async_client(
+    *, api_key: str | None, base_url: str | None, timeout: httpx.Timeout, max_retries: int = 0
+) -> Any:
+    """Create AsyncOpenAI with certifi CA bundle and no inherited SSL env.
+
+    Passing our own httpx.AsyncClient avoids httpx consulting broken platform
+    cafile paths such as /etc/ssl/cert.pem on Synology. [REH]
+    """
+    ssl_context = ssl.create_default_context(cafile=certifi.where())
+    http_client = httpx.AsyncClient(
+        timeout=timeout,
+        verify=ssl_context,
+        trust_env=False,
+    )
+    try:
+        return openai.AsyncOpenAI(
+            api_key=api_key,
+            base_url=base_url,
+            timeout=timeout,
+            max_retries=max_retries,
+            http_client=http_client,
+        )
+    except Exception:
+        try:
+            import asyncio
+
+            loop = asyncio.get_running_loop()
+            loop.create_task(http_client.aclose())
+        except Exception:
+            pass
+        raise
 
 
 async def _safe_aclose_openai_client(client: Any) -> None:
@@ -96,7 +167,7 @@ async def generate_openai_response(
         except Exception:
             timeout_seconds = 45.0
 
-        client = openai.AsyncOpenAI(
+        client = _make_openai_async_client(
             api_key=config.get("OPENAI_API_KEY"),
             base_url=config.get("OPENAI_API_BASE", "https://api.openai.com/v1"),
             timeout=httpx.Timeout(timeout_seconds),
@@ -702,7 +773,7 @@ async def _generate_vl_response_with_retry(
 
             async def _run():
                 # Create client with per-provider timeout from ladder config
-                client = openai.AsyncOpenAI(
+                client = _make_openai_async_client(
                     api_key=config.get("OPENAI_API_KEY"),
                     base_url=base_url or "https://api.openai.com/v1",
                     timeout=httpx.Timeout(provider_config.timeout),
@@ -929,7 +1000,7 @@ async def _generate_vl_response_with_retry(
     except Exception:
         timeout_seconds = 30.0
 
-    client = openai.AsyncOpenAI(
+    client = _make_openai_async_client(
         api_key=config.get("OPENAI_API_KEY"),
         base_url=base_url or "https://api.openai.com/v1",
         timeout=httpx.Timeout(timeout_seconds),
