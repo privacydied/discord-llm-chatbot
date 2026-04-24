@@ -197,23 +197,29 @@ class EnhancedRetryManager:
             ProviderConfig("openrouter", "openai/gpt-4o-mini", timeout=8.0),
         ]
         default_text = [
-            # Prefer chat-style model first for latency and robustness
+            # Working free models as of 2025-04 (old deepseek/gpt-oss delisted or 503)
             ProviderConfig(
                 "openrouter",
-                "deepseek/deepseek-chat-v3-0324:free",
+                "inclusionai/ling-2.6-1t:free",
                 timeout=25.0,
                 max_attempts=2,
             ),
             ProviderConfig(
                 "openrouter",
-                "deepseek/deepseek-r1-0528:free",
-                timeout=25.0,
+                "nvidia/nemotron-3-super-120b-a12b:free",
+                timeout=30.0,
                 max_attempts=1,
             ),
             ProviderConfig(
                 "openrouter",
-                "z-ai/glm-4.5-air:free",
-                timeout=30.0,
+                "inclusionai/ling-2.6-flash:free",
+                timeout=20.0,
+                max_attempts=1,
+            ),
+            ProviderConfig(
+                "openrouter",
+                "google/gemma-3-27b-it:free",
+                timeout=25.0,
                 max_attempts=1,
             ),
         ]
