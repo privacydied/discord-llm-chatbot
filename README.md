@@ -3,9 +3,9 @@
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](pyproject.toml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-**Production-ready Discord bot** that blends chat, search/RAG, and multimodal (vision, OCR, TTS/STT). Built on `discord.py 2.x` with robust routing, retries, structured logs, and optional Prometheus metrics.
+**Production-ready discord bot** that blends chat, search/RAG, and multimodal (vision, OCR, TTS/STT). Built on `discord.py 2.x` with robust routing, retries, structured logs, and optional Prometheus metrics.
 
-> Text via OpenAI/OpenRouter **or** local Ollama. RAG via ChromaDB. Vision via Together/Novita. STT via faster-whisper/whispercpp. OCR via PyMuPDF + Tesseract.
+> Text via OpenAI/OpenRouter, **NVIDIA NIM**, or local Ollama. RAG via ChromaDB. Vision via Together/Novita. STT via faster-whisper/whispercpp. OCR via PyMuPDF + Tesseract.
 
 ---
 

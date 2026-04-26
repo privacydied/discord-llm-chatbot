@@ -26,7 +26,7 @@ async def generate_response(
     """
     Generate a response using the configured AI backend.
 
-    Routes to either OpenAI/OpenRouter or Ollama based on TEXT_BACKEND configuration.
+    Routes to either OpenAI/OpenRouter, NVIDIA NIM, or Ollama based on TEXT_BACKEND configuration.
     """
     try:
         logger.info("🤖 === TEXT RESPONSE GENERATION STARTED ===")
@@ -59,6 +59,24 @@ async def generate_response(
                 **kwargs,
             )
             logger.info("✅ OpenAI backend completed successfully")
+            return result
+        elif backend == "nvidia":
+            # Use NVIDIA NIM backend
+            logger.debug("🤖 Routing to NVIDIA NIM backend")
+            from .nvidia_backend import generate_nvidia_response
+
+            result = await generate_nvidia_response(
+                prompt=prompt,
+                context=context,
+                system_prompt=system_prompt,
+                user_id=user_id,
+                guild_id=guild_id,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                stream=stream,
+                **kwargs,
+            )
+            logger.info("✅ NVIDIA NIM backend completed successfully")
             return result
         elif backend == "ollama":
             # Use Ollama backend
@@ -161,7 +179,7 @@ async def generate_vl_response(
         else:
             # For now, Ollama VL is not implemented, fallback to OpenAI
             logger.warning(
-                f"⚠️  VL not supported for backend {backend}, falling back to OpenAI"
+                f"⚠️ VL not supported for backend {backend}, falling back to OpenAI"
             )
             from .openai_backend import (
                 generate_vl_response as openai_generate_vl_response,
