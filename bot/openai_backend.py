@@ -818,6 +818,11 @@ async def _generate_vl_response_with_retry(
                     except Exception:
                         response_text = ""
 
+                    # Empty completion is a soft failure — retry with next model [REH]
+                    if not response_text.strip():
+                        raise APIError(
+                            f"VL model {selected_model} returned empty completion"
+                        )
                     usage = getattr(response, "usage", None)
                     usage_info = {
                         "prompt_tokens": getattr(usage, "prompt_tokens", 0),
@@ -1066,6 +1071,16 @@ async def _generate_vl_response_with_retry(
         except Exception:
             response_text = ""
 
+            # Empty completion is a soft failure — retry or fail [REH]
+            if not response_text.strip():
+                empty_err = APIError(
+                    f"VL model {model_name} returned empty completion"
+                )
+                empty_err.vl_exhausted = True
+                empty_err.vl_ladder_summary = f"{model_name}:empty_completion"
+                empty_err.vl_attempts = 1
+                empty_err.vl_provider_base = base_url
+                raise empty_err
         usage_info = {
             "prompt_tokens": getattr(usage, "prompt_tokens", 0),
             "completion_tokens": getattr(usage, "completion_tokens", 0),
