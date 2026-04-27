@@ -63,7 +63,8 @@ class FakeHistory:
 class FakeChannel:
     def __init__(self, channel_id: int, items: List[FakeMessage], channel_type=None):
         self.id = channel_id
-        self._items = list(items)
+        # Store reference (not copy) so messages appended after construction are visible [BUGFIX]
+        self._items = items
         self.type = channel_type
 
     def history(self, *, limit=None, oldest_first=False, after=None):

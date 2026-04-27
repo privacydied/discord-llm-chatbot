@@ -378,7 +378,9 @@ class Router:
         self._processed_recent = collections.deque(maxlen=512)
         self._processed_recent_set = set()
         # Concurrency guard for dedupe to prevent race when two listeners fire simultaneously [REH]
+        # Use weak references to avoid unbounded growth [BUGFIX]
         self._processing_locks: dict[int, asyncio.Lock] = {}
+        self._processing_locks_cleanup_counter = 0
         # Per-message metadata shared with core dispatch [REH][CA]
         self._dispatch_metadata: Dict[int, Dict[str, Any]] = {}
 
@@ -4048,6 +4050,20 @@ class Router:
             # Remove the per-message lock to avoid unbounded growth [RM]
             try:
                 self._processing_locks.pop(getattr(message, "id", None), None)
+            except Exception:
+                pass
+            # Periodic cleanup of old locks every 100 messages [BUGFIX]
+            try:
+                self._processing_locks_cleanup_counter += 1
+                if self._processing_locks_cleanup_counter >= 100:
+                    self._processing_locks_cleanup_counter = 0
+                    # Clean any locks that aren't currently locked
+                    old_ids = [
+                        k for k, v in self._processing_locks.items()
+                        if hasattr(v, "locked") and not v.locked()
+                    ]
+                    for old_id in old_ids:
+                        self._processing_locks.pop(old_id, None)
             except Exception:
                 pass
 

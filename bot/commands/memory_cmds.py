@@ -48,6 +48,7 @@ class MemoryCommands(commands.Cog):
             await ctx.send_help(ctx.command)
 
     @memory_group.command(name="add")
+    @commands.cooldown(1, 10, commands.BucketType.user)  # [BUGFIX] Rate limit added
     async def add_memory_cmd(self, ctx, *, content: str):
         """Add a memory to your profile.
 
