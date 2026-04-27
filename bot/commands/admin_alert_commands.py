@@ -59,6 +59,7 @@ class AdminAlertManager:
         self.config = load_config()
         self.logger = get_logger(f"{__name__}.AdminAlertManager")
         self.sessions: Dict[int, AlertSession] = {}
+        self._sessions_lock = asyncio.Lock()
         self.reaction_queues: Dict[int, List] = {}  # Per-message reaction queues
 
         self.enabled = self.config.get("ALERT_ENABLE", "false").lower() == "true"
@@ -496,6 +497,7 @@ class AdminAlertCommands(commands.Cog):
         self.logger.info("🚨 Admin Alert Commands loaded")
 
     @commands.command(name="alert")
+    @commands.is_owner()
     async def alert_command(
         self, ctx: commands.Context, *, message: str = None
     ) -> None:

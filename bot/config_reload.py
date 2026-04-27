@@ -111,9 +111,7 @@ def _redact_sensitive_values(config: Dict[str, Any]) -> Dict[str, Any]:
     for key, value in config.items():
         if any(sensitive in key.upper() for sensitive in SENSITIVE_KEYS):
             if value:
-                redacted[key] = (
-                    f"***{str(value)[-4:]}" if len(str(value)) > 4 else "***"
-                )
+                redacted[key] = "[REDACTED]"
             else:
                 redacted[key] = value
         else:

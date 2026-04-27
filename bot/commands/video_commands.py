@@ -7,6 +7,7 @@ import re
 from typing import Optional
 import discord
 from discord.ext import commands
+from discord.ext.commands import cooldown, BucketType
 
 from ..utils.logging import get_logger
 from ..exceptions import InferenceError
@@ -54,6 +55,7 @@ class VideoCommands(commands.Cog):
             return "Unknown"
 
     @commands.command(name="watch", aliases=["transcribe", "listen"])
+    @cooldown(1, 60, BucketType.user)
     async def watch_video(self, ctx, url: str = None, *, options: str = ""):
         """
         Transcribe audio from YouTube or TikTok video.

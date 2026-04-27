@@ -2231,13 +2231,14 @@ class LLMBot(commands.Bot):
             return False
 
         content = message.content.strip().lower()
+        prefix = getattr(self, "command_prefix", "!")
 
         # List of long-running admin commands that should not block user queues
         long_running_commands = [
-            "!rag bootstrap",
-            "!rag refresh",
-            "!rag update",
-            "!rag scan",
+            f"{prefix}rag bootstrap",
+            f"{prefix}rag refresh",
+            f"{prefix}rag update",
+            f"{prefix}rag scan",
             # Add other potentially long-running commands here
         ]
 

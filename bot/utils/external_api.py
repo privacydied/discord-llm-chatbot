@@ -1,6 +1,9 @@
 import httpx
+import ipaddress
 import logging
 import os
+import re
+import socket
 from pathlib import Path
 from urllib.parse import urlparse, urlunparse, quote
 
@@ -8,6 +11,33 @@ logger = logging.getLogger(__name__)
 
 SCREENSHOT_CACHE_DIR = Path("cache/screenshots")
 SCREENSHOT_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _is_private_hostname(hostname: str) -> bool:
+    """Check if a hostname resolves to a private/internal IP address. [SFT]
+
+    Prevents SSRF attacks by blocking requests to internal network
+    addresses (127.x, 10.x, 172.16-31.x, 192.168.x, link-local, etc.).
+    """
+    if not hostname:
+        return True  # Empty hostname is suspicious
+    # Block obvious internal hostnames
+    if hostname.lower() in ("localhost", "localhost.localdomain"):
+        return True
+    try:
+        # Resolve hostname to IP and check if it's private
+        addr_infos = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+        for family, _type, _proto, _canonname, sockaddr in addr_infos:
+            ip_str = sockaddr[0]
+            ip = ipaddress.ip_address(ip_str)
+            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+                return True
+    except socket.gaierror:
+        pass  # Unresolvable hostname — let the API deal with it
+    except Exception:
+        # On resolution errors, be conservative and block
+        return True
+    return False
 
 
 def _normalize_url_for_screenshot(url: str) -> str:
@@ -56,6 +86,17 @@ async def external_screenshot(url: str) -> str | None:
         return None
     if not url.lower().startswith(("http://", "https://")):
         logger.warning(f"⚠️ Skipping screenshot: unsupported URL scheme: {url}")
+        return None
+
+    # SSRF protection: block requests to private/internal IPs [SFT]
+    try:
+        parsed_for_ssrf = urlparse(url)
+        ssrf_hostname = parsed_for_ssrf.hostname or ""
+        if _is_private_hostname(ssrf_hostname):
+            logger.warning(f"⚠️ Skipping screenshot: private/internal IP target: {ssrf_hostname}")
+            return None
+    except Exception:
+        logger.warning("⚠️ Skipping screenshot: SSRF check failed")
         return None
 
     # Coerce to string early to prevent quote_from_bytes TypeError and handle bytes safely
@@ -115,10 +156,12 @@ async def external_screenshot(url: str) -> str | None:
         logger.debug(f"🍪 Added URL-encoded cookies: {encoded_cookies[:50]}...")
 
     logger.debug(f"⏱️ Using screenshot delay: {delay}ms")
-    logger.debug(f"🔗 Final API URL: {api_url}")
+    # Redact API key from logged URL to prevent secret leakage [SFT]
+    _redacted_url = re.sub(r'([?&]key=)[^&]+', r'\1[REDACTED]', api_url)
+    logger.debug(f"🔗 Final API URL: {_redacted_url}")
 
     logger.info(
-        f"📷 Requesting screenshot from {api_url_base} for {normalized_url} [{dimension}, {format_type}]"
+    f"📷 Requesting screenshot from {api_url_base} for {normalized_url} [{dimension}, {format_type}]"
     )
 
     try:

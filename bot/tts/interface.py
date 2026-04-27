@@ -1326,10 +1326,14 @@ class TTSManager:
             return TTSResult(Path(final_path), "audio/wav", meta=meta)
 
         # OGG/Opus (48k mono) using async ffmpeg subprocess
+        import tempfile
+
+        fd, ogg_tmp_path = tempfile.mkstemp(prefix="tts_", suffix=".ogg")
+        os.close(fd)
         ogg_out = (
             Path(out_path)
             if out_path
-            else Path(tempfile.mktemp(prefix="tts_", suffix=".ogg"))
+            else Path(ogg_tmp_path)
         )
         if ogg_out.parent and not ogg_out.parent.exists():
             ogg_out.parent.mkdir(parents=True, exist_ok=True)

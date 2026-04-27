@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -186,6 +187,9 @@ class SensitiveDataFilter(logging.Filter):
         "X_API_BEARER_TOKEN",
         "DISCORD_TOKEN",
         "VISION_API_KEY",
+        "SCREENSHOT_API_KEY",
+        "SEARCH_API_KEY",
+        "YOUTUBE_API_KEY",
         "AUTHORIZATION",
         "authorization",
         "api_key",
@@ -198,9 +202,9 @@ class SensitiveDataFilter(logging.Filter):
             for key, value in list(record.__dict__.items()):
                 if isinstance(value, dict):
                     self._scrub_dict_inplace(value)
-            # Also scrub 'detail' if it's a dict-like stored as attribute
-            if hasattr(record, "detail") and isinstance(record.detail, dict):
-                self._scrub_dict_inplace(record.detail)
+                # Also scrub 'detail' if it's a dict-like stored as attribute
+                if hasattr(record, "detail") and isinstance(record.detail, dict):
+                    self._scrub_dict_inplace(record.detail)
         except Exception:
             # Never block logging on scrubber errors
             return True
@@ -213,3 +217,27 @@ class SensitiveDataFilter(logging.Filter):
                 self._scrub_dict_inplace(v)
             elif isinstance(v, str) and k in self.SECRET_KEYS:
                 obj[k] = "[REDACTED]"
+
+
+def redact_sensitive_values(text: str) -> str:
+    """Redact known sensitive env-var values from arbitrary text.
+
+    Scans for common secret env-var names and replaces their values
+    with '[REDACTED]' so log output or user-facing messages never
+    leak credentials. [SFT]
+    """
+    secret_env_keys = [
+        "OPENAI_API_KEY",
+        "DISCORD_TOKEN",
+        "X_API_BEARER_TOKEN",
+        "VISION_API_KEY",
+        "SCREENSHOT_API_KEY",
+        "SEARCH_API_KEY",
+        "YOUTUBE_API_KEY",
+    ]
+    for env_key in secret_env_keys:
+        val = os.getenv(env_key, "")
+        if val and len(val) >= 4:
+            # Replace all occurrences of the full value [SFT]
+            text = text.replace(val, "[REDACTED]")
+    return text
