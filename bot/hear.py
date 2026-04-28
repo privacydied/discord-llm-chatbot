@@ -2064,7 +2064,7 @@ async def _transcribe_with_model(
     else:
         spans.end("whisper", ok=True, reason="ok")
     ram_guard.check("whisper-complete")
-    text = _join_segments(segments_accum)
+    text, _meta = _join_segments(segments_accum)
     if aborted_reason:
         chunks_done = len(chunk_records)
         dur_done_s = chunk_records[-1]["end"] if chunk_records else 0.0

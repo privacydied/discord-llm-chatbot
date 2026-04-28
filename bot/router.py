@@ -5611,9 +5611,16 @@ class Router:
 
             transcription: Optional[str] = None
             if isinstance(result, dict):
-                transcription = result.get("transcription") or result.get("text")
+                raw_transcription = result.get("transcription") or result.get("text")
+                # Handle tuple-shaped transcription [BUGFIX]
+                if isinstance(raw_transcription, tuple):
+                    transcription = str(raw_transcription[0] if raw_transcription else "").strip()
+                elif isinstance(raw_transcription, str):
+                    transcription = raw_transcription.strip()
+                else:
+                    transcription = str(raw_transcription or "").strip()
             elif result:
-                transcription = str(result)
+                transcription = str(result).strip()
 
             if transcription:
                 # Add STT context to prevent model saying "I can't process audio"

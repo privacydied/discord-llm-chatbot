@@ -86,7 +86,17 @@ def format_x_tweet_with_transcription(
 
     # STT transcript with low-speech guard [REH]
     try:
-        transcript = ((stt_res or {}).get("transcription") or "").strip()
+        raw_transcript = (stt_res or {}).get("transcription")
+        # Handle malformed tuple-shaped transcription [BUGFIX]
+        # When transcription is a tuple (text, meta), extract the text part
+        if isinstance(raw_transcript, tuple):
+            transcript = str(raw_transcript[0] if raw_transcript else "").strip()
+            # Optionally, we could extract confidence from the tuple for logging
+        elif isinstance(raw_transcript, str):
+            transcript = raw_transcript.strip()
+        else:
+            transcript = str(raw_transcript or "").strip()
+
         if transcript:
             bundle.media_transcript = transcript
         else:
