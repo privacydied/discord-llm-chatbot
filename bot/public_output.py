@@ -38,6 +38,21 @@ REASONING_LEAK_PATTERNS = [
     r"</reasoning>",
     r"<scratchpad>",
     r"</scratchpad>",
+    # Additional patterns for comprehensive coverage [REH]
+    r"I\s+should\s+analyze",
+    r"Let\s+me\s+analyze",
+    r"I\s+will\s+analyze",
+    r"I\s+need\s+to\s+analyze",
+    r"Based\s+on\s+the\s+above",
+    r"According\s+to\s+the\s+rules",
+    r"As\s+an\s+AI\s+(assistant|language\s+model)",
+    r"^\s*thought\s*:\s*",
+    r"^\s*plan\s*:\s*",
+    r"^\s*steps?\s*:\s*",
+    r"<think>",
+    r"</think>",
+    r"<analysis>",
+    r"</analysis>",
 ]
 
 # Compiled regex for faster matching
