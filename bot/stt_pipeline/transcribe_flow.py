@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Awaitable, Callable, Tuple
+from typing import Any, Awaitable, Callable, Optional, Tuple
 
 from .spec_select import select_initial_model_spec
 
@@ -20,6 +20,7 @@ async def preprocess_and_transcribe(
     downgrade_threshold_s: float = 120.0,
     preprocess_audio_with_retry: Callable[..., Awaitable[Any]],
     run_whisper_with_fallback: Callable[..., Awaitable[Any]],
+    language: Optional[str] = None,
 ) -> Tuple[Any, Any]:
     """Run preprocess + model selection + whisper for one STT source."""
     pre = await preprocess_audio_with_retry(
@@ -39,6 +40,6 @@ async def preprocess_and_transcribe(
         logger=logger,
     )
     transcript = await run_whisper_with_fallback(
-        pre, spans, spec, ram_guard, job=job
+        pre, spans, spec, ram_guard, job=job, language=language
     )
     return pre, transcript

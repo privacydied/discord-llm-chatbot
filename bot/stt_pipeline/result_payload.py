@@ -18,6 +18,10 @@ def build_url_transcript_result(
         "transcription": transcript.text,
         "partial": transcript.aborted,
         "abort_reason": transcript.abort_reason or "",
+        "confidence": transcript.confidence,
+        "confidence_status": transcript.confidence_status,
+        "language": transcript.language_detected,
+        "language_confidence": transcript.language_confidence,
         "metadata": {
             "source": metadata.source_type,
             "url": metadata.url,
