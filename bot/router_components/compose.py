@@ -122,6 +122,27 @@ def format_x_tweet_with_transcription(
     except Exception:
         pass
 
+    # Add STT grounding instructions to prevent "I can't process audio" responses [REH]
+    # This ensures the model knows STT succeeded and uses the transcript
+    if bundle.media_transcript or any(
+        s.kind == "caption_transcript" for s in bundle.extra_sections
+    ):
+        grounding = (
+            "\n\n[STT GROUNDING]\n"
+            "- The audio/video was transcribed by STT. Use the transcript above as the source.\n"
+            "- If the transcript appears malformed or low-confidence, note uncertainty\n"
+            "  but do NOT claim the audio cannot be processed or that you cannot access it.\n"
+            "- For non-English transcripts, translate or summarize based on the content.\n"
+            "- Do not ask the user to provide the audio in another format.\n"
+        )
+        # Append grounding to extra_sections as an instruction block
+        bundle.add_section(
+            kind="instruction",
+            title="STT Instructions",
+            body=grounding,
+            provenance={"source": "stt_grounding"},
+        )
+
     return bundle.compose_prompt_text()
 
 
