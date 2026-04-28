@@ -193,6 +193,11 @@ class TranscriptResult:
     is_fallback: bool = False
     fallback_provider: Optional[str] = None
     failure_context: Optional[str] = None
+    # Confidence metadata
+    confidence: Optional[float] = None
+    confidence_status: str = "unknown"
+    language_detected: Optional[str] = None
+    language_confidence: Optional[float] = None
 
 
 class STTJob:
@@ -1410,7 +1415,7 @@ def _segments_to_dict(segments: List[Any], offset: float, chunk_idx: int = 0) ->
     return results
 
 
-def _join_segments(segments: List[Dict[str, Any]]) -> str:
+def _join_segments(segments: List[Dict[str, Any]]) -> Tuple[str, Dict[str, Any]]:
     """
     Join segments into final transcript with timestamp-aware deduplication.
     
@@ -1427,7 +1432,7 @@ def _join_segments(segments: List[Dict[str, Any]]) -> str:
         Assembled transcript text
     """
     if not segments:
-        return ""
+        return "", {"confidence": None, "confidence_status": "unknown"}
     
     # Sort by absolute timestamp (start), then by chunk_idx if available
     def _sort_key(seg: Dict[str, Any]) -> tuple:
@@ -1438,6 +1443,7 @@ def _join_segments(segments: List[Dict[str, Any]]) -> str:
     sorted_segments = sorted(segments, key=_sort_key)
     
     texts: list[str] = []
+    kept_segments: list[Dict[str, Any]] = []
     last_end_s: float = -1.0
     
     for seg in sorted_segments:
@@ -1488,17 +1494,91 @@ def _join_segments(segments: List[Dict[str, Any]]) -> str:
                     continue
         
         texts.append(text)
+        kept_segments.append(seg)
         last_end_s = max(last_end_s, end_s)
     
     result = " ".join(texts).strip()
     
+    # Compute confidence metrics from kept segments
+    confidence_meta = _compute_confidence_metrics(kept_segments)
+    
     if sorted_segments:
         logger.info(
-            "stt.stitch summary input_segments=%d output_chars=%d duration=%.2f",
-            len(sorted_segments), len(result), sorted_segments[-1].get("end", 0.0)
+            "stt.stitch summary input_segments=%d output_chars=%d duration=%.2f confidence=%s",
+            len(sorted_segments), len(result), sorted_segments[-1].get("end", 0.0),
+            confidence_meta.get("confidence_status", "unknown")
         )
     
-    return result
+    return result, confidence_meta
+
+
+def _compute_confidence_metrics(segments: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Compute aggregate confidence metrics from segment-level Whisper data.
+    
+    Confidence heuristics:
+    - avg_logprob: average log probability of tokens (higher = more confident)
+    - no_speech_prob: probability that segment is non-speech (lower = more confident)
+    
+    Returns dict with confidence score (0.0-1.0) and status string.
+    """
+    if not segments:
+        return {"confidence": None, "confidence_status": "unknown"}
+    
+    # Collect available metrics
+    avg_logprobs: list[float] = []
+    no_speech_probs: list[float] = []
+    
+    for seg in segments:
+        alp = seg.get("avg_logprob")
+        nsp = seg.get("no_speech_prob")
+        if alp is not None:
+            avg_logprobs.append(float(alp))
+        if nsp is not None:
+            no_speech_probs.append(float(nsp))
+    
+    # If no metrics available, return unknown
+    if not avg_logprobs and not no_speech_probs:
+        return {"confidence": None, "confidence_status": "unknown"}
+    
+    # Compute normalized scores
+    # avg_logprob: typical range is -3 to 0, with > -1 being high confidence
+    # Normalize to 0-1: clip at -3 to 0, then scale
+    logprob_score = 0.5  # default neutral
+    if avg_logprobs:
+        mean_logprob = sum(avg_logprobs) / len(avg_logprobs)
+        # Clip to [-3, 0] and normalize
+        clipped = max(-3.0, min(0.0, mean_logprob))
+        logprob_score = (clipped + 3.0) / 3.0  # -3 -> 0, 0 -> 1
+    
+    # no_speech_prob: probability this is NOT speech (0.0-1.0)
+    # Lower is better. Typical threshold for speech is < 0.65
+    speech_score = 0.5  # default neutral
+    if no_speech_probs:
+        mean_nsp = sum(no_speech_probs) / len(no_speech_probs)
+        # Invert so higher = better (0.65 threshold -> 0.35 base)
+        speech_score = max(0.0, 1.0 - (mean_nsp / 0.65))
+    
+    # Combined confidence: weighted average
+    # Give more weight to logprob_score as it's more reliable
+    confidence = (logprob_score * 0.7) + (speech_score * 0.3)
+    
+    # Determine status
+    if confidence >= 0.7:
+        status = "high"
+    elif confidence >= 0.5:
+        status = "medium"
+    elif confidence >= 0.3:
+        status = "low"
+    else:
+        status = "critical"
+    
+    return {
+        "confidence": round(confidence, 3),
+        "confidence_status": status,
+        "mean_logprob": round(sum(avg_logprobs) / len(avg_logprobs), 3) if avg_logprobs else None,
+        "mean_no_speech_prob": round(sum(no_speech_probs) / len(no_speech_probs), 3) if no_speech_probs else None,
+    }
 
 
 def _find_overlap_len(prev: str, curr: str) -> int:
@@ -1548,6 +1628,7 @@ async def _run_whisper(
     initial_spec: ModelSpec,
     ram_guard: STTRAMGuard,
     job: Optional[STTJob] = None,
+    language: Optional[str] = None,
 ) -> TranscriptResult:
     spec = initial_spec
     attempted_slow_downgrade = False
@@ -1562,6 +1643,7 @@ async def _run_whisper(
                 spans=spans,
                 ram_guard=ram_guard,
                 job=job,
+                language=language,
             )
         except Exception:
             try:
@@ -1623,10 +1705,11 @@ async def _transcribe_with_model(
     spans: SpanRecorder,
     ram_guard: STTRAMGuard,
     job: Optional[STTJob] = None,
+    language: Optional[str] = None,
 ) -> TranscriptResult:
-        # Detect language once for the whole job if not already set
-    stt_language: Optional[str] = None
-    stt_language_source: str = "auto"  # "hint", "detect", "first_chunk"
+    # Detect language once for the whole job if not already set
+    stt_language: Optional[str] = language  # Use hint if provided, else None (auto-detect)
+    stt_language_source: str = "hint" if language else "auto"  # "hint", "detect", "first_chunk"
     stt_task: str = "transcribe"  # Only "transcribe" unless user explicitly requests translation
 
     cache_key = _transcript_cache_key(pre.cache_key, spec, vad_enabled=True, task=stt_task, language=stt_language)
@@ -2252,9 +2335,15 @@ async def _resolve_via_summarize(url: str) -> Optional[Dict[str, Any]]:
     }
 
 
-async def hear_infer_from_url(url: str, force_refresh: bool = False) -> Dict[str, Any]:
+async def hear_infer_from_url(url: str, force_refresh: bool = False, language: Optional[str] = None) -> Dict[str, Any]:
     """
     Transcribe audio fetched via yt-dlp for the given URL.
+    
+    Args:
+        url: URL to process
+        force_refresh: Bypass cache and re-process
+        language: Optional language hint (e.g., 'ar', 'en'). If provided,
+                  this language is used for all chunks instead of auto-detection.
     """
     # Log the exact URL being processed for STT job identity tracking [REH]
     logger.info(
@@ -2313,6 +2402,7 @@ async def hear_infer_from_url(url: str, force_refresh: bool = False) -> Dict[str
                 logger=logger,
                 preprocess_audio_with_retry=_preprocess_audio_with_retry,
                 run_whisper_with_fallback=_run_whisper_with_fallback,
+                language=language,
             )
 
             result = run_stitch_stage(
@@ -2362,6 +2452,7 @@ async def _run_whisper_with_fallback(
     initial_spec: ModelSpec,
     ram_guard: STTRAMGuard,
     job: Optional[STTJob] = None,
+    language: Optional[str] = None,
 ) -> TranscriptResult:
     """
     Primary whisper transcription with multimodal fallback support.
@@ -2372,7 +2463,7 @@ async def _run_whisper_with_fallback(
 
     try:
         # Try the primary faster-whisper transcription
-        transcript = await _run_whisper(pre, spans, initial_spec, ram_guard, job=job)
+        transcript = await _run_whisper(pre, spans, initial_spec, ram_guard, job=job, language=language)
 
         # If successful, return the primary result
         return transcript
