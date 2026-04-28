@@ -25,40 +25,36 @@ class BotAction:
         Final safety net to remove any chain-of-thought leakage before Discord send.
         This is a belt-and-suspenders approach that should rarely trigger.
         """
-        try:
-            from .vl.postprocess import sanitize_model_output, has_reasoning_content
+        from .public_output import extract_public_reply_text, has_reasoning_leakage
+        from .vl.postprocess import sanitize_model_output, has_reasoning_content
+        from .utils.logging import get_logger
 
-            # Only sanitize if content contains reasoning patterns
-            if has_reasoning_content(content):
-                from .utils.logging import get_logger
+        logger = get_logger("bot.action.safety_net")
 
-                logger = get_logger("bot.action.safety_net")
-                logger.warning(
-                    "Final safety net triggered - sanitizing content with reasoning leakage"
-                )
+        # First layer: check for new reasoning leak patterns
+        if has_reasoning_leakage(content):
+            logger.warning(
+                "Final safety net triggered - sanitizing content with reasoning leakage"
+            )
+            return extract_public_reply_text(content)
 
-                sanitized = sanitize_model_output(content)
-
-                # Log if significant sanitization occurred
-                if len(sanitized) < len(content) * 0.8:  # More than 20% removed
-                    logger.info(
-                        f"Safety net removed {len(content) - len(sanitized)} chars of reasoning content"
-                    )
-
-                return sanitized
-
-            return content
-
-        except Exception as e:
-            # If sanitization fails, return original content (fail-safe)
+        # Second layer: legacy VL postprocess
+        if has_reasoning_content(content):
+            logger.warning(
+                "VL safety net triggered - sanitizing content with reasoning patterns"
+            )
             try:
-                from .utils.logging import get_logger
+                sanitized = sanitize_model_output(content)
+                if len(sanitized) < len(content) * 0.8:
+                    logger.info(
+                        "VL safety net removed %d chars",
+                        len(content) - len(sanitized)
+                    )
+                return sanitized
+            except Exception as e:
+                logger.error(f"VL sanitization failed: {e}")
 
-                logger = get_logger("bot.action.safety_net")
-                logger.error(f"Final sanitization failed, using original content: {e}")
-            except Exception:
-                pass
-            return content
+        return content
 
     @property
     def has_payload(self):

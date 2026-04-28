@@ -5616,12 +5616,22 @@ class Router:
                 transcription = str(result)
 
             if transcription:
+                # Add STT context to prevent model saying "I can't process audio"
+                # This tells the model the audio was already transcribed and to use the transcript
+                stt_context = (
+                    f"[STT TRANSCRIPT | source={url} | "
+                    f"language={metadata.get('language', 'auto-detected')}]\n\n"
+                    f"The following is a transcript of audio/video content. "
+                    f"Use this transcript as the source material. \n\n"
+                    f"TRANSCRIPT:\n{transcription}\n\n"
+                    f"[END TRANSCRIPT]"
+                )
                 if is_twitter:
                     return await self._format_x_with_resolved_base_text(
                         url=url,
-                        stt_res={"transcription": transcription, "metadata": metadata},
+                        stt_res={"transcription": stt_context, "metadata": metadata},
                     )
-                # Non-Twitter: keep existing concise output
+                # Non-Twitter: keep existing concise output but with context
                 title = metadata.get("title", "Unknown")
                 return f"Video transcription from {url} ('{title}'): {transcription}"
             else:

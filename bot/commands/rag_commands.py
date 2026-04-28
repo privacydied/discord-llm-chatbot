@@ -118,7 +118,7 @@ class HybridSearchExtension:
 _invalidation_in_progress = {}
 
 
-class RAGCog(commands.Cog):
+class RAGCommands(commands.Cog):
     """Cog for RAG system management commands."""
 
     def __init__(self, bot):
@@ -698,4 +698,4 @@ class RAGCog(commands.Cog):
 
 async def setup(bot):
     """Add the RAG cog to the bot."""
-    await bot.add_cog(RAGCog(bot))
+    await bot.add_cog(RAGCommands(bot))
