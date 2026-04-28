@@ -1901,9 +1901,21 @@ async def _transcribe_with_model(
                 samples_buffered -= chunk_audio.shape[0]
                 chunk_start_s = start_sample / sample_rate
                 chunk_end_s = chunk_start_s + chunk_audio.shape[0] / sample_rate
-                segments, info, runtime = await _decode_chunk(chunk_audio)
+                segments, info, runtime = await _decode_chunk(chunk_audio, language=stt_language)
                 if chunk_idx == 0:
                     first_chunk_runtime = runtime
+                    # Capture detected language from first chunk for subsequent chunks
+                    if stt_language is None and hasattr(info, 'language'):
+                        detected = getattr(info, 'language', None)
+                        if detected:
+                            stt_language = detected
+                            stt_language_source = "detect"
+                            logger.info(
+                                "stt.language selected=%s source=%s prob=%.3f",
+                                stt_language,
+                                stt_language_source,
+                                getattr(info, 'language_probability', 0.0),
+                            )
                     if not segments and info.no_speech_prob >= NO_SPEECH_PROB_THRESHOLD:
                         spans.end("whisper", ok=False, reason="no_speech")
                         logger.info("stt.no_speech_fast_exit")
@@ -1979,22 +1991,34 @@ async def _transcribe_with_model(
                 remainder = _drain_frames(frames)
                 if chunk_idx == 0 and tail is not None and remainder.size == 0:
                     remainder = tail
-                tail = None
+                    tail = None
                 if remainder.size > 0:
                     chunk_start_s = start_sample / sample_rate
                     chunk_end_s = chunk_start_s + remainder.shape[0] / sample_rate
-                    segments, info, runtime = await _decode_chunk(remainder)
+                    segments, info, runtime = await _decode_chunk(remainder, language=stt_language)
                     if chunk_idx == 0:
                         first_chunk_runtime = runtime
-                        if (
-                            not segments
-                            and info.no_speech_prob >= NO_SPEECH_PROB_THRESHOLD
-                        ):
-                            spans.end("whisper", ok=False, reason="no_speech")
-                            logger.info("stt.no_speech_fast_exit")
-                            raise InferenceError(
-                                f"No speech detected (prob={info.no_speech_prob:.3f})"
-                            )
+                        # Capture detected language if not already set
+                        if stt_language is None and hasattr(info, 'language'):
+                            detected = getattr(info, 'language', None)
+                            if detected:
+                                stt_language = detected
+                                stt_language_source = "detect"
+                                logger.info(
+                                    "stt.language selected=%s source=%s prob=%.3f",
+                                    stt_language,
+                                    stt_language_source,
+                                    getattr(info, 'language_probability', 0.0),
+                                )
+                    if (
+                        not segments
+                        and info.no_speech_prob >= NO_SPEECH_PROB_THRESHOLD
+                    ):
+                        spans.end("whisper", ok=False, reason="no_speech")
+                        logger.info("stt.no_speech_fast_exit")
+                        raise InferenceError(
+                            f"No speech detected (prob={info.no_speech_prob:.3f})"
+                        )
                     logger.info(
                         "whisper.chunk idx=%s len_s=%.2f",
                         chunk_idx,
