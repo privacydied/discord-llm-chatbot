@@ -4,6 +4,8 @@ import pytest
 from unittest.mock import Mock, patch, MagicMock
 import numpy as np
 
+from bot.stt import ModelSpec
+
 
 class TestSTTLanguagePropagation:
     """Tests for language detection and propagation across chunks."""
@@ -11,7 +13,6 @@ class TestSTTLanguagePropagation:
     def test_transcript_cache_key_includes_language(self):
         """Cache key should include language parameter."""
         from bot.hear import _transcript_cache_key
-        from bot.stt_pipeline.spec import ModelSpec
 
         spec = ModelSpec(size="base", compute_type="int8")
 
@@ -28,7 +29,6 @@ class TestSTTLanguagePropagation:
     def test_transcript_cache_key_includes_task(self):
         """Cache key should include task mode (transcribe vs translate)."""
         from bot.hear import _transcript_cache_key
-        from bot.stt_pipeline.spec import ModelSpec
 
         spec = ModelSpec(size="base", compute_type="int8")
 
@@ -42,7 +42,6 @@ class TestSTTLanguagePropagation:
     def test_transcript_cache_key_includes_pipeline_version(self):
         """Cache key should include pipeline version for cache invalidation."""
         from bot.hear import _transcript_cache_key, STT_PIPELINE_VERSION
-        from bot.stt_pipeline.spec import ModelSpec
 
         spec = ModelSpec(size="base", compute_type="int8")
 
@@ -58,7 +57,6 @@ class TestSTTConfidenceMetadata:
     def test_transcript_result_has_confidence_fields(self):
         """TranscriptResult should have confidence and language fields."""
         from bot.hear import TranscriptResult
-        from bot.stt_pipeline.spec import ModelSpec
 
         spec = ModelSpec(size="base", compute_type="int8")
         result = TranscriptResult(
