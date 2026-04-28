@@ -57,14 +57,15 @@ class TestJoinSegments:
 
     def test_empty_segments(self):
         """Empty segments list returns empty string."""
-        result = _join_segments([])
-        assert result == ""
+        text, meta = _join_segments([])
+        assert text == ""
+        assert meta.get("confidence_status") == "unknown"
 
     def test_single_segment(self):
         """Single segment just returns its text."""
         segments = [{"start": 0.0, "end": 1.0, "text": "Hello world"}]
-        result = _join_segments(segments)
-        assert result == "Hello world"
+        text, meta = _join_segments(segments)
+        assert text == "Hello world"
 
     def test_sorts_by_timestamp(self):
         """Segments are sorted by timestamp before joining."""
@@ -72,8 +73,8 @@ class TestJoinSegments:
             {"start": 5.0, "end": 6.0, "text": "world", "chunk_idx": 1},
             {"start": 0.0, "end": 1.0, "text": "Hello", "chunk_idx": 0},
         ]
-        result = _join_segments(segments)
-        assert result == "Hello world"
+        text, meta = _join_segments(segments)
+        assert text == "Hello world"
 
     def test_removes_empty_text(self):
         """Empty text segments are filtered out."""
@@ -82,18 +83,18 @@ class TestJoinSegments:
             {"start": 1.0, "end": 2.0, "text": "", "chunk_idx": 0},
             {"start": 2.0, "end": 3.0, "text": "world", "chunk_idx": 0},
         ]
-        result = _join_segments(segments)
-        assert result == "Hello world"
+        text, meta = _join_segments(segments)
+        assert text == "Hello world"
 
     def test_removes_whitespace_only(self):
         """Whitespace-only text is filtered out."""
         segments = [
             {"start": 0.0, "end": 1.0, "text": "Hello", "chunk_idx": 0},
-            {"start": 1.0, "end": 2.0, "text": "   ", "chunk_idx": 0},
+            {"start": 1.0, "end": 2.0, "text": " ", "chunk_idx": 0},
             {"start": 2.0, "end": 3.0, "text": "world", "chunk_idx": 0},
         ]
-        result = _join_segments(segments)
-        assert result == "Hello world"
+        text, meta = _join_segments(segments)
+        assert text == "Hello world"
 
     def test_overlapping_segments_filtered(self):
         """Highly overlapping segments (>50% overlap) are filtered."""
@@ -102,8 +103,8 @@ class TestJoinSegments:
             {"start": 1.0, "end": 3.0, "text": "world how are", "chunk_idx": 1},
         ]
         # Second segment overlaps by 50% (1 second of 2)
-        result = _join_segments(segments)
-        assert "Hello" in result
+        text, meta = _join_segments(segments)
+        assert "Hello" in text
         # The second segment should be mostly skipped
 
     def test_exact_consecutive_duplicate_removed(self):
@@ -112,8 +113,8 @@ class TestJoinSegments:
             {"start": 0.0, "end": 1.0, "text": "Hello", "chunk_idx": 0},
             {"start": 1.0, "end": 2.0, "text": "Hello", "chunk_idx": 1},
         ]
-        result = _join_segments(segments)
-        assert result == "Hello"  # Not "Hello Hello"
+        text, meta = _join_segments(segments)
+        assert text == "Hello"  # Not "Hello Hello"
 
     def test_legitimate_repeated_phrases_preserved(self):
         """Non-consecutive repeated phrases are preserved."""
@@ -122,9 +123,9 @@ class TestJoinSegments:
             {"start": 1.0, "end": 2.0, "text": "there", "chunk_idx": 0},
             {"start": 3.0, "end": 4.0, "text": "Hello", "chunk_idx": 1},
         ]
-        result = _join_segments(segments)
+        text, meta = _join_segments(segments)
         # "Hello" appears twice but is legitimate repetition
-        assert result.count("Hello") == 2
+        assert text.count("Hello") == 2
 
 
 class TestFindOverlapLen:
