@@ -1868,17 +1868,12 @@ class UnifiedVisionAdapter:
                                 # Immediate retry without backoff
                                 continue
                         # Already retried once; fall through to existing handling
-                    if e.error_type in [
-                        VisionErrorType.RATE_LIMITED,
-                        VisionErrorType.PROVIDER_ERROR,
-                    ]:
-                        # Exponential backoff for retryable errors
-                        wait_time = (2**attempt) * 1.0  # 1s, 2s, 4s...
+                    elif e.error_type == VisionErrorType.QUOTA_EXCEEDED:
+                        # Payment/quota errors - NOT retryable, try next provider immediately [REH]
                         self.logger.warning(
-                            f"Retryable error from {provider_name} (attempt {attempt + 1}): {e.message}, retrying in {wait_time}s"
+                            f"Quota/balance error from {provider_name}: {e.message}. Trying next provider..."
                         )
-                        await asyncio.sleep(wait_time)
-                        continue
+                        break
                     else:
                         # Non-retryable error, try next provider
                         self.logger.warning(

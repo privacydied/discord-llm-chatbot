@@ -1,5 +1,8 @@
 """
 User and server profile management with persistence.
+
+Uses atomic file writes and corruption recovery for safe data storage.
+[REH][SFT] Atomic persistence with backup/recovery
 """
 
 import json
@@ -10,6 +13,12 @@ from datetime import datetime
 from typing import Dict, Optional
 import threading
 from pathlib import Path
+
+from bot.memory.persistence import (
+    atomic_save_json,
+    load_json_with_recovery,
+    validate_profile_integrity,
+)
 
 # Initialize locks for thread safety
 user_cache_lock = threading.Lock()
@@ -142,28 +151,40 @@ def ensure_profile_schema(
 
 
 def get_profile(user_id: str, username: Optional[str] = None) -> dict:
-    """Get or create a user profile, ensuring it has all required fields."""
+    """Get or create a user profile, ensuring it has all required fields.
+
+    [REH] Corruption recovery via load_json_with_recovery
+    [SFT] Validation before loading into cache
+    """
     with user_cache_lock:
         # Check cache first
         if user_id in user_cache:
             return user_cache[user_id].copy()
 
-        # Try to load from disk
+        # Try to load from disk with corruption recovery
         from bot.config import load_config
 
         config = load_config()
         profile_path = config["USER_PROFILE_DIR"] / f"{user_id}.json"
 
-        if profile_path.exists():
-            try:
-                with open(profile_path, "r", encoding="utf-8") as f:
-                    profile = json.load(f)
+        # Use persistence layer with recovery
+        default = default_profile(user_id, username)
+        profile = load_json_with_recovery(
+            profile_path,
+            default_data=None,  # We handle default separately
+            attempt_recovery=True,
+        )
+
+        if profile is not None:
+            # Validate loaded profile
+            is_valid, error_msg = validate_profile_integrity(profile)
+            if is_valid:
                 # Ensure the profile has all required fields
                 profile = ensure_profile_schema(profile, user_id, username)
                 user_cache[user_id] = profile
                 return profile.copy()
-            except (json.JSONDecodeError, IOError) as e:
-                logging.error(f"Error loading profile for user {user_id}: {e}")
+            else:
+                logging.warning(f"Corrupted profile for user {user_id}: {error_msg}")
                 # Fall through to create new profile
 
         # Create new profile if it doesn't exist or couldn't be loaded
@@ -173,7 +194,11 @@ def get_profile(user_id: str, username: Optional[str] = None) -> dict:
 
 
 def save_profile(profile: dict, force: bool = False) -> bool:
-    """Save a user profile to disk."""
+    """Save a user profile to disk using atomic writes with corruption recovery.
+
+    [REH] Atomic writes ensure readers see only complete writes
+    [SFT] Automatic backup and recovery on failure
+    """
     try:
         user_id = str(profile.get("discord_id") or profile.get("user_id") or "")
         if not user_id:
@@ -205,34 +230,32 @@ def save_profile(profile: dict, force: bool = False) -> bool:
             ):
                 profile["memories"] = profile["memories"][-max_memories:]
 
-            # Save to disk
+            # Save to disk using atomic persistence
             from bot.config import load_config
 
             config = load_config()
             profile_path = config["USER_PROFILE_DIR"] / f"{user_id}.json"
 
-            # Create backup of existing file if it exists
-            if profile_path.exists():
-                backup_path = profile_path.with_suffix(".json.bak")
-                _safe_backup_file(profile_path, backup_path)
-
-            # Save the profile
-            try:
-                with open(profile_path, "w", encoding="utf-8") as f:
-                    json.dump(profile, f, indent=2, ensure_ascii=False)
-                return True
-            except IOError as e:
-                logging.error(f"Failed to save profile for user {user_id}: {e}")
-                # Try to restore from backup if save failed
-                if "backup_path" in locals() and backup_path.exists():
-                    try:
-                        shutil.copy2(backup_path, profile_path)
-                        logging.info(f"Restored profile from backup for user {user_id}")
-                    except IOError as restore_error:
-                        logging.error(
-                            f"Failed to restore profile from backup: {restore_error}"
-                        )
+            # Validate profile before saving
+            is_valid, error_msg = validate_profile_integrity(profile)
+            if not is_valid:
+                logging.error(f"Profile validation failed for user {user_id}: {error_msg}")
                 return False
+
+            # Atomic save with backup
+            if not atomic_save_json(
+                profile_path,
+                profile,
+                create_backup=True,
+                validate_before_write=True,
+                use_lock=True,
+                indent=2,
+            ):
+                logging.error(f"Failed to save profile for user {user_id}")
+                return False
+
+            return True
+
     except Exception as e:
         logging.error(f"Unexpected error in save_profile: {e}", exc_info=True)
         return False
@@ -293,28 +316,39 @@ def ensure_server_profile_schema(profile: dict, guild_id: Optional[str] = None) 
 
 
 def get_server_profile(guild_id: str, force_reload: bool = False) -> dict:
-    """Get or create a server profile."""
+    """Get or create a server profile.
+
+    [REH] Corruption recovery via load_json_with_recovery
+    [SFT] Validation before loading into cache
+    """
     with server_lock:
         # Check cache first
         if guild_id in server_cache and not force_reload:
             return server_cache[guild_id]
 
-        # Try to load from disk
+        # Try to load from disk with corruption recovery
         from bot.config import load_config
 
         config = load_config()
         profile_path = config["SERVER_PROFILE_DIR"] / f"{guild_id}.json"
 
-        if profile_path.exists():
-            try:
-                with open(profile_path, "r", encoding="utf-8") as f:
-                    profile = json.load(f)
+        # Use persistence layer with recovery
+        profile = load_json_with_recovery(
+            profile_path,
+            default_data=None,  # We handle default separately
+            attempt_recovery=True,
+        )
+
+        if profile is not None:
+            # Validate loaded profile
+            is_valid, error_msg = validate_profile_integrity(profile)
+            if is_valid:
                 # Ensure the profile has all required fields
                 profile = ensure_server_profile_schema(profile, guild_id)
                 server_cache[guild_id] = profile
                 return profile
-            except (json.JSONDecodeError, IOError) as e:
-                logging.error(f"Error loading server profile for guild {guild_id}: {e}")
+            else:
+                logging.warning(f"Corrupted server profile for guild {guild_id}: {error_msg}")
                 # Fall through to create new profile
 
         # Create new profile if it doesn't exist or couldn't be loaded
@@ -324,9 +358,12 @@ def get_server_profile(guild_id: str, force_reload: bool = False) -> dict:
 
 
 def save_server_profile(guild_id, force: bool = False) -> bool:
-    """Save a server profile to disk.
+    """Save a server profile to disk using atomic writes with corruption recovery.
 
     Accepts either a guild_id/server_id string, or a full profile dict.
+
+    [REH] Atomic writes ensure readers see only complete writes
+    [SFT] Automatic backup and recovery on failure
     """
     try:
         with server_lock:
@@ -379,32 +416,26 @@ def save_server_profile(guild_id, force: bool = False) -> bool:
             # Create directory if it doesn't exist
             profile_path.parent.mkdir(parents=True, exist_ok=True)
 
-            # Create backup of existing file if it exists
-            if profile_path.exists():
-                backup_path = profile_path.with_suffix(".json.bak")
-                _safe_backup_file(profile_path, backup_path)
-
-            # Save the profile
-            try:
-                with open(profile_path, "w", encoding="utf-8") as f:
-                    json.dump(profile, f, indent=2, ensure_ascii=False)
-                return True
-            except IOError as e:
-                logging.error(
-                    f"Failed to save server profile for guild {guild_id}: {e}"
-                )
-                # Try to restore from backup if save failed
-                if "backup_path" in locals() and backup_path.exists():
-                    try:
-                        shutil.copy2(backup_path, profile_path)
-                        logging.info(
-                            f"Restored server profile from backup for guild {guild_id}"
-                        )
-                    except IOError as restore_error:
-                        logging.error(
-                            f"Failed to restore server profile from backup: {restore_error}"
-                        )
+            # Validate profile before saving
+            is_valid, error_msg = validate_profile_integrity(profile)
+            if not is_valid:
+                logging.error(f"Server profile validation failed for guild {gid}: {error_msg}")
                 return False
+
+            # Atomic save with backup
+            if not atomic_save_json(
+                profile_path,
+                profile,
+                create_backup=True,
+                validate_before_write=True,
+                use_lock=True,
+                indent=2,
+            ):
+                logging.error(f"Failed to save server profile for guild {gid}")
+                return False
+
+            return True
+
     except Exception as e:
         logging.error(f"Unexpected error in save_server_profile: {e}", exc_info=True)
         return False
@@ -450,10 +481,12 @@ server_profiles = server_cache
 
 
 def load_all_profiles():
-    """Load all user profiles from disk into memory cache.
+    """Load all user profiles from disk into memory cache using corruption recovery.
 
     Returns:
         tuple: A tuple containing (user_profiles, server_profiles)
+
+    [REH] Corruption recovery on per-profile basis
     """
     from bot.config import load_config
 
@@ -466,23 +499,37 @@ def load_all_profiles():
         profile_dir.mkdir(parents=True, exist_ok=True)
     else:
         loaded_count = 0
+        corrupted_count = 0
         for profile_file in profile_dir.glob("*.json"):
-            try:
-                user_id = profile_file.stem
-                with open(profile_file, "r", encoding="utf-8") as f:
-                    profile = json.load(f)
+            user_id = profile_file.stem
 
-                # Ensure profile has all required fields
-                profile = ensure_profile_schema(profile, user_id)
+            # Skip backup and temp files
+            if profile_file.suffix == ".bak" or profile_file.name.startswith("."):
+                continue
 
-                with user_cache_lock:
-                    user_cache[user_id] = profile
+            profile = load_json_with_recovery(
+                profile_file,
+                default_data=None,
+                attempt_recovery=True,
+            )
 
-                loaded_count += 1
+            if profile is not None:
+                # Validate loaded profile
+                is_valid, error_msg = validate_profile_integrity(profile)
+                if is_valid:
+                    profile = ensure_profile_schema(profile, user_id)
+                    with user_cache_lock:
+                        user_cache[user_id] = profile
+                    loaded_count += 1
+                else:
+                    logging.warning(f"Skipping corrupted profile {profile_file}: {error_msg}")
+                    corrupted_count += 1
+            else:
+                logging.warning(f"Could not load or recover profile {profile_file}")
+                corrupted_count += 1
 
-            except Exception as e:
-                logging.error(f"Error loading user profile {profile_file}: {e}")
-
+        if corrupted_count > 0:
+            logging.warning(f"Encountered {corrupted_count} corrupted profiles during load")
         logging.info(f"Loaded {loaded_count} user profiles from disk")
 
     # Load server profiles

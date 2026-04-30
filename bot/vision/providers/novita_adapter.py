@@ -735,6 +735,22 @@ class NovitaAdapter(BaseVisionProvider):
                 provider=VisionProvider.NOVITA,
             )
 
+        elif status_code == 403:
+            # Payment/balance errors - NOT retryable, should trigger immediate failover [REH]
+            if "NOT_ENOUGH_BALANCE" in str(error_data) or "insufficient" in error_message.lower():
+                return VisionError(
+                    error_type=VisionErrorType.QUOTA_EXCEEDED,
+                    message=f"Novita.ai out of balance: {error_message}",
+                    user_message="Image generation provider (Novita) is out of credits. Trying backup provider...",
+                    provider=VisionProvider.NOVITA,
+                )
+            return VisionError(
+                error_type=VisionErrorType.PROVIDER_ERROR,
+                message=f"Novita.ai forbidden: {error_message}",
+                user_message="Access denied by generation service.",
+                provider=VisionProvider.NOVITA,
+            )
+
         elif status_code == 429:
             return VisionError(
                 error_type=VisionErrorType.QUOTA_EXCEEDED,

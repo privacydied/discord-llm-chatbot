@@ -190,11 +190,16 @@ class SensitiveDataFilter(logging.Filter):
         "SCREENSHOT_API_KEY",
         "SEARCH_API_KEY",
         "YOUTUBE_API_KEY",
+        "WHISPER_API_KEY",
+        "DDG_API_KEY",
+        "CUSTOM_SEARCH_API_KEY",
         "AUTHORIZATION",
         "authorization",
         "api_key",
         "token",
         "bearer",
+        "secret",
+        "password",
     }
 
     def filter(self, record: logging.LogRecord) -> bool:
@@ -215,8 +220,12 @@ class SensitiveDataFilter(logging.Filter):
             v = obj[k]
             if isinstance(v, dict):
                 self._scrub_dict_inplace(v)
-            elif isinstance(v, str) and k in self.SECRET_KEYS:
-                obj[k] = "[REDACTED]"
+            elif isinstance(v, str):
+                if k in self.SECRET_KEYS:
+                    obj[k] = "[REDACTED]"
+                else:
+                    # Also redact known secret values embedded in any string field [S7][SFT]
+                    obj[k] = redact_sensitive_values(v)
 
 
 def redact_sensitive_values(text: str) -> str:
@@ -234,6 +243,9 @@ def redact_sensitive_values(text: str) -> str:
         "SCREENSHOT_API_KEY",
         "SEARCH_API_KEY",
         "YOUTUBE_API_KEY",
+        "WHISPER_API_KEY",
+        "DDG_API_KEY",
+        "CUSTOM_SEARCH_API_KEY",
     ]
     for env_key in secret_env_keys:
         val = os.getenv(env_key, "")

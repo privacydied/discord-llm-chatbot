@@ -51,6 +51,13 @@ class AlertSession:
     current_step: str = "select_channels"
     composer_message_id: Optional[int] = None
     composer_ready: bool = False
+    # Guild navigation pagination (NEW)
+    guild_page: int = 0
+    selected_guild_id: Optional[int] = None
+    channel_page: int = 0
+    guilds_list: List = field(default_factory=list)
+    selection_message_id: Optional[int] = None
+    channel_message_id: Optional[int] = None
 
 
 class AdminAlertManager:
@@ -664,11 +671,20 @@ class AdminAlertCommands(commands.Cog):
             return
 
         session = self.alert_manager.get_session(user.id)
-        if not session or session.composer_message_id != reaction.message.id:
+        if not session:
             return
 
-        # Ready gate: ignore reactions until composer is fully initialized
-        if not session.composer_ready:
+        # Allow reactions on composer, guild selection, or channel selection messages
+        valid_message_ids = [
+            session.composer_message_id,
+            getattr(session, 'selection_message_id', None),
+            getattr(session, 'channel_message_id', None)
+        ]
+        if reaction.message.id not in [m for m in valid_message_ids if m]:
+            return
+
+        # Ready gate: ignore reactions until composer is fully initialized (only for composer message)
+        if session.composer_message_id == reaction.message.id and not session.composer_ready:
             try:
                 await reaction.remove(user)
             except Exception:
@@ -688,6 +704,80 @@ class AdminAlertCommands(commands.Cog):
                 await self._handle_send_confirmation(reaction, user, session)
             elif emoji == "❌":
                 await self._handle_cancel(reaction, user, session)
+
+            # Guild selection navigation (on selection_message_id)
+            elif reaction.message.id == getattr(session, 'selection_message_id', None):
+                channels = await self.alert_manager.get_accessible_channels()
+                if not channels:
+                    return
+
+                guild_map: Dict[int, List[discord.TextChannel]] = {}
+                for ch in channels:
+                    gid = ch.guild.id
+                    if gid not in guild_map:
+                        guild_map[gid] = []
+                    guild_map[gid].append(ch)
+                for gid in guild_map:
+                    guild_map[gid].sort(key=lambda c: (c.position, c.name.lower()))
+
+                # Rebuild sorted_guilds from current guild_map
+                sorted_guilds = sorted(
+                    guild_map.keys(),
+                    key=lambda g: (
+                        next((c.guild.name.lower() for c in channels if c.guild.id == g), "")
+                    )
+                )
+                session.guilds_list = sorted_guilds
+
+                if emoji == "⬆️" and session.guild_page > 0:
+                    session.guild_page -= 1
+                    await self._show_guild_selection(user, session, guild_map, sorted_guilds)
+                elif emoji == "⬇️":
+                    total_pages = (len(sorted_guilds) + 7) // 8
+                    if session.guild_page < total_pages - 1:
+                        session.guild_page += 1
+                        await self._show_guild_selection(user, session, guild_map, sorted_guilds)
+                try:
+                    await reaction.remove(user)
+                except:
+                    pass
+
+            # Channel selection navigation (on channel_message_id)
+            elif reaction.message.id == getattr(session, 'channel_message_id', None):
+                channels = await self.alert_manager.get_accessible_channels()
+                guild_map: Dict[int, List[discord.TextChannel]] = {}
+                for ch in channels:
+                    gid = ch.guild.id
+                    if gid not in guild_map:
+                        guild_map[gid] = []
+                    guild_map[gid].append(ch)
+                for gid in guild_map:
+                    guild_map[gid].sort(key=lambda c: (c.position, c.name.lower()))
+
+                if emoji == "⬅️" and session.channel_page > 0:
+                    session.channel_page -= 1
+                    await self._show_channel_selection_for_guild(
+                        user, session, session.selected_guild_id, guild_map
+                    )
+                elif emoji == "➡️":
+                    guild_channels = guild_map.get(session.selected_guild_id, [])
+                    total_pages = (len(guild_channels) + 9) // 10
+                    if session.channel_page < total_pages - 1:
+                        session.channel_page += 1
+                        await self._show_channel_selection_for_guild(
+                            user, session, session.selected_guild_id, guild_map
+                        )
+                elif emoji == "🏠":
+                    session.selected_guild_id = None
+                    session.channel_page = 0
+                    sorted_guilds = session.guilds_list if session.guilds_list else []
+                    await self._show_guild_selection(user, session, guild_map, sorted_guilds)
+                elif emoji == "❌":
+                    await self._handle_cancel(reaction, user, session)
+                try:
+                    await reaction.remove(user)
+                except:
+                    pass
 
         except discord.HTTPException as e:
             # Structured logging for 50035 diagnostics [REH]
@@ -729,23 +819,113 @@ class AdminAlertCommands(commands.Cog):
             if not content:
                 return
 
-            # STEP: Select Channels
+            # STEP: Select Channels (guild-first navigation)
             if session.current_step == "select_channels":
+                # Handle "done" message
+                if content.lower() == "done":
+                    if session.destinations:
+                        session.current_step = "compose_content"
+                        await message.channel.send(
+                            f"✅ Using {len(session.destinations)} selected channel(s).\n\n"
+                            f"React with ✏️ to compose content, or send your alert content now."
+                        )
+                        await self._update_composer_embed(message, session)
+                    else:
+                        await message.channel.send(
+                            "❌ No channels selected yet. Reply with a guild number first."
+                        )
+                    return
+
+                # Handle "back" message to return to guild list
+                if content.lower() == "back":
+                    session.selected_guild_id = None
+                    session.channel_page = 0
+                    channels = await self.alert_manager.get_accessible_channels()
+                    if not channels:
+                        await message.channel.send("❌ No channels found.")
+                        return
+                    # Rebuild guild map
+                    guild_map: Dict[int, List[discord.TextChannel]] = {}
+                    for ch in channels:
+                        gid = ch.guild.id
+                        if gid not in guild_map:
+                            guild_map[gid] = []
+                        guild_map[gid].append(ch)
+                    for gid in guild_map:
+                        guild_map[gid].sort(key=lambda c: (c.position, c.name.lower()))
+                    # Reuse stored guilds_list
+                    sorted_guilds = session.guilds_list if session.guilds_list else []
+                    await self._show_guild_selection(message.author, session, guild_map, sorted_guilds)
+                    return
+
                 indices = self._extract_indices(content)
                 if not indices:
                     await message.channel.send(
-                        "⚠ Please send numbers like `1,3,5` corresponding to the list."
+                        "⚠️ Please send numbers like `1,3,5` corresponding to the list, or type `back` to return."
                     )
                     return
 
                 channels = await self.alert_manager.get_accessible_channels()
-                max_count = min(15, len(channels))  # Must match display limit
+                if not channels:
+                    await message.channel.send("❌ No accessible channels found.")
+                    return
+
+                # Build guild index
+                guild_map: Dict[int, List[discord.TextChannel]] = {}
+                for ch in channels:
+                    gid = ch.guild.id
+                    if gid not in guild_map:
+                        guild_map[gid] = []
+                    guild_map[gid].append(ch)
+
+                for gid in guild_map:
+                    guild_map[gid].sort(key=lambda c: (c.position, c.name.lower()))
+
+                # Restore guilds_list if empty
+                if not session.guilds_list:
+                    sorted_guilds = sorted(
+                        guild_map.keys(),
+                        key=lambda g: next(
+                            (c.guild.name.lower() for c in channels if c.guild.id == g), ""
+                        )
+                    )
+                    session.guilds_list = sorted_guilds
+
+                sorted_guilds = session.guilds_list
+
+                # Case 1: No guild selected - interpret as guild selection
+                if session.selected_guild_id is None:
+                    if len(indices) != 1:
+                        await message.channel.send(
+                            f"⚠️ Please send **one** guild number (1-{len(sorted_guilds)})."
+                        )
+                        return
+
+                    guild_idx = indices[0] - 1
+                    if guild_idx < 0 or guild_idx >= len(sorted_guilds):
+                        await message.channel.send(
+                            f"❌ Invalid guild number. Please choose 1-{len(sorted_guilds)}."
+                        )
+                        return
+
+                    selected_guild_id = sorted_guilds[guild_idx]
+                    await self._show_channel_selection_for_guild(
+                        message.author, session, selected_guild_id, guild_map
+                    )
+                    return
+
+                # Case 2: Guild selected - interpret as channel selection
+                guild_channels = guild_map.get(session.selected_guild_id, [])
+                if not guild_channels:
+                    await message.channel.send("❌ Could not find channels for that guild.")
+                    return
+
                 selected: List[AlertDestination] = []
                 invalid: List[int] = []
 
                 for idx in indices:
-                    if 1 <= idx <= max_count:
-                        ch = channels[idx - 1]
+                    if 1 <= idx <= len(guild_channels):
+                        ch = guild_channels[idx - 1]
                         selected.append(
                             AlertDestination(
                                 guild_id=ch.guild.id,
@@ -759,33 +939,28 @@ class AdminAlertCommands(commands.Cog):
 
                 if not selected:
                     await message.channel.send(
-                        "❌ No valid selections. Please choose indices from the provided list."
+                        f"❌ No valid selections. Please choose 1-{len(guild_channels)}."
                     )
                     return
 
-                session.destinations = selected
-                session.current_step = "compose_content"
+                session.destinations.extend(selected)
+                session.selected_guild_id = None  # Reset to allow multi-guild selection
+
                 self.logger.info(
-                    f"✅ User {message.author.id} selected {len(selected)} destination(s); invalid={invalid}"
+                    f"✅ User {message.author.id} selected {len(selected)} channel(s); total={len(session.destinations)}"
                 )
 
                 if invalid:
                     await message.channel.send(
-                        f"⚠ Ignored out-of-range indices: {', '.join(map(str, invalid))}"
+                        f"⚠️ Ignored out-of-range: {', '.join(map(str, invalid))}"
                     )
 
-                names = ", ".join(
-                    [
-                        f"#{d.channel_name or 'unknown-channel'} "
-                        f"({d.guild_name or 'Unknown Guild'})"
-                        for d in selected
-                    ]
-                )
+                names = ", ".join([f"#{d.channel_name}" for d in selected])
                 await message.channel.send(
-                    f"✅ Destinations set: {names}\n\nNow send your alert content, and optionally include `TITLE:` and `DESC:` lines, or react with ✏️."
+                    f"✅ Added {len(selected)}: {names}\n\n"
+                    f"Total selected: {len(session.destinations)} channel(s)\n"
+                    f"Reply `back` for more guilds, `done` to finish selection."
                 )
-
-                # Update composer embed
                 await self._update_composer_embed(message, session)
                 return
 
@@ -884,7 +1059,7 @@ class AdminAlertCommands(commands.Cog):
     async def _handle_channel_selection(
         self, reaction: discord.Reaction, user: discord.User, session: "AlertSession"
     ) -> None:
-        """Present the admin with a numbered list of accessible channels."""
+        """Present guild-based channel selection with scrollable guild list."""
         session.current_step = "select_channels"
 
         channels = await self.alert_manager.get_accessible_channels()
@@ -895,82 +1070,151 @@ class AdminAlertCommands(commands.Cog):
             )
             return
 
-        # Build channel list respecting Discord's 1024-char field limit [REH]
-        max_count = min(15, len(channels))  # Reduced from 20 to fit field limit
-        lines = []
-        total_len = 0
-        for idx, channel in enumerate(channels[:max_count], start=1):
-            guild_name = channel.guild.name if channel.guild else "Unknown Guild"
-            channel_name = channel.name
-            # Truncate long names to prevent field overflow
-            if len(guild_name) > 20:
-                guild_name = guild_name[:17] + "..."
-            if len(channel_name) > 25:
-                channel_name = channel_name[:22] + "..."
-            line = f"`{idx:>2}` #{channel_name} ({guild_name})"
-            # Check if adding this line would exceed field limit (1024 chars)
-            if total_len + len(line) + 1 > 1000:  # +1 for newline, 24 char buffer
-                lines.append(f"... and {max_count - idx + 1} more")
-                break
-            lines.append(line)
-            total_len += len(line) + 1
+        # Build guild index from accessible channels
+        guild_map: Dict[int, List[discord.TextChannel]] = {}
+        for ch in channels:
+            gid = ch.guild.id
+            if gid not in guild_map:
+                guild_map[gid] = []
+            guild_map[gid].append(ch)
 
-        embed = discord.Embed(
-            title="📋 Select Alert Destinations",
-            description=(
-                "Reply with the numbers of the channels you want to alert. "
-                "Use commas or spaces, for example `1,3,5`."
-            ),
-            color=0x5865F2,
-        )
+        # Sort channels within each guild by position
+        for gid in guild_map:
+            guild_map[gid].sort(key=lambda c: (c.position, c.name.lower()))
 
-        shown_count = len([line for line in lines if not line.startswith("...")])
-        embed.add_field(
-            name=(
-                f"Available Channels (showing {shown_count} of {len(channels)})"
-                if len(channels) > shown_count
-                else "Available Channels"
-            ),
-            value="\n".join(lines) if lines else "No channels available",
-            inline=False,
-        )
-
-        if len(channels) > shown_count:
-            embed.add_field(
-                name="ℹ️ Tip",
-                value=(
-                    f"Only {shown_count} of {len(channels)} channels shown. "
-                    "Adjust bot permissions to narrow the list if needed."
-                ),
-                inline=False,
+        # Sort guilds by name (case-insensitive)
+        sorted_guilds = sorted(
+            guild_map.keys(),
+            key=lambda g: (
+                next((c.guild.name.lower() for c in channels if c.guild.id == g), "")
             )
-
-        embed.set_footer(
-            text="You can react with ❌ at any time to cancel the alert session."
         )
+        session.guilds_list = sorted_guilds
 
-        await user.send(embed=embed)
-
-        try:
-            composer_embed = await self.alert_manager.build_composer_embed(session)
-            composer_embed = self.alert_manager._validate_embed_limits(composer_embed)
-            # Fetch full message to avoid partial message edit failures [REH]
-            full_message = await reaction.message.channel.fetch_message(
-                reaction.message.id
-            )
-            await full_message.edit(embed=composer_embed)
-        except discord.HTTPException as e:
-            self.logger.error(
-                f"❌ Failed to update composer embed during channel selection: "
-                f"status={e.status}, code={e.code}"
-            )
-            raise
+        await self._show_guild_selection(user, session, guild_map, sorted_guilds)
 
         try:
             await reaction.remove(user)
         except discord.HTTPException:
-            # Ignore failures (e.g. missing permissions); user can still remove manually
             pass
+
+    async def _show_guild_selection(
+        self,
+        user: discord.User,
+        session: "AlertSession",
+        guild_map: Dict[int, List[discord.TextChannel]],
+        sorted_guilds: List[int],
+    ) -> None:
+        """Display paginated guild list with scroll indicators."""
+        GUILDS_PER_PAGE = 8
+
+        page = getattr(session, 'guild_page', 0)
+        total_pages = max(1, (len(sorted_guilds) + GUILDS_PER_PAGE - 1) // GUILDS_PER_PAGE)
+        page = max(0, min(page, total_pages - 1))
+        session.guild_page = page
+
+        start_idx = page * GUILDS_PER_PAGE
+        end_idx = min(start_idx + GUILDS_PER_PAGE, len(sorted_guilds))
+
+        lines = []
+        for i, gid in enumerate(sorted_guilds[start_idx:end_idx], start=start_idx + 1):
+            g_channels = guild_map[gid]
+            guild_name = g_channels[0].guild.name if g_channels else "Unknown"
+            channel_count = len(g_channels)
+            lines.append(f"`{i:>2}` {guild_name} ({channel_count} channels)")
+
+        embed = discord.Embed(
+            title="📋 Select a Guild",
+            description="Use ⬆️/⬇️ to scroll, then reply with a guild number to browse its channels.",
+            color=0x5865F2,
+        )
+
+        embed.add_field(
+            name=f"Guilds (page {page + 1}/{total_pages})",
+            value="\n".join(lines) if lines else "No guilds available",
+            inline=False,
+        )
+
+        nav_text = "⬆️ Previous | ⬇️ Next | ❌ Cancel"
+        embed.add_field(name="Navigation", value=nav_text, inline=False)
+        embed.set_footer(text=f"Total: {len(sorted_guilds)} guilds | Reply with a number (1-{len(sorted_guilds)})")
+
+        # Edit existing message if available, otherwise send new
+        existing_msg_id = getattr(session, 'selection_message_id', None)
+        if existing_msg_id:
+            try:
+                existing_msg = await user.fetch_message(existing_msg_id)
+                await existing_msg.edit(embed=embed)
+                return
+            except discord.NotFound:
+                pass  # Message was deleted, send new one
+            except discord.HTTPException:
+                pass  # Other error, send new one
+
+        selection_msg = await user.send(embed=embed)
+        session.selection_message_id = selection_msg.id
+
+        if total_pages > 1:
+            await selection_msg.add_reaction("⬆️")
+            await selection_msg.add_reaction("⬇️")
+
+    async def _show_channel_selection_for_guild(
+        self,
+        user: discord.User,
+        session: "AlertSession",
+        guild_id: int,
+        guild_map: Dict[int, List[discord.TextChannel]],
+    ) -> None:
+        """Show channels within a selected guild with pagination."""
+        CHANNELS_PER_PAGE = 10
+
+        channels = guild_map.get(guild_id, [])
+        if not channels:
+            await user.send("❌ Could not find channels for that guild.")
+            return
+
+        guild_name = channels[0].guild.name if channels[0].guild else "Unknown Guild"
+
+        page = getattr(session, 'channel_page', 0)
+        total_pages = max(1, (len(channels) + CHANNELS_PER_PAGE - 1) // CHANNELS_PER_PAGE)
+        page = max(0, min(page, total_pages - 1))
+        session.channel_page = page
+        session.selected_guild_id = guild_id
+
+        start_idx = page * CHANNELS_PER_PAGE
+        end_idx = min(start_idx + CHANNELS_PER_PAGE, len(channels))
+
+        lines = []
+        for i, ch in enumerate(channels[start_idx:end_idx], start=start_idx + 1):
+            lines.append(f"`{i:>2}` #{ch.name}")
+
+        embed = discord.Embed(
+            title=f"📋 Select Channels from {guild_name}",
+            description="Reply with channel numbers (e.g., `1,3,5`) or use navigation.",
+            color=0x5865F2,
+        )
+
+        embed.add_field(
+            name=f"Channels (page {page + 1}/{total_pages})",
+            value="\n".join(lines) if lines else "No channels",
+            inline=False,
+        )
+
+        nav_parts = []
+        if total_pages > 1:
+            nav_parts.extend(["⬅️ Prev", "➡️ Next"])
+        nav_parts.extend(["🏠 Back to guilds", "❌ Cancel"])
+        embed.add_field(name="Navigation", value=" | ".join(nav_parts), inline=False)
+        embed.set_footer(text="Or reply with channel numbers to select (e.g., 1,2,3)")
+
+        msg = await user.send(embed=embed)
+        session.channel_message_id = msg.id
+
+        if total_pages > 1:
+            await msg.add_reaction("⬅️")
+            await msg.add_reaction("➡️")
+        await msg.add_reaction("🏠")
+        await msg.add_reaction("❌")
 
     async def _handle_content_composition(
         self, reaction: discord.Reaction, user: discord.User, session: "AlertSession"

@@ -4052,6 +4052,11 @@ class Router:
                 self._processing_locks.pop(getattr(message, "id", None), None)
             except Exception:
                 pass
+                # Also clear dispatch metadata for this message [RM]
+                try:
+                    self.clear_dispatch_metadata(getattr(message, "id", None))
+                except Exception:
+                    pass
             # Periodic cleanup of old locks every 100 messages [BUGFIX]
             try:
                 self._processing_locks_cleanup_counter += 1
@@ -5165,14 +5170,23 @@ class Router:
                 duration = 0.0
                 attempts = 0
                 try:
-                    result_text = await self._handle_item_with_provider(
+                    result_text = await asyncio.wait_for(
+                        self._handle_item_with_provider(
                         item, modality, None, message=message
+                    ),
+                        timeout=selected_budget,
                     )
                     success = True
                     duration = time.time() - start_time
                     self.logger.info(
                         f"✅ Item {i} completed (extraction-only, no provider ladder) ({duration:.2f}s)"
                     )
+                except asyncio.TimeoutError:
+                    self.logger.warning(f"⏱️ Item {i} timed out (budget={selected_budget}s)")
+                    success = False
+                    result_text = f"⏱️ Timed out after {selected_budget}s"
+                    duration = selected_budget
+                    attempts = 1
                 except Exception as e:
                     self.logger.warning(f"❌ Item {i} failed: {e}")
                     success = False

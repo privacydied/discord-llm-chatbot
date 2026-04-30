@@ -1325,8 +1325,7 @@ class TTSManager:
             }
             return TTSResult(Path(final_path), "audio/wav", meta=meta)
 
-        # OGG/Opus (48k mono) using async ffmpeg subprocess
-        import tempfile
+ # OGG/Opus (48k mono) using async ffmpeg subprocess
 
         fd, ogg_tmp_path = tempfile.mkstemp(prefix="tts_", suffix=".ogg")
         os.close(fd)
