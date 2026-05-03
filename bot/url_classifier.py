@@ -24,6 +24,7 @@ from .attachment_classifier import (
     classify_mime_and_extension,
     is_web_page_mime,
 )
+from .utils.external_api import _is_private_hostname
 from .utils.logging import get_logger
 
 if TYPE_CHECKING:
@@ -109,6 +110,12 @@ async def detect_url_content_type(url: str) -> Tuple[Optional[str], Optional[int
             )
             return None, None
     except Exception:
+        return None, None
+
+    # SSRF protection: block requests to private/internal IPs
+    _ssrf_hostname = parsed.hostname or ""
+    if _is_private_hostname(_ssrf_hostname):
+        logger.warning(f"url.probe ssrf blocked hostname={_ssrf_hostname}")
         return None, None
 
     try:
@@ -361,6 +368,11 @@ async def download_url_to_temp(
             return None, f"Unsupported URL scheme: {parsed.scheme}"
     except Exception as e:
         return None, f"Invalid URL: {e}"
+
+    # SSRF protection: block requests to private/internal IPs
+    _ssrf_hostname = parsed.hostname or ""
+    if _is_private_hostname(_ssrf_hostname):
+        return None, f"SSRF blocked: {_ssrf_hostname}"
 
     try:
         async with httpx.AsyncClient(

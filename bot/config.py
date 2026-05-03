@@ -35,7 +35,8 @@ def audit_env_file() -> None:
             for line_no, line in enumerate(f, 1):
                 line = line.strip()
                 if line and not line.startswith("#"):
-                    logger.debug(f".env:{line_no} → {line}")
+                    key = line.split("=")[0].strip() if "=" in line else "???"
+                    logger.debug(f".env:{line_no} → {key}=[SET]")
 
         # CHANGE: Verify critical multimodal variables are loaded
         critical_vars = [
@@ -48,14 +49,14 @@ def audit_env_file() -> None:
         for var in critical_vars:
             value = os.getenv(var)
             if value:
-                logger.debug(f"✅ {var} = {value}")
+                logger.debug(f"✅ {var} = [SET]")
             else:
                 logger.error(f"❌ {var} is missing or empty!")
 
         logger.debug("=== END .ENV AUDIT ===")
     else:
-        logger.error("❌ No .env file found for audit")
-        raise ConfigurationError("No .env file found")
+        logger.warning("No .env file found for audit")
+        return
 
 
 def validate_required_env() -> None:
@@ -71,7 +72,7 @@ def validate_required_env() -> None:
         if not value:
             missing_vars.append(var)
         else:
-            logger.debug(f"✅ {var}: {value}")
+            logger.debug(f"✅ {var}: [SET]")
 
     if missing_vars:
         raise ConfigurationError(

@@ -63,6 +63,8 @@ class RequestCoalescer(Generic[T]):
         
         # Cleanup tracking
         self._last_cleanup = time.time()
+        # Lock to prevent race conditions on dict mutations
+        self._lock = asyncio.Lock()
         
     def _maybe_cleanup(self) -> None:
         """Remove stale entries to prevent memory growth. [RM]"""
@@ -118,44 +120,51 @@ class RequestCoalescer(Generic[T]):
             asyncio.TimeoutError: If operation times out
             Exception: Any exception from the underlying coroutine
         """
-        # Check for cached result first
-        if key in self._completed:
-            result, ts = self._completed[key]
-            if time.time() - ts <= self.result_ttl_s:
-                logger.debug(f"{self.name}.cache_hit | key={key[:50]}...")
-                return result
+        async with self._lock:
+            # Check for cached result first
+            if key in self._completed:
+                result, ts = self._completed[key]
+                if time.time() - ts <= self.result_ttl_s:
+                    logger.debug(f"{self.name}.cache_hit | key={key[:50]}...")
+                    return result
+                else:
+                    del self._completed[key]
+                    
+            # Check for cached error (re-raise to maintain semantics)
+            if key in self._completed_errors:
+                error, ts = self._completed_errors[key]
+                if time.time() - ts <= self.result_ttl_s:
+                    logger.debug(f"{self.name}.cache_hit_error | key={key[:50]}...")
+                    raise error
+                else:
+                    del self._completed_errors[key]
+            
+            # Check if request is already in-flight
+            entry = self._inflight.get(key)
+            if entry is not None:
+                logger.debug(f"{self.name}.wait | key={key[:50]}...")
+                # Wait for the in-flight request to complete
+                waiter_future = entry.future
             else:
-                del self._completed[key]
-                
-        # Check for cached error (re-raise to maintain semantics)
-        if key in self._completed_errors:
-            error, ts = self._completed_errors[key]
-            if time.time() - ts <= self.result_ttl_s:
-                logger.debug(f"{self.name}.cache_hit_error | key={key[:50]}...")
-                raise error
-            else:
-                del self._completed_errors[key]
-        
-        # Check if request is already in-flight
-        entry = self._inflight.get(key)
-        if entry is not None:
-            logger.debug(f"{self.name}.wait | key={key[:50]}...")
-            # Wait for the in-flight request to complete
+                waiter_future = None
+            
+        if waiter_future is not None:
             try:
                 if timeout:
                     result = await asyncio.wait_for(
-                        asyncio.shield(entry.future), timeout=timeout
+                        asyncio.shield(waiter_future), timeout=timeout
                     )
                 else:
-                    result = await asyncio.shield(entry.future)
+                    result = await asyncio.shield(waiter_future)
                 return result
             except asyncio.TimeoutError:
                 logger.warning(f"{self.name}.timeout | key={key[:50]}...")
                 raise
         
         # We are the leader - execute the coroutine
-        entry = _CoalescedEntry(key=key, future=asyncio.get_event_loop().create_future())
-        self._inflight[key] = entry
+        async with self._lock:
+            entry = _CoalescedEntry(key=key, future=asyncio.get_event_loop().create_future())
+            self._inflight[key] = entry
         
         try:
             logger.debug(f"{self.name}.execute | key={key[:50]}...")
@@ -172,7 +181,8 @@ class RequestCoalescer(Generic[T]):
             entry.future.set_result(result)
             
             # Cache briefly for thundering herd protection
-            self._completed[key] = (result, time.time())
+            async with self._lock:
+                self._completed[key] = (result, time.time())
             
             return result
             
@@ -187,13 +197,15 @@ class RequestCoalescer(Generic[T]):
             entry.completed = True
             entry.future.set_exception(e)
             # Cache errors briefly too (prevents immediate retry storm)
-            self._completed_errors[key] = (e, time.time())
+            async with self._lock:
+                self._completed_errors[key] = (e, time.time())
             raise
             
         finally:
             # Remove from in-flight
-            self._inflight.pop(key, None)
-            self._maybe_cleanup()
+            async with self._lock:
+                self._inflight.pop(key, None)
+                self._maybe_cleanup()
 
 
 # Global coalescers for different operations

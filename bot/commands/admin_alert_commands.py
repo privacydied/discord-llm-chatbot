@@ -504,7 +504,6 @@ class AdminAlertCommands(commands.Cog):
         self.logger.info("🚨 Admin Alert Commands loaded")
 
     @commands.command(name="alert")
-    @commands.is_owner()
     async def alert_command(
         self, ctx: commands.Context, *, message: str = None
     ) -> None:
@@ -768,8 +767,16 @@ class AdminAlertCommands(commands.Cog):
                             user, session, session.selected_guild_id, guild_map
                         )
                 elif emoji == "🏠":
+                    # Turn the current channel-selection card back into the guild picker
+                    # so the user sees the message they clicked actually change back.
                     session.selected_guild_id = None
                     session.channel_page = 0
+                    session.selection_message_id = reaction.message.id
+                    session.channel_message_id = None
+                    try:
+                        await reaction.message.clear_reactions()
+                    except Exception:
+                        pass
                     sorted_guilds = session.guilds_list if session.guilds_list else []
                     await self._show_guild_selection(user, session, guild_map, sorted_guilds)
                 elif emoji == "❌":

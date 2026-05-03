@@ -18,9 +18,9 @@ config = load_config()
 logger = get_logger(__name__)
 
 # Ollama API settings
-OLLAMA_BASE_URL = config["OLLAMA_BASE_URL"]
-OLLAMA_MODEL = config["OLLAMA_MODEL"]
-DEFAULT_MAX_TOKENS = 1000
+OLLAMA_BASE_URL = config.get("OLLAMA_BASE_URL", "http://localhost:11434")
+OLLAMA_MODEL = config.get("OLLAMA_MODEL", "llama3")
+DEFAULT_MAX_TOKENS = 2048
 DEFAULT_TEMPERATURE = 0.7
 DEFAULT_TOP_P = 0.9
 DEFAULT_FREQUENCY_PENALTY = 0.0
@@ -52,7 +52,8 @@ class OllamaClient:
     async def ensure_session(self) -> None:
         """Ensure we have an active aiohttp session."""
         if self.session is None or self.session.closed:
-            self.session = aiohttp.ClientSession(headers=self.headers)
+            timeout = aiohttp.ClientTimeout(total=120, connect=10)
+            self.session = aiohttp.ClientSession(headers=self.headers, timeout=timeout)
 
     async def close(self) -> None:
         """Close the aiohttp session."""

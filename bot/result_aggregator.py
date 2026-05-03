@@ -72,6 +72,13 @@ class ResultAggregator:
         FAILED items (success=False) are NOT included in the prompt output.
         If all items failed and there is no original text, returns empty string.
 
+        IMPORTANT: The returned string is an INTERNAL prompt, not for direct
+        public display. It contains [n/m] provenance headers and other internal
+        markup that must NOT appear in Discord output. This prompt must always
+        flow through brain_infer (the text flow) before reaching users, so the
+        model can reframe the content and the public_output sanitizer can strip
+        any residual internal markers.
+
         Args:
             original_text: Original message text content (after removing URLs)
 
@@ -261,6 +268,7 @@ class ResultAggregator:
             status_emoji = "✅" if result.success else "❌"
             modality_display = self._get_modality_display_name(result.modality)
 
+            # INTERNAL-ONLY: these [n/m] headers must not appear in Discord public output
             header = f"### [{result.item_index + 1}/{total_items}] {status_emoji} {modality_display}: {result.item_name}"
 
             # Add timing info if available

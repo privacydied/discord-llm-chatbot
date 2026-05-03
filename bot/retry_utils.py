@@ -63,7 +63,7 @@ def is_retryable_error(error: Exception, config: RetryConfig) -> bool:
     error_str = str(error).lower()
 
     try:
-        retryable_flag = getattr(error, "retryable", True)
+        retryable_flag = getattr(error, "retryable", None)
         if retryable_flag is False:
             return False
     except Exception:

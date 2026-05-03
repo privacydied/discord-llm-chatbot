@@ -5,6 +5,8 @@ from typing import Any, Dict, List, Optional
 
 from discord import Embed, File
 
+from .public_output import sanitize_embed_collection_for_public
+
 
 @dataclass
 class BotAction:
@@ -17,15 +19,15 @@ class BotAction:
 
     def __post_init__(self):
         """Apply final safety net to sanitize content before sending to Discord."""
-        if self.content:
-            self.content = self._apply_final_sanitization(self.content)
+        self.content = self._apply_final_sanitization(self.content)
+        self.embeds = sanitize_embed_collection_for_public(self.embeds)
 
     def _apply_final_sanitization(self, content: str) -> str:
         """
         Final safety net to remove any chain-of-thought leakage before Discord send.
         This is a belt-and-suspenders approach that should rarely trigger.
         """
-        from .public_output import extract_public_reply_text, has_reasoning_leakage
+        from .public_output import extract_public_reply_text, has_reasoning_leakage, sanitize_public_text
         from .vl.postprocess import sanitize_model_output, has_reasoning_content
         from .utils.logging import get_logger
 
@@ -39,6 +41,7 @@ class BotAction:
             return extract_public_reply_text(content)
 
         # Second layer: legacy VL postprocess
+        vl_handled = False
         if has_reasoning_content(content):
             logger.warning(
                 "VL safety net triggered - sanitizing content with reasoning patterns"
@@ -50,9 +53,14 @@ class BotAction:
                         "VL safety net removed %d chars",
                         len(content) - len(sanitized)
                     )
-                return sanitized
+                    vl_handled = True
+                    content = sanitized
             except Exception as e:
                 logger.error(f"VL sanitization failed: {e}")
+
+        if not vl_handled:
+            # Third layer: strip internal labels, aggregation markers, etc.
+            content = sanitize_public_text(content)
 
         return content
 

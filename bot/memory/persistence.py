@@ -402,9 +402,20 @@ def load_json_with_recovery(
                 try:
                     with open(backup_path, "r", encoding="utf-8") as f:
                         data = json.load(f)
+                    # Validate recovered data is a dict before restoring [BUGFIX]
+                    if not isinstance(data, dict):
+                        logger.error(f"Backup data is not a dict, skipping recovery for {target_path}")
+                        return default_data
                     # Attempt to restore the corrupted file
                     if _atomic_write_file(target_path, data, fsync=True):
                         logger.info(f"Successfully recovered and restored {target_path}")
+                    else:
+                        # Remove corrupted file so next save creates a fresh one [BUGFIX]
+                        try:
+                            target_path.unlink()
+                            logger.warning(f"Removed corrupted file {target_path} after failed atomic restore; backup data returned")
+                        except OSError:
+                            pass
                     return data
                 except Exception as recovery_error:
                     logger.error(f"Recovery from backup failed: {recovery_error}")

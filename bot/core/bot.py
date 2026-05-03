@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 import asyncio
+import collections
 import os
 import sys
 from contextlib import asynccontextmanager
@@ -15,6 +16,11 @@ from rich.console import Console
 from rich.tree import Tree
 from rich.panel import Panel
 
+from bot.public_output import (
+    sanitize_public_text,
+    sanitize_embed_for_public,
+    sanitize_public_message_payload,
+)
 from bot.config import load_system_prompts
 from bot.config_reload import add_reload_callback
 from bot.enhanced_retry import get_retry_manager
@@ -124,6 +130,11 @@ class LLMBot(commands.Bot):
 
         super().__init__(*args, **kwargs)
         self.config = config or {}
+        owner_ids = self.config.get("OWNER_IDS", [])
+        try:
+            self.owner_ids = {int(owner_id) for owner_id in owner_ids}
+        except Exception:
+            self.owner_ids = set()
         self.logger = get_logger(__name__)
         self.metrics = NullMetrics()
         self.user_profiles = {}
@@ -135,6 +146,7 @@ class LLMBot(commands.Bot):
         self._is_ready = asyncio.Event()
         self.system_prompts = {}
         self._processed_messages = set()
+        self._processed_messages_order = collections.deque(maxlen=1000)  # [BUGFIX] LRU tracking for dedup
         self._dispatch_lock = (
             asyncio.Lock()
         )  # Global lock for processed messages tracking
@@ -144,6 +156,7 @@ class LLMBot(commands.Bot):
         # Track active long-running tasks for cancellation
         self._active_long_running_tasks: Dict[str, asyncio.Task] = {}  # task_id -> task
         self._task_metadata: Dict[str, Dict[str, Any]] = {}  # task_id -> metadata
+        self._task_lock = asyncio.Lock()  # [BUGFIX] prevent callback race on task tracking dicts
 
         # Idempotency guard to prevent duplicate initialization [DRY][REH]
         self._boot_completed = False
@@ -165,6 +178,75 @@ class LLMBot(commands.Bot):
             history_window=int(os.getenv("HISTORY_WINDOW", "10")),
             max_token_limit=self.config.get("MAX_CONTEXT_TOKENS", 4000),
         )
+        self._public_output_safety_installed = False
+
+    def _install_public_output_safety_hooks(self) -> None:
+        """Patch Discord send/edit boundaries so public text is sanitized everywhere."""
+        if self._public_output_safety_installed:
+            return
+
+        try:
+            from discord.abc import Messageable
+
+            def _sanitize_payload(args, kwargs):
+                args_list = list(args)
+                content = args_list[0] if args_list else kwargs.get("content", None)
+                embed = kwargs.get("embed", None)
+                embeds = kwargs.get("embeds", None)
+                sanitized_content, sanitized_embed, sanitized_embeds = (
+                    sanitize_public_message_payload(
+                        content,
+                        embed=embed,
+                        embeds=embeds,
+                    )
+                )
+                if args_list:
+                    args_list[0] = sanitized_content
+                elif "content" in kwargs:
+                    kwargs["content"] = sanitized_content
+
+                # Discord rejects payloads that specify both singular and plural
+                # embed arguments. Normalize to exactly one representation here.
+                has_embed = embed is not None or "embed" in kwargs
+                has_embeds = embeds is not None or "embeds" in kwargs
+                if has_embeds and sanitized_embeds:
+                    kwargs.pop("embed", None)
+                    kwargs["embeds"] = sanitized_embeds
+                elif has_embed:
+                    kwargs.pop("embeds", None)
+                    kwargs["embed"] = sanitized_embed
+                elif has_embeds:
+                    kwargs["embeds"] = sanitized_embeds
+                return tuple(args_list), kwargs
+
+            def _wrap_method(owner, attr_name: str):
+                original = getattr(owner, attr_name)
+                sentinel = f"_public_output_{attr_name}_wrapped"
+                if getattr(owner, sentinel, False):
+                    return
+
+                async def wrapper(self_obj, *args, **kwargs):
+                    new_args, new_kwargs = _sanitize_payload(args, kwargs)
+                    return await original(self_obj, *new_args, **new_kwargs)
+
+                setattr(owner, attr_name, wrapper)
+                setattr(owner, sentinel, True)
+
+            _wrap_method(Messageable, "send")
+            _wrap_method(discord.Message, "reply")
+            _wrap_method(discord.Message, "edit")
+            _wrap_method(discord.InteractionResponse, "send_message")
+            _wrap_method(discord.InteractionResponse, "edit_message")
+            _wrap_method(discord.Interaction, "edit_original_response")
+            _wrap_method(discord.Webhook, "send")
+
+            self._public_output_safety_installed = True
+            self.logger.info("✅ Public output send/edit safety hooks installed")
+        except Exception as exc:
+            self.logger.warning(
+                f"⚠️ Failed to install public output safety hooks: {exc}",
+                exc_info=True,
+            )
 
     def _is_retryable_discord_http_error(self, error: Exception) -> bool:
         """Return True for transient Discord transport or upstream failures."""
@@ -334,6 +416,7 @@ class LLMBot(commands.Bot):
 
         self._boot_completed = True
         self.logger.info("🔧 Starting bot setup")
+        self._install_public_output_safety_hooks()
 
         try:
             # Initialize metrics
@@ -1183,7 +1266,10 @@ class LLMBot(commands.Bot):
         done: bool = False,
     ) -> discord.Embed:
         """Create an embed for streaming status according to style."""
-        color = 0x2ECC71 if done else 0x3498DB  # green when done, blue otherwise
+        from bot.public_output import sanitize_public_text
+
+        label = sanitize_public_text(label) or "Processing"
+        color = 0x2ECC71 if done else 0x3498DB # green when done, blue otherwise
         embed = discord.Embed(
             title=label if style == "compact" else "Processing", color=color
         )
@@ -1193,12 +1279,13 @@ class LLMBot(commands.Bot):
                 desc_lines.append(f"Step {step}/{max_steps}")
             if done:
                 desc_lines.append("Ready to send the final answer.")
+            desc_lines = [sanitize_public_text(ln) or ln for ln in desc_lines]
             embed.description = "\n".join(desc_lines)
         else:
             if step and max_steps and not done:
-                embed.set_footer(text=f"{step}/{max_steps}")
+                embed.set_footer(text=sanitize_public_text(f"{step}/{max_steps}") or f"{step}/{max_steps}")
             if done:
-                embed.set_footer(text="done")
+                embed.set_footer(text=sanitize_public_text("done") or "done")
         return embed
 
     async def _execute_action(
@@ -1405,6 +1492,9 @@ class LLMBot(commands.Bot):
             )
 
         content = action.content or ""
+        content = sanitize_public_text(content)
+        if action.embeds:
+            action.embeds = [sanitize_embed_for_public(e) for e in action.embeds]
         embed_count = len(action.embeds) if action.embeds else 0
         file_count = len(files) if files else 0
 
@@ -2029,7 +2119,7 @@ class LLMBot(commands.Bot):
 
         for part_idx, base_chunk in enumerate(chunks, start=1):
             is_first_part = part_idx == 1
-            chunk_content = base_chunk
+            chunk_content = sanitize_public_text(base_chunk)
 
             # Apply explicit mention only to the first part.
             try:
@@ -2285,10 +2375,9 @@ class LLMBot(commands.Bot):
 
         # Add callback to clean up when task completes
         def cleanup_task(future):
-            if task_id in self._active_long_running_tasks:
-                del self._active_long_running_tasks[task_id]
-            if task_id in self._task_metadata:
-                del self._task_metadata[task_id]
+            # [BUGFIX] Use threadsafe deletion from done callback to avoid race with cancel_task
+            self._active_long_running_tasks.pop(task_id, None)
+            self._task_metadata.pop(task_id, None)
 
         task.add_done_callback(cleanup_task)
 
@@ -2368,17 +2457,21 @@ class LLMBot(commands.Bot):
                 pass  # Don't let error handling errors crash the bot
 
     async def on_message(self, message: discord.Message):
-        # DD-TODO: Use a more sophisticated cache like LRU to prevent memory growth.
         async with self._dispatch_lock:
             if message.id in self._processed_messages:
                 self.logger.warning(
                     f"Duplicate dispatch prevented for msg_id: {message.id}"
                 )
                 return
-            # Limit the size of the set to avoid unbounded memory growth
-            if len(self._processed_messages) > 1000:
-                self._processed_messages.pop()
+            # LRU eviction: remove oldest when at capacity [BUGFIX: use deque for proper LRU]
+            while len(self._processed_messages) >= 1000:
+                try:
+                    oldest = self._processed_messages_order.popleft()
+                    self._processed_messages.discard(oldest)
+                except IndexError:
+                    break
             self._processed_messages.add(message.id)
+            self._processed_messages_order.append(message.id)
 
         # Early returns before processing
         if message.author == self.user:
@@ -2888,6 +2981,13 @@ class LLMBot(commands.Bot):
 
             # Close aiohttp sessions
             await self._close_all_aiohttp_sessions()
+
+            # Close shared HTTP client
+            await cleanup_http_client()
+
+            # Close web extraction service
+            from bot.web_extraction_service import web_extractor
+            await web_extractor.aclose()
 
             # Close the database connection
             if hasattr(self, "db") and self.db.is_connected:

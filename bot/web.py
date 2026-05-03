@@ -13,6 +13,7 @@ from trafilatura.settings import use_config
 
 # Import bot modules
 from .config import load_config
+from .utils.external_api import _is_private_hostname
 
 # Load configuration
 config = load_config()
@@ -151,6 +152,14 @@ async def fetch_url_content(url: str, timeout: int = 15) -> Optional[Tuple[bytes
     }
 
     try:
+        # SSRF protection: block requests to private/internal IPs
+        from urllib.parse import urlparse as _ssrf_urlparse
+        _ssrf_parsed = _ssrf_urlparse(url)
+        _ssrf_hostname = _ssrf_parsed.hostname or ""
+        if _is_private_hostname(_ssrf_hostname):
+            logging.warning(f"SSRF blocked: {_ssrf_hostname}")
+            return None
+
         async with httpx.AsyncClient(
             headers=headers, follow_redirects=True, timeout=timeout
         ) as client:

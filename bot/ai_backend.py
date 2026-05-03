@@ -123,7 +123,7 @@ async def generate_response(
             logger.warning(f"⚠️ Text generation failed (all providers unavailable): {e}")
         else:
             logger.error(f"❌ Error in generate_response: {e}", exc_info=True)
-        raise Exception(f"Failed to generate response: {str(e)}")
+        raise APIError(f"Failed to generate response: {str(e)}") from e
 
 
 async def generate_vl_response(
@@ -230,4 +230,6 @@ async def generate_vl_response(
                 "Please try again in a few minutes."
             ) from e
         # For other errors, raise an inference-specific error
-        raise InferenceError(f"Vision processing failed: {str(e)}") from e
+        err = InferenceError(f"Vision processing failed: {str(e)}")
+        err.vl_exhausted = True
+        raise err from e

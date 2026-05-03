@@ -71,7 +71,10 @@ async def hybrid_pipeline(ctx, content: str, mode: str = "both"):
         return replies
     except Exception as e:
         logger.error(f"🚨 Pipeline error: {str(e)}")
-        await ctx.send("⚠️ An error occurred while processing your request")
+        try:
+            await ctx.send("⚠️ An error occurred while processing your request")
+        except Exception:
+            pass
 
 
 def _safe_unlink(path: Path) -> None:

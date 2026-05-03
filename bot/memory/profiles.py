@@ -324,7 +324,7 @@ def get_server_profile(guild_id: str, force_reload: bool = False) -> dict:
     with server_lock:
         # Check cache first
         if guild_id in server_cache and not force_reload:
-            return server_cache[guild_id]
+            return server_cache[guild_id].copy()  # [BUGFIX] return copy like get_profile
 
         # Try to load from disk with corruption recovery
         from bot.config import load_config
@@ -346,7 +346,7 @@ def get_server_profile(guild_id: str, force_reload: bool = False) -> dict:
                 # Ensure the profile has all required fields
                 profile = ensure_server_profile_schema(profile, guild_id)
                 server_cache[guild_id] = profile
-                return profile
+                return profile.copy()  # [BUGFIX] return copy
             else:
                 logging.warning(f"Corrupted server profile for guild {guild_id}: {error_msg}")
                 # Fall through to create new profile
@@ -354,7 +354,7 @@ def get_server_profile(guild_id: str, force_reload: bool = False) -> dict:
         # Create new profile if it doesn't exist or couldn't be loaded
         profile = default_server_profile(guild_id)
         server_cache[guild_id] = profile
-        return profile
+        return profile.copy()  # [BUGFIX] return copy
 
 
 def save_server_profile(guild_id, force: bool = False) -> bool:

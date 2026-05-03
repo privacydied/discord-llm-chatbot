@@ -1163,6 +1163,8 @@ class Router:
                 time.time(),
             )
             self._metric_inc("x.syndication.success", None)
+            # Periodic eviction of stale cache entries and unused locks [BUGFIX: prevent unbounded growth]
+            self._maybe_evict_stale_syn_entries()
             try:
                 txt = self._extract_syndication_text(data)
                 self.logger.info(
@@ -1176,6 +1178,30 @@ class Router:
             except Exception:
                 pass
             return data
+
+    def _maybe_evict_stale_syn_entries(self, max_cache: int = 512) -> None:
+        """Evict stale syndication cache entries and clean up orphaned locks. [BUGFIX: prevent unbounded growth]"""
+        try:
+            now = time.time()
+            stale_ids = [
+                tid for tid, entry in self._syn_cache.items()
+                if now - entry.get("ts", 0) > self._syn_ttl_s
+            ]
+            for tid in stale_ids:
+                self._syn_cache.pop(tid, None)
+                self._syn_locks.pop(tid, None)
+            # Also bound total cache size to a hard maximum
+            if len(self._syn_cache) > max_cache:
+                sorted_ids = sorted(
+                    self._syn_cache.keys(),
+                    key=lambda tid: self._syn_cache.get(tid, {}).get("ts", 0),
+                )
+                excess = len(self._syn_cache) - max_cache
+                for tid in sorted_ids[:excess]:
+                    self._syn_cache.pop(tid, None)
+                    self._syn_locks.pop(tid, None)
+        except Exception:
+            pass
 
     async def _probe_twitter_syndication_images(
         self, url: str, status_id: str
@@ -4052,11 +4078,11 @@ class Router:
                 self._processing_locks.pop(getattr(message, "id", None), None)
             except Exception:
                 pass
-                # Also clear dispatch metadata for this message [RM]
-                try:
-                    self.clear_dispatch_metadata(getattr(message, "id", None))
-                except Exception:
-                    pass
+            # Also clear dispatch metadata for this message [RM][BUGFIX: moved outside except]
+            try:
+                self.clear_dispatch_metadata(getattr(message, "id", None))
+            except Exception:
+                pass
             # Periodic cleanup of old locks every 100 messages [BUGFIX]
             try:
                 self._processing_locks_cleanup_counter += 1

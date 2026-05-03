@@ -61,6 +61,8 @@ class EditCoalescer:
 
         # Track active edit states by message ID
         self.active_states: Dict[int, EditCoalesceState] = {}
+        # Lock to prevent race conditions on active_states mutations
+        self._lock = asyncio.Lock()
 
         # Statistics
         self.stats = {
@@ -130,7 +132,8 @@ class EditCoalescer:
             streaming_reason=reason,
         )
 
-        self.active_states[message.id] = state
+        async with self._lock:
+            self.active_states[message.id] = state
 
         if streaming_eligible:
             self.stats["streaming_preserved"] += 1
@@ -149,7 +152,8 @@ class EditCoalescer:
         """Request an edit with coalescing. [REH]"""
         self.stats["edits_requested"] += 1
 
-        state = self.active_states.get(message_id)
+        async with self._lock:
+            state = self.active_states.get(message_id)
         if not state:
             # No active session, edit immediately
             if edit_callback:
@@ -202,7 +206,8 @@ class EditCoalescer:
         try:
             await asyncio.sleep(delay_s)
 
-            state = self.active_states.get(message_id)
+            async with self._lock:
+                state = self.active_states.get(message_id)
             if not state or not state.pending_content:
                 return
 
@@ -228,7 +233,8 @@ class EditCoalescer:
 
     async def finalize_session(self, message_id: int) -> None:
         """Finalize a streaming session and cleanup. [RM]"""
-        state = self.active_states.get(message_id)
+        async with self._lock:
+            state = self.active_states.pop(message_id, None)
         if not state:
             return
 
@@ -240,9 +246,6 @@ class EditCoalescer:
             except asyncio.CancelledError:
                 pass
 
-        # Clean up state
-        del self.active_states[message_id]
-
     async def force_flush_pending(
         self,
         message_id: int,
@@ -251,7 +254,8 @@ class EditCoalescer:
         ] = None,
     ) -> bool:
         """Force flush any pending edits immediately. [REH]"""
-        state = self.active_states.get(message_id)
+        async with self._lock:
+            state = self.active_states.get(message_id)
         if not state or not state.pending_content:
             return False
 

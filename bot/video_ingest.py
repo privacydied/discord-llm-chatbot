@@ -20,6 +20,7 @@ from datetime import datetime, timezone
 from .utils.logging import get_logger
 from .exceptions import InferenceError
 from .config import load_config
+from .utils.external_api import _is_private_hostname
 
 logger = get_logger(__name__)
 
@@ -705,11 +706,22 @@ class VideoIngestionManager:
         ext: str,
         timeout_s: float,
     ) -> Tuple[Path, Optional[int]]:
+        # Validate URL scheme and block private/internal IPs (SSRF protection)
+        _ssrf_parsed = urlparse(url)
+        if _ssrf_parsed.scheme not in ("http", "https"):
+            raise VideoIngestError(f"Unsupported URL scheme: {_ssrf_parsed.scheme}")
+        _ssrf_hostname = _ssrf_parsed.hostname or ""
+        if _is_private_hostname(_ssrf_hostname):
+            raise VideoIngestError(f"SSRF blocked: {_ssrf_hostname}")
+
         with tempfile.NamedTemporaryFile(delete=False, suffix=f".{ext}") as tmp:
             temp_path = Path(tmp.name)
 
         def _worker() -> Optional[int]:
             req = urllib.request.Request(url, method="GET")
+            req.add_header("User-Agent",
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/120.0 Safari/537.36")
             with urllib.request.urlopen(req, timeout=timeout_s) as resp:
                 content_length = resp.headers.get("Content-Length")
                 with open(temp_path, "wb") as fh:

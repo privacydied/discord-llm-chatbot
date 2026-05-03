@@ -25,21 +25,34 @@ def is_admin_user():
             )
             logger.info(f"[RAG Admin Check] Channel type: {type(ctx.channel).__name__}")
 
-            # In DMs, only allow the bot owner (not any guild admin) [SFT]
+            # In DMs, only allow configured admin/owner IDs (no Discord API call).
             if isinstance(ctx.channel, discord.DMChannel):
-                logger.info("[RAG Admin Check] DM context - checking bot owner only")
+                logger.info("[RAG Admin Check] DM context - checking configured admin IDs")
+                configured_ids = set()
                 try:
-                    app_info = await ctx.bot.application_info()
-                    if ctx.author.id == app_info.owner.id:
-                        logger.info(
-                            f"[RAG Admin Check] Bot owner {ctx.author.id} allowed DM access"
-                        )
-                        return True
-                except Exception as e:
-                    logger.error(f"[RAG Admin Check] Failed to get bot owner info: {e}")
+                    bot_owner_ids = getattr(ctx.bot, "owner_ids", None) or set()
+                    configured_ids.update(int(owner_id) for owner_id in bot_owner_ids)
+                except Exception:
+                    pass
+                try:
+                    config = getattr(ctx.bot, "config", {}) or {}
+                    for owner_id in config.get("OWNER_IDS", []):
+                        configured_ids.add(int(owner_id))
+                    for owner_id in config.get("ALERT_ADMIN_USER_IDS", "").split(","):
+                        owner_id = owner_id.strip()
+                        if owner_id:
+                            configured_ids.add(int(owner_id))
+                except Exception:
+                    pass
+
+                if ctx.author.id in configured_ids:
+                    logger.info(
+                        f"[RAG Admin Check] Configured admin {ctx.author.id} allowed DM access"
+                    )
+                    return True
 
                 logger.warning(
-                    f"[RAG Admin Check] User {ctx.author.id} attempted RAG command in DM - only bot owner allowed"
+                    f"[RAG Admin Check] User {ctx.author.id} attempted RAG command in DM - only configured admins allowed"
                 )
                 return False
 
