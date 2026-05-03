@@ -323,7 +323,7 @@ def extract_main_content(html: str, url: str) -> Dict[str, str]:
 
     except Exception as e:
         logging.error(f"Error extracting text from HTML: {e}")
-        return ""
+        return {"content": "", "text": ""}
 
 
 def should_extract_text(content_type: str) -> Dict[str, bool]:

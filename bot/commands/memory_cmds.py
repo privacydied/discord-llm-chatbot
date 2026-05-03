@@ -100,7 +100,7 @@ class MemoryCommands(commands.Cog):
                 ]
 
             # Save the profile
-            if save_profile(profile):
+            if save_profile(profile, caller_id=str(ctx.author.id)):
                 await ctx.send(
                     f"✅ Memory added! You now have {len(profile['memories'])} memories."
                 )
@@ -199,7 +199,7 @@ class MemoryCommands(commands.Cog):
                 memory_count = len(profile["memories"])
                 profile["memories"] = []
 
-                if save_profile(profile):
+                if save_profile(profile, caller_id=str(ctx.author.id)):
                     await ctx.send(f"✅ Successfully cleared {memory_count} memories.")
                     log_command(ctx, f"Cleared {memory_count} memories")
                 else:
@@ -237,6 +237,28 @@ class MemoryCommands(commands.Cog):
     async def server_memory_add(self, ctx, *, content: str):
         """Add a memory to the server's profile."""
         try:
+            # Input validation [REH][SFT] — mirror add_memory_cmd safety
+            if not content or not content.strip():
+                await ctx.send("❌ Memory content cannot be empty.")
+                return
+
+            content = content.strip()
+
+            # Length validation to prevent memory abuse [SFT]
+            MAX_MEMORY_LENGTH = 2000
+            if len(content) > MAX_MEMORY_LENGTH:
+                await ctx.send(
+                    f"❌ Memory too long. Maximum length is {MAX_MEMORY_LENGTH} characters."
+                )
+                return
+
+            # Content validation - basic safety checks [SFT]
+            prohibited_patterns = ["<script", "javascript:", "data:", "vbscript:"]
+            content_lower = content.lower()
+            if any(pattern in content_lower for pattern in prohibited_patterns):
+                await ctx.send("❌ Memory contains prohibited content.")
+                return
+
             # Get server profile
             server_id = str(ctx.guild.id)
             profile = get_server_profile(server_id, ctx.guild.name)

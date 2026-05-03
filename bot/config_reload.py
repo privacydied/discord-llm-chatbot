@@ -226,7 +226,7 @@ def reload_env(env_path: Optional[Path] = None) -> Dict[str, Any]:
             env_after = _file_digest(target_path) if target_path.exists() else None
 
             # Validate critical required variables
-            required_vars = ["DISCORD_TOKEN"]
+            required_vars = ["DISCORD_TOKEN", "PROMPT_FILE", "VL_PROMPT_FILE"]
             missing_vars = [var for var in required_vars if not new_config.get(var)]
             if missing_vars:
                 logger.error(
@@ -359,7 +359,12 @@ def reload_env(env_path: Optional[Path] = None) -> Dict[str, Any]:
 
                     loop = asyncio.get_event_loop()
                     if loop.is_running():
-                        asyncio.create_task(restart_janitor())
+                        _task = asyncio.create_task(restart_janitor())
+                        _task.add_done_callback(
+                            lambda t: logger.error(
+                                f"Janitor restart task failed: {t.exception()}"
+                            ) if t.exception() else None
+                        )
                     else:
                         loop.run_until_complete(restart_janitor())
                 except Exception as e:
@@ -410,14 +415,16 @@ def add_reload_callback(
     callback: Callable[[Dict[str, Any], Dict[str, Any]], None],
 ) -> None:
     """Add a callback to be called when configuration is reloaded."""
-    _reload_callbacks.add(callback)
+    with _config_lock:
+        _reload_callbacks.add(callback)
 
 
 def remove_reload_callback(
     callback: Callable[[Dict[str, Any], Dict[str, Any]], None],
 ) -> None:
     """Remove a reload callback."""
-    _reload_callbacks.discard(callback)
+    with _config_lock:
+        _reload_callbacks.discard(callback)
 
 
 def _sighup_handler(signum: int, frame) -> None:

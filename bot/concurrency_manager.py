@@ -247,18 +247,16 @@ class BoundedExecutionPool:
             context.started_at = time.time()
 
             # Submit to thread pool
-            loop = asyncio.get_event_loop()
             future = self.thread_pool.submit(func, *args, **kwargs)
             self.task_futures[task_id] = future
 
             # Wait for completion with optional timeout
             try:
+                async_future = asyncio.wrap_future(future)
                 if timeout:
-                    result = await asyncio.wait_for(
-                        loop.run_in_executor(None, future.result), timeout=timeout
-                    )
+                    result = await asyncio.wait_for(async_future, timeout=timeout)
                 else:
-                    result = await loop.run_in_executor(None, future.result)
+                    result = await async_future
 
                 context.completed_at = time.time()
                 context.result = result

@@ -37,6 +37,8 @@ class TestRetryManagerLadderRefresh:
             mock_load_config.return_value = {
                 "DISCORD_TOKEN": "test_token",
                 "TEXT_FALLBACK_MODELS": "model-a,model-b",
+                "PROMPT_FILE": "prompts/system.md",
+                "VL_PROMPT_FILE": "prompts/vl-prompt.txt",
             }
 
             # Import here to get the patched version
@@ -71,7 +73,9 @@ class TestRetryManagerLadderRefresh:
             mock_path_obj.resolve.return_value = mock_path_obj
             mock_path.return_value = mock_path_obj
 
-            mock_load_config.return_value = {"DISCORD_TOKEN": "test"}
+            mock_load_config.return_value = {"DISCORD_TOKEN": "test",
+                                            "PROMPT_FILE": "prompts/system.md",
+                                            "VL_PROMPT_FILE": "prompts/vl-prompt.txt"}
 
             from bot.config_reload import reload_env
             reload_env()
@@ -101,7 +105,9 @@ class TestRetryManagerLadderRefresh:
             mock_path_obj.resolve.return_value = mock_path_obj
             mock_path.return_value = mock_path_obj
 
-            mock_load_config.return_value = {"DISCORD_TOKEN": "test"}
+            mock_load_config.return_value = {"DISCORD_TOKEN": "test",
+                                            "PROMPT_FILE": "prompts/system.md",
+                                            "VL_PROMPT_FILE": "prompts/vl-prompt.txt"}
 
             from bot.config_reload import reload_env
             result = reload_env()

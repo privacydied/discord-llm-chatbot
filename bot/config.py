@@ -392,7 +392,7 @@ def load_config():
         ),
         # LEGACY COMPATIBILITY
         "OPENAI_MODEL": os.getenv("OPENAI_MODEL", "gpt-4"),
-        "MAX_MEMORIES": _safe_int(os.getenv("MAX_MEMORIES"), "100", "MAX_MEMORIES"),
+        "MAX_MEMORIES": _safe_int(os.getenv("MAX_MEMORIES") or os.getenv("MAX_USER_MEMORY"), "100", "MAX_MEMORIES"),
         "DEFAULT_TIMEOUT": _safe_int(
             os.getenv("DEFAULT_TIMEOUT"), "30", "DEFAULT_TIMEOUT"
         ),
@@ -797,6 +797,18 @@ def load_config():
             "STT_MULTIMODAL_FALLBACK_MAX_RETRIES",
         ),
     }
+
+    # Deprecation warnings for legacy config keys [SFT]
+    if os.getenv("TEXT_MODEL"):
+        logger.warning(
+            "⚠️ TEXT_MODEL is deprecated. Use OPENAI_TEXT_MODEL instead. "
+            "Support for TEXT_MODEL will be removed in a future release."
+        )
+    if os.getenv("OPENAI_MODEL"):
+        logger.warning(
+            "⚠️ OPENAI_MODEL is deprecated. Use OPENAI_TEXT_MODEL instead. "
+            "Support for OPENAI_MODEL will be removed in a future release."
+        )
 
     # One-time startup VISION flags summary [PA]
     try:

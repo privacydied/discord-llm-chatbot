@@ -193,16 +193,31 @@ def get_profile(user_id: str, username: Optional[str] = None) -> dict:
         return profile.copy()
 
 
-def save_profile(profile: dict, force: bool = False) -> bool:
+def save_profile(profile: dict, force: bool = False, caller_id: Optional[str] = None) -> bool:
     """Save a user profile to disk using atomic writes with corruption recovery.
 
     [REH] Atomic writes ensure readers see only complete writes
     [SFT] Automatic backup and recovery on failure
+
+    Args:
+        profile: The profile dict to save.
+        force: If True, skip some safety checks (still validates integrity).
+        caller_id: Optional Discord user ID of the caller. If provided,
+                   validates that the profile belongs to the caller to
+                   prevent cross-user profile overwrites.
     """
     try:
         user_id = str(profile.get("discord_id") or profile.get("user_id") or "")
         if not user_id:
             logging.error("Cannot save profile: missing user_id")
+            return False
+
+        # Cross-user overwrite prevention [SFT]
+        if caller_id is not None and str(caller_id) != user_id:
+            logging.error(
+                f"Profile overwrite blocked: caller {caller_id} attempted to save "
+                f"profile for user {user_id}"
+            )
             return False
 
         with user_cache_lock:
@@ -697,11 +712,8 @@ def add_memory(
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
             server_memory = f"[{timestamp}] {username}: {memory_text}"
 
-            # Check for duplicates in server memories
-            if not any(
-                server_memory.lower() in mem.lower()
-                for mem in server_profile["memories"]
-            ):
+            # Check for duplicates in server memories (exact match) [SFT]
+            if server_memory not in server_profile["memories"]:
                 server_profile["memories"].append(server_memory)
 
                 # Enforce server memory limit

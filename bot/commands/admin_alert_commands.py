@@ -13,6 +13,7 @@ from discord.ext import commands
 
 from bot.config import load_config
 from bot.utils.logging import get_logger
+from bot.public_output import sanitize_public_text
 
 logger = get_logger(__name__)
 
@@ -587,6 +588,9 @@ class AdminAlertCommands(commands.Cog):
         self.logger.info(
             f"alert:direct_broadcast:start user_id={ctx.author.id} content_len={len(content)}"
         )
+
+        # Sanitize broadcast content before sending [REH]
+        content = sanitize_public_text(content)
 
         guilds_targeted = 0
         guilds_success = 0

@@ -527,8 +527,17 @@ class VisionCommands(commands.Cog):
 
     async def _download_attachment(self, attachment: discord.Attachment) -> Path:
         """Download Discord attachment to temporary file [RM]"""
-        # Create temp file with proper extension
-        suffix = Path(attachment.filename).suffix
+        # Sanitize suffix from the original filename, fall back to .bin
+        suffix = Path(attachment.filename).suffix or ".bin"
+        # Only allow known safe suffixes to prevent writing executable content
+        safe_suffixes = {
+            ".mp3", ".wav", ".ogg", ".flac", ".m4a", ".mp4",
+            ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bin",
+            ".txt", ".pdf", ".csv", ".json", ".xml", ".yml", ".yaml",
+            ".md", ".log",
+        }
+        if suffix.lower() not in safe_suffixes:
+            suffix = ".bin"
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
         temp_path = Path(temp_file.name)
         temp_file.close()

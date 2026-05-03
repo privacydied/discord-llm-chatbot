@@ -16,9 +16,9 @@ config = load_config()
 
 # Conversation store for tracking message history
 conversation_store = defaultdict(list)
-CONTEXT_TTL = 900  # 15 minutes in seconds
-CONTEXT_MAXLEN = 30
-CONTEXT_RESET_AFTER = 3600  # 1 hour in seconds
+CONTEXT_TTL = config.get("CONTEXT_TTL", 900)  # 15 minutes in seconds
+CONTEXT_MAXLEN = config.get("CONTEXT_MAXLEN", 30)
+CONTEXT_RESET_AFTER = config.get("CONTEXT_RESET_AFTER", 3600)  # 1 hour in seconds
 last_message_time = {}
 
 

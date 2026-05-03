@@ -145,8 +145,7 @@ class LLMBot(commands.Bot):
         self.background_tasks = []
         self._is_ready = asyncio.Event()
         self.system_prompts = {}
-        self._processed_messages = set()
-        self._processed_messages_order = collections.deque(maxlen=1000)  # [BUGFIX] LRU tracking for dedup
+        self._processed_messages = collections.OrderedDict()  # BUGFIX 25: OrderedDict for FIFO dedup eviction
         self._dispatch_lock = (
             asyncio.Lock()
         )  # Global lock for processed messages tracking
@@ -2463,15 +2462,10 @@ class LLMBot(commands.Bot):
                     f"Duplicate dispatch prevented for msg_id: {message.id}"
                 )
                 return
-            # LRU eviction: remove oldest when at capacity [BUGFIX: use deque for proper LRU]
+            # FIFO eviction: remove oldest when at capacity [BUGFIX 25: OrderedDict popitem]
             while len(self._processed_messages) >= 1000:
-                try:
-                    oldest = self._processed_messages_order.popleft()
-                    self._processed_messages.discard(oldest)
-                except IndexError:
-                    break
-            self._processed_messages.add(message.id)
-            self._processed_messages_order.append(message.id)
+                self._processed_messages.popitem(last=False)
+            self._processed_messages[message.id] = True
 
         # Early returns before processing
         if message.author == self.user:

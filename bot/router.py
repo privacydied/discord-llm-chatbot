@@ -25,7 +25,6 @@ import tempfile
 import time
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from unittest.mock import AsyncMock, MagicMock, Mock
 import json
 from pathlib import Path
 from typing import (
@@ -357,6 +356,11 @@ class OutputModality(Enum):
     TTS = auto()
 
 
+def _is_mock(obj: Any) -> bool:
+    """Duck-type check for mock objects — avoids unittest.mock in production."""
+    return hasattr(obj, "_mock_name") or hasattr(obj, "_is_coroutine")
+
+
 class Router:
     """Handles routing of messages to the correct processing flow."""
 
@@ -375,8 +379,10 @@ class Router:
         self._bind_flow_methods(flow_overrides)
 
         # Recent-message dedupe to prevent double processing (embed echoes, relays)
+        # TTL-based expiry keeps the deque clean over long-running sessions [REH]
+        self._DEDUP_TTL_SECONDS = 300  # 5 minutes
         self._processed_recent = collections.deque(maxlen=512)
-        self._processed_recent_set = set()
+        self._processed_recent_ts: Dict[int, float] = {}
         # Concurrency guard for dedupe to prevent race when two listeners fire simultaneously [REH]
         # Use weak references to avoid unbounded growth [BUGFIX]
         self._processing_locks: dict[int, asyncio.Lock] = {}
@@ -458,8 +464,14 @@ class Router:
                 and loop.is_running()
                 and self._vision_orchestrator
                 and not getattr(self._vision_orchestrator, "_started", False)
-            ):
-                asyncio.create_task(self._vision_orchestrator.start())
+            ) :
+                # Create task with done callback for error logging [REH]
+                _task = asyncio.create_task(self._vision_orchestrator.start())
+                _task.add_done_callback(
+                    lambda t: self.logger.error(
+                        f"Vision orchestrator start task failed: {t.exception()}"
+                    ) if t.exception() else None
+                )
                 self.logger.debug("🚀 Vision Orchestrator start queued (router init)")
         except Exception:
             # Non-fatal; lazy start path covers this if needed
@@ -1037,147 +1049,150 @@ class Router:
             lock = asyncio.Lock()
             self._syn_locks[tweet_id] = lock
         async with lock:
-            # Check cache again inside lock
-            cached = self._syn_cache.get(tweet_id)
-            if cached:
-                hit_kind = classify_syndication_cache_hit(now, self._syn_ttl_s, cached)
-                if hit_kind == "neg":
-                    self._metric_inc("x.syndication.neg_cache_hit_locked", None)
-                    return None
-                if hit_kind == "data":
-                    self._metric_inc("x.syndication.cache_hit_locked", None)
-                    return cached.get("data")
-
-            int(self.config.get("X_SYNDICATION_TIMEOUT_MS", 4000))
-            base, headers, params_variants = build_syndication_fetch_plan(tweet_id)
-            data = None
-            media_hint_keys = syndication_media_hint_keys()
-
-            def _has_usable_payload(node: Any) -> bool:
-                return syndication_has_usable_payload(
-                    node,
-                    extract_text=self._extract_syndication_text,
-                    media_hint_keys=media_hint_keys,
-                )
-
             try:
-                http_client = await get_http_client()
-                for endpoint, params in params_variants:
-                    url = build_syndication_endpoint_url(base, endpoint)
-                    self._metric_inc(
-                        "x.syndication.fetch",
-                        build_syndication_fetch_metric_payload(endpoint),
+                # Check cache again inside lock
+                cached = self._syn_cache.get(tweet_id)
+                if cached:
+                    hit_kind = classify_syndication_cache_hit(now, self._syn_ttl_s, cached)
+                    if hit_kind == "neg":
+                        self._metric_inc("x.syndication.neg_cache_hit_locked", None)
+                        return None
+                    if hit_kind == "data":
+                        self._metric_inc("x.syndication.cache_hit_locked", None)
+                        return cached.get("data")
+
+                base, headers, params_variants = build_syndication_fetch_plan(tweet_id)
+                data = None
+                media_hint_keys = syndication_media_hint_keys()
+
+                def _has_usable_payload(node: Any) -> bool:
+                    return syndication_has_usable_payload(
+                        node,
+                        extract_text=self._extract_syndication_text,
+                        media_hint_keys=media_hint_keys,
                     )
-                    resp = await http_client.get(url, headers=headers, params=params)
-                    if resp.status_code != 200:
-                        self.logger.info(
-                            "Syndication non-200",
-                            extra=build_syndication_non_200_log_payload(
-                                tweet_id=tweet_id,
-                                status=resp.status_code,
-                                endpoint=endpoint,
-                            ),
-                        )
+
+                try:
+                    http_client = await get_http_client()
+                    for endpoint, params in params_variants:
+                        url = build_syndication_endpoint_url(base, endpoint)
                         self._metric_inc(
-                            "x.syndication.non_200",
-                            build_syndication_non_200_metric_payload(
-                                status=resp.status_code,
-                                endpoint=endpoint,
-                            ),
-                        )
-                        continue
-                    try:
-                        data = resp.json()
-                    except Exception:
-                        self._metric_inc(
-                            "x.syndication.invalid_json",
+                            "x.syndication.fetch",
                             build_syndication_fetch_metric_payload(endpoint),
                         )
-                        continue
-                    # If the JSON lacks usable text, try oEmbed fallbacks before moving on
-                    if not _has_usable_payload(data):
-                        oembed_url, oembed_fallbacks = (
-                            build_syndication_oembed_fallback_plan(tweet_id)
-                        )
-                        for (
-                            metric_endpoint,
-                            oembed_params,
-                        ) in oembed_fallbacks:
-                            if _has_usable_payload(data):
-                                break
-                            try:
-                                self._metric_inc(
-                                    "x.syndication.fetch",
-                                    build_syndication_fetch_metric_payload(
-                                        metric_endpoint
-                                    ),
-                                )
-                                resp_oe = await http_client.get(
-                                    oembed_url, headers=headers, params=oembed_params
-                                )
-                                oembed_data = extract_oembed_payload_from_response(
-                                    resp_oe
-                                )
-                                if oembed_data:
-                                    data = oembed_data
-                            except Exception:
-                                pass
-                    # Break when we have usable data; otherwise continue to next variant
-                    if _has_usable_payload(data):
-                        break
-            except Exception as e:
-                self.logger.info(
-                    "Syndication fetch failed",
-                    extra=build_syndication_fetch_failed_payload(
-                        tweet_id=tweet_id,
-                        error=str(e),
-                    ),
-                )
-                self._metric_inc("x.syndication.error", None)
-                return None
-
-            # Minimal validation: require text field
-            if not _has_usable_payload(data):
-                try:
+                        resp = await http_client.get(url, headers=headers, params=params)
+                        if resp.status_code != 200:
+                            self.logger.info(
+                                "Syndication non-200",
+                                extra=build_syndication_non_200_log_payload(
+                                    tweet_id=tweet_id,
+                                    status=resp.status_code,
+                                    endpoint=endpoint,
+                                ),
+                            )
+                            self._metric_inc(
+                                "x.syndication.non_200",
+                                build_syndication_non_200_metric_payload(
+                                    status=resp.status_code,
+                                    endpoint=endpoint,
+                                ),
+                            )
+                            continue
+                        try:
+                            data = resp.json()
+                        except Exception:
+                            self._metric_inc(
+                                "x.syndication.invalid_json",
+                                build_syndication_fetch_metric_payload(endpoint),
+                            )
+                            continue
+                        # If the JSON lacks usable text, try oEmbed fallbacks before moving on
+                        if not _has_usable_payload(data):
+                            oembed_url, oembed_fallbacks = (
+                                build_syndication_oembed_fallback_plan(tweet_id)
+                            )
+                            for (
+                                metric_endpoint,
+                                oembed_params,
+                            ) in oembed_fallbacks:
+                                if _has_usable_payload(data):
+                                    break
+                                try:
+                                    self._metric_inc(
+                                        "x.syndication.fetch",
+                                        build_syndication_fetch_metric_payload(
+                                            metric_endpoint
+                                        ),
+                                    )
+                                    resp_oe = await http_client.get(
+                                        oembed_url, headers=headers, params=oembed_params
+                                    )
+                                    oembed_data = extract_oembed_payload_from_response(
+                                        resp_oe
+                                    )
+                                    if oembed_data:
+                                        data = oembed_data
+                                except Exception:
+                                    pass
+                        # Break when we have usable data; otherwise continue to next variant
+                        if _has_usable_payload(data):
+                            break
+                except Exception as e:
                     self.logger.info(
-                        "x.text.miss",
-                        extra=build_x_text_miss_payload(
+                        "Syndication fetch failed",
+                        extra=build_syndication_fetch_failed_payload(
+                            tweet_id=tweet_id,
+                            error=str(e),
+                        ),
+                    )
+                    self._metric_inc("x.syndication.error", None)
+                    return None
+
+                # Minimal validation: require text field
+                if not _has_usable_payload(data):
+                    try:
+                        self.logger.info(
+                            "x.text.miss",
+                            extra=build_x_text_miss_payload(
+                                primary=tweet_id,
+                                layer="syndication",
+                                reason="no_text",
+                            ),
+                        )
+                    except Exception:
+                        pass
+                    self._metric_inc("x.syndication.invalid", None)
+                    # Negative cache to avoid repeated hits for unavailable/blocked tweets
+                    self._syn_cache[tweet_id] = build_syndication_negative_cache_entry(
+                        time.time()
+                    )
+                    self._metric_inc("x.syndication.neg_store", None)
+                    return None
+
+                # Cache and return
+                self._syn_cache[tweet_id] = build_syndication_cache_entry(
+                    data,
+                    time.time(),
+                )
+                self._metric_inc("x.syndication.success", None)
+                # Periodic eviction of stale cache entries and unused locks [BUGFIX: prevent unbounded growth]
+                self._maybe_evict_stale_syn_entries()
+                try:
+                    txt = self._extract_syndication_text(data)
+                    self.logger.info(
+                        "x.text.resolve",
+                        extra=build_x_text_resolve_payload(
                             primary=tweet_id,
-                            layer="syndication",
-                            reason="no_text",
+                            source="syndication",
+                            chars=len(txt),
                         ),
                     )
                 except Exception:
                     pass
-                self._metric_inc("x.syndication.invalid", None)
-                # Negative cache to avoid repeated hits for unavailable/blocked tweets
-                self._syn_cache[tweet_id] = build_syndication_negative_cache_entry(
-                    time.time()
-                )
-                self._metric_inc("x.syndication.neg_store", None)
-                return None
-
-            # Cache and return
-            self._syn_cache[tweet_id] = build_syndication_cache_entry(
-                data,
-                time.time(),
-            )
-            self._metric_inc("x.syndication.success", None)
-            # Periodic eviction of stale cache entries and unused locks [BUGFIX: prevent unbounded growth]
-            self._maybe_evict_stale_syn_entries()
-            try:
-                txt = self._extract_syndication_text(data)
-                self.logger.info(
-                    "x.text.resolve",
-                    extra=build_x_text_resolve_payload(
-                        primary=tweet_id,
-                        source="syndication",
-                        chars=len(txt),
-                    ),
-                )
-            except Exception:
-                pass
-            return data
+                return data
+            finally:
+                # BUGFIX 47: Remove lock from _syn_locks after async block completes
+                self._syn_locks.pop(tweet_id, None)
 
     def _maybe_evict_stale_syn_entries(self, max_cache: int = 512) -> None:
         """Evict stale syndication cache entries and clean up orphaned locks. [BUGFIX: prevent unbounded growth]"""
@@ -1749,7 +1764,10 @@ class Router:
         """Run a lightweight yt-dlp metadata probe to detect presence of video/audio.
         Returns parsed JSON on success or None on errors/timeouts.
         """
-        cmd = ["yt-dlp", "--dump-json", "--no-playlist", "--quiet", url]
+        # Validate URL scheme to prevent argument injection [SFT]
+        if not url.lower().startswith(("http://", "https://")):
+            return None
+        cmd = ["yt-dlp", "--dump-json", "--no-playlist", "--quiet", "--", url]
         try:
             proc = await asyncio.create_subprocess_exec(
                 *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
@@ -2290,7 +2308,7 @@ class Router:
         - URLs: direct image URL → download+VL; otherwise screenshot→VL
         - Embeds: try image/thumbnail URL similarly
         """
-        if isinstance(self.bot, (Mock, MagicMock)):
+        if _is_mock(self.bot):
             try:
                 name = (
                     getattr(getattr(item, "payload", None), "filename", "") or "image"
@@ -2457,7 +2475,8 @@ class Router:
         """Single source-of-truth gate: decide if this message should be processed.
         Cheap, synchronous, and config-driven. No network or heavy CPU allowed here.
         """
-        self._gate_denied.pop(getattr(message, "id", None), None)
+        # BUGFIX 43: Don't pop _gate_denied on entry (breaks idempotency).
+        # Denial state is set only on denial paths; consumed by clear_dispatch_metadata.
         cfg = self.config
         owners: list[int] = cfg.get("OWNER_IDS", [])
         triggers: list[str] = cfg.get(
@@ -2775,6 +2794,7 @@ class Router:
             self._metric_inc("gate.allowed", {"reason": "command_prefix"})
             return True
 
+        self._gate_denied[message.id] = "not_addressed"
         self.logger.info(
             f"gate.block | reason=not_addressed msg_id={message.id}",
             extra={
@@ -2964,8 +2984,8 @@ class Router:
     async def _compat_dispatch_for_tests(
         self, message: Message, clean_content: str
     ) -> Optional[ResponseMessage]:
-        """Simplified routing path for unit tests using MagicMock bots."""
-        if not isinstance(self.bot, MagicMock):
+        """Simplified routing path for unit tests using mock bots."""
+        if not _is_mock(self.bot):
             return None
 
         raw_content = clean_content or ""
@@ -3178,24 +3198,33 @@ class Router:
             except Exception:
                 lock = asyncio.Lock()
             async with lock:
-                if getattr(message, "id", None) in self._processed_recent_set:
-                    self.logger.info(
-                        "gate.skip",
-                        extra={
-                            "event": "gate.skip",
-                            "reason": "duplicate",
-                            "msg_id": getattr(message, "id", None),
-                        },
-                    )
-                    return None
+                msg_id = getattr(message, "id", None)
+                now = time.monotonic()
+                if msg_id is not None:
+                    # Check TTL — expire old entries lazily
+                    if msg_id in self._processed_recent_ts:
+                        if now - self._processed_recent_ts[msg_id] < self._DEDUP_TTL_SECONDS:
+                            self.logger.info(
+                                "gate.skip",
+                                extra={
+                                    "event": "gate.skip",
+                                    "reason": "duplicate",
+                                    "msg_id": msg_id,
+                                },
+                            )
+                            return None
+                        else:
+                            # TTL expired — clean up
+                            self._processed_recent_ts.pop(msg_id, None)
 
                 # Mark as processed (dedupe window)
                 try:
-                    if len(self._processed_recent) == self._processed_recent.maxlen:
-                        old_id = self._processed_recent.popleft()
-                        self._processed_recent_set.discard(old_id)
-                    self._processed_recent.append(message.id)
-                    self._processed_recent_set.add(message.id)
+                    if msg_id is not None:
+                        if len(self._processed_recent) == self._processed_recent.maxlen:
+                            old_id = self._processed_recent.popleft()
+                            self._processed_recent_ts.pop(old_id, None)
+                        self._processed_recent.append(msg_id)
+                        self._processed_recent_ts[msg_id] = now
                 except Exception:
                     pass
 
@@ -3215,7 +3244,7 @@ class Router:
                 pass
 
             # 1b. Compatibility fast-path for legacy tests: attachments + empty content
-            # Run this BEFORE gating and typing() to avoid MagicMock issues in tests
+            # Run this BEFORE gating and typing() to avoid mock issues in tests
             try:
                 has_attachments = (
                     bool(getattr(message, "attachments", None))
@@ -3230,7 +3259,7 @@ class Router:
             if (
                 has_attachments
                 and cleaned_for_compat == ""
-                and not isinstance(self.bot, (Mock, MagicMock))
+                and not _is_mock(self.bot)
             ):
                 # If all attachments are plain text (.txt/text/*), skip the legacy
                 # attachment compat path so the text ingestion path can handle them.
@@ -3412,7 +3441,7 @@ class Router:
                 if (
                     has_attachments
                     and cleaned_for_compat == ""
-                    and not isinstance(self.bot, (Mock, MagicMock))
+                    and not _is_mock(self.bot)
                 ):
                     # If all attachments are plain text (.txt/text/*), skip legacy compat path
                     try:
@@ -4095,6 +4124,16 @@ class Router:
                     ]
                     for old_id in old_ids:
                         self._processing_locks.pop(old_id, None)
+                    # BUGFIX 46: Also evict stale metadata entries without active processing
+                    active_ids = set(self._processing_locks.keys())
+                    for meta_dict in (
+                        self._dispatch_metadata,
+                        self._gate_denied,
+                        self._prefilter_gate,
+                    ):
+                        stale = [k for k in list(meta_dict.keys()) if k not in active_ids]
+                        for k in stale:
+                            meta_dict.pop(k, None)
             except Exception:
                 pass
 
@@ -4238,7 +4277,7 @@ class Router:
         Returns the BotAction instead of executing it directly.
         """
         # Simplified path for unit tests using mock bots to avoid network/file IO
-        if isinstance(self.bot, (Mock, MagicMock)):
+        if _is_mock(self.bot):
             items = collect_input_items(message) or []
             results: List[str] = []
             handler_timeout_s = 5.0
@@ -4333,10 +4372,10 @@ class Router:
 
             flow_fn = getattr(self, "_flow_process_text", None)
             invoke_flow = getattr(self, "_invoke_text_flow", None)
-            if isinstance(flow_fn, (AsyncMock, MagicMock)):
+            if _is_mock(flow_fn):
                 for res in results:
                     await flow_fn(res, message, context_str)
-            elif isinstance(invoke_flow, (AsyncMock, MagicMock)):
+            elif _is_mock(invoke_flow):
                 for res in results:
                     await invoke_flow(res, message, context_str)
 
@@ -7437,7 +7476,7 @@ class Router:
                     pass
                 return None
 
-            if isinstance(self.bot, (Mock, MagicMock)) and self._vision_intent_router:
+            if _is_mock(self.bot) and self._vision_intent_router:
                 try:
                     intent_result = await self._vision_intent_router.determine_intent(
                         user_message=content_clean,
@@ -7496,7 +7535,7 @@ class Router:
                         intent_result, message, context_str
                     )
 
-            if dry_run and isinstance(self.bot, (Mock, MagicMock)):
+            if dry_run and _is_mock(self.bot):
                 try:
                     self._metric_inc("vision.route.direct", {"stage": "precheck"})
                 except Exception:
@@ -7512,7 +7551,7 @@ class Router:
                     )
                 )
 
-            if isinstance(self.bot, (Mock, MagicMock)):
+            if _is_mock(self.bot):
                 from types import SimpleNamespace
 
                 intent_result = SimpleNamespace()

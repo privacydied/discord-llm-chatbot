@@ -169,6 +169,14 @@ async def external_screenshot(url: str) -> str | None:
             response = await client.get(api_url, follow_redirects=True, timeout=60.0)
             response.raise_for_status()
 
+            # SSRF protection: validate redirect target hostname [SFT]
+            redirect_hostname = urlparse(str(response.url)).hostname or ""
+            if _is_private_hostname(redirect_hostname):
+                logger.warning(
+                    f"⚠️ Screenshot API redirected to private/internal IP: {redirect_hostname}"
+                )
+                return None
+
         # Generate a safe filename from the original URL (use coerced string)
         parsed_url = urlparse(original_url_str)
         domain = parsed_url.netloc.replace(".", "_")

@@ -54,10 +54,10 @@ class TestConfigReload:
         redacted = _redact_sensitive_values(config)
 
         # Sensitive values should be redacted
-        assert redacted["DISCORD_TOKEN"] == "***6789"
-        assert redacted["OPENAI_API_KEY"] == "***cdef"
-        assert redacted["SECRET_KEY"] == "***123"
-        assert redacted["PASSWORD"] == "***word"
+        assert redacted["DISCORD_TOKEN"] == "[REDACTED]"
+        assert redacted["OPENAI_API_KEY"] == "[REDACTED]"
+        assert redacted["SECRET_KEY"] == "[REDACTED]"
+        assert redacted["PASSWORD"] == "[REDACTED]"
 
         # Normal values should be unchanged
         assert redacted["NORMAL_SETTING"] == "public_value"
@@ -92,7 +92,10 @@ class TestConfigReload:
 
         # Mock config loading
         old_config = {"KEY1": "old", "KEY2": "same"}
-        new_config = {"KEY1": "new", "KEY2": "same", "KEY3": "added"}
+        new_config = {"KEY1": "new", "KEY2": "same", "KEY3": "added",
+                       "DISCORD_TOKEN": "mock-token",
+                       "PROMPT_FILE": "prompts/system.md",
+                       "VL_PROMPT_FILE": "prompts/vl-prompt.txt"}
 
         # Set initial state
         with patch("bot.config_reload._current_config", old_config):
@@ -193,7 +196,7 @@ class TestConfigReloadIntegration:
         with patch("bot.config_reload._current_config", test_config):
             debug_config = get_config_for_debug()
 
-            assert debug_config["DISCORD_TOKEN"] == "***123"
+            assert debug_config["DISCORD_TOKEN"] == "[REDACTED]"
             assert debug_config["PUBLIC_SETTING"] == "public_value"
 
 
