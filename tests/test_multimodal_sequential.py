@@ -368,6 +368,24 @@ Doomguy stands in front of a horde of demons in a fiery arena."""
     assert "This is a Doom tweet with an image of Doomguy." in prompt
 
 
+def test_collect_input_items_skips_instagram_preview_embed_when_url_present():
+    """Discord link preview embeds for Instagram mirrors should not become duplicate VIDEO_URL items."""
+    message = MagicMock(spec=Message)
+    message.id = 1502026808160157737
+    message.content = "<@12345> https://d.vxinstagram.com/reel/DVMPNJtE50x/?igsh="
+    message.attachments = []
+
+    embed = MagicMock(spec=Embed)
+    embed.url = "https://d.vxinstagram.com/reel/DVMPNJtE50x/?igsh="
+    message.embeds = [embed]
+
+    items = collect_input_items(message)
+
+    assert len(items) == 1
+    assert items[0].source_type == "url"
+    assert items[0].payload == "https://d.vxinstagram.com/reel/DVMPNJtE50x/?igsh="
+
+
 def test_collect_input_items_order():
     """Test that collect_input_items preserves order correctly."""
     message = MagicMock(spec=Message)

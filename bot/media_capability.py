@@ -53,6 +53,8 @@ MEDIA_CAPABLE_DOMAINS = {
     # "facebook.com",
     "fb.com",
     "instagram.com",
+    "kkinstagram.com",
+    "d.vxinstagram.com",
     "linkedin.com",
 }
 
@@ -133,6 +135,19 @@ class MediaCapabilityDetector:
         logger.debug(f"🔍 Probing URL for media capability: {url}")
 
         try:
+            from .video_ingest import VideoIngestionManager
+
+            if VideoIngestionManager._is_vxinstagram_page_url(url):
+                return True, "vxinstagram media page"
+
+            probe_url = VideoIngestionManager._canonicalize_instagram_url_for_ytdlp(url)
+            if probe_url != url.split("#", 1)[0]:
+                logger.info(
+                    "media.probe.instagram.canonicalized original_host=%s canonical_url=%s",
+                    (urlparse(url).netloc or "").lower(),
+                    probe_url[:120],
+                )
+
             # Use yt-dlp to simulate extraction without downloading
             cmd = [
                 "yt-dlp",
@@ -144,7 +159,7 @@ class MediaCapabilityDetector:
                 "title",
                 "--print",
                 "duration",
-                url,
+                probe_url,
             ]
 
             proc = await asyncio.wait_for(

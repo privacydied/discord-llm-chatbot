@@ -7,13 +7,14 @@ import os
 import re
 import asyncio
 import hashlib
+import html
 import json
 import shutil
 import tempfile
 import urllib.request
 from pathlib import Path
 from typing import Dict, Any, Optional, Tuple
-from urllib.parse import ParseResult, urlparse
+from urllib.parse import ParseResult, urlparse, urlunparse
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
@@ -67,8 +68,11 @@ SUPPORTED_PATTERNS = [
     r"https?://(?:www|m|mbasic)\.facebook\.com/(?:[^/?#]+/)?videos/\d+/?",
     r"https?://fb\.watch/[0-9A-Za-z_-]+/?",
     # ---------- Instagram ----------
-    r"https?://(?:www\.)?instagram\.com/(?:p|reel|tv)/[0-9A-Za-z_-]+/?",
-    r"https?://(?:www\.)?instagram\.com/stories/[^/]+/\d+/?",
+    r"https?://(?:www\.)?(?:instagram|kkinstagram)\.com/(?:p|reel|tv)/[0-9A-Za-z_-]+/?",
+    r"https?://d\.vxinstagram\.com/(?:p|reel|tv)/[0-9A-Za-z_-]+/?",
+    r"https?://d\.vxinstagram\.com/offload/[^\s?#]+\.(?:mp4|m4a|aac|opus|ogg|mp3|webm)(?:\?[^\s#]+)?",
+    r"https?://(?:www\.)?(?:instagram|kkinstagram)\.com/stories/[^/]+/\d+/?",
+    r"https?://d\.vxinstagram\.com/stories/[^/]+/\d+/?",
     # ---------- Vimeo ----------
     r"https?://(?:www\.)?vimeo\.com/(?:\d+|ondemand/[^/?#]+/[^/?#]+|channels/[^/?#]+/\d+)",
     # ---------- Dailymotion ----------
@@ -200,6 +204,9 @@ _DOMAIN_EXTRACTOR_MAP: Dict[str, str] = {
     "fixupx.com": "twitter",
     "instagram.com": "instagram",
     "www.instagram.com": "instagram",
+    "kkinstagram.com": "instagram",
+    "www.kkinstagram.com": "instagram",
+    "d.vxinstagram.com": "instagram",
     "reddit.com": "reddit",
     "www.reddit.com": "reddit",
     "v.redd.it": "reddit",
@@ -361,11 +368,120 @@ class VideoIngestionManager:
         return any(re.match(pattern, base_url) for pattern in SUPPORTED_PATTERNS)
 
     @staticmethod
+    def _is_supported_instagram_content_path(path: str) -> bool:
+        return bool(
+            re.match(r"^/(?:p|reel|tv)/[0-9A-Za-z_-]+/?$", path or "")
+            or re.match(r"^/stories/[^/]+/\d+/?$", path or "")
+        )
+
+    @staticmethod
+    def _canonicalize_instagram_url_for_ytdlp(url: str) -> str:
+        """
+        Map supported kkinstagram mirror URLs to instagram.com for yt-dlp.
+        d.vxinstagram pages expose direct media and are resolved separately to avoid Instagram login walls.
+        Preserves path and query, drops fragments, and leaves unsupported paths/hosts unchanged.
+        """
+        if not url:
+            return url
+        try:
+            parsed = urlparse(url)
+            host = (parsed.netloc or "").lower()
+            if host not in {"kkinstagram.com", "www.kkinstagram.com"}:
+                return url.split("#", 1)[0]
+
+            if not VideoIngestionManager._is_supported_instagram_content_path(parsed.path):
+                return url
+
+            canonical = parsed._replace(
+                scheme="https",
+                netloc="www.instagram.com",
+                fragment="",
+            )
+            return urlunparse(canonical)
+        except Exception:
+            return url
+
+    @staticmethod
+    def _is_vxinstagram_page_url(url: str) -> bool:
+        try:
+            parsed = urlparse(url)
+            return (
+                (parsed.netloc or "").lower() == "d.vxinstagram.com"
+                and VideoIngestionManager._is_supported_instagram_content_path(parsed.path)
+            )
+        except Exception:
+            return False
+
+    @staticmethod
+    def _extract_vxinstagram_direct_media_url(html_text: str) -> Optional[str]:
+        for pattern in (
+            r'<meta[^>]+property=["\']og:video(?::secure_url)?["\'][^>]+content=["\']([^"\']+)["\']',
+            r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:video(?::secure_url)?["\']',
+            r'<meta[^>]+name=["\']twitter:player:stream["\'][^>]+content=["\']([^"\']+)["\']',
+            r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+name=["\']twitter:player:stream["\']',
+        ):
+            match = re.search(pattern, html_text, flags=re.IGNORECASE)
+            if not match:
+                continue
+            candidate = html.unescape(match.group(1).strip())
+            parsed = urlparse(candidate)
+            if (
+                parsed.scheme in {"http", "https"}
+                and (parsed.netloc or "").lower() == "d.vxinstagram.com"
+                and VideoIngestionManager._is_direct_media_url(candidate)
+            ):
+                return candidate
+        return None
+
+    async def _resolve_vxinstagram_direct_media_url(
+        self, url: str, timeout_s: float
+    ) -> Optional[str]:
+        if not self._is_vxinstagram_page_url(url):
+            return None
+
+        def _worker() -> Optional[str]:
+            req = urllib.request.Request(url.split("#", 1)[0], method="GET")
+            req.add_header(
+                "User-Agent",
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/120.0 Safari/537.36",
+            )
+            with urllib.request.urlopen(req, timeout=timeout_s) as resp:
+                content_type = (resp.headers.get("Content-Type") or "").lower()
+                if "text/html" not in content_type:
+                    return None
+                body = resp.read(256 * 1024).decode("utf-8", errors="ignore")
+            return self._extract_vxinstagram_direct_media_url(body)
+
+        try:
+            media_url = await asyncio.to_thread(_worker)
+        except Exception as exc:
+            logger.debug("vxinstagram direct media resolution failed: %s", exc)
+            return None
+
+        if media_url:
+            logger.info(
+                "stt.vxinstagram.direct_media_resolved original_url=%s media_url=%s",
+                url[:80],
+                media_url[:120],
+            )
+        return media_url
+
+    @staticmethod
     def _get_source_type(url: str) -> str:
         if "youtube.com" in url or "youtu.be" in url:
             return "youtube"
         if "tiktok.com" in url:
             return "tiktok"
+        if any(
+            host in url
+            for host in (
+                "instagram.com",
+                "kkinstagram.com",
+                "vxinstagram.com",
+            )
+        ):
+            return "instagram"
         return "unknown"
 
     @staticmethod
@@ -838,7 +954,6 @@ class VideoIngestionManager:
             raise VideoIngestError(f"Unsupported URL format: {url}")
 
         async with _download_semaphore:
-            url_no_fragment = url.split("#", 1)[0]
             metadata_timeout = float(os.getenv("YTDLP_METADATA_TIMEOUT_S", "10"))
             download_timeout = float(os.getenv("YTDLP_DOWNLOAD_TIMEOUT_S", "25"))
             budget_limit_env = os.environ.get("MEDIA_PER_ITEM_BUDGET")
@@ -849,6 +964,27 @@ class VideoIngestionManager:
                     download_timeout = min(download_timeout, max(15.0, budget_s - 5.0))
                 except Exception:
                     pass
+
+            vx_direct_media_url = await self._resolve_vxinstagram_direct_media_url(
+                url, min(metadata_timeout, 10.0)
+            )
+            if vx_direct_media_url:
+                parsed_direct = urlparse(vx_direct_media_url)
+                return await self._direct_media_fallback(
+                    original_url=url,
+                    media_url=vx_direct_media_url,
+                    parsed=parsed_direct,
+                    force_refresh=force_refresh,
+                    timeout_s=download_timeout,
+                )
+
+            url_no_fragment = self._canonicalize_instagram_url_for_ytdlp(url)
+            if url_no_fragment != url.split("#", 1)[0]:
+                logger.info(
+                    "stt.instagram.canonicalized original_host=%s canonical_url=%s",
+                    (urlparse(url).netloc or "").lower(),
+                    url_no_fragment[:120],
+                )
             parsed_url = urlparse(url_no_fragment)
             direct_candidate = self._is_direct_media_url(url_no_fragment)
 
