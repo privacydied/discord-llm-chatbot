@@ -122,6 +122,7 @@ async def setup_commands(bot) -> None:
             "video_commands": "VideoCommands",
             "rag_commands": "RAGCommands",
             "img_commands": "ImgCommands",
+            "archive_commands": "ArchiveCommands",
         }
 
         for module_name, cog_name in module_imports.items():

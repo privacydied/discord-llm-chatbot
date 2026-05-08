@@ -11,6 +11,7 @@ from discord.ext import commands, tasks
 from .memory import save_all_profiles, save_all_server_profiles, start_memory_service, stop_memory_service
 from .config import load_config
 from .janitor import start_janitor, stop_janitor
+from bot.server_archive import start_server_archive_service as start_native_server_archive_service, stop_server_archive_service as stop_native_server_archive_service
 
 logger = logging.getLogger(__name__)
 # Global task registry
@@ -114,6 +115,9 @@ class TaskManager:
             # Start curated memory service
             await start_memory_service(self.bot)
 
+            # Start server archive service
+            await start_native_server_archive_service(self.bot)
+
             # Start janitor task
             await self._start_janitor()
 
@@ -143,7 +147,11 @@ class TaskManager:
         except Exception as e:
             logger.warning(f"Error stopping curated memory service: {e}")
 
-        # Cancel all registered tasks
+        # Stop server archive service
+        try:
+            await stop_native_server_archive_service()
+        except Exception as e:
+            logger.warning(f"Error stopping server archive service: {e}")
         for task_name, task in self.tasks.items():
             try:
                 task.cancel()

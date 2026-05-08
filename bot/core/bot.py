@@ -28,6 +28,7 @@ from bot.http_client import cleanup_http_client
 from bot.utils.logging import get_logger
 from bot.metrics import NullMetrics
 from bot.memory import load_all_profiles, enqueue_inferred_memory, start_memory_service, stop_memory_service
+from bot.server_archive import start_server_archive_service, stop_server_archive_service
 from bot.memory.context_manager import ContextManager
 from bot.memory.enhanced_context_manager import EnhancedContextManager
 from bot.events import setup_command_error_handler
@@ -142,6 +143,7 @@ class LLMBot(commands.Bot):
         self.server_profiles = {}
         self.memory_save_task = None
         self.tts_manager: Optional[TTSManager] = None
+        self.archive_service = None
         self.router: Optional[Router] = None
         self.background_tasks = []
         self._is_ready = asyncio.Event()
@@ -321,61 +323,9 @@ class LLMBot(commands.Bot):
     async def _optional_typing(
         self, channel, *, base_extra: Optional[Dict[str, Any]] = None
     ):
-        """Enter typing() when available, but don't fail the send path if it errors."""
-        typing_factory = getattr(channel, "typing", None)
-        if not callable(typing_factory):
-            yield
-            return
-
-        ctx = None
-        entered = False
-        for attempt in range(1, 4):
-            try:
-                ctx = typing_factory()
-                await ctx.__aenter__()
-                entered = True
-                break
-            except discord.HTTPException as exc:
-                if not self._is_retryable_discord_http_error(exc):
-                    try:
-                        self.logger.warning(
-                            "discord.typing.skip | non_retryable_error",
-                            extra={**(base_extra or {}), "event": "discord.typing.skip"},
-                        )
-                    except Exception:
-                        pass
-                    ctx = None
-                    break
-
-                if attempt >= 3:
-                    try:
-                        self.logger.warning(
-                            f"discord.typing.skip | retries_exhausted status={getattr(exc, 'status', 'n/a')}",
-                            extra={**(base_extra or {}), "event": "discord.typing.skip"},
-                        )
-                    except Exception:
-                        pass
-                    ctx = None
-                    break
-
-                delay = self._discord_retry_delay(exc, attempt)
-                try:
-                    self.logger.warning(
-                        f"discord.retry | op=typing attempt={attempt}/3 status={getattr(exc, 'status', 'n/a')} delay={delay:.2f}s details={str(exc)}",
-                        extra={**(base_extra or {}), "event": "discord.retry", "op": "typing"},
-                    )
-                except Exception:
-                    pass
-                await asyncio.sleep(delay)
-
-        try:
-            yield
-        finally:
-            if entered and ctx is not None:
-                try:
-                    await ctx.__aexit__(None, None, None)
-                except Exception:
-                    pass
+        """Typing is disabled here to avoid Discord typing rate limits."""
+        yield
+        return
 
     async def process_commands(self, message: discord.Message) -> Optional[Any]:
         """
@@ -1612,8 +1562,6 @@ class LLMBot(commands.Bot):
             extra={**base_extra, "event": "dispatch.send.attempt"},
         )
 
-        sent_message = None
-        # Show typing indicator while sending the message
         async with self._optional_typing(message.channel, base_extra=base_extra):
             try:
                 if needs_chunking and (content or action.embeds or files):
@@ -2251,20 +2199,20 @@ class LLMBot(commands.Bot):
                 if self.enhanced_context_manager and sent:
                     await self.enhanced_context_manager.append_message(sent, role="bot")
             except discord.errors.HTTPException as e:
-                try:
-                    self.logger.error(
-                        f"dispatch:error | part={part_idx}/{total_parts} code={e.code} status={getattr(e, 'status', 'n/a')} details={str(e)}",
-                        extra={
-                            **base_extra,
-                            "event": "dispatch.send.error",
-                            "part": part_idx,
-                            "parts": total_parts,
-                        },
-                        exc_info=True,
-                    )
-                except Exception:
-                    pass
-                break
+                    try:
+                        self.logger.error(
+                            f"dispatch:error | part={part_idx}/{total_parts} code={e.code} status={getattr(e, 'status', 'n/a')} details={str(e)}",
+                            extra={
+                                **base_extra,
+                                "event": "dispatch.send.error",
+                                "part": part_idx,
+                                "parts": total_parts,
+                            },
+                            exc_info=True,
+                        )
+                    except Exception:
+                        pass
+                    break
 
         return last_sent
 
@@ -2388,6 +2336,8 @@ class LLMBot(commands.Bot):
             f"{prefix}rag refresh",
             f"{prefix}rag update",
             f"{prefix}rag scan",
+            f"{prefix}archive-sync",
+            f"{prefix}archive-sync-channel",
             # Add other potentially long-running commands here
         ]
 
@@ -2544,6 +2494,18 @@ class LLMBot(commands.Bot):
                 self._processed_messages.popitem(last=False)
             self._processed_messages[message.id] = True
 
+        # Best-effort archive enqueue for guild messages; never block the main flow.
+        try:
+            archive_service = getattr(self, "archive_service", None)
+            if archive_service is not None and getattr(archive_service, "enabled", True):
+                async def _archive_enqueue() -> None:
+                    await archive_service.enqueue_live_message(message)
+
+                task = asyncio.create_task(_archive_enqueue(), name=f"server_archive_enqueue_{message.id}")
+                task.add_done_callback(lambda t: t.exception() if t.done() and not t.cancelled() else None)
+        except Exception:
+            self.logger.debug(f"archive_enqueue_failed | msg_id:{message.id}")
+
         # Early returns before processing
 
         if (
@@ -2697,6 +2659,20 @@ class LLMBot(commands.Bot):
             asyncio.create_task(start_memory_service(self))
             self.memory_save_task = setup_memory_save_task(self)
             self.memory_save_task.start()
+            archive_start_task = asyncio.create_task(
+                start_server_archive_service(self), name="server_archive_start"
+            )
+
+            def _log_archive_start_failure(task):
+                try:
+                    self.archive_service = task.result()
+                except Exception as exc:
+                    self.logger.error(
+                        f"Server archive startup failed: {exc}", exc_info=True
+                    )
+
+            archive_start_task.add_done_callback(_log_archive_start_failure)
+            self.background_tasks.append(archive_start_task)
         except Exception as e:
             self.logger.error(f"Failed to set up background tasks: {e}", exc_info=True)
 
@@ -2823,6 +2799,7 @@ class LLMBot(commands.Bot):
             ("screenshot_commands", "ScreenshotCommands"),
             ("image_upgrade_commands", "ImageUpgradeCommands"),
             ("admin_alert_commands", "AdminAlertCommands"),
+            ("archive_commands", "ArchiveCommands"),
         ]
 
         command_modules = []  # List of (module_name, success_status)
@@ -3009,6 +2986,12 @@ class LLMBot(commands.Bot):
                 await stop_memory_service()
             except Exception as e:
                 self.logger.warning(f"Error stopping curated memory service: {e}")
+
+            # Stop server archive service
+            try:
+                await stop_server_archive_service()
+            except Exception as e:
+                self.logger.warning(f"Error stopping server archive service: {e}")
 
             # Close Vision Orchestrator (if initialized either on bot or via router fallback)
             try:

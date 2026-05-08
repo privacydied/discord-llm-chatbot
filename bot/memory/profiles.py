@@ -397,11 +397,16 @@ def save_server_profile(guild_id, force: bool = False) -> bool:
             else:
                 gid = str(guild_id)
                 if gid not in server_cache:
-                    logging.error(
-                        f"Cannot save server profile: guild {gid} not in cache"
+                    # Instead of failing, lazily initialize from disk or defaults.
+                    # This avoids recurring "not in cache" errors during autosave
+                    # when a profile was evicted or not loaded on startup.
+                    logging.warning(
+                        f"Server profile for guild {gid} not in cache; loading/creating before save"
                     )
-                    return False
-                profile = server_cache[gid]
+                    # get_server_profile will either load from disk or create default
+                    profile = get_server_profile(gid, force_reload=True)
+                else:
+                    profile = server_cache[gid]
 
             profile["last_updated"] = datetime.now().isoformat()
 

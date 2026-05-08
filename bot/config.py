@@ -356,6 +356,57 @@ def load_config():
             "0.55",
             "PERSISTENT_MEMORY_MIN_IMPORTANCE",
         ),
+        # SERVER ARCHIVE SETTINGS
+        # Support both the newer *_ENABLED / *_ARCHIVE_BOT_MESSAGES keys and the
+        # original aliases for backwards compatibility.
+        "SERVER_ARCHIVE_ENABLED": _parse_bool_str(
+            _clean_env_value(os.getenv("SERVER_ARCHIVE_ENABLED") or os.getenv("SERVER_ARCHIVE_ENABLE")),
+            False,
+        ),
+        "SERVER_ARCHIVE_ENABLE": _parse_bool_str(
+            _clean_env_value(os.getenv("SERVER_ARCHIVE_ENABLED") or os.getenv("SERVER_ARCHIVE_ENABLE")),
+            False,
+        ),
+        "SERVER_ARCHIVE_DB_PATH": os.getenv(
+            "SERVER_ARCHIVE_DB_PATH", "./data/server_archive.db"
+        ),
+        "SERVER_ARCHIVE_QUEUE_MAX": _safe_int(
+            os.getenv("SERVER_ARCHIVE_QUEUE_MAX"), "1000", "SERVER_ARCHIVE_QUEUE_MAX"
+        ),
+        "SERVER_ARCHIVE_BATCH_SIZE": _safe_int(
+            os.getenv("SERVER_ARCHIVE_BATCH_SIZE"), "100", "SERVER_ARCHIVE_BATCH_SIZE"
+        ),
+        "SERVER_ARCHIVE_SEARCH_LIMIT": _safe_int(
+            os.getenv("SERVER_ARCHIVE_SEARCH_LIMIT"), "10", "SERVER_ARCHIVE_SEARCH_LIMIT"
+        ),
+        "SERVER_ARCHIVE_ADMIN_ONLY": _parse_bool_str(
+            _clean_env_value(os.getenv("SERVER_ARCHIVE_ADMIN_ONLY")), True
+        ),
+        "SERVER_ARCHIVE_SYNC_ON_START": _parse_bool_str(
+            _clean_env_value(os.getenv("SERVER_ARCHIVE_SYNC_ON_START")), True
+        ),
+        "SERVER_ARCHIVE_LIVE_TAIL": _parse_bool_str(
+            _clean_env_value(os.getenv("SERVER_ARCHIVE_LIVE_TAIL")), True
+        ),
+        "SERVER_ARCHIVE_MAX_MESSAGE_CHARS": _safe_int(
+            os.getenv("SERVER_ARCHIVE_MAX_MESSAGE_CHARS"),
+            "8000",
+            "SERVER_ARCHIVE_MAX_MESSAGE_CHARS",
+        ),
+        "SERVER_ARCHIVE_ARCHIVE_BOT_MESSAGES": _parse_bool_str(
+            _clean_env_value(
+                os.getenv("SERVER_ARCHIVE_ARCHIVE_BOT_MESSAGES")
+                or os.getenv("SERVER_ARCHIVE_INCLUDE_BOT_MESSAGES")
+            ),
+            False,
+        ),
+        "SERVER_ARCHIVE_INCLUDE_BOT_MESSAGES": _parse_bool_str(
+            _clean_env_value(
+                os.getenv("SERVER_ARCHIVE_ARCHIVE_BOT_MESSAGES")
+                or os.getenv("SERVER_ARCHIVE_INCLUDE_BOT_MESSAGES")
+            ),
+            False,
+        ),
         "CONTEXT_FILE_PATH": os.getenv("CONTEXT_FILE_PATH", "runtime/context.json"),
         "MAX_CONTEXT_MESSAGES": _safe_int(
             os.getenv("MAX_CONTEXT_MESSAGES"), "10", "MAX_CONTEXT_MESSAGES"
