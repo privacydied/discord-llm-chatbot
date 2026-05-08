@@ -63,16 +63,80 @@ class ArchiveCommands(commands.Cog):
             return
         status = await get_server_archive_status(guild_id=str(ctx.guild.id))
         counts = status.get("counts", {})
+        stats = status.get("stats", {})
         sync_states = status.get("sync_states", [])
         last_sync = sync_states[0].get("last_synced_at") if sync_states else None
         current_state = sync_states[0].get("status") if sync_states else "idle"
-        lines = [
-            f"enabled: {status.get('enabled')} paused: {status.get('paused')} db: {status.get('db_path')}",
-            f"queue: {status.get('queue_size', 0)}/{status.get('queue_max', 0)} dropped:{status.get('stats', {}).get('dropped', 0)} batches:{status.get('batch_size', 0)}",
-            f"messages: {counts.get('messages', 0)} indexed:{counts.get('indexed_messages', counts.get('messages', 0))} guilds:{counts.get('guilds', 0)} channels:{counts.get('channels', 0)} threads:{counts.get('threads', 0)}",
-            f"sync: {current_state} last: {self._short_time(last_sync)} running: {status.get('sync_running')}",
-        ]
-        await ctx.reply("\n".join(lines), mention_author=False)
+
+        enabled = bool(status.get("enabled"))
+        paused = bool(status.get("paused"))
+        sync_running = bool(status.get("sync_running"))
+        db_path = status.get("db_path") or "-"
+        queue_size = int(status.get("queue_size", 0))
+        queue_max = int(status.get("queue_max", 0))
+        dropped = int(stats.get("dropped", 0))
+        batch_size = int(status.get("batch_size", 0))
+
+        msgs = int(counts.get("messages", 0))
+        indexed = int(counts.get("indexed_messages", counts.get("messages", 0)))
+        guilds = int(counts.get("guilds", 0))
+        channels = int(counts.get("channels", 0))
+        threads = int(counts.get("threads", 0))
+
+        status_text = "OFF" if not enabled else ("PAUSED" if paused else "ON")
+        sync_label = "RUNNING" if sync_running else current_state or "idle"
+
+        embed = discord.Embed(
+            title="Server Archive Status",
+            description=f"Status: {status_text}  •  Sync: {sync_label}",
+            color=discord.Color.green() if (enabled and not paused) else discord.Color.yellow(),
+        )
+        embed.set_footer(text=f"DB: {db_path}")
+
+        # Core stats
+        embed.add_field(
+            name="📊 Messages",
+            value=(
+                f"Stored: {msgs:,}\n"
+                f"Indexed: {indexed:,}"
+            ),
+            inline=True,
+        )
+        embed.add_field(
+            name="🌐 Scope",
+            value=(
+                f"Guilds: {guilds}\n"
+                f"Channels: {channels}\n"
+                f"Threads: {threads}"
+            ),
+            inline=True,
+        )
+        embed.add_field(
+            name="⚙️ Sync",
+            value=(
+                f"Running: {'yes' if sync_running else 'no'}\n"
+                f"Last sync: {self._short_time(last_sync)}"
+            ),
+            inline=True,
+        )
+
+        # Queue / internals
+        embed.add_field(
+            name="🔧 Queue",
+            value=(
+                f"Depth: {queue_size}/{queue_max}\n"
+                f"Batch size: {batch_size}"
+            ),
+            inline=True,
+        )
+        if dropped > 0:
+            embed.add_field(
+                name="⚠️ Dropped",
+                value=f"{dropped:,}",
+                inline=False,
+            )
+
+        await ctx.reply(embed=embed, mention_author=False)
 
     @commands.guild_only()
     @commands.command(name="archive-search")
