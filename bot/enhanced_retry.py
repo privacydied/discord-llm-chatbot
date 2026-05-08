@@ -138,6 +138,7 @@ class EnhancedRetryManager:
                 return default
             models = [m.strip() for m in models_env.split(",") if m.strip()]
             timeouts: List[float] = []
+            seen_pairs: set[tuple[str, str]] = set()
             if timeouts_env:
                 try:
                     timeouts = [
@@ -170,7 +171,18 @@ class EnhancedRetryManager:
                     model = model.strip()
                 else:
                     provider, model = "openrouter", entry
-                base_cfg = default_by_key.get((provider, model))
+
+                pair = (provider, model)
+                if pair in seen_pairs:
+                    logger.warning(
+                        "TEXT_FALLBACK_MODELS contains duplicate entry %s|%s; skipping repeat",
+                        provider,
+                        model,
+                    )
+                    continue
+                seen_pairs.add(pair)
+
+                base_cfg = default_by_key.get(pair)
 
                 # Determine timeout priority: explicit env timeout → default ladder timeout
                 # for this provider+model (if any) → legacy generic fallback (15/20s).

@@ -81,6 +81,22 @@ def test_text_ladder_env_can_force_single_attempt_per_model(monkeypatch):
     ]
 
 
+def test_text_ladder_env_dedupes_exact_duplicate_entries(monkeypatch):
+    monkeypatch.setenv(
+        "TEXT_FALLBACK_MODELS",
+        "openrouter|minimax/minimax-m2.5:free,openrouter|tencent/hy3-preview:free,openrouter|minimax/minimax-m2.5:free",
+    )
+    monkeypatch.setenv("TEXT_FALLBACK_TIMEOUTS", "35,35,35,35")
+    monkeypatch.setenv("TEXT_FALLBACK_MAX_ATTEMPTS", "1")
+
+    mgr = EnhancedRetryManager()
+
+    assert [p.model for p in mgr.provider_configs["text"]] == [
+        "minimax/minimax-m2.5:free",
+        "tencent/hy3-preview:free",
+    ]
+
+
 def test_empty_text_response_is_retryable_for_ladder():
     mgr = EnhancedRetryManager()
 
