@@ -6,12 +6,13 @@ Supports SIGHUP signal handling, file watching, and manual reload commands.
 import signal
 import hashlib
 import asyncio
+import os
 import threading
 import time
 from pathlib import Path
 from typing import Dict, Any, Optional, Set, Callable, List
 from datetime import datetime
-from dotenv import load_dotenv
+from dotenv import dotenv_values, load_dotenv
 
 from .config import load_config
 from .utils.logging import get_logger
@@ -71,6 +72,51 @@ def _preferred_env_path() -> Path:
 
 _env_file_path = _preferred_env_path()
 _last_env_digest: Optional[str] = None
+_env_loaded_values_by_path: Dict[Path, Dict[str, str]] = {}
+
+
+def _read_dotenv_values(path: Path) -> Dict[str, str]:
+    """Read dotenv key/value pairs without mutating process env."""
+    try:
+        return {
+            str(key): str(value)
+            for key, value in dotenv_values(path).items()
+            if key and value is not None
+        }
+    except Exception:
+        return {}
+
+
+def _snapshot_known_env_files() -> None:
+    """Track values loaded from existing env files so deletion hot-reloads work."""
+    for candidate in _candidate_env_paths():
+        if candidate.exists():
+            _env_loaded_values_by_path[candidate.resolve()] = _read_dotenv_values(candidate)
+
+
+def _sync_dotenv_file(path: Path) -> None:
+    """Apply one dotenv file, including removals from previous versions.
+
+    python-dotenv updates/adds keys but intentionally does not remove variables that
+    disappear from the file. Hot-reload semantics for this bot should mirror the file,
+    so keys previously loaded from the same file are removed when deleted, unless the
+    live process env was changed to a different value by some external source.
+    """
+    resolved = path.resolve()
+    old_values = _env_loaded_values_by_path.get(resolved, {})
+    new_values = _read_dotenv_values(resolved) if resolved.exists() else {}
+
+    for key, old_value in old_values.items():
+        if key not in new_values and os.environ.get(key) == old_value:
+            os.environ.pop(key, None)
+
+    if resolved.exists():
+        load_dotenv(dotenv_path=resolved, override=True)
+
+    _env_loaded_values_by_path[resolved] = new_values
+
+
+_snapshot_known_env_files()
 
 
 def _file_digest(p: Path) -> Optional[str]:
@@ -205,11 +251,13 @@ def reload_env(env_path: Optional[Path] = None) -> Dict[str, Any]:
             old_config = _current_config.copy()
             old_version = _config_version
 
-            # Reload .env file
+            # Reload .env file. python-dotenv does not remove deleted keys, so
+            # sync through our tracker instead of calling load_dotenv directly.
             if target_path.exists():
-                load_dotenv(dotenv_path=target_path, override=True)
+                _sync_dotenv_file(target_path)
                 logger.debug(f"📁 Reloaded .env from {target_path}")
             else:
+                _sync_dotenv_file(target_path)
                 logger.warning(f"⚠️ .env file not found at {target_path}")
 
             # Load new configuration

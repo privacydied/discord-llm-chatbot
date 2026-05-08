@@ -60,6 +60,14 @@ class VisionGateway:
 
         self.logger.info("VisionGateway initialized with unified adapter")
 
+    def update_config(self, config: Dict[str, Any]) -> None:
+        """Hot-reload gateway and adapter config snapshot."""
+        self.config = config
+        if hasattr(self.adapter, "update_config"):
+            self.adapter.update_config(config)
+        else:
+            self.adapter.config = config
+
     async def startup(self):
         """Initialize gateway and adapter connections [REH]"""
         try:

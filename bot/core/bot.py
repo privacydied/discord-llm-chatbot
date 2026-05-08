@@ -639,12 +639,19 @@ class LLMBot(commands.Bot):
                                             hasattr(vo, "gateway")
                                             and vo.gateway is not None
                                         ):
-                                            vo.gateway.config = self.config
-                                            if (
-                                                hasattr(vo.gateway, "adapter")
-                                                and vo.gateway.adapter is not None
-                                            ):
-                                                vo.gateway.adapter.config = self.config
+                                            if hasattr(vo.gateway, "update_config"):
+                                                vo.gateway.update_config(self.config)
+                                            else:
+                                                vo.gateway.config = self.config
+                                                if (
+                                                    hasattr(vo.gateway, "adapter")
+                                                    and vo.gateway.adapter is not None
+                                                ):
+                                                    adapter = vo.gateway.adapter
+                                                    if hasattr(adapter, "update_config"):
+                                                        adapter.update_config(self.config)
+                                                    else:
+                                                        adapter.config = self.config
                                         self.logger.info(
                                             "Vision orchestrator config rebound (hot)"
                                         )
@@ -734,12 +741,19 @@ class LLMBot(commands.Bot):
                                             hasattr(vo, "gateway")
                                             and vo.gateway is not None
                                         ):
-                                            vo.gateway.config = self.config
-                                            if (
-                                                hasattr(vo.gateway, "adapter")
-                                                and vo.gateway.adapter is not None
-                                            ):
-                                                vo.gateway.adapter.config = self.config
+                                            if hasattr(vo.gateway, "update_config"):
+                                                vo.gateway.update_config(self.config)
+                                            else:
+                                                vo.gateway.config = self.config
+                                                if (
+                                                    hasattr(vo.gateway, "adapter")
+                                                    and vo.gateway.adapter is not None
+                                                ):
+                                                    adapter = vo.gateway.adapter
+                                                    if hasattr(adapter, "update_config"):
+                                                        adapter.update_config(self.config)
+                                                    else:
+                                                        adapter.config = self.config
                                         self.logger.info(
                                             "Vision orchestrator config rebound (hot)"
                                         )

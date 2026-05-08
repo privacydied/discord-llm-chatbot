@@ -1321,17 +1321,11 @@ class UnifiedVisionAdapter:
         self.provider_config = {}
         self._provider_lock = asyncio.Lock()  # Provider initialization lock
 
-        self.allowed_providers = [
-            str(p).strip().lower()
-            for p in (config.get("VISION_ALLOWED_PROVIDERS") or [])
-            if str(p).strip()
-        ]
-        self.default_provider = (
-            str(config.get("VISION_DEFAULT_PROVIDER") or "").strip().lower()
-        )
+        self.allowed_providers = self._parse_allowed_providers(config)
+        self.default_provider = self._parse_default_provider(config)
 
         # Model override from environment [CMV]
-        self.vision_model_override = config.get("VISION_MODEL", "").strip()
+        self.vision_model_override = self._parse_vision_model_override(config)
         if self.vision_model_override:
             self.logger.info(
                 f"🎯 VISION_MODEL override active: {self.vision_model_override}"
@@ -1343,6 +1337,54 @@ class UnifiedVisionAdapter:
 
         # Initialize model resolver
         self._model_aliases = self._build_model_aliases()
+
+    @staticmethod
+    def _parse_allowed_providers(config: Dict[str, Any]) -> List[str]:
+        raw = config.get("VISION_ALLOWED_PROVIDERS") or []
+        if isinstance(raw, str):
+            raw = raw.split(",")
+        return [str(p).strip().lower() for p in raw if str(p).strip()]
+
+    @staticmethod
+    def _parse_default_provider(config: Dict[str, Any]) -> str:
+        return str(config.get("VISION_DEFAULT_PROVIDER") or "").strip().lower()
+
+    @staticmethod
+    def _parse_vision_model_override(config: Dict[str, Any]) -> str:
+        return str(config.get("VISION_MODEL") or "").strip()
+
+    def update_config(self, config: Dict[str, Any]) -> None:
+        """Hot-reload mutable vision adapter config without recreating sessions."""
+        self.config = config
+        self.allowed_providers = self._parse_allowed_providers(config)
+        self.default_provider = self._parse_default_provider(config)
+        self.vision_model_override = self._parse_vision_model_override(config)
+        self._load_provider_config()
+        self._initialize_providers()
+        self._model_aliases = self._build_model_aliases()
+
+        fallback_key = str(config.get("VISION_API_KEY") or "")
+        for provider_config in self.provider_config.get("vision", {}).get("providers", []):
+            name = str(provider_config.get("name") or "").lower()
+            provider = self.providers.get(name)
+            if provider is None:
+                continue
+            provider.config = provider_config
+            key_env = provider_config.get("api_key_env", "VISION_API_KEY")
+            provider.api_key = str(config.get(key_env) or fallback_key or "")
+            if hasattr(provider, "base_url"):
+                provider.base_url = provider_config.get("base_url", provider.base_url)
+            if hasattr(provider, "genai_base_url"):
+                provider.genai_base_url = provider_config.get(
+                    "genai_base_url", provider.genai_base_url
+                )
+
+        self.logger.info(
+            "vision.adapter.config_updated default=%s allowed=%s model_override=%s",
+            self.default_provider,
+            self.allowed_providers,
+            self.vision_model_override,
+        )
 
     def _load_provider_config(self):
         """Load provider configuration from JSON or defaults [IV]"""
@@ -1477,6 +1519,18 @@ class UnifiedVisionAdapter:
                 continue
 
             try:
+                if name in self.providers:
+                    plugin = self.providers[name]
+                    plugin.config = provider_config
+                    plugin.api_key = provider_key
+                    if hasattr(plugin, "base_url"):
+                        plugin.base_url = provider_config.get("base_url", plugin.base_url)
+                    if hasattr(plugin, "genai_base_url"):
+                        plugin.genai_base_url = provider_config.get(
+                            "genai_base_url", plugin.genai_base_url
+                        )
+                    continue
+
                 if name == "together":
                     plugin = TogetherPlugin(name, provider_config, provider_key)
                 elif name == "novita":
@@ -1719,13 +1773,13 @@ class UnifiedVisionAdapter:
                         supports_advanced=False,
                     )
                 elif provider_name == "nvidia":
-                    model_hint = model_part or "black-forest-labs/flux_2-klein-4b"
+                    model_hint = model_part or "black-forest-labs/flux.1-dev"
                     self.logger.info(
                         f"Resolved VISION_MODEL '{self.vision_model_override}' → nvidia with model={model_hint}"
                     )
                     return ModelSelection(
                         provider="nvidia",
-                        endpoint="chat/completions",
+                        endpoint="genai",
                         model_hint=model_hint,
                         supports_advanced=False,
                     )

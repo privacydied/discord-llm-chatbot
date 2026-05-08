@@ -193,3 +193,30 @@ async def test_nvidia_image_submit_uses_nvidia_endpoint_and_returns_fetchable_re
     assert captured["headers"]["Authorization"] == "Bearer nvidia-test-key"
     assert result.provider_used == "nvidia"
     assert result.assets == ["data:image/jpeg;base64,AAAA"]
+
+
+def test_unified_adapter_update_config_refreshes_hotloaded_vision_fields():
+    adapter = UnifiedVisionAdapter(
+        {
+            "VISION_API_KEY": "generic-vision-key",
+            "NVIDIA_NIM_API_KEY": "old-nvidia-key",
+            "VISION_ALLOWED_PROVIDERS": ["novita"],
+            "VISION_DEFAULT_PROVIDER": "novita",
+            "VISION_MODEL": "novita:qwen-image",
+        }
+    )
+
+    adapter.update_config(
+        {
+            "VISION_API_KEY": "generic-vision-key",
+            "NVIDIA_NIM_API_KEY": "new-nvidia-key",
+            "VISION_ALLOWED_PROVIDERS": "nvidia",
+            "VISION_DEFAULT_PROVIDER": "nvidia",
+            "VISION_MODEL": "nvidia:black-forest-labs/flux.1-schnell",
+        }
+    )
+
+    assert adapter.allowed_providers == ["nvidia"]
+    assert adapter.default_provider == "nvidia"
+    assert adapter.vision_model_override == "nvidia:black-forest-labs/flux.1-schnell"
+    assert adapter.providers["nvidia"].api_key == "new-nvidia-key"

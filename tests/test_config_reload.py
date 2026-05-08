@@ -2,6 +2,7 @@
 Tests for dynamic configuration reloading functionality.
 """
 
+import os
 from unittest.mock import patch
 
 import pytest
@@ -119,6 +120,63 @@ class TestConfigReload:
 
         assert result["success"] is False
         assert "Missing required variables" in result["error"]
+
+    def test_reload_env_removes_keys_deleted_from_env_file(self, tmp_path, monkeypatch):
+        """Hot reload mirrors .env deletions, not just additions/updates."""
+        env_file = tmp_path / ".env"
+        prompt_file = tmp_path / "prompt.txt"
+        vl_prompt_file = tmp_path / "vl_prompt.txt"
+        prompt_file.write_text("prompt", encoding="utf-8")
+        vl_prompt_file.write_text("vl", encoding="utf-8")
+
+        for key in [
+            "DISCORD_TOKEN",
+            "PROMPT_FILE",
+            "VL_PROMPT_FILE",
+            "VISION_DEFAULT_PROVIDER",
+        ]:
+            monkeypatch.delenv(key, raising=False)
+
+        env_file.write_text(
+            "\n".join(
+                [
+                    "DISCORD_TOKEN=test-token",
+                    f"PROMPT_FILE={prompt_file}",
+                    f"VL_PROMPT_FILE={vl_prompt_file}",
+                    "VISION_DEFAULT_PROVIDER=novita",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        from bot import config as config_module
+        from bot import config_reload as reload_module
+
+        reload_module._env_loaded_values_by_path.pop(env_file.resolve(), None)
+        config_module.invalidate_config_cache()
+        first = reload_env(env_file)
+        assert first["success"] is True
+        assert os.environ["VISION_DEFAULT_PROVIDER"] == "novita"
+
+        env_file.write_text(
+            "\n".join(
+                [
+                    "DISCORD_TOKEN=test-token",
+                    f"PROMPT_FILE={prompt_file}",
+                    f"VL_PROMPT_FILE={vl_prompt_file}",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        config_module.invalidate_config_cache()
+        second = reload_env(env_file)
+
+        assert second["success"] is True
+        assert "VISION_DEFAULT_PROVIDER" not in os.environ
+        assert config_module.load_config()["VISION_DEFAULT_PROVIDER"] == "together"
 
     def test_manual_reload_command_format(self):
         """Test manual reload command output formatting."""
