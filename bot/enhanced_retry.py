@@ -131,6 +131,7 @@ class EnhancedRetryManager:
             models_env: str | None,
             timeouts_env: str | None,
             default: List[ProviderConfig],
+            max_attempts_env: str | None = None,
         ) -> List[ProviderConfig]:
             # models entries may be either "provider|model" or just "model" (defaults to openrouter)
             if not models_env:
@@ -144,6 +145,16 @@ class EnhancedRetryManager:
                     ]
                 except Exception:
                     timeouts = []
+            attempts: List[int] = []
+            if max_attempts_env:
+                try:
+                    attempts = [
+                        max(1, int(t.strip()))
+                        for t in max_attempts_env.split(",")
+                        if t.strip()
+                    ]
+                except Exception:
+                    attempts = []
             # Allow env overrides to inherit tuned defaults (timeout, attempts, backoff)
             # when the provider+model pair matches an entry in the default ladder. This
             # keeps TEXT_FALLBACK_MODELS aligned with default_text/default_vision even
@@ -170,6 +181,15 @@ class EnhancedRetryManager:
                 else:
                     timeout = 15.0 if provider == "openrouter" else 20.0
 
+                if idx < len(attempts):
+                    max_attempts = attempts[idx]
+                elif len(attempts) == 1:
+                    max_attempts = attempts[0]
+                elif base_cfg is not None:
+                    max_attempts = base_cfg.max_attempts
+                else:
+                    max_attempts = ProviderConfig(provider, model).max_attempts
+
                 if base_cfg is not None:
                     # Preserve tuned retry/backoff parameters from the default ladder
                     ladder.append(
@@ -177,7 +197,7 @@ class EnhancedRetryManager:
                             provider,
                             model,
                             timeout=timeout,
-                            max_attempts=base_cfg.max_attempts,
+                            max_attempts=max_attempts,
                             base_delay=base_cfg.base_delay,
                             max_delay=base_cfg.max_delay,
                             exponential_base=base_cfg.exponential_base,
@@ -185,7 +205,7 @@ class EnhancedRetryManager:
                         )
                     )
                 else:
-                    ladder.append(ProviderConfig(provider, model, timeout=timeout))
+                    ladder.append(ProviderConfig(provider, model, timeout=timeout, max_attempts=max_attempts))
             return ladder
 
         # Optimized defaults with faster timeouts [CMV]
@@ -254,14 +274,13 @@ class EnhancedRetryManager:
         vision_timeouts = os.getenv("VISION_FALLBACK_TIMEOUTS")
         text_models = os.getenv("TEXT_FALLBACK_MODELS")
         text_timeouts = os.getenv("TEXT_FALLBACK_TIMEOUTS")
+        text_max_attempts = os.getenv("TEXT_FALLBACK_MAX_ATTEMPTS")
 
         # Determine whether the ladder comes from env (authoritative) or defaults
         vision_from_env = bool(vision_models)
         text_from_env = bool(text_models)
 
         vl_head = (config.get("VL_MODEL") or "").strip()
-        text_head = (config.get("OPENAI_TEXT_MODEL") or "").strip()
-
         def _ensure_head(
             ladder: List[ProviderConfig], head_model: str, default_timeout: float
         ) -> List[ProviderConfig]:
@@ -312,7 +331,9 @@ class EnhancedRetryManager:
         # Text ladder: env is authoritative; preserve exact order from TEXT_FALLBACK_MODELS.
         # Do not prepend OPENAI_TEXT_MODEL when env ladder is provided, because stale
         # model slugs can cause repeated 404/no-endpoints stalls before real fallbacks.
-        raw_text_ladder = _parse_ladder(text_models, text_timeouts, default_text)
+        raw_text_ladder = _parse_ladder(
+            text_models, text_timeouts, default_text, text_max_attempts
+        )
         if text_from_env:
             filtered_text = raw_text_ladder
         else:
@@ -529,6 +550,11 @@ class EnhancedRetryManager:
             "rate limit",
             "too many requests",
             "client error",
+            # Some OpenRouter/free-tier providers return HTTP 200 with no assistant
+            # text. That provider attempt is unusable, but the request itself can
+            # still succeed on a retry or fallback model, so keep laddering.
+            "empty text response",
+            "response normalization failed",
         ]
 
         # Hard non-retryable 404 / no-endpoints patterns (provider permanently unavailable)

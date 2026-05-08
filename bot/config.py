@@ -236,6 +236,13 @@ def load_config():
         "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY"),
         "OPENAI_API_BASE": os.getenv("OPENAI_API_BASE"),
         "OPENAI_TEXT_MODEL": os.getenv("OPENAI_TEXT_MODEL"),
+        "OPENROUTER_API_KEY": os.getenv("OPENROUTER_API_KEY"),
+        "TEXT_FALLBACK_MODELS": os.getenv("TEXT_FALLBACK_MODELS"),
+        "TEXT_FALLBACK_TIMEOUTS": os.getenv("TEXT_FALLBACK_TIMEOUTS"),
+        "TEXT_FALLBACK_MAX_ATTEMPTS": os.getenv("TEXT_FALLBACK_MAX_ATTEMPTS"),
+        "NVIDIA_NIM_API_KEY": os.getenv("NVIDIA_NIM_API_KEY"),
+        "NVIDIA_NIM_API_BASE": os.getenv("NVIDIA_NIM_API_BASE"),
+        "NVIDIA_NIM_TEXT_MODEL": os.getenv("NVIDIA_NIM_TEXT_MODEL"),
         "VL_MODEL": _clean_env_value(
             os.getenv("VL_MODEL")
         ),  # CHANGE: Added VL_MODEL for vision-language processing
@@ -662,6 +669,10 @@ def load_config():
         ],
         "VISION_DEFAULT_PROVIDER": os.getenv("VISION_DEFAULT_PROVIDER", "together"),
         "VISION_MODEL": _clean_env_value(os.getenv("VISION_MODEL")) or "",
+        "VISION_IMAGE_FALLBACK_MODELS": _clean_env_value(
+            os.getenv("VISION_IMAGE_FALLBACK_MODELS") or os.getenv("IMAGE_FALLBACK_MODELS")
+        )
+        or "",
         # Policy and data paths
         "VISION_POLICY_PATH": os.getenv(
             "VISION_POLICY_PATH", "configs/vision_policy.json"

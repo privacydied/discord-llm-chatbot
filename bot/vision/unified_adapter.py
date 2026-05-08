@@ -8,6 +8,7 @@ Normalizes requests/responses and handles provider selection, fallback, and erro
 import asyncio
 import aiohttp
 import json
+import os
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -923,7 +924,7 @@ class OpenRouterPlugin(ProviderPlugin):
         model = request.preferred_model or self.model_map.get(request.task)
         if not model:
             raise VisionError(
-                message=f"Task {request.task.value} not supported by OpenRouter",
+                message=f"Task {request.task.value} not supported by {self.name}",
                 error_type=VisionErrorType.UNSUPPORTED_TASK,
                 user_message=f"Sorry, {request.task.value} is not supported by this provider.",
             )
@@ -954,31 +955,31 @@ class OpenRouterPlugin(ProviderPlugin):
 
                 if response.status == 400:
                     raise VisionError(
-                        message=f"OpenRouter invalid request: {error_text}",
+                        message=f"{self.name} invalid request: {error_text}",
                         error_type=VisionErrorType.VALIDATION_ERROR,
                         user_message="There was an issue with your request parameters. Please check and try again.",
                     )
                 if response.status == 401:
                     raise VisionError(
-                        message="OpenRouter authentication failed",
+                        message=f"{self.name} authentication failed",
                         error_type=VisionErrorType.AUTHENTICATION_ERROR,
                         user_message="Vision service authentication failed. Please contact support.",
                     )
                 if response.status == 429:
                     raise VisionError(
-                        message="OpenRouter rate limit exceeded",
+                        message=f"{self.name} rate limit exceeded",
                         error_type=VisionErrorType.RATE_LIMITED,
                         user_message="Too many requests. Please wait a moment and try again.",
                     )
                 if response.status >= 500:
                     raise VisionError(
-                        message=f"OpenRouter server error: {error_text}",
+                        message=f"{self.name} server error: {error_text}",
                         error_type=VisionErrorType.SERVER_ERROR,
                         user_message="The vision service is temporarily unavailable. Please try again.",
                     )
                 if response.status != 200:
                     raise VisionError(
-                        message=f"OpenRouter error ({response.status}): {error_text}",
+                        message=f"{self.name} error ({response.status}): {error_text}",
                         error_type=VisionErrorType.PROVIDER_ERROR,
                         user_message="Vision generation failed. Please try again.",
                     )
@@ -987,7 +988,7 @@ class OpenRouterPlugin(ProviderPlugin):
 
                 # Debug: log response structure without raw data [REH]
                 logger.debug(
-                    f"OpenRouter response keys: {list(result.keys())}, "
+                    f"{self.name} response keys: {list(result.keys())}, "
                     f"choices count: {len(result.get('choices') or [])}"
                 )
 
@@ -1101,7 +1102,7 @@ class OpenRouterPlugin(ProviderPlugin):
                 if not urls:
                     # Log response structure for debugging (without sensitive data)
                     logger.warning(
-                        f"OpenRouter: No images found. Response structure: "
+                        f"{self.name}: No images found. Response structure: "
                         f"keys={list(result.keys())}, "
                         f"choices={len(choices)}, "
                         f"message_keys={list(message.keys()) if isinstance(message, dict) else 'N/A'}"
@@ -1122,10 +1123,10 @@ class OpenRouterPlugin(ProviderPlugin):
                     else:
                         url_summary.append(u[:100] if len(u) > 100 else u)
                 logger.debug(
-                    f"OpenRouter extracted {len(urls)} image(s): {url_summary}"
+                    f"{self.name} extracted {len(urls)} image(s): {url_summary}"
                 )
 
-                job_id = f"openrouter_{int(time.time() * 1000)}"
+                job_id = f"{self.name}_{int(time.time() * 1000)}"
                 self._results = getattr(self, "_results", {})
                 self._results[job_id] = {
                     "status": "completed",
@@ -1139,7 +1140,7 @@ class OpenRouterPlugin(ProviderPlugin):
             raise
         except Exception as e:
             raise VisionError(
-                message=f"OpenRouter connection error: {str(e)}",
+                message=f"{self.name} connection error: {str(e)}",
                 error_type=VisionErrorType.CONNECTION_ERROR,
                 user_message="Unable to connect to vision service. Please try again.",
             )
@@ -1166,9 +1167,139 @@ class OpenRouterPlugin(ProviderPlugin):
         return UnifiedResult(
             assets=assets,
             final_cost=float(job_data.get("cost", 0.0) or 0.0),
-            provider_used="openrouter",
+            provider_used=self.name,
             metadata={"model": job_data.get("model", "unknown")},
         )
+
+
+class NvidiaPlugin(OpenRouterPlugin):
+    """NVIDIA image provider using the GenAI endpoint, not chat/completions."""
+
+    def __init__(self, name: str, config: Dict[str, Any], api_key: str):
+        super().__init__(name, config, api_key)
+        # NVIDIA chat/text models live on integrate.api.nvidia.com/v1, but image
+        # generation NIMs are exposed on ai.api.nvidia.com/v1/genai/{model}.
+        # Calling integrate /chat/completions with image models returns 404.
+        self.base_url = config.get("base_url", "https://integrate.api.nvidia.com/v1")
+        self.genai_base_url = (
+            config.get("genai_base_url")
+            or os.getenv("NVIDIA_IMAGE_API_BASE")
+            or "https://ai.api.nvidia.com/v1"
+        ).rstrip("/")
+        self.model_map = {
+            VisionTask.TEXT_TO_IMAGE: "black-forest-labs/flux.1-dev",
+        }
+
+    async def submit(self, request: NormalizedRequest) -> str:
+        await self.startup()
+        model = request.preferred_model or self.model_map.get(request.task)
+        if request.task != VisionTask.TEXT_TO_IMAGE or not model:
+            raise VisionError(
+                message=f"Task {request.task.value} not supported by {self.name}",
+                error_type=VisionErrorType.UNSUPPORTED_TASK,
+                user_message=f"Sorry, {request.task.value} is not supported by this provider.",
+            )
+
+        payload: Dict[str, Any] = {"prompt": (request.prompt or "").strip()}
+        if not payload["prompt"]:
+            raise VisionError(
+                message="Prompt is empty after normalization",
+                error_type=VisionErrorType.VALIDATION_ERROR,
+                user_message="A prompt is required.",
+            )
+        if request.seed is not None:
+            payload["seed"] = int(request.seed)
+
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        }
+        url = f"{self.genai_base_url}/genai/{model}"
+
+        try:
+            async with self.session.post(url, json=payload, headers=headers) as response:
+                error_text = await response.text()
+                if response.status == 400:
+                    raise VisionError(
+                        message=f"{self.name} invalid request: {error_text}",
+                        error_type=VisionErrorType.VALIDATION_ERROR,
+                        user_message="There was an issue with your request parameters. Please check and try again.",
+                    )
+                if response.status == 401:
+                    raise VisionError(
+                        message=f"{self.name} authentication failed",
+                        error_type=VisionErrorType.AUTHENTICATION_ERROR,
+                        user_message="Vision service authentication failed. Please contact support.",
+                    )
+                if response.status == 403:
+                    raise VisionError(
+                        message=f"{self.name} forbidden/quota error: {error_text}",
+                        error_type=VisionErrorType.QUOTA_EXCEEDED,
+                        user_message="Vision service quota or access is unavailable. Please try another provider.",
+                    )
+                if response.status == 404:
+                    raise VisionError(
+                        message=f"{self.name} model endpoint not found: {model}",
+                        error_type=VisionErrorType.UNSUPPORTED_TASK,
+                        user_message="That NVIDIA image model is not available.",
+                    )
+                if response.status == 429:
+                    raise VisionError(
+                        message=f"{self.name} rate limit exceeded",
+                        error_type=VisionErrorType.RATE_LIMITED,
+                        user_message="Too many requests. Please wait a moment and try again.",
+                    )
+                if response.status >= 500:
+                    raise VisionError(
+                        message=f"{self.name} server error: {error_text}",
+                        error_type=VisionErrorType.SERVER_ERROR,
+                        user_message="The vision service is temporarily unavailable. Please try again.",
+                    )
+                if response.status != 200:
+                    raise VisionError(
+                        message=f"{self.name} error ({response.status}): {error_text}",
+                        error_type=VisionErrorType.PROVIDER_ERROR,
+                        user_message="Vision generation failed. Please try again.",
+                    )
+
+                result = await response.json()
+                assets: List[str] = []
+                for artifact in result.get("artifacts") or []:
+                    if not isinstance(artifact, dict):
+                        continue
+                    b64 = artifact.get("base64")
+                    if isinstance(b64, str) and b64:
+                        assets.append(f"data:image/jpeg;base64,{b64}")
+                    url_value = artifact.get("url")
+                    if isinstance(url_value, str) and url_value:
+                        assets.append(url_value)
+
+                if not assets:
+                    raise VisionError(
+                        message="No images returned from NVIDIA GenAI endpoint",
+                        error_type=VisionErrorType.PROVIDER_ERROR,
+                        user_message="No images were returned by the provider.",
+                    )
+
+                job_id = f"{self.name}_{int(time.time() * 1000)}"
+                self._results = getattr(self, "_results", {})
+                self._results[job_id] = {
+                    "status": "completed",
+                    "assets": assets,
+                    "cost": 0.0,
+                    "model": model,
+                }
+                return job_id
+
+        except VisionError:
+            raise
+        except Exception as e:
+            raise VisionError(
+                message=f"{self.name} connection error: {str(e)}",
+                error_type=VisionErrorType.CONNECTION_ERROR,
+                user_message="Unable to connect to vision service. Please try again.",
+            )
 
 
 class UnifiedVisionAdapter:
@@ -1307,6 +1438,19 @@ class UnifiedVisionAdapter:
                         },
                         "limits": {"max_size": "2048x2048", "max_steps": 0},
                     },
+                    {
+                        "name": "nvidia",
+                        "base_url": "https://integrate.api.nvidia.com/v1",
+                        "genai_base_url": "https://ai.api.nvidia.com/v1",
+                        "api_key_env": "NVIDIA_NIM_API_KEY",
+                        "enabled": True,
+                        "priority": 4,
+                        "price": {
+                            "image_base": 0.02,
+                            "image_per_px": 0.000005,
+                        },
+                        "limits": {"max_size": "2048x2048", "max_steps": 0},
+                    },
                 ],
             }
         }
@@ -1339,6 +1483,8 @@ class UnifiedVisionAdapter:
                     plugin = NovitaPlugin(name, provider_config, provider_key)
                 elif name == "openrouter":
                     plugin = OpenRouterPlugin(name, provider_config, provider_key)
+                elif name == "nvidia":
+                    plugin = NvidiaPlugin(name, provider_config, provider_key)
                 else:
                     self.logger.warning(f"Unknown provider: {name}")
                     continue
@@ -1370,6 +1516,13 @@ class UnifiedVisionAdapter:
             elif name == "openrouter":
                 key = (
                     self.config.get("OPENROUTER_API_KEY")
+                    or self.config.get("VISION_API_KEY")
+                    or ""
+                )
+            elif name == "nvidia":
+                key = (
+                    self.config.get("NVIDIA_NIM_API_KEY")
+                    or self.config.get("OPENAI_API_KEY")
                     or self.config.get("VISION_API_KEY")
                     or ""
                 )
@@ -1494,6 +1647,26 @@ class UnifiedVisionAdapter:
             supports_advanced=False,
         )
 
+        # NVIDIA Build/NIM aliases [CA]
+        for alias, model in {
+            "nvidia:black-forest-labs/flux_2-klein-4b": "black-forest-labs/flux_2-klein-4b",
+            "nvidia:flux_2-klein-4b": "black-forest-labs/flux_2-klein-4b",
+            "nvidia:qwen/qwen-image": "qwen/qwen-image",
+            "nvidia:qwen-image": "qwen/qwen-image",
+        }.items():
+            aliases[alias] = ModelSelection(
+                provider="nvidia",
+                endpoint="chat/completions",
+                model_hint=model,
+                supports_advanced=False,
+            )
+        aliases["nvidia"] = ModelSelection(
+            provider="nvidia",
+            endpoint="chat/completions",
+            model_hint="black-forest-labs/flux_2-klein-4b",
+            supports_advanced=False,
+        )
+
         return aliases
 
     def resolve_model_selection(
@@ -1541,6 +1714,17 @@ class UnifiedVisionAdapter:
                     )
                     return ModelSelection(
                         provider="openrouter",
+                        endpoint="chat/completions",
+                        model_hint=model_hint,
+                        supports_advanced=False,
+                    )
+                elif provider_name == "nvidia":
+                    model_hint = model_part or "black-forest-labs/flux_2-klein-4b"
+                    self.logger.info(
+                        f"Resolved VISION_MODEL '{self.vision_model_override}' → nvidia with model={model_hint}"
+                    )
+                    return ModelSelection(
+                        provider="nvidia",
                         endpoint="chat/completions",
                         model_hint=model_hint,
                         supports_advanced=False,
@@ -1663,10 +1847,86 @@ class UnifiedVisionAdapter:
             pixels = request.width * request.height
             return base_cost + (pixels * pixel_cost)
 
+    def _parse_provider_model_ladder(self, raw: str) -> List[Tuple[str, str]]:
+        entries: List[Tuple[str, str]] = []
+        for part in str(raw or "").split(","):
+            item = part.strip()
+            if not item:
+                continue
+            if "|" in item:
+                provider, model = item.split("|", 1)
+            else:
+                provider, model = self.default_provider or "openrouter", item
+            provider = provider.strip().lower() or "openrouter"
+            model = model.strip()
+            if model:
+                entries.append((provider, model))
+        return entries
+
+    async def _submit_text_to_image_ladder(
+        self, normalized_request: NormalizedRequest, raw_ladder: str
+    ) -> VisionResponse:
+        last_error: Optional[VisionError] = None
+        for provider_name, model_name in self._parse_provider_model_ladder(raw_ladder):
+            if self.allowed_providers and provider_name not in self.allowed_providers:
+                continue
+            if provider_name not in self.providers:
+                continue
+            if not (
+                self._has_valid_credentials(provider_name)
+                and self._is_provider_healthy(provider_name)
+            ):
+                continue
+
+            provider = self.providers[provider_name]
+            capabilities = provider.capabilities()
+            if normalized_request.task not in capabilities.get("modes", []):
+                continue
+
+            normalized_request.preferred_model = model_name
+            try:
+                self.logger.info(
+                    f"image.ladder.attempt provider={provider_name} model={model_name}"
+                )
+                task_id = await provider.submit(normalized_request)
+                return VisionResponse(
+                    success=True,
+                    job_id=f"{provider_name}:{task_id}",
+                    provider=VisionProvider(provider_name.lower()),
+                    model_used=model_name,
+                    provider_job_id=task_id,
+                )
+            except VisionError as exc:
+                last_error = exc
+                self.logger.warning(
+                    f"image.ladder.fail provider={provider_name} model={model_name} error={exc.message}"
+                )
+                continue
+            except Exception as exc:
+                last_error = VisionError(
+                    message=f"Unexpected error from {provider_name}: {exc}",
+                    error_type=VisionErrorType.PROVIDER_ERROR,
+                    user_message="Image generation is temporarily unavailable. Please try again later.",
+                )
+                self.logger.warning(
+                    f"image.ladder.fail provider={provider_name} model={model_name} error={exc}"
+                )
+                continue
+
+        raise last_error or VisionError(
+            message="All image generation providers exhausted",
+            error_type=VisionErrorType.PROVIDER_ERROR,
+            user_message="Image generation is temporarily unavailable. Please try again later.",
+        )
+
     async def submit(self, request: VisionRequest) -> VisionResponse:
         """Submit vision request with VISION_MODEL override and automatic provider selection [REH]"""
         policy = self.provider_config.get("vision", {}).get("default_policy", {})
         normalized_request = self.normalize_request(request)
+
+        image_ladder_raw = str(self.config.get("VISION_IMAGE_FALLBACK_MODELS") or "").strip()
+        if normalized_request.task == VisionTask.TEXT_TO_IMAGE and image_ladder_raw:
+            return await self._submit_text_to_image_ladder(normalized_request, image_ladder_raw)
 
         preferred_provider_obj = getattr(request, "preferred_provider", None)
         if preferred_provider_obj is not None:

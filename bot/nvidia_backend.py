@@ -23,6 +23,7 @@ References:
 """
 
 from typing import Any, AsyncGenerator, Dict, Union
+import os
 
 from bot.config import load_config
 from bot.exceptions import APIError
@@ -67,14 +68,23 @@ async def generate_nvidia_response(
 
     config = load_config()
 
-    # Determine which model name to use
+    # Determine which model name to display before the OpenAI-compatible backend
+    # applies the authoritative TEXT_FALLBACK_MODELS ladder.  Prefer the ladder
+    # head so logs match the first actual attempted model when a ladder is set.
+    ladder_head = None
+    raw_ladder = os.getenv("TEXT_FALLBACK_MODELS")
+    if raw_ladder:
+        first_entry = str(raw_ladder).strip().strip('"').split(",", 1)[0].strip()
+        ladder_head = first_entry.split("|", 1)[1].strip() if "|" in first_entry else first_entry
+
     model = (
-        config.get("NVIDIA_NIM_TEXT_MODEL")
+        ladder_head
+        or config.get("NVIDIA_NIM_TEXT_MODEL")
         or config.get("OPENAI_TEXT_MODEL")
         or "meta/llama3-70b-instruct"
     )
 
-    logger.info(f"🚀 Using NVIDIA NIM backend with model: {model}")
+    logger.info(f"🚀 Using NVIDIA NIM backend with configured model/ladder head: {model}")
 
     try:
         # Delegate to OpenAI backend - it will use NVIDIA configuration
@@ -90,10 +100,11 @@ async def generate_nvidia_response(
             **kwargs,
         )
 
-        # Mark result as from NVIDIA backend
+        # Mark result as from NVIDIA backend without overwriting the actual model
+        # returned by the OpenAI-compatible fallback ladder.
         if isinstance(result, dict):
             result["backend"] = "nvidia_nim"
-            result["model"] = model
+            result.setdefault("configured_model", model)
 
         logger.info("✅ NVIDIA NIM response generated successfully")
         return result

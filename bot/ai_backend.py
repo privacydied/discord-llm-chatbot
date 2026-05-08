@@ -42,7 +42,7 @@ async def generate_response(
             f"🤖 Temperature: {temperature}, Max tokens: {max_tokens}, Stream: {stream}"
         )
 
-        if backend == "openai":
+        if backend in ("openai", "openrouter"):
             # Use OpenAI/OpenRouter backend
             logger.debug("🤖 Routing to OpenAI/OpenRouter backend")
             from .openai_backend import generate_openai_response

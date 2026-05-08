@@ -104,6 +104,28 @@
       },
       "safety_factor": 1.1
     },
+    "nvidia": {
+      "name": "NVIDIA GenAI",
+      "base_prices": {
+        "text_to_image": {
+          "base_cost": 0.006,
+          "per_image": 0.006,
+          "size_multipliers": {
+            "512x512": 1.0,
+            "768x768": 1.15,
+            "1024x1024": 1.4,
+            "1536x1536": 1.8,
+            "2048x2048": 2.5
+          },
+          "model_multipliers": {
+            "default": 1.0,
+            "flux.1-dev": 1.0,
+            "flux.1-schnell": 1.0
+          }
+        }
+      },
+      "safety_factor": 1.1
+    },
     "chutes": {
       "name": "Chutes AI",
       "base_prices": {

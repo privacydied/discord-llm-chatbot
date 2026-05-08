@@ -95,6 +95,34 @@ def _make_openai_async_client(
         raise
 
 
+def _resolve_openai_compatible_endpoint(
+    provider_name: str | None, config: Dict[str, Any]
+) -> tuple[str | None, str | None, str]:
+    """Resolve API key/base URL for OpenAI-compatible ladders."""
+    provider = str(provider_name or "openrouter").strip().lower()
+    if provider == "nvidia":
+        return (
+            config.get("NVIDIA_NIM_API_KEY") or config.get("OPENAI_API_KEY"),
+            config.get("NVIDIA_NIM_API_BASE")
+            or config.get("OPENAI_API_BASE")
+            or "https://integrate.api.nvidia.com/v1",
+            "nvidia",
+        )
+    if provider == "openrouter":
+        return (
+            config.get("OPENROUTER_API_KEY")
+            or config.get("OPENAI_API_KEY")
+            or config.get("VISION_API_KEY"),
+            "https://openrouter.ai/api/v1",
+            "openrouter",
+        )
+    return (
+        config.get("OPENAI_API_KEY"),
+        config.get("OPENAI_API_BASE") or "https://api.openai.com/v1",
+        provider,
+    )
+
+
 async def _safe_aclose_openai_client(client: Any) -> None:
     """Best-effort close for OpenAI/httpx async clients without leaking __del__ tasks.
 
@@ -154,8 +182,26 @@ async def generate_openai_response(
     try:
         config = load_config()
 
-        # Configure OpenAI client with configurable timeout
+        # Configure OpenAI-compatible client with configurable timeout
         import httpx
+
+        backend = str(config.get("TEXT_BACKEND", "openai") or "openai").lower()
+        if backend == "nvidia":
+            api_key = config.get("NVIDIA_NIM_API_KEY") or config.get("OPENAI_API_KEY")
+            api_base = (
+                config.get("NVIDIA_NIM_API_BASE")
+                or config.get("OPENAI_API_BASE")
+                or "https://integrate.api.nvidia.com/v1"
+            )
+            configured_model = (
+                config.get("NVIDIA_NIM_TEXT_MODEL")
+                or config.get("OPENAI_TEXT_MODEL")
+                or "meta/llama3-70b-instruct"
+            )
+        else:
+            api_key = config.get("OPENAI_API_KEY")
+            api_base = config.get("OPENAI_API_BASE", "https://api.openai.com/v1")
+            configured_model = config.get("OPENAI_TEXT_MODEL", "gpt-4")
 
         # Prefer TEXTGEN_TIMEOUT_SECONDS; fall back to TEXT_REQUEST_TIMEOUT; default 45s
         try:
@@ -168,14 +214,14 @@ async def generate_openai_response(
             timeout_seconds = 45.0
 
         client = _make_openai_async_client(
-            api_key=config.get("OPENAI_API_KEY"),
-            base_url=config.get("OPENAI_API_BASE", "https://api.openai.com/v1"),
+            api_key=api_key,
+            base_url=api_base,
             timeout=httpx.Timeout(timeout_seconds),
             max_retries=0,  # Let our retry system handle retries
         )
 
         # Get model configuration
-        model = config.get("OPENAI_TEXT_MODEL", "gpt-4")
+        model = configured_model
 
         # Get user preferences if user_id is provided
         if user_id:
@@ -238,7 +284,7 @@ Server Context: {server_context}"""
         if max_tokens is None:
             max_tokens = config.get("MAX_RESPONSE_TOKENS", 1000)
 
-        logger.info(f"Generating OpenAI response with model: {model}")
+        logger.info(f"Configured OpenAI-compatible text model: {model}")
         logger.debug(
             f"[OpenAI] Request params: temp={temperature}, max_tokens={max_tokens}, stream={stream}"
         )
@@ -252,6 +298,14 @@ Server Context: {server_context}"""
                     raise APIError("No choices returned in OpenAI response")
                 first = response_obj.choices[0]
                 content = getattr(getattr(first, "message", None), "content", "") or ""
+                try:
+                    from .vl.postprocess import sanitize_model_output
+
+                    usable_content = sanitize_model_output(content)
+                except Exception:
+                    usable_content = content
+                if not str(usable_content or "").strip():
+                    raise APIError(f"Empty text response from model {used_model}")
                 usage = getattr(response_obj, "usage", None)
                 usage_info_local = {
                     "prompt_tokens": getattr(usage, "prompt_tokens", 0),
@@ -301,26 +355,38 @@ Server Context: {server_context}"""
 
             return stream_generator()
 
-        # Non-streaming: if using OpenRouter base, engage provider/model fallback ladder
-        base_url = str(config.get("OPENAI_API_BASE", "https://api.openai.com/v1") or "")
-        use_openrouter_fallback = "openrouter" in base_url.lower()
+        # Non-streaming: if using OpenRouter or NVIDIA Build/NIM base, engage provider/model fallback ladder
+        base_url = str(api_base or "https://api.openai.com/v1")
+        base_url_l = base_url.lower()
+        use_text_fallback = "openrouter" in base_url_l or "nvidia.com" in base_url_l
 
-        if use_openrouter_fallback:
+        if use_text_fallback:
+            ladder_label = "NVIDIA" if "nvidia.com" in base_url_l else "OpenRouter"
             logger.info(
-                "[OpenAI] Using EnhancedRetryManager text fallback ladder (OpenRouter)"
+                f"[OpenAI] Using EnhancedRetryManager text fallback ladder ({ladder_label})"
             )
+            await _safe_aclose_openai_client(client)
             retry_mgr = get_retry_manager()
 
             def _coro_factory(provider_config):
                 selected_model = provider_config.model
+                attempt_api_key, attempt_base_url, attempt_provider = (
+                    _resolve_openai_compatible_endpoint(provider_config.name, config)
+                )
 
                 async def _run():
+                    attempt_client = _make_openai_async_client(
+                        api_key=attempt_api_key,
+                        base_url=attempt_base_url,
+                        timeout=httpx.Timeout(provider_config.timeout),
+                        max_retries=0,
+                    )
                     try:
                         logger.debug(
-                            f"[OpenAI] 🔄 Sending request to API with model: {selected_model}"
+                            f"[OpenAI] 🔄 Sending request to {attempt_provider} with model: {selected_model}"
                         )
                         t0 = time.monotonic()
-                        resp = await client.chat.completions.create(
+                        resp = await attempt_client.chat.completions.create(
                             model=selected_model,
                             messages=messages,
                             temperature=temperature,
@@ -392,6 +458,8 @@ Server Context: {server_context}"""
                                 f"Request timeout after ~{elapsed_ms}ms for model {selected_model}"
                             )
                         raise
+                    finally:
+                        await _safe_aclose_openai_client(attempt_client)
 
                 return _run
 
@@ -760,22 +828,27 @@ async def _generate_vl_response_with_retry(
 
     # Use EnhancedRetryManager for vision ladder fallback (mirrors text flow) [CA][REH]
     # Skip ladder if model_override is explicitly provided (caller wants specific model)
-    use_openrouter_fallback = "openrouter" in base_url.lower() and not model_override
+    use_provider_fallback = (
+        ("openrouter" in base_url.lower() or "nvidia.com" in base_url.lower())
+        and not model_override
+    )
 
-    if use_openrouter_fallback:
-        logger.info(
-            "[VL] Using EnhancedRetryManager vision fallback ladder (OpenRouter)"
-        )
+    if use_provider_fallback:
+        ladder_label = "NVIDIA" if "nvidia.com" in base_url.lower() else "OpenRouter"
+        logger.info(f"[VL] Using EnhancedRetryManager vision fallback ladder ({ladder_label})")
         retry_mgr = get_retry_manager()
 
         def _coro_factory(provider_config):
             selected_model = provider_config.model
+            attempt_api_key, attempt_base_url, attempt_provider = (
+                _resolve_openai_compatible_endpoint(provider_config.name, config)
+            )
 
             async def _run():
                 # Create client with per-provider timeout from ladder config
                 client = _make_openai_async_client(
-                    api_key=config.get("OPENAI_API_KEY"),
-                    base_url=base_url or "https://api.openai.com/v1",
+                    api_key=attempt_api_key,
+                    base_url=attempt_base_url,
                     timeout=httpx.Timeout(provider_config.timeout),
                     max_retries=0,
                 )
@@ -796,7 +869,7 @@ async def _generate_vl_response_with_retry(
                 t0 = time.monotonic()
                 try:
                     logger.debug(
-                        f"[VL] 🔄 Sending request to API with model: {selected_model}"
+                        f"[VL] 🔄 Sending request to {attempt_provider} with model: {selected_model}"
                     )
                     response = await client.chat.completions.create(**api_params)
 
@@ -834,8 +907,8 @@ async def _generate_vl_response_with_retry(
                         "text": response_text,
                         "model": selected_model,
                         "usage": usage_info,
-                        "backend": "openai",
-                        "telemetry": {"provider_base": base_url},
+                        "backend": attempt_provider,
+                        "telemetry": {"provider_base": attempt_base_url},
                     }
 
                 except httpx.HTTPStatusError as he:
@@ -1005,9 +1078,13 @@ async def _generate_vl_response_with_retry(
     except Exception:
         timeout_seconds = 30.0
 
+    single_api_key, single_base_url, single_provider = _resolve_openai_compatible_endpoint(
+        "nvidia" if "nvidia.com" in base_url.lower() else "openrouter" if "openrouter" in base_url.lower() else "openai",
+        config,
+    )
     client = _make_openai_async_client(
-        api_key=config.get("OPENAI_API_KEY"),
-        base_url=base_url or "https://api.openai.com/v1",
+        api_key=single_api_key,
+        base_url=single_base_url,
         timeout=httpx.Timeout(timeout_seconds),
         max_retries=0,
     )
@@ -1015,7 +1092,7 @@ async def _generate_vl_response_with_retry(
     logger.info(
         "vl.attempt model=%s provider_base=%s stream=%s (single-provider mode)",
         model_name,
-        base_url,
+        single_base_url,
         stream_flag,
     )
 
@@ -1052,7 +1129,7 @@ async def _generate_vl_response_with_retry(
             exhaustion_error.vl_exhausted = True
             exhaustion_error.vl_ladder_summary = f"{model_name}:fail"
             exhaustion_error.vl_attempts = 1
-            exhaustion_error.vl_provider_base = base_url
+            exhaustion_error.vl_provider_base = single_base_url
             raise exhaustion_error from exc
 
         elapsed_ms = int((time.monotonic() - start) * 1000)
@@ -1079,7 +1156,7 @@ async def _generate_vl_response_with_retry(
             empty_err.vl_exhausted = True
             empty_err.vl_ladder_summary = f"{model_name}:empty_completion"
             empty_err.vl_attempts = 1
-            empty_err.vl_provider_base = base_url
+            empty_err.vl_provider_base = single_base_url
             raise empty_err
         usage_info = {
             "prompt_tokens": getattr(usage, "prompt_tokens", 0),
@@ -1091,8 +1168,8 @@ async def _generate_vl_response_with_retry(
             "text": response_text,
             "model": model_name,
             "usage": usage_info,
-            "backend": "openai",
-            "telemetry": {"provider_base": base_url, "ladder_attempts": 1},
+            "backend": single_provider,
+            "telemetry": {"provider_base": single_base_url, "ladder_attempts": 1},
         }
     finally:
         await _safe_aclose_openai_client(client)

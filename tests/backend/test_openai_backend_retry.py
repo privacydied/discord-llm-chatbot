@@ -5,6 +5,7 @@ import httpx
 from bot.exceptions import APIError
 from bot import retry_utils as retry_utils_mod
 from bot.openai_backend import generate_openai_response
+from bot.nvidia_backend import generate_nvidia_response
 from bot.enhanced_retry import (
     EnhancedRetryManager,
     ProviderStatus,
@@ -39,6 +40,84 @@ class FakeChat:
 class FakeOpenAIClient:
     def __init__(self, create_fn):
         self.chat = FakeChat(create_fn)
+
+
+@pytest.mark.asyncio
+async def test_text_backend_openrouter_alias_routes_to_openai_backend(monkeypatch):
+    def fake_load_config():
+        return {"TEXT_BACKEND": "openrouter"}
+
+    async def fake_generate_openai_response(**kwargs):
+        return {"text": "ok", "backend": "openai"}
+
+    monkeypatch.setattr("bot.ai_backend.load_config", fake_load_config)
+    monkeypatch.setattr(
+        "bot.openai_backend.generate_openai_response", fake_generate_openai_response
+    )
+
+    from bot.ai_backend import generate_response
+
+    result = await generate_response("hello", system_prompt="test")
+
+    assert result["text"] == "ok"
+
+
+def test_text_ladder_env_can_force_single_attempt_per_model(monkeypatch):
+    monkeypatch.setenv(
+        "TEXT_FALLBACK_MODELS",
+        "nvidia|deepseek-ai/deepseek-v4-pro,nvidia|qwen/qwen3.5-397b-a17b",
+    )
+    monkeypatch.setenv("TEXT_FALLBACK_TIMEOUTS", "35,35")
+    monkeypatch.setenv("TEXT_FALLBACK_MAX_ATTEMPTS", "1")
+
+    mgr = EnhancedRetryManager()
+
+    assert [
+        (p.name, p.model, p.timeout, p.max_attempts)
+        for p in mgr.provider_configs["text"]
+    ] == [
+        ("nvidia", "deepseek-ai/deepseek-v4-pro", 35.0, 1),
+        ("nvidia", "qwen/qwen3.5-397b-a17b", 35.0, 1),
+    ]
+
+
+def test_empty_text_response_is_retryable_for_ladder():
+    mgr = EnhancedRetryManager()
+
+    assert mgr._is_retryable_error(
+        APIError(
+            "Response normalization failed: APIError: Empty text response from model tencent/hy3-preview:free"
+        )
+    )
+
+
+@pytest.mark.asyncio
+async def test_nvidia_backend_preserves_actual_ladder_model(monkeypatch):
+    monkeypatch.setenv(
+        "TEXT_FALLBACK_MODELS",
+        "nvidia|deepseek-ai/deepseek-v4-pro,nvidia|z-ai/glm-5.1",
+    )
+
+    def fake_load_config():
+        return {
+            "TEXT_BACKEND": "nvidia",
+            "NVIDIA_NIM_TEXT_MODEL": "z-ai/glm-5.1",
+            "OPENAI_TEXT_MODEL": "deepseek-ai/deepseek-v4-pro",
+        }
+
+    async def fake_generate_openai_response(**kwargs):
+        return {"text": "ok", "model": "deepseek-ai/deepseek-v4-pro"}
+
+    monkeypatch.setattr("bot.nvidia_backend.load_config", fake_load_config)
+    monkeypatch.setattr(
+        "bot.openai_backend.generate_openai_response", fake_generate_openai_response
+    )
+
+    result = await generate_nvidia_response("hello", stream=False, system_prompt="test")
+
+    assert result["backend"] == "nvidia_nim"
+    assert result["model"] == "deepseek-ai/deepseek-v4-pro"
+    assert result["configured_model"] == "deepseek-ai/deepseek-v4-pro"
 
 
 @pytest.mark.asyncio
@@ -141,6 +220,193 @@ async def test_rate_limit_apierror_carries_retry_after_seconds_when_no_retry(
     e = ei.value
     assert hasattr(e, "retry_after_seconds")
     assert abs(float(e.retry_after_seconds) - 3.5) < 0.01
+
+
+@pytest.mark.asyncio
+async def test_nvidia_base_uses_text_fallback_ladder_and_nvidia_key(monkeypatch):
+    def fake_load_config():
+        return {
+            "TEXT_BACKEND": "nvidia",
+            "OPENAI_API_KEY": "old-openrouter-key",
+            "OPENAI_API_BASE": "https://openrouter.ai/api/v1",
+            "OPENAI_TEXT_MODEL": "old-openrouter-model",
+            "NVIDIA_NIM_API_KEY": "nvapi-test-key",
+            "NVIDIA_NIM_API_BASE": "https://integrate.api.nvidia.com/v1",
+            "NVIDIA_NIM_TEXT_MODEL": "model-a",
+            "TEXT_PER_ITEM_BUDGET": 10.0,
+            "TEMPERATURE": 0.1,
+        }
+
+    monkeypatch.setattr("bot.openai_backend.load_config", fake_load_config)
+
+    mgr = get_retry_manager()
+    mgr.circuit_breakers.clear()
+    mgr.provider_configs["text"] = [
+        ProviderConfig("nvidia", "model-a", timeout=2.0, max_attempts=1),
+        ProviderConfig("nvidia", "model-b", timeout=2.0, max_attempts=1),
+    ]
+
+    captured_client_kwargs = {}
+
+    async def fake_create(**kwargs):
+        model = kwargs.get("model")
+        if model == "model-a":
+            raise make_httpx_429(1.0)
+
+        class _Usage:
+            prompt_tokens = 1
+            completion_tokens = 2
+            total_tokens = 3
+
+        class _Msg:
+            content = "OK-NVIDIA-B"
+
+        class _Choice:
+            message = _Msg()
+
+        class _Resp:
+            choices = [_Choice()]
+            usage = _Usage()
+
+        return _Resp()
+
+    def fake_client_ctor(**kwargs):
+        captured_client_kwargs.update(kwargs)
+        return FakeOpenAIClient(fake_create)
+
+    monkeypatch.setattr("bot.openai_backend.openai.AsyncOpenAI", fake_client_ctor)
+
+    result = await generate_openai_response(
+        "hello", stream=False, system_prompt="test-system"
+    )
+
+    assert captured_client_kwargs["api_key"] == "nvapi-test-key"
+    assert str(captured_client_kwargs["base_url"]).rstrip("/") == "https://integrate.api.nvidia.com/v1"
+    assert result["text"] == "OK-NVIDIA-B"
+    assert result["model"] == "model-b"
+
+
+@pytest.mark.asyncio
+async def test_text_ladder_can_mix_openrouter_and_nvidia_endpoints(monkeypatch):
+    def fake_load_config():
+        return {
+            "OPENAI_API_KEY": "openrouter-key",
+            "OPENROUTER_API_KEY": "dedicated-openrouter-key",
+            "OPENAI_API_BASE": "https://openrouter.ai/api/v1",
+            "OPENAI_TEXT_MODEL": "openrouter-model-a",
+            "NVIDIA_NIM_API_KEY": "nvidia-key",
+            "NVIDIA_NIM_API_BASE": "https://integrate.api.nvidia.com/v1",
+            "TEXT_PER_ITEM_BUDGET": 10.0,
+            "TEMPERATURE": 0.1,
+        }
+
+    monkeypatch.setattr("bot.openai_backend.load_config", fake_load_config)
+
+    mgr = get_retry_manager()
+    mgr.circuit_breakers.clear()
+    mgr.provider_configs["text"] = [
+        ProviderConfig("openrouter", "openrouter-model-a", timeout=2.0, max_attempts=1),
+        ProviderConfig("nvidia", "nvidia-model-b", timeout=2.0, max_attempts=1),
+    ]
+
+    client_calls = []
+
+    async def fake_create(**kwargs):
+        model = kwargs.get("model")
+        if model == "openrouter-model-a":
+            raise make_httpx_429(1.0)
+
+        class _Usage:
+            prompt_tokens = 1
+            completion_tokens = 2
+            total_tokens = 3
+
+        class _Msg:
+            content = "OK-MIXED-NVIDIA"
+
+        class _Choice:
+            message = _Msg()
+
+        class _Resp:
+            choices = [_Choice()]
+            usage = _Usage()
+
+        return _Resp()
+
+    def fake_client_ctor(**kwargs):
+        client_calls.append(kwargs)
+        return FakeOpenAIClient(fake_create)
+
+    monkeypatch.setattr("bot.openai_backend.openai.AsyncOpenAI", fake_client_ctor)
+
+    result = await generate_openai_response(
+        "hello", stream=False, system_prompt="test-system"
+    )
+
+    assert result["text"] == "OK-MIXED-NVIDIA"
+    assert result["model"] == "nvidia-model-b"
+    ladder_calls = client_calls[-2:]
+    assert ladder_calls[0]["api_key"] == "dedicated-openrouter-key"
+    assert str(ladder_calls[0]["base_url"]).rstrip("/") == "https://openrouter.ai/api/v1"
+    assert ladder_calls[1]["api_key"] == "nvidia-key"
+    assert str(ladder_calls[1]["base_url"]).rstrip("/") == "https://integrate.api.nvidia.com/v1"
+
+
+@pytest.mark.asyncio
+async def test_text_ladder_falls_back_after_empty_model_response(monkeypatch):
+    def fake_load_config():
+        return {
+            "OPENAI_API_KEY": "openrouter-key",
+            "OPENAI_API_BASE": "https://openrouter.ai/api/v1",
+            "OPENAI_TEXT_MODEL": "model-a",
+            "TEXT_PER_ITEM_BUDGET": 10.0,
+            "TEMPERATURE": 0.1,
+        }
+
+    monkeypatch.setattr("bot.openai_backend.load_config", fake_load_config)
+
+    mgr = get_retry_manager()
+    mgr.circuit_breakers.clear()
+    mgr.provider_configs["text"] = [
+        ProviderConfig("openrouter", "model-empty", timeout=2.0, max_attempts=1),
+        ProviderConfig("openrouter", "model-good", timeout=2.0, max_attempts=1),
+    ]
+
+    calls = []
+
+    async def fake_create(**kwargs):
+        model = kwargs.get("model")
+        calls.append(model)
+
+        class _Usage:
+            prompt_tokens = 1
+            completion_tokens = 2
+            total_tokens = 3
+
+        class _Msg:
+            content = "" if model == "model-empty" else "OK-GOOD"
+
+        class _Choice:
+            message = _Msg()
+
+        class _Resp:
+            choices = [_Choice()]
+            usage = _Usage()
+
+        return _Resp()
+
+    monkeypatch.setattr(
+        "bot.openai_backend.openai.AsyncOpenAI",
+        lambda **kwargs: FakeOpenAIClient(fake_create),
+    )
+
+    result = await generate_openai_response(
+        "hello", stream=False, system_prompt="test-system"
+    )
+
+    assert calls[-2:] == ["model-empty", "model-good"]
+    assert result["text"] == "OK-GOOD"
+    assert result["model"] == "model-good"
 
 
 @pytest.mark.asyncio
