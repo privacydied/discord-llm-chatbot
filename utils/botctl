@@ -118,7 +118,7 @@ case "${1:-}" in
   start-clean)  SKIP_CLEAN=0 start ;;
   fg)           fg ;;
   stop)         stop ;;
-  restart)      stop; start ;;
+  restart)      stop; SKIP_CLEAN=1 start ;;
   clean)        clean ;;
   status)       status ;;
   *)
