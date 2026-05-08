@@ -119,43 +119,34 @@ class SentenceTransformerEmbedding(EmbeddingInterface):
                 raise
 
     async def _load_sentence_transformer(self):
-        """Load SentenceTransformer with local cache checking and graceful handling."""
-        try:
-            from sentence_transformers import SentenceTransformer
+        """Load SentenceTransformer without blocking the event loop."""
+        await asyncio.to_thread(self._load_sentence_transformer_sync)
 
-            # Check if model exists locally first
-            local_path = await self._get_local_model_path()
+    def _load_sentence_transformer_sync(self):
+        """Synchronous loader that can safely import and initialize the model off-thread."""
+        from sentence_transformers import SentenceTransformer
 
-            if local_path and await self._is_model_locally_cached(local_path):
-                logger.info(
-                    f"📂 Loading {self.model_name} from local cache: {local_path}"
-                )
-                # Load from local cache - much faster, no network requests
-                loop = asyncio.get_event_loop()
-                self.model = await loop.run_in_executor(
-                    None, lambda: SentenceTransformer(str(local_path), device="cpu")
-                )
-            else:
-                logger.info(
-                    f"🌐 Loading {self.model_name} from HuggingFace (first time or cache miss)"
-                )
-                # Download from HuggingFace - will cache locally
-                loop = asyncio.get_event_loop()
-                self.model = await loop.run_in_executor(
-                    None, lambda: SentenceTransformer(self.model_name, device="cpu")
-                )
+        # Check if model exists locally first
+        local_path = self._get_local_model_path()
 
-            # Get embedding dimension efficiently
-            self.embedding_dim = self.model.get_sentence_embedding_dimension()
-            self._initialized = True
+        if local_path and self._is_model_locally_cached(local_path):
+            logger.info(
+                f"📂 Loading {self.model_name} from local cache: {local_path}"
+            )
+            self.model = SentenceTransformer(str(local_path), device="cpu")
+        else:
+            logger.info(
+                f"🌐 Loading {self.model_name} from HuggingFace (first time or cache miss)"
+            )
+            self.model = SentenceTransformer(self.model_name, device="cpu")
 
-            logger.info(f"✅ Initialized {self.model_name} [dim={self.embedding_dim}]")
+        # Get embedding dimension efficiently
+        self.embedding_dim = self.model.get_sentence_embedding_dimension()
+        self._initialized = True
 
-        except Exception as e:
-            logger.error(f"❌ SentenceTransformer loading failed: {e}")
-            raise
+        logger.info(f"✅ Initialized {self.model_name} [dim={self.embedding_dim}]")
 
-    async def _get_local_model_path(self) -> Optional[Path]:
+    def _get_local_model_path(self) -> Optional[Path]:
         """Get the exact local cache path containing the model files."""
         try:
             # Standard HuggingFace cache locations (expanded for comprehensive coverage)
@@ -198,7 +189,7 @@ class SentenceTransformerEmbedding(EmbeddingInterface):
 
                 # Remove None entries and check each path
                 for path in filter(None, potential_paths):
-                    if await self._is_model_locally_cached(path):
+                    if self._is_model_locally_cached(path):
                         # Return the exact path where model files were found
                         actual_path = getattr(self, "_cached_model_path", path)
                         logger.debug(f"📂 Found cached model at: {actual_path}")
@@ -211,10 +202,7 @@ class SentenceTransformerEmbedding(EmbeddingInterface):
                     snapshots_dir = hub_model_path / "snapshots"
                     if snapshots_dir.exists():
                         for snapshot_dir in snapshots_dir.iterdir():
-                            if (
-                                snapshot_dir.is_dir()
-                                and await self._is_model_locally_cached(snapshot_dir)
-                            ):
+                            if snapshot_dir.is_dir() and self._is_model_locally_cached(snapshot_dir):
                                 # Return the exact snapshot directory containing model files
                                 actual_path = getattr(
                                     self, "_cached_model_path", snapshot_dir
@@ -231,7 +219,7 @@ class SentenceTransformerEmbedding(EmbeddingInterface):
             logger.debug(f"Could not determine local model path: {e}")
             return None
 
-    async def _is_model_locally_cached(self, path: Path) -> bool:
+    def _is_model_locally_cached(self, path: Path) -> bool:
         """Check if model is fully cached locally and return the correct model directory path."""
         if not path or not path.exists():
             return False

@@ -138,6 +138,7 @@ class TestEmbeddingInterface:
             # Mock the model
             mock_model = MagicMock()
             mock_model.encode.return_value = np.random.rand(2, 384).astype(np.float32)
+            mock_model.get_sentence_embedding_dimension.return_value = 384
             mock_st.return_value = mock_model
 
             embedding_model = SentenceTransformerEmbedding()
@@ -171,6 +172,35 @@ class TestEmbeddingInterface:
             # Check normalization
             norms = np.linalg.norm(embeddings, axis=1)
             np.testing.assert_array_almost_equal(norms, [1.0, 1.0], decimal=6)
+
+    async def test_sentence_transformer_load_is_offloaded(self, monkeypatch):
+        """Test that model initialization delegates to asyncio.to_thread."""
+        embedding_model = SentenceTransformerEmbedding()
+        seen = {}
+
+        def fake_loader():
+            seen["loader_called"] = True
+            return None
+
+        async def fake_to_thread(func, *args, **kwargs):
+            seen["func"] = func
+            seen["args"] = args
+            seen["kwargs"] = kwargs
+            return func(*args, **kwargs)
+
+        monkeypatch.setattr(
+            "bot.rag.embedding_interface.asyncio.to_thread", fake_to_thread
+        )
+        monkeypatch.setattr(
+            embedding_model, "_load_sentence_transformer_sync", fake_loader
+        )
+
+        await embedding_model._load_sentence_transformer()
+
+        assert seen["loader_called"] is True
+        assert seen["func"] is fake_loader
+        assert seen["args"] == ()
+        assert seen["kwargs"] == {}
 
     def test_embedding_factory(self):
         """Test embedding model factory function."""

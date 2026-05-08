@@ -8,7 +8,7 @@ from typing import Dict, List, Optional, Any
 
 from discord.ext import commands, tasks
 
-from .memory import save_all_profiles, save_all_server_profiles
+from .memory import save_all_profiles, save_all_server_profiles, start_memory_service, stop_memory_service
 from .config import load_config
 from .janitor import start_janitor, stop_janitor
 
@@ -111,6 +111,9 @@ class TaskManager:
             # Start health check task
             await self._start_health_check()
 
+            # Start curated memory service
+            await start_memory_service(self.bot)
+
             # Start janitor task
             await self._start_janitor()
 
@@ -133,6 +136,12 @@ class TaskManager:
             await stop_janitor()
         except Exception as e:
             logger.warning(f"Error stopping janitor: {e}")
+
+        # Stop curated memory service
+        try:
+            await stop_memory_service()
+        except Exception as e:
+            logger.warning(f"Error stopping curated memory service: {e}")
 
         # Cancel all registered tasks
         for task_name, task in self.tasks.items():

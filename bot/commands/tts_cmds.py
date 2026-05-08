@@ -14,6 +14,7 @@ from discord.ext import commands
 from bot.action import BotAction
 from bot.tts.state import tts_state
 from bot.tts.errors import SynthesisError
+from bot.server_features import is_server_feature_enabled
 
 try:
     from bot.voice.publisher import VoiceMessagePublisher  # type: ignore
@@ -41,6 +42,10 @@ class TTSCommands(commands.Cog):
     @commands.group(name="tts", invoke_without_command=True)
     async def tts_group(self, ctx: commands.Context, *, text: Optional[str] = None):
         """Base command for TTS functionality."""
+        guild_id = getattr(getattr(ctx, "guild", None), "id", None)
+        if guild_id is not None and not is_server_feature_enabled(guild_id, "tts"):
+            await ctx.send("❌ TTS is disabled on this server.")
+            return
         if text:
             # If there's text after !tts, treat it as a one-off TTS request
             await self.speak(ctx, text)
@@ -85,6 +90,11 @@ class TTSCommands(commands.Cog):
 
         user_id = str(ctx.author.id)
         channel_id = str(ctx.channel.id)
+
+        guild_id = getattr(getattr(ctx, "guild", None), "id", None)
+        if guild_id is not None and not is_server_feature_enabled(guild_id, "tts"):
+            await ctx.send("❌ TTS is disabled on this server.")
+            return
 
         if text:
             # If text is provided, delegate to the 'say' command's logic for direct synthesis.
@@ -147,6 +157,11 @@ class TTSCommands(commands.Cog):
                     raise e
 
         # 1) Attachment fast-path → delegate to router with one-time TTS
+        guild_id = getattr(getattr(ctx, "guild", None), "id", None)
+        if guild_id is not None and not is_server_feature_enabled(guild_id, "tts"):
+            await maybe_call(ctx.send, "❌ TTS is disabled on this server.")
+            return
+
         has_attachments = False
         try:
             atts = getattr(ctx.message, "attachments", None)

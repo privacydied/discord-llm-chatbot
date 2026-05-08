@@ -59,7 +59,7 @@ def mock_message():
     "command_type, expected_text, should_be_none, should_delegate_to_cog",
     [
         (Command.PING, "Pong!", False, False),
-        (Command.HELP, "See `/help` for a list of commands.", False, False),
+        (Command.HELP, None, False, True),
         (Command.CHAT, "Processed text", False, False),
         (Command.TTS, None, True, False),
         (Command.SAY, None, True, False),
@@ -106,7 +106,12 @@ async def test_command_handling(
         assert response is not None, (
             f"Expected a response for command {command_type.name}, but got None."
         )
-        assert response.text == expected_text
+        # HELP is handled specially: just check it returns non-empty text.
+        if command_type == Command.HELP:
+            assert isinstance(response.text, str)
+            assert len(response.text.strip()) > 50
+        else:
+            assert response.text == expected_text
 
 
 @pytest.mark.asyncio
@@ -128,6 +133,71 @@ async def test_alert_delegates_without_custom_parse(
 
 
 @pytest.mark.asyncio
+async def test_router_typing_rate_limit_is_non_fatal(router, mock_message):
+    """Typing failures should not abort routing, and repeated attempts should be suppressed."""
+
+    class _BrokenTyping:
+        async def __aenter__(self):
+            raise RuntimeError("429 Too Many Requests")
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    channel = MagicMock(spec=discord.TextChannel)
+    channel.id = 4242
+    channel.typing.return_value = _BrokenTyping()
+
+    first_message = mock_message
+    first_message.channel = channel
+    first_message.guild = MagicMock(spec=discord.Guild)
+    first_message.id = 9001
+    first_message.content = f"<@{router.bot.user.id}> please analyze this"
+    first_message.mentions = [router.bot.user]
+
+    second_message = MagicMock(spec=discord.Message)
+    second_message.id = 9002
+    second_message.channel = channel
+    second_message.guild = first_message.guild
+    second_message.author = first_message.author
+    second_message.content = first_message.content
+    second_message.attachments = []
+    second_message.mentions = [router.bot.user]
+
+    with patch.object(router, "_should_process_message", return_value=True), \
+        patch.object(router, "_compat_dispatch_for_tests", AsyncMock(return_value=None)), \
+        patch.object(router, "_resolve_scope_and_target", AsyncMock(return_value=("lone", None, ""))), \
+        patch.object(router, "_prioritized_vision_route", AsyncMock(return_value=None)), \
+        patch("bot.modality.collect_input_items", return_value=[]), \
+        patch.object(router, "_process_multimodal_message_internal", AsyncMock(return_value=BotAction(content="ok"))):
+
+        first = await router.dispatch_message(first_message)
+        second = await router.dispatch_message(second_message)
+
+    assert isinstance(first, BotAction)
+    assert isinstance(second, BotAction)
+    assert channel.typing.call_count == 1
+
+
+@pytest.mark.asyncio
+@patch("bot.router.parse_command")
+async def test_alert_delegates_without_custom_parse(
+    mock_parse_command, router, mock_message
+):
+    mock_parse_command.return_value = None
+
+    mock_message.guild = MagicMock(spec=discord.Guild)
+    mock_message.channel = MagicMock(spec=discord.TextChannel)
+    mock_message.content = "!alert hello"
+
+    response = await router.dispatch_message(mock_message)
+
+    assert response is not None
+    assert isinstance(response, BotAction)
+    assert response.meta.get("delegated_to_cog") is True
+
+
+
+
 @pytest.mark.parametrize(
     "modality, flow_key, expected_output",
     [

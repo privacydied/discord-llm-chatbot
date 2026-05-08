@@ -149,11 +149,14 @@ class ConfigCommands(commands.Cog):
 
         embed.add_field(
             name="📋 Hot-Reload Support",
-            value="Most settings take effect immediately:\n"
+            value="Most settings take effect immediately (no restart required):\n"
             "• Model settings (TEXT_MODEL, etc.)\n"
             "• Memory limits (MAX_USER_MEMORY, etc.)\n"
             "• TTS/STT engine settings\n"
-            "• Log levels and debug flags",
+            "• Log levels and debug flags\n"
+            "• Timeouts: TIMEOUT, VL_REQUEST_TIMEOUT, VL_NOTES_TIMEOUT_S\n"
+            "• Budgets: TEXT_PER_ITEM_BUDGET, MULTIMODAL_PER_ITEM_BUDGET, VISION_PER_ITEM_BUDGET, MEDIA_PER_ITEM_BUDGET\n"
+            "• Retry ladders: TEXT_FALLBACK_TIMEOUTS, TEXT_FALLBACK_MAX_ATTEMPTS",
             inline=False,
         )
 

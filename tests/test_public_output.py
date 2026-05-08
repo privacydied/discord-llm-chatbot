@@ -5,9 +5,9 @@ Tests for public output sanitizer.
 import pytest
 
 from bot.public_output import (
+    SAFE_FALLBACK_MESSAGE,
     extract_public_reply_text,
     has_reasoning_leakage,
-    SAFE_FALLBACK_MESSAGE,
 )
 
 
@@ -117,3 +117,40 @@ class TestHasReasoningLeakage:
     def test_thinking_tag_is_leak(self):
         """<thinking> is a leak pattern."""
         assert has_reasoning_leakage("<thinking>") is True
+
+    # v2: tool-call / JSON-like leakage
+    def test_tool_call_json_leak(self):
+        assert has_reasoning_leakage('{"tool": "search"}') is True
+
+    def test_function_type_json_leak(self):
+        assert has_reasoning_leakage('{"type": "function", "name": "search"}') is True
+
+    def test_tool_call_array_leak(self):
+        assert has_reasoning_leakage('[{"name": "search"}]') is True
+
+    # v2: internal routing/status fragments
+    def test_dispatch_status_leak(self):
+        assert has_reasoning_leakage("dispatch: status=ok") is True
+
+    def test_router_internal_leak(self):
+        assert has_reasoning_leakage("router=internal") is True
+
+    def test_pipeline_timeout_leak(self):
+        assert has_reasoning_leakage("pipeline=timeout") is True
+
+    # v2: analysis/final/commentary role leakage
+    def test_final_answer_leak(self):
+        assert has_reasoning_leakage("final answer: 42") is True
+
+    def test_analysis_summary_leak(self):
+        assert has_reasoning_leakage("analysis summary: all good") is True
+
+    def test_commentary_only_leak(self):
+        assert has_reasoning_leakage("commentary only: this is internal") is True
+
+    # v2: raw prompt scaffolding markers
+    def test_system_tag_leak(self):
+        assert has_reasoning_leakage("<system>instructions</system>") is True
+
+    def test_instruction_tag_leak(self):
+        assert has_reasoning_leakage("<instruction>do this</instruction>") is True

@@ -17,6 +17,9 @@ class Command(Enum):
     CHAT = auto()  # General chat, default command
     PING = auto()  # A simple command for testing
     HELP = auto()  # Show help message
+    STATUS = auto()  # Show operator status
+    FEATURE = auto()  # Toggle server features
+    INDEX = auto()  # Index text/URLs/attachments into RAG
     SEARCH = auto()  # Online web search
     TTS = auto()  # Toggle TTS on/off for the user
     TTS_ALL = auto()  # Admin-only global TTS toggle

@@ -315,6 +315,47 @@ def load_config():
         "MEMORY_SAVE_INTERVAL": _safe_int(
             os.getenv("MEMORY_SAVE_INTERVAL"), "30", "MEMORY_SAVE_INTERVAL"
         ),
+        "PERSISTENT_MEMORY_ENABLE": _parse_bool_str(
+            os.getenv("PERSISTENT_MEMORY_ENABLE"), True
+        ),
+        "PERSISTENT_MEMORY_SQLITE_PATH": os.getenv(
+            "PERSISTENT_MEMORY_SQLITE_PATH", "./data/memory.db"
+        ),
+        "PERSISTENT_MEMORY_CHROMA_PATH": os.getenv(
+            "PERSISTENT_MEMORY_CHROMA_PATH", "./chroma_db"
+        ),
+        "PERSISTENT_MEMORY_CHROMA_COLLECTION": os.getenv(
+            "PERSISTENT_MEMORY_CHROMA_COLLECTION", "curated_memories"
+        ),
+        "PERSISTENT_MEMORY_QUEUE_MAX": _safe_int(
+            os.getenv("PERSISTENT_MEMORY_QUEUE_MAX"), "256", "PERSISTENT_MEMORY_QUEUE_MAX"
+        ),
+        "PERSISTENT_MEMORY_WORKERS": _safe_int(
+            os.getenv("PERSISTENT_MEMORY_WORKERS"), "1", "PERSISTENT_MEMORY_WORKERS"
+        ),
+        "PERSISTENT_MEMORY_TOP_K": _safe_int(
+            os.getenv("PERSISTENT_MEMORY_TOP_K"), "6", "PERSISTENT_MEMORY_TOP_K"
+        ),
+        "PERSISTENT_MEMORY_MAX_PROMPT_CHARS": _safe_int(
+            os.getenv("PERSISTENT_MEMORY_MAX_PROMPT_CHARS"),
+            "1200",
+            "PERSISTENT_MEMORY_MAX_PROMPT_CHARS",
+        ),
+        "PERSISTENT_MEMORY_DEFAULT_TTL_DAYS": _safe_int(
+            os.getenv("PERSISTENT_MEMORY_DEFAULT_TTL_DAYS"),
+            "180",
+            "PERSISTENT_MEMORY_DEFAULT_TTL_DAYS",
+        ),
+        "PERSISTENT_MEMORY_TEMP_TTL_DAYS": _safe_int(
+            os.getenv("PERSISTENT_MEMORY_TEMP_TTL_DAYS"),
+            "14",
+            "PERSISTENT_MEMORY_TEMP_TTL_DAYS",
+        ),
+        "PERSISTENT_MEMORY_MIN_IMPORTANCE": _safe_float(
+            os.getenv("PERSISTENT_MEMORY_MIN_IMPORTANCE"),
+            "0.55",
+            "PERSISTENT_MEMORY_MIN_IMPORTANCE",
+        ),
         "CONTEXT_FILE_PATH": os.getenv("CONTEXT_FILE_PATH", "runtime/context.json"),
         "MAX_CONTEXT_MESSAGES": _safe_int(
             os.getenv("MAX_CONTEXT_MESSAGES"), "10", "MAX_CONTEXT_MESSAGES"

@@ -3,6 +3,7 @@ RAG system management commands for Discord bot.
 """
 
 import asyncio
+import re
 from pathlib import Path
 from typing import List, Tuple
 import discord
@@ -10,6 +11,7 @@ from discord.ext import commands
 
 from ..rag.hybrid_search import get_hybrid_search
 from ..rag.config import get_rag_environment_info, validate_rag_environment
+from ..server_features import is_server_feature_enabled
 from ..utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -537,6 +539,151 @@ class RAGCommands(commands.Cog):
 
         except Exception as e:
             logger.error(f"[RAG Commands] Search command failed: {e}")
+            await ctx.send(f"❌ **Error:** {safe_embed_value(str(e))}")
+
+    @commands.command(name="index")
+    async def index_message_content(self, ctx, *, text: str = None):
+        """Index the current message text, URLs, and supported attachments into RAG."""
+        try:
+            hybrid_search = self.hybrid_search or getattr(ctx.bot, "hybrid_search", None)
+            if hybrid_search is None:
+                hybrid_search = await get_hybrid_search()
+            if hybrid_search is None:
+                await ctx.send("❌ RAG indexing is unavailable right now.")
+                return
+
+            guild_id = getattr(getattr(ctx, "guild", None), "id", None)
+            if guild_id is not None and not is_server_feature_enabled(guild_id, "rag"):
+                await ctx.send("❌ RAG is disabled on this server.")
+                return
+
+            message = getattr(ctx, "message", None)
+            attachments = list(getattr(message, "attachments", []) or [])
+            raw_text = (text or "").strip()
+            urls = re.findall(r"https?://\S+", raw_text)
+            text_without_urls = re.sub(r"https?://\S+", " ", raw_text).strip()
+
+            work_items = []
+            if text_without_urls:
+                work_items.append(("text", text_without_urls, None))
+            for url in urls:
+                work_items.append(("url", url, None))
+            for attachment in attachments:
+                work_items.append(("attachment", attachment, None))
+
+            if not work_items:
+                await ctx.send(
+                    "Usage: `!index <text>` or attach files / paste a URL to index."
+                )
+                return
+
+            guild_id = getattr(getattr(ctx, "guild", None), "id", None)
+            user_id = getattr(getattr(ctx, "author", None), "id", None)
+            message_id = getattr(message, "id", None)
+            base_metadata = {
+                "guild_id": guild_id,
+                "channel_id": getattr(getattr(ctx, "channel", None), "id", None),
+                "user_id": user_id,
+                "message_id": message_id,
+                "source": "discord",
+            }
+
+            queue_enabled = bool(
+                getattr(getattr(hybrid_search, "_indexing_queue", None), "enabled", False)
+            )
+            action_verb = "Queued" if queue_enabled else "Indexed"
+            successes = 0
+            failures = []
+
+            for kind, item, _ in work_items:
+                if kind == "text":
+                    source_id = f"discord://guild/{guild_id}/message/{message_id}/text"
+                    ok = await hybrid_search.add_document(
+                        source_id=source_id,
+                        text=item,
+                        metadata={**base_metadata, "source_type": "text"},
+                        file_type="text",
+                    )
+                    if ok:
+                        successes += 1
+                    else:
+                        failures.append("text content")
+                    continue
+
+                if kind == "url":
+                    try:
+                        from ..document_ingest import ingest_document_from_url
+
+                        extracted = await ingest_document_from_url(item)
+                        extracted_text = (extracted or {}).get("text") or ""
+                        if not extracted_text:
+                            failures.append(item)
+                            continue
+                        source_id = f"discord://guild/{guild_id}/message/{message_id}/url/{len(failures) + successes}"
+                        ok = await hybrid_search.add_document(
+                            source_id=source_id,
+                            text=extracted_text,
+                            metadata={
+                                **base_metadata,
+                                "source_type": "url",
+                                "url": item,
+                                "extraction_metadata": (extracted or {}).get("metadata", {}),
+                            },
+                            file_type="url",
+                        )
+                        if ok:
+                            successes += 1
+                        else:
+                            failures.append(item)
+                    except Exception as exc:
+                        failures.append(f"{item} ({exc})")
+                    continue
+
+                try:
+                    from ..document_ingest import ingest_document_attachment
+
+                    extracted = await ingest_document_attachment(item)
+                    extracted_text = (extracted or {}).get("text") or ""
+                    if not extracted_text:
+                        failures.append(getattr(item, "filename", "attachment"))
+                        continue
+                    source_id = (
+                        f"discord://guild/{guild_id}/message/{message_id}/attachment/"
+                        f"{getattr(item, 'filename', 'attachment')}"
+                    )
+                    ok = await hybrid_search.add_document(
+                        source_id=source_id,
+                        text=extracted_text,
+                        metadata={
+                            **base_metadata,
+                            "source_type": "attachment",
+                            "filename": getattr(item, "filename", "attachment"),
+                            "attachment_metadata": (extracted or {}).get("metadata", {}),
+                        },
+                        file_type=Path(getattr(item, "filename", "attachment")).suffix.lstrip(
+                            "."
+                        )
+                        or "attachment",
+                    )
+                    if ok:
+                        successes += 1
+                    else:
+                        failures.append(getattr(item, "filename", "attachment"))
+                except Exception as exc:
+                    failures.append(f"{getattr(item, 'filename', 'attachment')} ({exc})")
+
+            if successes == 0 and failures:
+                await ctx.send(
+                    f"❌ RAG indexing failed for: {safe_embed_value(', '.join(failures), 1800)}"
+                )
+                return
+
+            summary = f"{action_verb} {successes} item{'s' if successes != 1 else ''}."
+            if failures:
+                summary += f" Failed: {safe_embed_value(', '.join(failures), 1200)}"
+            await ctx.send(summary)
+        except Exception as e:
+            logger.error(f"[RAG Commands] Index-this command failed: {e}")
             await ctx.send(f"❌ **Error:** {safe_embed_value(str(e))}")
 
     @rag_group.command(name="index")

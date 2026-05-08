@@ -18,6 +18,9 @@ logger = logging.getLogger(__name__)
 COMMAND_MAP = {
     "!ping": Command.PING,
     "!help": Command.HELP,
+    "!status": Command.STATUS,
+    "!feature": Command.FEATURE,
+    "!index": Command.INDEX,
     "!chat": Command.CHAT,
     "!search": Command.SEARCH,
     "!tts": Command.TTS,

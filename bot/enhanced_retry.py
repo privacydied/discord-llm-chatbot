@@ -261,12 +261,13 @@ class EnhancedRetryManager:
         # - MEDIA_PROVIDER_TIMEOUT env, if set, wins (float seconds)
         # - Else derive from MEDIA_PER_ITEM_BUDGET (minus small margin) if present
         # - Else fallback to sensible default 100s
+        # Read from config so hot-reloads via reload_env take effect [REH][PA]
         try:
-            media_timeout_env = os.getenv("MEDIA_PROVIDER_TIMEOUT")
+            media_timeout_env = config.get("MEDIA_PROVIDER_TIMEOUT")
             if media_timeout_env is not None:
                 media_timeout = float(media_timeout_env)
             else:
-                budget_env = os.getenv("MEDIA_PER_ITEM_BUDGET")
+                budget_env = config.get("MEDIA_PER_ITEM_BUDGET")
                 if budget_env is not None:
                     budget_val = float(budget_env)
                     # keep a 5s safety margin within the overall budget

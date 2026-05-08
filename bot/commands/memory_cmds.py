@@ -13,10 +13,15 @@ from discord.ext import commands
 # Import bot modules
 from ..config import load_config
 from ..memory import (
+    add_explicit_memory,
+    delete_memory,
     get_profile,
     get_server_profile,
+    list_user_memories,
     save_profile,
     save_server_profile,
+    search_user_memories,
+    wipe_user_memories,
 )
 from bot.logger import log_command
 
@@ -34,6 +39,125 @@ class MemoryCommands(commands.Cog):
         self.config = load_config()
         self.router = bot.router
         self.prefix = self.config.get("COMMAND_PREFIX", "!")
+
+    async def _add_curated_memory(
+        self,
+        ctx,
+        *,
+        content: str,
+        context_type: str = "user_preference",
+    ):
+        content = (content or "").strip()
+        if not content:
+            await ctx.send("❌ Memory content cannot be empty.")
+            return
+
+        try:
+            record = await add_explicit_memory(
+                user_id=str(ctx.author.id),
+                text=content,
+                guild_id=str(ctx.guild.id) if getattr(ctx, "guild", None) else None,
+                channel_id=str(ctx.channel.id) if getattr(ctx, "channel", None) else None,
+                thread_id=str(ctx.channel.id) if isinstance(ctx.channel, discord.Thread) else None,
+                source_message_id=str(getattr(ctx.message, "id", None)) if getattr(ctx, "message", None) else None,
+                context_type=context_type,
+                source="explicit_memory_command",
+                metadata={"command": ctx.command.qualified_name if getattr(ctx, "command", None) else "memory-add"},
+            )
+        except Exception as exc:
+            logger.error("Failed to persist curated memory: %s", exc, exc_info=True)
+            await ctx.send("❌ Failed to save memory. Please try again.")
+            return
+
+        await ctx.send(f"✅ Memory saved. ID: `{record.memory_id[:8]}`")
+
+    async def _show_curated_memories(self, ctx, limit: int = 5):
+        limit = min(max(1, int(limit)), 20)
+        records = await list_user_memories(str(ctx.author.id), limit=limit)
+        if not records:
+            await ctx.send("You don't have any durable memories yet. Use `!memory-add <content>` to add one!")
+            return
+
+        embed = discord.Embed(
+            title=f"Your Durable Memories ({len(records)})",
+            color=discord.Color.blurple(),
+        )
+        for idx, record in enumerate(records, 1):
+            embed.add_field(
+                name=f"{idx}. {record.memory_id[:8]} · {record.context_type}",
+                value=(record.summary or record.text)[:1024],
+                inline=False,
+            )
+        await ctx.send(embed=embed)
+
+    async def _delete_curated_memory(self, ctx, query: str):
+        query = (query or "").strip()
+        if not query:
+            await ctx.send("❌ Usage: `!memory-del <id or search>`")
+            return
+
+        if await delete_memory(query):
+            await ctx.send(f"✅ Deleted memory `{query[:8]}`.")
+            return
+
+        matches = await search_user_memories(str(ctx.author.id), query, limit=5)
+        if not matches:
+            await ctx.send("❌ No matching memory found.")
+            return
+
+        target = matches[0]
+        if await delete_memory(target.memory_id):
+            await ctx.send(f"✅ Deleted memory `{target.memory_id[:8]}`: {target.summary}")
+        else:
+            await ctx.send("❌ Failed to delete memory. Please try again.")
+
+    async def _wipe_curated_memories(self, ctx):
+        try:
+            count = await wipe_user_memories(str(ctx.author.id))
+            await ctx.send(f"✅ Wiped {count} durable memories.")
+        except Exception as exc:
+            logger.error("Failed to wipe curated memories: %s", exc, exc_info=True)
+            await ctx.send("❌ Failed to wipe memories. Please try again.")
+
+    async def _search_curated_memories(self, ctx, query: str, limit: int = 5):
+        query = (query or "").strip()
+        if not query:
+            await ctx.send("❌ Usage: `!memory-search <query>`")
+            return
+
+        records = await search_user_memories(str(ctx.author.id), query, limit=min(max(1, limit), 10))
+        if not records:
+            await ctx.send("No matching durable memories found.")
+            return
+
+        embed = discord.Embed(title=f"Memory Search: {query}", color=discord.Color.gold())
+        for idx, record in enumerate(records, 1):
+            embed.add_field(
+                name=f"{idx}. {record.memory_id[:8]} · {record.context_type}",
+                value=(record.summary or record.text)[:1024],
+                inline=False,
+            )
+        await ctx.send(embed=embed)
+
+    @commands.command(name="memory-add")
+    async def memory_add_direct(self, ctx, *, content: str):
+        await self._add_curated_memory(ctx, content=content, context_type="user_preference")
+
+    @commands.command(name="memory-show")
+    async def memory_show_direct(self, ctx, limit: int = 5):
+        await self._show_curated_memories(ctx, limit=limit)
+
+    @commands.command(name="memory-del")
+    async def memory_del_direct(self, ctx, *, query: str):
+        await self._delete_curated_memory(ctx, query=query)
+
+    @commands.command(name="memory-wipe")
+    async def memory_wipe_direct(self, ctx):
+        await self._wipe_curated_memories(ctx)
+
+    @commands.command(name="memory-search")
+    async def memory_search_direct(self, ctx, *, query: str):
+        await self._search_curated_memories(ctx, query=query)
 
     @commands.group(name="memory", invoke_without_command=True)
     async def memory_group(self, ctx):

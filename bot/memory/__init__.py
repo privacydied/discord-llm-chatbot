@@ -10,6 +10,19 @@ from .profiles import (
     server_profiles,
     user_profiles,
 )
+from .service import (
+    add_explicit_memory,
+    build_memory_prompt_block,
+    delete_memory,
+    enqueue_inferred_memory,
+    get_memory_service,
+    list_user_memories,
+    search_user_memories,
+    start_memory_service,
+    stop_memory_service,
+    wipe_user_memories,
+)
+from .retrieval import build_relevant_memory_block, get_relevant_memories
 
 __all__ = [
     "ContextManager",
@@ -22,4 +35,16 @@ __all__ = [
     "save_server_profile",
     "server_profiles",
     "user_profiles",
+    "add_explicit_memory",
+    "build_memory_prompt_block",
+    "build_relevant_memory_block",
+    "delete_memory",
+    "enqueue_inferred_memory",
+    "get_memory_service",
+    "get_relevant_memories",
+    "list_user_memories",
+    "search_user_memories",
+    "start_memory_service",
+    "stop_memory_service",
+    "wipe_user_memories",
 ]

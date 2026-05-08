@@ -209,6 +209,22 @@ async def test_tts_group_no_text(tts_cog, mock_ctx):
 
 
 @pytest.mark.asyncio
+async def test_say_disabled_on_server_short_circuits(
+    tts_cog, mock_ctx, mock_bot, monkeypatch
+):
+    mock_ctx.guild = SimpleNamespace(id=321)
+    monkeypatch.setattr(
+        "bot.commands.tts_cmds.is_server_feature_enabled",
+        lambda guild_id, feature: False,
+    )
+
+    await tts_cog.say.callback(tts_cog, mock_ctx, text="hello")
+
+    mock_ctx.send.assert_called_once_with("❌ TTS is disabled on this server.")
+    assert not mock_bot.tts_manager.is_available.called
+
+
+@pytest.mark.asyncio
 async def test_say_native_voice_publish_success(
     tts_cog, mock_ctx, mock_bot, monkeypatch
 ):

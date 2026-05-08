@@ -27,7 +27,7 @@ from bot.enhanced_retry import get_retry_manager
 from bot.http_client import cleanup_http_client
 from bot.utils.logging import get_logger
 from bot.metrics import NullMetrics
-from bot.memory import load_all_profiles
+from bot.memory import load_all_profiles, enqueue_inferred_memory, start_memory_service, stop_memory_service
 from bot.memory.context_manager import ContextManager
 from bot.memory.enhanced_context_manager import EnhancedContextManager
 from bot.events import setup_command_error_handler
@@ -38,7 +38,8 @@ from bot.memory.thread_tail import (
     _is_thread_channel,
 )
 
-_DISCORD_MAX_CONTENT_LEN = 1900
+      # Discord hard limit is 2000; use 1950 to leave headroom for mentions/overhead [REH][PA]
+_DISCORD_MAX_CONTENT_LEN = 1950
 
 if TYPE_CHECKING:
     from bot.router import Router, BotAction
@@ -890,6 +891,27 @@ class LLMBot(commands.Bot):
             # Enhanced context tracking for multi-user conversations
             if self.enhanced_context_manager:
                 await self.enhanced_context_manager.append_message(message, role="user")
+
+            # Best-effort curated memory ingestion must never block the hot path.
+            try:
+                is_command = await self._message_is_command(message)
+            except Exception:
+                is_command = False
+            if not is_command and getattr(message, "content", "").strip():
+                try:
+                    asyncio.create_task(
+                        enqueue_inferred_memory(
+                            user_id=str(message.author.id),
+                            text=message.content,
+                            guild_id=str(message.guild.id) if getattr(message, "guild", None) else None,
+                            channel_id=str(message.channel.id) if getattr(message, "channel", None) else None,
+                            thread_id=str(message.channel.id) if isinstance(message.channel, discord.Thread) else None,
+                            source_message_id=str(message.id),
+                            metadata={"source": "bot_message_pipeline"},
+                        )
+                    )
+                except Exception:
+                    pass
 
             guild_info = (
                 "DM"
@@ -2175,19 +2197,18 @@ class LLMBot(commands.Bot):
             except Exception:
                 pass
 
+            # Resolve channel for sending.
+            send_channel = ch or message.channel
+
+            # Small delay between continuation chunks to respect Discord rate limits
+            # (5 messages / 5 seconds per channel). This ensures ordered delivery and
+            # avoids silent drops from hitting the limit too hard [REH][PA].
+            if not is_first_part:
+                await asyncio.sleep(0.3)
+
             try:
-                if reply_target is None and _is_thread_channel(ch):
-                    sent = await self._call_with_discord_retry(
-                        "channel_send",
-                        lambda: message.channel.send(
-                            content=chunk_content,
-                            embeds=part_embeds,
-                            files=part_files,
-                            allowed_mentions=part_allowed_mentions,
-                        ),
-                        base_extra=base_extra,
-                    )
-                elif reply_target is not None:
+                if is_first_part and reply_target is not None:
+                    # First chunk: actual reply to the user's message.
                     sent = await self._call_with_discord_retry(
                         "reply_send",
                         lambda: reply_target.reply(
@@ -2200,18 +2221,19 @@ class LLMBot(commands.Bot):
                         base_extra=base_extra,
                     )
                 else:
+                    # Continuation chunks: plain channel messages (no reply chain).
                     sent = await self._call_with_discord_retry(
-                        "reply_send",
-                        lambda: message.reply(
+                        "channel_send",
+                        lambda: send_channel.send(
                             content=chunk_content,
                             embeds=part_embeds,
                             files=part_files,
-                            mention_author=False,
                             allowed_mentions=part_allowed_mentions,
                         ),
                         base_extra=base_extra,
                     )
 
+                # Ensure strict ordering: each chunk is fully sent before the next.
                 last_sent = sent
                 try:
                     self.logger.info(
@@ -2249,18 +2271,22 @@ class LLMBot(commands.Bot):
     def _chunk_message_content(self, content: str) -> List[str]:
         """Split a text payload into Discord-safe chunks.
 
-        This is a best-effort splitter that prefers paragraph breaks, then line breaks,
-        then simple sentence boundaries, then whitespace, and finally hard cuts. It is
-        intentionally simple and does not attempt full Markdown parsing; occasional
-        splits inside code fences are acceptable.
+        Requirements:
+        - Preserve all original content ("".join(chunks) == text).
+        - Prefer paragraph boundaries, then line breaks, then sentence endings,
+          then whitespace; hard cut only as last resort within max_len.
+        - Avoid empty/whitespace-only chunks where possible without dropping content.
+        - Respect code-fence parity when choosing a split point if feasible.
         """
         try:
             if content is None:
-                return [""]
+                return []
             text = str(content)
         except Exception:
-            # Fallback: treat as opaque string.
             text = content or ""
+
+        if not text:
+            return []
 
         max_len = _DISCORD_MAX_CONTENT_LEN
         if len(text) <= max_len:
@@ -2273,25 +2299,31 @@ class LLMBot(commands.Bot):
         while start < n:
             remaining = n - start
             if remaining <= max_len:
+                # Final chunk: take everything left; preserves exact content.
                 chunks.append(text[start:])
                 break
 
             window = text[start : start + max_len]
 
+            # Candidate split positions (relative to start), in priority order.
             candidates: List[int] = []
-            # Prefer paragraph boundaries first.
+
             para_idx = window.rfind("\n\n")
             if para_idx != -1:
                 candidates.append(para_idx + 2)
-            # Then single newlines.
+
             line_idx = window.rfind("\n")
             if line_idx != -1:
                 candidates.append(line_idx + 1)
-            # Then lightweight sentence boundaries.
-            sentence_idx = max(window.rfind(". "), window.rfind("! "), window.rfind("? "))
+
+            sentence_idx = max(
+                window.rfind(". "),
+                window.rfind("! "),
+                window.rfind("? "),
+            )
             if sentence_idx != -1:
                 candidates.append(sentence_idx + 2)
-            # Then spaces or tabs.
+
             space_idx = max(window.rfind(" "), window.rfind("\t"))
             if space_idx != -1:
                 candidates.append(space_idx + 1)
@@ -2305,6 +2337,7 @@ class LLMBot(commands.Bot):
                     uniq_candidates.append(c)
 
             best_break: int | None = None
+
             # Prefer boundaries that keep us outside of fenced code blocks when possible.
             for candidate in sorted(uniq_candidates, reverse=True):
                 segment = text[start : start + candidate]
@@ -2313,20 +2346,29 @@ class LLMBot(commands.Bot):
                         best_break = candidate
                         break
                 except Exception:
-                    # If anything goes wrong, fall back to naive behaviour.
                     best_break = candidate
                     break
 
+            # If none chosen by code-fence logic, take the last viable candidate.
             if best_break is None:
                 if uniq_candidates:
                     best_break = max(uniq_candidates)
                 else:
                     best_break = max_len
 
-            if best_break <= 0:
-                best_break = max_len
+            # Safety clamp: never exceed max_len.
+            if best_break <= 0 or (start + best_break > n):
+                best_break = min(max_len, n - start)
 
+            # Take this chunk as-is (no rstrip/trimming that loses content).
             chunk = text[start : start + best_break]
+
+            # If the chunk is empty/whitespace-only and there's more content ahead,
+            # extend it by one character to avoid producing an effectively empty message.
+            if not chunk.strip() and (start + best_break < n):
+                extra = min(1, n - (start + best_break))
+                chunk = text[start : start + best_break + extra]
+
             chunks.append(chunk)
             start += best_break
 
@@ -2652,6 +2694,7 @@ class LLMBot(commands.Bot):
         try:
             from bot.tasks import setup_memory_save_task
 
+            asyncio.create_task(start_memory_service(self))
             self.memory_save_task = setup_memory_save_task(self)
             self.memory_save_task.start()
         except Exception as e:
@@ -2772,6 +2815,7 @@ class LLMBot(commands.Bot):
             ("memory_cmds", "MemoryCommands"),
             ("tts_cmds", "TTSCommands"),
             ("config_commands", "ConfigCommands"),
+            ("operator_commands", "OperatorCommands"),
             ("janitor_commands", "JanitorCommands"),
             ("video_commands", "VideoCommands"),
             ("rag_commands", "RAGCommands"),
@@ -2959,6 +3003,12 @@ class LLMBot(commands.Bot):
                     self.logger.warning(
                         "Background tasks did not complete within timeout"
                     )
+
+            # Stop curated memory service
+            try:
+                await stop_memory_service()
+            except Exception as e:
+                self.logger.warning(f"Error stopping curated memory service: {e}")
 
             # Close Vision Orchestrator (if initialized either on bot or via router fallback)
             try:

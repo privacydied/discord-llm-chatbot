@@ -136,6 +136,7 @@ vision_data/transactions.jsonl
 AGENTS.md
 # --- Large / generated artifacts: keep out of Git ---
 # Vector DB / cache
+data/
 chroma_db/
 
 # Whisper / STT downloaded caches & weights

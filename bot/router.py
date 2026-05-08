@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import collections
+from contextlib import asynccontextmanager
 from .utils.logging import get_logger
 import logging
 import os
@@ -75,7 +76,9 @@ from .attachment_classifier import classify_attachments, AttachmentBucket, get_b
 from .document_ingest import ingest_document_attachment, ingest_document_from_url
 from .url_classifier import ClassifiedURL
 from .tts.state import tts_state
+from .server_features import is_server_feature_enabled
 from datetime import datetime, timezone
+from .memory import build_memory_prompt_block
 from .memory.mention_context import maybe_build_mention_context
 from .memory.thread_tail import (
     collect_thread_tail_context,
@@ -387,6 +390,8 @@ class Router:
         # Use weak references to avoid unbounded growth [BUGFIX]
         self._processing_locks: dict[int, asyncio.Lock] = {}
         self._processing_locks_cleanup_counter = 0
+        # Suppress non-critical typing indicators briefly after a rate-limit/error.
+        self._typing_suppressed_until: Dict[int, float] = {}
         # Per-message metadata shared with core dispatch [REH][CA]
         self._dispatch_metadata: Dict[int, Dict[str, Any]] = {}
 
@@ -3142,6 +3147,116 @@ class Router:
         except Exception:
             return False
 
+    def _feature_gate_response(
+        self,
+        message: Message,
+        clean_content: str,
+        parsed_command: Optional[ParsedCommand] = None,
+    ) -> Optional[ResponseMessage]:
+        """Return a short disable message when a server feature is toggled off."""
+        guild = getattr(message, "guild", None)
+        guild_id = getattr(guild, "id", None)
+        if guild_id is None:
+            return None
+
+        content = clean_content or getattr(message, "content", "") or ""
+        attachments = list(getattr(message, "attachments", []) or [])
+
+        def _disabled(feature: str, label: str) -> Optional[ResponseMessage]:
+            if is_server_feature_enabled(guild_id, feature):
+                return None
+            text = f"{label} is disabled on this server."
+            return ResponseMessage(content=text, text=text)
+
+        if parsed_command and parsed_command.command == Command.IMG:
+            gated = _disabled("image_generation", "Image generation")
+            if gated:
+                return gated
+
+        if attachments:
+            has_image = False
+            has_audio_video = False
+            for attachment in attachments:
+                content_type = (getattr(attachment, "content_type", "") or "").lower()
+                filename = (getattr(attachment, "filename", "") or "").lower()
+                if content_type.startswith("image/") or filename.endswith(
+                    (".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp")
+                ):
+                    has_image = True
+                if content_type.startswith(("audio/", "video/")) or filename.endswith(
+                    (".mp3", ".wav", ".m4a", ".ogg", ".mp4", ".mov", ".mkv", ".webm")
+                ):
+                    has_audio_video = True
+
+            if has_image and not is_server_feature_enabled(guild_id, "vision"):
+                text = "Vision is disabled on this server."
+                return ResponseMessage(content=text, text=text)
+            if has_audio_video and not is_server_feature_enabled(guild_id, "stt"):
+                text = "Audio/video transcription is disabled on this server."
+                return ResponseMessage(content=text, text=text)
+
+        urls = extract_raw_urls_from_texts([content]) if content else []
+        if urls:
+            has_x_url = any(self._is_twitter_status_url(url) for url in urls)
+            if has_x_url and not is_server_feature_enabled(guild_id, "x_twitter_extraction"):
+                text = "X/Twitter extraction is disabled on this server."
+                return ResponseMessage(content=text, text=text)
+            if not is_server_feature_enabled(guild_id, "web_extraction"):
+                text = "Web extraction is disabled on this server."
+                return ResponseMessage(content=text, text=text)
+
+        return None
+
+    @asynccontextmanager
+    async def _optional_typing(self, channel):
+        """Enter typing() when available, but never let typing failures abort dispatch."""
+        typing_factory = getattr(channel, "typing", None)
+        channel_id = getattr(channel, "id", None)
+        now = time.monotonic()
+
+        if channel_id is not None:
+            suppressed_until = self._typing_suppressed_until.get(channel_id, 0.0)
+            if now < suppressed_until:
+                yield
+                return
+
+        if not callable(typing_factory):
+            yield
+            return
+
+        ctx = None
+        entered = False
+        try:
+            ctx = typing_factory()
+            await ctx.__aenter__()
+            entered = True
+        except Exception as exc:
+            if channel_id is not None:
+                self._typing_suppressed_until[channel_id] = now + 60.0
+            try:
+                self.logger.warning(
+                    "discord.typing.skip | enter_failed",
+                    extra={
+                        "event": "discord.typing.skip",
+                        "channel_id": channel_id,
+                        "error_type": type(exc).__name__,
+                        "error": str(exc),
+                    },
+                )
+            except Exception:
+                pass
+            yield
+            return
+
+        try:
+            yield
+        finally:
+            if entered and ctx is not None:
+                try:
+                    await ctx.__aexit__(None, None, None)
+                except Exception:
+                    pass
+
     async def dispatch_message(self, message: Message) -> Optional[BotAction]:
         """Process a message and ensure exactly one response is generated (1 IN > 1 OUT rule)."""
         self.logger.info(f" === ROUTER DISPATCH STARTED: MSG {message.id} ====")
@@ -3256,6 +3371,9 @@ class Router:
             cleaned_for_compat = strip_leading_bot_mention(
                 cleaned_for_compat, getattr(getattr(self.bot, "user", None), "id", None)
             )
+            preflight_gate = self._feature_gate_response(message, cleaned_for_compat)
+            if preflight_gate is not None:
+                return preflight_gate
             if (
                 has_attachments
                 and cleaned_for_compat == ""
@@ -3309,6 +3427,11 @@ class Router:
             # 2. If a command is found, handle special cases or delegate to cogs.
             if parsed_command:
                 cmd = parsed_command.command
+                feature_gate = self._feature_gate_response(
+                    message, clean_content, parsed_command
+                )
+                if feature_gate is not None:
+                    return feature_gate
                 if cmd == Command.IMG:
                     self.logger.info(
                         f"Found command 'IMG', delegating to cog. (msg_id: {message.id})"
@@ -3319,10 +3442,7 @@ class Router:
                     return ResponseMessage(content="Pong!", text="Pong!")
 
                 if cmd == Command.HELP:
-                    return ResponseMessage(
-                        content="See `/help` for a list of commands.",
-                        text="See `/help` for a list of commands.",
-                    )
+                    return BotAction(meta={"delegated_to_cog": True})
 
                 if cmd in {
                     Command.TTS,
@@ -3417,7 +3537,7 @@ class Router:
                     return None
 
             # --- Start of processing for DMs, Mentions, and Replies ---
-            async with message.channel.typing():
+            async with self._optional_typing(message.channel):
                 self.logger.info(
                     f"Processing message: DM={isinstance(message.channel, DMChannel)}, Mention={self._is_mentioned(message)} (msg_id: {message.id})"
                 )
@@ -4124,6 +4244,13 @@ class Router:
                     ]
                     for old_id in old_ids:
                         self._processing_locks.pop(old_id, None)
+                    # Keep typing suppression bounded as well.
+                    now = time.monotonic()
+                    stale_channels = [
+                        k for k, until in self._typing_suppressed_until.items() if until < now
+                    ]
+                    for channel_id in stale_channels:
+                        self._typing_suppressed_until.pop(channel_id, None)
                     # BUGFIX 46: Also evict stale metadata entries without active processing
                     active_ids = set(self._processing_locks.keys())
                     for meta_dict in (
@@ -5104,12 +5231,14 @@ class Router:
         retry_manager = get_retry_manager()
         # Define timeout mappings for different modalities
 
-        # Per-item budgets
-        # LLM/vision tasks can be shorter; media (yt-dlp/transcribe) needs more time. [PA]
+        # Per-item budgets: read from live config so hot-reloads take effect [REH][PA]
+        # LLM/vision tasks can be shorter; media (yt-dlp/transcribe) needs more time.
         LLM_PER_ITEM_BUDGET = float(
-            os.environ.get("MULTIMODAL_PER_ITEM_BUDGET", "30.0")
+            self.config.get("MULTIMODAL_PER_ITEM_BUDGET", "30.0")
         )
-        MEDIA_PER_ITEM_BUDGET = float(os.environ.get("MEDIA_PER_ITEM_BUDGET", "120.0"))
+        MEDIA_PER_ITEM_BUDGET = float(
+            self.config.get("MEDIA_PER_ITEM_BUDGET", "120.0")
+        )
 
         # Process items strictly sequentially for determinism [CA]
         start_time = time.time()
@@ -8155,6 +8284,24 @@ class Router:
                     self.logger.debug("🚫 RAG: No relevant results found")
             except Exception as e:
                 self.logger.error(f"❌ RAG: Concurrent search failed: {e}")
+
+        if self.config.get("PERSISTENT_MEMORY_ENABLE", True):
+            try:
+                memory_block = await build_memory_prompt_block(
+                    user_id=str(message.author.id) if message else None,
+                    guild_id=str(message.guild.id) if getattr(message, "guild", None) else None,
+                    channel_id=str(message.channel.id) if getattr(message, "channel", None) else None,
+                    thread_id=str(message.channel.id) if isinstance(getattr(message, "channel", None), discord.Thread) else None,
+                    query=content_str or content,
+                    max_chars=int(self.config.get("PERSISTENT_MEMORY_MAX_PROMPT_CHARS", 1200)),
+                    top_k=int(self.config.get("PERSISTENT_MEMORY_TOP_K", 6)),
+                )
+                if memory_block:
+                    enhanced_context = (
+                        f"{enhanced_context}\n\n{memory_block}" if enhanced_context else memory_block
+                    )
+            except Exception as e:
+                self.logger.debug(f"persistent memory retrieval skipped: {e}")
 
         # 3. Use contextual brain inference if enhanced context manager is available and message is provided
         if (

@@ -956,10 +956,12 @@ class VideoIngestionManager:
         async with _download_semaphore:
             metadata_timeout = float(os.getenv("YTDLP_METADATA_TIMEOUT_S", "10"))
             download_timeout = float(os.getenv("YTDLP_DOWNLOAD_TIMEOUT_S", "25"))
-            budget_limit_env = os.environ.get("MEDIA_PER_ITEM_BUDGET")
-            if budget_limit_env:
+            # Use live config so hot-reloads via reload_env take effect [REH][PA]
+            cfg = load_config()
+            budget_limit_cfg = cfg.get("MEDIA_PER_ITEM_BUDGET")
+            if budget_limit_cfg is not None:
                 try:
-                    budget_s = max(15.0, float(budget_limit_env))
+                    budget_s = max(15.0, float(budget_limit_cfg))
                     metadata_timeout = min(metadata_timeout, max(5.0, budget_s * 0.25))
                     download_timeout = min(download_timeout, max(15.0, budget_s - 5.0))
                 except Exception:

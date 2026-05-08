@@ -22,6 +22,7 @@ logger = get_logger(__name__)
 
 # Patterns that indicate internal reasoning leakage
 REASONING_LEAK_PATTERNS = [
+ # Existing patterns
  r"^\s*Okay\s*,?\s*the\s+user",
  r"^\s*The\s+user\s+shared",
  r"^\s*First\s*,?\s*I\s+need\s+to",
@@ -62,6 +63,19 @@ REASONING_LEAK_PATTERNS = [
  r"\bsystem\s+prompt\b",
  r"\bdeveloper\s+message\b",
  r"\binternal\s+prompt\b",
+ # v2: tool-call / JSON-like leakage
+ r"^\s*\{\s*\"tool\"\s*:",
+ r"^\s*\{\s*\"type\"\s*:\s*\"(code|function)\"",
+ r"^\s*\[\s*\{\s*\"name\"\s*:",
+ # v2: internal routing/status fragments
+ r"^\s*(dispatch|route|router|pipeline|ingest|backpressure|queue_status|health)\s*[:=]\s*(?:internal|status|ok|fail|timeout)",
+ # v2: analysis/final/commentary role leakage
+ r"^\s*(final\s+answer|analysis\s+summary|commentary\s+only)",
+ # v2: raw prompt scaffolding markers
+ r"^\s*<system>",
+ r"^\s*</system>",
+ r"^\s*<instruction>",
+ r"^\s*</instruction>",
 ]
 
 # Compiled regex for faster matching
