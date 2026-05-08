@@ -2249,10 +2249,10 @@ class LLMBot(commands.Bot):
     def _chunk_message_content(self, content: str) -> List[str]:
         """Split a text payload into Discord-safe chunks.
 
-        This is a best-effort splitter that prefers paragraph and line boundaries, then
-        spaces, and finally falls back to hard cuts. It is intentionally simple and
-        does not attempt full Markdown parsing; occasional splits inside code fences
-        are acceptable.
+        This is a best-effort splitter that prefers paragraph breaks, then line breaks,
+        then simple sentence boundaries, then whitespace, and finally hard cuts. It is
+        intentionally simple and does not attempt full Markdown parsing; occasional
+        splits inside code fences are acceptable.
         """
         try:
             if content is None:
@@ -2287,6 +2287,10 @@ class LLMBot(commands.Bot):
             line_idx = window.rfind("\n")
             if line_idx != -1:
                 candidates.append(line_idx + 1)
+            # Then lightweight sentence boundaries.
+            sentence_idx = max(window.rfind(". "), window.rfind("! "), window.rfind("? "))
+            if sentence_idx != -1:
+                candidates.append(sentence_idx + 2)
             # Then spaces or tabs.
             space_idx = max(window.rfind(" "), window.rfind("\t"))
             if space_idx != -1:
@@ -2470,6 +2474,23 @@ class LLMBot(commands.Bot):
                 pass  # Don't let error handling errors crash the bot
 
     async def on_message(self, message: discord.Message):
+        # Early return before any bookkeeping or router dispatch.
+        author = getattr(message, "author", None)
+        try:
+            author_is_bot = bool(getattr(author, "bot", False)) if author else False
+        except Exception:
+            author_is_bot = True
+        try:
+            author_is_self = bool(
+                author
+                and getattr(author, "id", None)
+                == getattr(getattr(self, "user", None), "id", None)
+            )
+        except Exception:
+            author_is_self = False
+        if author_is_bot or author_is_self:
+            return
+
         async with self._dispatch_lock:
             if message.id in self._processed_messages:
                 self.logger.warning(
@@ -2482,8 +2503,6 @@ class LLMBot(commands.Bot):
             self._processed_messages[message.id] = True
 
         # Early returns before processing
-        if message.author == self.user:
-            return
 
         if (
             not message.content or not message.content.strip()
