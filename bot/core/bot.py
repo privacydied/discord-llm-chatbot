@@ -27,7 +27,14 @@ from bot.enhanced_retry import get_retry_manager
 from bot.http_client import cleanup_http_client
 from bot.utils.logging import get_logger
 from bot.metrics import NullMetrics
-from bot.memory import load_all_profiles, enqueue_inferred_memory, start_memory_service, stop_memory_service
+from bot.memory import (
+    enqueue_inferred_memory,
+    start_memory_distiller,
+    start_memory_service,
+    stop_memory_distiller,
+    stop_memory_service,
+    load_all_profiles,
+)
 from bot.server_archive import start_server_archive_service, stop_server_archive_service
 from bot.memory.context_manager import ContextManager
 from bot.memory.enhanced_context_manager import EnhancedContextManager
@@ -2657,6 +2664,7 @@ class LLMBot(commands.Bot):
             from bot.tasks import setup_memory_save_task
 
             asyncio.create_task(start_memory_service(self))
+            asyncio.create_task(start_memory_distiller(self))
             self.memory_save_task = setup_memory_save_task(self)
             self.memory_save_task.start()
             archive_start_task = asyncio.create_task(
@@ -2980,6 +2988,12 @@ class LLMBot(commands.Bot):
                     self.logger.warning(
                         "Background tasks did not complete within timeout"
                     )
+
+            # Stop memory distiller service
+            try:
+                await stop_memory_distiller()
+            except Exception as e:
+                self.logger.warning(f"Error stopping memory distiller service: {e}")
 
             # Stop curated memory service
             try:

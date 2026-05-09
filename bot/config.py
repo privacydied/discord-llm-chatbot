@@ -407,6 +407,42 @@ def load_config():
             ),
             False,
         ),
+        # MEMORY DISTILLER SETTINGS
+        "MEMORY_DISTILLER_ENABLED": _parse_bool_str(
+            _clean_env_value(os.getenv("MEMORY_DISTILLER_ENABLED")),
+            False,
+        ),
+        "MEMORY_DISTILLER_DRY_RUN": _parse_bool_str(
+            _clean_env_value(os.getenv("MEMORY_DISTILLER_DRY_RUN")),
+            True,
+        ),
+        "MEMORY_DISTILLER_BATCH_SIZE": _safe_int(
+            os.getenv("MEMORY_DISTILLER_BATCH_SIZE"), "200", "MEMORY_DISTILLER_BATCH_SIZE"
+        ),
+        "MEMORY_DISTILLER_INTERVAL_SECONDS": _safe_int(
+            os.getenv("MEMORY_DISTILLER_INTERVAL_SECONDS"),
+            "900",
+            "MEMORY_DISTILLER_INTERVAL_SECONDS",
+        ),
+        "MEMORY_DISTILLER_WINDOW_MESSAGES": _safe_int(
+            os.getenv("MEMORY_DISTILLER_WINDOW_MESSAGES"),
+            "25",
+            "MEMORY_DISTILLER_WINDOW_MESSAGES",
+        ),
+        "MEMORY_DISTILLER_MIN_CONFIDENCE": _safe_float(
+            os.getenv("MEMORY_DISTILLER_MIN_CONFIDENCE"),
+            "0.85",
+            "MEMORY_DISTILLER_MIN_CONFIDENCE",
+        ),
+        "MEMORY_DISTILLER_MAX_MEMORIES_PER_WINDOW": _safe_int(
+            os.getenv("MEMORY_DISTILLER_MAX_MEMORIES_PER_WINDOW"),
+            "3",
+            "MEMORY_DISTILLER_MAX_MEMORIES_PER_WINDOW",
+        ),
+        "MEMORY_DISTILLER_EXCLUDE_BOT_MESSAGES": _parse_bool_str(
+            _clean_env_value(os.getenv("MEMORY_DISTILLER_EXCLUDE_BOT_MESSAGES")),
+            True,
+        ),
         "CONTEXT_FILE_PATH": os.getenv("CONTEXT_FILE_PATH", "runtime/context.json"),
         "MAX_CONTEXT_MESSAGES": _safe_int(
             os.getenv("MAX_CONTEXT_MESSAGES"), "10", "MAX_CONTEXT_MESSAGES"

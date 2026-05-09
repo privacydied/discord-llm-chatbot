@@ -154,6 +154,30 @@ class ServerArchiveStore:
                             status TEXT NOT NULL DEFAULT 'idle',
                             error TEXT
                         );
+
+                        CREATE TABLE IF NOT EXISTS memory_distiller_state (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            guild_id TEXT NOT NULL,
+                            channel_id TEXT,
+                            thread_id TEXT,
+                            author_id TEXT,
+                            last_processed_message_id TEXT,
+                            last_processed_created_at TEXT,
+                            updated_at TEXT NOT NULL,
+                            error TEXT
+                        );
+
+                        CREATE TABLE IF NOT EXISTS memory_distiller_runs (
+                            run_id TEXT PRIMARY KEY,
+                            started_at TEXT NOT NULL,
+                            finished_at TEXT,
+                            scanned_count INTEGER NOT NULL DEFAULT 0,
+                            candidate_count INTEGER NOT NULL DEFAULT 0,
+                            accepted_count INTEGER NOT NULL DEFAULT 0,
+                            rejected_count INTEGER NOT NULL DEFAULT 0,
+                            merged_count INTEGER NOT NULL DEFAULT 0,
+                            error TEXT
+                        );
                         """
                     )
                     try:
@@ -542,6 +566,395 @@ class ServerArchiveStore:
                         (guild_id,),
                     ).fetchall()
                 return [ArchiveSyncState.from_row(row) for row in rows]
+            finally:
+                conn.close()
+
+    def _distiller_scope_key(
+        self,
+        guild_id: str,
+        channel_id: str | None = None,
+        thread_id: str | None = None,
+        author_id: str | None = None,
+    ) -> tuple[Any, ...]:
+        return (guild_id, channel_id, thread_id, author_id)
+
+    async def list_distiller_scopes(self, *, limit: int = 200, guild_id: str | None = None) -> list[dict[str, Any]]:
+        await self.initialize()
+        return await _to_thread(self._list_distiller_scopes_sync, limit, guild_id)
+
+    def _list_distiller_scopes_sync(self, limit: int, guild_id: str | None) -> list[dict[str, Any]]:
+        limit = max(1, min(1000, int(limit)))
+        with self._lock:
+            conn = self._connect()
+            try:
+                sql = (
+                    "SELECT guild_id, channel_id, thread_id, author_id, MIN(created_at) AS first_seen_at "
+                    "FROM archive_messages WHERE deleted_at IS NULL"
+                )
+                params: list[Any] = []
+                if guild_id is not None:
+                    sql += " AND guild_id = ?"
+                    params.append(guild_id)
+                sql += " GROUP BY guild_id, channel_id, thread_id, author_id ORDER BY first_seen_at ASC LIMIT ?"
+                params.append(limit)
+                rows = conn.execute(sql, params).fetchall()
+                return [dict(row) for row in rows]
+            finally:
+                conn.close()
+
+    async def fetch_distiller_messages(
+        self,
+        *,
+        guild_id: str,
+        channel_id: str | None,
+        thread_id: str | None,
+        author_id: str,
+        after_created_at: str | None = None,
+        after_message_id: str | None = None,
+        limit: int = 25,
+    ) -> list[dict[str, Any]]:
+        await self.initialize()
+        return await _to_thread(
+            self._fetch_distiller_messages_sync,
+            guild_id,
+            channel_id,
+            thread_id,
+            author_id,
+            after_created_at,
+            after_message_id,
+            limit,
+        )
+
+    def _fetch_distiller_messages_sync(
+        self,
+        guild_id: str,
+        channel_id: str | None,
+        thread_id: str | None,
+        author_id: str,
+        after_created_at: str | None,
+        after_message_id: str | None,
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        limit = max(1, min(500, int(limit)))
+        with self._lock:
+            conn = self._connect()
+            try:
+                sql = (
+                    "SELECT m.message_id, m.guild_id, m.channel_id, m.thread_id, m.author_id, u.bot AS author_bot, "
+                    "m.content, m.clean_content, m.created_at, m.edited_at, m.deleted_at, m.jump_url, "
+                    "m.reply_to_message_id, m.has_attachments, m.has_embeds, m.metadata_json "
+                    "FROM archive_messages AS m "
+                    "LEFT JOIN archive_users AS u ON u.user_id = m.author_id "
+                    "WHERE m.deleted_at IS NULL AND m.guild_id = ? AND m.author_id = ?"
+                )
+                params: list[Any] = [guild_id, author_id]
+                if channel_id is None:
+                    sql += " AND channel_id IS NULL"
+                else:
+                    sql += " AND channel_id = ?"
+                    params.append(channel_id)
+                if thread_id is None:
+                    sql += " AND thread_id IS NULL"
+                else:
+                    sql += " AND thread_id = ?"
+                    params.append(thread_id)
+                if after_created_at is not None and after_message_id is not None:
+                    sql += " AND (created_at > ? OR (created_at = ? AND message_id > ?))"
+                    params.extend([after_created_at, after_created_at, after_message_id])
+                sql += " ORDER BY created_at ASC, message_id ASC LIMIT ?"
+                params.append(limit)
+                rows = conn.execute(sql, params).fetchall()
+                return [dict(row) for row in rows]
+            finally:
+                conn.close()
+
+    async def get_distiller_state(
+        self,
+        *,
+        guild_id: str,
+        channel_id: str | None = None,
+        thread_id: str | None = None,
+        author_id: str | None = None,
+    ) -> dict[str, Any] | None:
+        await self.initialize()
+        return await _to_thread(
+            self._get_distiller_state_sync,
+            guild_id,
+            channel_id,
+            thread_id,
+            author_id,
+        )
+
+    def _get_distiller_state_sync(
+        self,
+        guild_id: str,
+        channel_id: str | None,
+        thread_id: str | None,
+        author_id: str | None,
+    ) -> dict[str, Any] | None:
+        with self._lock:
+            conn = self._connect()
+            try:
+                row = conn.execute(
+                    """
+                    SELECT * FROM memory_distiller_state
+                    WHERE guild_id = ?
+                      AND channel_id IS ?
+                      AND thread_id IS ?
+                      AND author_id IS ?
+                    """,
+                    (guild_id, channel_id, thread_id, author_id),
+                ).fetchone()
+                return dict(row) if row else None
+            finally:
+                conn.close()
+
+    async def upsert_distiller_state(
+        self,
+        *,
+        guild_id: str,
+        channel_id: str | None = None,
+        thread_id: str | None = None,
+        author_id: str | None = None,
+        last_processed_message_id: str | None = None,
+        last_processed_created_at: str | None = None,
+        error: str | None = None,
+    ) -> None:
+        await self.initialize()
+        await _to_thread(
+            self._upsert_distiller_state_sync,
+            guild_id,
+            channel_id,
+            thread_id,
+            author_id,
+            last_processed_message_id,
+            last_processed_created_at,
+            error,
+        )
+
+    def _upsert_distiller_state_sync(
+        self,
+        guild_id: str,
+        channel_id: str | None,
+        thread_id: str | None,
+        author_id: str | None,
+        last_processed_message_id: str | None,
+        last_processed_created_at: str | None,
+        error: str | None,
+    ) -> None:
+        with self._lock:
+            conn = self._connect()
+            try:
+                now = utc_now_iso()
+                existing = conn.execute(
+                    """
+                    SELECT id FROM memory_distiller_state
+                    WHERE guild_id = ?
+                      AND channel_id IS ?
+                      AND thread_id IS ?
+                      AND author_id IS ?
+                    """,
+                    (guild_id, channel_id, thread_id, author_id),
+                ).fetchone()
+                if existing:
+                    conn.execute(
+                        """
+                        UPDATE memory_distiller_state
+                        SET last_processed_message_id = ?,
+                            last_processed_created_at = ?,
+                            updated_at = ?,
+                            error = ?
+                        WHERE id = ?
+                        """,
+                        (
+                            last_processed_message_id,
+                            last_processed_created_at,
+                            now,
+                            error,
+                            existing["id"],
+                        ),
+                    )
+                else:
+                    conn.execute(
+                        """
+                        INSERT INTO memory_distiller_state(
+                            guild_id, channel_id, thread_id, author_id,
+                            last_processed_message_id, last_processed_created_at, updated_at, error
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            guild_id,
+                            channel_id,
+                            thread_id,
+                            author_id,
+                            last_processed_message_id,
+                            last_processed_created_at,
+                            now,
+                            error,
+                        ),
+                    )
+                conn.commit()
+            finally:
+                conn.close()
+
+    async def start_distiller_run(self, run_id: str, *, started_at: str) -> None:
+        await self.initialize()
+        await _to_thread(self._start_distiller_run_sync, run_id, started_at)
+
+    def _start_distiller_run_sync(self, run_id: str, started_at: str) -> None:
+        with self._lock:
+            conn = self._connect()
+            try:
+                conn.execute(
+                    """
+                    INSERT INTO memory_distiller_runs(
+                        run_id, started_at, finished_at, scanned_count, candidate_count,
+                        accepted_count, rejected_count, merged_count, error
+                    ) VALUES (?, ?, NULL, 0, 0, 0, 0, 0, NULL)
+                    """,
+                    (run_id, started_at),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
+    async def finish_distiller_run(
+        self,
+        run_id: str,
+        *,
+        finished_at: str,
+        scanned_count: int,
+        candidate_count: int,
+        accepted_count: int,
+        rejected_count: int,
+        merged_count: int,
+        error: str | None = None,
+    ) -> None:
+        await self.initialize()
+        await _to_thread(
+            self._finish_distiller_run_sync,
+            run_id,
+            finished_at,
+            scanned_count,
+            candidate_count,
+            accepted_count,
+            rejected_count,
+            merged_count,
+            error,
+        )
+
+    def _finish_distiller_run_sync(
+        self,
+        run_id: str,
+        finished_at: str,
+        scanned_count: int,
+        candidate_count: int,
+        accepted_count: int,
+        rejected_count: int,
+        merged_count: int,
+        error: str | None,
+    ) -> None:
+        with self._lock:
+            conn = self._connect()
+            try:
+                conn.execute(
+                    """
+                    UPDATE memory_distiller_runs
+                    SET finished_at = ?, scanned_count = ?, candidate_count = ?, accepted_count = ?,
+                        rejected_count = ?, merged_count = ?, error = ?
+                    WHERE run_id = ?
+                    """,
+                    (
+                        finished_at,
+                        scanned_count,
+                        candidate_count,
+                        accepted_count,
+                        rejected_count,
+                        merged_count,
+                        error,
+                        run_id,
+                    ),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
+    async def latest_distiller_run(self) -> dict[str, Any] | None:
+        await self.initialize()
+        return await _to_thread(self._latest_distiller_run_sync)
+
+    def _latest_distiller_run_sync(self) -> dict[str, Any] | None:
+        with self._lock:
+            conn = self._connect()
+            try:
+                row = conn.execute(
+                    "SELECT * FROM memory_distiller_runs ORDER BY started_at DESC LIMIT 1"
+                ).fetchone()
+                return dict(row) if row else None
+            finally:
+                conn.close()
+
+    async def count_distiller_backlog(self, *, guild_id: str | None = None) -> int:
+        await self.initialize()
+        return await _to_thread(self._count_distiller_backlog_sync, guild_id)
+
+    def _count_distiller_backlog_sync(self, guild_id: str | None) -> int:
+        with self._lock:
+            conn = self._connect()
+            try:
+                if guild_id is None:
+                    rows = conn.execute(
+                        "SELECT guild_id, channel_id, thread_id, author_id, last_processed_created_at, last_processed_message_id FROM memory_distiller_state"
+                    ).fetchall()
+                else:
+                    rows = conn.execute(
+                        "SELECT guild_id, channel_id, thread_id, author_id, last_processed_created_at, last_processed_message_id FROM memory_distiller_state WHERE guild_id = ?",
+                        (guild_id,),
+                    ).fetchall()
+                total = 0
+                for row in rows:
+                    params: list[Any] = [row["guild_id"], row["author_id"]]
+                    sql = (
+                        "SELECT COUNT(*) FROM archive_messages WHERE deleted_at IS NULL AND guild_id = ? AND author_id = ?"
+                    )
+                    if row["channel_id"] is None:
+                        sql += " AND channel_id IS NULL"
+                    else:
+                        sql += " AND channel_id = ?"
+                        params.append(row["channel_id"])
+                    if row["thread_id"] is None:
+                        sql += " AND thread_id IS NULL"
+                    else:
+                        sql += " AND thread_id = ?"
+                        params.append(row["thread_id"])
+                    if row["last_processed_created_at"] and row["last_processed_message_id"]:
+                        sql += " AND (created_at > ? OR (created_at = ? AND message_id > ?))"
+                        params.extend(
+                            [
+                                row["last_processed_created_at"],
+                                row["last_processed_created_at"],
+                                row["last_processed_message_id"],
+                            ]
+                        )
+                    total += int(conn.execute(sql, params).fetchone()[0])
+
+                sql = """
+                    SELECT COUNT(*)
+                    FROM archive_messages AS m
+                    LEFT JOIN memory_distiller_state AS s
+                      ON s.guild_id = m.guild_id
+                     AND s.channel_id IS m.channel_id
+                     AND s.thread_id IS m.thread_id
+                     AND s.author_id IS m.author_id
+                    WHERE m.deleted_at IS NULL
+                      AND s.id IS NULL
+                """
+                params: list[Any] = []
+                if guild_id is not None:
+                    sql += " AND m.guild_id = ?"
+                    params.append(guild_id)
+                total += int(conn.execute(sql, params).fetchone()[0])
+                return total
             finally:
                 conn.close()
 

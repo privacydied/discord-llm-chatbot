@@ -237,6 +237,52 @@ async def test_server_memory_clear_confirmed(memory_cog, mock_admin_ctx, monkeyp
 
 
 @pytest.mark.asyncio
+async def test_memory_distill_status_command_sends_embed(memory_cog, mock_admin_ctx, monkeypatch):
+    class FakeDistiller:
+        def __init__(self):
+            self.dry_run = True
+
+        async def get_status(self, guild_id=None):
+            return {
+                "enabled": True,
+                "dry_run": True,
+                "started": False,
+                "backlog": 12,
+                "batch_size": 200,
+                "interval_seconds": 900,
+                "last_run": {"scanned_count": 5, "accepted_count": 1, "rejected_count": 4, "merged_count": 0},
+            }
+
+    fake = FakeDistiller()
+    monkeypatch.setattr("bot.commands.memory_cmds.get_memory_distiller", AsyncMock(return_value=fake))
+
+    await memory_cog.memory_distill_status.callback(memory_cog, mock_admin_ctx)
+
+    mock_admin_ctx.send.assert_called_once()
+    embed = mock_admin_ctx.send.call_args.kwargs["embed"]
+    assert isinstance(embed, discord.Embed)
+    assert embed.title == "Memory Distiller Status"
+
+
+@pytest.mark.asyncio
+async def test_memory_distill_dryrun_toggle(memory_cog, mock_admin_ctx, monkeypatch):
+    class FakeDistiller:
+        def __init__(self):
+            self.dry_run = True
+
+        def set_dry_run(self, enabled: bool) -> None:
+            self.dry_run = enabled
+
+    fake = FakeDistiller()
+    monkeypatch.setattr("bot.commands.memory_cmds.get_memory_distiller", AsyncMock(return_value=fake))
+
+    await memory_cog.memory_distill_dryrun.callback(memory_cog, mock_admin_ctx, mode="off")
+
+    assert fake.dry_run is False
+    mock_admin_ctx.send.assert_called_once_with("✅ Memory distiller dry-run set to `False`.")
+
+
+@pytest.mark.asyncio
 async def test_server_memory_group_no_subcommand(memory_cog, mock_admin_ctx):
     """Verify help is sent when no server-memory subcommand is given."""
     mock_admin_ctx.invoked_subcommand = None

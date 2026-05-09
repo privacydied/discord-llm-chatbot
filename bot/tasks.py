@@ -8,7 +8,14 @@ from typing import Dict, List, Optional, Any
 
 from discord.ext import commands, tasks
 
-from .memory import save_all_profiles, save_all_server_profiles, start_memory_service, stop_memory_service
+from .memory import (
+    save_all_profiles,
+    save_all_server_profiles,
+    start_memory_distiller,
+    start_memory_service,
+    stop_memory_distiller,
+    stop_memory_service,
+)
 from .config import load_config
 from .janitor import start_janitor, stop_janitor
 from bot.server_archive import start_server_archive_service as start_native_server_archive_service, stop_server_archive_service as stop_native_server_archive_service
@@ -115,6 +122,9 @@ class TaskManager:
             # Start curated memory service
             await start_memory_service(self.bot)
 
+            # Start memory distiller service
+            await start_memory_distiller(self.bot)
+
             # Start server archive service
             await start_native_server_archive_service(self.bot)
 
@@ -146,6 +156,12 @@ class TaskManager:
             await stop_memory_service()
         except Exception as e:
             logger.warning(f"Error stopping curated memory service: {e}")
+
+        # Stop memory distiller service
+        try:
+            await stop_memory_distiller()
+        except Exception as e:
+            logger.warning(f"Error stopping memory distiller service: {e}")
 
         # Stop server archive service
         try:

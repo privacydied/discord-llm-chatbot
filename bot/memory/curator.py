@@ -542,7 +542,7 @@ class CuratedMemoryCurator:
         score = 0.72
         if context_type == "correction":
             score += 0.1
-        if context_type in {"user_preference", "recurring_instruction", "server_fact"}:
+        if context_type in {"user_preference", "recurring_instruction", "project_fact", "server_fact"}:
             score += 0.1
         if len(text) > 80:
             score += 0.03

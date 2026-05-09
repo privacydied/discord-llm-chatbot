@@ -22,6 +22,13 @@ from .service import (
     stop_memory_service,
     wipe_user_memories,
 )
+from .archive_distiller import (
+    get_memory_distiller,
+    get_memory_distiller_status,
+    run_memory_distiller_once,
+    start_memory_distiller,
+    stop_memory_distiller,
+)
 from .retrieval import build_relevant_memory_block, get_relevant_memories
 
 __all__ = [
@@ -41,10 +48,15 @@ __all__ = [
     "delete_memory",
     "enqueue_inferred_memory",
     "get_memory_service",
+    "get_memory_distiller",
+    "get_memory_distiller_status",
     "get_relevant_memories",
     "list_user_memories",
+    "run_memory_distiller_once",
     "search_user_memories",
     "start_memory_service",
+    "start_memory_distiller",
     "stop_memory_service",
+    "stop_memory_distiller",
     "wipe_user_memories",
 ]

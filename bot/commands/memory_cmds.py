@@ -15,9 +15,12 @@ from ..config import load_config
 from ..memory import (
     add_explicit_memory,
     delete_memory,
+    get_memory_distiller,
+    get_memory_distiller_status,
     get_profile,
     get_server_profile,
     list_user_memories,
+    run_memory_distiller_once,
     save_profile,
     save_server_profile,
     search_user_memories,
@@ -158,6 +161,62 @@ class MemoryCommands(commands.Cog):
     @commands.command(name="memory-search")
     async def memory_search_direct(self, ctx, *, query: str):
         await self._search_curated_memories(ctx, query=query)
+
+    @commands.command(name="memory-distill-status")
+    @commands.guild_only()
+    @commands.has_permissions(administrator=True)
+    async def memory_distill_status(self, ctx):
+        distiller = await get_memory_distiller(self.bot)
+        status = await distiller.get_status(guild_id=str(ctx.guild.id))
+        last_run = status.get("last_run") or {}
+        embed = discord.Embed(
+            title="Memory Distiller Status",
+            color=discord.Color.blue() if status.get("enabled") else discord.Color.dark_grey(),
+        )
+        embed.add_field(name="Enabled", value=str(status.get("enabled")), inline=True)
+        embed.add_field(name="Dry run", value=str(status.get("dry_run")), inline=True)
+        embed.add_field(name="Started", value=str(status.get("started")), inline=True)
+        embed.add_field(name="Backlog", value=str(status.get("backlog")), inline=True)
+        embed.add_field(name="Batch size", value=str(status.get("batch_size")), inline=True)
+        embed.add_field(name="Interval", value=f"{status.get('interval_seconds')}s", inline=True)
+        embed.add_field(
+            name="Last run",
+            value=(
+                f"scanned={last_run.get('scanned_count', 0)} accepted={last_run.get('accepted_count', 0)} "
+                f"rejected={last_run.get('rejected_count', 0)} merged={last_run.get('merged_count', 0)}"
+                if last_run
+                else "none"
+            ),
+            inline=False,
+        )
+        await ctx.send(embed=embed)
+
+    @commands.command(name="memory-distill-once")
+    @commands.guild_only()
+    @commands.has_permissions(administrator=True)
+    async def memory_distill_once(self, ctx):
+        distiller = await get_memory_distiller(self.bot)
+        result = await distiller.run_once()
+        await ctx.send(
+            "Distillation complete: "
+            f"scanned={result.get('scanned_count', 0)} "
+            f"candidates={result.get('candidate_count', 0)} "
+            f"accepted={result.get('accepted_count', 0)} "
+            f"rejected={result.get('rejected_count', 0)} "
+            f"merged={result.get('merged_count', 0)} dry_run={result.get('dry_run', True)}"
+        )
+
+    @commands.command(name="memory-distill-dryrun")
+    @commands.guild_only()
+    @commands.has_permissions(administrator=True)
+    async def memory_distill_dryrun(self, ctx, mode: str):
+        mode = (mode or "").strip().lower()
+        if mode not in {"on", "off"}:
+            await ctx.send("❌ Usage: `!memory-distill-dryrun <on|off>`")
+            return
+        distiller = await get_memory_distiller(self.bot)
+        distiller.set_dry_run(mode == "on")
+        await ctx.send(f"✅ Memory distiller dry-run set to `{distiller.dry_run}`.")
 
     @commands.group(name="memory", invoke_without_command=True)
     async def memory_group(self, ctx):

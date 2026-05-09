@@ -326,18 +326,21 @@ class CuratedMemoryService:
             used += len(line) + 1
         return "\n".join(lines) if len(lines) > 1 else ""
 
-    async def _persist_batch(self, candidates: List[MemoryCandidate]) -> None:
+    async def _persist_batch(self, candidates: List[MemoryCandidate]) -> dict[str, int]:
         if not candidates:
-            return
+            return {"attempted": 0, "inserted": 0, "merged": 0}
         await self.store.initialize()
         await self.semantic_store.initialize()
 
+        inserted = 0
+        merged = 0
         for candidate in candidates:
             # Only dedupe inferred memories; explicit ones are user-intended.
             if candidate.source == "inferred_curated":
                 maybe_merged = await self._dedupe_or_merge(candidate)
                 if maybe_merged is None:
                     # Candidate was merged into existing memory; skip inserting new one.
+                    merged += 1
                     continue
                 candidate = maybe_merged
 
@@ -362,12 +365,14 @@ class CuratedMemoryService:
                 )
                 record.chroma_id = chroma_id
                 await self.store.upsert_memory(record)
+                inserted += 1
             except Exception:
                 logger.exception(
                     "Failed to persist curated memory to Chroma",
                     extra={"memory_id": candidate.memory_id},
                 )
                 raise
+        return {"attempted": len(candidates), "inserted": inserted, "merged": merged}
 
     async def _dedupe_or_merge(self, candidate: MemoryCandidate) -> Optional[MemoryCandidate]:
         """
