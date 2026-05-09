@@ -49,3 +49,28 @@ def test_server_profile_backup_over_readonly_bak(tmp_path, monkeypatch):
     # Verify the backup now contains the previous JSON content
     bak_text = bak_path.read_text(encoding="utf-8")
     assert bak_text == before_text
+
+
+def test_save_server_profile_without_cache_does_not_deadlock(tmp_path, monkeypatch):
+    """Saving a missing server profile should initialize and return promptly."""
+
+    def fake_load_config():
+        return {"SERVER_PROFILE_DIR": Path(tmp_path)}
+
+    monkeypatch.setattr("bot.config.load_config", fake_load_config, raising=True)
+    profiles.server_cache.clear()
+
+    result = {}
+
+    def worker():
+        result["ok"] = profiles.save_server_profile("deadlock_free")
+
+    import threading
+
+    thread = threading.Thread(target=worker, daemon=True)
+    thread.start()
+    thread.join(timeout=5)
+
+    assert not thread.is_alive(), "save_server_profile hung waiting on server_lock"
+    assert result.get("ok") is True
+    assert (Path(tmp_path) / "deadlock_free.json").exists()
