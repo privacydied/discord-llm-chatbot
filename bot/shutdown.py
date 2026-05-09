@@ -15,6 +15,11 @@ from .memory import save_all_profiles, save_all_server_profiles
 from .ollama import ollama_client
 from .tasks import stop_background_tasks
 
+
+def _save_all_data_sync() -> tuple[bool, bool]:
+    """Persist all profile data off the event loop."""
+    return save_all_profiles(), save_all_server_profiles()
+
 logger = logging.getLogger(__name__)
 
 # Global shutdown state
@@ -224,8 +229,7 @@ class GracefulShutdown:
         """Save all persistent data."""
         try:
             logger.info("Saving all profiles...")
-            save_all_profiles()
-            save_all_server_profiles()
+            await asyncio.to_thread(_save_all_data_sync)
             logger.info("All profiles saved successfully")
 
         except Exception as e:

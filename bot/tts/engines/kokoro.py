@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import inspect
 import io
@@ -151,7 +152,10 @@ class KokoroONNXEngine(BaseEngine):
                     exc_info=True,
                 )
 
-        return self._synthesize_with_registry(text)
+        result = self._synthesize_with_registry(text)
+        if inspect.isawaitable(result):
+            return asyncio.run(result)
+        return result
 
     def _synthesize_english_ipa(self, text: str, **kwargs) -> bytes:
         logger.debug("English path: phoneme-only; using official model IPA vocabulary.")

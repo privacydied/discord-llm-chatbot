@@ -10,6 +10,15 @@ from typing import NoReturn, Dict, Any
 from rich.logging import RichHandler
 
 
+def _rich_tracebacks_supported() -> bool:
+    try:
+        import pygments.lexers.python  # type: ignore
+
+        return True
+    except Exception:
+        return False
+
+
 class LevelIconFilter(logging.Filter):
     """Adds a level icon to each record for console output."""
 
@@ -98,9 +107,10 @@ def init_logging() -> None:
         root.handlers.clear()
 
     # Pretty console sink
+    rich_tracebacks = _rich_tracebacks_supported()
     pretty = RichHandler(
-        rich_tracebacks=True,
-        tracebacks_show_locals=True,
+        rich_tracebacks=rich_tracebacks,
+        tracebacks_show_locals=rich_tracebacks,
         show_path=False,
         show_time=True,
         enable_link_path=False,

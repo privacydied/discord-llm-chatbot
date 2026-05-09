@@ -95,6 +95,13 @@ class CuratedMemoryService:
         source: str = "explicit_memory_command",
         metadata: Optional[Dict[str, Any]] = None,
     ) -> MemoryRecord:
+        # Check user's memory preference
+        from bot.memory.profiles import get_profile
+        profile = get_profile(user_id)
+        user_pref = profile.get("preferences", {}).get("memory_enabled", True)
+        if not user_pref:
+            raise RuntimeError("Persistent memory is disabled by user preference")
+
         if not self.enabled:
             raise RuntimeError("Persistent memory is disabled")
 
@@ -127,6 +134,13 @@ class CuratedMemoryService:
         source_message_id: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> bool:
+        # Check user's memory preference
+        from bot.memory.profiles import get_profile
+        profile = get_profile(user_id)
+        user_pref = profile.get("preferences", {}).get("memory_enabled", True)
+        if not user_pref:
+            return False
+
         if not self.enabled:
             return False
         candidate = self.curator.curate_inferred_candidate(

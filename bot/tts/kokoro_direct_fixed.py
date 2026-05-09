@@ -129,16 +129,14 @@ class KokoroDirect:
         # Canonicalize language code
         lang = (lang or "en").lower()
 
-        # English: ignore env overrides and force the IPA-only path semantics.
-        # We still return a stable label ("espeak") for compatibility, but
-        # the value is not used to trigger any external discovery.
-        if lang.startswith("en"):
-            return "espeak"
-
-        # For non-English languages, respect explicit env override
+        # Respect explicit env override for any language.
         override = os.getenv("TTS_PHONEMISER")
         if override:
             return override
+
+        # English: default to espeak-compatible label.
+        if lang.startswith("en"):
+            return "espeak"
 
         # Simple mapping without registry side-effects
         if lang.startswith("ja") or lang.startswith("zh"):

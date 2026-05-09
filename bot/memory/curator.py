@@ -40,6 +40,125 @@ _INTERNAL_PATTERNS = [
     r"system prompt",
 ]
 
+_PROJECT_FACT_SIGNALS = [
+    r"\bdiscord-bot\b",
+    r"\bdiscord bot\b",
+    r"\bthis bot\b",
+    r"\bthe bot\b",
+    r"\brouter\b",
+    r"\bmodule\b",
+    r"\bfile\b",
+    r"\brepo\b",
+    r"\bimplementation\b",
+    r"\bsubsystem\b",
+    r"\bmemory service\b",
+    r"\bmemory\b",
+    r"\brag\b",
+    r"\bchromadb\b",
+    r"\bstt\b",
+    r"\btts\b",
+    r"\bvision\b",
+    r"\bsearch\b",
+    r"\bcommand\b",
+    r"\bconfig\b",
+    r"\bdeployment\b",
+    r"\bruntime\b",
+    r"\barchitecture\b",
+    r"\baudit\b",
+    r"\bbug\b",
+    r"\bregression\b",
+    r"\blatency\b",
+    r"\bperformance\b",
+    r"\breply\b",
+    r"\broute\b",
+    r"\btyping indicator\b",
+]
+
+_PROJECT_FACT_CUES = [
+    r"\bshould\b",
+    r"\bmust\b",
+    r"\buses\b",
+    r"\bis\b",
+    r"\bare\b",
+    r"\bneeds?\b",
+    r"\brequires?\b",
+    r"\bpersists?\b",
+    r"\bwraps?\b",
+    r"\brejects?\b",
+    r"\benables?\b",
+    r"\bdisables?\b",
+    r"\bdeletes?\b",
+    r"\bloads?\b",
+    r"\bsaves?\b",
+]
+
+_SENSITIVE_ATTRIBUTE_PATTERNS = [
+    r"\brace\b",
+    r"\bracial\b",
+    r"\bethnic(?:ity)?\b",
+    r"\bnationalit(?:y|ies)\b",
+    r"\breligion\b",
+    r"\breligious\b",
+    r"\bpolitic(?:al|s)?\b",
+    r"\bsex(?:ual|uality| orientation)?\b",
+    r"\bgender\b",
+    r"\btrans(?:gender)?\b",
+    r"\bgay\b",
+    r"\blesbian\b",
+    r"\bbisexual\b",
+    r"\bqueer\b",
+    r"\bstraight\b",
+    r"\b(?:black|white|asian|hispanic|latino)(?:\s+(?:person|people|man|woman|men|women|community|race))\b",
+    r"\b(?:i|i'm|im|my)\s+(?:am\s+)?(?:black|white|asian|hispanic|latino)\b",
+    r"\bjew(?:ish)?\b",
+    r"\bmuslim\b",
+    r"\bchristian\b",
+    r"\bmale\b",
+    r"\bfemale\b",
+    r"\bman\b",
+    r"\bwoman\b",
+    r"\bmen\b",
+    r"\bwomen\b",
+    r"\bdisabilit(?:y|ies)\b",
+    r"\bdisabled\b",
+    r"\bautis(?:m|tic)\b",
+    r"\badhd\b",
+    r"\bdepression\b",
+    r"\bdepressed\b",
+    r"\bocd\b",
+    r"\bbipolar\b",
+]
+
+_WORLD_CLAIM_TERMS = [
+    r"\bfinance\b",
+    r"\bfinancial\b",
+    r"\bmedia\b",
+    r"\bacademia\b",
+    r"\bacademic(?:s)?\b",
+    r"\bsociet(?:y|al)\b",
+    r"\bdating\b",
+    r"\bidentity\b",
+    r"\bculture\b",
+    r"\bpolitic(?:s|al)?\b",
+    r"\bcorporate\b",
+]
+
+_GENERAL_CLAIM_TERMS = [
+    r"\boverrepresented\b",
+    r"\bunderrepresented\b",
+    r"\bdiscriminat(?:e|es|ed|ing|ion)\b",
+    r"\bharmful\b",
+    r"\btoxic\b",
+    r"\bsuperior\b",
+    r"\binferior\b",
+    r"\bbetter than\b",
+    r"\bworse than\b",
+    r"\bmore likely\b",
+    r"\bless likely\b",
+    r"\bmakes up\b",
+    r"\baccounts for\b",
+]
+
 
 @dataclass(slots=True)
 class MemoryCandidate:
@@ -190,12 +309,23 @@ class CuratedMemoryCurator:
                 reason="internal_noise",
             )
 
+        rejection_reason = self._rejection_reason_for_inferred(text)
+        if rejection_reason is not None:
+            return self._log_inferred_decision(
+                user_id,
+                guild_id,
+                channel_id,
+                thread_id,
+                source_message_id,
+                reason=rejection_reason,
+            )
+
         context_type, is_durable = self._classify_inferred(text)
         if not is_durable:
             return self._log_inferred_decision(
                 user_id, guild_id, channel_id, thread_id, source_message_id,
                 context_type=context_type,
-                reason="not_durable",
+                reason="reject_not_project_fact",
             )
 
         importance = self._importance_inferred(text, context_type)
@@ -264,6 +394,55 @@ class CuratedMemoryCurator:
     def _looks_internal(self, text: str) -> bool:
         lower = text.lower()
         return any(re.search(pattern, lower, flags=re.I) for pattern in _INTERNAL_PATTERNS)
+
+    def _rejection_reason_for_inferred(self, text: str) -> Optional[str]:
+        lower = text.lower()
+        if self._looks_quoted_or_external_content(lower):
+            return "reject_quoted_or_external_content"
+        if self._looks_sensitive_generalization(lower):
+            return "reject_sensitive_generalization"
+        if self._looks_world_claim(lower):
+            return "reject_world_claim"
+        return None
+
+    @staticmethod
+    def _has_project_anchor(lower: str) -> bool:
+        return any(re.search(pattern, lower, flags=re.I) for pattern in _PROJECT_FACT_SIGNALS)
+
+    @staticmethod
+    def _has_project_fact_cue(lower: str) -> bool:
+        return any(re.search(pattern, lower, flags=re.I) for pattern in _PROJECT_FACT_CUES)
+
+    def _looks_project_scoped_fact(self, lower: str) -> bool:
+        if not self._has_project_anchor(lower):
+            return False
+        return self._has_project_fact_cue(lower)
+
+    @staticmethod
+    def _looks_quoted_or_external_content(lower: str) -> bool:
+        if any(token in lower for token in ["according to", "article", "webpage", "website", "blog", "source:"]):
+            return True
+        if "http://" in lower or "https://" in lower or "www." in lower:
+            return True
+        return bool(re.search(r"[\"“”][^\"“”]{12,}[\"“”]", lower))
+
+    def _looks_sensitive_generalization(self, lower: str) -> bool:
+        if self._has_project_anchor(lower):
+            return False
+        if not any(re.search(pattern, lower, flags=re.I) for pattern in _SENSITIVE_ATTRIBUTE_PATTERNS):
+            return False
+        if any(re.search(pattern, lower, flags=re.I) for pattern in _GENERAL_CLAIM_TERMS):
+            return True
+        if any(trigger in lower for trigger in [" prefer ", " likes ", " like ", " love ", " loves ", " am ", "'m ", " have ", " is ", " are "]):
+            return True
+        return False
+
+    def _looks_world_claim(self, lower: str) -> bool:
+        if self._has_project_anchor(lower):
+            return False
+        if not any(re.search(pattern, lower, flags=re.I) for pattern in _WORLD_CLAIM_TERMS):
+            return False
+        return any(re.search(pattern, lower, flags=re.I) for pattern in _GENERAL_CLAIM_TERMS)
 
     # ---------------- internal helpers: inferred classification ----------------
 
@@ -423,25 +602,19 @@ class CuratedMemoryCurator:
 
         return False
 
-    @staticmethod
-    def _is_project_fact(lower: str) -> bool:
+    def _is_project_fact(self, lower: str) -> bool:
         """
-        Only treat as project_fact when it looks like a durable project-scoped rule
-        with an explicit project identifier, not generic task chatter.
+        Only treat as project_fact when the content is clearly about this bot,
+        repo, codebase, runtime behavior, or a concrete subsystem.
 
-        Accept:
-          - "discord-bot must never expose raw tokens"
-          - "we decided discord-bot should ..."
-          - "the rule for discord-bot is ..."
-          - "for the discord-bot project, ..."
+        Accept only project-scoped statements such as:
+          - "the bot should only reply when mentioned"
+          - "RAG uses ChromaDB"
+          - "memory service persists curated memories"
+          - "typing indicator should wrap routed messages"
 
-        Reject:
-          - "I'm working on a bug"
-          - "this project is annoying"
-          - "the code is wrong"
-          - "for discord-bot, always reply ..." (too vague / old pattern)
+        Reject generic social/world claims or vague project chatter.
         """
-        # Exclude task chatter and generic complaint/debug phrasing.
         if bool(re.search(r"\b(?:working on|fixing|debugging)\b", lower)):
             return False
         if bool(re.search(r"\b(?:this|that|the)\s+project\b", lower)):
@@ -451,17 +624,7 @@ class CuratedMemoryCurator:
         if bool(re.search(r"\b(?:annoying|frustrating|bad)\b", lower)) and "project" in lower:
             return False
 
-        # Patterns require an explicit project identifier.
-        if bool(re.search(r"\bfor (?:the )?([a-z0-9][\w-]{1,})\s+project\b.*[,;:]", lower)):
-            return True
-        if bool(re.search(r"\bwe decided\s+([a-z0-9][\w-]{1,})\s+should\b", lower)):
-            return True
-        if bool(re.search(r"\bthe rule for\s+([a-z0-9][\w-]{1,})\s+is\b", lower)):
-            return True
-        if bool(re.search(r"\b([a-z0-9][\w-]{1,})\s+(uses|is|should|must|has to)\b", lower)):
-            return True
-
-        return False
+        return self._looks_project_scoped_fact(lower)
 
     @staticmethod
     def _is_server_fact(lower: str) -> bool:

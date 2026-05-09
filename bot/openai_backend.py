@@ -3,6 +3,7 @@ OpenAI/OpenRouter Backend - Handles OpenAI API calls including OpenRouter.
 """
 
 from typing import Any, AsyncGenerator, Dict, Union
+from types import SimpleNamespace
 import base64
 import inspect
 import os
@@ -12,7 +13,20 @@ import time
 import aiohttp
 import certifi
 import httpx
-import openai
+
+try:
+    import openai as _openai
+except ModuleNotFoundError:
+    _openai = None
+    openai = SimpleNamespace(
+        AsyncOpenAI=None,
+        AuthenticationError=Exception,
+        RateLimitError=Exception,
+        APIError=Exception,
+        _base_client=SimpleNamespace(AsyncHttpxClientWrapper=None),
+    )
+else:
+    openai = _openai
 
 from bot.config import load_config, get_vl_model_ladder
 from bot.exceptions import APIError
@@ -26,6 +40,21 @@ from bot.enhanced_retry import get_retry_manager
 
 logger = get_logger(__name__)
 
+if _openai is not None:
+    OpenAIAuthenticationError = _openai.AuthenticationError
+    OpenAIRateLimitError = _openai.RateLimitError
+    OpenAIAPIError = _openai.APIError
+else:
+    OpenAIAuthenticationError = OpenAIRateLimitError = OpenAIAPIError = Exception
+
+
+def _require_openai() -> Any:
+    if _openai is None:
+        raise APIError(
+            "OpenAI backend is unavailable because the 'openai' package is not installed"
+        )
+    return _openai
+
 
 def _patch_openai_httpx_wrapper_destructor() -> None:
     """Prevent OpenAI's wrapper __del__ from scheduling a broken close task.
@@ -36,6 +65,7 @@ def _patch_openai_httpx_wrapper_destructor() -> None:
     AttributeError('_transport') in a background task. [REH]
     """
     try:
+        openai = _require_openai()
         wrapper_cls = openai._base_client.AsyncHttpxClientWrapper
     except Exception:
         return
@@ -77,6 +107,7 @@ def _make_openai_async_client(
         trust_env=False,
     )
     try:
+        openai = _require_openai()
         return openai.AsyncOpenAI(
             api_key=api_key,
             base_url=base_url,
@@ -578,10 +609,10 @@ Server Context: {server_context}"""
         finally:
             await _safe_aclose_openai_client(client)
 
-    except openai.AuthenticationError as e:
+    except OpenAIAuthenticationError as e:
         logger.error(f"OpenAI authentication failed: {e}")
         raise APIError(f"OpenAI authentication failed - check API key: {str(e)}")
-    except openai.RateLimitError as e:
+    except OpenAIRateLimitError as e:
         logger.warning(f"OpenAI rate limit exceeded: {e}")
         retry_after = None
         try:
@@ -603,7 +634,7 @@ Server Context: {server_context}"""
         except Exception:
             pass
         raise err
-    except openai.APIError as e:
+    except OpenAIAPIError as e:
         logger.error(f"OpenAI API error: {e}")
         raise APIError(f"OpenAI API error: {str(e)}")
     except httpx.HTTPStatusError as e:

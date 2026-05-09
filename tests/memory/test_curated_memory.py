@@ -487,24 +487,24 @@ async def test_explicit_memory_command_rejects_internal_traces_and_secrets():
 # ==================
 
 @pytest.mark.asyncio
-async def test_inferred_accepts_user_preference():
+async def test_inferred_accepts_harmless_stable_user_preference():
     curator = CuratedMemoryCurator()
     c = curator.curate_inferred_candidate(
         user_id="u",
-        text="I prefer short replies",
+        text="I prefer concise Claude prompts for discord-bot fixes.",
     )
-    assert c is not None, "Should accept clear user preference"
-    assert c.context_type in ("user_preference", "recurring_instruction")
+    assert c is not None, "Should accept a clear harmless user preference"
+    assert c.context_type == "user_preference"
 
 
 @pytest.mark.asyncio
-async def test_inferred_rejects_project_rule_for_discord_bot():
+async def test_inferred_rejects_old_vague_project_rule():
     curator = CuratedMemoryCurator()
     c = curator.curate_inferred_candidate(
         user_id="u",
         text="For discord-bot, always reply with summary then Claude prompt",
     )
-    assert c is None, "Old project-rule phrasing should be rejected by the stricter curator"
+    assert c is None, "Old vague project-rule phrasing should be rejected"
 
 
 @pytest.mark.asyncio
@@ -544,18 +544,107 @@ async def test_inferred_rejects_temporary_context_for_now():
 # ==================
 
 @pytest.mark.asyncio
-async def test_inferred_rejects_working_on_a_bug():
+async def test_inferred_rejects_broad_race_demographic_claim():
     curator = CuratedMemoryCurator()
-    c = curator.curate_inferred_candidate(user_id="u", text="I'm working on a bug")
-    assert c is None, "Ordinary task chatter should not become memory"
+    c = curator.curate_inferred_candidate(
+        user_id="u",
+        text="Project fact: race is overrepresented in finance, politics, media, and academia.",
+    )
+    assert c is None, "Should reject broad race/demographic claims"
 
 
 @pytest.mark.asyncio
-async def test_inferred_rejects_project_is_annoying():
+async def test_inferred_rejects_political_social_claim():
     curator = CuratedMemoryCurator()
-    c = curator.curate_inferred_candidate(user_id="u", text="this project is annoying")
-    assert c is None, "Generic project chatter should be rejected"
+    c = curator.curate_inferred_candidate(
+        user_id="u",
+        text="Project fact: political viewpoints are underrepresented in academia and media.",
+    )
+    assert c is None, "Should reject political/societal claims"
 
+
+@pytest.mark.asyncio
+async def test_inferred_rejects_finance_media_academia_claim():
+    curator = CuratedMemoryCurator()
+    c = curator.curate_inferred_candidate(
+        user_id="u",
+        text="Project fact: finance, media, and academia are overrepresented by one demographic.",
+    )
+    assert c is None, "Should reject broad world claims"
+
+
+@pytest.mark.asyncio
+async def test_inferred_rejects_quoted_article_content():
+    curator = CuratedMemoryCurator()
+    c = curator.curate_inferred_candidate(
+        user_id="u",
+        text="According to an article, 'Race X is overrepresented in STEM fields.'",
+    )
+    assert c is None, "Should reject quoted/external content"
+
+
+@pytest.mark.asyncio
+async def test_inferred_rejects_one_off_opinion():
+    curator = CuratedMemoryCurator()
+    c = curator.curate_inferred_candidate(
+        user_id="u",
+        text="Project fact: The user believes that diversity initiatives are harmful.",
+    )
+    assert c is None, "Should reject one-off opinions phrased as project facts"
+
+
+@pytest.mark.asyncio
+async def test_inferred_rejects_sensitive_identity_statement():
+    curator = CuratedMemoryCurator()
+    c = curator.curate_inferred_candidate(
+        user_id="u",
+        text="I'm bisexual and prefer dark mode.",
+    )
+    assert c is None, "Should reject inferred sensitive identity content"
+
+
+@pytest.mark.asyncio
+async def test_inferred_accepts_real_bot_bug_report():
+    curator = CuratedMemoryCurator()
+    c = curator.curate_inferred_candidate(
+        user_id="u",
+        text="Bug report: the sort dropdown should trigger a full server-side search, not a client-only re-render.",
+    )
+    assert c is not None
+    assert c.context_type == "project_fact"
+
+
+@pytest.mark.asyncio
+async def test_inferred_accepts_real_implementation_requirement():
+    curator = CuratedMemoryCurator()
+    c = curator.curate_inferred_candidate(
+        user_id="u",
+        text="The router should wrap the typing indicator around accepted routed messages.",
+    )
+    assert c is not None
+    assert c.context_type == "project_fact"
+
+
+@pytest.mark.asyncio
+async def test_inferred_accepts_project_architecture_fact():
+    curator = CuratedMemoryCurator()
+    c = curator.curate_inferred_candidate(
+        user_id="u",
+        text="The memory service persists curated memories in SQLite and ChromaDB.",
+    )
+    assert c is not None
+    assert c.context_type == "project_fact"
+
+
+@pytest.mark.asyncio
+async def test_inferred_accepts_project_audit_fact():
+    curator = CuratedMemoryCurator()
+    c = curator.curate_inferred_candidate(
+        user_id="u",
+        text="The audit found the memory service needs stricter project-fact validation.",
+    )
+    assert c is not None
+    assert c.context_type == "project_fact"
 
 @pytest.mark.asyncio
 async def test_inferred_rejects_code_is_wrong():

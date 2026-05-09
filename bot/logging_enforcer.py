@@ -29,6 +29,15 @@ from rich.text import Text
 from rich.panel import Panel
 
 
+def _rich_tracebacks_supported() -> bool:
+    try:
+        import pygments.lexers.python  # type: ignore
+
+        return True
+    except Exception:
+        return False
+
+
 class StructuredJsonFormatter(logging.Formatter):
     """JSON formatter with frozen key set preservation. [CA]"""
 
@@ -105,13 +114,14 @@ class PrettyConsoleHandler(RichHandler):
                 stderr=True, force_terminal=True, width=120, legacy_windows=False
             )
 
+        rich_tracebacks = _rich_tracebacks_supported()
         super().__init__(
             console=console,
             show_time=True,
             show_level=True,
             show_path=False,
-            rich_tracebacks=True,
-            tracebacks_show_locals=True,
+            rich_tracebacks=rich_tracebacks,
+            tracebacks_show_locals=rich_tracebacks,
             markup=True,
             **kwargs,
         )

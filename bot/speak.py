@@ -29,9 +29,12 @@ async def speak_infer(text: str) -> Path:
             )
 
         # Ask the manager to generate a WAV file (non-blocking APIs internally)
-        out_path, content_type = await manager.generate_tts(
-            text, out_path=None, output_format="wav"
-        )
+        gen_res = await manager.generate_tts(text, out_path=None, output_format="wav")
+        if isinstance(gen_res, tuple):
+            out_path, content_type = gen_res
+        else:
+            out_path = gen_res
+            content_type = "audio/wav"
 
         # Validate output file
         if not isinstance(out_path, Path):

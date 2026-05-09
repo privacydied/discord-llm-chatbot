@@ -108,10 +108,15 @@ class BotEventHandler(commands.Cog):
             else:
                 try:
                     # Generate OGG/Opus asynchronously via TTSManager
-                    audio_path, mime_type = await self.bot.tts_manager.generate_tts(
+                    gen_res = await self.bot.tts_manager.generate_tts(
                         text_response,
                         output_format="ogg",
                     )
+                    if isinstance(gen_res, tuple):
+                        audio_path, mime_type = gen_res
+                    else:
+                        audio_path = gen_res
+                        mime_type = "audio/ogg" if str(audio_path).endswith(".ogg") else "audio/wav"
 
                     if audio_path and Path(audio_path).exists():
                         # Send only voice response when TTS is active

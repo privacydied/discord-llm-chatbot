@@ -885,7 +885,9 @@ class LLMBot(commands.Bot):
                     break
 
                 try:
-                    await self._process_single_message(message)
+                    # Show typing indicator while processing the message
+                    async with self._optional_typing(message.channel):
+                        await self._process_single_message(message)
                     self.logger.debug(
                         f"Processed message {message.id} for user {user_id}"
                     )
