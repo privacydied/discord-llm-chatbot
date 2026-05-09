@@ -5,6 +5,7 @@ Uses atomic file writes and corruption recovery for safe data storage.
 [REH][SFT] Atomic persistence with backup/recovery
 """
 
+import copy
 import json
 import os
 import logging
@@ -337,39 +338,33 @@ def get_server_profile(guild_id: str, force_reload: bool = False) -> dict:
     [SFT] Validation before loading into cache
     """
     with server_lock:
-        # Check cache first
         if guild_id in server_cache and not force_reload:
-            return server_cache[guild_id].copy()  # [BUGFIX] return copy like get_profile
+            return server_cache[guild_id].copy()
 
-        # Try to load from disk with corruption recovery
-        from bot.config import load_config
+    from bot.config import load_config
 
-        config = load_config()
-        profile_path = config["SERVER_PROFILE_DIR"] / f"{guild_id}.json"
+    config = load_config()
+    profile_path = config["SERVER_PROFILE_DIR"] / f"{guild_id}.json"
 
-        # Use persistence layer with recovery
-        profile = load_json_with_recovery(
-            profile_path,
-            default_data=None,  # We handle default separately
-            attempt_recovery=True,
-        )
+    profile = load_json_with_recovery(
+        profile_path,
+        default_data=None,
+        attempt_recovery=True,
+    )
 
-        if profile is not None:
-            # Validate loaded profile
-            is_valid, error_msg = validate_profile_integrity(profile)
-            if is_valid:
-                # Ensure the profile has all required fields
-                profile = ensure_server_profile_schema(profile, guild_id)
+    if profile is not None:
+        is_valid, error_msg = validate_profile_integrity(profile)
+        if is_valid:
+            profile = ensure_server_profile_schema(profile, guild_id)
+            with server_lock:
                 server_cache[guild_id] = profile
-                return profile.copy()  # [BUGFIX] return copy
-            else:
-                logging.warning(f"Corrupted server profile for guild {guild_id}: {error_msg}")
-                # Fall through to create new profile
+            return profile.copy()
+        logging.warning(f"Corrupted server profile for guild {guild_id}: {error_msg}")
 
-        # Create new profile if it doesn't exist or couldn't be loaded
-        profile = default_server_profile(guild_id)
+    profile = default_server_profile(guild_id)
+    with server_lock:
         server_cache[guild_id] = profile
-        return profile.copy()  # [BUGFIX] return copy
+    return profile.copy()
 
 
 def save_server_profile(guild_id, force: bool = False) -> bool:
@@ -381,7 +376,6 @@ def save_server_profile(guild_id, force: bool = False) -> bool:
     [SFT] Automatic backup and recovery on failure
     """
     try:
-        # Support being passed a full profile dict (legacy tests)
         if isinstance(guild_id, dict):
             profile = guild_id
             gid = str(profile.get("guild_id") or profile.get("server_id") or "")
@@ -390,38 +384,35 @@ def save_server_profile(guild_id, force: bool = False) -> bool:
                     "Cannot save server profile: missing guild_id/server_id in profile"
                 )
                 return False
-            # Ensure schema and cache are updated
             profile = ensure_server_profile_schema(profile, gid)
             with server_lock:
                 server_cache[gid] = profile
+            working_profile = copy.deepcopy(profile)
         else:
             gid = str(guild_id)
             with server_lock:
-                profile = server_cache.get(gid)
+                cached_profile = server_cache.get(gid)
 
-            if profile is None:
-                # Instead of failing, lazily initialize from disk or defaults.
-                # This avoids recurring "not in cache" errors during autosave
-                # when a profile was evicted or not loaded on startup.
+            if cached_profile is None:
                 logging.warning(
                     f"Server profile for guild {gid} not in cache; loading/creating before save"
                 )
-                # get_server_profile will either load from disk or create default
-                profile = get_server_profile(gid, force_reload=True)
-                if profile is None:
+                cached_profile = get_server_profile(gid, force_reload=True)
+                if cached_profile is None:
                     logging.error(f"Failed to load server profile for guild {gid}")
                     return False
                 with server_lock:
-                    server_cache[gid] = profile
+                    server_cache[gid] = cached_profile
 
-        profile["last_updated"] = datetime.now().isoformat()
+            working_profile = copy.deepcopy(cached_profile)
+
+        working_profile["last_updated"] = datetime.now().isoformat()
 
         from bot.config import load_config
 
         config = load_config()
         profile_path = config["SERVER_PROFILE_DIR"] / f"{gid}.json"
 
-        # Enforce server memory limit (prefer fresh env to avoid cached config)
         try:
             env_val = os.getenv("MAX_SERVER_MEMORY")
             if env_val is not None:
@@ -434,24 +425,21 @@ def save_server_profile(guild_id, force: bool = False) -> bool:
             max_memories = 100
 
         if (
-            isinstance(profile.get("memories"), list)
-            and len(profile["memories"]) > max_memories
+            isinstance(working_profile.get("memories"), list)
+            and len(working_profile["memories"]) > max_memories
         ):
-            profile["memories"] = profile["memories"][-max_memories:]
+            working_profile["memories"] = working_profile["memories"][-max_memories:]
 
-        # Create directory if it doesn't exist
         profile_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Validate profile before saving
-        is_valid, error_msg = validate_profile_integrity(profile)
+        is_valid, error_msg = validate_profile_integrity(working_profile)
         if not is_valid:
             logging.error(f"Server profile validation failed for guild {gid}: {error_msg}")
             return False
 
-        # Atomic save with backup
         if not atomic_save_json(
             profile_path,
-            profile,
+            working_profile,
             create_backup=True,
             validate_before_write=True,
             use_lock=True,
@@ -460,6 +448,8 @@ def save_server_profile(guild_id, force: bool = False) -> bool:
             logging.error(f"Failed to save server profile for guild {gid}")
             return False
 
+        with server_lock:
+            server_cache[gid] = working_profile
         return True
 
     except Exception as e:
