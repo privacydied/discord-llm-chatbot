@@ -55,6 +55,45 @@ class ServerArchiveStore:
         await _to_thread(self._bootstrap_sync)
         self._initialized = True
 
+    async def ensure_distiller_schema(self) -> None:
+        await self.initialize()
+        await _to_thread(self._ensure_distiller_schema_sync)
+
+    def _ensure_distiller_schema_sync(self) -> None:
+        with self._lock:
+            conn = self._connect()
+            try:
+                conn.executescript(
+                    """
+                    CREATE TABLE IF NOT EXISTS memory_distiller_state (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        guild_id TEXT NOT NULL,
+                        channel_id TEXT,
+                        thread_id TEXT,
+                        author_id TEXT,
+                        last_processed_message_id TEXT,
+                        last_processed_created_at TEXT,
+                        updated_at TEXT NOT NULL,
+                        error TEXT
+                    );
+
+                    CREATE TABLE IF NOT EXISTS memory_distiller_runs (
+                        run_id TEXT PRIMARY KEY,
+                        started_at TEXT NOT NULL,
+                        finished_at TEXT,
+                        scanned_count INTEGER NOT NULL DEFAULT 0,
+                        candidate_count INTEGER NOT NULL DEFAULT 0,
+                        accepted_count INTEGER NOT NULL DEFAULT 0,
+                        rejected_count INTEGER NOT NULL DEFAULT 0,
+                        merged_count INTEGER NOT NULL DEFAULT 0,
+                        error TEXT
+                    );
+                    """
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
     def _bootstrap_sync(self) -> None:
         with self._lock:
             conn = self._connect()
@@ -579,7 +618,7 @@ class ServerArchiveStore:
         return (guild_id, channel_id, thread_id, author_id)
 
     async def list_distiller_scopes(self, *, limit: int = 200, guild_id: str | None = None) -> list[dict[str, Any]]:
-        await self.initialize()
+        await self.ensure_distiller_schema()
         return await _to_thread(self._list_distiller_scopes_sync, limit, guild_id)
 
     def _list_distiller_scopes_sync(self, limit: int, guild_id: str | None) -> list[dict[str, Any]]:
@@ -613,7 +652,7 @@ class ServerArchiveStore:
         after_message_id: str | None = None,
         limit: int = 25,
     ) -> list[dict[str, Any]]:
-        await self.initialize()
+        await self.ensure_distiller_schema()
         return await _to_thread(
             self._fetch_distiller_messages_sync,
             guild_id,
@@ -676,7 +715,7 @@ class ServerArchiveStore:
         thread_id: str | None = None,
         author_id: str | None = None,
     ) -> dict[str, Any] | None:
-        await self.initialize()
+        await self.ensure_distiller_schema()
         return await _to_thread(
             self._get_distiller_state_sync,
             guild_id,
@@ -720,7 +759,7 @@ class ServerArchiveStore:
         last_processed_created_at: str | None = None,
         error: str | None = None,
     ) -> None:
-        await self.initialize()
+        await self.ensure_distiller_schema()
         await _to_thread(
             self._upsert_distiller_state_sync,
             guild_id,
@@ -798,7 +837,7 @@ class ServerArchiveStore:
                 conn.close()
 
     async def start_distiller_run(self, run_id: str, *, started_at: str) -> None:
-        await self.initialize()
+        await self.ensure_distiller_schema()
         await _to_thread(self._start_distiller_run_sync, run_id, started_at)
 
     def _start_distiller_run_sync(self, run_id: str, started_at: str) -> None:
@@ -830,7 +869,7 @@ class ServerArchiveStore:
         merged_count: int,
         error: str | None = None,
     ) -> None:
-        await self.initialize()
+        await self.ensure_distiller_schema()
         await _to_thread(
             self._finish_distiller_run_sync,
             run_id,
@@ -880,7 +919,7 @@ class ServerArchiveStore:
                 conn.close()
 
     async def latest_distiller_run(self) -> dict[str, Any] | None:
-        await self.initialize()
+        await self.ensure_distiller_schema()
         return await _to_thread(self._latest_distiller_run_sync)
 
     def _latest_distiller_run_sync(self) -> dict[str, Any] | None:
@@ -895,7 +934,7 @@ class ServerArchiveStore:
                 conn.close()
 
     async def count_distiller_backlog(self, *, guild_id: str | None = None) -> int:
-        await self.initialize()
+        await self.ensure_distiller_schema()
         return await _to_thread(self._count_distiller_backlog_sync, guild_id)
 
     def _count_distiller_backlog_sync(self, guild_id: str | None) -> int:

@@ -67,6 +67,24 @@ async def test_schema_bootstrap_idempotent_and_wal(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_distiller_tables_are_lazy_created_for_existing_db(tmp_path):
+    db_path = tmp_path / "archive.sqlite3"
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute("PRAGMA user_version=1")
+        conn.commit()
+    finally:
+        conn.close()
+
+    store = ServerArchiveStore(db_path)
+    await store.initialize()
+    await store.start_distiller_run("run-1", started_at="2026-05-09T00:00:00+00:00")
+    latest = await store.latest_distiller_run()
+    assert latest is not None
+    assert latest["run_id"] == "run-1"
+
+
+@pytest.mark.asyncio
 async def test_message_attachment_and_fts_search(tmp_path, bundle_factory):
     store = ServerArchiveStore(tmp_path / "archive.sqlite3")
     await store.initialize()
