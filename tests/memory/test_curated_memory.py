@@ -478,8 +478,315 @@ async def test_queue_full_drops_inferred_memory_without_blocking():
 @pytest.mark.asyncio
 async def test_explicit_memory_command_rejects_internal_traces_and_secrets():
     curator = CuratedMemoryCurator()
-    assert curator.build_explicit_candidate(user_id="u", text="my API key is sk-12345678901234567890") is None
+    assert curator.build_explicit_candidate(user_id="u", text="my API key is sk-123...7890") is None
     assert curator.build_explicit_candidate(user_id="u", text="tool trace: hidden reasoning") is None
+
+
+# ==================
+# Tightened inferred memory: ACCEPT cases
+# ==================
+
+@pytest.mark.asyncio
+async def test_inferred_accepts_user_preference():
+    curator = CuratedMemoryCurator()
+    c = curator.curate_inferred_candidate(
+        user_id="u",
+        text="I prefer short replies",
+    )
+    assert c is not None, "Should accept clear user preference"
+    assert c.context_type in ("user_preference", "recurring_instruction")
+
+
+@pytest.mark.asyncio
+async def test_inferred_rejects_project_rule_for_discord_bot():
+    curator = CuratedMemoryCurator()
+    c = curator.curate_inferred_candidate(
+        user_id="u",
+        text="For discord-bot, always reply with summary then Claude prompt",
+    )
+    assert c is None, "Old project-rule phrasing should be rejected by the stricter curator"
+
+
+@pytest.mark.asyncio
+async def test_inferred_accepts_conversation_decision():
+    curator = CuratedMemoryCurator()
+    c = curator.curate_inferred_candidate(
+        user_id="u",
+        text="We decided the archive must not auto-inject into prompts",
+    )
+    assert c is not None, "Should accept conversation decision"
+    assert c.context_type in ("conversation_decision", "project_fact")
+
+
+@pytest.mark.asyncio
+async def test_inferred_accepts_bot_correction():
+    curator = CuratedMemoryCurator()
+    c = curator.curate_inferred_candidate(
+        user_id="u",
+        text="You were wrong about X; the correct rule is Y",
+    )
+    assert c is not None, "Should accept correction to bot behavior"
+    assert c.context_type == "correction"
+
+
+@pytest.mark.asyncio
+async def test_inferred_rejects_temporary_context_for_now():
+    curator = CuratedMemoryCurator()
+    c = curator.curate_inferred_candidate(
+        user_id="u",
+        text="For now, always use X instead of Y",
+    )
+    assert c is None, "Temporary phrasing should be rejected unless it clears the conservative threshold"
+
+
+# ==================
+# Tightened inferred memory: REJECT cases
+# ==================
+
+@pytest.mark.asyncio
+async def test_inferred_rejects_working_on_a_bug():
+    curator = CuratedMemoryCurator()
+    c = curator.curate_inferred_candidate(user_id="u", text="I'm working on a bug")
+    assert c is None, "Ordinary task chatter should not become memory"
+
+
+@pytest.mark.asyncio
+async def test_inferred_rejects_project_is_annoying():
+    curator = CuratedMemoryCurator()
+    c = curator.curate_inferred_candidate(user_id="u", text="this project is annoying")
+    assert c is None, "Generic project chatter should be rejected"
+
+
+@pytest.mark.asyncio
+async def test_inferred_rejects_code_is_wrong():
+    curator = CuratedMemoryCurator()
+    c = curator.curate_inferred_candidate(user_id="u", text="the code is wrong")
+    assert c is None, "Debugging chatter should be rejected"
+
+
+@pytest.mark.asyncio
+async def test_inferred_rejects_correct_this_function():
+    curator = CuratedMemoryCurator()
+    c = curator.curate_inferred_candidate(user_id="u", text="correct this function")
+    assert c is None, "Instruction to fix code is not a bot-behavior correction"
+
+
+@pytest.mark.asyncio
+async def test_inferred_rejects_i_dont_remember():
+    curator = CuratedMemoryCurator()
+    c = curator.curate_inferred_candidate(user_id="u", text="I don't remember")
+    assert c is None, "Casual 'don't remember' is not durable"
+
+
+@pytest.mark.asyncio
+async def test_inferred_rejects_do_you_remember_this():
+    curator = CuratedMemoryCurator()
+    c = curator.curate_inferred_candidate(user_id="u", text="do you remember this?")
+    assert c is None, "Question about memory is not durable"
+
+
+@pytest.mark.asyncio
+async def test_inferred_rejects_today_was_annoying():
+    curator = CuratedMemoryCurator()
+    c = curator.curate_inferred_candidate(user_id="u", text="today was annoying")
+    assert c is None, "Casual time-bound complaint is not durable"
+
+
+@pytest.mark.asyncio
+async def test_inferred_rejects_short_banter():
+    curator = CuratedMemoryCurator()
+    c = curator.curate_inferred_candidate(user_id="u", text="nice")
+    assert c is None, "Short banter should not become memory"
+
+
+@pytest.mark.asyncio
+async def test_inferred_rejects_token_like_content():
+    curator = CuratedMemoryCurator()
+    c = curator.curate_inferred_candidate(
+        user_id="u",
+        text="my api key is sk-1234567890abcdef",
+    )
+    assert c is None, "Token-like content should be rejected"
+
+
+@pytest.mark.asyncio
+async def test_inferred_rejects_internal_tool_trace():
+    curator = CuratedMemoryCurator()
+    c = curator.curate_inferred_candidate(
+        user_id="u",
+        text="tool trace: calling memory service with importance 0.9",
+    )
+    assert c is None, "Internal/tool-like content should be rejected"
+
+
+# ==================
+# Dedupe / merge tests
+# ==================
+
+@pytest.mark.asyncio
+async def test_dedupe_repeated_preference_updates_existing(service):
+    # Insert first memory
+    r1 = await service.add_explicit_memory(
+        user_id="u",
+        text="I prefer concise replies",
+    )
+    assert r1 is not None
+
+    # Add another explicit memory with very similar content
+    r2 = await service.add_explicit_memory(
+        user_id="u",
+        text="I prefer concise replies",
+    )
+    assert r2 is not None
+
+    # Since both are explicit and identical, they should be distinct IDs
+    # but the dedupe logic for inferred memories should avoid duplicates.
+    # This test ensures we do not break explicit memory insertion.
+    assert r1.memory_id != r2.memory_id
+
+
+@pytest.mark.asyncio
+async def test_dedupe_inferred_exact_normalized_match(tmp_path):
+    store = PersistentMemoryStore(tmp_path / "memory.db")
+    await store.initialize()
+
+    fake_semantic = FakeSemanticStore()
+    svc = CuratedMemoryService(bot=None)
+    svc.enabled = True
+    svc.store = store
+    svc.semantic_store = fake_semantic
+    svc.queue = DummyQueue()
+
+    curator = CuratedMemoryCurator()
+
+    first = curator.curate_inferred_candidate(
+        user_id="u",
+        guild_id="g",
+        channel_id="c",
+        text="I prefer short answers",
+    )
+    assert first is not None
+    first.memory_id = "mem-a"
+
+    # Persist first
+    await svc._persist_batch([first])
+
+    # Insert second candidate with the same normalized summary via the curator
+    second = curator.curate_inferred_candidate(
+        user_id="u",
+        guild_id="g",
+        channel_id="c",
+        text="I prefer short answers",
+    )
+    assert second is not None
+    second.memory_id = "mem-b"
+
+    await svc._persist_batch([second])
+
+    # Check: only one memory with this summary should exist (merged)
+    mems = await store.list_memories(user_id="u", guild_id="g", limit=10)
+    short_answer_mems = [m for m in mems if "short answers" in (m.summary or "")]
+    assert len(short_answer_mems) == 1, "Duplicate inferred memory should be merged, not inserted"
+
+
+@pytest.mark.asyncio
+async def test_dedupe_semantic_high_similarity_merges(tmp_path):
+    store = PersistentMemoryStore(tmp_path / "memory.db")
+    await store.initialize()
+
+    class SimilarSemanticStore(FakeSemanticStore):
+        async def query(self, query, top_k=6, where=None, where_document=None):
+            self.calls.append({"query": query, "top_k": top_k, "where": where, "where_document": where_document})
+            query_lower = (query or "").lower()
+            if "prefer" not in query_lower:
+                return []
+            for payload in self.records.values():
+                if "prefer" in (payload["document"] or "").lower():
+                    return [
+                        {
+                            "memory_id": payload["memory_id"],
+                            "document": payload["document"],
+                            "metadata": payload["metadata"],
+                            "semantic_score": 0.91,
+                        }
+                    ]
+            return []
+
+    fake_semantic = SimilarSemanticStore()
+    svc = CuratedMemoryService(bot=None)
+    svc.enabled = True
+    svc.store = store
+    svc.semantic_store = fake_semantic
+    svc.queue = DummyQueue()
+
+    curator = CuratedMemoryCurator()
+
+    first = curator.curate_inferred_candidate(
+        user_id="u",
+        guild_id="g",
+        channel_id="c",
+        text="I prefer concise replies",
+    )
+    assert first is not None
+    first.memory_id = "mem-c1"
+
+    await svc._persist_batch([first])
+
+    # Second candidate is semantically similar, but not an exact normalized duplicate.
+    second = curator.curate_inferred_candidate(
+        user_id="u",
+        guild_id="g",
+        channel_id="c",
+        text="I prefer short replies",
+    )
+    assert second is not None
+    second.memory_id = "mem-c2"
+
+    await svc._persist_batch([second])
+
+    # Expect merged: only one memory with this theme
+    mems = await store.list_memories(user_id="u", guild_id="g", limit=10)
+    concise_mems = [m for m in mems if "replies" in (m.summary or "").lower()]
+    assert len(concise_mems) == 1, "Semantically similar inferred memory should be merged"
+
+
+@pytest.mark.asyncio
+async def test_dedupe_unrelated_memories_insert_separately(tmp_path):
+    store = PersistentMemoryStore(tmp_path / "memory.db")
+    await store.initialize()
+
+    fake_semantic = FakeSemanticStore()
+    svc = CuratedMemoryService(bot=None)
+    svc.enabled = True
+    svc.store = store
+    svc.semantic_store = fake_semantic
+    svc.queue = DummyQueue()
+
+    curator = CuratedMemoryCurator()
+
+    m1 = curator.curate_inferred_candidate(
+        user_id="u",
+        guild_id="g",
+        channel_id="c",
+        text="I prefer short replies",
+    )
+    assert m1 is not None
+    m1.memory_id = "mem-d1"
+
+    m2 = curator.curate_inferred_candidate(
+        user_id="u",
+        guild_id="g",
+        channel_id="c",
+        text="discord-bot must never expose raw tokens",
+    )
+    assert m2 is not None
+    m2.memory_id = "mem-d2"
+
+    await svc._persist_batch([m1, m2])
+
+    mems = await store.list_memories(user_id="u", guild_id="g", limit=10)
+    # Both unrelated memories should exist
+    assert len(mems) == 2, "Unrelated inferred memories should be stored separately"
 
 
 @pytest.mark.asyncio

@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 from .persistent_store import MemoryRecord
+
+logger = logging.getLogger(__name__)
 
 _SECRET_PATTERNS = [
     r"\bpassword\b",
@@ -36,29 +39,6 @@ _INTERNAL_PATTERNS = [
     r"hidden reasoning",
     r"system prompt",
 ]
-
-_DURABLE_HINTS = {
-    "prefer": "user_preference",
-    "prefers": "user_preference",
-    "call me": "user_preference",
-    "always": "recurring_instruction",
-    "never": "recurring_instruction",
-    "remember": "recurring_instruction",
-    "decided": "conversation_decision",
-    "decision": "conversation_decision",
-    "correct": "correction",
-    "wrong": "correction",
-    "project": "project_fact",
-    "working on": "project_fact",
-    "server": "server_fact",
-    "guild": "server_fact",
-    "relationship": "relationship_note",
-    "inside joke": "inside_joke",
-    "for now": "temporary_context",
-    "temporarily": "temporary_context",
-    "this week": "temporary_context",
-    "today": "temporary_context",
-}
 
 
 @dataclass(slots=True)
@@ -108,7 +88,12 @@ class MemoryCandidate:
 
 
 class CuratedMemoryCurator:
-    """Heuristic curation for durable memories."""
+    """Heuristic curation for durable memories.
+
+    Design goals:
+    - Explicit memories: permissive.
+    - Inferred memories: conservative; avoid noisy project/debug chatter.
+    """
 
     def __init__(
         self,
@@ -119,6 +104,8 @@ class CuratedMemoryCurator:
         self.default_ttl_days = int(default_ttl_days)
         self.temp_ttl_days = int(temp_ttl_days)
         self.min_importance = float(min_importance)
+
+    # ---------------- explicit (user asked to remember) ----------------
 
     def build_explicit_candidate(
         self,
@@ -134,7 +121,13 @@ class CuratedMemoryCurator:
         metadata: Optional[Dict[str, Any]] = None,
     ) -> Optional[MemoryCandidate]:
         text = self._normalize(text)
-        if not text or self._looks_sensitive(text) or self._looks_internal(text):
+        if not text:
+            return None
+        if len(text) > 2000:
+            return None  # too long
+        if self._looks_sensitive(text):
+            return None
+        if self._looks_internal(text):
             return None
 
         summary = self._summarize(text, context_type)
@@ -160,6 +153,8 @@ class CuratedMemoryCurator:
             metadata_json=self._metadata_json(payload),
         )
 
+    # ---------------- inferred (auto from conversation) ----------------
+
     def curate_inferred_candidate(
         self,
         *,
@@ -172,24 +167,61 @@ class CuratedMemoryCurator:
         metadata: Optional[Dict[str, Any]] = None,
     ) -> Optional[MemoryCandidate]:
         text = self._normalize(text)
-        if not text or len(text) < 12:
-            return None
-        if self._looks_sensitive(text) or self._looks_internal(text):
-            return None
-        if not self._looks_durable(text):
-            return None
+        if not text:
+            return self._log_inferred_decision(
+                user_id, guild_id, channel_id, thread_id, source_message_id,
+                reason="too_short",
+            )
+        if len(text) < 16:
+            return self._log_inferred_decision(
+                user_id, guild_id, channel_id, thread_id, source_message_id,
+                reason="too_short",
+            )
 
-        context_type = self._classify(text)
-        importance = self._importance(text, context_type)
-        if importance < self.min_importance and context_type != "correction":
-            return None
+        if self._looks_sensitive(text):
+            return self._log_inferred_decision(
+                user_id, guild_id, channel_id, thread_id, source_message_id,
+                reason="sensitive",
+            )
+
+        if self._looks_internal(text):
+            return self._log_inferred_decision(
+                user_id, guild_id, channel_id, thread_id, source_message_id,
+                reason="internal_noise",
+            )
+
+        context_type, is_durable = self._classify_inferred(text)
+        if not is_durable:
+            return self._log_inferred_decision(
+                user_id, guild_id, channel_id, thread_id, source_message_id,
+                context_type=context_type,
+                reason="not_durable",
+            )
+
+        importance = self._importance_inferred(text, context_type)
+
+        # For temporary_context, enforce stricter threshold
+        if context_type == "temporary_context":
+            if importance < 0.6:
+                return self._log_inferred_decision(
+                    user_id, guild_id, channel_id, thread_id, source_message_id,
+                    context_type=context_type,
+                    reason="weak_temporary_context",
+                )
+        else:
+            # Non-temp memories must meet min_importance
+            if importance < self.min_importance:
+                return self._log_inferred_decision(
+                    user_id, guild_id, channel_id, thread_id, source_message_id,
+                    context_type=context_type,
+                    reason="below_importance_threshold",
+                )
 
         confidence = self._confidence(text, context_type)
         summary = self._summarize(text, context_type)
         expires_at = self._expiration_for(context_type)
 
-        payload = metadata or {}
-        return MemoryCandidate(
+        candidate = MemoryCandidate(
             memory_id=str(uuid4()),
             user_id=str(user_id),
             guild_id=str(guild_id) if guild_id is not None else None,
@@ -203,11 +235,26 @@ class CuratedMemoryCurator:
             confidence=confidence,
             source="inferred_curated",
             expires_at=expires_at,
-            metadata_json=self._metadata_json(payload),
+            metadata_json=self._metadata_json(metadata or {}),
         )
 
+        self._log_inferred_decision(
+            user_id, guild_id, channel_id, thread_id, source_message_id,
+            context_type=context_type,
+            reason="accepted",
+            importance=importance,
+            confidence=confidence,
+            ttl_days=self._ttl_for(context_type),
+        )
+
+        return candidate
+
+    # ---------------- internal helpers: normalization & filters ----------------
+
     def _normalize(self, text: str) -> str:
-        text = re.sub(r"\s+", " ", (text or "").strip())
+        if not text:
+            return ""
+        text = re.sub(r"\s+", " ", text.strip())
         return text[:2000]
 
     def _looks_sensitive(self, text: str) -> bool:
@@ -218,22 +265,262 @@ class CuratedMemoryCurator:
         lower = text.lower()
         return any(re.search(pattern, lower, flags=re.I) for pattern in _INTERNAL_PATTERNS)
 
-    def _looks_durable(self, text: str) -> bool:
+    # ---------------- internal helpers: inferred classification ----------------
+
+    def _classify_inferred(self, text: str) -> tuple[str, bool]:
+        """Return (context_type, is_durable) for inferred memories.
+
+        - Must be more selective than before.
+        - 'today', 'this week', 'for now', 'temporarily' only => temporary_context, not durable.
+        - Avoid storing normal project/debug chatter.
+        """
         lower = text.lower()
-        if any(hint in lower for hint in _DURABLE_HINTS):
+
+        # 1) Strong user preference patterns
+        if self._is_user_preference(lower):
+            return "user_preference", True
+
+        # 2) Strong recurring instructions (always/never)
+        if self._is_recurring_instruction(lower):
+            return "recurring_instruction", True
+
+        # 3) Explicit 'remember that...' with clear object
+        if self._is_strong_remember(lower):
+            return "recurring_instruction", True
+
+        # 4) Conversation decisions: we decided / the decision is
+        if self._is_conversation_decision(lower):
+            return "conversation_decision", True
+
+        # 5) Correction of bot behavior or a remembered rule
+        if self._is_bot_correction(lower):
+            return "correction", True
+
+        # 6) Project-scoped durable facts: for <project>, in <project>, etc.
+        if self._is_project_fact(lower):
+            return "project_fact", True
+
+        # 7) Server/guild rules (not just any mention of server/guild)
+        if self._is_server_fact(lower):
+            return "server_fact", True
+
+        # 8) Relationship note / inside joke
+        rel = self._is_relationship_note(lower)
+        joke = self._is_inside_joke(lower)
+        if rel:
+            return "relationship_note", True
+        if joke:
+            return "inside_joke", True
+
+        # 9) Temporary context: only for short-lived guidance
+        if self._is_temporary_context(lower):
+            return "temporary_context", False
+
+        # Default: not durable
+        return "conversation_decision", False
+
+    # ---------------- pattern matchers for inferred classification ----------------
+
+    @staticmethod
+    def _is_user_preference(lower: str) -> bool:
+        """Strong preference signals only."""
+        # Direct: "I prefer", "my preference is", etc.
+        if re.search(r"\b(i prefer|my preference|i'd prefer|i would prefer)\b", lower):
             return True
-        return bool(re.search(r"\b(i prefer|my preference|we decided|i corrected|i work on|i am working on|i always|i never)\b", lower))
+        # Strong preference without filler: "prefer short replies"
+        if bool(re.search(r"(?:^|\s)prefer\b(?:\s+\w+){1,6}", lower)):
+            return True
+        return False
 
-    def _classify(self, text: str) -> str:
-        lower = text.lower()
-        for hint, context_type in _DURABLE_HINTS.items():
-            if hint in lower:
-                return context_type
-        return "conversation_decision"
+    @staticmethod
+    def _is_recurring_instruction(lower: str) -> bool:
+        """Always/never instructions that clearly target bot behavior."""
+        # Patterns like "always reply with", "never do X", "you should always"
+        if bool(re.search(r"\b(?:you (?:should|must|have to))?\s+always\b", lower)):
+            return True
+        if bool(re.search(r"\b(?:you (?:should|must|have to))?\s+never\b", lower)):
+            return True
+        # "don't do X again" / "don't say X again"
+        if bool(re.search(r"\bdon't (?:do|say|use|assume)\b.*again\b", lower)):
+            return True
+        return False
 
-    def _importance(self, text: str, context_type: str) -> float:
+    @staticmethod
+    def _is_strong_remember(lower: str) -> bool:
+        """
+        Only treat 'remember' as durable when there is a clear object.
+
+        Store:
+          - "remember that I prefer X"
+          - "remember this for discord-bot: X"
+          - "remember, X is the rule"
+
+        Do NOT store:
+          - "remember when..."
+          - "I don't remember"
+          - "do you remember this?"
+        """
+        # Exclude weak patterns first
+        if any(p in lower for p in ["don't remember", "i don't remember", "you remember"]):
+            return False
+        if any(lower.startswith(p) for p in ["remember when", "do you remember"]):
+            return False
+
+        # Positive: "remember that", "remember this", "remember, ..."
+        if bool(re.search(r"\bremember\s+(?:that|this|it)\b", lower)):
+            return True
+        if bool(re.search(r"\bremember,\s+\w", lower)):
+            return True
+        return False
+
+    @staticmethod
+    def _is_conversation_decision(lower: str) -> bool:
+        """Decisions framed as group/project choices."""
+        # "we decided", "the decision is"
+        if bool(re.search(r"\bwe decided\b", lower)):
+            return True
+        if bool(re.search(r"\bthe decision (?:is|for)\b", lower)):
+            return True
+        return False
+
+    @staticmethod
+    def _is_bot_correction(lower: str) -> bool:
+        """
+        Only treat as correction when it corrects bot behavior or a rule,
+        not just any mention of 'correct'/'wrong' in code talk.
+
+        Store:
+          - "you were wrong about X; the correct rule is Y"
+          - "that's wrong, ..."
+          - "actually, ..."
+          - "don't say/do that again"
+          - "remember, X is Y not Z"
+
+        Reject:
+          - "this code is wrong"
+          - "wrong output"
+          - "correct this function"
+        """
+        # Direct corrections to bot:
+        if bool(re.search(r"\byou (?:were|are) (?:wrong|incorrect)\b", lower)):
+            return True
+        if bool(re.search(r"\bthat's wrong\b", lower)):
+            return True
+        if bool(re.search(r"\bthe correct rule is\b", lower)):
+            return True
+
+        # "actually, ..." as correction:
+        if bool(re.search(r"^\s*actually,\s+", lower)):
+            return True
+
+        # "don't say/do that again":
+        if bool(re.search(r"\bdon't (?:do|say|use)\b.*again\b", lower)):
+            return True
+
+        # "remember, X is Y not Z" style:
+        if bool(re.search(r"\bremember,?\s+.*(?:is|should be).*not\b", lower)):
+            return True
+
+        return False
+
+    @staticmethod
+    def _is_project_fact(lower: str) -> bool:
+        """
+        Only treat as project_fact when it looks like a durable project-scoped rule
+        with an explicit project identifier, not generic task chatter.
+
+        Accept:
+          - "discord-bot must never expose raw tokens"
+          - "we decided discord-bot should ..."
+          - "the rule for discord-bot is ..."
+          - "for the discord-bot project, ..."
+
+        Reject:
+          - "I'm working on a bug"
+          - "this project is annoying"
+          - "the code is wrong"
+          - "for discord-bot, always reply ..." (too vague / old pattern)
+        """
+        # Exclude task chatter and generic complaint/debug phrasing.
+        if bool(re.search(r"\b(?:working on|fixing|debugging)\b", lower)):
+            return False
+        if bool(re.search(r"\b(?:this|that|the)\s+project\b", lower)):
+            return False
+        if bool(re.search(r"\b(?:the\s+)?code\b.*\b(?:wrong|broken|buggy)\b", lower)):
+            return False
+        if bool(re.search(r"\b(?:annoying|frustrating|bad)\b", lower)) and "project" in lower:
+            return False
+
+        # Patterns require an explicit project identifier.
+        if bool(re.search(r"\bfor (?:the )?([a-z0-9][\w-]{1,})\s+project\b.*[,;:]", lower)):
+            return True
+        if bool(re.search(r"\bwe decided\s+([a-z0-9][\w-]{1,})\s+should\b", lower)):
+            return True
+        if bool(re.search(r"\bthe rule for\s+([a-z0-9][\w-]{1,})\s+is\b", lower)):
+            return True
+        if bool(re.search(r"\b([a-z0-9][\w-]{1,})\s+(uses|is|should|must|has to)\b", lower)):
+            return True
+
+        return False
+
+    @staticmethod
+    def _is_server_fact(lower: str) -> bool:
+        """
+        Only treat as server_fact when it's a clear rule/fact about the server,
+        not just any mention of 'server' or 'guild'.
+        """
+        # Exclude generic mentions:
+        if bool(re.search(r"\b(?:working on|fixing|debugging)\b", lower)):
+            return False
+
+        # Patterns:
+        if bool(re.search(r"\b(this server|the server)\s+(should|must|uses|is)\b", lower)):
+            return True
+        if bool(re.search(r"\b(for this server|for the server),\s+", lower)):
+            return True
+        # guild-specific rule:
+        if bool(re.search(r"\b(this guild|the guild)\s+(should|must|uses|is)\b", lower)):
+            return True
+
+        return False
+
+    @staticmethod
+    def _is_relationship_note(lower: str) -> bool:
+        # "our relationship", "we're close"
+        if bool(re.search(r"\b(?:our\s+)?relationship\b", lower)):
+            return True
+        return False
+
+    @staticmethod
+    def _is_inside_joke(lower: str) -> bool:
+        if bool(re.search(r"\b(?:inside joke|running joke)\b", lower)):
+            return True
+        return False
+
+    @staticmethod
+    def _is_temporary_context(lower: str) -> bool:
+        """
+        Only treat as temporary when it's clearly short-lived guidance.
+        Do not treat 'today' as durable on its own; it must be combined with
+        a weak/temporary phrase.
+        """
+        # Strong temp markers:
+        if any(p in lower for p in ["for now", "temporarily", "this week"]):
+            return True
+        # 'today' only when paired with temporary-scope language:
+        if "today" in lower and any(
+            p in lower
+            for p in ["for now", "until", "just for today", "temporarily"]
+        ):
+            return True
+        return False
+
+    # ---------------- importance & confidence (inferred) ----------------
+
+    def _importance_inferred(self, text: str, context_type: str) -> float:
         lower = text.lower()
         score = 0.55
+
         if context_type in {"user_preference", "recurring_instruction"}:
             score += 0.25
         elif context_type in {"project_fact", "server_fact", "conversation_decision", "correction"}:
@@ -242,10 +529,13 @@ class CuratedMemoryCurator:
             score += 0.10
         elif context_type == "temporary_context":
             score += 0.05
-        if "always" in lower or "never" in lower:
+
+        # Small boosts for strong language
+        if any(w in lower for w in ["always", "never"]):
             score += 0.05
-        if "important" in lower or "remember" in lower:
+        if any(w in lower for w in ["important", "remember"]):
             score += 0.05
+
         return max(0.0, min(1.0, score))
 
     def _confidence(self, text: str, context_type: str) -> float:
@@ -258,8 +548,9 @@ class CuratedMemoryCurator:
             score += 0.03
         return max(0.0, min(1.0, score))
 
+    # ---------------- summary & expiration ----------------
+
     def _summarize(self, text: str, context_type: str) -> str:
-        summary = text
         prefix_map = {
             "user_preference": "Prefers",
             "project_fact": "Project fact:",
@@ -272,22 +563,94 @@ class CuratedMemoryCurator:
             "temporary_context": "Temporary context:",
         }
         prefix = prefix_map.get(context_type, "Memory:")
-        summary = summary.strip().rstrip(".")
+        summary = text.strip().rstrip(".")
         if len(summary) > 220:
             summary = summary[:217].rstrip() + "..."
         return f"{prefix} {summary}"
 
     def _expiration_for(self, context_type: str) -> Optional[str]:
-        if context_type == "temporary_context":
-            days = self.temp_ttl_days
-        else:
-            days = self.default_ttl_days
+        days = self._ttl_for(context_type)
         if days <= 0:
             return None
         return (datetime.now(timezone.utc) + timedelta(days=days)).isoformat()
 
-    def _metadata_json(self, metadata: Dict[str, Any]) -> str:
+    def _ttl_for(self, context_type: str) -> int:
+        if context_type == "temporary_context":
+            return self.temp_ttl_days
+        return self.default_ttl_days
+
+    @staticmethod
+    def _metadata_json(metadata: Dict[str, Any]) -> str:
         try:
-            return __import__("json").dumps(metadata, ensure_ascii=False, separators=(",", ":"))
+            return json.dumps(metadata, ensure_ascii=False, separators=(",", ":"))
         except Exception:
             return "{}"
+
+    # ---------------- structured decision logging ----------------
+
+    @staticmethod
+    def _log_inferred_decision(
+        user_id: str,
+        guild_id: Optional[str],
+        channel_id: Optional[str],
+        thread_id: Optional[str],
+        source_message_id: Optional[str],
+        context_type: Optional[str] = None,
+        reason: str = "rejected",
+        importance: Optional[float] = None,
+        confidence: Optional[float] = None,
+        ttl_days: Optional[int] = None,
+    ) -> None:
+        """Log an inferred memory decision in a structured way.
+
+        Does not log raw message content to avoid leaking secrets.
+        """
+        extra = {
+            "subsys": "memory",
+            "event": "inferred_memory_decision",
+            "user_id": user_id,
+            "guild_id": guild_id,
+            "channel_id": channel_id,
+            "thread_id": thread_id,
+            "source_message_id": source_message_id,
+            "reason": reason,
+        }
+        if context_type is not None:
+            extra["context_type"] = context_type
+        if importance is not None:
+            extra["importance"] = importance
+        if confidence is not None:
+            extra["confidence"] = confidence
+        if ttl_days is not None:
+            extra["ttl_days"] = ttl_days
+
+        if reason == "accepted":
+            logger.info("Inferred memory accepted", extra=extra)
+        else:
+            logger.debug("Inferred memory rejected", extra=extra)
+
+
+# Legacy compatibility wrapper for existing callers that relied on _DURABLE_HINTS.
+# This is intentionally kept small and not used by new inferred logic.
+_DURABLE_HINTS: Dict[str, str] = {
+    "prefer": "user_preference",
+    "prefers": "user_preference",
+    "call me": "user_preference",
+    "always": "recurring_instruction",
+    "never": "recurring_instruction",
+    "remember": "recurring_instruction",
+    "decided": "conversation_decision",
+    "decision": "conversation_decision",
+    "correct": "correction",
+    "wrong": "correction",
+    "project": "project_fact",
+    "working on": "project_fact",
+    "server": "server_fact",
+    "guild": "server_fact",
+    "relationship": "relationship_note",
+    "inside joke": "inside_joke",
+    "for now": "temporary_context",
+    "temporarily": "temporary_context",
+    "this week": "temporary_context",
+    "today": "temporary_context",
+}

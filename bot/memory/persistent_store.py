@@ -524,3 +524,59 @@ class PersistentMemoryStore:
                 return [MemoryRecord.from_row(row) for row in rows]
             finally:
                 conn.close()
+
+    async def find_by_normalized_text(
+        self,
+        *,
+        user_id: str,
+        guild_id: Optional[str],
+        normalized_text: str,
+    ) -> Optional[MemoryRecord]:
+        """
+        Find an active memory with the same (user+guild) and identical
+        normalized summary text for deduplication.
+        """
+        await self.initialize()
+        return await asyncio.to_thread(
+            self._find_by_normalized_text_sync,
+            str(user_id),
+            str(guild_id) if guild_id is not None else None,
+            normalized_text,
+        )
+
+    def _find_by_normalized_text_sync(
+        self,
+        user_id: str,
+        guild_id: Optional[str],
+        normalized_text: str,
+    ) -> Optional[MemoryRecord]:
+        # Use a LIKE match on summary with normalized input for robustness.
+        like = f"%{normalized_text}%"
+        clauses: list[str] = [
+            "deleted_at IS NULL",
+            "(expires_at IS NULL OR expires_at > ?)",
+            "user_id = ?",
+        ]
+        params: list[Any] = [self._now_iso(), user_id]
+
+        if guild_id is not None:
+            clauses.append("guild_id = ?")
+            params.append(guild_id)
+
+        # Match summary that fully contains the normalized text
+        clauses.append("LOWER(summary) LIKE LOWER(?)")
+        params.append(like)
+
+        sql = (
+            "SELECT * FROM curated_memories WHERE "
+            + " AND ".join(clauses)
+            + " ORDER BY datetime(updated_at) DESC LIMIT 1"
+        )
+
+        with self._lock:
+            conn = self._connect()
+            try:
+                row = conn.execute(sql, params).fetchone()
+                return MemoryRecord.from_row(row) if row else None
+            finally:
+                conn.close()

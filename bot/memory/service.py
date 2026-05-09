@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -330,7 +331,16 @@ class CuratedMemoryService:
             return
         await self.store.initialize()
         await self.semantic_store.initialize()
+
         for candidate in candidates:
+            # Only dedupe inferred memories; explicit ones are user-intended.
+            if candidate.source == "inferred_curated":
+                maybe_merged = await self._dedupe_or_merge(candidate)
+                if maybe_merged is None:
+                    # Candidate was merged into existing memory; skip inserting new one.
+                    continue
+                candidate = maybe_merged
+
             record = candidate.to_record()
             try:
                 chroma_id = await self.semantic_store.upsert(
@@ -358,6 +368,172 @@ class CuratedMemoryService:
                     extra={"memory_id": candidate.memory_id},
                 )
                 raise
+
+    async def _dedupe_or_merge(self, candidate: MemoryCandidate) -> Optional[MemoryCandidate]:
+        """
+        Before inserting an inferred memory, check for near-duplicate.
+        - If found, update that existing memory (summary/importance/confidence/timestamp).
+        - Returns the original candidate if we should still insert it as-new,
+          or None if it was merged and should be skipped.
+        """
+        query_text = candidate.summary or candidate.text
+        if not query_text:
+            return candidate
+
+        # 1) Exact normalized text match in same scope (user + guild)
+        existing = await self.store.find_by_normalized_text(
+            user_id=candidate.user_id,
+            guild_id=candidate.guild_id,
+            normalized_text=self._normalize_for_dedupe(query_text),
+        )
+        if existing:
+            await self._merge_into_existing(existing, candidate)
+            logger.info(
+                "Inferred memory deduped (exact match)",
+                extra={
+                    "subsys": "memory",
+                    "event": "inferred_memory_deduped",
+                    "reason": "duplicate_merged",
+                    "user_id": candidate.user_id,
+                    "guild_id": candidate.guild_id,
+                    "existing_memory_id": existing.memory_id,
+                },
+            )
+            return None  # merged; do not insert candidate
+
+        # 2) Semantic similarity-based dedupe
+        try:
+            results = await self.semantic_store.query(
+                query_text,
+                top_k=3,
+                where={"user_id": candidate.user_id},
+            )
+        except Exception:
+            # If semantic search fails, allow insertion.
+            return candidate
+
+        SIMILARITY_THRESHOLD = 0.85
+        for item in results:
+            metadata = item.get("metadata") or {}
+            if (
+                metadata.get("source") != "inferred_curated"
+                or float(metadata.get("confidence", 1)) < 0.4
+            ):
+                continue
+
+            semantic_score = float(item.get("semantic_score", 0))
+            if semantic_score < SIMILARITY_THRESHOLD:
+                break
+
+            existing_id = item.get("memory_id")
+            if not existing_id:
+                continue
+
+            existing = await self.store.get_memory(existing_id)
+            if not existing or existing.user_id != candidate.user_id:
+                continue
+
+            # Prefer merging only when context_type matches or is compatible.
+            if (
+                existing.context_type != candidate.context_type
+                and not self._context_types_compatible(
+                    existing.context_type, candidate.context_type
+                )
+            ):
+                continue
+
+            await self._merge_into_existing(existing, candidate)
+            logger.info(
+                "Inferred memory deduped (semantic)",
+                extra={
+                    "subsys": "memory",
+                    "event": "inferred_memory_deduped",
+                    "reason": "duplicate_merged",
+                    "user_id": candidate.user_id,
+                    "guild_id": candidate.guild_id,
+                    "existing_memory_id": existing.memory_id,
+                    "semantic_score": semantic_score,
+                },
+            )
+            return None  # merged; do not insert candidate
+
+        return candidate  # no close match; insert as new
+
+    @staticmethod
+    def _normalize_for_dedupe(text: str) -> str:
+        import re as _re
+        t = (text or "").lower().strip()
+        t = _re.sub(r"\s+", " ", t)
+        return t
+
+    async def _merge_into_existing(self, existing: MemoryRecord, candidate: MemoryCandidate) -> None:
+        """
+        Merge candidate into existing memory:
+        - Update summary if candidate is longer/more specific.
+        - Increase importance/confidence slightly.
+        - Refresh updated_at.
+        """
+        now = datetime.now(timezone.utc).isoformat()
+
+        # Use candidate's summary if it's more informative (longer and meaningful)
+        new_summary = (
+            candidate.summary
+            if len(candidate.summary or "") > len(existing.summary or "")
+            else existing.summary
+        )
+
+        # Slightly boost importance/confidence, capped at 1.0
+        new_importance = min(
+            1.0,
+            float(existing.importance) + 0.05,
+        )
+        new_confidence = min(
+            1.0,
+            float(existing.confidence) + 0.03,
+        )
+
+        # Update the SQLite row
+        updated = existing.to_dict()
+        updated["summary"] = new_summary or existing.summary
+        updated["importance"] = new_importance
+        updated["confidence"] = new_confidence
+        updated["updated_at"] = now
+        updated_record = MemoryRecord(**updated)
+
+        await self.store.upsert_memory(updated_record)
+
+        # Upsert semantic vector with new summary
+        await self.semantic_store.upsert(
+            existing.memory_id,
+            new_summary or existing.summary,
+            {
+                "memory_id": existing.memory_id,
+                "user_id": existing.user_id,
+                "guild_id": existing.guild_id,
+                "channel_id": existing.channel_id,
+                "thread_id": existing.thread_id,
+                "context_type": existing.context_type,
+                "created_at": existing.created_at,
+                "expires_at": existing.expires_at,
+                "importance": new_importance,
+                "confidence": new_confidence,
+                "source": existing.source,
+            },
+        )
+
+    @staticmethod
+    def _context_types_compatible(a: str, b: str) -> bool:
+        # Allow merging within similar types.
+        if a == b:
+            return True
+        close = {
+            "user_preference",
+            "recurring_instruction",
+            "project_fact",
+            "server_fact",
+            "conversation_decision",
+        }
+        return a in close and b in close
 
     async def _persist_candidate(self, candidate: MemoryCandidate) -> None:
         await self._persist_batch([candidate])

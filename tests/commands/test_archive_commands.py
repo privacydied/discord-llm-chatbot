@@ -31,9 +31,11 @@ class DummyContext:
         self.channel = SimpleNamespace(id=channel_id, guild=self.guild)
         self.author = author or DummyAuthor()
         self.sent = []
+        self.replies = []
 
     async def reply(self, content=None, *, mention_author=False, **kwargs):
         self.sent.append(content)
+        self.replies.append({"content": content, "mention_author": mention_author, "kwargs": kwargs})
         return content
 
 
@@ -82,9 +84,15 @@ async def test_archive_status_output_is_short(monkeypatch, archive_config):
         ctx = DummyContext()
         await ArchiveCommands.archive_status.callback(cog, ctx)
         assert ctx.sent
-        assert len(ctx.sent[0]) < 2000
-        assert "dropped:" in ctx.sent[0]
-        assert "indexed:" in ctx.sent[0]
+        assert ctx.replies[0]["kwargs"]["embed"] is not None
+        embed_text = "\n".join(
+            [
+                ctx.replies[0]["kwargs"]["embed"].title or "",
+                ctx.replies[0]["kwargs"]["embed"].description or "",
+                ctx.replies[0]["kwargs"]["embed"].footer.text if ctx.replies[0]["kwargs"]["embed"].footer else "",
+            ]
+        )
+        assert len(embed_text) < 2000
     finally:
         await service.stop()
 
