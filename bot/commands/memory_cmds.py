@@ -208,19 +208,29 @@ class MemoryCommands(commands.Cog):
             self._distill_once_tasks.pop(guild_id, None)
 
         distiller = await get_memory_distiller(self.bot)
-        await ctx.send("⏳ Started memory distillation in the background. I’ll report back when it finishes.")
+        start_embed = discord.Embed(
+            title="Memory Distillation Started",
+            description="Running `!memory-distill-once` in the background.",
+            color=discord.Color.gold(),
+        )
+        start_embed.add_field(name="Mode", value="background", inline=True)
+        start_embed.add_field(name="Status", value="running", inline=True)
+        await ctx.send(embed=start_embed)
 
         async def _run_and_report() -> None:
             try:
                 result = await distiller.run_once()
-                await ctx.send(
-                    "Distillation complete: "
-                    f"scanned={result.get('scanned_count', 0)} "
-                    f"candidates={result.get('candidate_count', 0)} "
-                    f"accepted={result.get('accepted_count', 0)} "
-                    f"rejected={result.get('rejected_count', 0)} "
-                    f"merged={result.get('merged_count', 0)} dry_run={result.get('dry_run', True)}"
+                done_embed = discord.Embed(
+                    title="Memory Distillation Complete",
+                    color=discord.Color.green(),
                 )
+                done_embed.add_field(name="Scanned", value=str(result.get('scanned_count', 0)), inline=True)
+                done_embed.add_field(name="Candidates", value=str(result.get('candidate_count', 0)), inline=True)
+                done_embed.add_field(name="Accepted", value=str(result.get('accepted_count', 0)), inline=True)
+                done_embed.add_field(name="Rejected", value=str(result.get('rejected_count', 0)), inline=True)
+                done_embed.add_field(name="Merged", value=str(result.get('merged_count', 0)), inline=True)
+                done_embed.add_field(name="Dry run", value=str(result.get('dry_run', True)), inline=True)
+                await ctx.send(embed=done_embed)
             except Exception as exc:
                 logger.exception("Background memory distillation failed")
                 await ctx.send(f"❌ Memory distillation failed: `{exc}`")

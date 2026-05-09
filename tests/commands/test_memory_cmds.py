@@ -260,14 +260,15 @@ async def test_memory_distill_once_starts_background_task(memory_cog, mock_admin
     await memory_cog.memory_distill_once.callback(memory_cog, mock_admin_ctx)
     await started.wait()
 
-    assert mock_admin_ctx.send.call_args_list[0].args[0].startswith("⏳ Started memory distillation in the background")
+    assert mock_admin_ctx.send.call_args_list[0].kwargs["embed"].title == "Memory Distillation Started"
     assert memory_cog._distill_once_tasks[str(mock_admin_ctx.guild.id)] is not None
     assert not memory_cog._distill_once_tasks[str(mock_admin_ctx.guild.id)].done()
 
     release.set()
     await asyncio.sleep(0)
 
-    assert any("Distillation complete:" in call.args[0] for call in mock_admin_ctx.send.call_args_list)
+    complete_embeds = [call.kwargs.get("embed") for call in mock_admin_ctx.send.call_args_list if call.kwargs.get("embed")]
+    assert any(embed.title == "Memory Distillation Complete" for embed in complete_embeds)
 
 
 @pytest.mark.asyncio
