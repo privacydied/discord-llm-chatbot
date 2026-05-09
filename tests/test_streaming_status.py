@@ -239,6 +239,44 @@ async def test_execute_action_skips_failed_typing_and_still_replies(monkeypatch)
 
 
 @pytest.mark.asyncio
+async def test_execute_action_uses_typing_indicator(monkeypatch):
+    intents = discord.Intents.none()
+    bot = LLMBot(
+        command_prefix="!",
+        intents=intents,
+        config={"STREAMING_ENABLE": False},
+    )
+    bot.enhanced_context_manager = None
+
+    class CountingTyping:
+        entered = 0
+        exited = 0
+
+        async def __aenter__(self):
+            type(self).entered += 1
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            type(self).exited += 1
+            return False
+
+    class CountingChannel(FakeChannel):
+        def typing(self):
+            return CountingTyping()
+
+    ch = CountingChannel()
+    incoming = FakeMessage(channel=ch, content="hello")
+    action = BotAction(content="typing restored", embeds=[])
+
+    await bot._execute_action(incoming, action)
+
+    assert CountingTyping.entered == 1
+    assert CountingTyping.exited == 1
+    assert len(ch.sent_messages) == 1
+    assert ch.sent_messages[0].content == "typing restored"
+
+
+@pytest.mark.asyncio
 async def test_execute_action_retries_transient_reply_failure(monkeypatch):
     intents = discord.Intents.none()
     bot = LLMBot(

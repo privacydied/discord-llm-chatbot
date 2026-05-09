@@ -330,9 +330,61 @@ class LLMBot(commands.Bot):
     async def _optional_typing(
         self, channel, *, base_extra: Optional[Dict[str, Any]] = None
     ):
-        """Typing is disabled here to avoid Discord typing rate limits."""
-        yield
-        return
+        """Enter typing() when available, but don't fail the send path if it errors."""
+        typing_factory = getattr(channel, "typing", None)
+        if not callable(typing_factory):
+            yield
+            return
+
+        ctx = None
+        entered = False
+        for attempt in range(1, 4):
+            try:
+                ctx = typing_factory()
+                await ctx.__aenter__()
+                entered = True
+                break
+            except discord.HTTPException as exc:
+                if not self._is_retryable_discord_http_error(exc):
+                    try:
+                        self.logger.warning(
+                            "discord.typing.skip | non_retryable_error",
+                            extra={**(base_extra or {}), "event": "discord.typing.skip"},
+                        )
+                    except Exception:
+                        pass
+                    ctx = None
+                    break
+
+                if attempt >= 3:
+                    try:
+                        self.logger.warning(
+                            f"discord.typing.skip | retries_exhausted status={getattr(exc, 'status', 'n/a')}",
+                            extra={**(base_extra or {}), "event": "discord.typing.skip"},
+                        )
+                    except Exception:
+                        pass
+                    ctx = None
+                    break
+
+                delay = self._discord_retry_delay(exc, attempt)
+                try:
+                    self.logger.warning(
+                        f"discord.retry | op=typing attempt={attempt}/3 status={getattr(exc, 'status', 'n/a')} delay={delay:.2f}s details={str(exc)}",
+                        extra={**(base_extra or {}), "event": "discord.retry", "op": "typing"},
+                    )
+                except Exception:
+                    pass
+                await asyncio.sleep(delay)
+
+        try:
+            yield
+        finally:
+            if entered and ctx is not None:
+                try:
+                    await ctx.__aexit__(None, None, None)
+                except Exception:
+                    pass
 
     async def process_commands(self, message: discord.Message) -> Optional[Any]:
         """
