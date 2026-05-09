@@ -103,6 +103,14 @@ def _make_discord_server_error(status: int = 503, message: str = "service unavai
     return discord.DiscordServerError(response, message)
 
 
+def _make_discord_http_exception(status: int = 429, message: str = "rate limited"):
+    response = MagicMock()
+    response.status = status
+    response.reason = "Too Many Requests"
+    response.headers = {}
+    return discord.HTTPException(response, message)
+
+
 @pytest.mark.asyncio
 async def test_streaming_lifecycle_and_final_edit(monkeypatch):
     # Configure a minimal bot instance (no network). Intents and prefix are arbitrary here.
@@ -265,15 +273,52 @@ async def test_execute_action_uses_typing_indicator(monkeypatch):
             return CountingTyping()
 
     ch = CountingChannel()
-    incoming = FakeMessage(channel=ch, content="hello")
-    action = BotAction(content="typing restored", embeds=[])
+    incoming = FakeMessage(channel=ch, content="hello there, please type while you are preparing the reply")
+    action = BotAction(content="typing restored because this is a longer response", embeds=[])
 
     await bot._execute_action(incoming, action)
 
     assert CountingTyping.entered == 1
     assert CountingTyping.exited == 1
     assert len(ch.sent_messages) == 1
-    assert ch.sent_messages[0].content == "typing restored"
+    assert ch.sent_messages[0].content == "typing restored because this is a longer response"
+
+
+@pytest.mark.asyncio
+async def test_execute_action_suppresses_typing_after_429(monkeypatch):
+    intents = discord.Intents.none()
+    bot = LLMBot(
+        command_prefix="!",
+        intents=intents,
+        config={"STREAMING_ENABLE": False},
+    )
+    bot.enhanced_context_manager = None
+
+    class RateLimitedTyping:
+        entered = 0
+
+        async def __aenter__(self):
+            type(self).entered += 1
+            raise _make_discord_http_exception(status=429)
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    class RateLimitedChannel(FakeChannel):
+        def typing(self):
+            return RateLimitedTyping()
+
+    ch = RateLimitedChannel()
+    incoming = FakeMessage(channel=ch, content="this is a long enough response to try typing")
+    action = BotAction(content="This response is also long enough to try typing", embeds=[])
+
+    await bot._execute_action(incoming, action)
+    await bot._execute_action(FakeMessage(channel=ch, content="another long request"), action)
+
+    assert RateLimitedTyping.entered == 1
+    assert len(ch.sent_messages) == 2
+    assert ch.sent_messages[0].content == action.content
+    assert ch.sent_messages[1].content == action.content
 
 
 @pytest.mark.asyncio

@@ -5,6 +5,7 @@ import asyncio
 import collections
 import os
 import sys
+import time
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Optional, Dict, List, Tuple, Any
 
@@ -166,6 +167,7 @@ class LLMBot(commands.Bot):
         self._active_long_running_tasks: Dict[str, asyncio.Task] = {}  # task_id -> task
         self._task_metadata: Dict[str, Dict[str, Any]] = {}  # task_id -> metadata
         self._task_lock = asyncio.Lock()  # [BUGFIX] prevent callback race on task tracking dicts
+        self._typing_suppressed_until: Dict[int, float] = {}
 
         # Idempotency guard to prevent duplicate initialization [DRY][REH]
         self._boot_completed = False
@@ -328,54 +330,69 @@ class LLMBot(commands.Bot):
 
     @asynccontextmanager
     async def _optional_typing(
-        self, channel, *, base_extra: Optional[Dict[str, Any]] = None
+        self, channel, *, base_extra: Optional[Dict[str, Any]] = None, enabled: bool = True
     ):
         """Enter typing() when available, but don't fail the send path if it errors."""
+        if not enabled:
+            yield
+            return
+
         typing_factory = getattr(channel, "typing", None)
+        channel_id = getattr(channel, "id", None)
+        channel_key = channel_id if channel_id is not None else id(channel)
+        now = time.monotonic()
+
+        suppressed_until = self._typing_suppressed_until.get(channel_key, 0.0)
+        if now < suppressed_until:
+            yield
+            return
+
         if not callable(typing_factory):
             yield
             return
 
         ctx = None
         entered = False
-        for attempt in range(1, 4):
+        try:
+            ctx = typing_factory()
+            await ctx.__aenter__()
+            entered = True
+        except discord.HTTPException as exc:
+            if getattr(exc, "status", None) == 429:
+                self._typing_suppressed_until[channel_key] = now + 300.0
+            else:
+                self._typing_suppressed_until[channel_key] = now + 60.0
             try:
-                ctx = typing_factory()
-                await ctx.__aenter__()
-                entered = True
-                break
-            except discord.HTTPException as exc:
-                if not self._is_retryable_discord_http_error(exc):
-                    try:
-                        self.logger.warning(
-                            "discord.typing.skip | non_retryable_error",
-                            extra={**(base_extra or {}), "event": "discord.typing.skip"},
-                        )
-                    except Exception:
-                        pass
-                    ctx = None
-                    break
-
-                if attempt >= 3:
-                    try:
-                        self.logger.warning(
-                            f"discord.typing.skip | retries_exhausted status={getattr(exc, 'status', 'n/a')}",
-                            extra={**(base_extra or {}), "event": "discord.typing.skip"},
-                        )
-                    except Exception:
-                        pass
-                    ctx = None
-                    break
-
-                delay = self._discord_retry_delay(exc, attempt)
-                try:
-                    self.logger.warning(
-                        f"discord.retry | op=typing attempt={attempt}/3 status={getattr(exc, 'status', 'n/a')} delay={delay:.2f}s details={str(exc)}",
-                        extra={**(base_extra or {}), "event": "discord.retry", "op": "typing"},
-                    )
-                except Exception:
-                    pass
-                await asyncio.sleep(delay)
+                self.logger.warning(
+                    "discord.typing.skip | enter_failed",
+                    extra={
+                        "event": "discord.typing.skip",
+                        "channel_id": channel_id,
+                        "error_type": type(exc).__name__,
+                        "error": str(exc),
+                        "status": getattr(exc, "status", None),
+                    },
+                )
+            except Exception:
+                pass
+            yield
+            return
+        except Exception as exc:
+            self._typing_suppressed_until[channel_key] = now + 60.0
+            try:
+                self.logger.warning(
+                    "discord.typing.skip | enter_failed",
+                    extra={
+                        "event": "discord.typing.skip",
+                        "channel_id": channel_id,
+                        "error_type": type(exc).__name__,
+                        "error": str(exc),
+                    },
+                )
+            except Exception:
+                pass
+            yield
+            return
 
         try:
             yield
@@ -1621,7 +1638,13 @@ class LLMBot(commands.Bot):
             extra={**base_extra, "event": "dispatch.send.attempt"},
         )
 
-        async with self._optional_typing(message.channel, base_extra=base_extra):
+        typing_enabled = bool(content.strip()) and (
+            needs_chunking or embed_count > 0 or file_count > 0 or len(content.strip()) >= 30
+        )
+
+        async with self._optional_typing(
+            message.channel, base_extra=base_extra, enabled=typing_enabled
+        ):
             try:
                 if needs_chunking and (content or action.embeds or files):
                     sent_message = await self._send_chunked_reply(
