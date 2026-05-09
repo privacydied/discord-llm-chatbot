@@ -172,6 +172,13 @@ class MemoryCommands(commands.Cog):
         running_task = self._distill_once_tasks.get(str(ctx.guild.id))
         running = bool(running_task and not running_task.done())
         last_run = status.get("last_run") or {}
+        scanned_count = int(last_run.get("scanned_count", 0) or 0)
+        candidate_count = int(last_run.get("candidate_count", 0) or 0)
+        rejected_count = int(last_run.get("rejected_count", 0) or 0)
+        accepted_count = int(last_run.get("accepted_count", 0) or 0)
+        merged_count = int(last_run.get("merged_count", 0) or 0)
+        skipped_early_count = max(0, scanned_count - candidate_count)
+        candidate_rejected_count = max(0, rejected_count - skipped_early_count)
         embed = discord.Embed(
             title="Memory Distiller Status",
             color=discord.Color.blue() if status.get("enabled") else discord.Color.dark_grey(),
@@ -183,16 +190,19 @@ class MemoryCommands(commands.Cog):
         embed.add_field(name="Backlog", value=str(status.get("backlog")), inline=True)
         embed.add_field(name="Batch size", value=str(status.get("batch_size")), inline=True)
         embed.add_field(name="Interval", value=f"{status.get('interval_seconds')}s", inline=True)
-        embed.add_field(
-            name="Last run",
-            value=(
-                f"scanned={last_run.get('scanned_count', 0)} accepted={last_run.get('accepted_count', 0)} "
-                f"rejected={last_run.get('rejected_count', 0)} merged={last_run.get('merged_count', 0)}"
-                if last_run
-                else "none"
-            ),
-            inline=False,
-        )
+        embed.add_field(name="Scanned", value=str(scanned_count), inline=True)
+        embed.add_field(name="Skipped early", value=str(skipped_early_count), inline=True)
+        embed.add_field(name="Candidate rejected", value=str(candidate_rejected_count), inline=True)
+        embed.add_field(name="Accepted", value=str(accepted_count), inline=True)
+        embed.add_field(name="Merged", value=str(merged_count), inline=True)
+        if last_run:
+            embed.add_field(
+                name="Last run",
+                value=(
+                    f"candidate_count={candidate_count} total_rejected={rejected_count}"
+                ),
+                inline=False,
+            )
         await ctx.send(embed=embed)
 
     @commands.command(name="memory-distill-once", aliases=["memory-distil-once"])

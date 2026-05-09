@@ -285,7 +285,13 @@ async def test_memory_distill_status_command_sends_embed(memory_cog, mock_admin_
                 "backlog": 12,
                 "batch_size": 200,
                 "interval_seconds": 900,
-                "last_run": {"scanned_count": 5, "accepted_count": 1, "rejected_count": 4, "merged_count": 0},
+                "last_run": {
+                    "scanned_count": 12,
+                    "candidate_count": 10,
+                    "accepted_count": 7,
+                    "rejected_count": 3,
+                    "merged_count": 2,
+                },
             }
 
     fake = FakeDistiller()
@@ -297,7 +303,13 @@ async def test_memory_distill_status_command_sends_embed(memory_cog, mock_admin_
     embed = mock_admin_ctx.send.call_args.kwargs["embed"]
     assert isinstance(embed, discord.Embed)
     assert embed.title == "Memory Distiller Status"
-    assert any(field.name == "Running" and field.value == "False" for field in embed.fields)
+    field_values = {field.name: field.value for field in embed.fields}
+    assert field_values["Scanned"] == "12"
+    assert field_values["Skipped early"] == "2"
+    assert field_values["Candidate rejected"] == "1"
+    assert field_values["Accepted"] == "7"
+    assert field_values["Merged"] == "2"
+    assert field_values["Running"] == "False"
 
 
 @pytest.mark.asyncio
