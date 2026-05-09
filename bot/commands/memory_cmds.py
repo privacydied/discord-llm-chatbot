@@ -42,6 +42,7 @@ class MemoryCommands(commands.Cog):
         self.config = load_config()
         self.router = bot.router
         self.prefix = self.config.get("COMMAND_PREFIX", "!")
+        self._distill_once_tasks: dict[str, asyncio.Task] = {}
 
     async def _add_curated_memory(
         self,
@@ -162,12 +163,14 @@ class MemoryCommands(commands.Cog):
     async def memory_search_direct(self, ctx, *, query: str):
         await self._search_curated_memories(ctx, query=query)
 
-    @commands.command(name="memory-distill-status")
+    @commands.command(name="memory-distill-status", aliases=["memory-distil-status"])
     @commands.guild_only()
     @commands.has_permissions(administrator=True)
     async def memory_distill_status(self, ctx):
         distiller = await get_memory_distiller(self.bot)
         status = await distiller.get_status(guild_id=str(ctx.guild.id))
+        running_task = self._distill_once_tasks.get(str(ctx.guild.id))
+        running = bool(running_task and not running_task.done())
         last_run = status.get("last_run") or {}
         embed = discord.Embed(
             title="Memory Distiller Status",
@@ -176,6 +179,7 @@ class MemoryCommands(commands.Cog):
         embed.add_field(name="Enabled", value=str(status.get("enabled")), inline=True)
         embed.add_field(name="Dry run", value=str(status.get("dry_run")), inline=True)
         embed.add_field(name="Started", value=str(status.get("started")), inline=True)
+        embed.add_field(name="Running", value=str(running), inline=True)
         embed.add_field(name="Backlog", value=str(status.get("backlog")), inline=True)
         embed.add_field(name="Batch size", value=str(status.get("batch_size")), inline=True)
         embed.add_field(name="Interval", value=f"{status.get('interval_seconds')}s", inline=True)
@@ -191,20 +195,49 @@ class MemoryCommands(commands.Cog):
         )
         await ctx.send(embed=embed)
 
-    @commands.command(name="memory-distill-once")
+    @commands.command(name="memory-distill-once", aliases=["memory-distil-once"])
     @commands.guild_only()
     @commands.has_permissions(administrator=True)
     async def memory_distill_once(self, ctx):
+        guild_id = str(ctx.guild.id)
+        existing = self._distill_once_tasks.get(guild_id)
+        if existing and not existing.done():
+            await ctx.send("⏳ Memory distillation is already running for this server.")
+            return
+        if existing and existing.done():
+            self._distill_once_tasks.pop(guild_id, None)
+
         distiller = await get_memory_distiller(self.bot)
-        result = await distiller.run_once()
-        await ctx.send(
-            "Distillation complete: "
-            f"scanned={result.get('scanned_count', 0)} "
-            f"candidates={result.get('candidate_count', 0)} "
-            f"accepted={result.get('accepted_count', 0)} "
-            f"rejected={result.get('rejected_count', 0)} "
-            f"merged={result.get('merged_count', 0)} dry_run={result.get('dry_run', True)}"
-        )
+        await ctx.send("⏳ Started memory distillation in the background. I’ll report back when it finishes.")
+
+        async def _run_and_report() -> None:
+            try:
+                result = await distiller.run_once()
+                await ctx.send(
+                    "Distillation complete: "
+                    f"scanned={result.get('scanned_count', 0)} "
+                    f"candidates={result.get('candidate_count', 0)} "
+                    f"accepted={result.get('accepted_count', 0)} "
+                    f"rejected={result.get('rejected_count', 0)} "
+                    f"merged={result.get('merged_count', 0)} dry_run={result.get('dry_run', True)}"
+                )
+            except Exception as exc:
+                logger.exception("Background memory distillation failed")
+                await ctx.send(f"❌ Memory distillation failed: `{exc}`")
+            finally:
+                task = self._distill_once_tasks.get(guild_id)
+                if task is not None and task.done():
+                    self._distill_once_tasks.pop(guild_id, None)
+
+        task = asyncio.create_task(_run_and_report(), name=f"memory-distill-once-{guild_id}")
+        self._distill_once_tasks[guild_id] = task
+
+        def _cleanup(_task: asyncio.Task) -> None:
+            current = self._distill_once_tasks.get(guild_id)
+            if current is _task:
+                self._distill_once_tasks.pop(guild_id, None)
+
+        task.add_done_callback(_cleanup)
 
     @commands.command(name="memory-distill-dryrun")
     @commands.guild_only()

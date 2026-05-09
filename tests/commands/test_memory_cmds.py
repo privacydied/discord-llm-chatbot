@@ -237,6 +237,40 @@ async def test_server_memory_clear_confirmed(memory_cog, mock_admin_ctx, monkeyp
 
 
 @pytest.mark.asyncio
+async def test_memory_distill_once_starts_background_task(memory_cog, mock_admin_ctx, monkeypatch):
+    started = asyncio.Event()
+    release = asyncio.Event()
+
+    class FakeDistiller:
+        async def run_once(self):
+            started.set()
+            await release.wait()
+            return {
+                "scanned_count": 7,
+                "candidate_count": 3,
+                "accepted_count": 2,
+                "rejected_count": 1,
+                "merged_count": 1,
+                "dry_run": False,
+            }
+
+    fake = FakeDistiller()
+    monkeypatch.setattr("bot.commands.memory_cmds.get_memory_distiller", AsyncMock(return_value=fake))
+
+    await memory_cog.memory_distill_once.callback(memory_cog, mock_admin_ctx)
+    await started.wait()
+
+    assert mock_admin_ctx.send.call_args_list[0].args[0].startswith("⏳ Started memory distillation in the background")
+    assert memory_cog._distill_once_tasks[str(mock_admin_ctx.guild.id)] is not None
+    assert not memory_cog._distill_once_tasks[str(mock_admin_ctx.guild.id)].done()
+
+    release.set()
+    await asyncio.sleep(0)
+
+    assert any("Distillation complete:" in call.args[0] for call in mock_admin_ctx.send.call_args_list)
+
+
+@pytest.mark.asyncio
 async def test_memory_distill_status_command_sends_embed(memory_cog, mock_admin_ctx, monkeypatch):
     class FakeDistiller:
         def __init__(self):
@@ -262,6 +296,7 @@ async def test_memory_distill_status_command_sends_embed(memory_cog, mock_admin_
     embed = mock_admin_ctx.send.call_args.kwargs["embed"]
     assert isinstance(embed, discord.Embed)
     assert embed.title == "Memory Distiller Status"
+    assert any(field.name == "Running" and field.value == "False" for field in embed.fields)
 
 
 @pytest.mark.asyncio
