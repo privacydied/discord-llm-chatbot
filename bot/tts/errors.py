@@ -2,6 +2,9 @@
 
 from typing import Optional
 
+# Re-export from ipa_vocab_loader for modules that already import from here
+from bot.tts.ipa_vocab_loader import UnsupportedIPASymbolError
+
 
 class TTSError(Exception):
     """Base class for TTS errors"""
