@@ -33,6 +33,8 @@ def mock_config():
         "VISION_PROVIDER_TIMEOUT_MS": 30000,
         "VISION_PROVIDER_MAX_RETRIES": 2,
         "VISION_PROVIDER_RETRY_DELAY_MS": 1000,
+        # Use a budget high enough for test provider cost estimates
+        "VISION_BUDGET_PER_JOB_USD": 10.0,
     }
 
 
@@ -89,6 +91,8 @@ class TestUnifiedVisionAdapter:
 
     def test_provider_selection(self, unified_adapter, vision_request):
         """Test automatic provider selection logic [CA]"""
+        # Override budget to allow providers to be selected
+        unified_adapter.provider_config["vision"]["default_policy"]["budget_per_job_usd"] = 100.0
         normalized = unified_adapter.normalize_request(vision_request)
         provider = unified_adapter.select_provider(normalized)
 
@@ -186,10 +190,15 @@ class TestErrorHandling:
     @pytest.mark.asyncio
     async def test_authentication_error_handling(self, unified_adapter, vision_request):
         """Test authentication error is properly handled"""
-        # Mock provider to raise authentication error
-        with patch.object(
-            unified_adapter.providers.get("together", MagicMock()), "submit"
-        ) as mock_submit:
+        # Override budget so providers are selectable
+        unified_adapter.provider_config["vision"]["default_policy"]["budget_per_job_usd"] = 100.0
+        # Select together as the primary provider to patch
+        unified_adapter.provider_config["vision"]["default_policy"]["provider_order"] = ["together"]
+        together = unified_adapter.providers.get("together")
+        if together is None:
+            pytest.skip("Together provider not available for auth test")
+
+        with patch.object(together, "submit") as mock_submit:
             mock_submit.side_effect = VisionError(
                 message="Invalid API key",
                 error_type=VisionErrorType.AUTHENTICATION_ERROR,
@@ -204,6 +213,8 @@ class TestErrorHandling:
     @pytest.mark.asyncio
     async def test_fallback_on_provider_failure(self, unified_adapter, vision_request):
         """Test automatic fallback when primary provider fails"""
+        # Override budget so providers are selectable
+        unified_adapter.provider_config["vision"]["default_policy"]["budget_per_job_usd"] = 100.0
         # Ensure we have multiple providers for fallback testing
         if len(unified_adapter.providers) < 2:
             pytest.skip("Need multiple providers for fallback test")

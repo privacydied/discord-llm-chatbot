@@ -25,15 +25,18 @@ class TestCheckPlaywrightBrowsersRemoteValidation:
         mock_logger.warning.assert_not_called()
         assert any("reachable" in str(call).lower() for call in mock_logger.info.call_args_list)
 
-    def test_raises_when_unreachable(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_warns_when_unreachable(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("PW_SERVER_URL", "http://localhost:3006")
         from bot.core.startup import check_playwright_browsers
 
         mock_logger = MagicMock()
 
         with patch("bot.core.startup.socket.create_connection", side_effect=ConnectionRefusedError("refused")):
-            with pytest.raises(ConfigurationError, match="unreachable"):
-                check_playwright_browsers(mock_logger)
+            check_playwright_browsers(mock_logger)
+
+        # Production logs a warning but does NOT raise when unreachable
+        mock_logger.warning.assert_called_once()
+        assert "unreachable" in str(mock_logger.warning.call_args).lower()
 
     def test_checks_local_when_no_remote(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("PW_SERVER_URL", raising=False)

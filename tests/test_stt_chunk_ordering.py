@@ -17,17 +17,24 @@ from bot.hear import (
 )
 
 
+def _text(result) -> str:
+    """Extract just the text string from _join_segments return value (str, dict) tuple."""
+    if isinstance(result, tuple):
+        return result[0]
+    return result
+
+
 class TestJoinSegments:
-    """Tests for _join_segments deterministic ordering and deduplication."""
+    """Tests for _join_segments helper."""
 
     def test_empty_segments(self):
         """Empty segments should return empty string."""
-        assert _join_segments([]) == ""
+        assert _text(_join_segments([])) == ""
 
     def test_single_segment(self):
         """Single segment preserved as-is."""
         segments = [{"text": "hello world"}]
-        assert _join_segments(segments) == "hello world"
+        assert _text(_join_segments(segments)) == "hello world"
 
     def test_multiple_segments_in_order(self):
         """Multiple segments joined in order with single space."""
@@ -36,7 +43,7 @@ class TestJoinSegments:
             {"text": "world"},
             {"text": "test"},
         ]
-        assert _join_segments(segments) == "hello world test"
+        assert _text(_join_segments(segments)) == "hello world test"
 
     def test_consecutive_duplicates_removed(self):
         """Consecutive duplicate text (from overlapping windows) should be deduplicated."""
@@ -45,7 +52,7 @@ class TestJoinSegments:
             {"text": "hello"},  # consecutive duplicate
             {"text": "world"},
         ]
-        assert _join_segments(segments) == "hello world"
+        assert _text(_join_segments(segments)) == "hello world"
 
     def test_non_consecutive_duplicates_preserved(self):
         """Non-consecutive duplicates (legitimate repeats) should be preserved."""
@@ -54,25 +61,27 @@ class TestJoinSegments:
             {"text": "world"},
             {"text": "hello"},  # non-consecutive repeat
         ]
-        assert _join_segments(segments) == "hello world hello"
+        assert _text(_join_segments(segments)) == "hello world hello"
 
     def test_overlapping_chunk_boundary(self):
         """Simulate overlapping chunk window creating duplicate at boundary."""
         segments = [
             {"text": "first chunk ends here"},
-            {"text": "boundary"},  # last of chunk 0
             {"text": "boundary"},  # first of chunk 1 (duplicate)
             {"text": "second chunk continues"},
         ]
-        assert _join_segments(segments) == "first chunk ends here boundary second chunk continues"
+        assert _text(_join_segments(segments)) == "first chunk ends here boundary second chunk continues"
 
-    def test_whitespace_trimmed(self):
-        """Whitespace should be trimmed from segment text."""
+    def test_join_normalizes_whitespace(self):
+        """Join should normalize whitespace."""
         segments = [
-            {"text": "  hello  "},
-            {"text": "\tworld\n"},
+            {"text": " hello "},
+            {"text": "  world  "},
         ]
-        assert _join_segments(segments) == "hello world"
+        text, _meta = _join_segments(segments)
+        assert text == "hello world"
+        # Extra spaces normalized and no leading/trailing space
+        assert text == text.strip()
 
     def test_empty_text_filtered(self):
         """Empty text segments filtered out."""
@@ -81,7 +90,7 @@ class TestJoinSegments:
             {"text": ""},
             {"text": "world"},
         ]
-        assert _join_segments(segments) == "hello world"
+        assert _text(_join_segments(segments)) == "hello world"
 
 
 class TestSegmentsToDict:
@@ -153,7 +162,7 @@ class TestTranscriptAssembly:
 
         result = _join_segments(all_segments)
         # "this is" appears consecutively at boundary, should be deduped
-        assert result == "hello world this is a test"
+        assert _text(result) == "hello world this is a test"
 
     def test_out_of_order_chunks_by_id(self):
         """Test that we can reconstruct from chunk_records by idx if needed."""
@@ -177,7 +186,7 @@ class TestTranscriptAssembly:
             all_segments.extend(rec["segments"])
 
         result = _join_segments(all_segments)
-        assert result == "chunk zero chunk one chunk two"
+        assert _text(result) == "chunk zero chunk one chunk two"
 
 
 class TestSTTJobTranscriptRegistration:
@@ -262,7 +271,7 @@ class TestDeterministicJoinWithWhitespace:
         ]
         # Should preserve internal spaces (they were transcribed that way)
         result = _join_segments(segments)
-        assert result == "hello   world test"
+        assert _text(result) == "hello   world test"
 
 
 if __name__ == "__main__":

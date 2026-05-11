@@ -10,6 +10,10 @@ def test_build_url_transcript_result_shapes_metadata() -> None:
         aborted=True,
         abort_reason="chunk_limit",
         cache_hit=False,
+        confidence=None,
+        confidence_status="unknown",
+        language_detected=None,
+        language_confidence=None,
     )
     metadata = SimpleNamespace(
         source_type="twitter",
@@ -56,6 +60,10 @@ def test_build_url_transcript_result_defaults_abort_reason_and_demux() -> None:
         aborted=False,
         abort_reason=None,
         cache_hit=True,
+        confidence=None,
+        confidence_status="unknown",
+        language_detected=None,
+        language_confidence=None,
     )
     metadata = SimpleNamespace(
         source_type="youtube",

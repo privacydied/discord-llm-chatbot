@@ -42,7 +42,7 @@ async def test_preprocess_and_transcribe_success() -> None:
     )
     log = _Logger()
 
-    async def _run_whisper(pre, spans_arg, spec, ram_guard, job=None):
+    async def _run_whisper(pre, spans_arg, spec, ram_guard, job=None, language=None):
         assert pre.duration_in == 42.5
         assert spans_arg is spans
         assert spec is base_spec

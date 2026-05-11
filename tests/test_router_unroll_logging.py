@@ -25,17 +25,16 @@ class DummyBot:
 async def test_unroll_logging_ok(monkeypatch, caplog):
     caplog.set_level(logging.DEBUG)
 
-    # Force status URL checks to pass and avoid X API path
-    monkeypatch.setattr(Router, "_is_twitter_status_url", staticmethod(lambda u: True))
-    monkeypatch.setattr(Router, "_is_twitter_url", staticmethod(lambda u: False))
-
-    # Stub out network-heavy generic URL processing
-    async def fake_process_url(url: str):
-        return {"text": "Generic URL processed"}
-
     import bot.router as router_mod
 
-    monkeypatch.setattr(router_mod, "process_url", fake_process_url)
+    # Stub out the URL classifier to avoid real HTTP requests — return OTHER bucket
+    class _FakeClassifyResult:
+        bucket = "OTHER"
+
+    async def fake_classify_url(url, **_kw):
+        return _FakeClassifyResult()
+
+    monkeypatch.setattr("bot.url_classifier.classify_url", fake_classify_url)
 
     # Return a successful unroll context
     async def fake_unroll(url: str, *, timeout_s: float, max_tweets: int, max_chars: int):
