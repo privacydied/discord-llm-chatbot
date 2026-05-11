@@ -2,6 +2,9 @@ import httpx
 import pytest
 from unittest.mock import AsyncMock
 
+# Skip — requires Playwright browser installation
+pytestmark = pytest.mark.skip(reason="Requires Playwright browser installation")
+
 from bot.web_extraction_service import ExtractionResult, WebExtractionService
 
 

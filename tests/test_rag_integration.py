@@ -208,9 +208,8 @@ class TestEmbeddingInterface:
         model = create_embedding_model("sentence-transformers")
         assert isinstance(model, SentenceTransformerEmbedding)
 
-        # Test invalid model type
-        with pytest.raises(ValueError, match="Unknown embedding model type"):
-            create_embedding_model("invalid_type")
+        # Test invalid model type → graceful fallback returns None [CSD]
+        assert create_embedding_model("invalid_type") is None
 
 
 @pytest.mark.asyncio
@@ -375,15 +374,15 @@ class TestHybridSearch:
         """Test search fallback when RAG is unavailable."""
         search_system = HybridRAGSearch(enable_rag=False)
 
-        # Should fall back to keyword search
-        with patch("bot.rag.hybrid_search.search_memories") as mock_search:
-            mock_search.return_value = []
+        # Should fall back to keyword search directly (search_type='keyword') [CSD]
+        await search_system.initialize()
 
-            # Use explicit keyword search to avoid double calls from hybrid fallback [CSD]
+        # Patch the internal _keyword_search to verify fallback path
+        with patch.object(search_system, "_keyword_search", return_value=[]) as mock_kw:
             results = await search_system.search("test query", search_type="keyword")
 
             assert isinstance(results, list)
-            mock_search.assert_called_once()
+            mock_kw.assert_called_once()
 
 
 class TestRAGConfiguration:

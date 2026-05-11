@@ -255,12 +255,13 @@ async def test_nvidia_base_uses_text_fallback_ladder_and_nvidia_key(monkeypatch)
 
     monkeypatch.setattr("bot.openai_backend.load_config", fake_load_config)
 
-    mgr = get_retry_manager()
+    mgr = EnhancedRetryManager()
     mgr.circuit_breakers.clear()
     mgr.provider_configs["text"] = [
         ProviderConfig("nvidia", "model-a", timeout=2.0, max_attempts=1),
         ProviderConfig("nvidia", "model-b", timeout=2.0, max_attempts=1),
     ]
+    monkeypatch.setattr("bot.openai_backend.get_retry_manager", lambda: mgr)
 
     captured_client_kwargs = {}
 
@@ -318,12 +319,13 @@ async def test_text_ladder_can_mix_openrouter_and_nvidia_endpoints(monkeypatch):
 
     monkeypatch.setattr("bot.openai_backend.load_config", fake_load_config)
 
-    mgr = get_retry_manager()
+    mgr = EnhancedRetryManager()
     mgr.circuit_breakers.clear()
     mgr.provider_configs["text"] = [
         ProviderConfig("openrouter", "openrouter-model-a", timeout=2.0, max_attempts=1),
         ProviderConfig("nvidia", "nvidia-model-b", timeout=2.0, max_attempts=1),
     ]
+    monkeypatch.setattr("bot.openai_backend.get_retry_manager", lambda: mgr)
 
     client_calls = []
 
@@ -381,12 +383,13 @@ async def test_text_ladder_falls_back_after_empty_model_response(monkeypatch):
 
     monkeypatch.setattr("bot.openai_backend.load_config", fake_load_config)
 
-    mgr = get_retry_manager()
+    mgr = EnhancedRetryManager()
     mgr.circuit_breakers.clear()
     mgr.provider_configs["text"] = [
         ProviderConfig("openrouter", "model-empty", timeout=2.0, max_attempts=1),
         ProviderConfig("openrouter", "model-good", timeout=2.0, max_attempts=1),
     ]
+    monkeypatch.setattr("bot.openai_backend.get_retry_manager", lambda: mgr)
 
     calls = []
 
@@ -439,12 +442,13 @@ async def test_openrouter_fallback_ladder_selects_second_model(monkeypatch):
     monkeypatch.setattr("bot.openai_backend.load_config", fake_load_config)
 
     # Configure text ladder: first fails, second succeeds
-    mgr = get_retry_manager()
+    mgr = EnhancedRetryManager()
     mgr.circuit_breakers.clear()
     mgr.provider_configs["text"] = [
         ProviderConfig("openrouter", "text-model-a", timeout=2.0, max_attempts=1),
         ProviderConfig("openrouter", "text-model-b", timeout=2.0, max_attempts=1),
     ]
+    monkeypatch.setattr("bot.openai_backend.get_retry_manager", lambda: mgr)
 
     async def fake_create(**kwargs):
         model = kwargs.get("model")
@@ -484,7 +488,7 @@ async def test_openrouter_fallback_ladder_selects_second_model(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_enhanced_retry_manager_attempts_and_fallback_flags_text():
-    mgr = get_retry_manager()
+    mgr = EnhancedRetryManager()
     mgr.circuit_breakers.clear()
     mgr.provider_configs["text"] = [
         ProviderConfig("openrouter", "fail-a", timeout=1.0, max_attempts=1),

@@ -22,7 +22,7 @@ def make_httpx_429(retry_after: float = 1.0) -> httpx.HTTPStatusError:
 @pytest.mark.asyncio
 async def test_enhanced_retry_manager_vision_ladder_fallback():
     """Test that vision ladder falls back from first to second provider."""
-    mgr = get_retry_manager()
+    mgr = EnhancedRetryManager()
     mgr.circuit_breakers.clear()
     
     # Configure vision ladder: first fails, second succeeds
@@ -57,7 +57,7 @@ async def test_enhanced_retry_manager_vision_ladder_fallback():
 @pytest.mark.asyncio
 async def test_enhanced_retry_manager_vision_ladder_all_fail():
     """Test that vision ladder exhaustion is properly reported."""
-    mgr = get_retry_manager()
+    mgr = EnhancedRetryManager()
     mgr.circuit_breakers.clear()
     
     # Configure vision ladder: both providers fail
@@ -83,7 +83,7 @@ async def test_enhanced_retry_manager_vision_ladder_all_fail():
 @pytest.mark.asyncio
 async def test_enhanced_retry_manager_vision_single_provider_success():
     """Test that vision ladder works with a single provider that succeeds."""
-    mgr = get_retry_manager()
+    mgr = EnhancedRetryManager()
     mgr.circuit_breakers.clear()
     
     mgr.provider_configs["vision"] = [
@@ -112,7 +112,7 @@ async def test_enhanced_retry_manager_vision_single_provider_success():
 @pytest.mark.asyncio
 async def test_vision_ladder_respects_per_provider_timeouts():
     """Test that per-provider timeouts from ladder config are respected."""
-    mgr = get_retry_manager()
+    mgr = EnhancedRetryManager()
     mgr.circuit_breakers.clear()
     
     # Configure with different timeouts
@@ -144,7 +144,7 @@ async def test_vision_ladder_respects_per_provider_timeouts():
 @pytest.mark.asyncio
 async def test_vision_ladder_circuit_breaker_skips_failed_provider():
     """Test that circuit breaker skips providers that have recently failed."""
-    mgr = get_retry_manager()
+    mgr = EnhancedRetryManager()
     mgr.circuit_breakers.clear()
     
     mgr.provider_configs["vision"] = [

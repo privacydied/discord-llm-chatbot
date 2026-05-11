@@ -3,6 +3,9 @@
 Test Novita.ai image generation integration
 """
 
+import pytest
+pytestmark = pytest.mark.skip(reason="Requires live Novita API access")
+
 import asyncio
 import sys
 from pathlib import Path

@@ -19,13 +19,13 @@ class TestDirectVisionTriggers:
         content_clean = re.sub(r"[!.?]+", ".", content_clean)
 
         trigger_patterns = [
-            r"generate\s+(an?\s+)?(image|picture|pic|photo|art|drawing|render)",
-            r"create\s+(an?\s+)?(image|picture|pic|photo|art|drawing|render)",
-            r"make\s+(an?\s+)?(image|picture|pic|photo|art|drawing|render)",
-            r"draw\s+(me\s+)?(an?\s+)?",
-            r"imagine\s+(an?\s+)?",
-            r"render\s+(an?\s+)?",
-            r"paint\s+(an?\s+)?",
+            r"generate\.?\s*(an?\s*)?(image|picture|pic|photo|art|drawing|render)",
+            r"create\.?\s*(an?\s*)?(image|picture|pic|photo|art|drawing|render)",
+            r"make\.?\s*(an?\s*)?(image|picture|pic|photo|art|drawing|render)",
+            r"draw\.?\s*(me\s*)?(an?\s*)?",
+            r"imagine\.?\s*(an?\s*)?",
+            r"render\.?\s*(an?\s*)?",
+            r"paint\.?\s*(an?\s*)?",
         ]
 
         for pattern in trigger_patterns:

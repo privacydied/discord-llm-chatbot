@@ -24,9 +24,9 @@ class TestRetryManagerLadderRefresh:
 
         with patch("bot.config_reload.load_config") as mock_load_config, \
              patch("bot.config_reload.load_dotenv"), \
-             patch("bot.config_reload.invalidate_config_cache", MagicMock()), \
+             patch("bot.config.invalidate_config_cache", MagicMock()), \
              patch("bot.config_reload._preferred_env_path") as mock_path, \
-             patch("bot.config_reload.get_retry_manager", return_value=mock_retry_mgr):
+             patch("bot.enhanced_retry.get_retry_manager", return_value=mock_retry_mgr):
 
             # Setup mocks
             mock_path_obj = MagicMock()
@@ -63,9 +63,9 @@ class TestRetryManagerLadderRefresh:
 
         with patch("bot.config_reload.load_config") as mock_load_config, \
              patch("bot.config_reload.load_dotenv"), \
-             patch("bot.config_reload.invalidate_config_cache", MagicMock()), \
+             patch("bot.config.invalidate_config_cache", MagicMock()), \
              patch("bot.config_reload._preferred_env_path") as mock_path, \
-             patch("bot.config_reload.get_retry_manager", return_value=mock_retry_mgr), \
+             patch("bot.enhanced_retry.get_retry_manager", return_value=mock_retry_mgr), \
              patch("bot.config_reload.logger", mock_logger):
 
             mock_path_obj = MagicMock()
@@ -96,9 +96,9 @@ class TestRetryManagerLadderRefresh:
 
         with patch("bot.config_reload.load_config") as mock_load_config, \
              patch("bot.config_reload.load_dotenv"), \
-             patch("bot.config_reload.invalidate_config_cache", MagicMock()), \
+             patch("bot.config.invalidate_config_cache", MagicMock()), \
              patch("bot.config_reload._preferred_env_path") as mock_path, \
-             patch("bot.config_reload.get_retry_manager", return_value=mock_retry_mgr):
+             patch("bot.enhanced_retry.get_retry_manager", return_value=mock_retry_mgr):
 
             mock_path_obj = MagicMock()
             mock_path_obj.exists.return_value = True

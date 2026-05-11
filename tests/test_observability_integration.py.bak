@@ -6,17 +6,13 @@ health monitoring, background task monitoring, resource monitoring, and integrat
 [RAT: CDiP, REH] - Continuous Documentation in Progress, Robust Error Handling
 """
 
-import pytest
-
-# Skip all tests — require live Prometheus metrics stack
-pytestmark = pytest.mark.skip(reason="Requires live Prometheus metrics stack")
-
 import asyncio
 import os
 import pytest
 import tempfile
 import time
 from unittest.mock import Mock, patch, AsyncMock
+from pathlib import Path
 
 # Import observability components
 from bot.core.observability_integration import (
@@ -26,16 +22,22 @@ from bot.core.observability_integration import (
 from bot.core.startup_orchestrator import (
     StartupOrchestrator,
     ComponentSpec,
-    ComponentStatus,
 )
-from bot.core.config_validation import ConfigValidator, HealthMonitor, HealthStatus
-from bot.core.background_task_monitor import (
+
+skip_if_no_observability = pytest.mark.skipif(
+    not os.getenv("PROMETHEUS_URL"),
+    reason="PROMETHEUS_URL not set; skipping live observability integration test"
+)
+
+
+class TestObservabilityIntegration:
     BackgroundTaskMonitor,
     TaskConfig,
     RestartPolicy,
 )
 from bot.core.resource_monitor import ResourceMonitor
 
+@skip_if_no_observability
 
 class TestObservabilityIntegration:
     """Test observability integration system."""

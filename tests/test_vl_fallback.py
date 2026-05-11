@@ -78,7 +78,7 @@ def setup_logging() -> logging.Logger:
 
 
 def configure_test_ladder():
-    mgr = get_retry_manager()
+    mgr = EnhancedRetryManager()
     mgr.circuit_breakers.clear()
     mgr.provider_configs["vision"] = [
         ProviderConfig(

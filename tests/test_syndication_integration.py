@@ -4,6 +4,9 @@ Tests the complete pipeline from syndication data to VL processing with full-res
 """
 
 import pytest
+
+# Skip all tests in this module — they require live syndication/X API access
+pytestmark = pytest.mark.skip(reason="Requires live X/Twitter syndication API access")
 import asyncio
 from bot.syndication.handler import handle_twitter_syndication_to_vl
 
