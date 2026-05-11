@@ -18,67 +18,27 @@ logger = get_logger(__name__)
 
 
 def is_admin_user():
-    """Custom check that allows admin users in both guilds and DMs."""
+    """Custom check that allows admin users in both guilds and DMs.
+
+    Delegates to bot.core.permissions.is_admin_user for centralized logic.
+    """
 
     async def predicate(ctx):
-        try:
-            logger.info(
-                f"[RAG Admin Check] User {ctx.author.id} ({ctx.author.name}) attempting RAG command"
-            )
-            logger.info(f"[RAG Admin Check] Channel type: {type(ctx.channel).__name__}")
+        logger.info(
+            f"[RAG Admin Check] User {ctx.author.id} ({ctx.author.name}) attempting RAG command"
+        )
+        from bot.core.permissions import is_admin_user as _check
 
-            # In DMs, only allow configured admin/owner IDs (no Discord API call).
-            if isinstance(ctx.channel, discord.DMChannel):
-                logger.info("[RAG Admin Check] DM context - checking configured admin IDs")
-                configured_ids = set()
-                try:
-                    bot_owner_ids = getattr(ctx.bot, "owner_ids", None) or set()
-                    configured_ids.update(int(owner_id) for owner_id in bot_owner_ids)
-                except Exception:
-                    pass
-                try:
-                    config = getattr(ctx.bot, "config", {}) or {}
-                    for owner_id in config.get("OWNER_IDS", []):
-                        configured_ids.add(int(owner_id))
-                    for owner_id in config.get("ALERT_ADMIN_USER_IDS", "").split(","):
-                        owner_id = owner_id.strip()
-                        if owner_id:
-                            configured_ids.add(int(owner_id))
-                except Exception:
-                    pass
+        allowed = await _check(ctx.author, ctx.bot)
 
-                if ctx.author.id in configured_ids:
-                    logger.info(
-                        f"[RAG Admin Check] Configured admin {ctx.author.id} allowed DM access"
-                    )
-                    return True
-
-                logger.warning(
-                    f"[RAG Admin Check] User {ctx.author.id} attempted RAG command in DM - only configured admins allowed"
-                )
-                return False
-
-            # In guilds, use standard admin permission check
-            if (
-                hasattr(ctx.author, "guild_permissions")
-                and ctx.author.guild_permissions
-            ):
-                is_admin = ctx.author.guild_permissions.administrator
-                logger.info(
-                    f"[RAG Admin Check] Guild context - User admin status: {is_admin}"
-                )
-                return is_admin
-            else:
-                logger.warning(
-                    f"[RAG Admin Check] Could not check guild permissions for user {ctx.author.id}"
-                )
-                return False
-
-        except Exception as e:
-            logger.error(
-                f"[RAG Admin Check] Error in permission check: {e}", exc_info=True
+        # DM context: only owners/configured admins
+        if isinstance(ctx.channel, discord.DMChannel) and not allowed:
+            logger.warning(
+                f"[RAG Admin Check] User {ctx.author.id} attempted RAG command in DM"
             )
             return False
+
+        return allowed
 
     return commands.check(predicate)
 
