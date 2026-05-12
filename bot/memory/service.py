@@ -162,11 +162,17 @@ class CuratedMemoryService:
             return False
         return await self.queue.enqueue(candidate)
 
-    async def delete_memory(self, memory_id: str) -> bool:
+    async def delete_memory(self, memory_id: str, *, owner_id: str | None = None) -> bool:
         if not self.enabled:
             return False
         record = await self.store.get_memory(memory_id)
         if record is None:
+            return False
+        if owner_id is not None and record.user_id != str(owner_id):
+            logger.warning(
+                "Attempted delete_memory id=%s owner_mismatch got=%s expected=%s",
+                memory_id, record.user_id, owner_id,
+            )
             return False
         await self.store.soft_delete_memory(memory_id)
         try:

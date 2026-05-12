@@ -136,13 +136,14 @@ class ExtendedMemoryCommands(commands.Cog):
     async def memory_forget(self, ctx, *, memory_id: str):
         """Forget a specific memory by ID.
 
-        Args:
-            memory_id: The memory ID (first 8 chars OK) or search query
+        Accepts full UUID or unambiguous prefix. Never uses fuzzy/semantic
+        matching for deletion — only exact or prefix match within the
+        requesting user's own memories.
         """
         try:
-            memory_id = (memory_id or "").strip()
-            if not memory_id:
-                await ctx.send("❌ Usage: `!memory-forget <id or search>`")
+            raw_id = (memory_id or "").strip()
+            if not raw_id:
+                await ctx.send("❌ Usage: `!memory-forget <id>`")
                 return
 
             service = await get_memory_service(self.bot)
@@ -150,42 +151,46 @@ class ExtendedMemoryCommands(commands.Cog):
                 await ctx.send("Memory service is not enabled.")
                 return
 
-            user_id = str(ctx.author.id)
+            requester_id = str(ctx.author.id)
 
-            # Step 1: Find the target memory before deleting.
-            # Priority: exact match > prefix match > semantic search.
-            target = await service.store.get_memory(memory_id)
-            if target is None:
-                # Try prefix match against user's own memories
-                all_records = await service.list_user_memories(user_id, limit=100)
-                target = next(
-                    (
-                        r
-                        for r in all_records
-                        if r.memory_id.startswith(memory_id)
-                    ),
-                    None,
-                )
-            if target is None:
-                # Fall back to semantic search
-                matches = await service.search_user_memories(
-                    user_id, memory_id, limit=1
-                )
-                if not matches:
-                    await ctx.send("❌ No matching memory found.")
-                    return
-                target = matches[0]
+            # Step 1: Load requester's own memories (source of truth).
+            owned = await service.list_user_memories(requester_id, limit=500)
 
-            # Step 2: Show what will be deleted and ask for confirmation.
+            # Step 2: Find matching memory(s) within owned set.
+            exact_matches = [r for r in owned if r.memory_id == raw_id]
+            if len(exact_matches) == 1:
+                candidates = exact_matches
+            else:
+                # Prefix match within owned memories.
+                candidates = [r for r in owned if r.memory_id.startswith(raw_id)]
+
+            if len(candidates) == 0:
+                await ctx.send(
+                    f"❌ No memory owned by you matches ID prefix `{raw_id}`."
+                )
+                return
+            if len(candidates) > 1:
+                ids = ", ".join(f"`{r.memory_id[:8]}`" for r in candidates)
+                await ctx.send(
+                    f"❌ Ambiguous prefix `{raw_id}` matches {len(candidates)} "
+                    f"memories: {ids}. Provide more characters."
+                )
+                return
+
+            target = candidates[0]
+
+            # Step 3: Confirm before deleting.
             summary = target.summary or target.text or ""
             if len(summary) > 200:
                 summary = summary[:197] + "..."
 
-            await ctx.send(
+            confirm_msg = (
                 "🧠 Found a matching memory. React with ✅ to delete, or ignore.\n"
-                f"**ID:** `{target.memory_id[:8]}`\n**Preview:** {summary}\n"
-                f"**Type:** {target.context_type}  **Confidence:** {target.confidence:.2f}"
+                f"**ID:** `{target.memory_id}`\n**Preview:** {summary}\n"
+                f"**Type:** {target.context_type}  "
+                f"**Confidence:** {target.confidence:.2f}"
             )
+            confirm_msg_ref = await ctx.send(confirm_msg)
 
             def check(reaction, user):
                 return (
@@ -200,12 +205,22 @@ class ExtendedMemoryCommands(commands.Cog):
                 await ctx.send("⏱️ Delete cancelled (timed out).")
                 return
 
-            # Step 3: Actually delete.
-            deleted = await service.delete_memory(target.memory_id)
+            # Step 4: Delete by canonical ID, enforcing ownership.
+            canonical_id = target.memory_id
+            deleted = await service.delete_memory(canonical_id, owner_id=requester_id)
+
+            # Step 5: Verify — check it's actually gone.
             if deleted:
-                await ctx.send("✅ Deleted the memory.")
+                await ctx.send(f"✅ Deleted `{canonical_id[:8]}`.")
             else:
-                await ctx.send("❌ Failed to delete memory.")
+                # Verify via the confirmation message.
+                if confirm_msg_ref:
+                    await ctx.send(
+                        f"❌ Delete operation for `{canonical_id[:8]}` returned failure "
+                        f"— memory may already be deleted or inaccessible."
+                    )
+                else:
+                    await ctx.send("❌ Failed to delete memory.")
 
         except Exception as e:
             logger.error(f"Error in memory-forget: {e}", exc_info=True)

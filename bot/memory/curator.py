@@ -159,6 +159,35 @@ _GENERAL_CLAIM_TERMS = [
     r"\baccounts for\b",
 ]
 
+# ---------------------------------------------------------------------------
+# Inferred‐memory denylist — blocks casual / unsafe content from becoming
+# durable memories.  Does NOT affect explicit !memory-add / "remember that".
+# ---------------------------------------------------------------------------
+_INFERRED_DENYLIST = [
+    # Drugs / recreational substances / medications
+    r"\b(?:xanax|xanny|xanex)\b",
+    r"\b(?:coke|crack|blow|snow)\b",
+    r"\b(?:heroin|bop|smack|scag)\b",
+    r"\b(?:meth|mdma|molly|ecstasy|tina)\b",
+    r"\b(?:lsd|acid)\b",
+    r"\b(?:ketamine|special k)\b",
+    r"\b(?:weed|marijuana|cannabis|bong|joint|dabs)\b",
+    r"\b(?:opioid|opiate|fentanyl)\b",
+    r"\b(?:ativan|clonazepam|diazepam|valium|lorazepam|alprazolam)\b",
+    r"\b(?:morphine|tramadol|oxycontin|percocet|adderall)\b",
+    r"\b(?:shrooms|magic mushroom|psilocybin)\b",
+    # Medical / mental health
+    r"\b(?:depression|depressed|anxiety|ptsd|bipolar|schizophrenia)\b",
+    r"\b(?:suicid|self.harm|selfharm|suicide)\b",
+    # Third-party / anecdote markers
+    r"\bmy (?:friend|buddy|mate|sis|bro|cousin|girlfriend|boyfriend)\b.*\b(?:got|did|was|had|took)\b",
+    r"\b(?:someone|somebody) (?:said|told|did|got|was|had|took)\b",
+    r"\bi heard (?:from|that)\b",
+    r"\b(?:(?:he|she|they) (?:said|told|did|got|was|had|took))\b",
+    r"\bmy friends\b",
+    r"\bmy friend\b",
+]
+
 
 @dataclass(slots=True)
 class MemoryCandidate:
@@ -333,6 +362,16 @@ class CuratedMemoryCurator:
                 reason="internal_noise",
             )
 
+        if self._looks_denied_inferred(text.lower()):
+            return self._log_inferred_decision(
+                user_id,
+                guild_id,
+                channel_id,
+                thread_id,
+                source_message_id,
+                reason="denylist_blocked",
+            )
+
         rejection_reason = self._rejection_reason_for_inferred(text)
         if rejection_reason is not None:
             return self._log_inferred_decision(
@@ -439,6 +478,13 @@ class CuratedMemoryCurator:
         lower = text.lower()
         return any(
             re.search(pattern, lower, flags=re.I) for pattern in _INTERNAL_PATTERNS
+        )
+
+    @staticmethod
+    def _looks_denied_inferred(lower: str) -> bool:
+        """Return True when inferred content matches the denylist."""
+        return any(
+            re.search(pattern, lower, flags=re.I) for pattern in _INFERRED_DENYLIST
         )
 
     def _rejection_reason_for_inferred(self, text: str) -> Optional[str]:
@@ -596,14 +642,38 @@ class CuratedMemoryCurator:
 
     @staticmethod
     def _is_recurring_instruction(lower: str) -> bool:
-        """Always/never instructions that clearly target bot behavior."""
-        # Patterns like "always reply with", "never do X", "you should always"
-        if bool(re.search(r"\b(?:you (?:should|must|have to))?\s+always\b", lower)):
+        """Always/never instructions that clearly target bot behavior.
+
+        Must be a clear future-facing directive to the bot, e.g.:
+          "always reply shorter", "never say that again", "from now on..."
+
+        Reject:
+          "i never did", "she never goes", "my friends never..."
+        """
+        # "from now on" / "going forward" / "henceforth" — strong future markers
+        if bool(re.search(r"\bfrom\s+now\s+on\b", lower)):
             return True
-        if bool(re.search(r"\b(?:you (?:should|must|have to))?\s+never\b", lower)):
+        if bool(re.search(r"\bgoing\s+forward\b", lower)):
             return True
-        # "don't do X again" / "don't say X again"
-        if bool(re.search(r"\bdon't (?:do|say|use|assume)\b.*again\b", lower)):
+        if bool(re.search(r"\bhenceforth\b", lower)):
+            return True
+
+        # "always" with bot addressee or followed by content
+        if bool(re.search(r"\byou\s+(?:should\s+|must\s+|have\s+to\s+)?always\b", lower)):
+            return True
+        if bool(re.search(r"\balways\b(?:\s+\w+){1,}", lower)):
+            # "always" followed by at least one word — but reject "i always"
+            if not bool(re.search(r"\b(?:i|my|she|he|they)\b.*\balways\b", lower)):
+                return True
+
+        # "you should never", "you must never", "you never" — bot-directed
+        if bool(re.search(r"\byou\s+(?:should\s+|must\s+|have\s+to\s+)?never\b", lower)):
+            return True
+        # "don't do/use/say X again"
+        if bool(re.search(r"\bdon't\s+(?:do|say|use|assume)\b.*\bagain\b", lower)):
+            return True
+        # "never do X again"
+        if bool(re.search(r"\bnever\s+(?:do|say|use|assume)\b.*\bagain\b", lower)):
             return True
         return False
 
