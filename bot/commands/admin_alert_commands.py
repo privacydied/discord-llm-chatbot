@@ -749,8 +749,8 @@ class AdminAlertCommands(commands.Cog):
                         )
                 try:
                     await reaction.remove(user)
-                except:
-                    pass
+                except discord.HTTPException:
+                    pass  # Bot may lack MANAGE_MESSAGES permission; skip silently
 
             # Channel selection navigation (on channel_message_id)
             elif reaction.message.id == getattr(session, "channel_message_id", None):
@@ -796,8 +796,8 @@ class AdminAlertCommands(commands.Cog):
                     await self._handle_cancel(reaction, user, session)
                 try:
                     await reaction.remove(user)
-                except:
-                    pass
+                except discord.HTTPException:
+                    pass  # Bot may lack MANAGE_MESSAGES permission; skip silently
 
         except discord.HTTPException as e:
             # Structured logging for 50035 diagnostics [REH]
