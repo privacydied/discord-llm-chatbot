@@ -104,7 +104,10 @@ async def test_handle_vision_empty(mock_see, mock_ss, handler, url_ctx):
 
 
 @pytest.mark.asyncio
-@patch("bot.utils.external_api.external_screenshot", side_effect=ConnectionError("Network down"))
+@patch(
+    "bot.utils.external_api.external_screenshot",
+    side_effect=ConnectionError("Network down"),
+)
 async def test_handle_exception_recovery(mock_ss, handler, url_ctx):
     result = await handler.handle(url_ctx)
 

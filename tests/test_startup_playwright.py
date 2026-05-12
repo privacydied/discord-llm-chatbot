@@ -7,7 +7,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 
-
 class TestCheckPlaywrightBrowsersRemoteValidation:
     """When PW_SERVER_URL is set, validate the remote server is reachable."""
 

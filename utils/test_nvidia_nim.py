@@ -11,7 +11,6 @@ This script tests:
 3. Configuration documentation
 """
 
-import os
 import sys
 from pathlib import Path
 

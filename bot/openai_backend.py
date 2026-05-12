@@ -469,7 +469,13 @@ Server Context: {server_context}"""
                 # Ollama provider: route through local Ollama instance
                 if provider_config.name == "ollama":
                     return _ollama_coro_factory(
-                        config, selected_model, messages, temperature, max_tokens, kwargs, provider_config
+                        config,
+                        selected_model,
+                        messages,
+                        temperature,
+                        max_tokens,
+                        kwargs,
+                        provider_config,
                     )
 
                 attempt_api_key, attempt_base_url, attempt_provider = (

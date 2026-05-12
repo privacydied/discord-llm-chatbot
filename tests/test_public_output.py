@@ -2,7 +2,6 @@
 Tests for public output sanitizer.
 """
 
-
 from bot.public_output import (
     SAFE_FALLBACK_MESSAGE,
     extract_public_reply_text,

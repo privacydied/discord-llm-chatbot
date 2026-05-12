@@ -58,9 +58,7 @@ class ScreenshotHandler(RouteHandler):
 
             screenshot_path = await external_screenshot(url)
             if not screenshot_path:
-                logger.warning(
-                    "Screenshot API did not return an image for %s", url
-                )
+                logger.warning("Screenshot API did not return an image for %s", url)
                 return (
                     f"Could not capture a screenshot for: {url}. "
                     "Please try again later."
@@ -69,9 +67,7 @@ class ScreenshotHandler(RouteHandler):
             if progress_cb:
                 await progress_cb("saved", 4)
 
-            logger.info(
-                "Screenshot saved at: %s. Sending to VL.", screenshot_path
-            )
+            logger.info("Screenshot saved at: %s. Sending to VL.", screenshot_path)
 
             try:
                 if progress_cb:
@@ -113,9 +109,7 @@ class ScreenshotHandler(RouteHandler):
                 )
 
         except Exception as e:
-            logger.error(
-                "Error taking screenshot of URL: %s", e, exc_info=True
-            )
+            logger.error("Error taking screenshot of URL: %s", e, exc_info=True)
             return f"Failed to screenshot URL: {ctx.payload}"
 
 

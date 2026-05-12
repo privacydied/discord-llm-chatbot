@@ -8,7 +8,6 @@ import hashlib
 from urllib.parse import urlparse
 
 
-
 # Inline copies of the functions under test (to avoid import issues)
 import re
 

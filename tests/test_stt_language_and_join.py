@@ -1,6 +1,5 @@
 """Tests for STT language propagation across chunks."""
 
-
 from bot.stt import ModelSpec
 
 

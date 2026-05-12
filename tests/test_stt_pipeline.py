@@ -2,7 +2,6 @@
 Tests for STT pipeline improvements.
 """
 
-
 from bot.hear import (
     _transcript_cache_key,
     _join_segments,

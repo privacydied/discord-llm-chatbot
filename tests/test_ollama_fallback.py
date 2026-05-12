@@ -1,4 +1,5 @@
 """Tests for Ollama fallback integration."""
+
 from __future__ import annotations
 
 import asyncio
@@ -124,9 +125,7 @@ async def test_run_with_fallback_ollama_no_fallback_available():
         async def _fail():
             raise ConnectionError("nope")
 
-        rr = await mgr.run_with_fallback(
-            "text", lambda pc: _fail, per_item_budget=10.0
-        )
+        rr = await mgr.run_with_fallback("text", lambda pc: _fail, per_item_budget=10.0)
         assert not rr.success
         assert rr.provider_used == "ollama:llama3"
         assert rr.attempts == 1

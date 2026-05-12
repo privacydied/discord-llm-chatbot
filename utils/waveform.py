@@ -3,7 +3,6 @@ from __future__ import annotations
 import base64
 import contextlib
 import subprocess
-import tempfile
 import wave
 from pathlib import Path
 
