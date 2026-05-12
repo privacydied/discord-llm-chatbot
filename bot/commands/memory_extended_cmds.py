@@ -152,13 +152,13 @@ class ExtendedMemoryCommands(commands.Cog):
 
             user_id = str(ctx.author.id)
 
-            # Try exact match first
-            deleted = await service.delete_memory(memory_id)
-
-            if not deleted:
-                # Try prefix match (first 8 chars of user's own memories)
+            # Step 1: Find the target memory before deleting.
+            # Priority: exact match > prefix match > semantic search.
+            target = await service.store.get_memory(memory_id)
+            if target is None:
+                # Try prefix match against user's own memories
                 all_records = await service.list_user_memories(user_id, limit=100)
-                prefix_match = next(
+                target = next(
                     (
                         r
                         for r in all_records
@@ -166,38 +166,7 @@ class ExtendedMemoryCommands(commands.Cog):
                     ),
                     None,
                 )
-                if prefix_match:
-                    summary = prefix_match.summary or prefix_match.text or ""
-                    if len(summary) > 200:
-                        summary = summary[:197] + "..."
-
-                    await ctx.send(
-                        "🧠 Found a matching memory. React with ✅ to delete, or ignore.\n"
-                        f"**ID:** `{prefix_match.memory_id[:8]}`\n**Preview:** {summary}\n"
-                        f"**Type:** {prefix_match.context_type}  "
-                        f"**Confidence:** {prefix_match.confidence:.2f}"
-                    )
-
-                    def check(reaction, user):
-                        return (
-                            user.id == ctx.author.id
-                            and reaction.message.channel == ctx.channel
-                            and str(reaction.emoji) == "\u2705"
-                        )
-
-                    try:
-                        await self.bot.wait_for("reaction_add", timeout=30.0, check=check)
-                    except Exception:
-                        await ctx.send("⏱️ Delete cancelled (timed out).")
-                        return
-
-                    deleted = await service.delete_memory(prefix_match.memory_id)
-                    if deleted:
-                        await ctx.send("✅ Deleted the memory.")
-                    else:
-                        await ctx.send("❌ Failed to delete memory.")
-                    return
-
+            if target is None:
                 # Fall back to semantic search
                 matches = await service.search_user_memories(
                     user_id, memory_id, limit=1
@@ -205,38 +174,38 @@ class ExtendedMemoryCommands(commands.Cog):
                 if not matches:
                     await ctx.send("❌ No matching memory found.")
                     return
-
                 target = matches[0]
-                summary = target.summary or target.text or ""
-                if len(summary) > 200:
-                    summary = summary[:197] + "..."
 
-                await ctx.send(
-                    "🧠 Found a matching memory via search. React with ✅ to delete, or ignore.\n"
-                    f"**ID:** `{target.memory_id[:8]}`\n**Preview:** {summary}\n"
-                    f"**Type:** {target.context_type}  **Confidence:** {target.confidence:.2f}"
+            # Step 2: Show what will be deleted and ask for confirmation.
+            summary = target.summary or target.text or ""
+            if len(summary) > 200:
+                summary = summary[:197] + "..."
+
+            await ctx.send(
+                "🧠 Found a matching memory. React with ✅ to delete, or ignore.\n"
+                f"**ID:** `{target.memory_id[:8]}`\n**Preview:** {summary}\n"
+                f"**Type:** {target.context_type}  **Confidence:** {target.confidence:.2f}"
+            )
+
+            def check(reaction, user):
+                return (
+                    user.id == ctx.author.id
+                    and reaction.message.channel == ctx.channel
+                    and str(reaction.emoji) == "\u2705"
                 )
 
-                def check(reaction, user):
-                    return (
-                        user.id == ctx.author.id
-                        and reaction.message.channel == ctx.channel
-                        and str(reaction.emoji) == "\u2705"
-                    )
+            try:
+                await self.bot.wait_for("reaction_add", timeout=30.0, check=check)
+            except Exception:
+                await ctx.send("⏱️ Delete cancelled (timed out).")
+                return
 
-                try:
-                    await self.bot.wait_for("reaction_add", timeout=30.0, check=check)
-                except Exception:
-                    await ctx.send("⏱️ Delete cancelled (timed out).")
-                    return
-
-                deleted = await service.delete_memory(target.memory_id)
-                if deleted:
-                    await ctx.send("✅ Deleted the memory.")
-                else:
-                    await ctx.send("❌ Failed to delete memory.")
+            # Step 3: Actually delete.
+            deleted = await service.delete_memory(target.memory_id)
+            if deleted:
+                await ctx.send("✅ Deleted the memory.")
             else:
-                await ctx.send(f"✅ Deleted memory `{memory_id[:8]}`.")
+                await ctx.send("❌ Failed to delete memory.")
 
         except Exception as e:
             logger.error(f"Error in memory-forget: {e}", exc_info=True)
