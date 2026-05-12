@@ -135,6 +135,7 @@ class OperatorCommands(commands.Cog):
         rag_line = self._get_rag_status(guild_id, toggles)
         stt_line = self._get_stt_status(toggles)
         tts_line = self._get_tts_status(toggles)
+        ollama_line = self._get_ollama_status(toggles)
         playwright_line = self._get_playwright_status(toggles)
         queue_line = self._get_queue_status()
 
@@ -158,6 +159,7 @@ class OperatorCommands(commands.Cog):
         embed.add_field(name="RAG", value=rag_line, inline=False)
         embed.add_field(name="STT", value=stt_line, inline=False)
         embed.add_field(name="TTS", value=tts_line, inline=False)
+        embed.add_field(name="Ollama", value=ollama_line, inline=False)
         embed.add_field(name="Playwright", value=playwright_line, inline=False)
         embed.add_field(name="Queue / backpressure", value=queue_line, inline=False)
 
@@ -321,6 +323,25 @@ class OperatorCommands(commands.Cog):
         available = engine_status.get("available", False)
         engine = engine_status.get("engine", "unknown")
         return f"{feature_status_emoji(enabled)} {feature_status_label(enabled)}; engine={engine}; loaded={available}; {cache_text}"
+
+    def _get_ollama_status(self, toggles: Dict[str, bool]) -> str:
+        """Return Ollama provider status (if configured)."""
+        import os
+
+        ollama_host = os.getenv("OLLAMA_HOST", "").strip()
+        if not ollama_host:
+            return "not configured"
+        enabled = toggles.get("ollama", True)
+        # Check if an ollama backend exists on the router
+        router = getattr(self.bot, "router", None)
+        ollama_backend = None
+        if router:
+            ollama_backend = getattr(router, "ollama_backend", None)
+        available = ollama_backend is not None
+        return (
+            f"{feature_status_emoji(enabled)} {feature_status_label(enabled)}; "
+            f"host={ollama_host}; available={available}"
+        )
 
     def _get_playwright_status(self, toggles: Dict[str, bool]) -> str:
         try:

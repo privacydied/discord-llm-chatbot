@@ -16,6 +16,8 @@ async def download_robust_image(
     """
     Robust image download with fallback candidate chain.
 
+    Each candidate URL is validated against SSRF rules before fetching.
+
     Args:
         image_ref: ImageRef object with primary URL and fallbacks
         local_path: Local file path to save to
@@ -26,6 +28,7 @@ async def download_robust_image(
     """
     import aiohttp
     import asyncio
+    from ..url_safety import UrlSafetyError, validate_url
     from ..utils.logging import get_logger
 
     logger = get_logger(__name__)
@@ -40,6 +43,12 @@ async def download_robust_image(
 
     async with aiohttp.ClientSession(headers=headers, timeout=timeout) as session:
         for idx, candidate_url in enumerate(candidates):
+            # Validate candidate URL before fetching (scheme, SSRF, forbidden IP)
+            try:
+                validate_url(candidate_url)
+            except UrlSafetyError as exc:
+                logger.warning("Image download candidate blocked: %s", exc)
+                continue
             try:
                 async with session.get(candidate_url, allow_redirects=True) as response:
                     # Check status
@@ -118,6 +127,8 @@ async def download_file(
     """
     Download a file from a URL and save it to the specified path.
 
+    Validates the URL against SSRF rules before fetching.
+
     Args:
         url: URL of the file to download
         save_path: Path to save the file to
@@ -126,6 +137,15 @@ async def download_file(
     Returns:
         bool: True if download was successful, False otherwise
     """
+    from ..url_safety import UrlSafetyError, validate_url
+
+    # SSRF validation before fetch
+    try:
+        validate_url(url)
+    except UrlSafetyError as exc:
+        logging.warning("download_file URL blocked: %s", exc)
+        return False
+
     close_session = False
     # Per-attempt timeout budget: defaults tuned for image fetches [PA]
     try:

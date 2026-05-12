@@ -141,7 +141,24 @@ def get_domain_info(url: str) -> Dict[str, str]:
 async def fetch_url_content(url: str, timeout: int = 15) -> Optional[Tuple[bytes, str]]:
     """
     Fetch the content of a URL using httpx.
+
+    Validates the URL (scheme, SSRF, DNS) before fetching.
+    Validates redirect target after redirects.
+    Wraps fetched content as untrusted for prompt safety.
     """
+    # SSRF / URL safety validation (comprehensive — replaces _is_private_hostname)
+    from bot.url_safety import (
+        UrlSafetyError,
+        validate_redirect_response,
+        validate_url_with_dns,
+    )
+
+    try:
+        await validate_url_with_dns(url)
+    except UrlSafetyError as exc:
+        logging.warning("URL safety blocked: %s", exc)
+        return None
+
     headers = {
         "User-Agent": USER_AGENT,
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
@@ -168,6 +185,8 @@ async def fetch_url_content(url: str, timeout: int = 15) -> Optional[Tuple[bytes
                 f"web.fetch request url={url[:200]} timeout_s={timeout} ua_present={bool(headers.get('User-Agent'))}"
             )
             response = await client.get(url)
+            # Validate redirect target for SSRF
+            validate_redirect_response(response)
             response.raise_for_status()  # Raise exception for 4xx/5xx responses
             content = await response.aread()
             content_type = response.headers.get(

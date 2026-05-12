@@ -11,7 +11,6 @@ from rich.logging import RichHandler
 
 def _rich_tracebacks_supported() -> bool:
     try:
-
         return True
     except Exception:
         return False

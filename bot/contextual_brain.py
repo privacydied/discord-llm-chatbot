@@ -352,7 +352,7 @@ def create_context_command_handler(bot: "LLMBot"):
     async def handle_context_reset(message: discord.Message) -> str:
         """Reset conversation context."""
         if bot.enhanced_context_manager:
-            bot.enhanced_context_manager.reset_context(message)
+            await bot.enhanced_context_manager.reset_context(message)
             return "✔ Conversation context has been reset."
         return "❌ Enhanced context manager not available."
 

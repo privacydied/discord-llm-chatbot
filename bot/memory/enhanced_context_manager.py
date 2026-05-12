@@ -7,6 +7,7 @@ import json
 import os
 import asyncio
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Dict, List, Optional, Any, Set
 from dataclasses import dataclass, asdict
 from cryptography.fernet import Fernet
@@ -177,13 +178,15 @@ class EnhancedContextManager:
             self.memory = {}
             self.privacy_opt_outs = {}
 
-    def _save(self) -> None:
-        """Save context to storage file with privacy filtering."""
+    async def _save(self) -> None:
+        """Save context to storage file with privacy filtering (atomic writes)."""
         if self.in_memory_only:
             return
 
+        from bot.atomic_json import write_json_atomic
+
         try:
-            # Filter out DM conversations for privacy
+            # Filter out DM conversations to enforce privacy
             filtered_messages = {
                 k: [entry.to_dict() for entry in v]
                 for k, v in self.memory.items()
@@ -199,28 +202,29 @@ class EnhancedContextManager:
                 },
             }
 
-            # Ensure directory exists
-            os.makedirs(
-                os.path.dirname(self.filepath)
-                if os.path.dirname(self.filepath)
-                else ".",
-                exist_ok=True,
-            )
+            await write_json_atomic(Path(self.filepath), data)
 
-            with open(self.filepath, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2)
-
-            # Set restrictive permissions
-            os.chmod(self.filepath, 0o600)
+            # Post-write permission hardening
+            try:
+                os.chmod(self.filepath, 0o600)
+            except Exception:
+                pass
 
         except Exception as e:
-            logger.error(f"❌ Failed to save context: {e}")
+            logger.error("Failed to save context: %s", e)
 
     def set_privacy_opt_out(self, user_id: str, opt_out: bool = True) -> None:
         """Set privacy opt-out for a user."""
         self.privacy_opt_outs[str(user_id)] = opt_out
-        self._save()
-        logger.info(f"✔ Privacy opt-out set for user {user_id}: {opt_out}")
+        # Fire-and-forget async save (sync caller)
+        try:
+            import asyncio
+
+            asyncio.ensure_future(self._save())
+        except RuntimeError:
+            # No event loop — skip save (should not happen in normal bot op)
+            pass
+        logger.info(f"Privacy opt-out set for user {user_id}: {opt_out}")
 
     def is_privacy_opted_out(self, user_id: str) -> bool:
         """Check if user has opted out of context tracking."""
@@ -270,7 +274,7 @@ class EnhancedContextManager:
 
             # Save to disk if not in memory-only mode
             if not self.in_memory_only:
-                self._save()
+                await self._save()
 
             logger.debug(
                 f"✔ Message stored [context={context_key}, role={role}, user={message.author.id}]"
@@ -448,13 +452,13 @@ class EnhancedContextManager:
             response_text=response_text, used_history=used_history, fallback=fallback
         )
 
-    def reset_context(self, message: discord.Message) -> None:
+    async def reset_context(self, message: discord.Message) -> None:
         """Reset conversation context for a channel/DM."""
         context_key = self._get_context_key(message)
         if context_key in self.memory:
             del self.memory[context_key]
-            self._save()
-            logger.info(f"✔ Context reset for {context_key}")
+            await self._save()
+            logger.info(f"Context reset for {context_key}")
 
     def get_stats(self) -> Dict[str, Any]:
         """Get context manager statistics."""

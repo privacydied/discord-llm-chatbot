@@ -22,12 +22,12 @@ def is_admin_user():
 
     Delegates to bot.core.permissions.is_admin_user for centralized logic.
     """
+    from bot.core.permissions import is_admin_user as _check
 
     async def predicate(ctx):
         logger.info(
             f"[RAG Admin Check] User {ctx.author.id} ({ctx.author.name}) attempting RAG command"
         )
-        from bot.core.permissions import is_admin_user as _check
 
         allowed = await _check(ctx.author, ctx.bot)
 
@@ -273,8 +273,11 @@ class RAGCommands(commands.Cog):
 
             # Test 4: Collection stats
             try:
-                if "search_engine" in locals():
-                    stats = await search_engine.get_stats()
+                search_engine_var = locals().get("search_engine")
+                if search_engine_var is not None and hasattr(
+                    search_engine_var, "get_stats"
+                ):
+                    stats = await search_engine_var.get_stats()
                     if "collection_stats" in stats:
                         chunks = stats["collection_stats"].get("total_chunks", 0)
                         test_results.append(

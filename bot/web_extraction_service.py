@@ -116,6 +116,20 @@ class WebExtractionService:
             self._client = None
 
     async def extract(self, url: str) -> ExtractionResult:
+        from bot.url_safety import (
+            UrlSafetyError,
+            validate_url_with_dns,
+        )
+
+        # SSRF / URL safety validation before any fetch
+        try:
+            await validate_url_with_dns(url)
+        except UrlSafetyError as exc:
+            logger.warning("URL safety blocked extraction: %s", exc)
+            return ExtractionResult(
+                success=False, tier_used="none", error=f"URL blocked: {exc}"
+            )
+
         last_error: Optional[str] = None
         last_tier = "none"
 

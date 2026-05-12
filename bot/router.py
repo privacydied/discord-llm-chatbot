@@ -5566,8 +5566,17 @@ class Router:
         try:
             # Validate URL before attempting screenshot [IV]
             if not url or not isinstance(url, str) or not re.match(r"^https?://", url):
-                self.logger.warning(f"⚠️ Skipping screenshot: invalid URL: {url}")
-                return "⚠️ Skipping screenshot: invalid or missing image URL."
+                self.logger.warning(f"Skipping screenshot: invalid URL: {url}")
+                return "Skipping screenshot: invalid or missing image URL."
+
+            # SSRF / URL safety validation
+            from bot.url_safety import UrlSafetyError, validate_url_with_dns
+
+            try:
+                await validate_url_with_dns(url)
+            except UrlSafetyError as exc:
+                self.logger.warning(f"Screenshot URL blocked: {exc}")
+                return f"Screenshot URL blocked by safety check: {exc}"
 
             # Take screenshot using the configured screenshot API
             self.logger.info(f"📸 Taking screenshot of URL: {url}")
@@ -5981,7 +5990,13 @@ class Router:
                 )
                 extract_res = await web_extractor.extract(url)
                 if extract_res.success:
-                    return f"Twitter post content:\n{extract_res.to_message()}"
+                    from bot.url_safety import wrap_untrusted_content
+
+                    wrapped = wrap_untrusted_content(
+                        extract_res.to_message(),
+                        source=extract_res.canonical_url or url,
+                    )
+                    return f"Twitter post content:\n{wrapped}"
                 else:
                     return "⚠️ Could not process this Twitter URL as video; text extraction also failed."
 
@@ -7096,7 +7111,13 @@ class Router:
                     {"url": url},
                 )
                 if extract_res and extract_res.success:
-                    return f"Web content from {extract_res.canonical_url or url}:\n{extract_res.to_message()}"
+                    from bot.url_safety import wrap_untrusted_content
+
+                    wrapped = wrap_untrusted_content(
+                        extract_res.to_message(),
+                        source=extract_res.canonical_url or url,
+                    )
+                    return f"Web content from {extract_res.canonical_url or url}:\n{wrapped}"
                 # Both process_url and tiered extractor failed — propagate as real failure [REH][PA]
                 err_detail = url_result.get("error", "none") if url_result else "none"
                 self.logger.warning(
@@ -7130,7 +7151,13 @@ class Router:
                     {"url": url},
                 )
                 if extract_res and extract_res.success:
-                    return f"Web content from {extract_res.canonical_url or url}:\n{extract_res.to_message()}"
+                    from bot.url_safety import wrap_untrusted_content
+
+                    wrapped = wrap_untrusted_content(
+                        extract_res.to_message(),
+                        source=extract_res.canonical_url or url,
+                    )
+                    return f"Web content from {extract_res.canonical_url or url}:\n{wrapped}"
                 # process_url returned empty/no-text AND tiered extractor also failed — real failure [REH][PA]
                 self.logger.warning(
                     f"url.extract.all_failed url={url[:120]} error={getattr(extract_res, 'error', 'no_result')}",
@@ -7178,7 +7205,10 @@ class Router:
             # Prefer text from process_url when available.
             content = url_result.get("text", "")
             if content and content.strip():
-                return f"Web content from {url}: {content}"
+                from bot.url_safety import wrap_untrusted_content
+
+                wrapped = wrap_untrusted_content(content, source=url)
+                return f"Web content from {url}: {wrapped}"
 
             # If no text was extracted (and no media route), use tiered extractor (no screenshots)
             self.logger.info(
@@ -7191,7 +7221,15 @@ class Router:
                 {"url": url},
             )
             if extract_res and extract_res.success:
-                return f"Web content from {extract_res.canonical_url or url}:\n{extract_res.to_message()}"
+                from bot.url_safety import wrap_untrusted_content
+
+                wrapped = wrap_untrusted_content(
+                    extract_res.to_message(),
+                    source=extract_res.canonical_url or url,
+                )
+                return (
+                    f"Web content from {extract_res.canonical_url or url}:\n{wrapped}"
+                )
             # Both tiered extraction tiers failed — propagate as real failure [REH][PA]
             self.logger.warning(
                 f"url.extract.all_failed url={url[:120]} error={getattr(extract_res, 'error', 'no_result')}",
@@ -7445,73 +7483,14 @@ class Router:
     async def _handle_screenshot_url(
         self,
         item: InputItem,
-        progress_cb: Optional[Callable[[str, int], Awaitable[None]]] = None,
+        message: Optional[Message] = None,
     ) -> str:
-        """
-        Handle URLs that need screenshot fallback.
-        Returns screenshot analysis for further processing.
-        Screenshots are explicitly command-gated (e.g., !ss).
-        """
-        try:
-            if item.source_type != "url":
-                return f"Screenshot handler received non-URL item: {item.source_type}"
+        """Handle screenshot URL — delegates to extracted handler."""
+        from bot.routing.screenshot_handler import screenshot_handler
+        from bot.routing.base import RouteContext
 
-            url = item.payload
-            self.logger.info(f"📸 Taking screenshot of URL: {url}")
-            if progress_cb:
-                await progress_cb("validate", 1)
-            # Lazy-import to avoid circular deps and keep import costs off hot paths
-            from .utils.external_api import external_screenshot
-
-            # Preparation phase (network/client setup, throttling checks, etc.)
-            if progress_cb:
-                await progress_cb("prepare", 2)
-
-            if progress_cb:
-                await progress_cb("capture", 3)
-            screenshot_path = await external_screenshot(url)
-            if not screenshot_path:
-                self.logger.warning(
-                    f"⚠️ Screenshot API did not return an image for {url}"
-                )
-                return f"⚠️ Could not capture a screenshot for: {url}. Please try again later."
-
-            if progress_cb:
-                await progress_cb("saved", 4)
-            self.logger.info(
-                f"🖼️ Screenshot saved at: {screenshot_path}. Sending to VL."
-            )
-            try:
-                # Use VL to analyze the screenshot content
-                if progress_cb:
-                    await progress_cb("analyze", 5)
-                analysis = await see_infer(
-                    image_path=screenshot_path,
-                    prompt=(
-                        f"Analyze this screenshot from {url}. Summarize the main content, visible text, "
-                        f"and any important details. Be concise."
-                    ),
-                )
-                if analysis:
-                    if progress_cb:
-                        await progress_cb("done", 6)
-                    return f"Screenshot content from {url}: {analysis}"
-                else:
-                    if progress_cb:
-                        await progress_cb("done", 6)
-                    return f"✅ Captured screenshot from {url}, but vision analysis returned no content."
-            except Exception as vl_err:
-                self.logger.error(
-                    f"❌ Vision analysis failed for {screenshot_path}: {vl_err}",
-                    exc_info=True,
-                )
-                if progress_cb:
-                    await progress_cb("done", 6)
-                return f"✅ Captured screenshot from {url}, but could not analyze it right now."
-
-        except Exception as e:
-            self.logger.error(f"Error taking screenshot of URL: {e}", exc_info=True)
-            return f"Failed to screenshot URL: {item.payload}"
+        ctx = RouteContext(item=item, message=message)
+        return await screenshot_handler.handle(ctx)
 
     async def _handle_unknown(
         self, item: InputItem, message: Optional[Message] = None

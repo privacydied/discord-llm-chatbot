@@ -1,16 +1,25 @@
-"""Routing layer — extracted from bot/router.py (Phase 12).
+"""Routing handlers extracted from bot/router.py.
 
-All route handlers live here.  The router in bot/router.py delegates to
-these handlers while the extraction is in progress to preserve backward
-compatibility.
+Each handler implements the RouteHandler protocol:
+- can_handle(ctx) -> bool
+- async handle(ctx) -> RouteResult
+
+Extraction protocol:
+1. Router delegates to handler (preserves existing behavior)
+2. Handler is independently testable
+3. Router remains the compatibility shell
+4. Imports outside router.py are preserved
 """
 
-from bot.routing.base import RouteContext, RouteHandler, RouteResult
-from bot.routing.unknown_handler import UnknownHandler
+from .base import RouteContext, RouteResult, RouteHandler
+from .screenshot_handler import ScreenshotHandler, handle_screenshot_url
+from .unknown_handler import UnknownHandler
 
 __all__ = [
     "RouteContext",
-    "RouteHandler",
     "RouteResult",
+    "RouteHandler",
+    "ScreenshotHandler",
     "UnknownHandler",
+    "handle_screenshot_url",
 ]

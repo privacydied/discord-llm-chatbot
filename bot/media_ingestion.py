@@ -309,10 +309,13 @@ class MediaIngestionManager:
                     )
 
                 if extract_res is not None and getattr(extract_res, "success", False):
-                    content = (
-                        f"Web content from {extract_res.canonical_url or url}:\n"
-                        f"{extract_res.to_message()}"
+                    from bot.url_safety import wrap_untrusted_content
+
+                    wrapped = wrap_untrusted_content(
+                        extract_res.to_message(),
+                        source=extract_res.canonical_url or url,
                     )
+                    content = f"Web content from {extract_res.canonical_url or url}:\n{wrapped}"
                     return MediaIngestionResult(
                         success=True,
                         content=content,

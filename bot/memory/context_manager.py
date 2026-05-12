@@ -1,5 +1,7 @@
+import asyncio
 import json
 import os
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
 import logging
 import stat
@@ -78,8 +80,8 @@ class ContextManager:
             )
             self.memory = {}
 
-    def _save(self):
-        """Saves the current in-memory context to the JSON file.
+    async def _save(self):
+        """Saves the current in-memory context to the JSON file atomically.
 
         This is part of the storage backend, which could be replaced by Redis, etc.
         Security: Ensure the context file has restrictive permissions (e.g., 600).
@@ -94,8 +96,9 @@ class ContextManager:
         }
 
         try:
-            with open(self.filepath, "w", encoding="utf-8") as f:
-                json.dump(guild_context_only, f, indent=2)
+            from bot.atomic_json import write_json_atomic
+
+            await write_json_atomic(Path(self.filepath), guild_context_only)
             # Post-write permission check (best-effort)
             try:
                 st = os.stat(self.filepath)
@@ -143,7 +146,11 @@ class ContextManager:
             self.memory.setdefault(primary_key, []).append(entry)
             self.memory[primary_key] = self.memory[primary_key][-self.max_messages :]
 
-        self._save()
+        # Fire-and-forget async save (sync caller)
+        try:
+            asyncio.ensure_future(self._save())
+        except RuntimeError:
+            pass
 
     def get_context(self, message: discord.Message) -> List[Dict[str, str]]:
         """Retrieves the context for a given message's source."""
