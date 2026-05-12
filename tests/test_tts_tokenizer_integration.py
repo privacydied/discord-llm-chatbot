@@ -156,22 +156,6 @@ class TestTTSTokenizerIntegrationEspeakWrapper(unittest.TestCase):
         # Clean up temporary directory
         self.temp_dir.cleanup()
 
-    def test_espeak_wrapper_registration(self):
-        """Sanity check: registration shim exists and is callable.
-
-        We no longer depend on kokoro_onnx.tokenizer_registry in tests. The
-        registration function should exist and return a boolean without raising.
-        """
-        from bot.tts import TOKENIZER_ALIASES, register_espeak_wrapper
-
-        # TOKENIZER_ALIASES should be a dict with at least "default"
-        self.assertIsInstance(TOKENIZER_ALIASES, dict)
-        self.assertIn("default", TOKENIZER_ALIASES)
-        # Calling the shim should not raise and should return a bool (may be False
-        # when kokoro_onnx.tokenizer_registry does not exist in this environment)
-        result = register_espeak_wrapper()
-        self.assertIsInstance(result, bool)
-
     @patch("bot.tts.kokoro_direct.KokoroDirect._load_model")
     @patch("bot.tts.kokoro_direct.KokoroDirect._load_voices")
     @patch("bot.tts.kokoro_direct.KokoroDirect._save_audio_to_wav")
@@ -317,7 +301,7 @@ class TestTTSTokenizerIntegrationEspeakWrapper(unittest.TestCase):
     @patch("bot.tts.manager.TTSManager._init_tokenizer_registry")
     @patch("bot.tts.manager.TTSManager._load_kokoro")
     def test_tts_manager_integration(self, mock_load_kokoro, mock_init_registry):
-        """Test TTSManager integration with kokoro_bootstrap and KokoroDirect."""
+        """Test TTSManager integration with KokoroDirect."""
         # Import TTSManager
         from bot.tts.manager import TTSManager
 

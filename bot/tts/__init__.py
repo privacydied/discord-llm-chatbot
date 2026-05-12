@@ -2,13 +2,12 @@
 TTS (Text-to-Speech) package for the Discord bot.
 
 This package contains modules for TTS functionality, including
-the kokoro_bootstrap module for registering the EspeakWrapper tokenizer.
+TTSManager, engine implementations, and tokenizer utilities.
 """
 
 import os
 from pathlib import Path
 
-from .kokoro_bootstrap import TOKENIZER_ALIASES, register_espeak_wrapper
 from .stub import generate_stub_wav
 from .errors import SynthesisError
 
@@ -69,8 +68,6 @@ class TTS:  # pragma: no cover - test helper symbol
 
 
 __all__ = [
-    "TOKENIZER_ALIASES",
-    "register_espeak_wrapper",
     "TTSManager",
     "TTS",
     "generate_tts",
