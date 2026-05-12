@@ -6,7 +6,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from bot.modality import InputItem
 from bot.routing.base import RouteContext
 from bot.routing.screenshot_handler import ScreenshotHandler, handle_screenshot_url
 

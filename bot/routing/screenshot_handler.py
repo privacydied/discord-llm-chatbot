@@ -13,7 +13,7 @@ from ..see import see_infer
 from ..utils.logging import get_logger
 
 if TYPE_CHECKING:
-    from ..modality import InputItem
+    pass
 
 logger = get_logger(__name__)
 
