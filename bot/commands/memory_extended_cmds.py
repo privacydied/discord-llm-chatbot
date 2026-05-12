@@ -150,23 +150,89 @@ class ExtendedMemoryCommands(commands.Cog):
                 await ctx.send("Memory service is not enabled.")
                 return
 
+            user_id = str(ctx.author.id)
+
+            # Try exact match first
             deleted = await service.delete_memory(memory_id)
 
             if not deleted:
+                # Try prefix match (first 8 chars of user's own memories)
+                all_records = await service.list_user_memories(user_id, limit=100)
+                prefix_match = next(
+                    (
+                        r
+                        for r in all_records
+                        if r.memory_id.startswith(memory_id)
+                    ),
+                    None,
+                )
+                if prefix_match:
+                    summary = prefix_match.summary or prefix_match.text or ""
+                    if len(summary) > 200:
+                        summary = summary[:197] + "..."
+
+                    await ctx.send(
+                        "🧠 Found a matching memory. React with ✅ to delete, or ignore.\n"
+                        f"**ID:** `{prefix_match.memory_id[:8]}`\n**Preview:** {summary}\n"
+                        f"**Type:** {prefix_match.context_type}  "
+                        f"**Confidence:** {prefix_match.confidence:.2f}"
+                    )
+
+                    def check(reaction, user):
+                        return (
+                            user.id == ctx.author.id
+                            and reaction.message.channel == ctx.channel
+                            and str(reaction.emoji) == "\u2705"
+                        )
+
+                    try:
+                        await self.bot.wait_for("reaction_add", timeout=30.0, check=check)
+                    except Exception:
+                        await ctx.send("⏱️ Delete cancelled (timed out).")
+                        return
+
+                    deleted = await service.delete_memory(prefix_match.memory_id)
+                    if deleted:
+                        await ctx.send("✅ Deleted the memory.")
+                    else:
+                        await ctx.send("❌ Failed to delete memory.")
+                    return
+
+                # Fall back to semantic search
                 matches = await service.search_user_memories(
-                    str(ctx.author.id), memory_id, limit=5
+                    user_id, memory_id, limit=1
                 )
                 if not matches:
                     await ctx.send("❌ No matching memory found.")
                     return
 
                 target = matches[0]
-                deleted = await service.delete_memory(target.memory_id)
+                summary = target.summary or target.text or ""
+                if len(summary) > 200:
+                    summary = summary[:197] + "..."
 
-                if deleted:
-                    await ctx.send(
-                        f"✅ Deleted memory `{target.memory_id[:8]}`: {target.summary}"
+                await ctx.send(
+                    "🧠 Found a matching memory via search. React with ✅ to delete, or ignore.\n"
+                    f"**ID:** `{target.memory_id[:8]}`\n**Preview:** {summary}\n"
+                    f"**Type:** {target.context_type}  **Confidence:** {target.confidence:.2f}"
+                )
+
+                def check(reaction, user):
+                    return (
+                        user.id == ctx.author.id
+                        and reaction.message.channel == ctx.channel
+                        and str(reaction.emoji) == "\u2705"
                     )
+
+                try:
+                    await self.bot.wait_for("reaction_add", timeout=30.0, check=check)
+                except Exception:
+                    await ctx.send("⏱️ Delete cancelled (timed out).")
+                    return
+
+                deleted = await service.delete_memory(target.memory_id)
+                if deleted:
+                    await ctx.send("✅ Deleted the memory.")
                 else:
                     await ctx.send("❌ Failed to delete memory.")
             else:
