@@ -1,114 +1,181 @@
+"""
+Canonical TTS manager for the Discord bot.
+
+Exposes ``TTSManager`` with environment variable resolution, tokenizer
+registry bootstrap, lazy ``KokoroDirect`` loading, and a synchronous
+``generate_speech`` helper that returns a :class:`pathlib.Path`.
+"""
+
 from __future__ import annotations
 
+import os
 import logging
-import asyncio
+from pathlib import Path
+from typing import Any, Dict, Optional, Tuple
 
-from bot.config import load_config
-from bot.tts.engines.kokoro import KokoroTTS
-from bot.tts.errors import SynthesisError
-from bot.memory import get_profile
+# Import KokoroDirect here so tests can patch 'bot.tts_manager_fixed.KokoroDirect'
+from .kokoro_direct import KokoroDirect
 
 logger = logging.getLogger(__name__)
 
+# Defaults aligned with asset manager [CMV]
+DEFAULT_MODEL_PATH = "tts/kokoro-v1.0.onnx"
+DEFAULT_VOICES_PATH = "tts/voices-v1.0.bin"
+
 
 class TTSManager:
-    def __init__(self) -> None:
-        cfg = load_config()
-        self.enabled = bool(cfg.get("TTS_ENABLE", False))
-        self.engine: KokoroTTS | None = None
-        self.max_concurrent_jobs = int(cfg.get("TTS_MAX_CONCURRENT", 2))
-        self.max_text_length = int(cfg.get("TTS_MAX_TEXT_LENGTH", 500))
-        self.synthesis_timeout = float(cfg.get("TTS_SYNTHESIS_TIMEOUT", 30.0))
-        self._current_jobs: dict[str, asyncio.Task] = {}
-        self._job_locks: dict[str, asyncio.Lock] = {}
+    """
+    Minimal TTS manager compatible with legacy tests and code.
 
-        if self.enabled:
-            try:
-                # Initialize Kokoro TTS engine
-                self.engine = KokoroTTS.from_config(cfg)
-                logger.info("TTS engine initialized successfully")
-            except Exception as e:
-                logger.error(f"Failed to initialize TTS engine: {e}", exc_info=True)
-                self.enabled = False
+    Responsibilities:
+    - Resolve model/voices paths from env or config with new→old precedence
+    - Initialize tokenizer registry (no-op friendly)
+    - Lazily load KokoroDirect on first use
+    - Provide synchronous generate_speech() that returns a Path
+    """
 
-    async def generate_tts(self, text: str, user_id: str, out_path: str) -> str:
-        if not self.enabled or not self.engine:
-            raise RuntimeError("TTS is not enabled")
+    def __init__(self, config: Optional[Dict[str, Any]] = None) -> None:
+        self.config: Dict[str, Any] = config or {}
 
-        # Check max text length
-        if len(text) > self.max_text_length:
-            raise ValueError(
-                f"Text length exceeds maximum ({self.max_text_length} characters)"
-            )
+        # Public attributes expected by tests/scripts
+        self.backend: str = str(
+            self.config.get("TTS_BACKEND") or os.getenv("TTS_BACKEND") or "kokoro-onnx"
+        )
+        self.voice: str = str(
+            self.config.get("TTS_VOICE") or os.getenv("TTS_VOICE") or "default"
+        )
+        self.available: bool = False
 
-        # Per-user gating: check user's profile preferences
-        profile = get_profile(user_id)
-        user_pref = profile.get("preferences", {}).get("memory_enabled", True)
-        if not user_pref:
-            raise RuntimeError("TTS not available due to user memory preference")
+        # Internal state
+        self.kokoro: Optional[KokoroDirect] = None
 
-        # Check concurrent jobs for this user (simple per-user gating)
-        if user_id in self._current_jobs:
-            raise RuntimeError("User already has a pending TTS job")
-
-        # Create a lock for this user
-        if user_id not in self._job_locks:
-            self._job_locks[user_id] = asyncio.Lock()
-
-        # Acquire the lock to prevent concurrent jobs for the same user
-        async with self._job_locks[user_id]:
-            # Create a task for this job
-            task = asyncio.create_task(self._synthesize_with_timeout(text, out_path))
-            self._current_jobs[user_id] = task
-
-            try:
-                result = await task
-                return result
-            except Exception as e:
-                raise e
-            finally:
-                # Remove the job from current jobs
-                if (
-                    user_id in self._current_jobs
-                    and self._current_jobs[user_id] is task
-                ):
-                    del self._current_jobs[user_id]
-
-    async def _synthesize_with_timeout(self, text: str, out_path: str) -> str:
+        # Best‑effort tokenizer registry init (safe if patched in tests)
         try:
-            # Synthesize with timeout
-            await asyncio.wait_for(
-                self.engine.synthesize(text, out_path), timeout=self.synthesis_timeout
-            )
-            return out_path
-        except asyncio.TimeoutError:
-            raise SynthesisError(
-                f"TTS synthesis timed out after {self.synthesis_timeout} seconds"
+            self._init_tokenizer_registry()
+        except Exception as e:  # [REH]
+            logger.debug(
+                f"Tokenizer registry init skipped: {e}",
+                extra={"subsys": "tts", "event": "manager.registry_init.skip"},
             )
 
-    def get_status(self) -> dict:
-        if not self.enabled or not self.engine:
-            return {"enabled": False, "status": "disabled"}
-        return {
-            "enabled": True,
-            "status": "ready",
-            "engine": "kokoro",
-            "max_chars": self.max_text_length,
-            "sample_rate": self.engine.sample_rate
-            if hasattr(self.engine, "sample_rate")
-            else "unknown",
-            "max_concurrent": self.max_concurrent_jobs,
-        }
+    # ----- Initialization helpers -----
+    def _init_tokenizer_registry(self) -> None:
+        """Initialize tokenizer registry discovery. Safe to call multiple times."""
+        try:
+            from .tokenizer_registry import TokenizerRegistry
 
-    async def shutdown(self) -> None:
-        # Cancel any ongoing jobs
-        for task in self._current_jobs.values():
-            task.cancel()
-        if self.engine:
-            await self.engine.shutdown()
+            registry = TokenizerRegistry.get_instance()
+            registry.discover_tokenizers()
+            logger.debug(
+                "Tokenizer registry initialized",
+                extra={"subsys": "tts", "event": "manager.registry_init"},
+            )
+        except Exception as e:  # [REH]
+            logger.info(
+                f"Tokenizer registry unavailable: {e}",
+                extra={"subsys": "tts", "event": "manager.registry_init.unavailable"},
+            )
 
-    async def __aenter__(self):
-        return self
+    def _resolve_paths(self) -> Tuple[str, str]:
+        """
+        Resolve model and voices paths with precedence:
+        1) New env vars: TTS_MODEL_PATH, TTS_VOICES_PATH
+        2) Old env vars: TTS_MODEL_FILE, TTS_VOICE_FILE
+        3) Config nested: config['tts']['model_path'|'voices_path']
+        4) Config flat: config['TTS_MODEL_PATH'|'TTS_VOICES_PATH'|'TTS_MODEL_FILE'|'TTS_VOICE_FILE']
+        5) Reasonable defaults
+        """
+        # 1) New env
+        model_path = os.getenv("TTS_MODEL_PATH")
+        voices_path = os.getenv("TTS_VOICES_PATH")
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        await self.shutdown()
+        # 2) Old env (fallback)
+        # If new env vars are not set OR equal to our known defaults, prefer old env if provided.
+        old_model_env = os.getenv("TTS_MODEL_FILE")
+        old_voices_env = os.getenv("TTS_VOICE_FILE")
+        if (not model_path or model_path == DEFAULT_MODEL_PATH) and old_model_env:
+            model_path = old_model_env
+        if (not voices_path or voices_path == DEFAULT_VOICES_PATH) and old_voices_env:
+            voices_path = old_voices_env
+
+        # 3) Config nested
+        tts_cfg = self.config.get("tts") or {}
+        if not model_path:
+            model_path = tts_cfg.get("model_path")
+        if not voices_path:
+            voices_path = tts_cfg.get("voices_path")
+
+        # 4) Config flat fallbacks
+        if not model_path:
+            model_path = self.config.get("TTS_MODEL_PATH") or self.config.get(
+                "TTS_MODEL_FILE"
+            )
+        if not voices_path:
+            voices_path = self.config.get("TTS_VOICES_PATH") or self.config.get(
+                "TTS_VOICE_FILE"
+            )
+
+        # 5) Defaults
+        model_path = str(model_path or DEFAULT_MODEL_PATH)
+        voices_path = str(voices_path or DEFAULT_VOICES_PATH)
+
+        logger.debug(
+            f"Resolved model_path={model_path}, voices_path={voices_path}",
+            extra={"subsys": "tts", "event": "manager.paths"},
+        )
+        return model_path, voices_path
+
+    def _load_kokoro(self, model_path: str, voices_path: str) -> KokoroDirect:
+        """Create KokoroDirect instance. Broken out for test patching."""
+        logger.info(
+            "Loading KokoroDirect",
+            extra={
+                "subsys": "tts",
+                "event": "manager.kokoro.load",
+                "model_path": model_path,
+                "voices_path": voices_path,
+            },
+        )
+        return KokoroDirect(model_path=model_path, voices_path=voices_path)
+
+    # ----- Public API -----
+    def load_model(self) -> None:
+        """Load KokoroDirect if not already loaded."""
+        if self.kokoro is not None:
+            return
+        model_path, voices_path = self._resolve_paths()
+        self.kokoro = self._load_kokoro(model_path, voices_path)
+        self.available = self.kokoro is not None
+        logger.debug(
+            f"TTS available={self.available}",
+            extra={"subsys": "tts", "event": "manager.available"},
+        )
+
+    def generate_speech(
+        self, text: str, voice: Optional[str] = None, *, out_path: Optional[Path] = None
+    ) -> Path:
+        """
+        Generate speech synchronously using KokoroDirect.create.
+
+        Args:
+            text: Text to synthesize
+            voice: Optional voice id/name. Defaults to manager.voice
+            out_path: Optional explicit output path for WAV file
+
+        Returns:
+            Path to generated WAV file
+        """
+        if self.kokoro is None:
+            self.load_model()
+        if not self.kokoro:
+            raise RuntimeError("TTS engine not available")  # [REH]
+
+        chosen_voice = voice or self.voice
+        logger.debug(
+            f"Generating speech (voice={chosen_voice})",
+            extra={"subsys": "tts", "event": "manager.generate"},
+        )
+        return self.kokoro.create(text, chosen_voice, out_path=out_path)
+
+
+__all__ = ["TTSManager", "KokoroDirect"]

@@ -9,7 +9,7 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 # Import the modules we want to test
-from bot.tts.manager_fixed import TTSManager
+from bot.tts.manager import TTSManager
 from bot.tts.kokoro_direct import KokoroDirect, TokenizationMethod
 
 
@@ -42,7 +42,7 @@ class TestTTSEnvVarCompat(unittest.TestCase):
         # Clean up temporary directory
         self.temp_dir.cleanup()
 
-    @patch("bot.tts.manager_fixed.KokoroDirect")
+    @patch("bot.tts.manager.KokoroDirect")
     def test_new_env_vars(self, mock_kokoro):
         """Test that new environment variables are used correctly."""
         # Set new environment variables
@@ -61,7 +61,7 @@ class TestTTSEnvVarCompat(unittest.TestCase):
         self.assertEqual(kwargs["model_path"], str(self.temp_path / "new_model.onnx"))
         self.assertEqual(kwargs["voices_path"], str(self.temp_path / "new_voices.bin"))
 
-    @patch("bot.tts.manager_fixed.KokoroDirect")
+    @patch("bot.tts.manager.KokoroDirect")
     def test_old_env_vars(self, mock_kokoro):
         """Test that old environment variables are used as fallback."""
         # Set old environment variables
@@ -80,7 +80,7 @@ class TestTTSEnvVarCompat(unittest.TestCase):
         self.assertEqual(kwargs["model_path"], str(self.temp_path / "old_model.onnx"))
         self.assertEqual(kwargs["voices_path"], str(self.temp_path / "old_voices.bin"))
 
-    @patch("bot.tts.manager_fixed.KokoroDirect")
+    @patch("bot.tts.manager.KokoroDirect")
     def test_new_vars_override_old(self, mock_kokoro):
         """Test that new environment variables override old ones."""
         # Set both old and new environment variables

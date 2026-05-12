@@ -153,7 +153,8 @@ class LLMBot(commands.Bot):
         self.tts_manager: Optional[TTSManager] = None
         self.archive_service = None
         self.router: Optional[Router] = None
-        self.background_tasks = []
+        self._background_tasks: set[asyncio.Task] = set()
+        self._event_loop: Optional[asyncio.AbstractEventLoop] = None
         self._is_ready = asyncio.Event()
         self.system_prompts = {}
         self.message_processor = None  # set in setup_hook
@@ -187,6 +188,27 @@ class LLMBot(commands.Bot):
             max_token_limit=self.config.get("MAX_CONTEXT_TOKENS", 4000),
         )
         self._public_output_safety_installed = False
+
+    def _track_background_task(self, task: asyncio.Task) -> None:
+        """Register a background task so it is tracked and cancelled on shutdown."""
+        self._background_tasks.add(task)
+        task.add_done_callback(lambda t: self._background_tasks.discard(t))
+
+        def _log_exception(t: asyncio.Task) -> None:
+            try:
+                exc = t.exception()
+            except asyncio.CancelledError:
+                return  # cancellation is normal
+            except Exception:
+                return  # task did not raise
+            if exc is not None:
+                task_name = t.get_name() if hasattr(t, "get_name") else "unnamed"
+                self.logger.warning(
+                    f"Background task '{task_name}' raised: {exc}",
+                    exc_info=exc,
+                )
+
+        task.add_done_callback(_log_exception)
 
     def _install_public_output_safety_hooks(self) -> None:
         """Patch Discord send/edit boundaries so public text is sanitized everywhere."""
@@ -447,6 +469,8 @@ class LLMBot(commands.Bot):
             return
 
         self._boot_completed = True
+        # Save the running event loop for thread-safe reload callbacks [PHASE2]
+        self._event_loop = asyncio.get_running_loop()
         self.logger.info("🔧 Starting bot setup")
         self._install_public_output_safety_hooks()
 
@@ -623,6 +647,20 @@ class LLMBot(commands.Bot):
                 def _on_config_reload(
                     old_cfg: Dict[str, Any], new_cfg: Dict[str, Any]
                 ) -> None:
+                    """Thread-safe config reload shim: schedules mutation onto the event loop."""
+                    loop = self._event_loop
+                    if loop is None or loop.is_closed():
+                        self.logger.warning(
+                            "Config reload skipped: event loop not running"
+                        )
+                        return
+                    asyncio.run_coroutine_threadsafe(
+                        _apply_config_reload(old_cfg, new_cfg), loop
+                    )
+
+                async def _apply_config_reload(
+                    old_cfg: Dict[str, Any], new_cfg: Dict[str, Any]
+                ) -> None:
                     try:
                         # Swap live config snapshot
                         self.config = dict(new_cfg)
@@ -731,80 +769,28 @@ class LLMBot(commands.Bot):
                                             "detail": {},
                                         },
                                     )
-                                    # cleanup function is async; schedule and forget to avoid blocking reload path
-                                    import asyncio as _aio
+                                    # Schedule cleanup with retained ref and bounded timeout [PHASE2]
+                                    async def _cleanup_with_timeout():
+                                        try:  # noqa: SIM105
+                                            async with asyncio.timeout(10.0):
+                                                await cleanup_http_client()
+                                        except asyncio.TimeoutError:
+                                            self.logger.warning(
+                                                "config.reload.http_client_cleanup_timeout",
+                                                extra={
+                                                    "event": "config.reload.http_client_cleanup_timeout",
+                                                    "detail": {"timeout": 10.0},
+                                                },
+                                            )
+                                        except Exception:
+                                            pass  # best-effort cleanup
 
-                                    _aio.create_task(cleanup_http_client())
+                                    task = asyncio.create_task(_cleanup_with_timeout())
+                                    self._track_background_task(task)
                                 except Exception as e:
                                     self.logger.debug(
                                         f"HTTP client restart failed: {e}"
                                     )
-                        except Exception:
-                            pass
-                        # Scoped re-init: rebind TTS when TTS_* keys changed; refresh VO configs when VISION/VL_* changed
-                        try:
-                            changed_keys = set()
-                            ok = old_cfg or {}
-                            nk = new_cfg or {}
-                            for k in set(ok.keys()) | set(nk.keys()):
-                                if ok.get(k) != nk.get(k):
-                                    changed_keys.add(str(k))
-                            upper = {k.upper() for k in changed_keys}
-                            if any(k.startswith("TTS_") for k in upper):
-                                # Best-effort shutdown of prior TTS thread executor
-                                try:
-                                    if getattr(self, "tts_manager", None) and getattr(
-                                        self.tts_manager, "_executor", None
-                                    ):
-                                        self.tts_manager._executor.shutdown(wait=False)
-                                except Exception:
-                                    pass
-                                try:
-                                    from bot.tts.interface import TTSManager
-
-                                    self.tts_manager = TTSManager(self)
-                                    self.logger.info("TTS manager hot-reloaded")
-                                except Exception as e:
-                                    self.logger.error(f"TTS hot-reload failed: {e}")
-                            if any(
-                                k.startswith("VISION_") or k.startswith("VL_")
-                                for k in upper
-                            ):
-                                vo = getattr(self, "vision_orchestrator", None)
-                                if vo is not None:
-                                    try:
-                                        vo.config = self.config
-                                    except Exception:
-                                        pass
-                                    try:
-                                        if (
-                                            hasattr(vo, "gateway")
-                                            and vo.gateway is not None
-                                        ):
-                                            if hasattr(vo.gateway, "update_config"):
-                                                vo.gateway.update_config(self.config)
-                                            else:
-                                                vo.gateway.config = self.config
-                                                if (
-                                                    hasattr(vo.gateway, "adapter")
-                                                    and vo.gateway.adapter is not None
-                                                ):
-                                                    adapter = vo.gateway.adapter
-                                                    if hasattr(
-                                                        adapter, "update_config"
-                                                    ):
-                                                        adapter.update_config(
-                                                            self.config
-                                                        )
-                                                    else:
-                                                        adapter.config = self.config
-                                        self.logger.info(
-                                            "Vision orchestrator config rebound (hot)"
-                                        )
-                                    except Exception as e:
-                                        self.logger.debug(
-                                            f"Vision hot-rebind failed: {e}"
-                                        )
                         except Exception:
                             pass
                         # Breadcrumb
@@ -896,21 +882,23 @@ class LLMBot(commands.Bot):
                 is_command = False
             if not is_command and getattr(message, "content", "").strip():
                 try:
-                    asyncio.create_task(
-                        enqueue_inferred_memory(
-                            user_id=str(message.author.id),
-                            text=message.content,
-                            guild_id=str(message.guild.id)
-                            if getattr(message, "guild", None)
-                            else None,
-                            channel_id=str(message.channel.id)
-                            if getattr(message, "channel", None)
-                            else None,
-                            thread_id=str(message.channel.id)
-                            if isinstance(message.channel, discord.Thread)
-                            else None,
-                            source_message_id=str(message.id),
-                            metadata={"source": "bot_message_pipeline"},
+                    self._track_background_task(
+                        asyncio.create_task(
+                            enqueue_inferred_memory(
+                                user_id=str(message.author.id),
+                                text=message.content,
+                                guild_id=str(message.guild.id)
+                                if getattr(message, "guild", None)
+                                else None,
+                                channel_id=str(message.channel.id)
+                                if getattr(message, "channel", None)
+                                else None,
+                                thread_id=str(message.channel.id)
+                                if isinstance(message.channel, discord.Thread)
+                                else None,
+                                source_message_id=str(message.id),
+                                metadata={"source": "bot_message_pipeline"},
+                            )
                         )
                     )
                 except Exception:
@@ -2609,8 +2597,12 @@ class LLMBot(commands.Bot):
         try:
             from bot.tasks import setup_memory_save_task
 
-            asyncio.create_task(start_memory_service(self))
-            asyncio.create_task(start_memory_distiller(self))
+            self._track_background_task(
+                asyncio.create_task(start_memory_service(self), name="memory_service")
+            )
+            self._track_background_task(
+                asyncio.create_task(start_memory_distiller(self), name="memory_distiller")
+            )
             self.memory_save_task = setup_memory_save_task(self)
             self.memory_save_task.start()
             archive_start_task = asyncio.create_task(
@@ -2626,7 +2618,7 @@ class LLMBot(commands.Bot):
                     )
 
             archive_start_task.add_done_callback(_log_archive_start_failure)
-            self.background_tasks.append(archive_start_task)
+            self._track_background_task(archive_start_task)
         except Exception as e:
             self.logger.error(f"Failed to set up background tasks: {e}", exc_info=True)
 
@@ -2662,7 +2654,12 @@ class LLMBot(commands.Bot):
                             and loop.is_running()
                             and not getattr(self.vision_orchestrator, "_started", False)
                         ):
-                            asyncio.create_task(self.vision_orchestrator.start())
+                            self._track_background_task(
+                                asyncio.create_task(
+                                    self.vision_orchestrator.start(),
+                                    name="vision_startup",
+                                )
+                            )
                             self.logger.info("VisionOrchestrator: start queued")
                     except RuntimeError:
                         # No running loop; fall back to direct start
@@ -2897,16 +2894,16 @@ class LLMBot(commands.Bot):
                 except Exception as e:
                     self.logger.warning(f"Error cancelling memory save task: {e}")
 
-            # Cancel background tasks
-            for task in self.background_tasks:
+            # Cancel tracked background tasks
+            for task in list(self._background_tasks):
                 if not task.done():
                     task.cancel()
 
             # Wait for background tasks to complete with timeout
-            if self.background_tasks:
+            if self._background_tasks:
                 try:
                     await asyncio.wait_for(
-                        asyncio.gather(*self.background_tasks, return_exceptions=True),
+                        asyncio.gather(*self._background_tasks, return_exceptions=True),
                         timeout=3.0,
                     )
                 except asyncio.TimeoutError:

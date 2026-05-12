@@ -314,12 +314,12 @@ class TestTTSTokenizerIntegrationEspeakWrapper(unittest.TestCase):
                 result, Path, f"Result is not a Path, got {type(result)}"
             )
 
-    @patch("bot.tts.manager_fixed.TTSManager._init_tokenizer_registry")
-    @patch("bot.tts.manager_fixed.TTSManager._load_kokoro")
+    @patch("bot.tts.manager.TTSManager._init_tokenizer_registry")
+    @patch("bot.tts.manager.TTSManager._load_kokoro")
     def test_tts_manager_integration(self, mock_load_kokoro, mock_init_registry):
         """Test TTSManager integration with kokoro_bootstrap and KokoroDirect."""
         # Import TTSManager
-        from bot.tts.manager_fixed import TTSManager
+        from bot.tts.manager import TTSManager
 
         # Create a minimal config
         config = {
