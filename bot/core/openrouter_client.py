@@ -420,26 +420,6 @@ class OptimizedOpenRouterClient:
         }
 
 
-# Global client instance for reuse [PA]
-_client_instance: Optional[OptimizedOpenRouterClient] = None
-
-
-async def get_openrouter_client(
-    api_key: str, base_url: str = "https://openrouter.ai/api/v1"
-) -> OptimizedOpenRouterClient:
-    """Get or create optimized OpenRouter client instance."""
-    global _client_instance
-
-    if _client_instance is None:
-        _client_instance = OptimizedOpenRouterClient(api_key, base_url)
-        logger.info("🚀 Global OptimizedOpenRouterClient created")
-
-    return _client_instance
-
-
-async def close_global_client():
-    """Close global client for cleanup [RM]."""
-    global _client_instance
-    if _client_instance:
-        await _client_instance.close()
-        _client_instance = None
+# NOTE: Global singleton removed.  Instantiate OptimizedOpenRouterClient
+# directly wherever a client is needed.  The class remains fully usable
+# as a standalone, instance-scoped object.
