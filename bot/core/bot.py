@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 import asyncio
-import collections
 import os
 import sys
 import time
@@ -46,6 +45,7 @@ from bot.memory.thread_tail import (
     resolve_thread_reply_target,
     _is_thread_channel,
 )
+from .message_processor import MessageProcessor
 
 # Discord hard limit is 2000; use 1950 to leave headroom for mentions/overhead [REH][PA]
 _DISCORD_MAX_CONTENT_LEN = 1950
@@ -156,14 +156,8 @@ class LLMBot(commands.Bot):
         self.background_tasks = []
         self._is_ready = asyncio.Event()
         self.system_prompts = {}
-        self._processed_messages = (
-            collections.OrderedDict()
-        )  # BUGFIX 25: OrderedDict for FIFO dedup eviction
-        self._dispatch_lock = (
-            asyncio.Lock()
-        )  # Global lock for processed messages tracking
-        self._user_queues: Dict[str, asyncio.Queue] = {}  # Per-user message queues
-        self._user_processors: Dict[str, asyncio.Task] = {}  # Per-user processing tasks
+        self.message_processor = None  # set in setup_hook
+        self._typing_suppressed_until: Dict[int, float] = {}
 
         # Track active long-running tasks for cancellation
         self._active_long_running_tasks: Dict[str, asyncio.Task] = {}  # task_id -> task
@@ -171,7 +165,6 @@ class LLMBot(commands.Bot):
         self._task_lock = (
             asyncio.Lock()
         )  # [BUGFIX] prevent callback race on task tracking dicts
-        self._typing_suppressed_until: Dict[int, float] = {}
 
         # Idempotency guard to prevent duplicate initialization [DRY][REH]
         self._boot_completed = False
@@ -456,6 +449,9 @@ class LLMBot(commands.Bot):
         self._boot_completed = True
         self.logger.info("🔧 Starting bot setup")
         self._install_public_output_safety_hooks()
+
+        # Instantiate MessageProcessor for per-user queue + dedup + orchestration
+        self.message_processor = MessageProcessor(self)
 
         try:
             # Initialize metrics
@@ -871,64 +867,16 @@ class LLMBot(commands.Bot):
             self.logger.info("🎉 Bot is ready to receive commands!")
 
     def _get_user_queue(self, user_id: str) -> asyncio.Queue:
-        """Get or create a message queue for a specific user."""
-        if user_id not in self._user_queues:
-            self._user_queues[user_id] = asyncio.Queue()
-        return self._user_queues[user_id]
+        """Compatibility shim — delegated to MessageProcessor."""
+        return self.message_processor._get_queue(user_id)
 
-    async def _ensure_user_processor(self, user_id: str):
-        """Ensure a message processor task is running for the user."""
-        if (
-            user_id not in self._user_processors
-            or self._user_processors[user_id].done()
-        ):
-            self._user_processors[user_id] = asyncio.create_task(
-                self._process_user_messages(user_id)
-            )
-            self.logger.debug(f"Started message processor for user {user_id}")
+    async def _ensure_user_processor(self, user_id: str) -> None:
+        """Compatibility shim — delegated to MessageProcessor."""
+        await self.message_processor._ensure_user_processor(user_id)
 
-    async def _process_user_messages(self, user_id: str):
-        """Process messages for a specific user in order, preventing lockout."""
-        queue = self._get_user_queue(user_id)
-
-        try:
-            while True:
-                # Wait for next message with timeout to allow cleanup
-                try:
-                    message = await asyncio.wait_for(
-                        queue.get(), timeout=300
-                    )  # 5 minute timeout
-                except asyncio.TimeoutError:
-                    # No messages for 5 minutes, cleanup processor
-                    self.logger.debug(
-                        f"Message processor for user {user_id} timed out, cleaning up"
-                    )
-                    break
-
-                try:
-                    # Show typing indicator while processing the message
-                    async with self._optional_typing(message.channel):
-                        await self._process_single_message(message)
-                    self.logger.debug(
-                        f"Processed message {message.id} for user {user_id}"
-                    )
-                except Exception as e:
-                    self.logger.error(
-                        f"Error processing message {message.id} for user {user_id}: {e}",
-                        exc_info=True,
-                    )
-                finally:
-                    queue.task_done()
-
-        except Exception as e:
-            self.logger.error(
-                f"User message processor for {user_id} failed: {e}", exc_info=True
-            )
-        finally:
-            # Cleanup processor reference
-            if user_id in self._user_processors:
-                del self._user_processors[user_id]
-            self.logger.debug(f"Message processor for user {user_id} stopped")
+    async def _process_user_messages(self, user_id: str) -> None:
+        """Compatibility shim — delegated to MessageProcessor."""
+        await self.message_processor._process_user_messages(user_id)
 
     async def _process_single_message(self, message: discord.Message):
         """Process a single message through the full pipeline."""
@@ -2583,111 +2531,14 @@ class LLMBot(commands.Bot):
                 pass  # Don't let error handling errors crash the bot
 
     async def on_message(self, message: discord.Message):
-        # Early return before any bookkeeping or router dispatch.
-        author = getattr(message, "author", None)
-        try:
-            author_is_bot = bool(getattr(author, "bot", False)) if author else False
-        except Exception:
-            author_is_bot = True
-        try:
-            author_is_self = bool(
-                author
-                and getattr(author, "id", None)
-                == getattr(getattr(self, "user", None), "id", None)
-            )
-        except Exception:
-            author_is_self = False
-        if author_is_bot or author_is_self:
+        """Delegate early filtering to MessageProcessor, then handle
+        SSOT gate / readiness / long-running commands before enqueue.
+        """
+        # Early filtering returns False for messages that should be dropped
+        if not await self.message_processor.on_message(message):
             return
 
-        async with self._dispatch_lock:
-            if message.id in self._processed_messages:
-                self.logger.warning(
-                    f"Duplicate dispatch prevented for msg_id: {message.id}"
-                )
-                return
-            # FIFO eviction: remove oldest when at capacity [BUGFIX 25: OrderedDict popitem]
-            while len(self._processed_messages) >= 1000:
-                self._processed_messages.popitem(last=False)
-            self._processed_messages[message.id] = True
-
-        # Best-effort archive enqueue for guild messages; never block the main flow.
-        try:
-            archive_service = getattr(self, "archive_service", None)
-            if archive_service is not None and getattr(
-                archive_service, "enabled", True
-            ):
-
-                async def _archive_enqueue() -> None:
-                    await archive_service.enqueue_live_message(message)
-
-                task = asyncio.create_task(
-                    _archive_enqueue(), name=f"server_archive_enqueue_{message.id}"
-                )
-                task.add_done_callback(
-                    lambda t: t.exception() if t.done() and not t.cancelled() else None
-                )
-        except Exception:
-            self.logger.debug(f"archive_enqueue_failed | msg_id:{message.id}")
-
-        # Early returns before processing
-
-        if (
-            not message.content or not message.content.strip()
-        ) and not message.attachments:
-            return
-
-        # Suppress normal text flow while an admin alert session is active in DMs [CA][REH]
-        try:
-            cog = self.get_cog("AdminAlertCommands")
-            if cog is not None and cog.alert_manager.is_dm_channel(message.channel):
-                active_session = cog.alert_manager.get_session(message.author.id)
-                if active_session is not None:
-                    # If the user attempts to run !alert again, gently inform them
-                    try:
-                        prefixes = await self.get_prefix(message)
-                    except Exception:
-                        prefixes = None
-
-                    is_alert_cmd = False
-                    try:
-                        if isinstance(prefixes, (list, tuple)):
-                            for p in prefixes:
-                                if p and message.content.startswith(p):
-                                    rest = (message.content[len(p) :] or "").strip()
-                                    if rest.split(" ", 1)[0].lower() == "alert":
-                                        is_alert_cmd = True
-                                        break
-                        elif prefixes:
-                            p = prefixes
-                            if message.content.startswith(p):
-                                rest = (message.content[len(p) :] or "").strip()
-                                if rest.split(" ", 1)[0].lower() == "alert":
-                                    is_alert_cmd = True
-                    except Exception:
-                        pass
-
-                    if is_alert_cmd:
-                        try:
-                            await message.channel.send(
-                                "⚠️ An alert session is already active. Use the composer, or react with ❌ to cancel."
-                            )
-                        except Exception:
-                            pass
-
-                    self.logger.info(
-                        f"suppress.textflow.alert | msg_id:{message.id} user:{message.author.id}",
-                        extra={
-                            "event": "alert.suppress",
-                            "msg_id": message.id,
-                            "user_id": message.author.id,
-                        },
-                    )
-                    return
-        except Exception as e:
-            self.logger.debug(f"alert_suppress_check_failed | {e}")
-
-        # Enhanced SSOT gate: check gating before enqueuing heavy work [IV]
+        # --- SSOT gate: check gating before enqueuing heavy work [IV] ---
         try:
             if self.router is not None and not self._is_long_running_admin_command(
                 message
@@ -2727,42 +2578,20 @@ class LLMBot(commands.Bot):
                             pass
                         return
         except Exception as e:
-            # Never let gate failures crash on_message; fall back to readiness wait and normal flow
             self.logger.warning(f"Gate check failed for msg_id:{message.id}: {e}")
 
         await self._is_ready.wait()  # Wait until the bot is ready
 
         # Check if this is a long-running admin command
         if self._is_long_running_admin_command(message):
-            # Execute long-running commands out-of-band to not block user's message queue
             task_id = self._generate_task_id(message)
             command = message.content.split()[0] if message.content else "unknown"
-
-            # Create and register the task
             task = asyncio.create_task(self._execute_out_of_band_command(message))
             self._register_long_running_task(task_id, task, message, command)
             return
 
-        # Queue regular messages for per-user processing to prevent lockout and ensure proper ordering
-        user_id = str(message.author.id)
-
-        # Get user's message queue and ensure processor is running
-        user_queue = self._get_user_queue(user_id)
-        await self._ensure_user_processor(user_id)
-
-        # Add message to user's queue for sequential processing
-        await user_queue.put(message)
-
-        guild_info = (
-            "DM"
-            if isinstance(message.channel, discord.DMChannel)
-            else f"guild:{message.guild.id}"
-        )
-        self.logger.info(
-            " === DM MESSAGE PROCESSING STARTED ===="
-            if guild_info == "DM"
-            else f"Message queued: msg_id:{message.id} author:{message.author.id} in:{guild_info} len:{len(message.content)} queue_size:{user_queue.qsize()}"
-        )
+        # Delegate regular message queueing to MessageProcessor
+        await self.message_processor.enqueue(message)
 
     async def load_profiles(self) -> None:
         """Load user and server memory profiles."""
@@ -3039,31 +2868,9 @@ class LLMBot(commands.Bot):
                 except Exception as e:
                     self.logger.warning(f"Error closing Discord connection: {e}")
 
-            # Cancel user message processors
-            if self._user_processors:
-                self.logger.info(
-                    f"Cancelling {len(self._user_processors)} user message processors"
-                )
-                for user_id, processor in self._user_processors.items():
-                    if not processor.done():
-                        processor.cancel()
-
-                # Wait for processors to cancel with short timeout
-                if self._user_processors:
-                    try:
-                        await asyncio.wait_for(
-                            asyncio.gather(
-                                *self._user_processors.values(), return_exceptions=True
-                            ),
-                            timeout=3.0,
-                        )
-                    except asyncio.TimeoutError:
-                        self.logger.warning(
-                            "User processors did not cancel within timeout"
-                        )
-
-                self._user_processors.clear()
-                self._user_queues.clear()
+            # Cancel user message processors via MessageProcessor
+            if self.message_processor:
+                await self.message_processor.shutdown()
 
             # Cancel memory save task
             if self.memory_save_task:

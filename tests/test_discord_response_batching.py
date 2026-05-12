@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-from collections import OrderedDict
 from unittest.mock import AsyncMock, MagicMock
 
 import discord
@@ -20,6 +19,31 @@ class _FakeSentMessage:
         self.id = id(self)
 
 
+class _MessageProcessorMock:
+    """Simulates MessageProcessor.on_message filtering: returns False for
+    bot/self authors, True for legitimate user messages."""
+
+    def __init__(self, bot_stub):
+        self._bot_stub = bot_stub
+        self.enqueue = AsyncMock()
+
+    async def on_message(self, message):
+        author = getattr(message, "author", None)
+        if author is None:
+            return True
+        author_is_bot = bool(getattr(author, "bot", False))
+        try:
+            author_is_self = (
+                getattr(author, "id", None)
+                == getattr(self._bot_stub.user, "id", None)
+            )
+        except Exception:
+            author_is_self = False
+        if author_is_bot or author_is_self:
+            return False  # Drop bot/self messages
+        return True
+
+
 @pytest.fixture
 def bot_stub():
     bot = MagicMock(spec=LLMBot)
@@ -27,8 +51,8 @@ def bot_stub():
     bot.config = {}
     bot.logger = MagicMock()
     bot.enhanced_context_manager = None
-    bot._processed_messages = OrderedDict()
-    bot._dispatch_lock = asyncio.Lock()
+    # MessageProcessor handles bot/self author filtering + dedup + queue
+    bot.message_processor = _MessageProcessorMock(bot)
 
     async def _call_with_discord_retry(_name, factory, **_kwargs):
         return await factory()
@@ -312,12 +336,10 @@ async def test_on_message_ignores_bot_authors(bot_stub, author_id, self_id):
     await LLMBot.on_message(bot_stub, message)
 
     bot_stub.router.dispatch_message.assert_not_called()
-    assert list(bot_stub._processed_messages.keys()) == []
 
 
 @pytest.mark.asyncio
 async def test_on_message_ignores_own_continuation_message_no_loop(bot_stub):
-    # Simulate: bot sends a continuation message; on_message should ignore it.
     bot_stub.user.id = 99999
     bot_stub.router = MagicMock()
 
@@ -330,9 +352,8 @@ async def test_on_message_ignores_own_continuation_message_no_loop(bot_stub):
 
     await LLMBot.on_message(bot_stub, message)
 
-    # Must not be dispatched to router and not tracked as processed
+    # Must not be dispatched to router.
     bot_stub.router.dispatch_message.assert_not_called()
-    assert list(bot_stub._processed_messages.keys()) == []
 
 
 @pytest.mark.asyncio

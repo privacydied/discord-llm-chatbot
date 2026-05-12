@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Dict
 
 import discord
 
-from .logging import get_logger
+from bot.utils.logging import get_logger
 
 if TYPE_CHECKING:
     from .bot import LLMBot
@@ -92,10 +92,17 @@ class MessageProcessor:
         ) and not message.attachments:
             return
 
-        # Alert-session suppression (inline from old on_message)
+        # Alert-session suppression — early return gate
         await self._alert_suppression_gate(message)
 
-        # Enqueue onto per-user queue and ensure processor is running
+        return True  # Message passed all early checks; caller will enqueue
+
+    async def enqueue(self, message: discord.Message) -> None:
+        """Queue a message for per-user processing.
+
+        This is the public method called by LLMBot when all gate checks
+        have passed.
+        """
         user_id = str(getattr(message.author, "id", None))
         self._get_queue(user_id).put_nowait(message)
         await self._ensure_user_processor(user_id)
