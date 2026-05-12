@@ -197,8 +197,10 @@ def _ollama_coro_factory(
             elif role == "assistant":
                 user_parts.append(f"[Assistant previous response]: {content}")
 
-        system_prompt = "\n".join(system_parts) if system_parts else None
         prompt = "\n".join(user_parts) if user_parts else ""
+        if system_parts:
+            system_text = "\n".join(system_parts)
+            prompt = f"System instructions: {system_text}\n\n{prompt}"
 
         try:
             result = await ollama_client.generate(
