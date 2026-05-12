@@ -48,7 +48,7 @@ class ExtendedMemoryCommands(commands.Cog):
             embed.add_field(name="Enabled", value=str(enabled), inline=True)
 
             if enabled and service:
-                queue_size = service.queue._queue.qsize()
+                queue_size = service.queue.qsize()
                 embed.add_field(name="Queue Depth", value=str(queue_size), inline=True)
 
                 try:

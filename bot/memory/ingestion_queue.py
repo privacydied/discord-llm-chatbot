@@ -88,6 +88,9 @@ class CuratedMemoryIngestionQueue:
         await asyncio.gather(*self._worker_tasks, return_exceptions=True)
         self._worker_tasks.clear()
 
+    def qsize(self) -> int:
+        return self._queue.qsize()
+
     async def enqueue(self, candidate: MemoryCandidate) -> bool:
         if not self.enabled:
             # Still process via callback path if queueing is disabled.
