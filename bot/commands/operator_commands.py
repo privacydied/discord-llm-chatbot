@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Dict, Optional
 
 import discord
 from discord.ext import commands
@@ -132,15 +132,23 @@ class OperatorCommands(commands.Cog):
         playwright_line = self._get_playwright_status(toggles)
         queue_line = self._get_queue_status()
 
+        vision_line = self._get_vision_status(toggles)
+        memory_line = self._get_memory_service_status(toggles)
+        degraded_line = self._get_degraded_mode_line()
+
         embed = discord.Embed(
             title="🩺 Bot Status",
-            color=discord.Color.green(),
+            color=discord.Color.red() if degraded_line else discord.Color.green(),
             timestamp=discord.utils.utcnow(),
         )
         embed.add_field(name="Uptime", value=uptime, inline=True)
         embed.add_field(name="Active backend", value=backend, inline=True)
         if rss:
             embed.add_field(name="Memory RSS", value=rss, inline=True)
+        embed.add_field(name="Vision", value=vision_line, inline=False)
+        if degraded_line:
+            embed.add_field(name="Degraded", value=degraded_line, inline=False)
+        embed.add_field(name="Memory service", value=memory_line, inline=False)
         embed.add_field(name="RAG", value=rag_line, inline=False)
         embed.add_field(name="STT", value=stt_line, inline=False)
         embed.add_field(name="TTS", value=tts_line, inline=False)
@@ -190,13 +198,72 @@ class OperatorCommands(commands.Cog):
 
     def _get_backend_name(self) -> str:
         config = getattr(self.bot, "config", {}) or {}
-        return str(
-            config.get("TEXT_BACKEND")
-            or config.get("ACTIVE_BACKEND")
-            or config.get("MODEL_BACKEND")
-            or config.get("TEXT_MODEL")
-            or "unknown"
-        )
+        backend_name = config.get("TEXT_BACKEND", config.get("text_backend", "unknown"))
+        model = config.get("OPENAI_TEXT_MODEL", config.get("openai_text_model", "unknown"))
+        if backend_name == "openrouter":
+            return f"openrouter ({model})"
+        return f"{backend_name} ({model})"
+
+    def _get_vision_status(self, toggles: Dict[str, bool]) -> str:
+        """Return Vision / image-gen status line from existing orchestrator state."""
+        enabled = toggles.get("vision", True)
+        orchestrator = getattr(self.bot, "_vision_orchestrator", None)
+        if orchestrator is None:
+            return f"{feature_status_emoji(enabled)} {feature_status_label(enabled)}; orchestrator=missing"
+
+        # Try to get adapter status
+        adapter = getattr(orchestrator, "adapter", None) or getattr(orchestrator, "unified_adapter", None)
+        providers = getattr(adapter, "providers", {}) if adapter else {}
+        provider_count = len(providers) if providers else 0
+
+        # Check if any providers are configured
+        config = getattr(self.bot, "config", {}) or {}
+        api_key = config.get("VISION_API_KEY") or config.get("vision_api_key")
+        has_key = bool(api_key and api_key.strip())
+
+        parts = [f"{feature_status_emoji(enabled)} {feature_status_label(enabled)}"]
+        if provider_count:
+            parts.append(f"providers={provider_count}")
+        if has_key:
+            parts.append("key=configured")
+        else:
+            parts.append("key=missing")
+        return "; ".join(parts)
+
+    def _get_memory_service_status(self, toggles: Dict[str, bool]) -> str:
+        """Return memory service status from the existing service state."""
+        enabled = toggles.get("memory", True)
+        svc = getattr(self.bot, "_memory_service", None) or getattr(self.bot, "memory_service", None)
+        if svc is None:
+            return f"{feature_status_emoji(enabled)} {feature_status_label(enabled)}; service=missing"
+
+        # Get existing stats from the memory service
+        try:
+            status = getattr(svc, "get_status", lambda: {})() or {}
+        except Exception:
+            status = {}
+
+        memory_count = status.get("memory_count", "?")
+        store = getattr(svc, "_persistent_store", None)
+        store_type = "chroma" if store else "local"
+
+        return f"{feature_status_emoji(enabled)} {feature_status_label(enabled)}; memories={memory_count}; store={store_type}"
+
+    def _get_degraded_mode_line(self) -> str:
+        """Return degraded mode info from the existing metrics system, or None."""
+        try:
+            from bot.metrics import is_degraded_mode, get_degraded_reasons
+        except ImportError:
+            return None
+
+        if not is_degraded_mode():
+            return None
+
+        reasons = get_degraded_reasons()
+        if reasons:
+            reason_text = "; ".join(str(r) for r in reasons if r)
+            return f"⚠️ yes — {reason_text}" if reason_text else "⚠️ yes"
+        return "⚠️ yes"
 
     def _get_rag_status(self, guild_id: Optional[int], toggles: Dict[str, bool]) -> str:
         global_enabled = bool((getattr(self.bot, "config", {}) or {}).get("rag_enabled", True))
