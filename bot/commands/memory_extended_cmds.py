@@ -308,6 +308,51 @@ class ExtendedMemoryCommands(commands.Cog):
             await ctx.send("❌ Failed to export memories.")
 
 
+    @commands.command(name="memories-show", aliases=["memories", "mem-show"])
+    async def memories_show(self, ctx, limit: int = 5):
+        """Show your most recent stored memories.
+
+        Args:
+            limit: Number of memories to show (default: 5, max: 50)
+        """
+        try:
+            limit = min(max(1, int(limit)), 50)
+            service = await get_memory_service(self.bot)
+            if not service or not service.enabled:
+                await ctx.send("❌ Memory service is not enabled.")
+                return
+
+            user_id = str(ctx.author.id)
+            records = await service.list_user_memories(user_id, limit=limit)
+
+            if not records:
+                await ctx.send("🧠 No memories stored yet. Keep chatting!")
+                return
+
+            embed = discord.Embed(
+                title=f"🧠 Your Memories ({len(records)} total, showing {limit})",
+                color=discord.Color.purple(),
+            )
+
+            for idx, record in enumerate(records, 1):
+                summary = record.summary or record.text or ""
+                if len(summary) > 300:
+                    summary = summary[:297] + "..."
+
+                embed.add_field(
+                    name=f"{idx}. {record.memory_id[:8]}",
+                    value=f"{summary}\n*{record.context_type} • {record.created_at[:10] if record.created_at else 'N/A'}*",
+                    inline=False,
+                )
+
+            embed.set_footer(text="Use !memories-show <n> for more, !memory-forget <id> to delete")
+            await ctx.send(embed=embed)
+
+        except Exception as e:
+            logger.error(f"Error in memories-show: {e}", exc_info=True)
+            await ctx.send("❌ Failed to show memories.")
+
+
 async def setup(bot) -> None:
     """Add extended memory commands to the bot."""
     if not bot.get_cog("ExtendedMemoryCommands"):
