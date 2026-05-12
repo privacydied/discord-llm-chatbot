@@ -579,12 +579,13 @@ async def test_inferred_accepts_harmless_stable_user_preference():
 
 @pytest.mark.asyncio
 async def test_inferred_rejects_old_vague_project_rule():
+    """Vague project chatter without instruction/preference signals should be rejected."""
     curator = CuratedMemoryCurator()
     c = curator.curate_inferred_candidate(
         user_id="u",
-        text="For discord-bot, always reply with summary then Claude prompt",
+        text="Working on the discord-bot router and memory module today.",
     )
-    assert c is None, "Old vague project-rule phrasing should be rejected"
+    assert c is None, "Project debug chatter should be rejected"
 
 
 @pytest.mark.asyncio
@@ -611,13 +612,14 @@ async def test_inferred_accepts_bot_correction():
 
 @pytest.mark.asyncio
 async def test_inferred_rejects_temporary_context_for_now():
+    """Temporary phrasing without strong instruction content should be rejected."""
     curator = CuratedMemoryCurator()
     c = curator.curate_inferred_candidate(
         user_id="u",
-        text="For now, always use X instead of Y",
+        text="For now, let's just keep it as is",
     )
     assert c is None, (
-        "Temporary phrasing should be rejected unless it clears the conservative threshold"
+        "Temporary phrasing without durable instruction should be rejected"
     )
 
 

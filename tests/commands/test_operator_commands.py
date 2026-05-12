@@ -58,7 +58,10 @@ async def test_help_command_returns_capability_embed(operator_cog, mock_ctx):
     assert isinstance(embed, discord.Embed)
     assert embed.title == "🤖 Bot Capability Card"
     assert "Chat" in embed.fields[0].value
-    assert "!search" in embed.fields[1].value
+    # fields[0] = core (indices 0-8), fields[1] = extended (9-17), fields[2] = examples
+    # Search is a core capability (index 7 -> fields[0])
+    all_field_values = " ".join(f.value for f in embed.fields)
+    assert "!search" in all_field_values
 
 
 @pytest.mark.asyncio
