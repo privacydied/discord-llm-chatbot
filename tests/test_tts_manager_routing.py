@@ -140,9 +140,9 @@ def test_missing_assets_raise_synthesis_error(monkeypatch, tmp_path):
     monkeypatch.setenv("TTS_ENGINE", "kokoro-onnx")
     monkeypatch.delenv("TTS_MODEL_PATH", raising=False)
     monkeypatch.delenv("TTS_VOICES_PATH", raising=False)
-    import bot.tts.interface as tts_interface
+    import bot.tts.assets as tts_assets
 
-    monkeypatch.setattr(tts_interface, "ensure_kokoro_assets", failing_ensure)
+    monkeypatch.setattr(tts_assets, "ensure_kokoro_assets", failing_ensure)
 
     manager = TTSManager()
     try:
@@ -180,7 +180,6 @@ def test_runtime_engine_error_propagates(monkeypatch, tmp_path):
 
     monkeypatch.setattr(tts_interface, "KokoroONNXEngine", ExplodingEngine)
     monkeypatch.setitem(tts_interface.ENGINES, "kokoro-onnx", ExplodingEngine)
-    monkeypatch.setattr(tts_interface, "ensure_kokoro_assets", ensure_paths)
 
     manager = TTSManager()
     try:
