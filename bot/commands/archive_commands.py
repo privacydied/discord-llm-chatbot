@@ -9,7 +9,12 @@ from typing import Any
 import discord
 from discord.ext import commands
 
-from bot.server_archive import get_server_archive_service, get_server_archive_status, search_archive, start_server_archive_service
+from bot.server_archive import (
+    get_server_archive_service,
+    get_server_archive_status,
+    search_archive,
+    start_server_archive_service,
+)
 from bot.server_archive.search import sanitize_snippet
 
 
@@ -45,14 +50,20 @@ class ArchiveCommands(commands.Cog):
     async def _require_permission(self, ctx: commands.Context) -> bool:
         if self._archive_admin_allowed(ctx):
             return True
-        await ctx.reply("Archive commands are admin-only on this server.", mention_author=False)
+        await ctx.reply(
+            "Archive commands are admin-only on this server.", mention_author=False
+        )
         return False
 
     def _short_time(self, iso_value: str | None) -> str:
         if not iso_value:
             return "unknown"
         try:
-            return datetime.fromisoformat(iso_value).astimezone().strftime("%Y-%m-%d %H:%M")
+            return (
+                datetime.fromisoformat(iso_value)
+                .astimezone()
+                .strftime("%Y-%m-%d %H:%M")
+            )
         except Exception:
             return iso_value
 
@@ -89,26 +100,21 @@ class ArchiveCommands(commands.Cog):
         embed = discord.Embed(
             title="Server Archive Status",
             description=f"Status: {status_text}  •  Sync: {sync_label}",
-            color=discord.Color.green() if (enabled and not paused) else discord.Color.yellow(),
+            color=discord.Color.green()
+            if (enabled and not paused)
+            else discord.Color.yellow(),
         )
         embed.set_footer(text=f"DB: {db_path}")
 
         # Core stats
         embed.add_field(
             name="📊 Messages",
-            value=(
-                f"Stored: {msgs:,}\n"
-                f"Indexed: {indexed:,}"
-            ),
+            value=(f"Stored: {msgs:,}\nIndexed: {indexed:,}"),
             inline=True,
         )
         embed.add_field(
             name="🌐 Scope",
-            value=(
-                f"Guilds: {guilds}\n"
-                f"Channels: {channels}\n"
-                f"Threads: {threads}"
-            ),
+            value=(f"Guilds: {guilds}\nChannels: {channels}\nThreads: {threads}"),
             inline=True,
         )
         embed.add_field(
@@ -123,10 +129,7 @@ class ArchiveCommands(commands.Cog):
         # Queue / internals
         embed.add_field(
             name="🔧 Queue",
-            value=(
-                f"Depth: {queue_size}/{queue_max}\n"
-                f"Batch size: {batch_size}"
-            ),
+            value=(f"Depth: {queue_size}/{queue_max}\nBatch size: {batch_size}"),
             inline=True,
         )
         if dropped > 0:
@@ -155,7 +158,9 @@ class ArchiveCommands(commands.Cog):
         for result in results[:limit]:
             channel_name = result.channel_name or f"#{result.channel_id}"
             author_name = result.author_name or result.author_id
-            snippet = sanitize_snippet(result.snippet or result.clean_content or result.content, limit=180)
+            snippet = sanitize_snippet(
+                result.snippet or result.clean_content or result.content, limit=180
+            )
             url = result.jump_url or ""
             lines.append(
                 f"[{self._short_time(result.created_at)}] {channel_name} · {author_name}\n{snippet}"
@@ -177,7 +182,9 @@ class ArchiveCommands(commands.Cog):
         guild = ctx.guild
         status = await service.get_status(guild_id=str(guild.id))
         if status.get("sync_running"):
-            await ctx.reply("Archive sync is already running for this guild.", mention_author=False)
+            await ctx.reply(
+                "Archive sync is already running for this guild.", mention_author=False
+            )
             return
         asyncio.create_task(service.sync_guild(guild), name=f"archive-sync-{guild.id}")
         await ctx.reply("Archive sync started for this guild.", mention_author=False)
@@ -185,7 +192,9 @@ class ArchiveCommands(commands.Cog):
     @commands.guild_only()
     @commands.command(name="archive-sync-channel")
     async def archive_sync_channel(
-        self, ctx: commands.Context, channel: discord.TextChannel | discord.Thread | None = None
+        self,
+        ctx: commands.Context,
+        channel: discord.TextChannel | discord.Thread | None = None,
     ) -> None:
         if not await self._require_permission(ctx):
             return
@@ -194,14 +203,26 @@ class ArchiveCommands(commands.Cog):
         service = await self._service_or_raise()
         target = channel or ctx.channel
         if getattr(target, "guild", None) is not ctx.guild:
-            await ctx.reply("Archive sync targets must belong to this guild.", mention_author=False)
+            await ctx.reply(
+                "Archive sync targets must belong to this guild.", mention_author=False
+            )
             return
         key = f"{ctx.guild.id}:{getattr(target, 'id', '')}"
-        if key in service._channel_sync_tasks and not service._channel_sync_tasks[key].done():
-            await ctx.reply("Archive sync is already running for this channel/thread.", mention_author=False)
+        if (
+            key in service._channel_sync_tasks
+            and not service._channel_sync_tasks[key].done()
+        ):
+            await ctx.reply(
+                "Archive sync is already running for this channel/thread.",
+                mention_author=False,
+            )
             return
-        asyncio.create_task(service.sync_channel(target), name=f"archive-sync-channel-{key}")
-        await ctx.reply("Archive sync started for the target channel/thread.", mention_author=False)
+        asyncio.create_task(
+            service.sync_channel(target), name=f"archive-sync-channel-{key}"
+        )
+        await ctx.reply(
+            "Archive sync started for the target channel/thread.", mention_author=False
+        )
 
     @commands.guild_only()
     @commands.command(name="archive-pause")

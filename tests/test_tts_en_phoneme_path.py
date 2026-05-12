@@ -5,6 +5,7 @@ import pytest
 # Skip — requires TTS phoneme pipeline
 pytestmark = pytest.mark.skip(reason="Requires TTS engine phoneme pipeline")
 
+
 def test_en_uses_phoneme_only(monkeypatch):
     from bot.tts.engines.kokoro import KokoroEngine
 
@@ -35,8 +36,8 @@ def test_no_error_when_no_tokenizer_if_phonemes(monkeypatch, caplog):
     kd = KokoroDirect("/model.onnx", "/voices.bin", use_tokenizer=False)
     # create must not log 'No tokenizer available' nor invoke grapheme path
     caplog.clear()
-    kd._synthesize_from_ipa = (
-        lambda ipa, **k: "/tmp/ok.wav"
+    kd._synthesize_from_ipa = lambda ipa, **k: (
+        "/tmp/ok.wav"
     )  # monkeypatch the final call
     kd.create(
         phonemes="t ɹ iː",

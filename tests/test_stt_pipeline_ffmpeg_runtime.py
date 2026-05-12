@@ -24,9 +24,7 @@ def test_ffmpeg_candidates_from_env_order_and_dedupe(monkeypatch) -> None:
 
 def test_ffmpeg_supports_aac_decoder_true(monkeypatch) -> None:
     def fake_run(*_args, **_kwargs):
-        return SimpleNamespace(
-            returncode=0, stdout=" A..... aac\n A..... aac_fixed\n"
-        )
+        return SimpleNamespace(returncode=0, stdout=" A..... aac\n A..... aac_fixed\n")
 
     monkeypatch.setattr("bot.stt_pipeline.ffmpeg_runtime.subprocess.run", fake_run)
     assert ffmpeg_supports_aac_decoder("ffmpeg") is True

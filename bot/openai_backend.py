@@ -93,7 +93,11 @@ _patch_openai_httpx_wrapper_destructor()
 
 
 def _make_openai_async_client(
-    *, api_key: str | None, base_url: str | None, timeout: httpx.Timeout, max_retries: int = 0
+    *,
+    api_key: str | None,
+    base_url: str | None,
+    timeout: httpx.Timeout,
+    max_retries: int = 0,
 ) -> Any:
     """Create AsyncOpenAI with certifi CA bundle and no inherited SSL env.
 
@@ -526,15 +530,12 @@ Server Context: {server_context}"""
                                 f"after {attempts} attempt(s) in {total_time:.2f}s "
                                 f"(last_provider={prov}). Last error: {type(base_err).__name__}: {base_err}"
                             )
-                        elif (
-                            ("401" in err_str or "403" in err_str)
-                            and (
-                                "authentication" in err_str
-                                or "unauthorized" in err_str
-                                or "forbidden" in err_str
-                                or "user not found" in err_str
-                                or "invalid api key" in err_str
-                            )
+                        elif ("401" in err_str or "403" in err_str) and (
+                            "authentication" in err_str
+                            or "unauthorized" in err_str
+                            or "forbidden" in err_str
+                            or "user not found" in err_str
+                            or "invalid api key" in err_str
                         ):
                             msg = (
                                 "Text provider authentication failed "
@@ -558,15 +559,12 @@ Server Context: {server_context}"""
                                 "404" in err_str and "endpoint" in err_str
                             ):
                                 setattr(api_err, "retryable", False)
-                            if (
-                                ("401" in err_str or "403" in err_str)
-                                and (
-                                    "authentication" in err_str
-                                    or "unauthorized" in err_str
-                                    or "forbidden" in err_str
-                                    or "user not found" in err_str
-                                    or "invalid api key" in err_str
-                                )
+                            if ("401" in err_str or "403" in err_str) and (
+                                "authentication" in err_str
+                                or "unauthorized" in err_str
+                                or "forbidden" in err_str
+                                or "user not found" in err_str
+                                or "invalid api key" in err_str
                             ):
                                 setattr(api_err, "retryable", False)
                         except Exception:
@@ -594,7 +592,9 @@ Server Context: {server_context}"""
                     **kwargs,
                 )
             except Exception as e:
-                if "timeout" in str(e).lower() or "TimeoutError" in str(type(e).__name__):
+                if "timeout" in str(e).lower() or "TimeoutError" in str(
+                    type(e).__name__
+                ):
                     logger.warning(
                         f"[OpenAI] ⏰ Request timeout after {config.get('TEXT_REQUEST_TIMEOUT', 30)}s: {e}"
                     )
@@ -860,13 +860,14 @@ async def _generate_vl_response_with_retry(
     # Use EnhancedRetryManager for vision ladder fallback (mirrors text flow) [CA][REH]
     # Skip ladder if model_override is explicitly provided (caller wants specific model)
     use_provider_fallback = (
-        ("openrouter" in base_url.lower() or "nvidia.com" in base_url.lower())
-        and not model_override
-    )
+        "openrouter" in base_url.lower() or "nvidia.com" in base_url.lower()
+    ) and not model_override
 
     if use_provider_fallback:
         ladder_label = "NVIDIA" if "nvidia.com" in base_url.lower() else "OpenRouter"
-        logger.info(f"[VL] Using EnhancedRetryManager vision fallback ladder ({ladder_label})")
+        logger.info(
+            f"[VL] Using EnhancedRetryManager vision fallback ladder ({ladder_label})"
+        )
         retry_mgr = get_retry_manager()
 
         def _coro_factory(provider_config):
@@ -1025,15 +1026,12 @@ async def _generate_vl_response_with_retry(
                             f"after {attempts} attempt(s) in {total_time:.2f}s "
                             f"(last_provider={prov}). Last error: {type(base_err).__name__}: {base_err}"
                         )
-                    elif (
-                        ("401" in err_str or "403" in err_str)
-                        and (
-                            "authentication" in err_str
-                            or "unauthorized" in err_str
-                            or "forbidden" in err_str
-                            or "user not found" in err_str
-                            or "invalid api key" in err_str
-                        )
+                    elif ("401" in err_str or "403" in err_str) and (
+                        "authentication" in err_str
+                        or "unauthorized" in err_str
+                        or "forbidden" in err_str
+                        or "user not found" in err_str
+                        or "invalid api key" in err_str
                     ):
                         msg = (
                             "Vision provider authentication failed "
@@ -1064,15 +1062,12 @@ async def _generate_vl_response_with_retry(
                             "404" in err_str and "endpoint" in err_str
                         ):
                             setattr(api_err, "retryable", False)
-                        if (
-                            ("401" in err_str or "403" in err_str)
-                            and (
-                                "authentication" in err_str
-                                or "unauthorized" in err_str
-                                or "forbidden" in err_str
-                                or "user not found" in err_str
-                                or "invalid api key" in err_str
-                            )
+                        if ("401" in err_str or "403" in err_str) and (
+                            "authentication" in err_str
+                            or "unauthorized" in err_str
+                            or "forbidden" in err_str
+                            or "user not found" in err_str
+                            or "invalid api key" in err_str
                         ):
                             setattr(api_err, "retryable", False)
                     except Exception:
@@ -1109,9 +1104,15 @@ async def _generate_vl_response_with_retry(
     except Exception:
         timeout_seconds = 30.0
 
-    single_api_key, single_base_url, single_provider = _resolve_openai_compatible_endpoint(
-        "nvidia" if "nvidia.com" in base_url.lower() else "openrouter" if "openrouter" in base_url.lower() else "openai",
-        config,
+    single_api_key, single_base_url, single_provider = (
+        _resolve_openai_compatible_endpoint(
+            "nvidia"
+            if "nvidia.com" in base_url.lower()
+            else "openrouter"
+            if "openrouter" in base_url.lower()
+            else "openai",
+            config,
+        )
     )
     client = _make_openai_async_client(
         api_key=single_api_key,
@@ -1181,9 +1182,7 @@ async def _generate_vl_response_with_retry(
 
         # Empty completion is a soft failure — retry or fail [REH]
         if not response_text.strip():
-            empty_err = APIError(
-                f"VL model {model_name} returned empty completion"
-            )
+            empty_err = APIError(f"VL model {model_name} returned empty completion")
             empty_err.vl_exhausted = True
             empty_err.vl_ladder_summary = f"{model_name}:empty_completion"
             empty_err.vl_attempts = 1

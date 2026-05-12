@@ -164,15 +164,12 @@ class ResultAggregator:
             for r in self.results:
                 if not r.success or not r.result_text.strip():
                     continue
-                if (
-                    r.modality
-                    in (
-                        InputModality.GENERAL_URL,
-                        InputModality.PDF_DOCUMENT,
-                        InputModality.PDF_OCR,
-                        InputModality.AUDIO_VIDEO_FILE,
-                        InputModality.VIDEO_URL,
-                    )
+                if r.modality in (
+                    InputModality.GENERAL_URL,
+                    InputModality.PDF_DOCUMENT,
+                    InputModality.PDF_OCR,
+                    InputModality.AUDIO_VIDEO_FILE,
+                    InputModality.VIDEO_URL,
                 ):
                     text_snippets.append(r.result_text.strip())
 
@@ -247,7 +244,9 @@ class ResultAggregator:
         # downstream text-flow generation from the summary header alone. [REH][PA]
         has_original = bool(original_text and original_text.strip())
         if len(truly_successful) == 0 and failed_items > 0 and not has_original:
-            logger.debug("ResultAggregator: all items failed, no original_text — returning empty prompt")
+            logger.debug(
+                "ResultAggregator: all items failed, no original_text — returning empty prompt"
+            )
             return ""
 
         if total_items == 1:

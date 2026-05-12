@@ -163,13 +163,24 @@ async def test_router_typing_rate_limit_is_non_fatal(router, mock_message):
     second_message.attachments = []
     second_message.mentions = [router.bot.user]
 
-    with patch.object(router, "_should_process_message", return_value=True), \
-        patch.object(router, "_compat_dispatch_for_tests", AsyncMock(return_value=None)), \
-        patch.object(router, "_resolve_scope_and_target", AsyncMock(return_value=("lone", None, ""))), \
-        patch.object(router, "_prioritized_vision_route", AsyncMock(return_value=None)), \
-        patch("bot.modality.collect_input_items", return_value=[]), \
-        patch.object(router, "_process_multimodal_message_internal", AsyncMock(return_value=BotAction(content="ok"))):
-
+    with (
+        patch.object(router, "_should_process_message", return_value=True),
+        patch.object(
+            router, "_compat_dispatch_for_tests", AsyncMock(return_value=None)
+        ),
+        patch.object(
+            router,
+            "_resolve_scope_and_target",
+            AsyncMock(return_value=("lone", None, "")),
+        ),
+        patch.object(router, "_prioritized_vision_route", AsyncMock(return_value=None)),
+        patch("bot.modality.collect_input_items", return_value=[]),
+        patch.object(
+            router,
+            "_process_multimodal_message_internal",
+            AsyncMock(return_value=BotAction(content="ok")),
+        ),
+    ):
         first = await router.dispatch_message(first_message)
         second = await router.dispatch_message(second_message)
 
@@ -194,8 +205,6 @@ async def test_alert_delegates_without_custom_parse(
     assert response is not None
     assert isinstance(response, BotAction)
     assert response.meta.get("delegated_to_cog") is True
-
-
 
 
 @pytest.mark.parametrize(
@@ -322,8 +331,11 @@ async def test_error_embed_generation(mock_parse_command, router, mock_message):
 
     assert response is not None
     # Error responses may use embeds or content depending on code path
-    has_error = (hasattr(response, "content") and response.content and "Error" in response.content) or \
-                (hasattr(response, "embeds") and response.embeds)
+    has_error = (
+        hasattr(response, "content")
+        and response.content
+        and "Error" in response.content
+    ) or (hasattr(response, "embeds") and response.embeds)
     assert has_error, "Error responses should include error content or embeds"
 
 
@@ -367,7 +379,14 @@ async def test_guild_unmentioned_ignored():
     mock_bot = MagicMock()
     mock_bot.config = {
         "OWNER_IDS": [],
-        "REPLY_TRIGGERS": ["dm", "mention", "reply", "bot_threads", "owner", "command_prefix"],
+        "REPLY_TRIGGERS": [
+            "dm",
+            "mention",
+            "reply",
+            "bot_threads",
+            "owner",
+            "command_prefix",
+        ],
         "REQUIRE_MENTION_IN_GUILDS": True,
         "ALLOW_REPLY_TO_BOT_WITHOUT_MENTION": True,
         "DM_REQUIRE_MENTION": False,
@@ -402,32 +421,47 @@ class TestExtractionOnlyTimeout:
     async def test_extraction_only_timeout_cancels_hung_handler(self, mock_bot):
         """If an extraction handler hangs, asyncio.wait_for cancels it and
         the item is recorded as failed (partial-success preserved)."""
-        router = Router(bot=mock_bot, flow_overrides={}, logger=logging.getLogger("test"))
+        router = Router(
+            bot=mock_bot, flow_overrides={}, logger=logging.getLogger("test")
+        )
+
         # Mock _handle_item_with_provider to hang forever
         async def _hang_forever(*args, **kwargs):
             await asyncio.sleep(9999)
+
         router._handle_item_with_provider = AsyncMock(side_effect=_hang_forever)
         # Set a very short budget
         import os
+
         os.environ["MULTIMODAL_PER_ITEM_BUDGET"] = "0.1"
         try:
             # We test the timeout guard by verifying asyncio.wait_for is used.
             # Direct E2E test would require full multimodal setup; instead we
             # verify the code structure: the extraction-only branch catches TimeoutError.
             import inspect
+
             source = inspect.getsource(router._process_multimodal_message_internal)
             # Verify asyncio.wait_for wraps extraction-only handler calls
-            assert "asyncio.wait_for" in source, "extraction-only items must use asyncio.wait_for"
-            assert "asyncio.TimeoutError" in source, "must catch asyncio.TimeoutError for extraction items"
+            assert "asyncio.wait_for" in source, (
+                "extraction-only items must use asyncio.wait_for"
+            )
+            assert "asyncio.TimeoutError" in source, (
+                "must catch asyncio.TimeoutError for extraction items"
+            )
         finally:
             os.environ.pop("MULTIMODAL_PER_ITEM_BUDGET", None)
 
     @pytest.mark.asyncio
     async def test_extraction_only_success_within_budget(self, mock_bot):
         """Extraction-only items that complete within budget succeed normally."""
-        router = Router(bot=mock_bot, flow_overrides={}, logger=logging.getLogger("test"))
+        router = Router(
+            bot=mock_bot, flow_overrides={}, logger=logging.getLogger("test")
+        )
         router._handle_item_with_provider = AsyncMock(return_value="extracted text")
         import inspect
+
         source = inspect.getsource(router._process_multimodal_message_internal)
         # Verify timeout=selected_budget is passed (not hardcoded)
-        assert "timeout=selected_budget" in source, "timeout must use selected_budget per modality"
+        assert "timeout=selected_budget" in source, (
+            "timeout must use selected_budget per modality"
+        )

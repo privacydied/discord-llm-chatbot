@@ -124,12 +124,16 @@ async def test_fetch_and_prepare_url_audio_invalid(
         await manager.fetch_and_prepare_url_audio("invalid")
 
 
-def test_instagram_alias_urls_are_supported_for_stt(manager: VideoIngestionManager) -> None:
+def test_instagram_alias_urls_are_supported_for_stt(
+    manager: VideoIngestionManager,
+) -> None:
     """Instagram mirror hosts should match the existing Instagram STT URL patterns."""
     assert manager._is_supported_url("https://www.kkinstagram.com/reel/DWjQyv_Dt4k/")
     assert manager._is_supported_url("https://d.vxinstagram.com/reel/DWjQyv_Dt4k/")
     assert manager._is_supported_url("https://www.instagram.com/reel/DWjQyv_Dt4k/")
-    assert manager._is_supported_url("https://d.vxinstagram.com/offload/DVMPNJtE50x/0.mp4")
+    assert manager._is_supported_url(
+        "https://d.vxinstagram.com/offload/DVMPNJtE50x/0.mp4"
+    )
 
 
 def test_instagram_alias_urls_canonicalize_to_instagram_before_ytdlp() -> None:
@@ -149,7 +153,8 @@ def test_instagram_alias_urls_canonicalize_to_instagram_before_ytdlp() -> None:
         == "https://d.vxinstagram.com/reel/DWjQyv_Dt4k/"
     )
     assert (
-        VideoIngestionManager._canonicalize_instagram_url_for_ytdlp(expected) == expected
+        VideoIngestionManager._canonicalize_instagram_url_for_ytdlp(expected)
+        == expected
     )
 
 
@@ -168,7 +173,9 @@ def test_instagram_alias_unsupported_paths_and_random_hosts_rejected(
 ) -> None:
     """Alias support should not promote unrelated paths or random hosts into STT."""
     assert not manager._is_supported_url("https://www.kkinstagram.com/accounts/login/")
-    assert not manager._is_supported_url("https://d.vxinstagram.com/explore/tags/guitar/")
+    assert not manager._is_supported_url(
+        "https://d.vxinstagram.com/explore/tags/guitar/"
+    )
     assert not manager._is_supported_url("https://random.example.com/reel/DWjQyv_Dt4k/")
     assert (
         VideoIngestionManager._canonicalize_instagram_url_for_ytdlp(
@@ -242,7 +249,9 @@ async def test_vxinstagram_reel_resolves_to_direct_media_without_instagram_ytdlp
 
     async def fake_probe(url_arg: str, timeout_s: float):
         seen["probe"] = True
-        raise AssertionError("yt-dlp probe should not run for resolved vxinstagram media")
+        raise AssertionError(
+            "yt-dlp probe should not run for resolved vxinstagram media"
+        )
 
     async def fake_download_direct(media_url_arg: str, ext: str, timeout_s: float):
         seen["direct_download"] = media_url_arg
@@ -266,9 +275,9 @@ async def test_vxinstagram_reel_resolves_to_direct_media_without_instagram_ytdlp
 
 
 def test_vxinstagram_og_video_extraction_is_strict() -> None:
-    html = '''
+    html = """
     <meta property="og:video" content="https://d.vxinstagram.com/offload/DVMPNJtE50x/0.mp4" />
-    '''
+    """
     assert (
         VideoIngestionManager._extract_vxinstagram_direct_media_url(html)
         == "https://d.vxinstagram.com/offload/DVMPNJtE50x/0.mp4"
@@ -282,7 +291,9 @@ def test_vxinstagram_og_video_extraction_is_strict() -> None:
 
 
 @pytest.mark.asyncio
-async def test_vxinstagram_media_capability_short_circuits_ytdlp_probe(monkeypatch) -> None:
+async def test_vxinstagram_media_capability_short_circuits_ytdlp_probe(
+    monkeypatch,
+) -> None:
     from bot.media_capability import MediaCapabilityDetector
 
     async def fail_create_subprocess_exec(*_args, **_kwargs):
@@ -421,7 +432,9 @@ def stub_hear(monkeypatch, tmp_path: Path) -> Tuple[SimpleNamespace, DownloadedA
             stream=None,
         )
 
-    async def fake_run_whisper(pre, spans, spec_obj, ram_guard, job=None, language=None):
+    async def fake_run_whisper(
+        pre, spans, spec_obj, ram_guard, job=None, language=None
+    ):
         return SimpleNamespace(
             text="This is the transcribed text",
             aborted=False,

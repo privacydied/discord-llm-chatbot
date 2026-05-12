@@ -25,7 +25,9 @@ and mod_delete is updated to pass it through.
 
 import pytest
 
-pytestmark = pytest.mark.skip(reason="CuratedMemoryService.delete_memory() user_id param not yet implemented")
+pytestmark = pytest.mark.skip(
+    reason="CuratedMemoryService.delete_memory() user_id param not yet implemented"
+)
 
 from bot.memory.service import CuratedMemoryService
 from bot.memory.persistent_store import MemoryRecord
@@ -34,7 +36,15 @@ from bot.memory.curator import CuratedMemoryCurator
 
 # --------------- helpers ---------------
 
-def _make_record(*, memory_id: str, user_id: str, guild_id: str | None = None, summary: str | None = None, **kw) -> MemoryRecord:
+
+def _make_record(
+    *,
+    memory_id: str,
+    user_id: str,
+    guild_id: str | None = None,
+    summary: str | None = None,
+    **kw,
+) -> MemoryRecord:
     return MemoryRecord(
         memory_id=memory_id,
         user_id=user_id,
@@ -112,7 +122,9 @@ def _fake_persistent_store():
     return store
 
 
-def _ctx_with_user(user_id: int, guild_id: int | None = None, channel_id: int | None = None):
+def _ctx_with_user(
+    user_id: int, guild_id: int | None = None, channel_id: int | None = None
+):
     ctx = MagicMock()
     ctx.author = MagicMock()
     ctx.author.id = user_id
@@ -124,6 +136,7 @@ def _ctx_with_user(user_id: int, guild_id: int | None = None, channel_id: int | 
 
 
 # --------------- fixture for CuratedMemoryService ---------------
+
 
 @pytest.fixture
 def mock_service():
@@ -149,6 +162,7 @@ def mock_service():
 
 # ============ Test 1: User A adds memory; User A can see it. ============
 
+
 @pytest.mark.asyncio
 async def test_user_sees_own_memory(mock_service):
     rec = _make_record(memory_id="mem-aaa", user_id="111")
@@ -161,6 +175,7 @@ async def test_user_sees_own_memory(mock_service):
 
 # ============ Test 2: User A adds memory; User B cannot see it via !memory-show ============
 
+
 @pytest.mark.asyncio
 async def test_user_b_cannot_see_user_a_memory(mock_service):
     rec = _make_record(memory_id="mem-aaa", user_id="111")
@@ -172,6 +187,7 @@ async def test_user_b_cannot_see_user_a_memory(mock_service):
 
 
 # ============ Test 3: User A adds memory; User B cannot retrieve it via search ============
+
 
 @pytest.mark.asyncio
 async def test_user_b_cannot_search_user_a_memory(mock_service):
@@ -196,7 +212,9 @@ async def test_user_b_cannot_search_user_a_memory(mock_service):
     mock_service.semantic_store.query = AsyncMock(return_value=semantic_results)
 
     # Build scope filters for User B's guild
-    filters = mock_service._scope_filters(user_id="222", guild_id="555", channel_id=None, thread_id=None)
+    filters = mock_service._scope_filters(
+        user_id="222", guild_id="555", channel_id=None, thread_id=None
+    )
     assert len(filters) >= 1  # user filter + guild filter
 
     # Check _scope_allows for the guild scope — User B should NOT see User A's memory
@@ -209,12 +227,17 @@ async def test_user_b_cannot_search_user_a_memory(mock_service):
 
 # ============ Test 4: User A's memory not injected into User B's LLM context ============
 
+
 @pytest.mark.asyncio
 async def test_no_cross_user_memory_injection(mock_service):
     """build_prompt_block with user_id=222 must not include User A's memory."""
     # Put one memory in the store for User A
-    rec_a = _make_record(memory_id="mem-aaa", user_id="111", guild_id="555",
-                         summary="User A's private fact")
+    rec_a = _make_record(
+        memory_id="mem-aaa",
+        user_id="111",
+        guild_id="555",
+        summary="User A's private fact",
+    )
     await mock_service.store.upsert_memory(rec_a)
 
     # Mock build_prompt_block to use the real implementation but with our mocks
@@ -232,19 +255,29 @@ async def test_no_cross_user_memory_injection(mock_service):
         return "\n".join(lines)
 
     block = await fake_build_prompt_block(
-        user_id="222", guild_id="555", channel_id="777",
-        thread_id=None, query="anything"
+        user_id="222",
+        guild_id="555",
+        channel_id="777",
+        thread_id=None,
+        query="anything",
     )
-    assert "User A's private fact" not in block, "User A's memory leaked into User B's prompt"
+    assert "User A's private fact" not in block, (
+        "User A's memory leaked into User B's prompt"
+    )
     assert block == "", "Expected empty block for User B"
 
 
 # ============ Test 5: User A and B can each save similar memories without collision ============
 
+
 @pytest.mark.asyncio
 async def test_parallel_user_memories_no_collision(mock_service):
-    rec_a = _make_record(memory_id="mem-aaa", user_id="111", summary="favorite color is red")
-    rec_b = _make_record(memory_id="mem-bbb", user_id="222", summary="favorite color is blue")
+    rec_a = _make_record(
+        memory_id="mem-aaa", user_id="111", summary="favorite color is red"
+    )
+    rec_b = _make_record(
+        memory_id="mem-bbb", user_id="222", summary="favorite color is blue"
+    )
 
     await mock_service.store.upsert_memory(rec_a)
     await mock_service.store.upsert_memory(rec_b)
@@ -263,6 +296,7 @@ async def test_parallel_user_memories_no_collision(mock_service):
 
 
 # ============ Test 6: Delete only affects the requesting user's memory ============
+
 
 @pytest.mark.asyncio
 async def test_delete_blocks_foreign_user(mock_service):
@@ -310,6 +344,7 @@ async def test_delete_without_user_id_fallback(mock_service):
 
 # ============ Test 7: Orphaned legacy memories with no owner are not returned ============
 
+
 @pytest.mark.asyncio
 async def test_orphaned_memories_not_returned(mock_service):
     """Memories missing user_id field should not leak to any user."""
@@ -345,9 +380,11 @@ async def test_orphaned_memories_not_returned(mock_service):
 
 # ============ Test 8: DM and guild paths both pass correct requester ID ============
 
+
 @pytest.mark.asyncio
 async def test_dm_and_guild_paths_preserve_user_id():
     """Verify that both DM and guild contexts pass the correct user_id through the pipeline."""
+
     # Simulate what the router does for both contexts
     def simulate_router_build(message_author_id, guild, channel, is_thread=False):
         return {
@@ -370,7 +407,9 @@ async def test_dm_and_guild_paths_preserve_user_id():
     mock_guild.id = 555
     mock_channel = MagicMock()
     mock_channel.id = 777
-    guild_ctx = simulate_router_build(guild_author_id, guild=mock_guild, channel=mock_channel)
+    guild_ctx = simulate_router_build(
+        guild_author_id, guild=mock_guild, channel=mock_channel
+    )
     assert guild_ctx["user_id"] == "222"
     assert guild_ctx["guild_id"] == "555"
     assert guild_ctx["channel_id"] == "777"
@@ -380,14 +419,14 @@ async def test_dm_and_guild_paths_preserve_user_id():
     mock_thread_channel = MagicMock()
     mock_thread_channel.id = 999
     thread_ctx = simulate_router_build(
-        thread_author_id, guild=mock_guild,
-        channel=mock_thread_channel, is_thread=True
+        thread_author_id, guild=mock_guild, channel=mock_thread_channel, is_thread=True
     )
     assert thread_ctx["user_id"] == "333"
     assert thread_ctx["thread_id"] == "999"
 
 
 # ============ Additional: _scope_filters always includes user filter ============
+
 
 @pytest.mark.asyncio
 async def test_scope_filters_include_user_filter(mock_service):
@@ -404,12 +443,14 @@ async def test_scope_filters_include_user_filter(mock_service):
 
 # ============ Additional: verify module-level delete_memory passes user_id ============
 
+
 @pytest.mark.asyncio
 async def test_module_delete_memory_passes_user_id():
     """Verify that the module-level delete_memory accepts and forwards user_id."""
     from bot.memory.service import delete_memory as mod_delete
 
     import inspect
+
     sig = inspect.signature(mod_delete)
     params = list(sig.parameters.keys())
     assert "user_id" in params, "mod_delete must accept user_id kwarg"

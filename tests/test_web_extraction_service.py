@@ -85,7 +85,9 @@ async def test_extract_disables_tier_b_on_fatal_launch_failure() -> None:
         return_value=ExtractionResult(success=False, tier_used="A", error="no text")
     )
 
-    svc._tier_b_playwright = AsyncMock(side_effect=Exception("Failed to launch browser"))
+    svc._tier_b_playwright = AsyncMock(
+        side_effect=Exception("Failed to launch browser")
+    )
 
     res = await svc.extract("https://example.com")
 
@@ -122,7 +124,9 @@ async def test_extract_does_not_disable_tier_b_on_version_mismatch_428() -> None
     svc._tier_b_available = True
 
     svc._tier_a_httpx = AsyncMock(
-        return_value=ExtractionResult(success=False, tier_used="A", error="http_status:403")
+        return_value=ExtractionResult(
+            success=False, tier_used="A", error="http_status:403"
+        )
     )
 
     msg = (

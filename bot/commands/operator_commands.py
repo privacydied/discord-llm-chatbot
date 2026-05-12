@@ -49,9 +49,7 @@ class OperatorCommands(commands.Cog):
             )
         except Exception as exc:
             logger.error("status command failed: %s", exc, exc_info=True)
-            await ctx.reply(
-                "❌ Failed to build status summary.", mention_author=False
-            )
+            await ctx.reply("❌ Failed to build status summary.", mention_author=False)
 
     @commands.command(name="feature", aliases=["toggle-feature", "toggle_feature"])
     @commands.has_permissions(administrator=True)
@@ -83,7 +81,14 @@ class OperatorCommands(commands.Cog):
                 return
 
             setting_norm = setting.strip().lower()
-            if setting_norm not in {"on", "off", "enable", "disable", "enabled", "disabled"}:
+            if setting_norm not in {
+                "on",
+                "off",
+                "enable",
+                "disable",
+                "enabled",
+                "disabled",
+            }:
                 await ctx.reply(
                     "❌ Setting must be `on` or `off`.", mention_author=False
                 )
@@ -96,7 +101,7 @@ class OperatorCommands(commands.Cog):
                 )
                 return
 
-            toggles = set_server_feature_toggle(ctx.guild.id, normalized, enabled)
+            set_server_feature_toggle(ctx.guild.id, normalized, enabled)
             state = feature_status_label(enabled)
             await ctx.reply(
                 f"{feature_status_emoji(enabled)} `{normalized}` is now {state} for this server.",
@@ -118,10 +123,11 @@ class OperatorCommands(commands.Cog):
             await ctx.reply("❌ Failed to update feature toggle.", mention_author=False)
 
     def _build_status_embed(self, ctx: commands.Context) -> discord.Embed:
-        bot = self.bot
         guild = ctx.guild
         guild_id = getattr(guild, "id", None)
-        toggles = get_server_feature_toggles(guild_id) if guild_id else dict(FEATURE_DEFAULTS)
+        toggles = (
+            get_server_feature_toggles(guild_id) if guild_id else dict(FEATURE_DEFAULTS)
+        )
 
         uptime = self._format_uptime()
         rss = self._format_rss_mb()
@@ -160,9 +166,13 @@ class OperatorCommands(commands.Cog):
             for name, enabled in sorted(toggles.items())
         ]
         if feature_lines:
-            embed.add_field(name="Feature toggles", value="\n".join(feature_lines), inline=False)
+            embed.add_field(
+                name="Feature toggles", value="\n".join(feature_lines), inline=False
+            )
 
-        embed.set_footer(text="Health checks are cached/local only; no outbound probes are sent.")
+        embed.set_footer(
+            text="Health checks are cached/local only; no outbound probes are sent."
+        )
         return embed
 
     def _format_uptime(self) -> str:
@@ -199,7 +209,9 @@ class OperatorCommands(commands.Cog):
     def _get_backend_name(self) -> str:
         config = getattr(self.bot, "config", {}) or {}
         backend_name = config.get("TEXT_BACKEND", config.get("text_backend", "unknown"))
-        model = config.get("OPENAI_TEXT_MODEL", config.get("openai_text_model", "unknown"))
+        model = config.get(
+            "OPENAI_TEXT_MODEL", config.get("openai_text_model", "unknown")
+        )
         if backend_name == "openrouter":
             return f"openrouter ({model})"
         return f"{backend_name} ({model})"
@@ -212,7 +224,9 @@ class OperatorCommands(commands.Cog):
             return f"{feature_status_emoji(enabled)} {feature_status_label(enabled)}; orchestrator=missing"
 
         # Try to get adapter status
-        adapter = getattr(orchestrator, "adapter", None) or getattr(orchestrator, "unified_adapter", None)
+        adapter = getattr(orchestrator, "adapter", None) or getattr(
+            orchestrator, "unified_adapter", None
+        )
         providers = getattr(adapter, "providers", {}) if adapter else {}
         provider_count = len(providers) if providers else 0
 
@@ -233,7 +247,9 @@ class OperatorCommands(commands.Cog):
     def _get_memory_service_status(self, toggles: Dict[str, bool]) -> str:
         """Return memory service status from the existing service state."""
         enabled = toggles.get("memory", True)
-        svc = getattr(self.bot, "_memory_service", None) or getattr(self.bot, "memory_service", None)
+        svc = getattr(self.bot, "_memory_service", None) or getattr(
+            self.bot, "memory_service", None
+        )
         if svc is None:
             return f"{feature_status_emoji(enabled)} {feature_status_label(enabled)}; service=missing"
 
@@ -266,7 +282,9 @@ class OperatorCommands(commands.Cog):
         return "⚠️ yes"
 
     def _get_rag_status(self, guild_id: Optional[int], toggles: Dict[str, bool]) -> str:
-        global_enabled = bool((getattr(self.bot, "config", {}) or {}).get("rag_enabled", True))
+        global_enabled = bool(
+            (getattr(self.bot, "config", {}) or {}).get("rag_enabled", True)
+        )
         guild_enabled = toggles.get("rag", True) if guild_id is not None else True
         effective = global_enabled and guild_enabled
         try:
@@ -311,7 +329,11 @@ class OperatorCommands(commands.Cog):
 
             configured = _pw_server_url() is not None
             service = getattr(self.bot, "web_extraction_service", None)
-            tier_b_available = getattr(service, "_tier_b_available", ENABLE_TIER_B) if service else ENABLE_TIER_B
+            tier_b_available = (
+                getattr(service, "_tier_b_available", ENABLE_TIER_B)
+                if service
+                else ENABLE_TIER_B
+            )
             enabled = toggles.get("web_extraction", True)
             return (
                 f"{feature_status_emoji(enabled)} {feature_status_label(enabled)}; "

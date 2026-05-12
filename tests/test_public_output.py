@@ -2,7 +2,6 @@
 Tests for public output sanitizer.
 """
 
-import pytest
 
 from bot.public_output import (
     SAFE_FALLBACK_MESSAGE,

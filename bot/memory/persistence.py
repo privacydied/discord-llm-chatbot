@@ -17,7 +17,7 @@ import shutil
 import tempfile
 import threading
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional
 from contextlib import contextmanager
 
 # Thread-local storage for file handles (used during locking)
@@ -28,16 +28,19 @@ logger = logging.getLogger(__name__)
 
 class PersistenceError(Exception):
     """Raised when persistence operations fail."""
+
     pass
 
 
 class CorruptionError(PersistenceError):
     """Raised when data corruption is detected."""
+
     pass
 
 
 class AtomicWriteError(PersistenceError):
     """Raised when atomic write fails."""
+
     pass
 
 
@@ -105,7 +108,9 @@ def _atomic_write_file(
         temp_path = Path(temp_str)
 
         # Serialize JSON
-        json_bytes = json.dumps(data, indent=indent, ensure_ascii=ensure_ascii).encode("utf-8")
+        json_bytes = json.dumps(data, indent=indent, ensure_ascii=ensure_ascii).encode(
+            "utf-8"
+        )
 
         # Write and fsync for durability
         os.write(temp_fd, json_bytes)
@@ -342,7 +347,9 @@ def atomic_save_json(
                     logger.info(f"Attempting to restore {target_path} from backup")
                     if _restore_from_backup(backup_path, target_path):
                         # Retry the write once more
-                        if _atomic_write_file(target_path, data, indent=indent, fsync=True):
+                        if _atomic_write_file(
+                            target_path, data, indent=indent, fsync=True
+                        ):
                             return True
 
                 return False
@@ -404,16 +411,22 @@ def load_json_with_recovery(
                         data = json.load(f)
                     # Validate recovered data is a dict before restoring [BUGFIX]
                     if not isinstance(data, dict):
-                        logger.error(f"Backup data is not a dict, skipping recovery for {target_path}")
+                        logger.error(
+                            f"Backup data is not a dict, skipping recovery for {target_path}"
+                        )
                         return default_data
                     # Attempt to restore the corrupted file
                     if _atomic_write_file(target_path, data, fsync=True):
-                        logger.info(f"Successfully recovered and restored {target_path}")
+                        logger.info(
+                            f"Successfully recovered and restored {target_path}"
+                        )
                     else:
                         # Remove corrupted file so next save creates a fresh one [BUGFIX]
                         try:
                             target_path.unlink()
-                            logger.warning(f"Removed corrupted file {target_path} after failed atomic restore; backup data returned")
+                            logger.warning(
+                                f"Removed corrupted file {target_path} after failed atomic restore; backup data returned"
+                            )
                         except OSError:
                             pass
                     return data
@@ -444,7 +457,10 @@ def validate_profile_integrity(data: Dict) -> tuple[bool, Optional[str]]:
     has_guild_id = bool(data.get("guild_id") or data.get("server_id"))
 
     if not (has_user_id or has_guild_id):
-        return False, "Profile missing identifier (discord_id/user_id/guild_id/server_id)"
+        return (
+            False,
+            "Profile missing identifier (discord_id/user_id/guild_id/server_id)",
+        )
 
     # Check required list fields exist and are lists
     for field in ["memories", "history"]:

@@ -232,7 +232,9 @@ class WebExtractionService:
                                 pass
 
                     await page.route("**/*", _route_handler)
-                    await page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
+                    await page.goto(
+                        url, wait_until="domcontentloaded", timeout=timeout_ms
+                    )
                     html_doc = await page.content()
                     final_url = await page.evaluate("() => document.location.href")
                     parsed = self._parse_html_for_text(html_doc, final_url)

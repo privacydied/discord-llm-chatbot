@@ -6,7 +6,9 @@ Tests robust error handling patterns for external API calls.
 import pytest
 
 # Skip all tests — many require live vision API or depend on see_infer internals
-pytestmark = pytest.mark.skip(reason="Requires live vision API integration; see_infer internals need refactoring")
+pytestmark = pytest.mark.skip(
+    reason="Requires live vision API integration; see_infer internals need refactoring"
+)
 
 from unittest.mock import AsyncMock, MagicMock, patch, mock_open
 from openai import InternalServerError

@@ -100,9 +100,7 @@ async def test_feature_gate_blocks_disabled_stt_before_attachment_flow(
         guild=SimpleNamespace(id=123),
         channel=SimpleNamespace(id=456),
         author=SimpleNamespace(bot=False, id=42),
-        attachments=[
-            SimpleNamespace(content_type="audio/wav", filename="clip.wav")
-        ],
+        attachments=[SimpleNamespace(content_type="audio/wav", filename="clip.wav")],
     )
     monkeypatch.setattr(
         "bot.router.is_server_feature_enabled",

@@ -70,7 +70,9 @@ def primary_tweet_id_hint_keys() -> Tuple[str, ...]:
     return ("ptid", "primary", "tweet_id", "status_id", "id")
 
 
-def primary_tweet_id_param_sources(parsed: Any) -> Tuple[Dict[str, List[str]], Dict[str, List[str]]]:
+def primary_tweet_id_param_sources(
+    parsed: Any,
+) -> Tuple[Dict[str, List[str]], Dict[str, List[str]]]:
     """Return parsed fragment/query param maps checked for tweet-id hints."""
     return (
         parse_qs(str(getattr(parsed, "fragment", "") or "")),
@@ -222,7 +224,9 @@ def append_embed_candidate_attr_urls(urls: List[str], embed: Any) -> None:
         append_embed_attr_url_if_present(urls, embed, attr_name)
 
 
-def append_embed_attr_url_if_present(urls: List[str], embed: Any, attr_name: str) -> None:
+def append_embed_attr_url_if_present(
+    urls: List[str], embed: Any, attr_name: str
+) -> None:
     """Append nested embed attribute URL when present (e.g., video/image/thumbnail)."""
     attr = getattr(embed, attr_name, None)
     url = getattr(attr, "url", None) if attr else None
@@ -700,7 +704,9 @@ def extract_sparse_media_resolution(
         return ("unknown", [], default_url)
     sparse_kind = normalize_sparse_kind_value(resolved_sparse.get("kind"))
     sparse_images = normalize_sparse_images_value(resolved_sparse.get("images"))
-    sparse_url = normalize_sparse_url_value(resolved_sparse.get("url"), default_url=default_url)
+    sparse_url = normalize_sparse_url_value(
+        resolved_sparse.get("url"), default_url=default_url
+    )
     return sparse_media_resolution_tuple(sparse_kind, sparse_images, sparse_url)
 
 
@@ -806,7 +812,9 @@ def build_stt_fail_log_payload(
     return payload
 
 
-def build_stt_fail_detail(reason: str, *, media_kind: Optional[str] = None) -> Dict[str, Any]:
+def build_stt_fail_detail(
+    reason: str, *, media_kind: Optional[str] = None
+) -> Dict[str, Any]:
     """Build detail object for STT failure breadcrumb payloads."""
     detail: Dict[str, Any] = {"reason": reason}
     if media_kind:
@@ -917,7 +925,9 @@ def normalized_article_header_text(article_node: Dict[str, Any], key: str) -> st
     return unescape(str(article_node.get(key) or "").strip())
 
 
-def append_unique_article_block_texts(parts: List[str], article_node: Dict[str, Any]) -> None:
+def append_unique_article_block_texts(
+    parts: List[str], article_node: Dict[str, Any]
+) -> None:
     """Append unique normalized block texts to article text parts."""
     for text in iter_article_block_texts(article_node):
         append_unique_article_text_part(parts, text)
@@ -1215,7 +1225,9 @@ def build_x_text_resolve_payload(
     )
 
 
-def build_event_with_detail_payload(event: str, detail: Dict[str, Any]) -> Dict[str, Any]:
+def build_event_with_detail_payload(
+    event: str, detail: Dict[str, Any]
+) -> Dict[str, Any]:
     """Build payload with canonical event/detail shape."""
     return {
         "event": event,
@@ -1260,7 +1272,9 @@ def build_oembed_text_payload(
 def extract_oembed_payload_from_response(
     response: Any,
     *,
-    build_payload: Callable[[Any], Optional[Dict[str, Any]]] = build_oembed_text_payload,
+    build_payload: Callable[
+        [Any], Optional[Dict[str, Any]]
+    ] = build_oembed_text_payload,
 ) -> Optional[Dict[str, Any]]:
     """Extract oEmbed text payload from an HTTP response-like object."""
     if response.status_code != 200:
@@ -1568,7 +1582,9 @@ def build_syndication_fetch_params_core_map(tweet_id: str, lang: str) -> Dict[st
     }
 
 
-def build_syndication_fetch_params_variants(tweet_id: str) -> List[Tuple[str, Dict[str, str]]]:
+def build_syndication_fetch_params_variants(
+    tweet_id: str,
+) -> List[Tuple[str, Dict[str, str]]]:
     """Return endpoint+params variants for CDN syndication fetch attempts."""
     return build_syndication_fetch_params_variants_list(tweet_id)
 
@@ -1584,7 +1600,9 @@ def build_syndication_fetch_params_variants_list(
 
 def build_syndication_fetch_params_variant_entries(
     tweet_id: str,
-) -> Tuple[Tuple[str, Dict[str, str]], Tuple[str, Dict[str, str]], Tuple[str, Dict[str, str]]]:
+) -> Tuple[
+    Tuple[str, Dict[str, str]], Tuple[str, Dict[str, str]], Tuple[str, Dict[str, str]]
+]:
     """Return canonical syndication fetch variant tuple entries."""
     return (
         build_syndication_widgets_params_variant(tweet_id),
@@ -1727,7 +1745,9 @@ def build_syndication_oembed_url_key() -> str:
 
 def build_syndication_oembed_host_for_flag(use_x_host: bool) -> str:
     """Return oEmbed host selected from use_x_host toggle."""
-    host = build_syndication_x_host() if use_x_host else build_syndication_twitter_host()
+    host = (
+        build_syndication_x_host() if use_x_host else build_syndication_twitter_host()
+    )
     return (
         build_syndication_twitter_host()
         if is_syndication_twitter_host(host)
@@ -2144,7 +2164,9 @@ def build_syndication_cache_entry(data: Any, now_s: float) -> Dict[str, Any]:
     )
 
 
-def build_syndication_cache_entry_from_fields(*fields: Dict[str, Any]) -> Dict[str, Any]:
+def build_syndication_cache_entry_from_fields(
+    *fields: Dict[str, Any],
+) -> Dict[str, Any]:
     """Build cache entry map by merging ordered field fragments."""
     entry: Dict[str, Any] = {}
     for field in fields:
@@ -2304,7 +2326,7 @@ def format_syndication_body_text(text: str) -> str:
 
 def format_syndication_truncated_text(text: str) -> str:
     """Return legacy-truncated syndication body text with ellipsis suffix."""
-    return text[:syndication_body_truncate_chars()] + syndication_ellipsis()
+    return text[: syndication_body_truncate_chars()] + syndication_ellipsis()
 
 
 def syndication_text_exceeds_body_limit(text: str) -> bool:
@@ -2406,7 +2428,7 @@ def format_syndication_error_fallback(url: str, syn_data: Any) -> str:
 
 def format_syndication_error_payload_repr(syn_data: Any) -> str:
     """Return truncated string representation for syndication fallback payloads."""
-    return str(syn_data)[:format_syndication_error_payload_max_chars()]
+    return str(syn_data)[: format_syndication_error_payload_max_chars()]
 
 
 def format_syndication_error_payload_max_chars() -> int:
@@ -2856,7 +2878,9 @@ def status_url_extract_regex_result_value(regex: Any) -> Any:
 
 def status_url_extract_regex_source() -> Any:
     """Return underlying regex object used for status URL extraction."""
-    return status_url_extract_regex_source_result(status_url_extract_regex_source_value())
+    return status_url_extract_regex_source_result(
+        status_url_extract_regex_source_value()
+    )
 
 
 def status_url_extract_regex_source_result(regex: Any) -> Any:
@@ -3579,7 +3603,9 @@ def append_canonicalized_value(
     )
 
 
-def append_canonicalized_unique_value(*, items: List[str], canonical_value: str) -> None:
+def append_canonicalized_unique_value(
+    *, items: List[str], canonical_value: str
+) -> None:
     """Append canonical value with uniqueness gating."""
     append_unique_str(items, canonical_value)
 

@@ -9,7 +9,6 @@ from bot.nvidia_backend import generate_nvidia_response
 from bot.enhanced_retry import (
     EnhancedRetryManager,
     ProviderStatus,
-    get_retry_manager,
     ProviderConfig,
 )
 
@@ -298,7 +297,10 @@ async def test_nvidia_base_uses_text_fallback_ladder_and_nvidia_key(monkeypatch)
     )
 
     assert captured_client_kwargs["api_key"] == "nvapi-test-key"
-    assert str(captured_client_kwargs["base_url"]).rstrip("/") == "https://integrate.api.nvidia.com/v1"
+    assert (
+        str(captured_client_kwargs["base_url"]).rstrip("/")
+        == "https://integrate.api.nvidia.com/v1"
+    )
     assert result["text"] == "OK-NVIDIA-B"
     assert result["model"] == "model-b"
 
@@ -365,9 +367,14 @@ async def test_text_ladder_can_mix_openrouter_and_nvidia_endpoints(monkeypatch):
     assert result["model"] == "nvidia-model-b"
     ladder_calls = client_calls[-2:]
     assert ladder_calls[0]["api_key"] == "dedicated-openrouter-key"
-    assert str(ladder_calls[0]["base_url"]).rstrip("/") == "https://openrouter.ai/api/v1"
+    assert (
+        str(ladder_calls[0]["base_url"]).rstrip("/") == "https://openrouter.ai/api/v1"
+    )
     assert ladder_calls[1]["api_key"] == "nvidia-key"
-    assert str(ladder_calls[1]["base_url"]).rstrip("/") == "https://integrate.api.nvidia.com/v1"
+    assert (
+        str(ladder_calls[1]["base_url"]).rstrip("/")
+        == "https://integrate.api.nvidia.com/v1"
+    )
 
 
 @pytest.mark.asyncio
@@ -563,9 +570,7 @@ async def test_streaming_bypasses_fallback_and_streams_chunks(monkeypatch):
 
 
 def test_text_fallback_env_ladder_is_not_overridden_by_openai_text_model(monkeypatch):
-    monkeypatch.setenv(
-        "TEXT_FALLBACK_MODELS", "openrouter|model-a,openrouter|model-b"
-    )
+    monkeypatch.setenv("TEXT_FALLBACK_MODELS", "openrouter|model-a,openrouter|model-b")
     monkeypatch.setenv("OPENAI_TEXT_MODEL", "dead-model-not-in-ladder")
     monkeypatch.delenv("TEXT_FALLBACK_TIMEOUTS", raising=False)
 

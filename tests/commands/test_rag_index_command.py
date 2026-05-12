@@ -55,7 +55,9 @@ async def test_rag_cog_registers_index_command(rag_cog):
 
 
 @pytest.mark.asyncio
-async def test_index_message_content_indexes_direct_text(rag_cog, fake_bot, fake_search, ctx):
+async def test_index_message_content_indexes_direct_text(
+    rag_cog, fake_bot, fake_search, ctx
+):
     fake_bot.hybrid_search = fake_search
     await rag_cog.index_message_content.callback(rag_cog, ctx, text="hello world")
 

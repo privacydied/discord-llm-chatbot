@@ -1218,7 +1218,9 @@ class NvidiaPlugin(OpenRouterPlugin):
         url = f"{self.genai_base_url}/genai/{model}"
 
         try:
-            async with self.session.post(url, json=payload, headers=headers) as response:
+            async with self.session.post(
+                url, json=payload, headers=headers
+            ) as response:
                 error_text = await response.text()
                 if response.status == 400:
                     raise VisionError(
@@ -1364,7 +1366,9 @@ class UnifiedVisionAdapter:
         self._model_aliases = self._build_model_aliases()
 
         fallback_key = str(config.get("VISION_API_KEY") or "")
-        for provider_config in self.provider_config.get("vision", {}).get("providers", []):
+        for provider_config in self.provider_config.get("vision", {}).get(
+            "providers", []
+        ):
             name = str(provider_config.get("name") or "").lower()
             provider = self.providers.get(name)
             if provider is None:
@@ -1524,7 +1528,9 @@ class UnifiedVisionAdapter:
                     plugin.config = provider_config
                     plugin.api_key = provider_key
                     if hasattr(plugin, "base_url"):
-                        plugin.base_url = provider_config.get("base_url", plugin.base_url)
+                        plugin.base_url = provider_config.get(
+                            "base_url", plugin.base_url
+                        )
                     if hasattr(plugin, "genai_base_url"):
                         plugin.genai_base_url = provider_config.get(
                             "genai_base_url", plugin.genai_base_url
@@ -1978,9 +1984,13 @@ class UnifiedVisionAdapter:
         policy = self.provider_config.get("vision", {}).get("default_policy", {})
         normalized_request = self.normalize_request(request)
 
-        image_ladder_raw = str(self.config.get("VISION_IMAGE_FALLBACK_MODELS") or "").strip()
+        image_ladder_raw = str(
+            self.config.get("VISION_IMAGE_FALLBACK_MODELS") or ""
+        ).strip()
         if normalized_request.task == VisionTask.TEXT_TO_IMAGE and image_ladder_raw:
-            return await self._submit_text_to_image_ladder(normalized_request, image_ladder_raw)
+            return await self._submit_text_to_image_ladder(
+                normalized_request, image_ladder_raw
+            )
 
         preferred_provider_obj = getattr(request, "preferred_provider", None)
         if preferred_provider_obj is not None:

@@ -6,7 +6,6 @@ text ladder for subsequent requests.
 These tests use mocking to avoid full bot initialization.
 """
 
-import pytest
 from unittest.mock import patch, MagicMock
 
 
@@ -22,12 +21,13 @@ class TestRetryManagerLadderRefresh:
             "media": ["media-handler"],
         }
 
-        with patch("bot.config_reload.load_config") as mock_load_config, \
-             patch("bot.config_reload.load_dotenv"), \
-             patch("bot.config.invalidate_config_cache", MagicMock()), \
-             patch("bot.config_reload._preferred_env_path") as mock_path, \
-             patch("bot.enhanced_retry.get_retry_manager", return_value=mock_retry_mgr):
-
+        with (
+            patch("bot.config_reload.load_config") as mock_load_config,
+            patch("bot.config_reload.load_dotenv"),
+            patch("bot.config.invalidate_config_cache", MagicMock()),
+            patch("bot.config_reload._preferred_env_path") as mock_path,
+            patch("bot.enhanced_retry.get_retry_manager", return_value=mock_retry_mgr),
+        ):
             # Setup mocks
             mock_path_obj = MagicMock()
             mock_path_obj.exists.return_value = True
@@ -61,23 +61,27 @@ class TestRetryManagerLadderRefresh:
 
         mock_logger = MagicMock()
 
-        with patch("bot.config_reload.load_config") as mock_load_config, \
-             patch("bot.config_reload.load_dotenv"), \
-             patch("bot.config.invalidate_config_cache", MagicMock()), \
-             patch("bot.config_reload._preferred_env_path") as mock_path, \
-             patch("bot.enhanced_retry.get_retry_manager", return_value=mock_retry_mgr), \
-             patch("bot.config_reload.logger", mock_logger):
-
+        with (
+            patch("bot.config_reload.load_config") as mock_load_config,
+            patch("bot.config_reload.load_dotenv"),
+            patch("bot.config.invalidate_config_cache", MagicMock()),
+            patch("bot.config_reload._preferred_env_path") as mock_path,
+            patch("bot.enhanced_retry.get_retry_manager", return_value=mock_retry_mgr),
+            patch("bot.config_reload.logger", mock_logger),
+        ):
             mock_path_obj = MagicMock()
             mock_path_obj.exists.return_value = True
             mock_path_obj.resolve.return_value = mock_path_obj
             mock_path.return_value = mock_path_obj
 
-            mock_load_config.return_value = {"DISCORD_TOKEN": "test",
-                                            "PROMPT_FILE": "prompts/system.md",
-                                            "VL_PROMPT_FILE": "prompts/vl-prompt.txt"}
+            mock_load_config.return_value = {
+                "DISCORD_TOKEN": "test",
+                "PROMPT_FILE": "prompts/system.md",
+                "VL_PROMPT_FILE": "prompts/vl-prompt.txt",
+            }
 
             from bot.config_reload import reload_env
+
             reload_env()
 
             # Check logger.info was called with ladder info
@@ -94,22 +98,26 @@ class TestRetryManagerLadderRefresh:
         mock_retry_mgr = MagicMock()
         mock_retry_mgr.refresh_from_env.side_effect = RuntimeError("Simulated failure")
 
-        with patch("bot.config_reload.load_config") as mock_load_config, \
-             patch("bot.config_reload.load_dotenv"), \
-             patch("bot.config.invalidate_config_cache", MagicMock()), \
-             patch("bot.config_reload._preferred_env_path") as mock_path, \
-             patch("bot.enhanced_retry.get_retry_manager", return_value=mock_retry_mgr):
-
+        with (
+            patch("bot.config_reload.load_config") as mock_load_config,
+            patch("bot.config_reload.load_dotenv"),
+            patch("bot.config.invalidate_config_cache", MagicMock()),
+            patch("bot.config_reload._preferred_env_path") as mock_path,
+            patch("bot.enhanced_retry.get_retry_manager", return_value=mock_retry_mgr),
+        ):
             mock_path_obj = MagicMock()
             mock_path_obj.exists.return_value = True
             mock_path_obj.resolve.return_value = mock_path_obj
             mock_path.return_value = mock_path_obj
 
-            mock_load_config.return_value = {"DISCORD_TOKEN": "test",
-                                            "PROMPT_FILE": "prompts/system.md",
-                                            "VL_PROMPT_FILE": "prompts/vl-prompt.txt"}
+            mock_load_config.return_value = {
+                "DISCORD_TOKEN": "test",
+                "PROMPT_FILE": "prompts/system.md",
+                "VL_PROMPT_FILE": "prompts/vl-prompt.txt",
+            }
 
             from bot.config_reload import reload_env
+
             result = reload_env()
 
             # Reload should still succeed even if retry manager fails

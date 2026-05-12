@@ -531,10 +531,27 @@ class VisionCommands(commands.Cog):
         suffix = Path(attachment.filename).suffix or ".bin"
         # Only allow known safe suffixes to prevent writing executable content
         safe_suffixes = {
-            ".mp3", ".wav", ".ogg", ".flac", ".m4a", ".mp4",
-            ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bin",
-            ".txt", ".pdf", ".csv", ".json", ".xml", ".yml", ".yaml",
-            ".md", ".log",
+            ".mp3",
+            ".wav",
+            ".ogg",
+            ".flac",
+            ".m4a",
+            ".mp4",
+            ".png",
+            ".jpg",
+            ".jpeg",
+            ".gif",
+            ".webp",
+            ".bin",
+            ".txt",
+            ".pdf",
+            ".csv",
+            ".json",
+            ".xml",
+            ".yml",
+            ".yaml",
+            ".md",
+            ".log",
         }
         if suffix.lower() not in safe_suffixes:
             suffix = ".bin"

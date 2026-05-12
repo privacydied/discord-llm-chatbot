@@ -1,7 +1,6 @@
 import json
 import logging
 import os
-import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -12,7 +11,6 @@ from rich.logging import RichHandler
 
 def _rich_tracebacks_supported() -> bool:
     try:
-        import pygments.lexers.python  # type: ignore
 
         return True
     except Exception:

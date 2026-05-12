@@ -33,7 +33,9 @@ def format_x_tweet_with_transcription(
     try:
         caption = ""
         if tweet_data and isinstance(tweet_data, dict):
-            caption = (tweet_data.get("full_text") or tweet_data.get("text") or "").strip()
+            caption = (
+                tweet_data.get("full_text") or tweet_data.get("text") or ""
+            ).strip()
         if not caption and base_text:
             try:
                 base_str = str(base_text)
@@ -156,20 +158,14 @@ def format_x_tweet_result(
     try:
         payload = api_data or {}
         tweet = (
-            payload.get("data")
-            if isinstance(payload.get("data"), dict)
-            else payload
+            payload.get("data") if isinstance(payload.get("data"), dict) else payload
         )
         tweet = tweet or {}
         includes = (
-            payload.get("includes")
-            if isinstance(payload.get("includes"), dict)
-            else {}
+            payload.get("includes") if isinstance(payload.get("includes"), dict) else {}
         )
         media_list = (
-            includes.get("media")
-            if isinstance(includes.get("media"), list)
-            else []
+            includes.get("media") if isinstance(includes.get("media"), list) else []
         )
 
         text = (tweet.get("full_text") or tweet.get("text") or "").strip()
@@ -182,7 +178,10 @@ def format_x_tweet_result(
                 for user_item in users:
                     if not isinstance(user_item, dict):
                         continue
-                    if author_id and str(user_item.get("id") or "").strip() != author_id:
+                    if (
+                        author_id
+                        and str(user_item.get("id") or "").strip() != author_id
+                    ):
                         continue
                     user = (
                         user_item.get("name")
@@ -196,9 +195,7 @@ def format_x_tweet_result(
             user = ""
 
         if not user:
-            user_obj = (
-                tweet.get("user") if isinstance(tweet.get("user"), dict) else {}
-            )
+            user_obj = tweet.get("user") if isinstance(tweet.get("user"), dict) else {}
             user = (user_obj.get("name") or user_obj.get("screen_name") or "").strip()
 
         photo_count = 0

@@ -39,6 +39,7 @@ def bot_stub():
 
 # ===================== chunking: basic behavior =====================
 
+
 @pytest.mark.asyncio
 async def test_chunk_short_text_returns_single_chunk_unchanged(bot_stub):
     text = "short response"
@@ -114,7 +115,7 @@ async def test_chunk_does_not_mangle_code_block_worse_than_current(bot_stub):
     # - preserve content (no loss)
     # - not introduce random extra backticks or markers.
     code = "print('hello')\n"
-    text = ("intro\n\n```python\n" + code * 400 + "\n```\n")
+    text = "intro\n\n```python\n" + code * 400 + "\n```\n"
 
     chunks = LLMBot._chunk_message_content(bot_stub, text)
 
@@ -128,6 +129,7 @@ async def test_chunk_does_not_mangle_code_block_worse_than_current(bot_stub):
 
 
 # ===================== send_chunked_reply: behavior =====================
+
 
 @pytest.mark.asyncio
 async def test_send_chunked_short_message_sends_once(bot_stub):
@@ -250,11 +252,15 @@ async def test_send_chunked_long_message_is_sequential_and_ordered(bot_stub):
 
     # Ensure our logical content is fully preserved inside the concatenation.
     joined = "".join(all_contents)
-    assert content in joined, "Full logical content must be preserved (ignoring mentions)"
+    assert content in joined, (
+        "Full logical content must be preserved (ignoring mentions)"
+    )
 
     # First chunk may include a user mention prefix, so only strictly enforce
     # length limit on continuation chunks.
-    continuation_contents = channel_send_calls[0]["content"] if channel_send_calls else ""
+    continuation_contents = (
+        channel_send_calls[0]["content"] if channel_send_calls else ""
+    )
     for c in all_contents[1:]:
         assert len(c) <= _DISCORD_MAX_CONTENT_LEN, (
             "Continuation chunk exceeds Discord limit"
@@ -283,6 +289,7 @@ async def test_send_chunked_long_message_is_sequential_and_ordered(bot_stub):
 
 
 # ===================== on_message: no self-reply loop =====================
+
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(

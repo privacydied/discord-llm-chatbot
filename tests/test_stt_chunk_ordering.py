@@ -1,19 +1,15 @@
 """Tests for STT chunk ordering and deduplication."""
 
 import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
-import asyncio
-import numpy as np
+from unittest.mock import MagicMock
 
 from bot.hear import (
     _join_segments,
     _segments_to_dict,
     SpanRecorder,
-    PreprocessResult,
     TranscriptResult,
     STTJob,
     STTRAMGuard,
-    _transcribe_with_model,
 )
 
 
@@ -70,7 +66,10 @@ class TestJoinSegments:
             {"text": "boundary"},  # first of chunk 1 (duplicate)
             {"text": "second chunk continues"},
         ]
-        assert _text(_join_segments(segments)) == "first chunk ends here boundary second chunk continues"
+        assert (
+            _text(_join_segments(segments))
+            == "first chunk ends here boundary second chunk continues"
+        )
 
     def test_join_normalizes_whitespace(self):
         """Join should normalize whitespace."""

@@ -5,7 +5,7 @@ RAG system management commands for Discord bot.
 import asyncio
 import re
 from pathlib import Path
-from typing import List, Tuple
+from typing import List
 import discord
 from discord.ext import commands
 
@@ -62,7 +62,9 @@ def safe_embed_value(text: str, limit: int = DISCORD_EMBED_FIELD_VALUE_LIMIT) ->
     return truncated + "..."
 
 
-def chunk_text(text: str, chunk_size: int = DISCORD_EMBED_FIELD_VALUE_LIMIT) -> List[str]:
+def chunk_text(
+    text: str, chunk_size: int = DISCORD_EMBED_FIELD_VALUE_LIMIT
+) -> List[str]:
     """Split text into Discord-safe chunks."""
     if not text:
         return []
@@ -246,9 +248,7 @@ class RAGCommands(commands.Cog):
             try:
                 if not self.hybrid_search:
                     self.hybrid_search = await get_hybrid_search()
-                test_results.append(
-                    ("✅", "Hybrid Search", "Successfully initialized")
-                )
+                test_results.append(("✅", "Hybrid Search", "Successfully initialized"))
             except Exception as e:
                 error_msg = safe_embed_value(str(e), 50)
                 test_results.append(("❌", "Hybrid Search", f"Failed: {error_msg}"))
@@ -419,7 +419,7 @@ class RAGCommands(commands.Cog):
                 # Currently hybrid_search.clear() doesn't take source_patterns
                 # But we should handle this case - for now, clear all
                 await self.hybrid_search.clear()
-                note = f"Cleared all documents (source filtering not yet implemented)"
+                note = "Cleared all documents (source filtering not yet implemented)"
             else:
                 await self.hybrid_search.clear()
                 note = "Cleared all documents"
@@ -505,7 +505,9 @@ class RAGCommands(commands.Cog):
     async def index_message_content(self, ctx, *, text: str = None):
         """Index the current message text, URLs, and supported attachments into RAG."""
         try:
-            hybrid_search = self.hybrid_search or getattr(ctx.bot, "hybrid_search", None)
+            hybrid_search = self.hybrid_search or getattr(
+                ctx.bot, "hybrid_search", None
+            )
             if hybrid_search is None:
                 hybrid_search = await get_hybrid_search()
             if hybrid_search is None:
@@ -549,7 +551,9 @@ class RAGCommands(commands.Cog):
             }
 
             queue_enabled = bool(
-                getattr(getattr(hybrid_search, "_indexing_queue", None), "enabled", False)
+                getattr(
+                    getattr(hybrid_search, "_indexing_queue", None), "enabled", False
+                )
             )
             action_verb = "Queued" if queue_enabled else "Indexed"
             successes = 0
@@ -587,7 +591,9 @@ class RAGCommands(commands.Cog):
                                 **base_metadata,
                                 "source_type": "url",
                                 "url": item,
-                                "extraction_metadata": (extracted or {}).get("metadata", {}),
+                                "extraction_metadata": (extracted or {}).get(
+                                    "metadata", {}
+                                ),
                             },
                             file_type="url",
                         )
@@ -618,11 +624,13 @@ class RAGCommands(commands.Cog):
                             **base_metadata,
                             "source_type": "attachment",
                             "filename": getattr(item, "filename", "attachment"),
-                            "attachment_metadata": (extracted or {}).get("metadata", {}),
+                            "attachment_metadata": (extracted or {}).get(
+                                "metadata", {}
+                            ),
                         },
-                        file_type=Path(getattr(item, "filename", "attachment")).suffix.lstrip(
-                            "."
-                        )
+                        file_type=Path(
+                            getattr(item, "filename", "attachment")
+                        ).suffix.lstrip(".")
                         or "attachment",
                     )
                     if ok:
@@ -630,7 +638,9 @@ class RAGCommands(commands.Cog):
                     else:
                         failures.append(getattr(item, "filename", "attachment"))
                 except Exception as exc:
-                    failures.append(f"{getattr(item, 'filename', 'attachment')} ({exc})")
+                    failures.append(
+                        f"{getattr(item, 'filename', 'attachment')} ({exc})"
+                    )
 
             if successes == 0 and failures:
                 await ctx.send(
@@ -742,7 +752,9 @@ class RAGCommands(commands.Cog):
                     error_text = "\n".join(f"- {err}" for err in errors[:5])
                     if len(errors) > 5:
                         error_text += f"\n... and {len(errors) - 5} more"
-                    description = f"Indexed {indexed} documents\n\n⚠️ Errors:\n{error_text}"
+                    description = (
+                        f"Indexed {indexed} documents\n\n⚠️ Errors:\n{error_text}"
+                    )
                     color = discord.Color.yellow()
                 else:
                     description = f"Successfully indexed {indexed} documents"

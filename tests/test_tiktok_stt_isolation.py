@@ -7,11 +7,11 @@ and that transcripts are not cross-contaminated.
 import hashlib
 from urllib.parse import urlparse
 
-import pytest
 
 
 # Inline copies of the functions under test (to avoid import issues)
 import re
+
 
 def _normalize_tiktok_url(url: str) -> str:
     """
@@ -25,19 +25,19 @@ def _normalize_tiktok_url(url: str) -> str:
         host = parsed.netloc.lower()
         if host in ("vm.tiktok.com", "m.tiktok.com", "www.tiktok.com", "tiktok.com"):
             path = parsed.path.rstrip("/")
-            
+
             # Handle /player/v1/<video_id> embed URLs - extract video ID for identity
             player_match = re.match(r"^/player(?:/v\d+)?/(\d+)", path)
             if player_match:
                 video_id = player_match.group(1)
                 return f"tiktok://video/{video_id}"
-            
+
             # Handle /@user/video/<video_id> canonical URLs - extract video ID
             video_match = re.match(r"^/@[\w\.-]+/video/(\d+)", path)
             if video_match:
                 video_id = video_match.group(1)
                 return f"tiktok://video/{video_id}"
-            
+
             # For short URLs like /t/ZP8UxRTSU, the path is the key
             return f"tiktok://{path}"
     except Exception:
@@ -73,28 +73,31 @@ def _canonicalize_video_identity(original_url: str, metadata=None) -> str:
         video_id = metadata.get("id") or ""
         if extractor and video_id:
             return f"{extractor.lower()}:{video_id}"
-    
+
     if not original_url:
         return ""
-    
+
     url_lower = original_url.lower()
-    
+
     if "tiktok.com" in url_lower:
         normalized = _normalize_tiktok_url(original_url)
         if normalized.startswith("tiktok://"):
             return normalized.replace("://", ":")
-    
+
     return f"generic:{hashlib.sha256(original_url.encode()).hexdigest()[:16]}"
 
 
 def _compute_download_key(
-    resolved_url: str, fmt_id: str, content_length, 
-    original_url=None, video_identity=None
+    resolved_url: str,
+    fmt_id: str,
+    content_length,
+    original_url=None,
+    video_identity=None,
 ) -> str:
     """Compute cache key with video identity for collision resistance."""
     length_part = str(content_length) if content_length is not None else "na"
     base_key = f"{_hash_resolved_url(resolved_url)}-{fmt_id}-{length_part}"
-    
+
     # Always include video identity hash to prevent cross-contamination
     if video_identity:
         identity_hash = _hash_resolved_url(video_identity)[:10]
@@ -103,7 +106,7 @@ def _compute_download_key(
         fallback_identity = _canonicalize_video_identity(original_url)
         identity_hash = _hash_resolved_url(fallback_identity)[:10]
         base_key = f"{base_key}-v{identity_hash}"
-    
+
     return base_key
 
 
@@ -191,49 +194,54 @@ class TestCacheKeyIsolation:
         """Different TikTok URLs should produce different cache keys."""
         # Simulate same resolved CDN URL (worst case scenario)
         same_resolved = "https://cdn.tiktok.com/video/abc123.mp4"
-        
+
         key1 = _compute_download_key(
-            same_resolved, "ba", 1000000,
-            original_url="https://www.tiktok.com/t/ABC123/"
+            same_resolved,
+            "ba",
+            1000000,
+            original_url="https://www.tiktok.com/t/ABC123/",
         )
         key2 = _compute_download_key(
-            same_resolved, "ba", 1000000,
-            original_url="https://www.tiktok.com/t/XYZ789/"
+            same_resolved,
+            "ba",
+            1000000,
+            original_url="https://www.tiktok.com/t/XYZ789/",
         )
-        
+
         assert key1 != key2, "Different TikTok URLs must produce different cache keys"
 
     def test_same_tiktok_same_key(self):
         """Same TikTok URL should produce same cache key."""
         resolved = "https://cdn.tiktok.com/video/abc123.mp4"
         original = "https://www.tiktok.com/t/ABC123/"
-        
+
         key1 = _compute_download_key(resolved, "ba", 1000000, original_url=original)
         key2 = _compute_download_key(resolved, "ba", 1000000, original_url=original)
-        
+
         assert key1 == key2, "Same TikTok URL should produce same cache key"
 
     def test_youtube_has_identity_suffix(self):
         """YouTube URLs should have identity suffix in key."""
         resolved = "https://cdn.youtube.com/video/abc123.mp4"
-        
+
         key = _compute_download_key(
-            resolved, "ba", 1000000,
-            original_url="https://www.youtube.com/watch?v=abc123"
+            resolved,
+            "ba",
+            1000000,
+            original_url="https://www.youtube.com/watch?v=abc123",
         )
-        
+
         # Key should have the "-v" identity suffix
         assert "-v" in key
 
     def test_tiktok_has_identity_suffix(self):
         """TikTok URLs should have identity suffix in key."""
         resolved = "https://cdn.tiktok.com/video/abc123.mp4"
-        
+
         key = _compute_download_key(
-            resolved, "ba", 1000000,
-            original_url="https://www.tiktok.com/t/ABC123/"
+            resolved, "ba", 1000000, original_url="https://www.tiktok.com/t/ABC123/"
         )
-        
+
         # Key should have the "-v" identity suffix
         assert "-v" in key
 

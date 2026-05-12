@@ -21,7 +21,9 @@ class CaptureLogger:
         return None
 
 
-def test_build_visual_anchored_system_prompt_returns_none_without_visual_facts() -> None:
+def test_build_visual_anchored_system_prompt_returns_none_without_visual_facts() -> (
+    None
+):
     router = Router(DummyBot())
     router.logger = CaptureLogger()
 
@@ -31,7 +33,9 @@ def test_build_visual_anchored_system_prompt_returns_none_without_visual_facts()
     assert router.logger.info_lines == []
 
 
-def test_build_visual_anchored_system_prompt_detects_attachment_image_analysis() -> None:
+def test_build_visual_anchored_system_prompt_detects_attachment_image_analysis() -> (
+    None
+):
     router = Router(DummyBot())
     router.logger = CaptureLogger()
 
@@ -45,7 +49,9 @@ def test_build_visual_anchored_system_prompt_detects_attachment_image_analysis()
     assert "[VISUAL-ANALYSIS-ANCHOR]" in out
 
 
-def test_build_visual_anchored_system_prompt_detects_direct_image_url_analysis() -> None:
+def test_build_visual_anchored_system_prompt_detects_direct_image_url_analysis() -> (
+    None
+):
     router = Router(DummyBot())
     router.logger = CaptureLogger()
 

@@ -1,8 +1,5 @@
 """Tests for STT language propagation across chunks."""
 
-import pytest
-from unittest.mock import Mock, patch, MagicMock
-import numpy as np
 
 from bot.stt import ModelSpec
 

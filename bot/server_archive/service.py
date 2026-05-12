@@ -6,13 +6,18 @@ import asyncio
 import logging
 from dataclasses import asdict
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from bot.config import load_config
 
 from .ingestion_queue import ArchiveIngestionQueue
-from .models import ArchiveMessageBundle, ArchiveSearchResult, utc_now_iso
-from .sync import build_bundle_from_message, sync_channel_archive as _sync_channel_archive, sync_guild_archive as _sync_guild_archive, sync_thread_archive as _sync_thread_archive
+from .models import ArchiveMessageBundle, ArchiveSearchResult
+from .sync import (
+    build_bundle_from_message,
+    sync_channel_archive as _sync_channel_archive,
+    sync_guild_archive as _sync_guild_archive,
+    sync_thread_archive as _sync_thread_archive,
+)
 from .store import ServerArchiveStore
 
 logger = logging.getLogger(__name__)
@@ -43,17 +48,28 @@ class ServerArchiveService:
     def refresh_config(self) -> None:
         cfg = load_config()
         self.config = cfg
-        self.enabled = bool(cfg.get("SERVER_ARCHIVE_ENABLED", cfg.get("SERVER_ARCHIVE_ENABLE", False)))
-        self.db_path = Path(cfg.get("SERVER_ARCHIVE_DB_PATH", "./data/server_archive.db"))
+        self.enabled = bool(
+            cfg.get("SERVER_ARCHIVE_ENABLED", cfg.get("SERVER_ARCHIVE_ENABLE", False))
+        )
+        self.db_path = Path(
+            cfg.get("SERVER_ARCHIVE_DB_PATH", "./data/server_archive.db")
+        )
         self.queue_max = max(1, int(cfg.get("SERVER_ARCHIVE_QUEUE_MAX", 1000)))
         self.batch_size = max(1, int(cfg.get("SERVER_ARCHIVE_BATCH_SIZE", 100)))
-        self.search_limit = max(1, min(10, int(cfg.get("SERVER_ARCHIVE_SEARCH_LIMIT", 10))))
+        self.search_limit = max(
+            1, min(10, int(cfg.get("SERVER_ARCHIVE_SEARCH_LIMIT", 10)))
+        )
         self.admin_only = bool(cfg.get("SERVER_ARCHIVE_ADMIN_ONLY", True))
         self.sync_on_start = bool(cfg.get("SERVER_ARCHIVE_SYNC_ON_START", True))
         self.live_tail = bool(cfg.get("SERVER_ARCHIVE_LIVE_TAIL", True))
-        self.max_message_chars = max(1, int(cfg.get("SERVER_ARCHIVE_MAX_MESSAGE_CHARS", 8000)))
+        self.max_message_chars = max(
+            1, int(cfg.get("SERVER_ARCHIVE_MAX_MESSAGE_CHARS", 8000))
+        )
         self.include_bot_messages = bool(
-            cfg.get("SERVER_ARCHIVE_ARCHIVE_BOT_MESSAGES", cfg.get("SERVER_ARCHIVE_INCLUDE_BOT_MESSAGES", False))
+            cfg.get(
+                "SERVER_ARCHIVE_ARCHIVE_BOT_MESSAGES",
+                cfg.get("SERVER_ARCHIVE_INCLUDE_BOT_MESSAGES", False),
+            )
         )
 
     async def start(self) -> None:
@@ -66,21 +82,37 @@ class ServerArchiveService:
             await self.queue.start()
             self._started = True
             if self.sync_on_start and self.bot is not None:
-                self._sync_start_task = asyncio.create_task(self._sync_all_visible_guilds(), name="server-archive-sync-on-start")
+                self._sync_start_task = asyncio.create_task(
+                    self._sync_all_visible_guilds(), name="server-archive-sync-on-start"
+                )
             logger.info(
                 "Server archive service started",
-                extra={"subsys": "server_archive", "event": "archive_service_started", "detail": {"db_path": str(self.db_path)}},
+                extra={
+                    "subsys": "server_archive",
+                    "event": "archive_service_started",
+                    "detail": {"db_path": str(self.db_path)},
+                },
             )
 
     async def stop(self) -> None:
         self._paused = True
         if self._sync_start_task and not self._sync_start_task.done():
             self._sync_start_task.cancel()
-        for task in list(self._guild_sync_tasks.values()) + list(self._channel_sync_tasks.values()):
+        for task in list(self._guild_sync_tasks.values()) + list(
+            self._channel_sync_tasks.values()
+        ):
             if not task.done():
                 task.cancel()
         await self.queue.stop(timeout=5.0)
-        tasks = [t for t in [self._sync_start_task, *self._guild_sync_tasks.values(), *self._channel_sync_tasks.values()] if t is not None]
+        tasks = [
+            t
+            for t in [
+                self._sync_start_task,
+                *self._guild_sync_tasks.values(),
+                *self._channel_sync_tasks.values(),
+            ]
+            if t is not None
+        ]
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
         self._guild_sync_tasks.clear()
@@ -101,7 +133,9 @@ class ServerArchiveService:
             return True
         if not self.include_bot_messages and bool(getattr(author, "bot", False)):
             return True
-        if not getattr(message, "content", "") and not getattr(message, "attachments", None):
+        if not getattr(message, "content", "") and not getattr(
+            message, "attachments", None
+        ):
             return True
         if self._looks_like_command(message):
             return True
@@ -111,7 +145,9 @@ class ServerArchiveService:
         content = str(getattr(message, "content", "") or "").lstrip()
         if not content:
             return False
-        prefixes = getattr(self.bot, "command_prefix", "!") if self.bot is not None else "!"
+        prefixes = (
+            getattr(self.bot, "command_prefix", "!") if self.bot is not None else "!"
+        )
         if isinstance(prefixes, (list, tuple, set)):
             return any(prefix and content.startswith(prefix) for prefix in prefixes)
         return bool(prefixes and content.startswith(str(prefixes)))
@@ -155,8 +191,10 @@ class ServerArchiveService:
         task = self._channel_sync_tasks.get(key)
         if task and not task.done() and not force:
             return 0
+
         async def _runner() -> int:
             return await _sync_channel_archive(self.store, channel, force=force)
+
         task = asyncio.create_task(_runner(), name=f"server-archive-sync-channel-{key}")
         self._channel_sync_tasks[key] = task
         task.add_done_callback(lambda _t: self._channel_sync_tasks.pop(key, None))
@@ -171,9 +209,13 @@ class ServerArchiveService:
         task = self._channel_sync_tasks.get(key)
         if task and not task.done() and not force:
             return 0
+
         async def _runner() -> int:
             return await _sync_thread_archive(self.store, thread, force=force)
-        task = asyncio.create_task(_runner(), name=f"server-archive-sync-thread-{getattr(thread, 'id', '')}")
+
+        task = asyncio.create_task(
+            _runner(), name=f"server-archive-sync-thread-{getattr(thread, 'id', '')}"
+        )
         self._channel_sync_tasks[key] = task
         task.add_done_callback(lambda _t: self._channel_sync_tasks.pop(key, None))
         return await task
@@ -185,9 +227,13 @@ class ServerArchiveService:
         task = self._guild_sync_tasks.get(guild_id)
         if task and not task.done() and not force:
             return 0
+
         async def _runner() -> int:
             return await _sync_guild_archive(self.store, guild, force=force)
-        task = asyncio.create_task(_runner(), name=f"server-archive-sync-guild-{guild_id}")
+
+        task = asyncio.create_task(
+            _runner(), name=f"server-archive-sync-guild-{guild_id}"
+        )
         self._guild_sync_tasks[guild_id] = task
         task.add_done_callback(lambda _t: self._guild_sync_tasks.pop(guild_id, None))
         return await task
@@ -201,7 +247,13 @@ class ServerArchiveService:
                     break
                 await self.sync_guild(guild)
         except Exception:
-            logger.exception("Server archive sync-on-start failed", extra={"subsys": "server_archive", "event": "archive_sync_on_start_failed"})
+            logger.exception(
+                "Server archive sync-on-start failed",
+                extra={
+                    "subsys": "server_archive",
+                    "event": "archive_sync_on_start_failed",
+                },
+            )
 
     def pause(self) -> None:
         self._paused = True
@@ -211,20 +263,27 @@ class ServerArchiveService:
 
     async def get_status(self, *, guild_id: str | None = None) -> dict[str, Any]:
         counts = await self.store.counts(guild_id=guild_id)
-        states = [state.to_row() for state in await self.store.list_sync_states(guild_id=guild_id)]
+        states = [
+            state.to_row()
+            for state in await self.store.list_sync_states(guild_id=guild_id)
+        ]
         guild_sync_running = False
         if guild_id is not None:
             guild_task = self._guild_sync_tasks.get(guild_id)
             guild_sync_running = bool(guild_task and not guild_task.done())
         else:
-            guild_sync_running = any(task and not task.done() for task in self._guild_sync_tasks.values())
+            guild_sync_running = any(
+                task and not task.done() for task in self._guild_sync_tasks.values()
+            )
         if guild_id is not None:
             channel_running = any(
                 key.startswith(f"{guild_id}:") and task and not task.done()
                 for key, task in self._channel_sync_tasks.items()
             )
         else:
-            channel_running = any(task and not task.done() for task in self._channel_sync_tasks.values())
+            channel_running = any(
+                task and not task.done() for task in self._channel_sync_tasks.values()
+            )
         return {
             "enabled": self.enabled,
             "started": self._started,
@@ -237,7 +296,9 @@ class ServerArchiveService:
             "stats": asdict(self.queue.stats),
             "counts": counts,
             "sync_states": states,
-            "sync_running": guild_sync_running or channel_running or (self._sync_start_task is not None and not self._sync_start_task.done()),
+            "sync_running": guild_sync_running
+            or channel_running
+            or (self._sync_start_task is not None and not self._sync_start_task.done()),
         }
 
 
@@ -278,7 +339,13 @@ async def search_archive(
     limit: int | None = None,
 ) -> list[ArchiveSearchResult]:
     service = await get_server_archive_service()
-    return await service.search(query, guild_id=guild_id, channel_id=channel_id, author_id=author_id, limit=limit)
+    return await service.search(
+        query,
+        guild_id=guild_id,
+        channel_id=channel_id,
+        author_id=author_id,
+        limit=limit,
+    )
 
 
 async def get_server_archive_status(*, guild_id: str | None = None) -> dict[str, Any]:

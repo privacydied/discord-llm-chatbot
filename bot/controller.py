@@ -95,8 +95,20 @@ async def download_attachment(attachment) -> Path:
     # Sanitize suffix from the original filename, fall back to .bin
     suffix = Path(attachment.filename).suffix or ".bin"
     # Only allow known safe suffixes to prevent writing executable content
-    safe_suffixes = {".mp3", ".wav", ".ogg", ".flac", ".m4a", ".mp4",
-                     ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bin"}
+    safe_suffixes = {
+        ".mp3",
+        ".wav",
+        ".ogg",
+        ".flac",
+        ".m4a",
+        ".mp4",
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".gif",
+        ".webp",
+        ".bin",
+    }
     if suffix.lower() not in safe_suffixes:
         suffix = ".bin"
     temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)

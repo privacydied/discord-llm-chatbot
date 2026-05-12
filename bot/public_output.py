@@ -14,7 +14,6 @@ import re
 from typing import Optional, Tuple
 
 import discord
-from discord import Embed
 
 from .utils.logging import get_logger
 
@@ -22,66 +21,66 @@ logger = get_logger(__name__)
 
 # Patterns that indicate internal reasoning leakage
 REASONING_LEAK_PATTERNS = [
- # Existing patterns
- r"^\s*Okay\s*,?\s*the\s+user",
- r"^\s*The\s+user\s+shared",
- r"^\s*First\s*,?\s*I\s+need\s+to",
- r"^\s*I\s+need\s+to\s+figure\s+out",
- r"Checking\s+the\s+MODE\s*GATE",
- r"MODE\s*GATE",
- r"POLITICAL\s*MODE",
- r"NORMAL\s*MODE",
- r"EXPLICIT_LENS_REQUEST",
- r"POLITICS_CORE_TOPIC",
- r"chain-of-thought",
- r"hidden\s+reasoning",
- r"scratchpad",
- r"^\s*analysis\s*:",
- r"^\s*reasoning\s*:",
- r"<thinking>",
- r"</thinking>",
- r"<reasoning>",
- r"</reasoning>",
- r"<scratchpad>",
- r"</scratchpad>",
- # Additional patterns for comprehensive coverage [REH]
- r"I\s+should\s+analyze",
- r"Let\s+me\s+analyze",
- r"I\s+will\s+analyze",
- r"I\s+need\s+to\s+analyze",
- r"Based\s+on\s+the\s+above",
- r"According\s+to\s+the\s+rules",
- r"As\s+an\s+AI\s+(assistant|language\s+model)",
- r"^\s*thought\s*:\s*",
- r"^\s*plan\s*:\s*",
- r"^\s*steps?\s*:\s*",
+    # Existing patterns
+    r"^\s*Okay\s*,?\s*the\s+user",
+    r"^\s*The\s+user\s+shared",
+    r"^\s*First\s*,?\s*I\s+need\s+to",
+    r"^\s*I\s+need\s+to\s+figure\s+out",
+    r"Checking\s+the\s+MODE\s*GATE",
+    r"MODE\s*GATE",
+    r"POLITICAL\s*MODE",
+    r"NORMAL\s*MODE",
+    r"EXPLICIT_LENS_REQUEST",
+    r"POLITICS_CORE_TOPIC",
+    r"chain-of-thought",
+    r"hidden\s+reasoning",
+    r"scratchpad",
+    r"^\s*analysis\s*:",
+    r"^\s*reasoning\s*:",
+    r"<thinking>",
+    r"</thinking>",
+    r"<reasoning>",
+    r"</reasoning>",
+    r"<scratchpad>",
+    r"</scratchpad>",
+    # Additional patterns for comprehensive coverage [REH]
+    r"I\s+should\s+analyze",
+    r"Let\s+me\s+analyze",
+    r"I\s+will\s+analyze",
+    r"I\s+need\s+to\s+analyze",
+    r"Based\s+on\s+the\s+above",
+    r"According\s+to\s+the\s+rules",
+    r"As\s+an\s+AI\s+(assistant|language\s+model)",
+    r"^\s*thought\s*:\s*",
+    r"^\s*plan\s*:\s*",
+    r"^\s*steps?\s*:\s*",
     r"<tool_call>",
     r"^\s*\]\s*$",  # standalone ] on its own line only
- r"<analysis>",
- r"</analysis>",
- # Internal prompt/context wrapper labels
- r"\bsystem\s+prompt\b",
- r"\bdeveloper\s+message\b",
- r"\binternal\s+prompt\b",
- # v2: tool-call / JSON-like leakage
- r"^\s*\{\s*\"tool\"\s*:",
- r"^\s*\{\s*\"type\"\s*:\s*\"(code|function)\"",
- r"^\s*\[\s*\{\s*\"name\"\s*:",
- # v2: internal routing/status fragments
- r"^\s*(dispatch|route|router|pipeline|ingest|backpressure|queue_status|health)\s*[:=]\s*(?:internal|status|ok|fail|timeout)",
- # v2: analysis/final/commentary role leakage
- r"^\s*(final\s+answer|analysis\s+summary|commentary\s+only)",
- # v2: raw prompt scaffolding markers
- r"^\s*<system>",
- r"^\s*</system>",
- r"^\s*<instruction>",
- r"^\s*</instruction>",
+    r"<analysis>",
+    r"</analysis>",
+    # Internal prompt/context wrapper labels
+    r"\bsystem\s+prompt\b",
+    r"\bdeveloper\s+message\b",
+    r"\binternal\s+prompt\b",
+    # v2: tool-call / JSON-like leakage
+    r"^\s*\{\s*\"tool\"\s*:",
+    r"^\s*\{\s*\"type\"\s*:\s*\"(code|function)\"",
+    r"^\s*\[\s*\{\s*\"name\"\s*:",
+    # v2: internal routing/status fragments
+    r"^\s*(dispatch|route|router|pipeline|ingest|backpressure|queue_status|health)\s*[:=]\s*(?:internal|status|ok|fail|timeout)",
+    # v2: analysis/final/commentary role leakage
+    r"^\s*(final\s+answer|analysis\s+summary|commentary\s+only)",
+    # v2: raw prompt scaffolding markers
+    r"^\s*<system>",
+    r"^\s*</system>",
+    r"^\s*<instruction>",
+    r"^\s*</instruction>",
 ]
 
 # Compiled regex for faster matching
 _reasoning_pattern = re.compile(
- "|".join(f"({p})" for p in REASONING_LEAK_PATTERNS),
- re.IGNORECASE | re.MULTILINE,
+    "|".join(f"({p})" for p in REASONING_LEAK_PATTERNS),
+    re.IGNORECASE | re.MULTILINE,
 )
 
 SAFE_FALLBACK_MESSAGE = "I couldn't produce a usable reply for that. Try rephrasing it."
@@ -108,8 +107,8 @@ _AGGREGATION_HEADER_RE = re.compile(
 
 # b) "### Original Message Text:" header lines
 _ORIGINAL_MSG_HEADER_RE = re.compile(
- r"^\s*###\s*Original\s+Message\s+Text\s*:.*$",
- re.IGNORECASE | re.MULTILINE,
+    r"^\s*###\s*Original\s+Message\s+Text\s*:.*$",
+    re.IGNORECASE | re.MULTILINE,
 )
 
 # c) Standalone [n/m] at line start that look like internal routing.
@@ -127,16 +126,16 @@ _INTERNAL_ROUTING_LABEL_SIMPLE_RE = re.compile(
 
 # d) Internal section markers
 _INTERNAL_SECTION_MARKERS_RE = re.compile(
- r"^\s*(?:VISUAL_FACTS|vl\s+prompt\s+output|Internal\s+intent)\s*:.*$"
- r"|\[Tweet\s+Caption\]",
- re.IGNORECASE | re.MULTILINE,
+    r"^\s*(?:VISUAL_FACTS|vl\s+prompt\s+output|Internal\s+intent)\s*:.*$"
+    r"|\[Tweet\s+Caption\]",
+    re.IGNORECASE | re.MULTILINE,
 )
 
 # e) Lines that are purely internal identifiers
 _INTERNAL_IDENTIFIER_RE = re.compile(
- r"^\s*_process_multimodal_message_internal\s*$"
- r"|^\s*VL_DEBUG_FLOW\s*$",
- re.MULTILINE,
+    r"^\s*_process_multimodal_message_internal\s*$"
+    r"|^\s*VL_DEBUG_FLOW\s*$",
+    re.MULTILINE,
 )
 
 # e2) Inline route/debug labels that point to internal pipeline stages
@@ -153,20 +152,20 @@ _PROMPT_SECTION_HEADER_RE = re.compile(
 
 # g) Internal-format timestamps: "digits — YYYY-MM-DD HH:MM UTC"
 _INTERNAL_TIMESTAMP_RE = re.compile(
- r"^\s*\d+\s*[—\-–]\s*\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}\s+UTC\s*$",
- re.MULTILINE,
+    r"^\s*\d+\s*[—\-–]\s*\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}\s+UTC\s*$",
+    re.MULTILINE,
 )
 
 # h) <analysis>...</analysis> tags with content
 _ANALYSIS_TAG_RE = re.compile(
- r"<analysis>.*?</analysis>",
- re.DOTALL | re.IGNORECASE,
+    r"<analysis>.*?</analysis>",
+    re.DOTALL | re.IGNORECASE,
 )
 
 # Standalone <analysis> or </analysis> leftover tags (in case not paired)
 _ANALYSIS_LEFTOVER_RE = re.compile(
- r"</?analysis>",
- re.IGNORECASE,
+    r"</?analysis>",
+    re.IGNORECASE,
 )
 
 # Whitespace collapse: 3+ newlines -> 2, strip trailing per-line whitespace
@@ -442,11 +441,13 @@ def sanitize_embed_for_public(embed: discord.Embed) -> discord.Embed:
     if embed.fields:
         saved_fields = []
         for f in embed.fields:
-            saved_fields.append({
-                "name": sanitize_public_text(f.name) or "\u200b",
-                "value": sanitize_public_text(f.value) or "\u200b",
-                "inline": f.inline,
-            })
+            saved_fields.append(
+                {
+                    "name": sanitize_public_text(f.name) or "\u200b",
+                    "value": sanitize_public_text(f.value) or "\u200b",
+                    "inline": f.inline,
+                }
+            )
         # Clear existing fields by setting internal _fields to empty
         embed._fields = []
         for sf in saved_fields:
@@ -483,9 +484,7 @@ def sanitize_public_message_payload(
     embeds: Optional[list[discord.Embed]] = None,
 ) -> tuple[Optional[str], Optional[discord.Embed], list[discord.Embed]]:
     """Sanitize outbound Discord message payload text immediately before send."""
-    sanitized_content = (
-        sanitize_public_text(content) if content is not None else None
-    )
+    sanitized_content = sanitize_public_text(content) if content is not None else None
     sanitized_embed = sanitize_embed_for_public(embed) if embed is not None else None
     sanitized_embeds = sanitize_embed_collection_for_public(embeds)
     return sanitized_content, sanitized_embed, sanitized_embeds

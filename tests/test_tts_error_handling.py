@@ -5,7 +5,9 @@ Test TTS error handling for zero audio and OCR soft-dependency.
 import pytest
 
 # Skip all tests — require TTS binaries (espeak-ng, tesseract, Kokoro)
-pytestmark = pytest.mark.skip(reason="Requires TTS binaries (espeak-ng, tesseract, Kokoro)")
+pytestmark = pytest.mark.skip(
+    reason="Requires TTS binaries (espeak-ng, tesseract, Kokoro)"
+)
 
 import unittest
 import tempfile

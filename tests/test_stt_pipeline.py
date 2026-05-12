@@ -2,8 +2,6 @@
 Tests for STT pipeline improvements.
 """
 
-import pytest
-from unittest.mock import MagicMock
 
 from bot.hear import (
     _transcript_cache_key,
@@ -21,7 +19,7 @@ class TestTranscriptCacheKey:
         """Cache key generation should include pipeline version."""
         spec = ModelSpec("tiny", "int8")
         key1 = _transcript_cache_key("audio123", spec, vad_enabled=True)
-        
+
         # Check the key is a hex string
         assert isinstance(key1, str)
         assert len(key1) == 24  # We truncate to 24 chars
@@ -30,14 +28,17 @@ class TestTranscriptCacheKey:
         """Changing pipeline version changes the cache key."""
         # This test documents the expected behavior
         assert STT_PIPELINE_VERSION.startswith("stt-")
-        assert "lang-aware" in STT_PIPELINE_VERSION.lower() or "stitch" in STT_PIPELINE_VERSION.lower()
+        assert (
+            "lang-aware" in STT_PIPELINE_VERSION.lower()
+            or "stitch" in STT_PIPELINE_VERSION.lower()
+        )
 
     def test_cache_key_includes_task_and_language(self):
         """Cache key should include task and language parameters."""
         spec = ModelSpec("tiny", "int8")
         key1 = _transcript_cache_key("audio123", spec, task="transcribe", language=None)
         key2 = _transcript_cache_key("audio123", spec, task="translate", language="en")
-        
+
         # Different task/language should produce different keys
         assert key1 != key2
 
@@ -47,7 +48,7 @@ class TestTranscriptCacheKey:
         key_auto = _transcript_cache_key("audio123", spec, language=None)
         key_ar = _transcript_cache_key("audio123", spec, language="ar")
         key_en = _transcript_cache_key("audio123", spec, language="en")
-        
+
         # All three should be different
         assert len(set([key_auto, key_ar, key_en])) == 3
 

@@ -29,7 +29,7 @@ Usage:
 from __future__ import annotations
 
 import functools
-from typing import Optional, Sequence, Set
+from typing import Optional, Set
 
 import discord
 from discord.ext import commands
@@ -196,13 +196,9 @@ def admin_only_slash(
 
     def decorator(fn):
         @functools.wraps(fn)
-        async def wrapper(
-            interaction: discord.Interaction, *args, **kwargs
-        ):
+        async def wrapper(interaction: discord.Interaction, *args, **kwargs):
             if not await is_admin_user(interaction.user, interaction.client):
-                await interaction.response.send_message(
-                    message, ephemeral=True
-                )
+                await interaction.response.send_message(message, ephemeral=True)
                 raise PermissionDeniedError(message)
             return await fn(interaction, *args, **kwargs)
 

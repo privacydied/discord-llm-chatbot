@@ -7,15 +7,12 @@ import logging
 import sqlite3
 import threading
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any, Sequence
 
 from .models import (
-    ArchiveAttachment,
     ArchiveChannel,
     ArchiveGuild,
-    ArchiveMessage,
     ArchiveMessageBundle,
-    ArchiveMention,
     ArchiveSearchResult,
     ArchiveSyncState,
     ArchiveThread,
@@ -260,7 +257,10 @@ class ServerArchiveStore:
                     conn.commit()
                     logger.info(
                         "Server archive schema bootstrapped",
-                        extra={"subsys": "server_archive", "event": "archive_schema_bootstrap"},
+                        extra={
+                            "subsys": "server_archive",
+                            "event": "archive_schema_bootstrap",
+                        },
                     )
                 elif version > _SCHEMA_VERSION:
                     logger.warning(
@@ -287,18 +287,53 @@ class ServerArchiveStore:
                 indexed_where = " WHERE guild_id = ?" if guild_id else ""
                 indexed_params: tuple[Any, ...] = (guild_id,) if guild_id else ()
                 indexed_messages = int(
-                    conn.execute(f"SELECT COUNT(*) FROM archive_messages_fts{indexed_where}", indexed_params).fetchone()[0]
+                    conn.execute(
+                        f"SELECT COUNT(*) FROM archive_messages_fts{indexed_where}",
+                        indexed_params,
+                    ).fetchone()[0]
                 )
                 return {
-                    "guilds": int(conn.execute(f"SELECT COUNT(*) FROM archive_guilds{where}", params).fetchone()[0]),
-                    "channels": int(conn.execute(f"SELECT COUNT(*) FROM archive_channels{where}", params).fetchone()[0]),
-                    "threads": int(conn.execute(f"SELECT COUNT(*) FROM archive_threads{where}", params).fetchone()[0]),
-                    "users": int(conn.execute("SELECT COUNT(*) FROM archive_users").fetchone()[0]),
-                    "messages": int(conn.execute(f"SELECT COUNT(*) FROM archive_messages{where}", params).fetchone()[0]),
+                    "guilds": int(
+                        conn.execute(
+                            f"SELECT COUNT(*) FROM archive_guilds{where}", params
+                        ).fetchone()[0]
+                    ),
+                    "channels": int(
+                        conn.execute(
+                            f"SELECT COUNT(*) FROM archive_channels{where}", params
+                        ).fetchone()[0]
+                    ),
+                    "threads": int(
+                        conn.execute(
+                            f"SELECT COUNT(*) FROM archive_threads{where}", params
+                        ).fetchone()[0]
+                    ),
+                    "users": int(
+                        conn.execute("SELECT COUNT(*) FROM archive_users").fetchone()[0]
+                    ),
+                    "messages": int(
+                        conn.execute(
+                            f"SELECT COUNT(*) FROM archive_messages{where}", params
+                        ).fetchone()[0]
+                    ),
                     "indexed_messages": indexed_messages,
-                    "attachments": int(conn.execute(f"SELECT COUNT(*) FROM archive_attachments a JOIN archive_messages m ON m.message_id = a.message_id{(' WHERE m.guild_id = ?' if guild_id else '')}", params).fetchone()[0]),
-                    "mentions": int(conn.execute(f"SELECT COUNT(*) FROM archive_mentions a JOIN archive_messages m ON m.message_id = a.message_id{(' WHERE m.guild_id = ?' if guild_id else '')}", params).fetchone()[0]),
-                    "sync_states": int(conn.execute(f"SELECT COUNT(*) FROM archive_sync_state{where}", params).fetchone()[0]),
+                    "attachments": int(
+                        conn.execute(
+                            f"SELECT COUNT(*) FROM archive_attachments a JOIN archive_messages m ON m.message_id = a.message_id{(' WHERE m.guild_id = ?' if guild_id else '')}",
+                            params,
+                        ).fetchone()[0]
+                    ),
+                    "mentions": int(
+                        conn.execute(
+                            f"SELECT COUNT(*) FROM archive_mentions a JOIN archive_messages m ON m.message_id = a.message_id{(' WHERE m.guild_id = ?' if guild_id else '')}",
+                            params,
+                        ).fetchone()[0]
+                    ),
+                    "sync_states": int(
+                        conn.execute(
+                            f"SELECT COUNT(*) FROM archive_sync_state{where}", params
+                        ).fetchone()[0]
+                    ),
                 }
             finally:
                 conn.close()
@@ -344,7 +379,9 @@ class ServerArchiveStore:
             guild.to_row(),
         )
 
-    def _upsert_channel(self, conn: sqlite3.Connection, channel: ArchiveChannel) -> None:
+    def _upsert_channel(
+        self, conn: sqlite3.Connection, channel: ArchiveChannel
+    ) -> None:
         conn.execute(
             """
             INSERT INTO archive_channels(channel_id, guild_id, parent_id, name, type, archived_at, last_synced_message_id, last_synced_at)
@@ -392,7 +429,9 @@ class ServerArchiveStore:
             user.to_row(),
         )
 
-    def _upsert_message(self, conn: sqlite3.Connection, bundle: ArchiveMessageBundle) -> None:
+    def _upsert_message(
+        self, conn: sqlite3.Connection, bundle: ArchiveMessageBundle
+    ) -> None:
         message = bundle.message
         conn.execute(
             """
@@ -423,10 +462,18 @@ class ServerArchiveStore:
             """,
             message.to_row(),
         )
-        conn.execute("DELETE FROM archive_attachments WHERE message_id = ?", (message.message_id,))
-        conn.execute("DELETE FROM archive_mentions WHERE message_id = ?", (message.message_id,))
+        conn.execute(
+            "DELETE FROM archive_attachments WHERE message_id = ?",
+            (message.message_id,),
+        )
+        conn.execute(
+            "DELETE FROM archive_mentions WHERE message_id = ?", (message.message_id,)
+        )
         if self._fts_enabled:
-            conn.execute("DELETE FROM archive_messages_fts WHERE message_id = ?", (message.message_id,))
+            conn.execute(
+                "DELETE FROM archive_messages_fts WHERE message_id = ?",
+                (message.message_id,),
+            )
 
         for attachment in bundle.attachments:
             conn.execute(
@@ -453,7 +500,12 @@ class ServerArchiveStore:
             )
 
         if self._fts_enabled:
-            author_display = bundle.author.display_name or bundle.author.global_name or bundle.author.username or ""
+            author_display = (
+                bundle.author.display_name
+                or bundle.author.global_name
+                or bundle.author.username
+                or ""
+            )
             conn.execute(
                 """
                 INSERT INTO archive_messages_fts(
@@ -489,16 +541,23 @@ class ServerArchiveStore:
                     message.author_id,
                     message.content or "",
                     message.clean_content or "",
-                    bundle.author.display_name or bundle.author.global_name or bundle.author.username or "",
+                    bundle.author.display_name
+                    or bundle.author.global_name
+                    or bundle.author.username
+                    or "",
                     message.created_at,
                 ),
             )
 
-    async def soft_delete_message(self, message_id: str, deleted_at: str | None = None) -> bool:
+    async def soft_delete_message(
+        self, message_id: str, deleted_at: str | None = None
+    ) -> bool:
         await self.initialize()
         return await _to_thread(self._soft_delete_message_sync, message_id, deleted_at)
 
-    def _soft_delete_message_sync(self, message_id: str, deleted_at: str | None) -> bool:
+    def _soft_delete_message_sync(
+        self, message_id: str, deleted_at: str | None
+    ) -> bool:
         deleted_at = deleted_at or utc_now_iso()
         with self._lock:
             conn = self._connect()
@@ -508,7 +567,10 @@ class ServerArchiveStore:
                     (deleted_at, message_id),
                 )
                 if self._fts_enabled:
-                    conn.execute("DELETE FROM archive_messages_fts WHERE message_id = ?", (message_id,))
+                    conn.execute(
+                        "DELETE FROM archive_messages_fts WHERE message_id = ?",
+                        (message_id,),
+                    )
                 conn.commit()
                 return row.rowcount > 0
             finally:
@@ -522,17 +584,29 @@ class ServerArchiveStore:
         with self._lock:
             conn = self._connect()
             try:
-                row = conn.execute("DELETE FROM archive_messages WHERE message_id = ?", (message_id,))
-                conn.execute("DELETE FROM archive_attachments WHERE message_id = ?", (message_id,))
-                conn.execute("DELETE FROM archive_mentions WHERE message_id = ?", (message_id,))
+                row = conn.execute(
+                    "DELETE FROM archive_messages WHERE message_id = ?", (message_id,)
+                )
+                conn.execute(
+                    "DELETE FROM archive_attachments WHERE message_id = ?",
+                    (message_id,),
+                )
+                conn.execute(
+                    "DELETE FROM archive_mentions WHERE message_id = ?", (message_id,)
+                )
                 if self._fts_enabled:
-                    conn.execute("DELETE FROM archive_messages_fts WHERE message_id = ?", (message_id,))
+                    conn.execute(
+                        "DELETE FROM archive_messages_fts WHERE message_id = ?",
+                        (message_id,),
+                    )
                 conn.commit()
                 return row.rowcount > 0
             finally:
                 conn.close()
 
-    def _sync_state_key(self, guild_id: str, channel_id: str | None = None, thread_id: str | None = None) -> str:
+    def _sync_state_key(
+        self, guild_id: str, channel_id: str | None = None, thread_id: str | None = None
+    ) -> str:
         return ":".join([guild_id, channel_id or "", thread_id or ""])
 
     async def get_sync_state(
@@ -543,7 +617,9 @@ class ServerArchiveStore:
         thread_id: str | None = None,
     ) -> ArchiveSyncState | None:
         await self.initialize()
-        return await _to_thread(self._get_sync_state_sync, guild_id, channel_id, thread_id)
+        return await _to_thread(
+            self._get_sync_state_sync, guild_id, channel_id, thread_id
+        )
 
     def _get_sync_state_sync(
         self,
@@ -589,7 +665,9 @@ class ServerArchiveStore:
             finally:
                 conn.close()
 
-    async def list_sync_states(self, *, guild_id: str | None = None) -> list[ArchiveSyncState]:
+    async def list_sync_states(
+        self, *, guild_id: str | None = None
+    ) -> list[ArchiveSyncState]:
         await self.initialize()
         return await _to_thread(self._list_sync_states_sync, guild_id)
 
@@ -598,7 +676,9 @@ class ServerArchiveStore:
             conn = self._connect()
             try:
                 if guild_id is None:
-                    rows = conn.execute("SELECT * FROM archive_sync_state ORDER BY last_synced_at DESC").fetchall()
+                    rows = conn.execute(
+                        "SELECT * FROM archive_sync_state ORDER BY last_synced_at DESC"
+                    ).fetchall()
                 else:
                     rows = conn.execute(
                         "SELECT * FROM archive_sync_state WHERE guild_id = ? ORDER BY last_synced_at DESC",
@@ -617,11 +697,15 @@ class ServerArchiveStore:
     ) -> tuple[Any, ...]:
         return (guild_id, channel_id, thread_id, author_id)
 
-    async def list_distiller_scopes(self, *, limit: int = 200, guild_id: str | None = None) -> list[dict[str, Any]]:
+    async def list_distiller_scopes(
+        self, *, limit: int = 200, guild_id: str | None = None
+    ) -> list[dict[str, Any]]:
         await self.ensure_distiller_schema()
         return await _to_thread(self._list_distiller_scopes_sync, limit, guild_id)
 
-    def _list_distiller_scopes_sync(self, limit: int, guild_id: str | None) -> list[dict[str, Any]]:
+    def _list_distiller_scopes_sync(
+        self, limit: int, guild_id: str | None
+    ) -> list[dict[str, Any]]:
         limit = max(1, min(1000, int(limit)))
         with self._lock:
             conn = self._connect()
@@ -698,8 +782,12 @@ class ServerArchiveStore:
                     sql += " AND thread_id = ?"
                     params.append(thread_id)
                 if after_created_at is not None and after_message_id is not None:
-                    sql += " AND (created_at > ? OR (created_at = ? AND message_id > ?))"
-                    params.extend([after_created_at, after_created_at, after_message_id])
+                    sql += (
+                        " AND (created_at > ? OR (created_at = ? AND message_id > ?))"
+                    )
+                    params.extend(
+                        [after_created_at, after_created_at, after_message_id]
+                    )
                 sql += " ORDER BY created_at ASC, message_id ASC LIMIT ?"
                 params.append(limit)
                 rows = conn.execute(sql, params).fetchall()
@@ -953,9 +1041,7 @@ class ServerArchiveStore:
                 total = 0
                 for row in rows:
                     params: list[Any] = [row["guild_id"], row["author_id"]]
-                    sql = (
-                        "SELECT COUNT(*) FROM archive_messages WHERE deleted_at IS NULL AND guild_id = ? AND author_id = ?"
-                    )
+                    sql = "SELECT COUNT(*) FROM archive_messages WHERE deleted_at IS NULL AND guild_id = ? AND author_id = ?"
                     if row["channel_id"] is None:
                         sql += " AND channel_id IS NULL"
                     else:
@@ -966,7 +1052,10 @@ class ServerArchiveStore:
                     else:
                         sql += " AND thread_id = ?"
                         params.append(row["thread_id"])
-                    if row["last_processed_created_at"] and row["last_processed_message_id"]:
+                    if (
+                        row["last_processed_created_at"]
+                        and row["last_processed_message_id"]
+                    ):
                         sql += " AND (created_at > ? OR (created_at = ? AND message_id > ?))"
                         params.extend(
                             [
@@ -1007,7 +1096,9 @@ class ServerArchiveStore:
         limit: int = 5,
     ) -> list[ArchiveSearchResult]:
         await self.initialize()
-        return await _to_thread(self._search_sync, query, guild_id, channel_id, author_id, limit)
+        return await _to_thread(
+            self._search_sync, query, guild_id, channel_id, author_id, limit
+        )
 
     def _search_sync(
         self,
@@ -1096,7 +1187,12 @@ class ServerArchiveStore:
                 results: list[ArchiveSearchResult] = []
                 for row in rows:
                     data = dict(row)
-                    data["snippet"] = sanitize_snippet(data.get("snippet") or data.get("clean_content") or data.get("content") or "")
+                    data["snippet"] = sanitize_snippet(
+                        data.get("snippet")
+                        or data.get("clean_content")
+                        or data.get("content")
+                        or ""
+                    )
                     results.append(ArchiveSearchResult.from_row(data))
                 return results
             finally:
@@ -1110,9 +1206,13 @@ class ServerArchiveStore:
         thread_id: str | None = None,
     ) -> str | None:
         await self.initialize()
-        return await _to_thread(self._latest_message_id_sync, guild_id, channel_id, thread_id)
+        return await _to_thread(
+            self._latest_message_id_sync, guild_id, channel_id, thread_id
+        )
 
-    def _latest_message_id_sync(self, guild_id: str, channel_id: str | None, thread_id: str | None) -> str | None:
+    def _latest_message_id_sync(
+        self, guild_id: str, channel_id: str | None, thread_id: str | None
+    ) -> str | None:
         with self._lock:
             conn = self._connect()
             try:

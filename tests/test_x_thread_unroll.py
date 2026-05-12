@@ -44,6 +44,7 @@ async def test_mid_thread_collects_all_in_order(monkeypatch):
         return url
 
     from bot.threads import x_thread_unroll as xu
+
     monkeypatch.setattr(xu, "_fetch_html_with_playwright", fake_fetch)
     monkeypatch.setattr(xu, "_expand_tco_if_needed", no_expand)
 
@@ -70,6 +71,7 @@ async def test_non_author_replies_are_skipped(monkeypatch):
         return url
 
     from bot.threads import x_thread_unroll as xu
+
     monkeypatch.setattr(xu, "_fetch_html_with_playwright", fake_fetch)
     monkeypatch.setattr(xu, "_expand_tco_if_needed", no_expand)
 
@@ -85,6 +87,7 @@ async def test_non_author_replies_are_skipped(monkeypatch):
 @pytest.mark.asyncio
 async def test_limits_cap_items_and_mark_truncated(monkeypatch):
     from datetime import datetime
+
     # Generate 45 tweet HTMLs for same author
     parts = ["<html><body>"]
     base_time = 1672531200  # 2023-01-01T00:00:00Z
@@ -92,10 +95,10 @@ async def test_limits_cap_items_and_mark_truncated(monkeypatch):
         tid = 10000 + i
         ts = base_time + i * 60
         parts.append(
-            f"<article><a href=\"/author/status/{tid}\">link</a>"
-            f"<a href=\"/author\">@author</a>"
-            f"<time datetime=\"{datetime.utcfromtimestamp(ts).isoformat()}Z\"></time>"
-            f"<div data-testid=\"tweetText\">Tweet number {i+1}.</div>"
+            f'<article><a href="/author/status/{tid}">link</a>'
+            f'<a href="/author">@author</a>'
+            f'<time datetime="{datetime.utcfromtimestamp(ts).isoformat()}Z"></time>'
+            f'<div data-testid="tweetText">Tweet number {i + 1}.</div>'
             f"</article>"
         )
     parts.append("</body></html>")
@@ -108,6 +111,7 @@ async def test_limits_cap_items_and_mark_truncated(monkeypatch):
         return url
 
     from bot.threads import x_thread_unroll as xu
+
     monkeypatch.setattr(xu, "_fetch_html_with_playwright", fake_fetch)
     monkeypatch.setattr(xu, "_expand_tco_if_needed", no_expand)
 
@@ -128,6 +132,7 @@ async def test_dom_change_or_timeout_fallback(monkeypatch):
         return url
 
     from bot.threads import x_thread_unroll as xu
+
     monkeypatch.setattr(xu, "_fetch_html_with_playwright", fake_fetch)
     monkeypatch.setattr(xu, "_expand_tco_if_needed", no_expand)
 
@@ -150,6 +155,7 @@ async def test_mirrors_and_mobile_urls_normalize(monkeypatch):
         return url
 
     from bot.threads import x_thread_unroll as xu
+
     monkeypatch.setattr(xu, "_fetch_html_with_playwright", fake_fetch)
     monkeypatch.setattr(xu, "_expand_tco_if_needed", no_expand)
 
@@ -185,11 +191,15 @@ async def test_fx_meta_redirect_single_block(monkeypatch):
         return url
 
     from bot.threads import x_thread_unroll as xu
+
     monkeypatch.setattr(xu, "_fetch_html_with_playwright", fake_fetch)
     monkeypatch.setattr(xu, "_expand_tco_if_needed", no_expand)
 
     ctx, reason = await unroll_author_thread(
-        "https://fxtwitter.com/author/status/424242", timeout_s=5, max_tweets=30, max_chars=6000
+        "https://fxtwitter.com/author/status/424242",
+        timeout_s=5,
+        max_tweets=30,
+        max_chars=6000,
     )
     assert ctx is not None, reason
     assert ctx.tweet_count == 1

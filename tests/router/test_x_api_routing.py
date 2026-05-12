@@ -258,7 +258,9 @@ async def test_video_url_inference_error_degrades_to_caption_only_with_resolved_
 
 
 @pytest.mark.asyncio
-async def test_sparse_syndication_without_api_uses_direct_media_probe_for_stt(monkeypatch):
+async def test_sparse_syndication_without_api_uses_direct_media_probe_for_stt(
+    monkeypatch,
+):
     bot = DummyBot()
     bot.config["X_API_ENABLED"] = False
     bot.system_prompts = {"vl_prompt": None}
@@ -419,14 +421,18 @@ async def test_sparse_syndication_tco_article_resolves_to_text(monkeypatch):
             "id": "2016825738041630720",
             "title": "The TESTOSTERONE Kabbalah",
             "preview_text": "They control everything.",
-            "content": {"blocks": [{"text": "Cellular energy production and metabolism."}]},
+            "content": {
+                "blocks": [{"text": "Cellular energy production and metabolism."}]
+            },
         }
     )
     monkeypatch.setattr(
         Router, "_fetch_x_article_from_fxtwitter", article_mock, raising=True
     )
 
-    resolve_mock = AsyncMock(return_value={"kind": "unknown", "images": [], "url": None})
+    resolve_mock = AsyncMock(
+        return_value={"kind": "unknown", "images": [], "url": None}
+    )
     monkeypatch.setattr(Router, "_resolve_x_media", resolve_mock, raising=True)
 
     import bot.router as router_mod
@@ -512,8 +518,14 @@ async def test_hydrate_syndication_article_merges_full_article_blocks(monkeypatc
             "preview_text": "They control everything.",
             "content": {
                 "blocks": [
-                    {"type": "unstyled", "text": "Cellular energy production and metabolism."},
-                    {"type": "unstyled", "text": "Hormonal signaling under chronic stress."},
+                    {
+                        "type": "unstyled",
+                        "text": "Cellular energy production and metabolism.",
+                    },
+                    {
+                        "type": "unstyled",
+                        "text": "Hormonal signaling under chronic stress.",
+                    },
                 ]
             },
         }
@@ -572,7 +584,9 @@ async def test_sparse_image_probe_passes_hydrated_article_text_to_vl(monkeypatch
             "id": "2016825738041630720",
             "title": "The TESTOSTERONE Kabbalah",
             "preview_text": "They control everything.",
-            "content": {"blocks": [{"text": "Cellular energy production and metabolism."}]},
+            "content": {
+                "blocks": [{"text": "Cellular energy production and metabolism."}]
+            },
         }
     )
     monkeypatch.setattr(

@@ -194,7 +194,9 @@ def get_profile(user_id: str, username: Optional[str] = None) -> dict:
         return profile.copy()
 
 
-def save_profile(profile: dict, force: bool = False, caller_id: Optional[str] = None) -> bool:
+def save_profile(
+    profile: dict, force: bool = False, caller_id: Optional[str] = None
+) -> bool:
     """Save a user profile to disk using atomic writes with corruption recovery.
 
     [REH] Atomic writes ensure readers see only complete writes
@@ -255,7 +257,9 @@ def save_profile(profile: dict, force: bool = False, caller_id: Optional[str] = 
             # Validate profile before saving
             is_valid, error_msg = validate_profile_integrity(profile)
             if not is_valid:
-                logging.error(f"Profile validation failed for user {user_id}: {error_msg}")
+                logging.error(
+                    f"Profile validation failed for user {user_id}: {error_msg}"
+                )
                 return False
 
             # Atomic save with backup
@@ -434,7 +438,9 @@ def save_server_profile(guild_id, force: bool = False) -> bool:
 
         is_valid, error_msg = validate_profile_integrity(working_profile)
         if not is_valid:
-            logging.error(f"Server profile validation failed for guild {gid}: {error_msg}")
+            logging.error(
+                f"Server profile validation failed for guild {gid}: {error_msg}"
+            )
             return False
 
         if not atomic_save_json(
@@ -538,14 +544,18 @@ def load_all_profiles():
                         user_cache[user_id] = profile
                     loaded_count += 1
                 else:
-                    logging.warning(f"Skipping corrupted profile {profile_file}: {error_msg}")
+                    logging.warning(
+                        f"Skipping corrupted profile {profile_file}: {error_msg}"
+                    )
                     corrupted_count += 1
             else:
                 logging.warning(f"Could not load or recover profile {profile_file}")
                 corrupted_count += 1
 
         if corrupted_count > 0:
-            logging.warning(f"Encountered {corrupted_count} corrupted profiles during load")
+            logging.warning(
+                f"Encountered {corrupted_count} corrupted profiles during load"
+            )
         logging.info(f"Loaded {loaded_count} user profiles from disk")
 
     # Load server profiles

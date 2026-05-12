@@ -354,7 +354,9 @@ def _lang_rank(lang: str, preferred: List[str]) -> int:
     return len(preferred)
 
 
-def _sort_tracks(tracks: List[Dict[str, Any]], preferred: List[str]) -> List[Dict[str, Any]]:
+def _sort_tracks(
+    tracks: List[Dict[str, Any]], preferred: List[str]
+) -> List[Dict[str, Any]]:
     def _score(track: Dict[str, Any]) -> tuple:
         lang = str(track.get("languageCode") or "")
         asr = 1 if _track_is_asr(track) else 0
@@ -616,7 +618,9 @@ async def _resolve_via_ytdlp_captions(
 
     vid = str(payload.get("id") or "").strip() or video_id
     title = str(payload.get("title") or title or "Unknown Title")
-    uploader = str(payload.get("uploader") or payload.get("channel") or uploader or "Unknown")
+    uploader = str(
+        payload.get("uploader") or payload.get("channel") or uploader or "Unknown"
+    )
     try:
         duration_s = float(payload.get("duration") or duration_s or 0.0)
     except Exception:
@@ -764,7 +768,9 @@ async def resolve_youtube_transcript(
                     if asr and not allow_asr:
                         continue
 
-                    base_url = html_lib.unescape(str(track.get("baseUrl") or "")).strip()
+                    base_url = html_lib.unescape(
+                        str(track.get("baseUrl") or "")
+                    ).strip()
                     if not base_url:
                         continue
 
@@ -774,7 +780,9 @@ async def resolve_youtube_transcript(
                             caption_url=caption_url,
                             timeout_s=timeout_s,
                             max_chars=max_chars,
-                            max_segments=_env_int("YOUTUBE_TRANSCRIPT_MAX_SEGMENTS", 80),
+                            max_segments=_env_int(
+                                "YOUTUBE_TRANSCRIPT_MAX_SEGMENTS", 80
+                            ),
                         )
                         if not transcript:
                             continue

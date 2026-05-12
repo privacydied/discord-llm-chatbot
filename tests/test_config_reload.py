@@ -93,10 +93,14 @@ class TestConfigReload:
 
         # Mock config loading
         old_config = {"KEY1": "old", "KEY2": "same"}
-        new_config = {"KEY1": "new", "KEY2": "same", "KEY3": "added",
-                       "DISCORD_TOKEN": "mock-token",
-                       "PROMPT_FILE": "prompts/system.md",
-                       "VL_PROMPT_FILE": "prompts/vl-prompt.txt"}
+        new_config = {
+            "KEY1": "new",
+            "KEY2": "same",
+            "KEY3": "added",
+            "DISCORD_TOKEN": "mock-token",
+            "PROMPT_FILE": "prompts/system.md",
+            "VL_PROMPT_FILE": "prompts/vl-prompt.txt",
+        }
 
         # Set initial state
         with patch("bot.config_reload._current_config", old_config):

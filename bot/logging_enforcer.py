@@ -31,7 +31,6 @@ from rich.panel import Panel
 
 def _rich_tracebacks_supported() -> bool:
     try:
-        import pygments.lexers.python  # type: ignore
 
         return True
     except Exception:

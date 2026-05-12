@@ -237,7 +237,9 @@ async def test_server_memory_clear_confirmed(memory_cog, mock_admin_ctx, monkeyp
 
 
 @pytest.mark.asyncio
-async def test_memory_distill_once_starts_background_task(memory_cog, mock_admin_ctx, monkeypatch):
+async def test_memory_distill_once_starts_background_task(
+    memory_cog, mock_admin_ctx, monkeypatch
+):
     started = asyncio.Event()
     release = asyncio.Event()
 
@@ -255,24 +257,37 @@ async def test_memory_distill_once_starts_background_task(memory_cog, mock_admin
             }
 
     fake = FakeDistiller()
-    monkeypatch.setattr("bot.commands.memory_cmds.get_memory_distiller", AsyncMock(return_value=fake))
+    monkeypatch.setattr(
+        "bot.commands.memory_cmds.get_memory_distiller", AsyncMock(return_value=fake)
+    )
 
     await memory_cog.memory_distill_once.callback(memory_cog, mock_admin_ctx)
     await started.wait()
 
-    assert mock_admin_ctx.send.call_args_list[0].kwargs["embed"].title == "Memory Distillation Started"
+    assert (
+        mock_admin_ctx.send.call_args_list[0].kwargs["embed"].title
+        == "Memory Distillation Started"
+    )
     assert memory_cog._distill_once_tasks[str(mock_admin_ctx.guild.id)] is not None
     assert not memory_cog._distill_once_tasks[str(mock_admin_ctx.guild.id)].done()
 
     release.set()
     await asyncio.sleep(0)
 
-    complete_embeds = [call.kwargs.get("embed") for call in mock_admin_ctx.send.call_args_list if call.kwargs.get("embed")]
-    assert any(embed.title == "Memory Distillation Complete" for embed in complete_embeds)
+    complete_embeds = [
+        call.kwargs.get("embed")
+        for call in mock_admin_ctx.send.call_args_list
+        if call.kwargs.get("embed")
+    ]
+    assert any(
+        embed.title == "Memory Distillation Complete" for embed in complete_embeds
+    )
 
 
 @pytest.mark.asyncio
-async def test_memory_distill_status_command_sends_embed(memory_cog, mock_admin_ctx, monkeypatch):
+async def test_memory_distill_status_command_sends_embed(
+    memory_cog, mock_admin_ctx, monkeypatch
+):
     class FakeDistiller:
         def __init__(self):
             self.dry_run = True
@@ -295,7 +310,9 @@ async def test_memory_distill_status_command_sends_embed(memory_cog, mock_admin_
             }
 
     fake = FakeDistiller()
-    monkeypatch.setattr("bot.commands.memory_cmds.get_memory_distiller", AsyncMock(return_value=fake))
+    monkeypatch.setattr(
+        "bot.commands.memory_cmds.get_memory_distiller", AsyncMock(return_value=fake)
+    )
 
     await memory_cog.memory_distill_status.callback(memory_cog, mock_admin_ctx)
 
@@ -322,12 +339,18 @@ async def test_memory_distill_dryrun_toggle(memory_cog, mock_admin_ctx, monkeypa
             self.dry_run = enabled
 
     fake = FakeDistiller()
-    monkeypatch.setattr("bot.commands.memory_cmds.get_memory_distiller", AsyncMock(return_value=fake))
+    monkeypatch.setattr(
+        "bot.commands.memory_cmds.get_memory_distiller", AsyncMock(return_value=fake)
+    )
 
-    await memory_cog.memory_distill_dryrun.callback(memory_cog, mock_admin_ctx, mode="off")
+    await memory_cog.memory_distill_dryrun.callback(
+        memory_cog, mock_admin_ctx, mode="off"
+    )
 
     assert fake.dry_run is False
-    mock_admin_ctx.send.assert_called_once_with("✅ Memory distiller dry-run set to `False`.")
+    mock_admin_ctx.send.assert_called_once_with(
+        "✅ Memory distiller dry-run set to `False`."
+    )
 
 
 @pytest.mark.asyncio

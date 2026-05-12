@@ -389,7 +389,9 @@ class VideoIngestionManager:
             if host not in {"kkinstagram.com", "www.kkinstagram.com"}:
                 return url.split("#", 1)[0]
 
-            if not VideoIngestionManager._is_supported_instagram_content_path(parsed.path):
+            if not VideoIngestionManager._is_supported_instagram_content_path(
+                parsed.path
+            ):
                 return url
 
             canonical = parsed._replace(
@@ -407,7 +409,9 @@ class VideoIngestionManager:
             parsed = urlparse(url)
             return (
                 (parsed.netloc or "").lower() == "d.vxinstagram.com"
-                and VideoIngestionManager._is_supported_instagram_content_path(parsed.path)
+                and VideoIngestionManager._is_supported_instagram_content_path(
+                    parsed.path
+                )
             )
         except Exception:
             return False
@@ -835,9 +839,11 @@ class VideoIngestionManager:
 
         def _worker() -> Optional[int]:
             req = urllib.request.Request(url, method="GET")
-            req.add_header("User-Agent",
+            req.add_header(
+                "User-Agent",
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                "(KHTML, like Gecko) Chrome/120.0 Safari/537.36")
+                "(KHTML, like Gecko) Chrome/120.0 Safari/537.36",
+            )
             with urllib.request.urlopen(req, timeout=timeout_s) as resp:
                 content_length = resp.headers.get("Content-Length")
                 with open(temp_path, "wb") as fh:

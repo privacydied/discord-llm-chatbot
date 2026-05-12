@@ -106,7 +106,9 @@ async def test_abort_and_finish_failure_aborts_and_records_failure() -> None:
 
 
 @pytest.mark.asyncio
-async def test_abort_and_finish_failure_swallows_abort_error_and_records_failure() -> None:
+async def test_abort_and_finish_failure_swallows_abort_error_and_records_failure() -> (
+    None
+):
     logger = _Logger()
     job = _Job(stream=_StreamFail())
     exc = RuntimeError("oops")

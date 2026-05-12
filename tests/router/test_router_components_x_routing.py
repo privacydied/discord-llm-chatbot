@@ -527,7 +527,6 @@ from bot.router_components.x_routing import (
     iter_url_matches_for_url_matches,
     iter_url_matches_source,
     iter_url_matches_iter,
-    iter_url_matches_from_finditer,
     iter_url_matches,
     url_re_finditer_source,
     url_re_finditer_iter,
@@ -577,12 +576,20 @@ def test_lower_or_empty() -> None:
 
 
 def test_normalize_raw_url() -> None:
-    assert normalize_raw_url("  https://x.com/u/status/1  ") == "https://x.com/u/status/1"
+    assert (
+        normalize_raw_url("  https://x.com/u/status/1  ") == "https://x.com/u/status/1"
+    )
     assert normalize_raw_url(None) == ""
 
 
 def test_primary_tweet_id_hint_keys() -> None:
-    assert primary_tweet_id_hint_keys() == ("ptid", "primary", "tweet_id", "status_id", "id")
+    assert primary_tweet_id_hint_keys() == (
+        "ptid",
+        "primary",
+        "tweet_id",
+        "status_id",
+        "id",
+    )
 
 
 def test_first_digit_candidate() -> None:
@@ -620,11 +627,17 @@ def test_canonicalize_and_normalize_x_urls() -> None:
 
 
 def test_compose_canonical_status_url() -> None:
-    assert compose_canonical_status_url("2022790791047823773") == "https://x.com/i/status/2022790791047823773"
+    assert (
+        compose_canonical_status_url("2022790791047823773")
+        == "https://x.com/i/status/2022790791047823773"
+    )
 
 
 def test_compose_normalized_x_url() -> None:
-    assert compose_normalized_x_url("x.com", "/user/status/1") == "https://x.com/user/status/1"
+    assert (
+        compose_normalized_x_url("x.com", "/user/status/1")
+        == "https://x.com/user/status/1"
+    )
 
 
 def test_normalize_x_path() -> None:
@@ -780,7 +793,10 @@ def test_twitter_media_cdn_host_set() -> None:
 
 
 def test_extract_url_host_lower() -> None:
-    assert extract_url_host_lower("https://Video.TWIMG.com/ext_tw_video/abc") == "video.twimg.com"
+    assert (
+        extract_url_host_lower("https://Video.TWIMG.com/ext_tw_video/abc")
+        == "video.twimg.com"
+    )
     assert extract_url_host_lower("not-a-url") == ""
 
 
@@ -830,13 +846,17 @@ def test_collect_candidate_urls_for_item_source_dispatch() -> None:
         "https://x.com/u/status/1"
     ]
 
-    embed = SimpleNamespace(url="https://x.com/u/status/2", video=None, image=None, thumbnail=None)
+    embed = SimpleNamespace(
+        url="https://x.com/u/status/2", video=None, image=None, thumbnail=None
+    )
     embed_item = SimpleNamespace(source_type="embed", payload=embed)
     assert collect_candidate_urls_for_item_source(embed_item, "embed") == [
         "https://x.com/u/status/2"
     ]
 
-    att = SimpleNamespace(url="https://video.twimg.com/ext_tw_video/att.mp4", proxy_url=None)
+    att = SimpleNamespace(
+        url="https://video.twimg.com/ext_tw_video/att.mp4", proxy_url=None
+    )
     att_item = SimpleNamespace(source_type="attachment", payload=att)
     assert collect_candidate_urls_for_item_source(att_item, "attachment") == [
         "https://video.twimg.com/ext_tw_video/att.mp4"
@@ -992,7 +1012,10 @@ def test_twitter_host_and_media_path_helpers() -> None:
 
 
 def test_tweet_media_url_path() -> None:
-    assert tweet_media_url_path("https://pbs.twimg.com/media/abc123.jpg?x=1") == "/media/abc123.jpg"
+    assert (
+        tweet_media_url_path("https://pbs.twimg.com/media/abc123.jpg?x=1")
+        == "/media/abc123.jpg"
+    )
     assert tweet_media_url_path(None) == ""
 
 
@@ -1041,13 +1064,19 @@ def test_is_poster_tweet_media_path() -> None:
 
 
 def test_path_starts_with_any_prefix() -> None:
-    assert path_starts_with_any_prefix("/profile_images/123/a.jpg", ("/profile_images/",))
+    assert path_starts_with_any_prefix(
+        "/profile_images/123/a.jpg", ("/profile_images/",)
+    )
     assert not path_starts_with_any_prefix("/media/abc123.jpg", ("/profile_images/",))
 
 
 def test_path_contains_any_fragment() -> None:
-    assert path_contains_any_fragment("/ext_tw_video_thumb/123/pu/img.jpg", ("/ext_tw_video_thumb/",))
-    assert not path_contains_any_fragment("/media/abc123.jpg", ("/ext_tw_video_thumb/",))
+    assert path_contains_any_fragment(
+        "/ext_tw_video_thumb/123/pu/img.jpg", ("/ext_tw_video_thumb/",)
+    )
+    assert not path_contains_any_fragment(
+        "/media/abc123.jpg", ("/ext_tw_video_thumb/",)
+    )
 
 
 def test_poster_tweet_media_prefixes() -> None:
@@ -1078,7 +1107,9 @@ def test_extract_x_status_urls_from_text() -> None:
     urls = extract_x_status_urls_from_text(
         text,
         is_status_url=lambda u: "/status/" in u,
-        canonicalize_status_url=lambda u: u.split("?")[0].replace("twitter.com", "x.com"),
+        canonicalize_status_url=lambda u: u.split("?")[0].replace(
+            "twitter.com", "x.com"
+        ),
     )
     assert urls == ["https://x.com/u/status/1", "https://x.com/u/status/2"]
 
@@ -1089,7 +1120,9 @@ def test_collect_status_urls_from_candidates() -> None:
         items,
         "a https://x.com/u/status/1 and https://example.com b https://twitter.com/u/status/2?s=20",
         is_status_url=lambda u: "/status/" in u,
-        canonicalize_status_url=lambda u: u.split("?")[0].replace("twitter.com", "x.com"),
+        canonicalize_status_url=lambda u: u.split("?")[0].replace(
+            "twitter.com", "x.com"
+        ),
     )
     assert items == ["https://x.com/u/status/1", "https://x.com/u/status/2"]
 
@@ -1100,13 +1133,17 @@ def test_append_status_url_candidate() -> None:
         items=items,
         raw="https://x.com/u/status/1",
         is_status_url=lambda u: "/status/" in u,
-        canonicalize_status_url=lambda u: u.split("?")[0].replace("twitter.com", "x.com"),
+        canonicalize_status_url=lambda u: u.split("?")[0].replace(
+            "twitter.com", "x.com"
+        ),
     )
     append_status_url_candidate(
         items=items,
         raw="https://example.com",
         is_status_url=lambda u: "/status/" in u,
-        canonicalize_status_url=lambda u: u.split("?")[0].replace("twitter.com", "x.com"),
+        canonicalize_status_url=lambda u: u.split("?")[0].replace(
+            "twitter.com", "x.com"
+        ),
     )
     assert items == ["https://x.com/u/status/1"]
 
@@ -1117,7 +1154,9 @@ def test_collect_status_urls_into_items_delegates_collection() -> None:
         items,
         "a https://x.com/u/status/1 and https://twitter.com/u/status/2?s=20",
         is_status_url=lambda u: "/status/" in u,
-        canonicalize_status_url=lambda u: u.split("?")[0].replace("twitter.com", "x.com"),
+        canonicalize_status_url=lambda u: u.split("?")[0].replace(
+            "twitter.com", "x.com"
+        ),
     )
     assert items == ["https://x.com/u/status/1", "https://x.com/u/status/2"]
 
@@ -1131,7 +1170,10 @@ def test_status_url_items_result_identity() -> None:
 
 
 def test_status_url_candidate_raw_value_identity() -> None:
-    assert status_url_candidate_raw_value("https://x.com/u/status/1") == "https://x.com/u/status/1"
+    assert (
+        status_url_candidate_raw_value("https://x.com/u/status/1")
+        == "https://x.com/u/status/1"
+    )
 
 
 def test_status_url_candidate_values_delegates_candidates() -> None:
@@ -1211,12 +1253,16 @@ def test_status_url_extract_regex_source_matches_x_url_extract_regex() -> None:
 
 
 def test_status_url_extract_regex_source_value_matches_x_url_extract_regex() -> None:
-    assert status_url_extract_regex_source_value().pattern == x_url_extract_regex().pattern
+    assert (
+        status_url_extract_regex_source_value().pattern == x_url_extract_regex().pattern
+    )
     assert status_url_extract_regex_source_value().flags == x_url_extract_regex().flags
 
 
 def test_status_url_extract_regex_source_input_matches_x_url_extract_regex() -> None:
-    assert status_url_extract_regex_source_input().pattern == x_url_extract_regex().pattern
+    assert (
+        status_url_extract_regex_source_input().pattern == x_url_extract_regex().pattern
+    )
     assert status_url_extract_regex_source_input().flags == x_url_extract_regex().flags
 
 
@@ -1231,8 +1277,14 @@ def test_status_url_extract_regex_result_value_identity() -> None:
 
 
 def test_status_url_extract_regex_source_call_matches_source() -> None:
-    assert status_url_extract_regex_source_call().pattern == status_url_extract_regex_source().pattern
-    assert status_url_extract_regex_source_call().flags == status_url_extract_regex_source().flags
+    assert (
+        status_url_extract_regex_source_call().pattern
+        == status_url_extract_regex_source().pattern
+    )
+    assert (
+        status_url_extract_regex_source_call().flags
+        == status_url_extract_regex_source().flags
+    )
 
 
 def test_status_url_extract_regex_source_for_call_matches_source() -> None:
@@ -1273,13 +1325,9 @@ def test_x_url_extract_regex_source_input_matches_x_url_extract_regex() -> None:
 
 def test_x_url_extract_regex_for_source_input_matches_x_url_extract_regex() -> None:
     assert (
-        x_url_extract_regex_for_source_input().pattern
-        == x_url_extract_regex().pattern
+        x_url_extract_regex_for_source_input().pattern == x_url_extract_regex().pattern
     )
-    assert (
-        x_url_extract_regex_for_source_input().flags
-        == x_url_extract_regex().flags
-    )
+    assert x_url_extract_regex_for_source_input().flags == x_url_extract_regex().flags
 
 
 def test_status_url_candidates_regex_matches_status_url_extract_regex() -> None:
@@ -1287,12 +1335,21 @@ def test_status_url_candidates_regex_matches_status_url_extract_regex() -> None:
     assert status_url_candidates_regex().flags == status_url_extract_regex().flags
 
 
-def test_status_url_candidates_regex_value_matches_status_url_candidates_regex() -> None:
-    assert status_url_candidates_regex_value().pattern == status_url_candidates_regex().pattern
-    assert status_url_candidates_regex_value().flags == status_url_candidates_regex().flags
+def test_status_url_candidates_regex_value_matches_status_url_candidates_regex() -> (
+    None
+):
+    assert (
+        status_url_candidates_regex_value().pattern
+        == status_url_candidates_regex().pattern
+    )
+    assert (
+        status_url_candidates_regex_value().flags == status_url_candidates_regex().flags
+    )
 
 
-def test_status_url_candidates_regex_for_extraction_matches_status_candidates_regex() -> None:
+def test_status_url_candidates_regex_for_extraction_matches_status_candidates_regex() -> (
+    None
+):
     assert (
         status_url_candidates_regex_for_extraction().pattern
         == status_url_candidates_regex().pattern
@@ -1303,14 +1360,27 @@ def test_status_url_candidates_regex_for_extraction_matches_status_candidates_re
     )
 
 
-def test_status_url_candidates_regex_value_source_matches_status_url_extract_regex() -> None:
-    assert status_url_candidates_regex_value_source().pattern == status_url_extract_regex().pattern
-    assert status_url_candidates_regex_value_source().flags == status_url_extract_regex().flags
+def test_status_url_candidates_regex_value_source_matches_status_url_extract_regex() -> (
+    None
+):
+    assert (
+        status_url_candidates_regex_value_source().pattern
+        == status_url_extract_regex().pattern
+    )
+    assert (
+        status_url_candidates_regex_value_source().flags
+        == status_url_extract_regex().flags
+    )
 
 
 def test_status_url_candidates_regex_source_matches_status_url_extract_regex() -> None:
-    assert status_url_candidates_regex_source().pattern == status_url_extract_regex().pattern
-    assert status_url_candidates_regex_source().flags == status_url_extract_regex().flags
+    assert (
+        status_url_candidates_regex_source().pattern
+        == status_url_extract_regex().pattern
+    )
+    assert (
+        status_url_candidates_regex_source().flags == status_url_extract_regex().flags
+    )
 
 
 def test_raw_url_extract_regex_source_matches_x_url_extract_regex() -> None:
@@ -1354,7 +1424,10 @@ def test_status_url_candidates_iter_delegates_iterator() -> None:
 
 
 def test_x_url_extract_regex_matches_expected_urls() -> None:
-    matches = [m.group(0) for m in x_url_extract_regex().finditer("x https://x.com/u/status/1 y")]
+    matches = [
+        m.group(0)
+        for m in x_url_extract_regex().finditer("x https://x.com/u/status/1 y")
+    ]
     assert matches == ["https://x.com/u/status/1"]
 
 
@@ -1410,7 +1483,9 @@ def test_compile_regex_pattern_argument_identity() -> None:
 
 
 def test_compile_regex_pattern_for_argument_identity() -> None:
-    assert compile_regex_pattern_for_argument(r"https?://x\\.com") == r"https?://x\\.com"
+    assert (
+        compile_regex_pattern_for_argument(r"https?://x\\.com") == r"https?://x\\.com"
+    )
 
 
 def test_compile_regex_pattern_value_identity() -> None:
@@ -1442,11 +1517,16 @@ def test_compile_url_extract_flags_value_identity() -> None:
 
 
 def test_compile_url_extract_pattern_argument_identity() -> None:
-    assert compile_url_extract_pattern_argument(r"https?://x\\.com") == r"https?://x\\.com"
+    assert (
+        compile_url_extract_pattern_argument(r"https?://x\\.com") == r"https?://x\\.com"
+    )
 
 
 def test_compile_url_extract_pattern_for_argument_identity() -> None:
-    assert compile_url_extract_pattern_for_argument(r"https?://x\\.com") == r"https?://x\\.com"
+    assert (
+        compile_url_extract_pattern_for_argument(r"https?://x\\.com")
+        == r"https?://x\\.com"
+    )
 
 
 def test_compile_url_extract_pattern_value_identity() -> None:
@@ -1506,29 +1586,50 @@ def test_raw_url_items_result_identity() -> None:
 
 
 def test_raw_url_candidate_value_identity() -> None:
-    assert raw_url_candidate_value("https://x.com/u/status/1") == "https://x.com/u/status/1"
+    assert (
+        raw_url_candidate_value("https://x.com/u/status/1")
+        == "https://x.com/u/status/1"
+    )
 
 
 def test_raw_url_candidate_value_source_identity() -> None:
-    assert raw_url_candidate_value_source("https://x.com/u/status/1") == "https://x.com/u/status/1"
+    assert (
+        raw_url_candidate_value_source("https://x.com/u/status/1")
+        == "https://x.com/u/status/1"
+    )
 
 
 def test_raw_url_candidate_value_result_identity() -> None:
-    assert raw_url_candidate_value_result("https://x.com/u/status/1") == "https://x.com/u/status/1"
+    assert (
+        raw_url_candidate_value_result("https://x.com/u/status/1")
+        == "https://x.com/u/status/1"
+    )
 
 
 def test_raw_url_candidate_values_delegates_iter_text_urls() -> None:
-    urls = list(raw_url_candidate_values("a https://x.com/u/status/1 b", url_re=x_url_extract_regex()))
+    urls = list(
+        raw_url_candidate_values(
+            "a https://x.com/u/status/1 b", url_re=x_url_extract_regex()
+        )
+    )
     assert urls == ["https://x.com/u/status/1"]
 
 
 def test_raw_url_candidate_values_source_delegates_iter_text_urls() -> None:
-    urls = list(raw_url_candidate_values_source("a https://x.com/u/status/1 b", url_re=x_url_extract_regex()))
+    urls = list(
+        raw_url_candidate_values_source(
+            "a https://x.com/u/status/1 b", url_re=x_url_extract_regex()
+        )
+    )
     assert urls == ["https://x.com/u/status/1"]
 
 
 def test_raw_url_candidate_values_iter_delegates_iter_text_urls() -> None:
-    urls = list(raw_url_candidate_values_iter("a https://x.com/u/status/1 b", url_re=x_url_extract_regex()))
+    urls = list(
+        raw_url_candidate_values_iter(
+            "a https://x.com/u/status/1 b", url_re=x_url_extract_regex()
+        )
+    )
     assert urls == ["https://x.com/u/status/1"]
 
 
@@ -1543,7 +1644,10 @@ def test_iter_raw_url_candidates_for_text_normalizes_values() -> None:
 
 
 def test_normalize_raw_url_candidate_identity() -> None:
-    assert normalize_raw_url_candidate("https://x.com/u/status/1") == "https://x.com/u/status/1"
+    assert (
+        normalize_raw_url_candidate("https://x.com/u/status/1")
+        == "https://x.com/u/status/1"
+    )
 
 
 def test_append_raw_url_candidate_to_items_delegates_append() -> None:
@@ -1578,18 +1682,26 @@ def test_raw_url_source_texts_iter_delegates_iterable() -> None:
 
 
 def test_iter_text_urls_yields_raw_matches() -> None:
-    urls = list(iter_text_urls("a https://x.com/u/status/1 b", url_re=x_url_extract_regex()))
+    urls = list(
+        iter_text_urls("a https://x.com/u/status/1 b", url_re=x_url_extract_regex())
+    )
     assert urls == ["https://x.com/u/status/1"]
 
 
 def test_iter_url_values_from_matches_yields_group_values() -> None:
-    matches = iter_text_url_matches("a https://x.com/u/status/1 b", url_re=x_url_extract_regex())
+    matches = iter_text_url_matches(
+        "a https://x.com/u/status/1 b", url_re=x_url_extract_regex()
+    )
     urls = list(iter_url_values_from_matches(matches))
     assert urls == ["https://x.com/u/status/1"]
 
 
 def test_iter_text_url_matches_yields_match_objects() -> None:
-    matches = list(iter_text_url_matches("a https://x.com/u/status/1 b", url_re=x_url_extract_regex()))
+    matches = list(
+        iter_text_url_matches(
+            "a https://x.com/u/status/1 b", url_re=x_url_extract_regex()
+        )
+    )
     assert [m.group(0) for m in matches] == ["https://x.com/u/status/1"]
 
 
@@ -1597,73 +1709,106 @@ def test_collect_raw_urls_from_texts() -> None:
     items = []
     collect_raw_urls_from_texts(
         items,
-        ["a https://x.com/u/status/1", "b https://x.com/u/status/1 c https://example.com"],
+        [
+            "a https://x.com/u/status/1",
+            "b https://x.com/u/status/1 c https://example.com",
+        ],
         url_re=x_url_extract_regex(),
     )
     assert items == ["https://x.com/u/status/1", "https://example.com"]
 
 
 def test_iter_url_matches_yields_match_objects() -> None:
-    matches = list(iter_url_matches("a https://x.com/u/status/1 b", url_re=x_url_extract_regex()))
+    matches = list(
+        iter_url_matches("a https://x.com/u/status/1 b", url_re=x_url_extract_regex())
+    )
     assert [m.group(0) for m in matches] == ["https://x.com/u/status/1"]
 
 
 def test_iter_url_matches_source_yields_match_objects() -> None:
-    matches = list(iter_url_matches_source("a https://x.com/u/status/1 b", url_re=x_url_extract_regex()))
+    matches = list(
+        iter_url_matches_source(
+            "a https://x.com/u/status/1 b", url_re=x_url_extract_regex()
+        )
+    )
     assert [m.group(0) for m in matches] == ["https://x.com/u/status/1"]
 
 
 def test_iter_url_matches_from_regex_yields_match_objects() -> None:
-    matches = list(iter_url_matches_from_regex("a https://x.com/u/status/1 b", url_re=x_url_extract_regex()))
+    matches = list(
+        iter_url_matches_from_regex(
+            "a https://x.com/u/status/1 b", url_re=x_url_extract_regex()
+        )
+    )
     assert [m.group(0) for m in matches] == ["https://x.com/u/status/1"]
 
 
 def test_iter_url_matches_iter_yields_match_objects() -> None:
-    matches = list(iter_url_matches_iter("a https://x.com/u/status/1 b", url_re=x_url_extract_regex()))
+    matches = list(
+        iter_url_matches_iter(
+            "a https://x.com/u/status/1 b", url_re=x_url_extract_regex()
+        )
+    )
     assert [m.group(0) for m in matches] == ["https://x.com/u/status/1"]
 
 
 def test_url_matches_source_yields_match_objects() -> None:
-    matches = list(url_matches_source("a https://x.com/u/status/1 b", url_re=x_url_extract_regex()))
+    matches = list(
+        url_matches_source("a https://x.com/u/status/1 b", url_re=x_url_extract_regex())
+    )
     assert [m.group(0) for m in matches] == ["https://x.com/u/status/1"]
 
 
 def test_iter_url_matches_for_source_yields_match_objects() -> None:
     matches = list(
-        iter_url_matches_for_source("a https://x.com/u/status/1 b", url_re=x_url_extract_regex())
+        iter_url_matches_for_source(
+            "a https://x.com/u/status/1 b", url_re=x_url_extract_regex()
+        )
     )
     assert [m.group(0) for m in matches] == ["https://x.com/u/status/1"]
 
 
 def test_url_matches_iter_yields_match_objects() -> None:
-    matches = list(url_matches_iter("a https://x.com/u/status/1 b", url_re=x_url_extract_regex()))
+    matches = list(
+        url_matches_iter("a https://x.com/u/status/1 b", url_re=x_url_extract_regex())
+    )
     assert [m.group(0) for m in matches] == ["https://x.com/u/status/1"]
 
 
 def test_url_re_finditer_yields_match_objects() -> None:
-    matches = list(url_re_finditer(x_url_extract_regex(), "a https://x.com/u/status/1 b"))
+    matches = list(
+        url_re_finditer(x_url_extract_regex(), "a https://x.com/u/status/1 b")
+    )
     assert [m.group(0) for m in matches] == ["https://x.com/u/status/1"]
 
 
 def test_iter_url_re_finditer_matches_yields_match_objects() -> None:
     matches = list(
-        iter_url_re_finditer_matches(x_url_extract_regex(), "a https://x.com/u/status/1 b")
+        iter_url_re_finditer_matches(
+            x_url_extract_regex(), "a https://x.com/u/status/1 b"
+        )
     )
     assert [m.group(0) for m in matches] == ["https://x.com/u/status/1"]
 
 
 def test_url_re_finditer_source_yields_match_objects() -> None:
-    matches = list(url_re_finditer_source(x_url_extract_regex(), "a https://x.com/u/status/1 b"))
+    matches = list(
+        url_re_finditer_source(x_url_extract_regex(), "a https://x.com/u/status/1 b")
+    )
     assert [m.group(0) for m in matches] == ["https://x.com/u/status/1"]
 
 
 def test_url_re_finditer_iter_yields_match_objects() -> None:
-    matches = list(url_re_finditer_iter(x_url_extract_regex(), "a https://x.com/u/status/1 b"))
+    matches = list(
+        url_re_finditer_iter(x_url_extract_regex(), "a https://x.com/u/status/1 b")
+    )
     assert [m.group(0) for m in matches] == ["https://x.com/u/status/1"]
 
 
 def test_url_matches_delegates_iter_url_matches() -> None:
-    matches = list(url_matches("a https://x.com/u/status/1 b", url_re=x_url_extract_regex()))
+    matches = list(
+        url_matches("a https://x.com/u/status/1 b", url_re=x_url_extract_regex())
+    )
     assert [m.group(0) for m in matches] == ["https://x.com/u/status/1"]
 
 
@@ -1721,7 +1866,9 @@ def test_url_match_group_index_constant() -> None:
 
 
 def test_url_match_group_value_returns_group_zero() -> None:
-    match = next(iter_url_matches("a https://x.com/u/status/1 b", url_re=x_url_extract_regex()))
+    match = next(
+        iter_url_matches("a https://x.com/u/status/1 b", url_re=x_url_extract_regex())
+    )
     assert url_match_group_value(match) == "https://x.com/u/status/1"
 
 
@@ -1737,7 +1884,7 @@ def test_extract_raw_urls_and_filter_canonical_x_urls() -> None:
 
     filtered = filter_canonical_x_urls(
         raw,
-        is_x_url=lambda u: ("x.com/" in u or "twitter.com/" in u),
+        is_x_url=lambda u: "x.com/" in u or "twitter.com/" in u,
         canonicalize_x_url=lambda u: u.split("?")[0].replace("twitter.com", "x.com"),
     )
     assert filtered == ["https://x.com/a/status/1"]
@@ -1800,28 +1947,48 @@ def test_unique_value_missing_result_checks_membership() -> None:
 
 
 def test_is_x_url_candidate_source_delegates_predicate() -> None:
-    assert is_x_url_candidate_source("https://x.com/u/status/1", is_x_url=lambda _: True)
-    assert not is_x_url_candidate_source("https://example.com", is_x_url=lambda _: False)
+    assert is_x_url_candidate_source(
+        "https://x.com/u/status/1", is_x_url=lambda _: True
+    )
+    assert not is_x_url_candidate_source(
+        "https://example.com", is_x_url=lambda _: False
+    )
 
 
 def test_is_x_url_candidate_result_delegates_predicate() -> None:
-    assert is_x_url_candidate_result("https://x.com/u/status/1", is_x_url=lambda _: True)
-    assert not is_x_url_candidate_result("https://example.com", is_x_url=lambda _: False)
+    assert is_x_url_candidate_result(
+        "https://x.com/u/status/1", is_x_url=lambda _: True
+    )
+    assert not is_x_url_candidate_result(
+        "https://example.com", is_x_url=lambda _: False
+    )
 
 
 def test_is_x_url_candidate_for_result_delegates_predicate() -> None:
-    assert is_x_url_candidate_for_result("https://x.com/u/status/1", is_x_url=lambda _: True)
-    assert not is_x_url_candidate_for_result("https://example.com", is_x_url=lambda _: False)
+    assert is_x_url_candidate_for_result(
+        "https://x.com/u/status/1", is_x_url=lambda _: True
+    )
+    assert not is_x_url_candidate_for_result(
+        "https://example.com", is_x_url=lambda _: False
+    )
 
 
 def test_x_url_matches_predicate_source_delegates_predicate() -> None:
-    assert x_url_matches_predicate_source("https://x.com/u/status/1", is_x_url=lambda _: True)
-    assert not x_url_matches_predicate_source("https://example.com", is_x_url=lambda _: False)
+    assert x_url_matches_predicate_source(
+        "https://x.com/u/status/1", is_x_url=lambda _: True
+    )
+    assert not x_url_matches_predicate_source(
+        "https://example.com", is_x_url=lambda _: False
+    )
 
 
 def test_x_url_matches_predicate_result_delegates_predicate() -> None:
-    assert x_url_matches_predicate_result("https://x.com/u/status/1", is_x_url=lambda _: True)
-    assert not x_url_matches_predicate_result("https://example.com", is_x_url=lambda _: False)
+    assert x_url_matches_predicate_result(
+        "https://x.com/u/status/1", is_x_url=lambda _: True
+    )
+    assert not x_url_matches_predicate_result(
+        "https://example.com", is_x_url=lambda _: False
+    )
 
 
 def test_append_raw_url_if_present_only_appends_non_empty_unique() -> None:
@@ -1925,15 +2092,23 @@ def test_append_canonical_x_url_only_appends_unique_canonical() -> None:
 
 
 def test_canonical_x_raw_value_identity() -> None:
-    assert canonical_x_raw_value("https://x.com/u/status/1") == "https://x.com/u/status/1"
+    assert (
+        canonical_x_raw_value("https://x.com/u/status/1") == "https://x.com/u/status/1"
+    )
 
 
 def test_canonical_x_raw_value_source_identity() -> None:
-    assert canonical_x_raw_value_source("https://x.com/u/status/1") == "https://x.com/u/status/1"
+    assert (
+        canonical_x_raw_value_source("https://x.com/u/status/1")
+        == "https://x.com/u/status/1"
+    )
 
 
 def test_canonical_x_raw_value_result_identity() -> None:
-    assert canonical_x_raw_value_result("https://x.com/u/status/1") == "https://x.com/u/status/1"
+    assert (
+        canonical_x_raw_value_result("https://x.com/u/status/1")
+        == "https://x.com/u/status/1"
+    )
 
 
 def test_append_canonical_status_url_only_appends_unique_canonical() -> None:
@@ -1941,26 +2116,39 @@ def test_append_canonical_status_url_only_appends_unique_canonical() -> None:
     append_canonical_status_url(
         items,
         "https://twitter.com/u/status/1?s=20",
-        canonicalize_status_url=lambda u: u.split("?")[0].replace("twitter.com", "x.com"),
+        canonicalize_status_url=lambda u: u.split("?")[0].replace(
+            "twitter.com", "x.com"
+        ),
     )
     append_canonical_status_url(
         items,
         "https://twitter.com/v/status/2?s=20",
-        canonicalize_status_url=lambda u: u.split("?")[0].replace("twitter.com", "x.com"),
+        canonicalize_status_url=lambda u: u.split("?")[0].replace(
+            "twitter.com", "x.com"
+        ),
     )
     assert items == ["https://x.com/u/status/1", "https://x.com/v/status/2"]
 
 
 def test_canonical_status_raw_value_identity() -> None:
-    assert canonical_status_raw_value("https://x.com/u/status/1") == "https://x.com/u/status/1"
+    assert (
+        canonical_status_raw_value("https://x.com/u/status/1")
+        == "https://x.com/u/status/1"
+    )
 
 
 def test_canonical_status_raw_value_source_identity() -> None:
-    assert canonical_status_raw_value_source("https://x.com/u/status/1") == "https://x.com/u/status/1"
+    assert (
+        canonical_status_raw_value_source("https://x.com/u/status/1")
+        == "https://x.com/u/status/1"
+    )
 
 
 def test_canonical_status_raw_value_result_identity() -> None:
-    assert canonical_status_raw_value_result("https://x.com/u/status/1") == "https://x.com/u/status/1"
+    assert (
+        canonical_status_raw_value_result("https://x.com/u/status/1")
+        == "https://x.com/u/status/1"
+    )
 
 
 def test_append_status_url_if_match() -> None:
@@ -1981,23 +2169,39 @@ def test_append_status_url_if_match() -> None:
 
 
 def test_should_append_status_url_delegates_predicate() -> None:
-    assert should_append_status_url("https://x.com/u/status/1", is_status_url=lambda u: "/status/" in u)
-    assert not should_append_status_url("https://example.com", is_status_url=lambda u: "/status/" in u)
+    assert should_append_status_url(
+        "https://x.com/u/status/1", is_status_url=lambda u: "/status/" in u
+    )
+    assert not should_append_status_url(
+        "https://example.com", is_status_url=lambda u: "/status/" in u
+    )
 
 
 def test_is_status_url_candidate_delegates_predicate() -> None:
-    assert is_status_url_candidate("https://x.com/u/status/1", is_status_url=lambda u: "/status/" in u)
-    assert not is_status_url_candidate("https://example.com", is_status_url=lambda u: "/status/" in u)
+    assert is_status_url_candidate(
+        "https://x.com/u/status/1", is_status_url=lambda u: "/status/" in u
+    )
+    assert not is_status_url_candidate(
+        "https://example.com", is_status_url=lambda u: "/status/" in u
+    )
 
 
 def test_is_status_url_candidate_source_delegates_predicate() -> None:
-    assert is_status_url_candidate_source("https://x.com/u/status/1", is_status_url=lambda u: "/status/" in u)
-    assert not is_status_url_candidate_source("https://example.com", is_status_url=lambda u: "/status/" in u)
+    assert is_status_url_candidate_source(
+        "https://x.com/u/status/1", is_status_url=lambda u: "/status/" in u
+    )
+    assert not is_status_url_candidate_source(
+        "https://example.com", is_status_url=lambda u: "/status/" in u
+    )
 
 
 def test_is_status_url_candidate_result_delegates_predicate() -> None:
-    assert is_status_url_candidate_result("https://x.com/u/status/1", is_status_url=lambda u: "/status/" in u)
-    assert not is_status_url_candidate_result("https://example.com", is_status_url=lambda u: "/status/" in u)
+    assert is_status_url_candidate_result(
+        "https://x.com/u/status/1", is_status_url=lambda u: "/status/" in u
+    )
+    assert not is_status_url_candidate_result(
+        "https://example.com", is_status_url=lambda u: "/status/" in u
+    )
 
 
 def test_is_status_url_candidate_for_result_delegates_predicate() -> None:
@@ -2047,34 +2251,53 @@ def test_append_matched_status_url_only_appends_unique_canonical() -> None:
     append_matched_status_url(
         items,
         "https://twitter.com/u/status/1?s=20",
-        canonicalize_status_url=lambda u: u.split("?")[0].replace("twitter.com", "x.com"),
+        canonicalize_status_url=lambda u: u.split("?")[0].replace(
+            "twitter.com", "x.com"
+        ),
     )
     append_matched_status_url(
         items,
         "https://twitter.com/v/status/2?s=20",
-        canonicalize_status_url=lambda u: u.split("?")[0].replace("twitter.com", "x.com"),
+        canonicalize_status_url=lambda u: u.split("?")[0].replace(
+            "twitter.com", "x.com"
+        ),
     )
     assert items == ["https://x.com/u/status/1", "https://x.com/v/status/2"]
 
 
 def test_resolve_matched_status_raw_url_identity() -> None:
-    assert resolve_matched_status_raw_url("https://x.com/u/status/1") == "https://x.com/u/status/1"
+    assert (
+        resolve_matched_status_raw_url("https://x.com/u/status/1")
+        == "https://x.com/u/status/1"
+    )
 
 
 def test_matched_status_raw_value_identity() -> None:
-    assert matched_status_raw_value("https://x.com/u/status/1") == "https://x.com/u/status/1"
+    assert (
+        matched_status_raw_value("https://x.com/u/status/1")
+        == "https://x.com/u/status/1"
+    )
 
 
 def test_matched_status_raw_value_source_identity() -> None:
-    assert matched_status_raw_value_source("https://x.com/u/status/1") == "https://x.com/u/status/1"
+    assert (
+        matched_status_raw_value_source("https://x.com/u/status/1")
+        == "https://x.com/u/status/1"
+    )
 
 
 def test_matched_status_raw_value_result_identity() -> None:
-    assert matched_status_raw_value_result("https://x.com/u/status/1") == "https://x.com/u/status/1"
+    assert (
+        matched_status_raw_value_result("https://x.com/u/status/1")
+        == "https://x.com/u/status/1"
+    )
 
 
 def test_matched_status_raw_value_for_result_identity() -> None:
-    assert matched_status_raw_value_for_result("https://x.com/u/status/1") == "https://x.com/u/status/1"
+    assert (
+        matched_status_raw_value_for_result("https://x.com/u/status/1")
+        == "https://x.com/u/status/1"
+    )
 
 
 def test_append_matched_x_url_only_appends_unique_canonical() -> None:
@@ -2093,7 +2316,10 @@ def test_append_matched_x_url_only_appends_unique_canonical() -> None:
 
 
 def test_resolve_matched_x_raw_url_identity() -> None:
-    assert resolve_matched_x_raw_url("https://x.com/u/status/1") == "https://x.com/u/status/1"
+    assert (
+        resolve_matched_x_raw_url("https://x.com/u/status/1")
+        == "https://x.com/u/status/1"
+    )
 
 
 def test_matched_x_raw_value_identity() -> None:
@@ -2101,20 +2327,33 @@ def test_matched_x_raw_value_identity() -> None:
 
 
 def test_matched_x_raw_value_source_identity() -> None:
-    assert matched_x_raw_value_source("https://x.com/u/status/1") == "https://x.com/u/status/1"
+    assert (
+        matched_x_raw_value_source("https://x.com/u/status/1")
+        == "https://x.com/u/status/1"
+    )
 
 
 def test_matched_x_raw_value_result_identity() -> None:
-    assert matched_x_raw_value_result("https://x.com/u/status/1") == "https://x.com/u/status/1"
+    assert (
+        matched_x_raw_value_result("https://x.com/u/status/1")
+        == "https://x.com/u/status/1"
+    )
 
 
 def test_matched_x_raw_value_for_result_identity() -> None:
-    assert matched_x_raw_value_for_result("https://x.com/u/status/1") == "https://x.com/u/status/1"
+    assert (
+        matched_x_raw_value_for_result("https://x.com/u/status/1")
+        == "https://x.com/u/status/1"
+    )
 
 
 def test_is_x_url_candidate_delegates_predicate() -> None:
-    assert is_x_url_candidate("https://x.com/u/status/1", is_x_url=lambda u: "x.com" in u)
-    assert not is_x_url_candidate("https://example.com", is_x_url=lambda u: "x.com" in u)
+    assert is_x_url_candidate(
+        "https://x.com/u/status/1", is_x_url=lambda u: "x.com" in u
+    )
+    assert not is_x_url_candidate(
+        "https://example.com", is_x_url=lambda u: "x.com" in u
+    )
 
 
 def test_x_url_matches_predicate_delegates_candidate_check() -> None:
@@ -2133,13 +2372,13 @@ def test_append_x_url_if_match() -> None:
     append_x_url_if_match(
         items,
         "https://twitter.com/u/status/1?s=20",
-        is_x_url=lambda u: ("x.com/" in u or "twitter.com/" in u),
+        is_x_url=lambda u: "x.com/" in u or "twitter.com/" in u,
         canonicalize_x_url=lambda u: u.split("?")[0].replace("twitter.com", "x.com"),
     )
     append_x_url_if_match(
         items,
         "https://example.com/page",
-        is_x_url=lambda u: ("x.com/" in u or "twitter.com/" in u),
+        is_x_url=lambda u: "x.com/" in u or "twitter.com/" in u,
         canonicalize_x_url=lambda u: u.split("?")[0].replace("twitter.com", "x.com"),
     )
     assert items == ["https://x.com/u/status/1"]
@@ -2158,8 +2397,14 @@ def test_unwrap_x_media_url() -> None:
         "https://API.VXTwitter.com/dl?u="
         "https%3A%2F%2Fvideo.twimg.com%2Fext_tw_video%2Fmixed%2Fv.mp4"
     )
-    assert unwrap_x_media_url(wrapped_mixed_case) == "https://video.twimg.com/ext_tw_video/mixed/v.mp4"
-    assert unwrap_x_media_url("https://x.com/user/status/1") == "https://x.com/user/status/1"
+    assert (
+        unwrap_x_media_url(wrapped_mixed_case)
+        == "https://video.twimg.com/ext_tw_video/mixed/v.mp4"
+    )
+    assert (
+        unwrap_x_media_url("https://x.com/user/status/1")
+        == "https://x.com/user/status/1"
+    )
 
 
 def test_unwrap_x_media_param_keys() -> None:
@@ -2177,24 +2422,36 @@ def test_first_unwrap_x_media_candidate() -> None:
 
 
 def test_parse_unwrap_x_media_params() -> None:
-    parsed = urlparse("https://api.fxtwitter.com/dl?u=https%3A%2F%2Fvideo.twimg.com%2Fv.mp4")
+    parsed = urlparse(
+        "https://api.fxtwitter.com/dl?u=https%3A%2F%2Fvideo.twimg.com%2Fv.mp4"
+    )
     params = parse_unwrap_x_media_params(parsed)
     assert params.get("u") == ["https://video.twimg.com/v.mp4"]
 
 
 def test_extract_unwrap_x_media_query() -> None:
-    parsed = urlparse("https://api.fxtwitter.com/dl?u=https%3A%2F%2Fvideo.twimg.com%2Fv.mp4")
-    assert extract_unwrap_x_media_query(parsed) == "u=https%3A%2F%2Fvideo.twimg.com%2Fv.mp4"
+    parsed = urlparse(
+        "https://api.fxtwitter.com/dl?u=https%3A%2F%2Fvideo.twimg.com%2Fv.mp4"
+    )
+    assert (
+        extract_unwrap_x_media_query(parsed)
+        == "u=https%3A%2F%2Fvideo.twimg.com%2Fv.mp4"
+    )
 
 
 def test_parse_unwrap_x_media_url() -> None:
-    parsed = parse_unwrap_x_media_url("https://api.fxtwitter.com/dl?u=https%3A%2F%2Fvideo.twimg.com%2Fv.mp4")
+    parsed = parse_unwrap_x_media_url(
+        "https://api.fxtwitter.com/dl?u=https%3A%2F%2Fvideo.twimg.com%2Fv.mp4"
+    )
     assert parsed.netloc == "api.fxtwitter.com"
     assert parsed.path == "/dl"
 
 
 def test_resolve_unwrap_x_media_host() -> None:
-    assert resolve_unwrap_x_media_host("https://API.VXTwitter.com/dl?u=x") == "api.vxtwitter.com"
+    assert (
+        resolve_unwrap_x_media_host("https://API.VXTwitter.com/dl?u=x")
+        == "api.vxtwitter.com"
+    )
 
 
 def test_should_unwrap_x_media_host() -> None:
@@ -2203,7 +2460,9 @@ def test_should_unwrap_x_media_host() -> None:
 
 
 def test_resolve_unwrap_x_media_candidate() -> None:
-    parsed = urlparse("https://api.fxtwitter.com/dl?target=https%3A%2F%2Fvideo.twimg.com%2Fv.mp4")
+    parsed = urlparse(
+        "https://api.fxtwitter.com/dl?target=https%3A%2F%2Fvideo.twimg.com%2Fv.mp4"
+    )
     assert resolve_unwrap_x_media_candidate(parsed) == "https://video.twimg.com/v.mp4"
 
 
@@ -2216,7 +2475,10 @@ def test_resolved_unwrap_x_media_url() -> None:
         )
         == "https://video.twimg.com/ext_tw_video/abc.mp4"
     )
-    assert resolved_unwrap_x_media_url("/ext_tw_video/abc.mp4", fallback=fallback) == fallback
+    assert (
+        resolved_unwrap_x_media_url("/ext_tw_video/abc.mp4", fallback=fallback)
+        == fallback
+    )
 
 
 def test_unwrap_x_media_proxy_hosts() -> None:
@@ -2236,7 +2498,9 @@ def test_unwrap_x_media_candidate_url_prefix() -> None:
 
 
 def test_is_unwrap_x_media_candidate_url() -> None:
-    assert is_unwrap_x_media_candidate_url("https://video.twimg.com/ext_tw_video/abc.mp4")
+    assert is_unwrap_x_media_candidate_url(
+        "https://video.twimg.com/ext_tw_video/abc.mp4"
+    )
     assert not is_unwrap_x_media_candidate_url("/ext_tw_video/abc.mp4")
 
 
@@ -2299,9 +2563,18 @@ def test_sparse_media_resolution_tuple() -> None:
 
 
 def test_normalize_sparse_url_value() -> None:
-    assert normalize_sparse_url_value("https://x.com/a", default_url="https://x.com/b") == "https://x.com/a"
-    assert normalize_sparse_url_value("", default_url="https://x.com/b") == "https://x.com/b"
-    assert normalize_sparse_url_value(None, default_url="https://x.com/b") == "https://x.com/b"
+    assert (
+        normalize_sparse_url_value("https://x.com/a", default_url="https://x.com/b")
+        == "https://x.com/a"
+    )
+    assert (
+        normalize_sparse_url_value("", default_url="https://x.com/b")
+        == "https://x.com/b"
+    )
+    assert (
+        normalize_sparse_url_value(None, default_url="https://x.com/b")
+        == "https://x.com/b"
+    )
 
 
 def test_normalize_sparse_kind_value() -> None:
@@ -2546,7 +2819,8 @@ def test_syndication_article_has_blocks_variants() -> None:
     assert syndication_article_has_blocks({}) is False
     assert syndication_article_has_blocks({"content": {"blocks": "bad"}}) is False
     assert (
-        syndication_article_has_blocks({"content": {"blocks": [{"text": "   "}]}}) is False
+        syndication_article_has_blocks({"content": {"blocks": [{"text": "   "}]}})
+        is False
     )
     assert (
         syndication_article_has_blocks({"content": {"blocks": [{"text": "hello"}]}})
@@ -2560,7 +2834,9 @@ def test_syndication_article_has_blocks_variants() -> None:
 
 def test_extract_article_content_and_blocks() -> None:
     article = {"content": {"blocks": [{"text": "hello"}, {"x": 1}, "bad"]}}
-    assert extract_article_content(article) == {"blocks": [{"text": "hello"}, {"x": 1}, "bad"]}
+    assert extract_article_content(article) == {
+        "blocks": [{"text": "hello"}, {"x": 1}, "bad"]
+    }
     assert extract_article_blocks(article) == [{"text": "hello"}, {"x": 1}, "bad"]
     assert list(iter_article_blocks(article)) == [{"text": "hello"}, {"x": 1}]
     assert extract_article_content({"content": "bad"}) == {}
@@ -2601,7 +2877,9 @@ def test_article_text_part_helpers() -> None:
     article = {
         "title": "Title",
         "preview_text": "Preview",
-        "content": {"blocks": [{"text": "Body A"}, {"text": "Body A"}, {"text": "Body B"}]},
+        "content": {
+            "blocks": [{"text": "Body A"}, {"text": "Body A"}, {"text": "Body B"}]
+        },
     }
     parts = build_article_text_parts(article)
     assert parts == ["Title", "Preview", "Body A", "Body B"]
@@ -3000,9 +3278,7 @@ def test_build_syndication_oembed_params_default_and_x_host() -> None:
         "hide_thread": "true",
         "lang": "en",
     }
-    assert build_syndication_oembed_params(
-        "2022790791047823773", use_x_host=True
-    ) == {
+    assert build_syndication_oembed_params("2022790791047823773", use_x_host=True) == {
         "url": "https://x.com/i/status/2022790791047823773",
         "dnt": "false",
         "omit_script": "true",
@@ -3369,7 +3645,10 @@ def test_build_syndication_oembed_fallback_plan_components_shape() -> None:
 def test_build_syndication_oembed_fallback_plan_tuple_passthrough() -> None:
     url = "https://publish.twitter.com/oembed"
     variants = [("oembed", {"url": "u"})]
-    assert build_syndication_oembed_fallback_plan_tuple(url, variants) == (url, variants)
+    assert build_syndication_oembed_fallback_plan_tuple(url, variants) == (
+        url,
+        variants,
+    )
 
 
 def test_build_syndication_oembed_url_constant() -> None:
@@ -3491,8 +3770,7 @@ def test_build_syndication_fetch_accept_constant() -> None:
 
 def test_build_syndication_accept_primary_mimes_constant() -> None:
     assert (
-        build_syndication_accept_primary_mimes()
-        == "application/json, text/javascript"
+        build_syndication_accept_primary_mimes() == "application/json, text/javascript"
     )
 
 
@@ -3513,7 +3791,10 @@ def test_build_syndication_accept_text_entry_constant() -> None:
 
 
 def test_compose_entry_with_quality() -> None:
-    assert compose_entry_with_quality("text/javascript", "q=0.9") == "text/javascript;q=0.9"
+    assert (
+        compose_entry_with_quality("text/javascript", "q=0.9")
+        == "text/javascript;q=0.9"
+    )
 
 
 def test_build_syndication_accept_any_mime_constant() -> None:
@@ -3696,9 +3977,7 @@ def test_build_syndication_widgets_params_variant_shape() -> None:
 
 
 def test_build_syndication_widgets_params_variant_with_dnt_shape() -> None:
-    assert build_syndication_widgets_params_variant_with_dnt(
-        "2022790791047823773"
-    ) == (
+    assert build_syndication_widgets_params_variant_with_dnt("2022790791047823773") == (
         "widgets",
         {"id": "2022790791047823773", "lang": "en", "dnt": "false"},
     )
@@ -3772,9 +4051,7 @@ def test_build_syndication_fetch_plan_components_shape() -> None:
 
 
 def test_build_syndication_fetch_plan_values_shape() -> None:
-    base, headers, variants = build_syndication_fetch_plan_values(
-        "2022790791047823773"
-    )
+    base, headers, variants = build_syndication_fetch_plan_values("2022790791047823773")
     assert base == "https://cdn.syndication.twimg.com/"
     assert headers["Referer"] == "https://platform.twitter.com/"
     assert variants == [
@@ -3785,7 +4062,10 @@ def test_build_syndication_fetch_plan_values_shape() -> None:
 
 
 def test_resolve_syndication_fetch_plan_value_helpers() -> None:
-    assert resolve_syndication_fetch_plan_base_url() == "https://cdn.syndication.twimg.com/"
+    assert (
+        resolve_syndication_fetch_plan_base_url()
+        == "https://cdn.syndication.twimg.com/"
+    )
     headers = resolve_syndication_fetch_plan_headers()
     assert headers["Referer"] == "https://platform.twitter.com/"
     assert resolve_syndication_fetch_plan_params_variants("2022790791047823773") == [
@@ -4027,9 +4307,7 @@ def test_build_syndication_endpoint_suffix_mapping() -> None:
 
 def test_build_syndication_endpoint_suffix_for_widgets_flag() -> None:
     assert build_syndication_endpoint_suffix_for_widgets_flag(True) == "widgets/tweet"
-    assert (
-        build_syndication_endpoint_suffix_for_widgets_flag(False) == "tweet-result"
-    )
+    assert build_syndication_endpoint_suffix_for_widgets_flag(False) == "tweet-result"
 
 
 def test_syndication_has_usable_payload_with_text_or_media_hints() -> None:
@@ -4177,7 +4455,10 @@ def test_format_syndication_header_line_variants() -> None:
 
 
 def test_format_syndication_header_username_prefers_screen_name() -> None:
-    assert format_syndication_header_username({"screen_name": "alice", "name": "Alice"}) == "alice"
+    assert (
+        format_syndication_header_username({"screen_name": "alice", "name": "Alice"})
+        == "alice"
+    )
     assert format_syndication_header_username({"name": "Alice"}) == "Alice"
 
 
@@ -4393,7 +4674,10 @@ def test_format_twitter_syndication_image_count_variants() -> None:
 
 
 def test_resolve_first_image_host_variants() -> None:
-    assert resolve_first_image_host(["https://pbs.twimg.com/media/abc.jpg"]) == "pbs.twimg.com"
+    assert (
+        resolve_first_image_host(["https://pbs.twimg.com/media/abc.jpg"])
+        == "pbs.twimg.com"
+    )
     assert resolve_first_image_host(["not a url"]) == ""
     assert resolve_first_image_host([]) == ""
 

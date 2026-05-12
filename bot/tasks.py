@@ -18,7 +18,10 @@ from .memory import (
 )
 from .config import load_config
 from .janitor import start_janitor, stop_janitor
-from bot.server_archive import start_server_archive_service as start_native_server_archive_service, stop_server_archive_service as stop_native_server_archive_service
+from bot.server_archive import (
+    start_server_archive_service as start_native_server_archive_service,
+    stop_server_archive_service as stop_native_server_archive_service,
+)
 
 logger = logging.getLogger(__name__)
 # Global task registry

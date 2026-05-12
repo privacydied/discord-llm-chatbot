@@ -328,7 +328,9 @@ def load_config():
             "PERSISTENT_MEMORY_CHROMA_COLLECTION", "curated_memories"
         ),
         "PERSISTENT_MEMORY_QUEUE_MAX": _safe_int(
-            os.getenv("PERSISTENT_MEMORY_QUEUE_MAX"), "256", "PERSISTENT_MEMORY_QUEUE_MAX"
+            os.getenv("PERSISTENT_MEMORY_QUEUE_MAX"),
+            "256",
+            "PERSISTENT_MEMORY_QUEUE_MAX",
         ),
         "PERSISTENT_MEMORY_WORKERS": _safe_int(
             os.getenv("PERSISTENT_MEMORY_WORKERS"), "1", "PERSISTENT_MEMORY_WORKERS"
@@ -360,11 +362,17 @@ def load_config():
         # Support both the newer *_ENABLED / *_ARCHIVE_BOT_MESSAGES keys and the
         # original aliases for backwards compatibility.
         "SERVER_ARCHIVE_ENABLED": _parse_bool_str(
-            _clean_env_value(os.getenv("SERVER_ARCHIVE_ENABLED") or os.getenv("SERVER_ARCHIVE_ENABLE")),
+            _clean_env_value(
+                os.getenv("SERVER_ARCHIVE_ENABLED")
+                or os.getenv("SERVER_ARCHIVE_ENABLE")
+            ),
             False,
         ),
         "SERVER_ARCHIVE_ENABLE": _parse_bool_str(
-            _clean_env_value(os.getenv("SERVER_ARCHIVE_ENABLED") or os.getenv("SERVER_ARCHIVE_ENABLE")),
+            _clean_env_value(
+                os.getenv("SERVER_ARCHIVE_ENABLED")
+                or os.getenv("SERVER_ARCHIVE_ENABLE")
+            ),
             False,
         ),
         "SERVER_ARCHIVE_DB_PATH": os.getenv(
@@ -377,7 +385,9 @@ def load_config():
             os.getenv("SERVER_ARCHIVE_BATCH_SIZE"), "100", "SERVER_ARCHIVE_BATCH_SIZE"
         ),
         "SERVER_ARCHIVE_SEARCH_LIMIT": _safe_int(
-            os.getenv("SERVER_ARCHIVE_SEARCH_LIMIT"), "10", "SERVER_ARCHIVE_SEARCH_LIMIT"
+            os.getenv("SERVER_ARCHIVE_SEARCH_LIMIT"),
+            "10",
+            "SERVER_ARCHIVE_SEARCH_LIMIT",
         ),
         "SERVER_ARCHIVE_ADMIN_ONLY": _parse_bool_str(
             _clean_env_value(os.getenv("SERVER_ARCHIVE_ADMIN_ONLY")), True
@@ -417,7 +427,9 @@ def load_config():
             True,
         ),
         "MEMORY_DISTILLER_BATCH_SIZE": _safe_int(
-            os.getenv("MEMORY_DISTILLER_BATCH_SIZE"), "200", "MEMORY_DISTILLER_BATCH_SIZE"
+            os.getenv("MEMORY_DISTILLER_BATCH_SIZE"),
+            "200",
+            "MEMORY_DISTILLER_BATCH_SIZE",
         ),
         "MEMORY_DISTILLER_INTERVAL_SECONDS": _safe_int(
             os.getenv("MEMORY_DISTILLER_INTERVAL_SECONDS"),
@@ -527,7 +539,11 @@ def load_config():
         ),
         # LEGACY COMPATIBILITY
         "OPENAI_MODEL": os.getenv("OPENAI_MODEL", "gpt-4"),
-        "MAX_MEMORIES": _safe_int(os.getenv("MAX_MEMORIES") or os.getenv("MAX_USER_MEMORY"), "100", "MAX_MEMORIES"),
+        "MAX_MEMORIES": _safe_int(
+            os.getenv("MAX_MEMORIES") or os.getenv("MAX_USER_MEMORY"),
+            "100",
+            "MAX_MEMORIES",
+        ),
         "DEFAULT_TIMEOUT": _safe_int(
             os.getenv("DEFAULT_TIMEOUT"), "30", "DEFAULT_TIMEOUT"
         ),
@@ -798,7 +814,8 @@ def load_config():
         "VISION_DEFAULT_PROVIDER": os.getenv("VISION_DEFAULT_PROVIDER", "together"),
         "VISION_MODEL": _clean_env_value(os.getenv("VISION_MODEL")) or "",
         "VISION_IMAGE_FALLBACK_MODELS": _clean_env_value(
-            os.getenv("VISION_IMAGE_FALLBACK_MODELS") or os.getenv("IMAGE_FALLBACK_MODELS")
+            os.getenv("VISION_IMAGE_FALLBACK_MODELS")
+            or os.getenv("IMAGE_FALLBACK_MODELS")
         )
         or "",
         # Policy and data paths

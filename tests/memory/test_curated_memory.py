@@ -1,11 +1,9 @@
 import asyncio
 from collections import OrderedDict
-from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
-import discord
 import pytest
 
 from bot.core.bot import LLMBot
@@ -30,7 +28,11 @@ class FakeSemanticStore:
 
     async def upsert(self, memory_id, document, metadata):
         self.upserts.append((memory_id, document, metadata))
-        self.records[memory_id] = {"memory_id": memory_id, "document": document, "metadata": metadata}
+        self.records[memory_id] = {
+            "memory_id": memory_id,
+            "document": document,
+            "metadata": metadata,
+        }
         return memory_id
 
     async def delete(self, memory_id):
@@ -43,11 +45,20 @@ class FakeSemanticStore:
             self.records.pop(memory_id, None)
 
     async def query(self, query, top_k=6, where=None, where_document=None):
-        self.calls.append({"query": query, "top_k": top_k, "where": where, "where_document": where_document})
+        self.calls.append(
+            {
+                "query": query,
+                "top_k": top_k,
+                "where": where,
+                "where_document": where_document,
+            }
+        )
         results = []
         for payload in self.records.values():
             metadata = payload["metadata"]
-            if where and any(metadata.get(key) != value for key, value in where.items()):
+            if where and any(
+                metadata.get(key) != value for key, value in where.items()
+            ):
                 continue
             if query.lower() not in (payload["document"] or "").lower():
                 continue
@@ -189,7 +200,9 @@ async def test_delete_and_wipe_remove_from_retrieval(tmp_path):
         chroma_id=None,
         metadata_json="{}",
     )
-    wiped = MemoryRecord(**{**active.to_dict(), "memory_id": "mem-wipe", "summary": "likes tea"})
+    wiped = MemoryRecord(
+        **{**active.to_dict(), "memory_id": "mem-wipe", "summary": "likes tea"}
+    )
     await store.upsert_memory(active)
     await store.upsert_memory(wiped)
 
@@ -198,12 +211,28 @@ async def test_delete_and_wipe_remove_from_retrieval(tmp_path):
             "mem-active": {
                 "memory_id": "mem-active",
                 "document": "prefers dark mode",
-                "metadata": {"user_id": "user-1", "guild_id": "guild-1", "channel_id": "channel-1", "context_type": "user_preference", "created_at": now, "importance": 0.9, "confidence": 0.95},
+                "metadata": {
+                    "user_id": "user-1",
+                    "guild_id": "guild-1",
+                    "channel_id": "channel-1",
+                    "context_type": "user_preference",
+                    "created_at": now,
+                    "importance": 0.9,
+                    "confidence": 0.95,
+                },
             },
             "mem-wipe": {
                 "memory_id": "mem-wipe",
                 "document": "likes tea",
-                "metadata": {"user_id": "user-1", "guild_id": "guild-1", "channel_id": "channel-1", "context_type": "user_preference", "created_at": now, "importance": 0.9, "confidence": 0.95},
+                "metadata": {
+                    "user_id": "user-1",
+                    "guild_id": "guild-1",
+                    "channel_id": "channel-1",
+                    "context_type": "user_preference",
+                    "created_at": now,
+                    "importance": 0.9,
+                    "confidence": 0.95,
+                },
             },
         }
     )
@@ -284,7 +313,16 @@ async def test_expired_memories_are_not_returned(tmp_path):
             "mem-expired": {
                 "memory_id": "mem-expired",
                 "document": "temporary note",
-                "metadata": {"user_id": "user-1", "guild_id": "guild-1", "channel_id": "channel-1", "context_type": "temporary_context", "created_at": past, "expires_at": past, "importance": 0.4, "confidence": 0.8},
+                "metadata": {
+                    "user_id": "user-1",
+                    "guild_id": "guild-1",
+                    "channel_id": "channel-1",
+                    "context_type": "temporary_context",
+                    "created_at": past,
+                    "expires_at": past,
+                    "importance": 0.4,
+                    "confidence": 0.8,
+                },
             }
         }
     )
@@ -332,8 +370,25 @@ async def test_retrieval_filters_by_scope(tmp_path):
         chroma_id=None,
         metadata_json="{}",
     )
-    rec_guild = MemoryRecord(**{**rec_user.to_dict(), "memory_id": "mem-guild", "user_id": "user-2", "summary": "guild fact", "text": "guild fact"})
-    rec_channel = MemoryRecord(**{**rec_user.to_dict(), "memory_id": "mem-channel", "user_id": "user-2", "channel_id": "channel-9", "summary": "channel fact", "text": "channel fact"})
+    rec_guild = MemoryRecord(
+        **{
+            **rec_user.to_dict(),
+            "memory_id": "mem-guild",
+            "user_id": "user-2",
+            "summary": "guild fact",
+            "text": "guild fact",
+        }
+    )
+    rec_channel = MemoryRecord(
+        **{
+            **rec_user.to_dict(),
+            "memory_id": "mem-channel",
+            "user_id": "user-2",
+            "channel_id": "channel-9",
+            "summary": "channel fact",
+            "text": "channel fact",
+        }
+    )
     await store.upsert_memory(rec_user)
     await store.upsert_memory(rec_guild)
     await store.upsert_memory(rec_channel)
@@ -434,7 +489,15 @@ async def test_top_k_and_max_prompt_chars_are_enforced(tmp_path):
         records[memory_id] = {
             "memory_id": memory_id,
             "document": record.summary,
-            "metadata": {"user_id": "user-1", "guild_id": "guild-1", "channel_id": "channel-1", "context_type": "project_fact", "created_at": now, "importance": 0.9, "confidence": 0.95},
+            "metadata": {
+                "user_id": "user-1",
+                "guild_id": "guild-1",
+                "channel_id": "channel-1",
+                "context_type": "project_fact",
+                "created_at": now,
+                "importance": 0.9,
+                "confidence": 0.95,
+            },
         }
 
     fake_semantic = FakeSemanticStore(records)
@@ -464,11 +527,17 @@ async def test_queue_full_drops_inferred_memory_without_blocking():
     async def persist_callback(batch):
         await asyncio.sleep(0)
 
-    queue = CuratedMemoryIngestionQueue(persist_callback, max_size=1, workers=1, batch_size=1)
-    candidate = CuratedMemoryCurator().build_explicit_candidate(user_id="user-1", text="I prefer dark mode")
+    queue = CuratedMemoryIngestionQueue(
+        persist_callback, max_size=1, workers=1, batch_size=1
+    )
+    candidate = CuratedMemoryCurator().build_explicit_candidate(
+        user_id="user-1", text="I prefer dark mode"
+    )
     assert candidate is not None
     assert await queue.enqueue(candidate) is True
-    second = CuratedMemoryCurator().build_explicit_candidate(user_id="user-1", text="I prefer light mode")
+    second = CuratedMemoryCurator().build_explicit_candidate(
+        user_id="user-1", text="I prefer light mode"
+    )
     assert second is not None
     start = asyncio.get_event_loop().time()
     assert await queue.enqueue(second) is False
@@ -478,13 +547,24 @@ async def test_queue_full_drops_inferred_memory_without_blocking():
 @pytest.mark.asyncio
 async def test_explicit_memory_command_rejects_internal_traces_and_secrets():
     curator = CuratedMemoryCurator()
-    assert curator.build_explicit_candidate(user_id="u", text="my API key is sk-123...7890") is None
-    assert curator.build_explicit_candidate(user_id="u", text="tool trace: hidden reasoning") is None
+    assert (
+        curator.build_explicit_candidate(
+            user_id="u", text="my API key is sk-123...7890"
+        )
+        is None
+    )
+    assert (
+        curator.build_explicit_candidate(
+            user_id="u", text="tool trace: hidden reasoning"
+        )
+        is None
+    )
 
 
 # ==================
 # Tightened inferred memory: ACCEPT cases
 # ==================
+
 
 @pytest.mark.asyncio
 async def test_inferred_accepts_harmless_stable_user_preference():
@@ -536,12 +616,15 @@ async def test_inferred_rejects_temporary_context_for_now():
         user_id="u",
         text="For now, always use X instead of Y",
     )
-    assert c is None, "Temporary phrasing should be rejected unless it clears the conservative threshold"
+    assert c is None, (
+        "Temporary phrasing should be rejected unless it clears the conservative threshold"
+    )
 
 
 # ==================
 # Tightened inferred memory: REJECT cases
 # ==================
+
 
 @pytest.mark.asyncio
 async def test_inferred_rejects_broad_race_demographic_claim():
@@ -646,6 +729,7 @@ async def test_inferred_accepts_project_audit_fact():
     assert c is not None
     assert c.context_type == "project_fact"
 
+
 @pytest.mark.asyncio
 async def test_inferred_rejects_code_is_wrong():
     curator = CuratedMemoryCurator()
@@ -712,6 +796,7 @@ async def test_inferred_rejects_internal_tool_trace():
 # Dedupe / merge tests
 # ==================
 
+
 @pytest.mark.asyncio
 async def test_dedupe_repeated_preference_updates_existing(service):
     # Insert first memory
@@ -775,7 +860,9 @@ async def test_dedupe_inferred_exact_normalized_match(tmp_path):
     # Check: only one memory with this summary should exist (merged)
     mems = await store.list_memories(user_id="u", guild_id="g", limit=10)
     short_answer_mems = [m for m in mems if "short answers" in (m.summary or "")]
-    assert len(short_answer_mems) == 1, "Duplicate inferred memory should be merged, not inserted"
+    assert len(short_answer_mems) == 1, (
+        "Duplicate inferred memory should be merged, not inserted"
+    )
 
 
 @pytest.mark.asyncio
@@ -785,7 +872,14 @@ async def test_dedupe_semantic_high_similarity_merges(tmp_path):
 
     class SimilarSemanticStore(FakeSemanticStore):
         async def query(self, query, top_k=6, where=None, where_document=None):
-            self.calls.append({"query": query, "top_k": top_k, "where": where, "where_document": where_document})
+            self.calls.append(
+                {
+                    "query": query,
+                    "top_k": top_k,
+                    "where": where,
+                    "where_document": where_document,
+                }
+            )
             query_lower = (query or "").lower()
             if "prefer" not in query_lower:
                 return []
@@ -836,7 +930,9 @@ async def test_dedupe_semantic_high_similarity_merges(tmp_path):
     # Expect merged: only one memory with this theme
     mems = await store.list_memories(user_id="u", guild_id="g", limit=10)
     concise_mems = [m for m in mems if "replies" in (m.summary or "").lower()]
-    assert len(concise_mems) == 1, "Semantically similar inferred memory should be merged"
+    assert len(concise_mems) == 1, (
+        "Semantically similar inferred memory should be merged"
+    )
 
 
 @pytest.mark.asyncio
@@ -883,7 +979,9 @@ async def test_no_raw_transcript_is_injected_into_prompt(tmp_path):
     store = PersistentMemoryStore(tmp_path / "memory.db")
     await store.initialize()
     now = datetime.now(timezone.utc).isoformat()
-    raw_transcript = "USER RAW TRANSCRIPT: I said a lot of details that should not be injected."
+    raw_transcript = (
+        "USER RAW TRANSCRIPT: I said a lot of details that should not be injected."
+    )
     record = MemoryRecord(
         memory_id="mem-raw",
         user_id="user-1",
@@ -911,7 +1009,15 @@ async def test_no_raw_transcript_is_injected_into_prompt(tmp_path):
             "mem-raw": {
                 "memory_id": "mem-raw",
                 "document": record.summary,
-                "metadata": {"user_id": "user-1", "guild_id": "guild-1", "channel_id": "channel-1", "context_type": "user_preference", "created_at": now, "importance": 0.9, "confidence": 0.95},
+                "metadata": {
+                    "user_id": "user-1",
+                    "guild_id": "guild-1",
+                    "channel_id": "channel-1",
+                    "context_type": "user_preference",
+                    "created_at": now,
+                    "importance": 0.9,
+                    "confidence": 0.95,
+                },
             }
         }
     )
@@ -970,7 +1076,9 @@ async def test_bot_message_handling_does_not_await_slow_chroma_writes(monkeypatc
         coro.close()
         return MagicMock()
 
-    monkeypatch.setattr("bot.core.bot.enqueue_inferred_memory", slow_enqueue_inferred_memory)
+    monkeypatch.setattr(
+        "bot.core.bot.enqueue_inferred_memory", slow_enqueue_inferred_memory
+    )
     monkeypatch.setattr("bot.core.bot.asyncio.create_task", fake_create_task)
 
     message = SimpleNamespace(
@@ -994,4 +1102,6 @@ def test_recency_and_combined_scoring_decay_with_age():
     fresh = now.isoformat()
     old = (now - timedelta(days=180)).isoformat()
     assert recency_score(fresh, now=now) > recency_score(old, now=now)
-    assert combined_score(0.9, 0.8, fresh, now=now) > combined_score(0.9, 0.8, old, now=now)
+    assert combined_score(0.9, 0.8, fresh, now=now) > combined_score(
+        0.9, 0.8, old, now=now
+    )

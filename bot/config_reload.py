@@ -91,7 +91,9 @@ def _snapshot_known_env_files() -> None:
     """Track values loaded from existing env files so deletion hot-reloads work."""
     for candidate in _candidate_env_paths():
         if candidate.exists():
-            _env_loaded_values_by_path[candidate.resolve()] = _read_dotenv_values(candidate)
+            _env_loaded_values_by_path[candidate.resolve()] = _read_dotenv_values(
+                candidate
+            )
 
 
 def _sync_dotenv_file(path: Path) -> None:
@@ -409,9 +411,13 @@ def reload_env(env_path: Optional[Path] = None) -> Dict[str, Any]:
                     if loop.is_running():
                         _task = asyncio.create_task(restart_janitor())
                         _task.add_done_callback(
-                            lambda t: logger.error(
-                                f"Janitor restart task failed: {t.exception()}"
-                            ) if t.exception() else None
+                            lambda t: (
+                                logger.error(
+                                    f"Janitor restart task failed: {t.exception()}"
+                                )
+                                if t.exception()
+                                else None
+                            )
                         )
                     else:
                         loop.run_until_complete(restart_janitor())

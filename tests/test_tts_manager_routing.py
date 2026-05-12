@@ -208,9 +208,7 @@ def test_kokoro_english_falls_back_when_g2p_missing(monkeypatch, tmp_path):
     monkeypatch.setattr("bot.tts.eng_g2p_local.text_to_ipa", raising_text_to_ipa)
     monkeypatch.setattr(KokoroONNXEngine, "_synthesize_with_registry", fake_registry)
 
-    engine = KokoroONNXEngine(
-        model_path=str(model_file), voices_path=str(voices_file)
-    )
+    engine = KokoroONNXEngine(model_path=str(model_file), voices_path=str(voices_file))
 
     audio = engine.synthesize("hello world")
     assert audio == b"registry"
@@ -221,12 +219,11 @@ def test_process_propagates_synthesis_error(monkeypatch):
 
     manager = TTSManager()
     try:
+
         async def failing_generate(self, text: str, out_path=None, timeout=None):
             raise SynthesisError("forced failure")
 
-        monkeypatch.setattr(
-            TTSManager, "generate_tts", failing_generate, raising=False
-        )
+        monkeypatch.setattr(TTSManager, "generate_tts", failing_generate, raising=False)
 
         action = bot_action_stub.BotAction(content="hello world")
 

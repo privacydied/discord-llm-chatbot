@@ -255,11 +255,16 @@ class TestSyndicationExtract:
             "text": "mixed",
             "photos": [{"url": "https://pbs.twimg.com/media/IMG123?name=small"}],
             "media": [
-                {"type": "photo", "media_url_https": "https://pbs.twimg.com/media/IMG123"},
+                {
+                    "type": "photo",
+                    "media_url_https": "https://pbs.twimg.com/media/IMG123",
+                },
                 {
                     "type": "video",
                     "video_info": {"duration_ms": 10333},
-                    "video_variants": [{"url": "https://video.twimg.com/ext_tw_video/vid.mp4"}],
+                    "video_variants": [
+                        {"url": "https://video.twimg.com/ext_tw_video/vid.mp4"}
+                    ],
                 },
             ],
         }
@@ -288,7 +293,12 @@ class TestSyndicationExtract:
             "text": "photos only",
             "photos": [{"url": "https://pbs.twimg.com/media/PHOTO123?name=small"}],
             "extended_entities": {
-                "media": [{"type": "photo", "media_url_https": "https://pbs.twimg.com/media/PHOTO123"}]
+                "media": [
+                    {
+                        "type": "photo",
+                        "media_url_https": "https://pbs.twimg.com/media/PHOTO123",
+                    }
+                ]
             },
         }
 

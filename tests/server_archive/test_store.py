@@ -14,8 +14,6 @@ from bot.server_archive.models import (
     ArchiveMessage,
     ArchiveMessageBundle,
     ArchiveMention,
-    ArchiveSearchResult,
-    ArchiveThread,
     ArchiveUser,
 )
 from bot.server_archive.service import ServerArchiveService
@@ -24,9 +22,17 @@ from bot.server_archive.store import ServerArchiveStore
 
 @pytest.fixture()
 def bundle_factory():
-    def _make(message_id: str, content: str, guild_id: str = "1", channel_id: str = "10", author_id: str = "20"):
+    def _make(
+        message_id: str,
+        content: str,
+        guild_id: str = "1",
+        channel_id: str = "10",
+        author_id: str = "20",
+    ):
         guild = ArchiveGuild(guild_id=guild_id, name="guild")
-        channel = ArchiveChannel(channel_id=channel_id, guild_id=guild_id, name="general", type="text")
+        channel = ArchiveChannel(
+            channel_id=channel_id, guild_id=guild_id, name="general", type="text"
+        )
         author = ArchiveUser(user_id=author_id, username="alice", display_name="Alice")
         message = ArchiveMessage(
             message_id=message_id,
@@ -44,7 +50,14 @@ def bundle_factory():
             channel=channel,
             author=author,
             message=message,
-            attachments=(ArchiveAttachment(attachment_id=f"a-{message_id}", message_id=message_id, filename="x.txt", url="https://cdn.example/x.txt"),),
+            attachments=(
+                ArchiveAttachment(
+                    attachment_id=f"a-{message_id}",
+                    message_id=message_id,
+                    filename="x.txt",
+                    url="https://cdn.example/x.txt",
+                ),
+            ),
             mentions=(ArchiveMention(message_id=message_id, mentioned_user_id="99"),),
         )
 
@@ -60,8 +73,12 @@ async def test_schema_bootstrap_idempotent_and_wal(tmp_path):
     try:
         assert conn.execute("PRAGMA user_version").fetchone()[0] == 1
         assert conn.execute("PRAGMA journal_mode").fetchone()[0].lower() == "wal"
-        assert conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='archive_messages'").fetchone()
-        assert conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='archive_messages_fts'").fetchone()
+        assert conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='archive_messages'"
+        ).fetchone()
+        assert conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='archive_messages_fts'"
+        ).fetchone()
     finally:
         conn.close()
 
@@ -118,7 +135,11 @@ async def test_search_is_guild_scoped_and_limit_is_enforced(tmp_path, bundle_fac
     await store.initialize()
     for idx in range(20):
         guild_id = "1" if idx < 12 else "2"
-        await store.upsert_bundle(bundle_factory(str(idx), f"needle {idx}", guild_id=guild_id, channel_id=str(10 + idx)))
+        await store.upsert_bundle(
+            bundle_factory(
+                str(idx), f"needle {idx}", guild_id=guild_id, channel_id=str(10 + idx)
+            )
+        )
     results = await store.search("needle", guild_id="1", limit=50)
     assert len(results) == 10
     assert all(result.guild_id == "1" for result in results)
@@ -132,7 +153,9 @@ async def test_queue_full_drops_writes_without_blocking(bundle_factory):
         seen.append([item.message.message_id for item in batch])
         await asyncio.sleep(0.05)
 
-    queue = ArchiveIngestionQueue(persist, max_size=1, workers=1, batch_size=1, enabled=True)
+    queue = ArchiveIngestionQueue(
+        persist, max_size=1, workers=1, batch_size=1, enabled=True
+    )
     assert await queue.enqueue(bundle_factory("1", "one"))
     assert await queue.enqueue(bundle_factory("2", "two")) is False
     assert queue.stats.dropped == 1
@@ -158,8 +181,20 @@ async def test_live_tail_ignores_dm_and_bot_messages(monkeypatch, tmp_path):
     service = ServerArchiveService(bot=None)
     await service.start()
     try:
-        dm_message = SimpleNamespace(guild=None, channel=SimpleNamespace(id=1), author=SimpleNamespace(id=2, bot=False), content="hello", attachments=[])
-        bot_message = SimpleNamespace(guild=SimpleNamespace(id=1), channel=SimpleNamespace(id=2), author=SimpleNamespace(id=3, bot=True), content="hello", attachments=[])
+        dm_message = SimpleNamespace(
+            guild=None,
+            channel=SimpleNamespace(id=1),
+            author=SimpleNamespace(id=2, bot=False),
+            content="hello",
+            attachments=[],
+        )
+        bot_message = SimpleNamespace(
+            guild=SimpleNamespace(id=1),
+            channel=SimpleNamespace(id=2),
+            author=SimpleNamespace(id=3, bot=True),
+            content="hello",
+            attachments=[],
+        )
         assert await service.enqueue_live_message(dm_message) is False
         assert await service.enqueue_live_message(bot_message) is False
     finally:
@@ -210,5 +245,7 @@ async def test_permission_errors_are_logged_and_skipped(tmp_path):
             raise PermissionError("forbidden")
 
     guild = SimpleNamespace(id=1, text_channels=[PermissionErrorHistory()], threads=[])
-    result = await __import__("bot.server_archive.sync", fromlist=["sync_guild_archive"]).sync_guild_archive(store, guild)
+    result = await __import__(
+        "bot.server_archive.sync", fromlist=["sync_guild_archive"]
+    ).sync_guild_archive(store, guild)
     assert result == 0

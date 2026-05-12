@@ -28,6 +28,7 @@ T = TypeVar("T")
 @dataclass
 class _CoalescedEntry(Generic[T]):
     """Internal entry for coalesced request."""
+
     key: str
     future: asyncio.Future[T]
     result: Optional[T] = None
@@ -39,11 +40,11 @@ class _CoalescedEntry(Generic[T]):
 class RequestCoalescer(Generic[T]):
     """
     Coalesces duplicate concurrent requests into single execution.
-    
+
     When multiple coroutines request the same key simultaneously,
     only one executes while others wait for the result.
     """
-    
+
     def __init__(
         self,
         name: str = "coalescer",
@@ -53,48 +54,44 @@ class RequestCoalescer(Generic[T]):
         self.name = name
         self.result_ttl_s = result_ttl_s
         self.cleanup_interval_s = cleanup_interval_s
-        
+
         # In-flight requests (key -> entry)
         self._inflight: Dict[str, _CoalescedEntry[T]] = {}
-        
+
         # Completed results (key -> (result, timestamp))
         self._completed: Dict[str, tuple[T, float]] = {}
         self._completed_errors: Dict[str, tuple[Exception, float]] = {}
-        
+
         # Cleanup tracking
         self._last_cleanup = time.time()
         # Lock to prevent race conditions on dict mutations
         self._lock = asyncio.Lock()
-        
+
     def _maybe_cleanup(self) -> None:
         """Remove stale entries to prevent memory growth. [RM]"""
         now = time.time()
         if now - self._last_cleanup < self.cleanup_interval_s:
             return
-            
+
         # Clean completed results older than TTL
         cutoff = now - self.result_ttl_s
-        expired = [
-            key for key, (_, ts) in self._completed.items()
-            if ts < cutoff
-        ]
+        expired = [key for key, (_, ts) in self._completed.items() if ts < cutoff]
         for key in expired:
             del self._completed[key]
-            
+
         expired_errors = [
-            key for key, (_, ts) in self._completed_errors.items()
-            if ts < cutoff
+            key for key, (_, ts) in self._completed_errors.items() if ts < cutoff
         ]
         for key in expired_errors:
             del self._completed_errors[key]
-            
+
         self._last_cleanup = now
-        
+
         if expired or expired_errors:
             logger.debug(
                 f"{self.name}.cleanup | removed={len(expired)} results, {len(expired_errors)} errors"
             )
-    
+
     async def execute(
         self,
         key: str,
@@ -103,19 +100,19 @@ class RequestCoalescer(Generic[T]):
     ) -> T:
         """
         Execute coroutine with coalescing.
-        
+
         If another request with the same key is in-flight, wait for its result.
         If a recent result is cached, return it immediately.
         Otherwise, execute the coroutine and share the result with waiters.
-        
+
         Args:
             key: Unique identifier for the operation
             coro_factory: Factory that creates the coroutine (called only once)
             timeout: Maximum time to wait for result
-            
+
         Returns:
             Result from the coroutine execution
-            
+
         Raises:
             asyncio.TimeoutError: If operation times out
             Exception: Any exception from the underlying coroutine
@@ -129,7 +126,7 @@ class RequestCoalescer(Generic[T]):
                     return result
                 else:
                     del self._completed[key]
-                    
+
             # Check for cached error (re-raise to maintain semantics)
             if key in self._completed_errors:
                 error, ts = self._completed_errors[key]
@@ -138,7 +135,7 @@ class RequestCoalescer(Generic[T]):
                     raise error
                 else:
                     del self._completed_errors[key]
-            
+
             # Check if request is already in-flight
             entry = self._inflight.get(key)
             if entry is not None:
@@ -147,7 +144,7 @@ class RequestCoalescer(Generic[T]):
                 waiter_future = entry.future
             else:
                 waiter_future = None
-            
+
         if waiter_future is not None:
             try:
                 if timeout:
@@ -160,38 +157,40 @@ class RequestCoalescer(Generic[T]):
             except asyncio.TimeoutError:
                 logger.warning(f"{self.name}.timeout | key={key[:50]}...")
                 raise
-        
+
         # We are the leader - execute the coroutine
         async with self._lock:
-            entry = _CoalescedEntry(key=key, future=asyncio.get_event_loop().create_future())
+            entry = _CoalescedEntry(
+                key=key, future=asyncio.get_event_loop().create_future()
+            )
             self._inflight[key] = entry
-        
+
         try:
             logger.debug(f"{self.name}.execute | key={key[:50]}...")
-            
+
             # Execute with optional timeout
             if timeout:
                 result = await asyncio.wait_for(coro_factory(), timeout=timeout)
             else:
                 result = await coro_factory()
-            
+
             # Store result and notify waiters
             entry.result = result
             entry.completed = True
             entry.future.set_result(result)
-            
+
             # Cache briefly for thundering herd protection
             async with self._lock:
                 self._completed[key] = (result, time.time())
-            
+
             return result
-            
+
         except asyncio.TimeoutError as e:
             entry.error = e
             entry.completed = True
             entry.future.set_exception(e)
             raise
-            
+
         except Exception as e:
             entry.error = e
             entry.completed = True
@@ -200,7 +199,7 @@ class RequestCoalescer(Generic[T]):
             async with self._lock:
                 self._completed_errors[key] = (e, time.time())
             raise
-            
+
         finally:
             # Remove from in-flight
             async with self._lock:

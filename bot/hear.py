@@ -21,7 +21,6 @@ import math
 import os
 import re
 import shutil
-import subprocess
 import tempfile
 import time
 from datetime import datetime, timezone
@@ -871,12 +870,17 @@ def _reset_stream_from_cache(pre: PreprocessResult) -> None:
 # This ensures old cached transcripts are not reused after bug fixes
 STT_PIPELINE_VERSION = "stt-v2-lang-aware-stitch"
 
+
 def _transcript_cache_key(
-    audio_cache_key: str, spec: ModelSpec, vad_enabled: bool = True, task: str = "transcribe", language: Optional[str] = None
+    audio_cache_key: str,
+    spec: ModelSpec,
+    vad_enabled: bool = True,
+    task: str = "transcribe",
+    language: Optional[str] = None,
 ) -> str:
     """
     Build a cache key for transcript results that includes pipeline version.
-    
+
     The key includes:
     - Canonical media identity (audio_cache_key)
     - Model spec (size, compute_type)
@@ -1397,7 +1401,9 @@ def _drain_frames(frames: deque[np.ndarray]) -> np.ndarray:
     return np.concatenate(parts)
 
 
-def _segments_to_dict(segments: List[Any], offset: float, chunk_idx: int = 0) -> List[Dict[str, Any]]:
+def _segments_to_dict(
+    segments: List[Any], offset: float, chunk_idx: int = 0
+) -> List[Dict[str, Any]]:
     """Convert Whisper segments to dicts with absolute timestamps and chunk metadata."""
     results: List[Dict[str, Any]] = []
     for seg in segments:
@@ -1418,42 +1424,42 @@ def _segments_to_dict(segments: List[Any], offset: float, chunk_idx: int = 0) ->
 def _join_segments(segments: List[Dict[str, Any]]) -> Tuple[str, Dict[str, Any]]:
     """
     Join segments into final transcript with timestamp-aware deduplication.
-    
+
     This function:
     1. Sorts segments by absolute start timestamp
     2. Filters empty/no-speech segments
     3. Performs timestamp-aware overlap trimming (not just exact duplicates)
     4. Preserves legitimate repeated phrases (non-consecutive duplicates)
-    
+
     Args:
         segments: List of segment dicts with 'start', 'end', 'text' keys
-        
+
     Returns:
         Assembled transcript text
     """
     if not segments:
         return "", {"confidence": None, "confidence_status": "unknown"}
-    
+
     # Sort by absolute timestamp (start), then by chunk_idx if available
     def _sort_key(seg: Dict[str, Any]) -> tuple:
         start = seg.get("start", 0.0)
         chunk_idx = seg.get("chunk_idx", 0)
         return (start, chunk_idx)
-    
+
     sorted_segments = sorted(segments, key=_sort_key)
-    
+
     texts: list[str] = []
     kept_segments: list[Dict[str, Any]] = []
     last_end_s: float = -1.0
-    
+
     for seg in sorted_segments:
         text = seg.get("text", "").strip()
         if not text:
             continue
-        
+
         start_s = seg.get("start", 0.0)
         end_s = seg.get("end", start_s)
-        
+
         # Skip segments that are entirely within already-covered time
         # with significant overlap (>50% of segment duration)
         if last_end_s > 0 and start_s < last_end_s:
@@ -1463,10 +1469,12 @@ def _join_segments(segments: List[Dict[str, Any]]) -> Tuple[str, Dict[str, Any]]
                 # Skip highly overlapping segment
                 logger.debug(
                     "stt.stitch skip_overlapping start=%.2f end=%.2f text=%s",
-                    start_s, end_s, text[:30]
+                    start_s,
+                    end_s,
+                    text[:30],
                 )
                 continue
-        
+
         # Check for consecutive duplicate/overlap and trim
         if texts:
             prev_text = texts[-1]
@@ -1474,10 +1482,11 @@ def _join_segments(segments: List[Dict[str, Any]]) -> Tuple[str, Dict[str, Any]]
             if text == prev_text:
                 logger.debug(
                     "stt.stitch skip_exact_duplicate start=%.2f text=%s",
-                    start_s, text[:30]
+                    start_s,
+                    text[:30],
                 )
                 continue
-            
+
             # Check for suffix/prefix overlap (e.g., "hello world" + "world foo")
             # Trim if the overlap is substantial (>3 chars and at word boundary)
             overlap_len = _find_overlap_len(prev_text, text)
@@ -1487,48 +1496,51 @@ def _join_segments(segments: List[Dict[str, Any]]) -> Tuple[str, Dict[str, Any]]
                     text = trimmed
                     logger.debug(
                         "stt.stitch trim_overlap overlap=%d text=%s",
-                        overlap_len, text[:30]
+                        overlap_len,
+                        text[:30],
                     )
                 else:
                     # Text is entirely contained in previous - skip
                     continue
-        
+
         texts.append(text)
         kept_segments.append(seg)
         last_end_s = max(last_end_s, end_s)
-    
+
     result = " ".join(texts).strip()
-    
+
     # Compute confidence metrics from kept segments
     confidence_meta = _compute_confidence_metrics(kept_segments)
-    
+
     if sorted_segments:
         logger.info(
             "stt.stitch summary input_segments=%d output_chars=%d duration=%.2f confidence=%s",
-            len(sorted_segments), len(result), sorted_segments[-1].get("end", 0.0),
-            confidence_meta.get("confidence_status", "unknown")
+            len(sorted_segments),
+            len(result),
+            sorted_segments[-1].get("end", 0.0),
+            confidence_meta.get("confidence_status", "unknown"),
         )
-    
+
     return result, confidence_meta
 
 
 def _compute_confidence_metrics(segments: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
     Compute aggregate confidence metrics from segment-level Whisper data.
-    
+
     Confidence heuristics:
     - avg_logprob: average log probability of tokens (higher = more confident)
     - no_speech_prob: probability that segment is non-speech (lower = more confident)
-    
+
     Returns dict with confidence score (0.0-1.0) and status string.
     """
     if not segments:
         return {"confidence": None, "confidence_status": "unknown"}
-    
+
     # Collect available metrics
     avg_logprobs: list[float] = []
     no_speech_probs: list[float] = []
-    
+
     for seg in segments:
         alp = seg.get("avg_logprob")
         nsp = seg.get("no_speech_prob")
@@ -1536,11 +1548,11 @@ def _compute_confidence_metrics(segments: List[Dict[str, Any]]) -> Dict[str, Any
             avg_logprobs.append(float(alp))
         if nsp is not None:
             no_speech_probs.append(float(nsp))
-    
+
     # If no metrics available, return unknown
     if not avg_logprobs and not no_speech_probs:
         return {"confidence": None, "confidence_status": "unknown"}
-    
+
     # Compute normalized scores
     # avg_logprob: typical range is -3 to 0, with > -1 being high confidence
     # Normalize to 0-1: clip at -3 to 0, then scale
@@ -1550,7 +1562,7 @@ def _compute_confidence_metrics(segments: List[Dict[str, Any]]) -> Dict[str, Any
         # Clip to [-3, 0] and normalize
         clipped = max(-3.0, min(0.0, mean_logprob))
         logprob_score = (clipped + 3.0) / 3.0  # -3 -> 0, 0 -> 1
-    
+
     # no_speech_prob: probability this is NOT speech (0.0-1.0)
     # Lower is better. Typical threshold for speech is < 0.65
     speech_score = 0.5  # default neutral
@@ -1558,11 +1570,11 @@ def _compute_confidence_metrics(segments: List[Dict[str, Any]]) -> Dict[str, Any
         mean_nsp = sum(no_speech_probs) / len(no_speech_probs)
         # Invert so higher = better (0.65 threshold -> 0.35 base)
         speech_score = max(0.0, 1.0 - (mean_nsp / 0.65))
-    
+
     # Combined confidence: weighted average
     # Give more weight to logprob_score as it's more reliable
     confidence = (logprob_score * 0.7) + (speech_score * 0.3)
-    
+
     # Determine status
     if confidence >= 0.7:
         status = "high"
@@ -1572,39 +1584,43 @@ def _compute_confidence_metrics(segments: List[Dict[str, Any]]) -> Dict[str, Any
         status = "low"
     else:
         status = "critical"
-    
+
     return {
         "confidence": round(confidence, 3),
         "confidence_status": status,
-        "mean_logprob": round(sum(avg_logprobs) / len(avg_logprobs), 3) if avg_logprobs else None,
-        "mean_no_speech_prob": round(sum(no_speech_probs) / len(no_speech_probs), 3) if no_speech_probs else None,
+        "mean_logprob": round(sum(avg_logprobs) / len(avg_logprobs), 3)
+        if avg_logprobs
+        else None,
+        "mean_no_speech_prob": round(sum(no_speech_probs) / len(no_speech_probs), 3)
+        if no_speech_probs
+        else None,
     }
 
 
 def _find_overlap_len(prev: str, curr: str) -> int:
     """Find the length of suffix/prefix overlap between two strings.
-    
+
     Returns the maximum n where prev[-n:] == curr[:n].
     Only considers overlaps at word boundaries.
     """
     if not prev or not curr:
         return 0
-    
+
     max_possible = min(len(prev), len(curr))
     if max_possible < 3:
         return 0
-    
+
     # Try to find overlap at word boundaries
     # Normalize: lowercase, strip punctuation for comparison
     prev_norm = prev.lower().rstrip(".,!?;:")
     curr_norm = curr.lower().lstrip(".,!?;:")
-    
+
     for n in range(max_possible, 2, -1):
         if prev_norm[-n:] == curr_norm[:n]:
             # Check if this is a clean word boundary in original
-            if n < len(prev) and prev[-n-1].isspace():
+            if n < len(prev) and prev[-n - 1].isspace():
                 return n
-    
+
     # Also check for partial word overlaps (e.g., "President Biden" + "Biden says")
     # Only if the overlap is a complete word in the new segment
     words_curr = curr.split()
@@ -1618,7 +1634,7 @@ def _find_overlap_len(prev: str, curr: str) -> int:
                 # Only accept if it looks reasonable
                 if overlap_len > 3:
                     return overlap_len
-    
+
     return 0
 
 
@@ -1708,11 +1724,19 @@ async def _transcribe_with_model(
     language: Optional[str] = None,
 ) -> TranscriptResult:
     # Detect language once for the whole job if not already set
-    stt_language: Optional[str] = language  # Use hint if provided, else None (auto-detect)
-    stt_language_source: str = "hint" if language else "auto"  # "hint", "detect", "first_chunk"
-    stt_task: str = "transcribe"  # Only "transcribe" unless user explicitly requests translation
+    stt_language: Optional[str] = (
+        language  # Use hint if provided, else None (auto-detect)
+    )
+    stt_language_source: str = (
+        "hint" if language else "auto"
+    )  # "hint", "detect", "first_chunk"
+    stt_task: str = (
+        "transcribe"  # Only "transcribe" unless user explicitly requests translation
+    )
 
-    cache_key = _transcript_cache_key(pre.cache_key, spec, vad_enabled=True, task=stt_task, language=stt_language)
+    cache_key = _transcript_cache_key(
+        pre.cache_key, spec, vad_enabled=True, task=stt_task, language=stt_language
+    )
     cached = _load_transcript_cache(cache_key)
     if cached:
         spans.spans["whisper"] = 0
@@ -1813,13 +1837,15 @@ async def _transcribe_with_model(
         pending_memory_abort = False
         return False
 
-    async def _decode_chunk(chunk_audio: np.ndarray, language: Optional[str] = None) -> Tuple[List[Any], Any, float]:
+    async def _decode_chunk(
+        chunk_audio: np.ndarray, language: Optional[str] = None
+    ) -> Tuple[List[Any], Any, float]:
         """Decode a single audio chunk with Whisper.
-        
+
         Args:
             chunk_audio: Audio samples as numpy array (float32, normalized)
             language: Language code to use (e.g., 'ar', 'en'). If None, auto-detect.
-        
+
         Returns:
             Tuple of (segments, info, runtime)
         """
@@ -1845,18 +1871,18 @@ async def _transcribe_with_model(
 
         segments, info = await asyncio.to_thread(_run)
         runtime = time.perf_counter() - chunk_begin
-        
+
         # Log detected language from first chunk
-        if language is None and hasattr(info, 'language'):
-            detected_lang = getattr(info, 'language', None)
-            detected_prob = getattr(info, 'language_probability', None)
+        if language is None and hasattr(info, "language"):
+            detected_lang = getattr(info, "language", None)
+            detected_prob = getattr(info, "language_probability", None)
             if detected_lang:
                 logger.info(
                     "stt.language detected=%s prob=%.3f",
                     detected_lang,
                     detected_prob or 0.0,
                 )
-        
+
         return segments, info, runtime
 
     try:
@@ -1901,12 +1927,14 @@ async def _transcribe_with_model(
                 samples_buffered -= chunk_audio.shape[0]
                 chunk_start_s = start_sample / sample_rate
                 chunk_end_s = chunk_start_s + chunk_audio.shape[0] / sample_rate
-                segments, info, runtime = await _decode_chunk(chunk_audio, language=stt_language)
+                segments, info, runtime = await _decode_chunk(
+                    chunk_audio, language=stt_language
+                )
                 if chunk_idx == 0:
                     first_chunk_runtime = runtime
                     # Capture detected language from first chunk for subsequent chunks
-                    if stt_language is None and hasattr(info, 'language'):
-                        detected = getattr(info, 'language', None)
+                    if stt_language is None and hasattr(info, "language"):
+                        detected = getattr(info, "language", None)
                         if detected:
                             stt_language = detected
                             stt_language_source = "detect"
@@ -1914,7 +1942,7 @@ async def _transcribe_with_model(
                                 "stt.language selected=%s source=%s prob=%.3f",
                                 stt_language,
                                 stt_language_source,
-                                getattr(info, 'language_probability', 0.0),
+                                getattr(info, "language_probability", 0.0),
                             )
                     if not segments and info.no_speech_prob >= NO_SPEECH_PROB_THRESHOLD:
                         spans.end("whisper", ok=False, reason="no_speech")
@@ -1928,7 +1956,9 @@ async def _transcribe_with_model(
                     chunk_idx,
                     chunk_end_s - chunk_start_s,
                 )
-                seg_dicts = _segments_to_dict(segments, offset=chunk_start_s, chunk_idx=chunk_idx)
+                seg_dicts = _segments_to_dict(
+                    segments, offset=chunk_start_s, chunk_idx=chunk_idx
+                )
                 segments_accum.extend(seg_dicts)
                 chunk_records.append(
                     {
@@ -1995,12 +2025,14 @@ async def _transcribe_with_model(
                 if remainder.size > 0:
                     chunk_start_s = start_sample / sample_rate
                     chunk_end_s = chunk_start_s + remainder.shape[0] / sample_rate
-                    segments, info, runtime = await _decode_chunk(remainder, language=stt_language)
+                    segments, info, runtime = await _decode_chunk(
+                        remainder, language=stt_language
+                    )
                     if chunk_idx == 0:
                         first_chunk_runtime = runtime
                         # Capture detected language if not already set
-                        if stt_language is None and hasattr(info, 'language'):
-                            detected = getattr(info, 'language', None)
+                        if stt_language is None and hasattr(info, "language"):
+                            detected = getattr(info, "language", None)
                             if detected:
                                 stt_language = detected
                                 stt_language_source = "detect"
@@ -2008,12 +2040,9 @@ async def _transcribe_with_model(
                                     "stt.language selected=%s source=%s prob=%.3f",
                                     stt_language,
                                     stt_language_source,
-                                    getattr(info, 'language_probability', 0.0),
+                                    getattr(info, "language_probability", 0.0),
                                 )
-                    if (
-                        not segments
-                        and info.no_speech_prob >= NO_SPEECH_PROB_THRESHOLD
-                    ):
+                    if not segments and info.no_speech_prob >= NO_SPEECH_PROB_THRESHOLD:
                         spans.end("whisper", ok=False, reason="no_speech")
                         logger.info("stt.no_speech_fast_exit")
                         raise InferenceError(
@@ -2024,7 +2053,9 @@ async def _transcribe_with_model(
                         chunk_idx,
                         chunk_end_s - chunk_start_s,
                     )
-                    seg_dicts = _segments_to_dict(segments, offset=chunk_start_s, chunk_idx=chunk_idx)
+                    seg_dicts = _segments_to_dict(
+                        segments, offset=chunk_start_s, chunk_idx=chunk_idx
+                    )
                     segments_accum.extend(seg_dicts)
                     chunk_records.append(
                         {
@@ -2278,8 +2309,10 @@ async def _resolve_via_summarize(url: str) -> Optional[Dict[str, Any]]:
         _SUMMARIZE_BIN,
         url,
         "--extract-only",
-        "--youtube", "web",
-        "--timeout", "30s",
+        "--youtube",
+        "web",
+        "--timeout",
+        "30s",
     ]
     logger.info("stt.summarize.start url=%s", url[:120])
 
@@ -2359,10 +2392,12 @@ async def _resolve_via_summarize(url: str) -> Optional[Dict[str, Any]]:
     }
 
 
-async def hear_infer_from_url(url: str, force_refresh: bool = False, language: Optional[str] = None) -> Dict[str, Any]:
+async def hear_infer_from_url(
+    url: str, force_refresh: bool = False, language: Optional[str] = None
+) -> Dict[str, Any]:
     """
     Transcribe audio fetched via yt-dlp for the given URL.
-    
+
     Args:
         url: URL to process
         force_refresh: Bypass cache and re-process
@@ -2487,7 +2522,9 @@ async def _run_whisper_with_fallback(
 
     try:
         # Try the primary faster-whisper transcription
-        transcript = await _run_whisper(pre, spans, initial_spec, ram_guard, job=job, language=language)
+        transcript = await _run_whisper(
+            pre, spans, initial_spec, ram_guard, job=job, language=language
+        )
 
         # If successful, return the primary result
         return transcript

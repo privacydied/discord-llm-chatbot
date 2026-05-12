@@ -29,7 +29,10 @@ class CaptureLogger:
 def test_extract_x_api_primary_text_handles_dict_and_list_payloads() -> None:
     router = Router(DummyBot())
 
-    assert router._extract_x_api_primary_text({"data": {"text": "dict text"}}) == "dict text"
+    assert (
+        router._extract_x_api_primary_text({"data": {"text": "dict text"}})
+        == "dict text"
+    )
     assert (
         router._extract_x_api_primary_text({"data": [{"text": "list text"}]})
         == "list text"
@@ -474,7 +477,9 @@ def test_extract_x_api_primary_tweet_handles_payload_variants() -> None:
 
 
 @pytest.mark.asyncio
-async def test_route_twitter_syndication_to_vl_delegates_to_handler(monkeypatch) -> None:
+async def test_route_twitter_syndication_to_vl_delegates_to_handler(
+    monkeypatch,
+) -> None:
     router = Router(DummyBot())
     captured = {}
 
@@ -736,7 +741,9 @@ def test_stt_result_has_transcription_matches_existing_truthiness() -> None:
 def test_extract_sparse_media_resolution_defaults_and_sanitizes() -> None:
     router = Router(DummyBot())
 
-    assert router._extract_sparse_media_resolution(None, default_url="https://x.com/a") == (
+    assert router._extract_sparse_media_resolution(
+        None, default_url="https://x.com/a"
+    ) == (
         "unknown",
         [],
         "https://x.com/a",
@@ -860,7 +867,9 @@ async def test_resolve_syndication_caption_from_payload_hydrates_and_extracts(
         return {"text": "hydrated"}
 
     monkeypatch.setattr(Router, "_maybe_hydrate_syndication_payload", _maybe_hydrate)
-    monkeypatch.setattr(Router, "_extract_syndication_text", lambda _s, n: n.get("text", ""))
+    monkeypatch.setattr(
+        Router, "_extract_syndication_text", lambda _s, n: n.get("text", "")
+    )
 
     out = await router._resolve_syndication_caption_from_payload(
         "123",
@@ -919,10 +928,14 @@ async def test_resolve_twitter_caption_text_prefers_syndication(monkeypatch) -> 
 
     monkeypatch.setattr(Router, "_get_tweet_via_syndication", _get_syn)
     monkeypatch.setattr(Router, "_hydrate_syndication_article_if_needed", _hydrate)
-    monkeypatch.setattr(Router, "_extract_syndication_text", lambda _s, n: n.get("text", ""))
+    monkeypatch.setattr(
+        Router, "_extract_syndication_text", lambda _s, n: n.get("text", "")
+    )
     monkeypatch.setattr(
         "bot.router.get_http_client",
-        lambda: (_ for _ in ()).throw(AssertionError("http fallback should not be used")),
+        lambda: (_ for _ in ()).throw(
+            AssertionError("http fallback should not be used")
+        ),
     )
 
     out = await router._resolve_twitter_caption_text("123")
@@ -959,7 +972,9 @@ async def test_resolve_twitter_caption_text_falls_back_to_fx(monkeypatch) -> Non
 
     monkeypatch.setattr(Router, "_get_tweet_via_syndication", _get_syn)
     monkeypatch.setattr(Router, "_hydrate_syndication_article_if_needed", _hydrate)
-    monkeypatch.setattr(Router, "_extract_syndication_text", lambda _s, n: n.get("text", ""))
+    monkeypatch.setattr(
+        Router, "_extract_syndication_text", lambda _s, n: n.get("text", "")
+    )
     monkeypatch.setattr("bot.router.get_http_client", _get_http)
 
     out = await router._resolve_twitter_caption_text("123")
@@ -993,7 +1008,9 @@ async def test_resolve_twitter_caption_from_syndication_prefers_hydrated_text(
 
     monkeypatch.setattr(Router, "_get_tweet_via_syndication", _get_syn)
     monkeypatch.setattr(Router, "_maybe_hydrate_syndication_payload", _maybe_hydrate)
-    monkeypatch.setattr(Router, "_extract_syndication_text", lambda _s, n: n.get("text", ""))
+    monkeypatch.setattr(
+        Router, "_extract_syndication_text", lambda _s, n: n.get("text", "")
+    )
 
     out = await router._resolve_twitter_caption_from_syndication(
         "123",

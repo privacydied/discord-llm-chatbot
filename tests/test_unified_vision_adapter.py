@@ -8,11 +8,13 @@ error handling, fallback logic, and integration with gateway.
 import pytest
 
 # Skip all tests — require live vision provider APIs
-pytestmark = pytest.mark.skip(reason="Requires live vision provider APIs (together, novita, openrouter)")
+pytestmark = pytest.mark.skip(
+    reason="Requires live vision provider APIs (together, novita, openrouter)"
+)
 
 import asyncio
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from bot.vision.unified_adapter import (
     UnifiedVisionAdapter,
@@ -24,7 +26,13 @@ from bot.vision.unified_adapter import (
     UnifiedResult,
 )
 from bot.vision.gateway import VisionGateway
-from bot.vision.types import VisionRequest, VisionTask, VisionError, VisionErrorType, VisionProvider
+from bot.vision.types import (
+    VisionRequest,
+    VisionTask,
+    VisionError,
+    VisionErrorType,
+    VisionProvider,
+)
 
 
 @pytest.fixture
@@ -97,7 +105,9 @@ class TestUnifiedVisionAdapter:
     def test_provider_selection(self, unified_adapter, vision_request):
         """Test automatic provider selection logic [CA]"""
         # Override budget to allow providers to be selected
-        unified_adapter.provider_config["vision"]["default_policy"]["budget_per_job_usd"] = 100.0
+        unified_adapter.provider_config["vision"]["default_policy"][
+            "budget_per_job_usd"
+        ] = 100.0
         normalized = unified_adapter.normalize_request(vision_request)
         provider = unified_adapter.select_provider(normalized)
 
@@ -196,9 +206,13 @@ class TestErrorHandling:
     async def test_authentication_error_handling(self, unified_adapter, vision_request):
         """Test authentication error is properly handled"""
         # Override budget so providers are selectable
-        unified_adapter.provider_config["vision"]["default_policy"]["budget_per_job_usd"] = 100.0
+        unified_adapter.provider_config["vision"]["default_policy"][
+            "budget_per_job_usd"
+        ] = 100.0
         # Select together as the primary provider to patch
-        unified_adapter.provider_config["vision"]["default_policy"]["provider_order"] = ["together"]
+        unified_adapter.provider_config["vision"]["default_policy"][
+            "provider_order"
+        ] = ["together"]
         together = unified_adapter.providers.get("together")
         if together is None:
             pytest.skip("Together provider not available for auth test")
@@ -219,7 +233,9 @@ class TestErrorHandling:
     async def test_fallback_on_provider_failure(self, unified_adapter, vision_request):
         """Test automatic fallback when primary provider fails"""
         # Override budget so providers are selectable
-        unified_adapter.provider_config["vision"]["default_policy"]["budget_per_job_usd"] = 100.0
+        unified_adapter.provider_config["vision"]["default_policy"][
+            "budget_per_job_usd"
+        ] = 100.0
         # Ensure we have multiple providers for fallback testing
         if len(unified_adapter.providers) < 2:
             pytest.skip("Need multiple providers for fallback test")

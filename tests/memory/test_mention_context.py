@@ -14,6 +14,7 @@ from bot.memory.mention_context import (
 
 # Helpers -------------------------------------------------------------
 
+
 class FakeAuthor:
     def __init__(self, id: int, name: str, bot: bool = False):
         self.id = id
@@ -107,6 +108,7 @@ def _now():
 
 # Tests ---------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_thread_case_short():
     now = _now()
@@ -194,9 +196,33 @@ async def test_reply_case_linear():
     ch = FakeChannel(1002, items, channel_type=None)
 
     root = FakeMessage(301, a, "root", now - timedelta(minutes=4), ch, guild)
-    m2 = FakeMessage(302, b, "r1", now - timedelta(minutes=3), ch, guild, reference=SimpleNamespace(message_id=root.id))
-    m3 = FakeMessage(303, a, "r2", now - timedelta(minutes=2), ch, guild, reference=SimpleNamespace(message_id=m2.id))
-    m4 = FakeMessage(304, b, "r3", now - timedelta(minutes=1), ch, guild, reference=SimpleNamespace(message_id=m3.id))
+    m2 = FakeMessage(
+        302,
+        b,
+        "r1",
+        now - timedelta(minutes=3),
+        ch,
+        guild,
+        reference=SimpleNamespace(message_id=root.id),
+    )
+    m3 = FakeMessage(
+        303,
+        a,
+        "r2",
+        now - timedelta(minutes=2),
+        ch,
+        guild,
+        reference=SimpleNamespace(message_id=m2.id),
+    )
+    m4 = FakeMessage(
+        304,
+        b,
+        "r3",
+        now - timedelta(minutes=1),
+        ch,
+        guild,
+        reference=SimpleNamespace(message_id=m3.id),
+    )
     items.extend([root, m2, m3, m4])
 
     trigger = m4
@@ -226,10 +252,42 @@ async def test_reply_case_forked_only_chain_included():
 
     root = FakeMessage(401, a, "root", now - timedelta(minutes=5), ch, guild)
     other = FakeMessage(402, c, "noise", now - timedelta(minutes=4), ch, guild)
-    r1 = FakeMessage(403, b, "r1", now - timedelta(minutes=3), ch, guild, reference=SimpleNamespace(message_id=root.id))
-    noise_reply = FakeMessage(404, c, "noise_reply", now - timedelta(minutes=2, seconds=30), ch, guild, reference=SimpleNamespace(message_id=other.id))
-    r2 = FakeMessage(405, a, "r2", now - timedelta(minutes=2), ch, guild, reference=SimpleNamespace(message_id=r1.id))
-    trigger = FakeMessage(406, b, "r3", now - timedelta(minutes=1), ch, guild, reference=SimpleNamespace(message_id=r2.id))
+    r1 = FakeMessage(
+        403,
+        b,
+        "r1",
+        now - timedelta(minutes=3),
+        ch,
+        guild,
+        reference=SimpleNamespace(message_id=root.id),
+    )
+    noise_reply = FakeMessage(
+        404,
+        c,
+        "noise_reply",
+        now - timedelta(minutes=2, seconds=30),
+        ch,
+        guild,
+        reference=SimpleNamespace(message_id=other.id),
+    )
+    r2 = FakeMessage(
+        405,
+        a,
+        "r2",
+        now - timedelta(minutes=2),
+        ch,
+        guild,
+        reference=SimpleNamespace(message_id=r1.id),
+    )
+    trigger = FakeMessage(
+        406,
+        b,
+        "r3",
+        now - timedelta(minutes=1),
+        ch,
+        guild,
+        reference=SimpleNamespace(message_id=r2.id),
+    )
     items.extend([root, other, r1, noise_reply, r2, trigger])
     trigger.mentions = [SimpleNamespace(id=bot.user.id)]
 
@@ -264,8 +322,24 @@ async def test_age_cap_excludes_old_except_root():
     ch = FakeChannel(1005, items)
     # Root very old
     root = FakeMessage(601, a, "root", now - timedelta(minutes=10000), ch, guild)
-    r1 = FakeMessage(602, a, "r1", now - timedelta(minutes=10), ch, guild, reference=SimpleNamespace(message_id=root.id))
-    trigger = FakeMessage(603, a, "r2", now - timedelta(minutes=5), ch, guild, reference=SimpleNamespace(message_id=r1.id))
+    r1 = FakeMessage(
+        602,
+        a,
+        "r1",
+        now - timedelta(minutes=10),
+        ch,
+        guild,
+        reference=SimpleNamespace(message_id=root.id),
+    )
+    trigger = FakeMessage(
+        603,
+        a,
+        "r2",
+        now - timedelta(minutes=5),
+        ch,
+        guild,
+        reference=SimpleNamespace(message_id=r1.id),
+    )
     items.extend([root, r1, trigger])
     trigger.mentions = [SimpleNamespace(id=bot.user.id)]
 
@@ -289,9 +363,27 @@ async def test_bot_filter_excludes_others_keeps_ours():
     ch = FakeChannel(1006, items)
 
     root = FakeMessage(701, a, "root", now - timedelta(minutes=3), ch, guild)
-    bot_msg = FakeMessage(702, other_bot, "bot noise", now - timedelta(minutes=2), ch, guild, reference=SimpleNamespace(message_id=root.id))
-    ours = FakeMessage(703, our_bot_author, "bot reply", now - timedelta(minutes=1), ch, guild, reference=SimpleNamespace(message_id=root.id))
-    trigger = FakeMessage(704, a, "ok", now, ch, guild, reference=SimpleNamespace(message_id=ours.id))
+    bot_msg = FakeMessage(
+        702,
+        other_bot,
+        "bot noise",
+        now - timedelta(minutes=2),
+        ch,
+        guild,
+        reference=SimpleNamespace(message_id=root.id),
+    )
+    ours = FakeMessage(
+        703,
+        our_bot_author,
+        "bot reply",
+        now - timedelta(minutes=1),
+        ch,
+        guild,
+        reference=SimpleNamespace(message_id=root.id),
+    )
+    trigger = FakeMessage(
+        704, a, "ok", now, ch, guild, reference=SimpleNamespace(message_id=ours.id)
+    )
     items.extend([root, bot_msg, ours, trigger])
     trigger.mentions = [our_bot_user]
 
@@ -318,7 +410,9 @@ async def test_timeout_fallback_clean():
     items = []
     ch = SlowChannel(1007, items)
     root = FakeMessage(801, a, "root", now - timedelta(minutes=3), ch, guild)
-    trigger = FakeMessage(803, a, "ok", now, ch, guild, reference=SimpleNamespace(message_id=root.id))
+    trigger = FakeMessage(
+        803, a, "ok", now, ch, guild, reference=SimpleNamespace(message_id=root.id)
+    )
     items.extend([root, trigger])
     trigger.mentions = [SimpleNamespace(id=bot.user.id)]
 
@@ -339,7 +433,9 @@ async def test_merge_dedup_within_block():
     ch = FakeChannel(1008, items, channel_type=discord.ChannelType.public_thread)
 
     m0 = FakeMessage(901, a, "m0", now - timedelta(minutes=2), ch, guild)
-    dup_m0 = FakeMessage(901, a, "m0", now - timedelta(minutes=1, seconds=30), ch, guild)
+    dup_m0 = FakeMessage(
+        901, a, "m0", now - timedelta(minutes=1, seconds=30), ch, guild
+    )
     m1 = FakeMessage(902, a, "m1", now - timedelta(minutes=1), ch, guild)
     items.extend([m0, dup_m0, m1])
     trigger = m1

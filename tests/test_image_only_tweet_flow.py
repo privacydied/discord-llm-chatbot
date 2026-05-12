@@ -3,10 +3,13 @@ Comprehensive test suite for Twitter image-only tweet processing flow.
 
 Tests cover unit, integration, and fault-injection scenarios.
 """
+
 import pytest
 
 # Skip all tests in this module — they require live X/Twitter API and vision service integration
-pytestmark = pytest.mark.skip(reason="Requires live X/Twitter API and vision service integration")
+pytestmark = pytest.mark.skip(
+    reason="Requires live X/Twitter API and vision service integration"
+)
 
 import asyncio
 from unittest.mock import Mock, AsyncMock, patch
@@ -234,7 +237,9 @@ class TestImageOnlyTweetFlow:
                 "id": "2016825738041630720",
                 "title": "The TESTOSTERONE Kabbalah",
                 "preview_text": "They control everything.",
-                "content": {"blocks": [{"text": "Cellular energy production and metabolism."}]},
+                "content": {
+                    "blocks": [{"text": "Cellular energy production and metabolism."}]
+                },
             },
         }
 

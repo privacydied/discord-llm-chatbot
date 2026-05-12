@@ -196,9 +196,7 @@ def validate_url(
         pass  # not a literal IP — will need DNS resolution to be thorough
     else:
         if _is_forbidden_ip_addr(ip):
-            raise UrlSafetyError(
-                f"URL targets forbidden IP address: {ip}"
-            )
+            raise UrlSafetyError(f"URL targets forbidden IP address: {ip}")
 
     return scheme, hostname
 
@@ -215,9 +213,7 @@ async def validate_url_with_dns(url: str) -> tuple[str, str]:
         except ValueError:
             continue
         if _is_forbidden_ip_addr(ip):
-            raise UrlSafetyError(
-                f"Hostname {hostname} resolves to forbidden IP: {ip}"
-            )
+            raise UrlSafetyError(f"Hostname {hostname} resolves to forbidden IP: {ip}")
 
     return scheme, hostname
 

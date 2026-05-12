@@ -47,7 +47,7 @@ from bot.memory.thread_tail import (
     _is_thread_channel,
 )
 
-      # Discord hard limit is 2000; use 1950 to leave headroom for mentions/overhead [REH][PA]
+# Discord hard limit is 2000; use 1950 to leave headroom for mentions/overhead [REH][PA]
 _DISCORD_MAX_CONTENT_LEN = 1950
 
 if TYPE_CHECKING:
@@ -156,7 +156,9 @@ class LLMBot(commands.Bot):
         self.background_tasks = []
         self._is_ready = asyncio.Event()
         self.system_prompts = {}
-        self._processed_messages = collections.OrderedDict()  # BUGFIX 25: OrderedDict for FIFO dedup eviction
+        self._processed_messages = (
+            collections.OrderedDict()
+        )  # BUGFIX 25: OrderedDict for FIFO dedup eviction
         self._dispatch_lock = (
             asyncio.Lock()
         )  # Global lock for processed messages tracking
@@ -166,7 +168,9 @@ class LLMBot(commands.Bot):
         # Track active long-running tasks for cancellation
         self._active_long_running_tasks: Dict[str, asyncio.Task] = {}  # task_id -> task
         self._task_metadata: Dict[str, Dict[str, Any]] = {}  # task_id -> metadata
-        self._task_lock = asyncio.Lock()  # [BUGFIX] prevent callback race on task tracking dicts
+        self._task_lock = (
+            asyncio.Lock()
+        )  # [BUGFIX] prevent callback race on task tracking dicts
         self._typing_suppressed_until: Dict[int, float] = {}
 
         # Idempotency guard to prevent duplicate initialization [DRY][REH]
@@ -286,7 +290,9 @@ class LLMBot(commands.Bot):
             response = getattr(error, "response", None)
             headers = getattr(response, "headers", None)
             if headers:
-                raw_retry_after = headers.get("retry-after") or headers.get("Retry-After")
+                raw_retry_after = headers.get("retry-after") or headers.get(
+                    "Retry-After"
+                )
                 if raw_retry_after is not None:
                     try:
                         retry_after = float(raw_retry_after)
@@ -313,7 +319,10 @@ class LLMBot(commands.Bot):
             try:
                 return await func()
             except discord.HTTPException as exc:
-                if not self._is_retryable_discord_http_error(exc) or attempt >= attempts:
+                if (
+                    not self._is_retryable_discord_http_error(exc)
+                    or attempt >= attempts
+                ):
                     raise
 
                 delay = self._discord_retry_delay(exc, attempt)
@@ -330,7 +339,11 @@ class LLMBot(commands.Bot):
 
     @asynccontextmanager
     async def _optional_typing(
-        self, channel, *, base_extra: Optional[Dict[str, Any]] = None, enabled: bool = True
+        self,
+        channel,
+        *,
+        base_extra: Optional[Dict[str, Any]] = None,
+        enabled: bool = True,
     ):
         """Enter typing() when available, but don't fail the send path if it errors."""
         if not enabled:
@@ -675,8 +688,12 @@ class LLMBot(commands.Bot):
                                                     and vo.gateway.adapter is not None
                                                 ):
                                                     adapter = vo.gateway.adapter
-                                                    if hasattr(adapter, "update_config"):
-                                                        adapter.update_config(self.config)
+                                                    if hasattr(
+                                                        adapter, "update_config"
+                                                    ):
+                                                        adapter.update_config(
+                                                            self.config
+                                                        )
                                                     else:
                                                         adapter.config = self.config
                                         self.logger.info(
@@ -777,8 +794,12 @@ class LLMBot(commands.Bot):
                                                     and vo.gateway.adapter is not None
                                                 ):
                                                     adapter = vo.gateway.adapter
-                                                    if hasattr(adapter, "update_config"):
-                                                        adapter.update_config(self.config)
+                                                    if hasattr(
+                                                        adapter, "update_config"
+                                                    ):
+                                                        adapter.update_config(
+                                                            self.config
+                                                        )
                                                     else:
                                                         adapter.config = self.config
                                         self.logger.info(
@@ -931,9 +952,15 @@ class LLMBot(commands.Bot):
                         enqueue_inferred_memory(
                             user_id=str(message.author.id),
                             text=message.content,
-                            guild_id=str(message.guild.id) if getattr(message, "guild", None) else None,
-                            channel_id=str(message.channel.id) if getattr(message, "channel", None) else None,
-                            thread_id=str(message.channel.id) if isinstance(message.channel, discord.Thread) else None,
+                            guild_id=str(message.guild.id)
+                            if getattr(message, "guild", None)
+                            else None,
+                            channel_id=str(message.channel.id)
+                            if getattr(message, "channel", None)
+                            else None,
+                            thread_id=str(message.channel.id)
+                            if isinstance(message.channel, discord.Thread)
+                            else None,
                             source_message_id=str(message.id),
                             metadata={"source": "bot_message_pipeline"},
                         )
@@ -1332,7 +1359,7 @@ class LLMBot(commands.Bot):
         from bot.public_output import sanitize_public_text
 
         label = sanitize_public_text(label) or "Processing"
-        color = 0x2ECC71 if done else 0x3498DB # green when done, blue otherwise
+        color = 0x2ECC71 if done else 0x3498DB  # green when done, blue otherwise
         embed = discord.Embed(
             title=label if style == "compact" else "Processing", color=color
         )
@@ -1346,7 +1373,10 @@ class LLMBot(commands.Bot):
             embed.description = "\n".join(desc_lines)
         else:
             if step and max_steps and not done:
-                embed.set_footer(text=sanitize_public_text(f"{step}/{max_steps}") or f"{step}/{max_steps}")
+                embed.set_footer(
+                    text=sanitize_public_text(f"{step}/{max_steps}")
+                    or f"{step}/{max_steps}"
+                )
             if done:
                 embed.set_footer(text=sanitize_public_text("done") or "done")
         return embed
@@ -1641,7 +1671,10 @@ class LLMBot(commands.Bot):
         )
 
         typing_enabled = bool(content.strip()) and (
-            needs_chunking or embed_count > 0 or file_count > 0 or len(content.strip()) >= 30
+            needs_chunking
+            or embed_count > 0
+            or file_count > 0
+            or len(content.strip()) >= 30
         )
 
         async with self._optional_typing(
@@ -2283,20 +2316,20 @@ class LLMBot(commands.Bot):
                 if self.enhanced_context_manager and sent:
                     await self.enhanced_context_manager.append_message(sent, role="bot")
             except discord.errors.HTTPException as e:
-                    try:
-                        self.logger.error(
-                            f"dispatch:error | part={part_idx}/{total_parts} code={e.code} status={getattr(e, 'status', 'n/a')} details={str(e)}",
-                            extra={
-                                **base_extra,
-                                "event": "dispatch.send.error",
-                                "part": part_idx,
-                                "parts": total_parts,
-                            },
-                            exc_info=True,
-                        )
-                    except Exception:
-                        pass
-                    break
+                try:
+                    self.logger.error(
+                        f"dispatch:error | part={part_idx}/{total_parts} code={e.code} status={getattr(e, 'status', 'n/a')} details={str(e)}",
+                        extra={
+                            **base_extra,
+                            "event": "dispatch.send.error",
+                            "part": part_idx,
+                            "parts": total_parts,
+                        },
+                        exc_info=True,
+                    )
+                except Exception:
+                    pass
+                break
 
         return last_sent
 
@@ -2581,12 +2614,19 @@ class LLMBot(commands.Bot):
         # Best-effort archive enqueue for guild messages; never block the main flow.
         try:
             archive_service = getattr(self, "archive_service", None)
-            if archive_service is not None and getattr(archive_service, "enabled", True):
+            if archive_service is not None and getattr(
+                archive_service, "enabled", True
+            ):
+
                 async def _archive_enqueue() -> None:
                     await archive_service.enqueue_live_message(message)
 
-                task = asyncio.create_task(_archive_enqueue(), name=f"server_archive_enqueue_{message.id}")
-                task.add_done_callback(lambda t: t.exception() if t.done() and not t.cancelled() else None)
+                task = asyncio.create_task(
+                    _archive_enqueue(), name=f"server_archive_enqueue_{message.id}"
+                )
+                task.add_done_callback(
+                    lambda t: t.exception() if t.done() and not t.cancelled() else None
+                )
         except Exception:
             self.logger.debug(f"archive_enqueue_failed | msg_id:{message.id}")
 
@@ -3138,6 +3178,7 @@ class LLMBot(commands.Bot):
 
             # Close web extraction service
             from bot.web_extraction_service import web_extractor
+
             await web_extractor.aclose()
 
             # Close the database connection

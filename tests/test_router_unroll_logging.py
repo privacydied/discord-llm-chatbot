@@ -40,7 +40,9 @@ async def test_unroll_logging_ok(monkeypatch, caplog):
     monkeypatch.setattr("bot.url_classifier.classify_url", fake_classify_url)
 
     # Return a successful unroll context
-    async def fake_unroll(url: str, *, timeout_s: float, max_tweets: int, max_chars: int):
+    async def fake_unroll(
+        url: str, *, timeout_s: float, max_tweets: int, max_chars: int
+    ):
         ctx = SimpleNamespace(
             joined_text="Thread joined text", tweet_count=3, canonical_url=url
         )
@@ -51,7 +53,9 @@ async def test_unroll_logging_ok(monkeypatch, caplog):
     bot = DummyBot({"TWITTER_UNROLL_ENABLED": True})
     r = Router(bot)
 
-    item = InputItem(source_type="url", payload="https://x.com/a/status/1", order_index=0)
+    item = InputItem(
+        source_type="url", payload="https://x.com/a/status/1", order_index=0
+    )
     result = await r._handle_general_url(item)
 
     # Ensure we returned the joined thread text
@@ -78,7 +82,9 @@ async def test_unroll_logging_fallback(monkeypatch, caplog):
     monkeypatch.setattr(router_mod, "process_url", fake_process_url)
 
     # Return a fallback with reason
-    async def fake_unroll(url: str, *, timeout_s: float, max_tweets: int, max_chars: int):
+    async def fake_unroll(
+        url: str, *, timeout_s: float, max_tweets: int, max_chars: int
+    ):
         return None, "dom_mismatch"
 
     monkeypatch.setattr(router_mod, "unroll_author_thread", fake_unroll)
@@ -86,11 +92,17 @@ async def test_unroll_logging_fallback(monkeypatch, caplog):
     bot = DummyBot({"TWITTER_UNROLL_ENABLED": True})
     r = Router(bot)
 
-    item = InputItem(source_type="url", payload="https://x.com/a/status/1", order_index=0)
+    item = InputItem(
+        source_type="url", payload="https://x.com/a/status/1", order_index=0
+    )
     _ = await r._handle_general_url(item)
 
     # Verify log breadcrumbs: start and fallback with reason present
-    fallback_recs = [rec for rec in caplog.records if getattr(rec, "event", None) == "unroll_fallback"]
+    fallback_recs = [
+        rec
+        for rec in caplog.records
+        if getattr(rec, "event", None) == "unroll_fallback"
+    ]
     assert any(getattr(rec, "event", None) == "unroll_start" for rec in caplog.records)
     assert fallback_recs, "Expected an unroll_fallback log record"
     assert any(
@@ -98,4 +110,3 @@ async def test_unroll_logging_fallback(monkeypatch, caplog):
         and getattr(rec, "detail", {}).get("reason") == "dom_mismatch"
         for rec in fallback_recs
     )
-

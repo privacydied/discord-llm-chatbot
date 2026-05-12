@@ -5,8 +5,12 @@ from bot.router_components.input_harvest import is_direct_image_url
 
 
 def test_direct_image_url_detects_twitter_format_query() -> None:
-    assert is_direct_image_url("https://pbs.twimg.com/media/ABC123?format=jpg&name=large")
-    assert is_direct_image_url("https://pbs.twimg.com/media/ABC123?format=png&name=small")
+    assert is_direct_image_url(
+        "https://pbs.twimg.com/media/ABC123?format=jpg&name=large"
+    )
+    assert is_direct_image_url(
+        "https://pbs.twimg.com/media/ABC123?format=png&name=small"
+    )
 
 
 @pytest.mark.asyncio

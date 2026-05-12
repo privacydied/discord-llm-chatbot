@@ -26,7 +26,9 @@ async def test_resolve_reference_message_no_reference() -> None:
 async def test_resolve_reference_message_uses_resolved() -> None:
     router = object.__new__(Router)
     resolved = SimpleNamespace(id=20)
-    message = SimpleNamespace(reference=SimpleNamespace(resolved=resolved, message_id=30))
+    message = SimpleNamespace(
+        reference=SimpleNamespace(resolved=resolved, message_id=30)
+    )
     out = await router._resolve_reference_message(message)
     assert out is resolved
 

@@ -59,9 +59,7 @@ def sanitize_metadata(
     return sanitized
 
 
-def build_media_context(
-    transcription: str, metadata: Dict[str, Any], url: str
-) -> str:
+def build_media_context(transcription: str, metadata: Dict[str, Any], url: str) -> str:
     """Build enriched LLM context from transcription + metadata."""
     context_parts = []
 

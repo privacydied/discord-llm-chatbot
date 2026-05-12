@@ -9,7 +9,9 @@ class BrokenHttpxWrapperLikeClient:
 
     async def aclose(self) -> None:
         self.closed_attempted = True
-        raise AttributeError("'AsyncHttpxClientWrapper' object has no attribute '_transport'")
+        raise AttributeError(
+            "'AsyncHttpxClientWrapper' object has no attribute '_transport'"
+        )
 
 
 class CloseOnlyClient:

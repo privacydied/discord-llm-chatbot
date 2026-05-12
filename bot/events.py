@@ -116,7 +116,11 @@ class BotEventHandler(commands.Cog):
                         audio_path, mime_type = gen_res
                     else:
                         audio_path = gen_res
-                        mime_type = "audio/ogg" if str(audio_path).endswith(".ogg") else "audio/wav"
+                        mime_type = (
+                            "audio/ogg"
+                            if str(audio_path).endswith(".ogg")
+                            else "audio/wav"
+                        )
 
                     if audio_path and Path(audio_path).exists():
                         # Send only voice response when TTS is active

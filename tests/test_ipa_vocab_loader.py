@@ -10,7 +10,9 @@ def test_normalize_ipa_rewrites_to_official_symbols(monkeypatch):
         "θ": 4,
     }
 
-    monkeypatch.setattr(ipa_vocab_kokoro_v1, "PHONEME_TO_ID", sample_vocab, raising=False)
+    monkeypatch.setattr(
+        ipa_vocab_kokoro_v1, "PHONEME_TO_ID", sample_vocab, raising=False
+    )
     monkeypatch.setattr(ipa_vocab_loader, "PHONEME_TO_ID", sample_vocab, raising=False)
     monkeypatch.setattr(ipa_vocab_loader, "IS_PLACEHOLDER", False, raising=False)
 

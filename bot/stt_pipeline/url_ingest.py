@@ -73,7 +73,9 @@ async def prepare_url_download_for_stt(
     ram_guard: Any,
     fetcher: Callable[..., Awaitable[Any]],
     ingest_error_type: Any,
-    ensure_ready_or_raise: Callable[..., Awaitable[None]] = ensure_manager_ready_or_raise,
+    ensure_ready_or_raise: Callable[
+        ..., Awaitable[None]
+    ] = ensure_manager_ready_or_raise,
     fetch_or_raise: Callable[..., Awaitable[Any]] = fetch_url_audio_or_raise,
 ) -> Any:
     """Run canonical URL download preparation for STT URL entrypoint."""

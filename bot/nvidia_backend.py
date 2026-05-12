@@ -75,7 +75,9 @@ async def generate_nvidia_response(
     raw_ladder = os.getenv("TEXT_FALLBACK_MODELS")
     if raw_ladder:
         first_entry = str(raw_ladder).strip().strip('"').split(",", 1)[0].strip()
-        ladder_head = first_entry.split("|", 1)[1].strip() if "|" in first_entry else first_entry
+        ladder_head = (
+            first_entry.split("|", 1)[1].strip() if "|" in first_entry else first_entry
+        )
 
     model = (
         ladder_head
@@ -84,7 +86,9 @@ async def generate_nvidia_response(
         or "meta/llama3-70b-instruct"
     )
 
-    logger.info(f"🚀 Using NVIDIA NIM backend with configured model/ladder head: {model}")
+    logger.info(
+        f"🚀 Using NVIDIA NIM backend with configured model/ladder head: {model}"
+    )
 
     try:
         # Delegate to OpenAI backend - it will use NVIDIA configuration

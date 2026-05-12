@@ -10,17 +10,27 @@ from pathlib import Path
 
 def _decode_ogg_to_pcm(ogg_path: Path) -> tuple[bytes, int, int, int]:
     """Decode OGG/Opus to raw PCM using ffmpeg.
-    
+
     Returns (raw_pcm_bytes, n_channels, sample_width, n_frames).
     [REH]
     """
     # Decode to 16-bit signed LE mono WAV in memory
     cmd = [
-        "ffmpeg", "-hide_banner", "-loglevel", "error",
-        "-i", str(ogg_path),
-        "-f", "s16le", "-acodec", "pcm_s16le",
-        "-ac", "1", "-ar", "48000",
-        "-"
+        "ffmpeg",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-i",
+        str(ogg_path),
+        "-f",
+        "s16le",
+        "-acodec",
+        "pcm_s16le",
+        "-ac",
+        "1",
+        "-ar",
+        "48000",
+        "-",
     ]
     try:
         result = subprocess.run(cmd, capture_output=True, timeout=30)

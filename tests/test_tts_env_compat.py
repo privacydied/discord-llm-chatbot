@@ -116,8 +116,8 @@ class TestTokenizerSelection(unittest.TestCase):
 
         # Mock external dependencies
         mock_which.return_value = "/usr/bin/espeak"  # espeak is available
-        mock_find_spec.side_effect = (
-            lambda name: MagicMock() if name == "phonemizer" else None
+        mock_find_spec.side_effect = lambda name: (
+            MagicMock() if name == "phonemizer" else None
         )
 
         # Create KokoroDirect with mocked tokenizer

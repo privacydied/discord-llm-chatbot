@@ -116,7 +116,7 @@ async def setup_commands(bot) -> None:
         module_imports = {
             "test_cmds": "TestCommands",
             "memory_cmds": "MemoryCommands",
-        "memory_extended_cmds": "ExtendedMemoryCommands",
+            "memory_extended_cmds": "ExtendedMemoryCommands",
             "tts_cmds": "TTSCommands",
             "config_commands": "ConfigCommands",
             "janitor_commands": "JanitorCommands",

@@ -680,14 +680,17 @@ class AdminAlertCommands(commands.Cog):
         # Allow reactions on composer, guild selection, or channel selection messages
         valid_message_ids = [
             session.composer_message_id,
-            getattr(session, 'selection_message_id', None),
-            getattr(session, 'channel_message_id', None)
+            getattr(session, "selection_message_id", None),
+            getattr(session, "channel_message_id", None),
         ]
         if reaction.message.id not in [m for m in valid_message_ids if m]:
             return
 
         # Ready gate: ignore reactions until composer is fully initialized (only for composer message)
-        if session.composer_message_id == reaction.message.id and not session.composer_ready:
+        if (
+            session.composer_message_id == reaction.message.id
+            and not session.composer_ready
+        ):
             try:
                 await reaction.remove(user)
             except Exception:
@@ -709,7 +712,7 @@ class AdminAlertCommands(commands.Cog):
                 await self._handle_cancel(reaction, user, session)
 
             # Guild selection navigation (on selection_message_id)
-            elif reaction.message.id == getattr(session, 'selection_message_id', None):
+            elif reaction.message.id == getattr(session, "selection_message_id", None):
                 channels = await self.alert_manager.get_accessible_channels()
                 if not channels:
                     return
@@ -726,27 +729,31 @@ class AdminAlertCommands(commands.Cog):
                 # Rebuild sorted_guilds from current guild_map
                 sorted_guilds = sorted(
                     guild_map.keys(),
-                    key=lambda g: (
-                        next((c.guild.name.lower() for c in channels if c.guild.id == g), "")
-                    )
+                    key=lambda g: next(
+                        (c.guild.name.lower() for c in channels if c.guild.id == g), ""
+                    ),
                 )
                 session.guilds_list = sorted_guilds
 
                 if emoji == "⬆️" and session.guild_page > 0:
                     session.guild_page -= 1
-                    await self._show_guild_selection(user, session, guild_map, sorted_guilds)
+                    await self._show_guild_selection(
+                        user, session, guild_map, sorted_guilds
+                    )
                 elif emoji == "⬇️":
                     total_pages = (len(sorted_guilds) + 7) // 8
                     if session.guild_page < total_pages - 1:
                         session.guild_page += 1
-                        await self._show_guild_selection(user, session, guild_map, sorted_guilds)
+                        await self._show_guild_selection(
+                            user, session, guild_map, sorted_guilds
+                        )
                 try:
                     await reaction.remove(user)
                 except:
                     pass
 
             # Channel selection navigation (on channel_message_id)
-            elif reaction.message.id == getattr(session, 'channel_message_id', None):
+            elif reaction.message.id == getattr(session, "channel_message_id", None):
                 channels = await self.alert_manager.get_accessible_channels()
                 guild_map: Dict[int, List[discord.TextChannel]] = {}
                 for ch in channels:
@@ -782,7 +789,9 @@ class AdminAlertCommands(commands.Cog):
                     except Exception:
                         pass
                     sorted_guilds = session.guilds_list if session.guilds_list else []
-                    await self._show_guild_selection(user, session, guild_map, sorted_guilds)
+                    await self._show_guild_selection(
+                        user, session, guild_map, sorted_guilds
+                    )
                 elif emoji == "❌":
                     await self._handle_cancel(reaction, user, session)
                 try:
@@ -866,7 +875,9 @@ class AdminAlertCommands(commands.Cog):
                         guild_map[gid].sort(key=lambda c: (c.position, c.name.lower()))
                     # Reuse stored guilds_list
                     sorted_guilds = session.guilds_list if session.guilds_list else []
-                    await self._show_guild_selection(message.author, session, guild_map, sorted_guilds)
+                    await self._show_guild_selection(
+                        message.author, session, guild_map, sorted_guilds
+                    )
                     return
 
                 indices = self._extract_indices(content)
@@ -897,8 +908,9 @@ class AdminAlertCommands(commands.Cog):
                     sorted_guilds = sorted(
                         guild_map.keys(),
                         key=lambda g: next(
-                            (c.guild.name.lower() for c in channels if c.guild.id == g), ""
-                        )
+                            (c.guild.name.lower() for c in channels if c.guild.id == g),
+                            "",
+                        ),
                     )
                     session.guilds_list = sorted_guilds
 
@@ -928,7 +940,9 @@ class AdminAlertCommands(commands.Cog):
                 # Case 2: Guild selected - interpret as channel selection
                 guild_channels = guild_map.get(session.selected_guild_id, [])
                 if not guild_channels:
-                    await message.channel.send("❌ Could not find channels for that guild.")
+                    await message.channel.send(
+                        "❌ Could not find channels for that guild."
+                    )
                     return
 
                 selected: List[AlertDestination] = []
@@ -1096,9 +1110,9 @@ class AdminAlertCommands(commands.Cog):
         # Sort guilds by name (case-insensitive)
         sorted_guilds = sorted(
             guild_map.keys(),
-            key=lambda g: (
-                next((c.guild.name.lower() for c in channels if c.guild.id == g), "")
-            )
+            key=lambda g: next(
+                (c.guild.name.lower() for c in channels if c.guild.id == g), ""
+            ),
         )
         session.guilds_list = sorted_guilds
 
@@ -1119,8 +1133,10 @@ class AdminAlertCommands(commands.Cog):
         """Display paginated guild list with scroll indicators."""
         GUILDS_PER_PAGE = 8
 
-        page = getattr(session, 'guild_page', 0)
-        total_pages = max(1, (len(sorted_guilds) + GUILDS_PER_PAGE - 1) // GUILDS_PER_PAGE)
+        page = getattr(session, "guild_page", 0)
+        total_pages = max(
+            1, (len(sorted_guilds) + GUILDS_PER_PAGE - 1) // GUILDS_PER_PAGE
+        )
         page = max(0, min(page, total_pages - 1))
         session.guild_page = page
 
@@ -1148,10 +1164,12 @@ class AdminAlertCommands(commands.Cog):
 
         nav_text = "⬆️ Previous | ⬇️ Next | ❌ Cancel"
         embed.add_field(name="Navigation", value=nav_text, inline=False)
-        embed.set_footer(text=f"Total: {len(sorted_guilds)} guilds | Reply with a number (1-{len(sorted_guilds)})")
+        embed.set_footer(
+            text=f"Total: {len(sorted_guilds)} guilds | Reply with a number (1-{len(sorted_guilds)})"
+        )
 
         # Edit existing message if available, otherwise send new
-        existing_msg_id = getattr(session, 'selection_message_id', None)
+        existing_msg_id = getattr(session, "selection_message_id", None)
         if existing_msg_id:
             try:
                 existing_msg = await user.fetch_message(existing_msg_id)
@@ -1186,8 +1204,10 @@ class AdminAlertCommands(commands.Cog):
 
         guild_name = channels[0].guild.name if channels[0].guild else "Unknown Guild"
 
-        page = getattr(session, 'channel_page', 0)
-        total_pages = max(1, (len(channels) + CHANNELS_PER_PAGE - 1) // CHANNELS_PER_PAGE)
+        page = getattr(session, "channel_page", 0)
+        total_pages = max(
+            1, (len(channels) + CHANNELS_PER_PAGE - 1) // CHANNELS_PER_PAGE
+        )
         page = max(0, min(page, total_pages - 1))
         session.channel_page = page
         session.selected_guild_id = guild_id

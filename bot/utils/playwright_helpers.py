@@ -29,9 +29,9 @@ def _pw_server_url() -> Optional[str]:
         return None
     # Normalise http(s):// to ws:// -- Playwright servers speak WS, not CDP.
     if raw.startswith("http://"):
-        raw = "ws://" + raw[len("http://"):]
+        raw = "ws://" + raw[len("http://") :]
     elif raw.startswith("https://"):
-        raw = "wss://" + raw[len("https://"):]
+        raw = "wss://" + raw[len("https://") :]
     elif not raw.startswith("ws"):
         # Assume bare host:port, prefix with ws://
         raw = "ws://" + raw

@@ -26,7 +26,9 @@ def _is_private_hostname(hostname: str) -> bool:
         return True
     try:
         # Resolve hostname to IP and check if it's private
-        addr_infos = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+        addr_infos = socket.getaddrinfo(
+            hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM
+        )
         for family, _type, _proto, _canonname, sockaddr in addr_infos:
             ip_str = sockaddr[0]
             ip = ipaddress.ip_address(ip_str)
@@ -93,7 +95,9 @@ async def external_screenshot(url: str) -> str | None:
         parsed_for_ssrf = urlparse(url)
         ssrf_hostname = parsed_for_ssrf.hostname or ""
         if _is_private_hostname(ssrf_hostname):
-            logger.warning(f"⚠️ Skipping screenshot: private/internal IP target: {ssrf_hostname}")
+            logger.warning(
+                f"⚠️ Skipping screenshot: private/internal IP target: {ssrf_hostname}"
+            )
             return None
     except Exception:
         logger.warning("⚠️ Skipping screenshot: SSRF check failed")
@@ -157,11 +161,11 @@ async def external_screenshot(url: str) -> str | None:
 
     logger.debug(f"⏱️ Using screenshot delay: {delay}ms")
     # Redact API key from logged URL to prevent secret leakage [SFT]
-    _redacted_url = re.sub(r'([?&]key=)[^&]+', r'\1[REDACTED]', api_url)
+    _redacted_url = re.sub(r"([?&]key=)[^&]+", r"\1[REDACTED]", api_url)
     logger.debug(f"🔗 Final API URL: {_redacted_url}")
 
     logger.info(
-    f"📷 Requesting screenshot from {api_url_base} for {normalized_url} [{dimension}, {format_type}]"
+        f"📷 Requesting screenshot from {api_url_base} for {normalized_url} [{dimension}, {format_type}]"
     )
 
     try:
@@ -260,7 +264,9 @@ async def _playwright_screenshot(url: str) -> str | None:
         async with async_playwright() as p:
             browser = await _pw_connect_browser(p)
             if browser is None:
-                logger.error("No browser available for screenshot (remote and local both failed)")
+                logger.error(
+                    "No browser available for screenshot (remote and local both failed)"
+                )
                 return None
             try:
                 context = await browser.new_context(

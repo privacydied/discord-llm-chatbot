@@ -20,26 +20,34 @@ logger = get_logger(__name__)
 try:
     from .hear import hear_infer_from_url
 except Exception:  # pragma: no cover - compatibility fallback
+
     async def hear_infer_from_url(*_args, **_kwargs):  # type: ignore[override]
         raise RuntimeError("hear_infer_from_url unavailable")
+
 
 try:
     from .brain import brain_infer
 except Exception:  # pragma: no cover - compatibility fallback
+
     async def brain_infer(*_args, **_kwargs):  # type: ignore[override]
         raise RuntimeError("brain_infer unavailable")
+
 
 try:
     from .contextual_brain import contextual_brain_infer_simple
 except Exception:  # pragma: no cover - compatibility fallback
+
     async def contextual_brain_infer_simple(*_args, **_kwargs):  # type: ignore[override]
         raise RuntimeError("contextual_brain_infer_simple unavailable")
+
 
 try:
     from .see import see_infer
 except Exception:  # pragma: no cover - compatibility fallback
+
     async def see_infer(*_args, **_kwargs):  # type: ignore[override]
         raise RuntimeError("see_infer unavailable")
+
 
 # Configuration
 MAX_CONCURRENT_MEDIA_DOWNLOADS = int(os.getenv("MEDIA_MAX_CONCURRENT", "2"))
@@ -571,10 +579,9 @@ class MediaIngestionManager:
                     "Screenshot available at: ", ""
                 ).strip()
 
-                prompt = (
-                    (getattr(self.bot, "system_prompts", {}) or {}).get("VL_PROMPT_FILE")
-                    or "Describe this image based on the content of the URL."
-                )
+                prompt = (getattr(self.bot, "system_prompts", {}) or {}).get(
+                    "VL_PROMPT_FILE"
+                ) or "Describe this image based on the content of the URL."
                 vision_response = await see_infer(
                     image_path=screenshot_path, prompt=prompt
                 )

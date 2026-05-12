@@ -15,7 +15,9 @@ def _mk_message(embeds=None):
     return types.SimpleNamespace(attachments=[], embeds=embeds or [])
 
 
-def test_collect_image_urls_prefers_thumbnail_proxy_over_thumbnail_url_when_no_image() -> None:
+def test_collect_image_urls_prefers_thumbnail_proxy_over_thumbnail_url_when_no_image() -> (
+    None
+):
     msg = _mk_message(
         embeds=[
             _mk_embed(

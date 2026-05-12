@@ -17,7 +17,7 @@ from rich.logging import RichHandler
 from rich.console import Console
 from rich.panel import Panel
 
-from bot.enhanced_retry import get_retry_manager, ProviderConfig
+from bot.enhanced_retry import ProviderConfig
 
 ICON_BY_LEVEL = {
     "DEBUG": "🔎",

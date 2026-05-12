@@ -1,7 +1,6 @@
 """Tests for STT grounding instructions to prevent "I can't process audio" responses."""
 
 from bot.router_components.compose import format_x_tweet_with_transcription
-from bot.evidence import EvidenceBundle
 import re
 
 
@@ -107,7 +106,9 @@ def test_grounding_included_as_instruction_section():
 
     # Should have the instruction section
     assert "[STT Instructions]" in result
-    grounding_match = re.search(r'\[STT Instructions\]\n(.+?)(?=\n\[|$)', result, re.DOTALL)
+    grounding_match = re.search(
+        r"\[STT Instructions\]\n(.+?)(?=\n\[|$)", result, re.DOTALL
+    )
     assert grounding_match is not None
 
 

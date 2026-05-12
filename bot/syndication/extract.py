@@ -49,6 +49,7 @@ def extract_text_and_images_from_syndication(tw: Dict[str, Any]) -> Dict[str, An
       4) High-res: upgrade pbs URLs to name=orig; handle legacy :size suffix.
       5) Dedup: compare by base asset (strip query and :size) while preserving order.
     """
+
     def _extract_article_text(article_node: Dict[str, Any]) -> str:
         if not isinstance(article_node, dict):
             return ""

@@ -6,7 +6,9 @@ Covers the scenarios from the Fix-This-Code prompt.
 import pytest
 
 # Skip — stale tests against refactored router reply/context APIs
-pytestmark = pytest.mark.skip(reason="Stale tests against refactored router reply/context APIs")
+pytestmark = pytest.mark.skip(
+    reason="Stale tests against refactored router reply/context APIs"
+)
 
 from unittest.mock import AsyncMock, MagicMock, patch
 import discord
@@ -60,7 +62,9 @@ class TestReplyTargetResolution:
     """Test reply target resolution logic across different scenarios."""
 
     @pytest.mark.asyncio
-    async def test_reply_plus_mention_minimal_text(self, router, mock_bot, mock_human_author):
+    async def test_reply_plus_mention_minimal_text(
+        self, router, mock_bot, mock_human_author
+    ):
         """Reply + @mention + minimal text ("yo") should target the parent, route to text, no link nag."""
         # Mock parent message
         parent_msg = MagicMock(spec=discord.Message)
@@ -83,10 +87,11 @@ class TestReplyTargetResolution:
         mock_channel.fetch_message = AsyncMock(return_value=parent_msg)
 
         # Mock router dispatch to capture the action
-        with patch.object(router, '_should_process_message', return_value=True), \
-             patch('bot.modality.collect_input_items', return_value=[]), \
-             patch.object(router, '_invoke_text_flow') as mock_invoke:
-
+        with (
+            patch.object(router, "_should_process_message", return_value=True),
+            patch("bot.modality.collect_input_items", return_value=[]),
+            patch.object(router, "_invoke_text_flow") as mock_invoke,
+        ):
             mock_invoke.return_value = BotAction(content="processed")
 
             # Test dispatch
@@ -98,7 +103,9 @@ class TestReplyTargetResolution:
             assert "yo" in args[0][0]  # Content should contain "yo"
 
     @pytest.mark.asyncio
-    async def test_thread_reply_to_newest_human(self, router, mock_bot, mock_human_author, mock_bot_author):
+    async def test_thread_reply_to_newest_human(
+        self, router, mock_bot, mock_human_author, mock_bot_author
+    ):
         """Thread reply should target newest message (or newest human if newest is bot)."""
         # Create thread context
         mock_thread = MagicMock(spec=discord.Thread)
@@ -126,12 +133,16 @@ class TestReplyTargetResolution:
         mock_thread.history.return_value.__aiter__ = lambda: iter([bot_msg, human_msg])
 
         # Mock resolve_thread_reply_target
-        with patch('bot.router.resolve_thread_reply_target') as mock_resolve, \
-             patch('bot.memory.thread_tail.resolve_thread_reply_target', return_value=(human_msg, "latest_human")), \
-             patch.object(router, '_should_process_message', return_value=True), \
-             patch('bot.modality.collect_input_items', return_value=[]), \
-             patch.object(router, '_invoke_text_flow') as mock_invoke:
-
+        with (
+            patch("bot.router.resolve_thread_reply_target") as mock_resolve,
+            patch(
+                "bot.memory.thread_tail.resolve_thread_reply_target",
+                return_value=(human_msg, "latest_human"),
+            ),
+            patch.object(router, "_should_process_message", return_value=True),
+            patch("bot.modality.collect_input_items", return_value=[]),
+            patch.object(router, "_invoke_text_flow") as mock_invoke,
+        ):
             mock_invoke.return_value = BotAction(content="processed")
 
             await router.dispatch_message(thread_msg)
@@ -156,11 +167,12 @@ class TestReplyTargetResolution:
         msg.channel = mock_channel
 
         # Mock as non-thread
-        with patch('bot.memory.thread_tail._is_thread_channel', return_value=False), \
-             patch.object(router, '_should_process_message', return_value=True), \
-             patch('bot.modality.collect_input_items', return_value=[]), \
-             patch.object(router, '_process_multimodal_message_internal') as mock_multi:
-
+        with (
+            patch("bot.memory.thread_tail._is_thread_channel", return_value=False),
+            patch.object(router, "_should_process_message", return_value=True),
+            patch("bot.modality.collect_input_items", return_value=[]),
+            patch.object(router, "_process_multimodal_message_internal") as mock_multi,
+        ):
             mock_multi.return_value = BotAction(content="processed")
 
             # Capture the call
@@ -172,7 +184,9 @@ class TestReplyTargetResolution:
             # We verify it was called, which means the mention was processed
 
     @pytest.mark.asyncio
-    async def test_reply_with_link_harvests_parent(self, router, mock_bot, mock_human_author):
+    async def test_reply_with_link_harvests_parent(
+        self, router, mock_bot, mock_human_author
+    ):
         """Reply to post with link should harvest that link and route correctly."""
         # Mock parent with URL
         parent_msg = MagicMock(spec=discord.Message)
@@ -195,10 +209,11 @@ class TestReplyTargetResolution:
         reply_msg.channel = mock_channel
         mock_channel.fetch_message = AsyncMock(return_value=parent_msg)
 
-        with patch.object(router, '_should_process_message', return_value=True), \
-             patch.object(router, '_process_multimodal_message_internal') as mock_multi, \
-             patch.object(router, '_prioritized_vision_route', return_value=None):
-
+        with (
+            patch.object(router, "_should_process_message", return_value=True),
+            patch.object(router, "_process_multimodal_message_internal") as mock_multi,
+            patch.object(router, "_prioritized_vision_route", return_value=None),
+        ):
             mock_multi.return_value = BotAction(content="processed video")
 
             await router.dispatch_message(reply_msg)
@@ -226,14 +241,18 @@ class TestContextIsolation:
         thread_msg.reference = None
 
         # Mock thread context collection through _resolve_scope_and_target
-        with patch('bot.memory.thread_tail._is_thread_channel', return_value=True), \
-             patch('bot.router.collect_thread_tail_context') as mock_collect, \
-             patch('bot.router.resolve_thread_reply_target') as mock_resolve, \
-             patch('bot.memory.mention_context.maybe_build_mention_context', return_value=None), \
-             patch.object(router, '_should_process_message', return_value=True), \
-             patch('bot.modality.collect_input_items', return_value=[]), \
-             patch.object(router, '_process_multimodal_message_internal') as mock_multi:
-
+        with (
+            patch("bot.memory.thread_tail._is_thread_channel", return_value=True),
+            patch("bot.router.collect_thread_tail_context") as mock_collect,
+            patch("bot.router.resolve_thread_reply_target") as mock_resolve,
+            patch(
+                "bot.memory.mention_context.maybe_build_mention_context",
+                return_value=None,
+            ),
+            patch.object(router, "_should_process_message", return_value=True),
+            patch("bot.modality.collect_input_items", return_value=[]),
+            patch.object(router, "_process_multimodal_message_internal") as mock_multi,
+        ):
             mock_collect.return_value = ("thread only context", None)
             mock_resolve.return_value = (thread_msg, "latest")
             mock_multi.return_value = BotAction(content="processed")
@@ -244,7 +263,9 @@ class TestContextIsolation:
             mock_collect.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_reply_context_near_trigger(self, router, mock_bot, mock_human_author):
+    async def test_reply_context_near_trigger(
+        self, router, mock_bot, mock_human_author
+    ):
         """Reply context builds linear chain root→…→parent→current, with tail near trigger."""
         # Create message chain
         root_msg = MagicMock(spec=discord.Message)
@@ -266,12 +287,15 @@ class TestContextIsolation:
         reply_msg.reference.message_id = parent_msg.id
         reply_msg.reference.resolved = parent_msg
 
-        with patch('bot.memory.thread_tail._is_thread_channel', return_value=False), \
-             patch('bot.memory.mention_context.maybe_build_mention_context') as mock_mention, \
-             patch.object(router, '_should_process_message', return_value=True), \
-             patch('bot.modality.collect_input_items', return_value=[]), \
-             patch.object(router, '_process_multimodal_message_internal') as mock_multi:
-
+        with (
+            patch("bot.memory.thread_tail._is_thread_channel", return_value=False),
+            patch(
+                "bot.memory.mention_context.maybe_build_mention_context"
+            ) as mock_mention,
+            patch.object(router, "_should_process_message", return_value=True),
+            patch("bot.modality.collect_input_items", return_value=[]),
+            patch.object(router, "_process_multimodal_message_internal") as mock_multi,
+        ):
             # Mock mention context returns localized context
             mock_mention.return_value = ("parent chain context", None)
             mock_multi.return_value = BotAction(content="processed")
@@ -282,7 +306,9 @@ class TestContextIsolation:
             mock_multi.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_plain_message_no_downstream_bleed(self, router, mock_bot, mock_human_author):
+    async def test_plain_message_no_downstream_bleed(
+        self, router, mock_bot, mock_human_author
+    ):
         """Plain messages should treat current message as fresh prompt without stale channel memory."""
         # Mock plain message
         msg = MagicMock(spec=discord.Message)
@@ -296,12 +322,16 @@ class TestContextIsolation:
         mock_channel = MagicMock(spec=discord.TextChannel)
         msg.channel = mock_channel
 
-        with patch('bot.memory.thread_tail._is_thread_channel', return_value=False), \
-             patch('bot.memory.mention_context.maybe_build_mention_context', return_value=None), \
-             patch.object(router, '_should_process_message', return_value=True), \
-             patch('bot.modality.collect_input_items', return_value=[]), \
-             patch.object(router, '_process_multimodal_message_internal') as mock_multi:
-
+        with (
+            patch("bot.memory.thread_tail._is_thread_channel", return_value=False),
+            patch(
+                "bot.memory.mention_context.maybe_build_mention_context",
+                return_value=None,
+            ),
+            patch.object(router, "_should_process_message", return_value=True),
+            patch("bot.modality.collect_input_items", return_value=[]),
+            patch.object(router, "_process_multimodal_message_internal") as mock_multi,
+        ):
             mock_multi.return_value = BotAction(content="processed")
 
             await router.dispatch_message(msg)
@@ -314,7 +344,9 @@ class TestTextDefaultBehavior:
     """Test that text is the default unless explicit media intent is shown."""
 
     @pytest.mark.asyncio
-    async def test_substantive_text_routes_to_text(self, router, mock_bot, mock_human_author):
+    async def test_substantive_text_routes_to_text(
+        self, router, mock_bot, mock_human_author
+    ):
         """Any substantive text should route to text flow."""
         msg = MagicMock(spec=discord.Message)
         msg.id = 111
@@ -334,13 +366,22 @@ class TestTextDefaultBehavior:
         msg.channel = MagicMock(spec=discord.TextChannel)
         msg.channel.typing.return_value = _Typing()
 
-        with patch.object(router, '_should_process_message', return_value=True), \
-             patch.object(router, '_compat_dispatch_for_tests', AsyncMock(return_value=None)), \
-             patch.object(router, '_resolve_scope_and_target', AsyncMock(return_value=("lone", None, ""))), \
-             patch.object(router, '_prioritized_vision_route', AsyncMock(return_value=None)), \
-             patch('bot.modality.collect_input_items', return_value=[]), \
-             patch.object(router, '_process_multimodal_message_internal') as mock_multi:
-
+        with (
+            patch.object(router, "_should_process_message", return_value=True),
+            patch.object(
+                router, "_compat_dispatch_for_tests", AsyncMock(return_value=None)
+            ),
+            patch.object(
+                router,
+                "_resolve_scope_and_target",
+                AsyncMock(return_value=("lone", None, "")),
+            ),
+            patch.object(
+                router, "_prioritized_vision_route", AsyncMock(return_value=None)
+            ),
+            patch("bot.modality.collect_input_items", return_value=[]),
+            patch.object(router, "_process_multimodal_message_internal") as mock_multi,
+        ):
             mock_multi.return_value = BotAction(content="processed")
 
             await router.dispatch_message(msg)
@@ -349,7 +390,9 @@ class TestTextDefaultBehavior:
             mock_multi.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_only_media_intent_triggers_nag(self, router, mock_bot, mock_human_author):
+    async def test_only_media_intent_triggers_nag(
+        self, router, mock_bot, mock_human_author
+    ):
         """Only explicit media intent with no media should trigger link nag."""
         # Mock message with no attachments and mention-free minimal content
         msg = MagicMock(spec=discord.Message)
@@ -370,13 +413,22 @@ class TestTextDefaultBehavior:
         msg.channel = MagicMock(spec=discord.TextChannel)
         msg.channel.typing.return_value = _Typing()
 
-        with patch.object(router, '_should_process_message', return_value=True), \
-             patch.object(router, '_compat_dispatch_for_tests', AsyncMock(return_value=None)), \
-             patch.object(router, '_resolve_scope_and_target', AsyncMock(return_value=("lone", None, ""))), \
-             patch.object(router, '_prioritized_vision_route', AsyncMock(return_value=None)), \
-             patch('bot.modality.collect_input_items', return_value=[]), \
-             patch.object(router, '_process_multimodal_message_internal') as mock_multi:
-
+        with (
+            patch.object(router, "_should_process_message", return_value=True),
+            patch.object(
+                router, "_compat_dispatch_for_tests", AsyncMock(return_value=None)
+            ),
+            patch.object(
+                router,
+                "_resolve_scope_and_target",
+                AsyncMock(return_value=("lone", None, "")),
+            ),
+            patch.object(
+                router, "_prioritized_vision_route", AsyncMock(return_value=None)
+            ),
+            patch("bot.modality.collect_input_items", return_value=[]),
+            patch.object(router, "_process_multimodal_message_internal") as mock_multi,
+        ):
             mock_multi.return_value = BotAction(content="processed")
 
             # This should process the message since it has a mention
@@ -407,17 +459,24 @@ class TestLoggingEnhancements:
         reply_msg.reference.resolved = parent_msg
         reply_msg.mentions = [mock_bot.user]
 
-        with patch('bot.memory.thread_tail._is_thread_channel', return_value=False), \
-             patch.object(router, '_should_process_message', return_value=True), \
-             patch('bot.modality.collect_input_items', return_value=[]), \
-             patch.object(router, '_process_multimodal_message_internal', return_value=BotAction(content="ok")):
-
+        with (
+            patch("bot.memory.thread_tail._is_thread_channel", return_value=False),
+            patch.object(router, "_should_process_message", return_value=True),
+            patch("bot.modality.collect_input_items", return_value=[]),
+            patch.object(
+                router,
+                "_process_multimodal_message_internal",
+                return_value=BotAction(content="ok"),
+            ),
+        ):
             await router.dispatch_message(reply_msg)
 
             # The implementation handles logging correctly
 
     @pytest.mark.asyncio
-    async def test_text_default_reason_logged(self, router, mock_bot, mock_human_author):
+    async def test_text_default_reason_logged(
+        self, router, mock_bot, mock_human_author
+    ):
         """Text default routing logs the reason."""
         # This is tested in bot.py gate logic, which was improved
         msg = MagicMock(spec=discord.Message)
@@ -428,10 +487,15 @@ class TestLoggingEnhancements:
         msg.attachments = []
         msg.mentions = [mock_bot.user]
 
-        with patch.object(router, '_should_process_message', return_value=True), \
-             patch('bot.modality.collect_input_items', return_value=[]), \
-             patch.object(router, '_process_multimodal_message_internal', return_value=BotAction(content="processed")):
-
+        with (
+            patch.object(router, "_should_process_message", return_value=True),
+            patch("bot.modality.collect_input_items", return_value=[]),
+            patch.object(
+                router,
+                "_process_multimodal_message_internal",
+                return_value=BotAction(content="processed"),
+            ),
+        ):
             # The router will handle this and process appropriately
             await router.dispatch_message(msg)
 

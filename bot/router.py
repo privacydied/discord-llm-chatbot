@@ -469,13 +469,17 @@ class Router:
                 and loop.is_running()
                 and self._vision_orchestrator
                 and not getattr(self._vision_orchestrator, "_started", False)
-            ) :
+            ):
                 # Create task with done callback for error logging [REH]
                 _task = asyncio.create_task(self._vision_orchestrator.start())
                 _task.add_done_callback(
-                    lambda t: self.logger.error(
-                        f"Vision orchestrator start task failed: {t.exception()}"
-                    ) if t.exception() else None
+                    lambda t: (
+                        self.logger.error(
+                            f"Vision orchestrator start task failed: {t.exception()}"
+                        )
+                        if t.exception()
+                        else None
+                    )
                 )
                 self.logger.debug("🚀 Vision Orchestrator start queued (router init)")
         except Exception:
@@ -519,7 +523,9 @@ class Router:
         # Gate for early X-resolve (enabled by default for correctness) [KBT]
         self._x_early_resolve_enabled = runtime_compat.x_early_resolve_enabled
 
-    def _get_system_prompt(self, key: str, default: Optional[str] = None) -> Optional[str]:
+    def _get_system_prompt(
+        self, key: str, default: Optional[str] = None
+    ) -> Optional[str]:
         """Safely read a prompt template from bot.system_prompts."""
         return get_system_prompt(self.bot, key, default)
 
@@ -721,9 +727,7 @@ class Router:
             tweet_text=tweet_text,
         )
 
-    async def _format_x_with_resolved_base_text(
-        self, *, url: str, stt_res: Any
-    ) -> str:
+    async def _format_x_with_resolved_base_text(self, *, url: str, stt_res: Any) -> str:
         """Resolve X base text for URL and format with STT payload."""
         base_text = await self._resolve_x_base_text_for_url(url)
         return self._format_x_tweet_with_transcription(
@@ -1058,7 +1062,9 @@ class Router:
                 # Check cache again inside lock
                 cached = self._syn_cache.get(tweet_id)
                 if cached:
-                    hit_kind = classify_syndication_cache_hit(now, self._syn_ttl_s, cached)
+                    hit_kind = classify_syndication_cache_hit(
+                        now, self._syn_ttl_s, cached
+                    )
                     if hit_kind == "neg":
                         self._metric_inc("x.syndication.neg_cache_hit_locked", None)
                         return None
@@ -1085,7 +1091,9 @@ class Router:
                             "x.syndication.fetch",
                             build_syndication_fetch_metric_payload(endpoint),
                         )
-                        resp = await http_client.get(url, headers=headers, params=params)
+                        resp = await http_client.get(
+                            url, headers=headers, params=params
+                        )
                         if resp.status_code != 200:
                             self.logger.info(
                                 "Syndication non-200",
@@ -1130,7 +1138,9 @@ class Router:
                                         ),
                                     )
                                     resp_oe = await http_client.get(
-                                        oembed_url, headers=headers, params=oembed_params
+                                        oembed_url,
+                                        headers=headers,
+                                        params=oembed_params,
                                     )
                                     oembed_data = extract_oembed_payload_from_response(
                                         resp_oe
@@ -1204,7 +1214,8 @@ class Router:
         try:
             now = time.time()
             stale_ids = [
-                tid for tid, entry in self._syn_cache.items()
+                tid
+                for tid, entry in self._syn_cache.items()
                 if now - entry.get("ts", 0) > self._syn_ttl_s
             ]
             for tid in stale_ids:
@@ -1875,14 +1886,18 @@ class Router:
                     for key, value in node.items():
                         key_l = str(key).lower()
                         if isinstance(value, str):
-                            if key_l in {
-                                "url",
-                                "video_url",
-                                "playback_url",
-                                "hls_url",
-                                "m3u8_url",
-                                "source",
-                            } or "video" in key_l:
+                            if (
+                                key_l
+                                in {
+                                    "url",
+                                    "video_url",
+                                    "playback_url",
+                                    "hls_url",
+                                    "m3u8_url",
+                                    "source",
+                                }
+                                or "video" in key_l
+                            ):
                                 cand = _normalize_video_candidate(value)
                                 if cand and cand not in found:
                                     found.append(cand)
@@ -2184,7 +2199,9 @@ class Router:
         try:
             http = await get_http_client()
             cfg = self._build_x_syn_quick_request_config()
-            resp = await http.get(f"https://api.fxtwitter.com/status/{status_id}", config=cfg)
+            resp = await http.get(
+                f"https://api.fxtwitter.com/status/{status_id}", config=cfg
+            )
             if getattr(resp, "status_code", 500) != 200:
                 return None
             try:
@@ -2224,7 +2241,9 @@ class Router:
             if kept_blocks:
                 normalized["content"] = {"blocks": kept_blocks}
 
-            if not (normalized.get("title") or normalized.get("preview_text") or kept_blocks):
+            if not (
+                normalized.get("title") or normalized.get("preview_text") or kept_blocks
+            ):
                 return None
             return normalized
         except Exception as e:
@@ -2407,7 +2426,9 @@ class Router:
 
     def _is_reply_to_bot(self, message: Message) -> bool:
         """Check if a message is a reply to the bot."""
-        return is_reply_to_bot(message, getattr(getattr(self.bot, "user", None), "id", None))
+        return is_reply_to_bot(
+            message, getattr(getattr(self.bot, "user", None), "id", None)
+        )
 
     async def _resolve_reference_message(
         self, message: Message, fallback: Optional[Message] = None
@@ -2431,7 +2452,9 @@ class Router:
 
     def _mentions_bot(self, message: Message) -> bool:
         """Return True if the message explicitly mentions this bot."""
-        return mentions_bot(message, getattr(getattr(self.bot, "user", None), "id", None))
+        return mentions_bot(
+            message, getattr(getattr(self.bot, "user", None), "id", None)
+        )
 
     def _update_dispatch_metadata(
         self,
@@ -3198,7 +3221,9 @@ class Router:
         urls = extract_raw_urls_from_texts([content]) if content else []
         if urls:
             has_x_url = any(self._is_twitter_status_url(url) for url in urls)
-            if has_x_url and not is_server_feature_enabled(guild_id, "x_twitter_extraction"):
+            if has_x_url and not is_server_feature_enabled(
+                guild_id, "x_twitter_extraction"
+            ):
                 text = "X/Twitter extraction is disabled on this server."
                 return ResponseMessage(content=text, text=text)
             if not is_server_feature_enabled(guild_id, "web_extraction"):
@@ -3318,7 +3343,10 @@ class Router:
                 if msg_id is not None:
                     # Check TTL — expire old entries lazily
                     if msg_id in self._processed_recent_ts:
-                        if now - self._processed_recent_ts[msg_id] < self._DEDUP_TTL_SECONDS:
+                        if (
+                            now - self._processed_recent_ts[msg_id]
+                            < self._DEDUP_TTL_SECONDS
+                        ):
                             self.logger.info(
                                 "gate.skip",
                                 extra={
@@ -3374,11 +3402,7 @@ class Router:
             preflight_gate = self._feature_gate_response(message, cleaned_for_compat)
             if preflight_gate is not None:
                 return preflight_gate
-            if (
-                has_attachments
-                and cleaned_for_compat == ""
-                and not _is_mock(self.bot)
-            ):
+            if has_attachments and cleaned_for_compat == "" and not _is_mock(self.bot):
                 # If all attachments are plain text (.txt/text/*), skip the legacy
                 # attachment compat path so the text ingestion path can handle them.
                 try:
@@ -3556,7 +3580,8 @@ class Router:
                     mention_pattern, "", (message.content or "").strip()
                 )
                 cleaned_for_compat = strip_leading_bot_mention(
-                    cleaned_for_compat, getattr(getattr(self.bot, "user", None), "id", None)
+                    cleaned_for_compat,
+                    getattr(getattr(self.bot, "user", None), "id", None),
                 )
                 if (
                     has_attachments
@@ -4239,7 +4264,8 @@ class Router:
                     self._processing_locks_cleanup_counter = 0
                     # Clean any locks that aren't currently locked
                     old_ids = [
-                        k for k, v in self._processing_locks.items()
+                        k
+                        for k, v in self._processing_locks.items()
                         if hasattr(v, "locked") and not v.locked()
                     ]
                     for old_id in old_ids:
@@ -4247,7 +4273,9 @@ class Router:
                     # Keep typing suppression bounded as well.
                     now = time.monotonic()
                     stale_channels = [
-                        k for k, until in self._typing_suppressed_until.items() if until < now
+                        k
+                        for k, until in self._typing_suppressed_until.items()
+                        if until < now
                     ]
                     for channel_id in stale_channels:
                         self._typing_suppressed_until.pop(channel_id, None)
@@ -4258,7 +4286,9 @@ class Router:
                         self._gate_denied,
                         self._prefilter_gate,
                     ):
-                        stale = [k for k in list(meta_dict.keys()) if k not in active_ids]
+                        stale = [
+                            k for k in list(meta_dict.keys()) if k not in active_ids
+                        ]
                         for k in stale:
                             meta_dict.pop(k, None)
             except Exception:
@@ -5236,9 +5266,7 @@ class Router:
         LLM_PER_ITEM_BUDGET = float(
             self.config.get("MULTIMODAL_PER_ITEM_BUDGET", "30.0")
         )
-        MEDIA_PER_ITEM_BUDGET = float(
-            self.config.get("MEDIA_PER_ITEM_BUDGET", "120.0")
-        )
+        MEDIA_PER_ITEM_BUDGET = float(self.config.get("MEDIA_PER_ITEM_BUDGET", "120.0"))
 
         # Process items strictly sequentially for determinism [CA]
         start_time = time.time()
@@ -5366,8 +5394,8 @@ class Router:
                 try:
                     result_text = await asyncio.wait_for(
                         self._handle_item_with_provider(
-                        item, modality, None, message=message
-                    ),
+                            item, modality, None, message=message
+                        ),
                         timeout=selected_budget,
                     )
                     success = True
@@ -5376,7 +5404,9 @@ class Router:
                         f"✅ Item {i} completed (extraction-only, no provider ladder) ({duration:.2f}s)"
                     )
                 except asyncio.TimeoutError:
-                    self.logger.warning(f"⏱️ Item {i} timed out (budget={selected_budget}s)")
+                    self.logger.warning(
+                        f"⏱️ Item {i} timed out (budget={selected_budget}s)"
+                    )
                     success = False
                     result_text = f"⏱️ Timed out after {selected_budget}s"
                     duration = selected_budget
@@ -5822,7 +5852,9 @@ class Router:
                 raw_transcription = result.get("transcription") or result.get("text")
                 # Handle tuple-shaped transcription [BUGFIX]
                 if isinstance(raw_transcription, tuple):
-                    transcription = str(raw_transcription[0] if raw_transcription else "").strip()
+                    transcription = str(
+                        raw_transcription[0] if raw_transcription else ""
+                    ).strip()
                 elif isinstance(raw_transcription, str):
                     transcription = raw_transcription.strip()
                 else:
@@ -5921,9 +5953,11 @@ class Router:
                     self._emit_caption_only_fallback_breadcrumbs("error")
 
                     # Try API then syndication for anchored caption.
-                    formatted = await self._format_x_with_resolved_base_text_if_available(
-                        url=url,
-                        stt_res={"transcription": ""},
+                    formatted = (
+                        await self._format_x_with_resolved_base_text_if_available(
+                            url=url,
+                            stt_res={"transcription": ""},
+                        )
                     )
                     if formatted:
                         return formatted
@@ -6242,7 +6276,9 @@ class Router:
                     res = await asyncio.wait_for(coro, timeout=timeout_s)
                     try:
                         dt_ms = int((_t.time() - t0) * 1000)
-                        if hasattr(res, "success") and not getattr(res, "success", False):
+                        if hasattr(res, "success") and not getattr(
+                            res, "success", False
+                        ):
                             err = getattr(res, "error", "") or "unknown"
                             self.logger.warning(
                                 f"{tag}.fail extraction_no_content ms={dt_ms} ({err})",
@@ -6413,7 +6449,9 @@ class Router:
 
                         # Log syndication response keys for video detection debugging [IV][REH]
                         try:
-                            syn_keys = list(syn.keys())[:30] if isinstance(syn, dict) else []
+                            syn_keys = (
+                                list(syn.keys())[:30] if isinstance(syn, dict) else []
+                            )
                             self.logger.info(
                                 f"route=x_syndication.metadata keys={syn_keys} tweet_id={tweet_id}",
                                 extra={
@@ -6476,7 +6514,9 @@ class Router:
                             (not _syn_has_video)
                             and (not has_any_images)
                             and tweet_id
-                            and bool(re.search(r"https?://t\.co/[A-Za-z0-9]+", text or ""))
+                            and bool(
+                                re.search(r"https?://t\.co/[A-Za-z0-9]+", text or "")
+                            )
                         ):
                             article_data, _ = await _bounded(
                                 self._fetch_x_article_from_fxtwitter(tweet_id),
@@ -6502,7 +6542,8 @@ class Router:
                                             "detail": {
                                                 "tweet_id": tweet_id,
                                                 "chars": len(text or ""),
-                                                "article_id": article_data.get("id") or "",
+                                                "article_id": article_data.get("id")
+                                                or "",
                                             },
                                         },
                                     )
@@ -6542,7 +6583,9 @@ class Router:
                             routing_decision = (
                                 "video"
                                 if _syn_has_video
-                                else ("image_only" if is_image_only else "text_or_mixed")
+                                else (
+                                    "image_only" if is_image_only else "text_or_mixed"
+                                )
                             )
                             self.logger.info(
                                 f"route=x_syndication.decision decision={routing_decision} "
@@ -6586,10 +6629,12 @@ class Router:
                                 },
                             )
                             syn_for_images = syn
-                            syn_for_images = await self._maybe_hydrate_syndication_payload(
-                                tweet_id,
-                                syn_for_images,
-                                allow_tco_pointer=True,
+                            syn_for_images = (
+                                await self._maybe_hydrate_syndication_payload(
+                                    tweet_id,
+                                    syn_for_images,
+                                    allow_tco_pointer=True,
+                                )
                             )
                             return await self._handle_image_only_tweet(
                                 url, syn_for_images, source="syndication"
@@ -6658,10 +6703,12 @@ class Router:
                                         status_id,
                                         fallback_text=text,
                                     )
-                                    result = await self._route_twitter_images_with_caption(
-                                        url=url,
-                                        caption_text=tweet_text,
-                                        image_urls=imgs,
+                                    result = (
+                                        await self._route_twitter_images_with_caption(
+                                            url=url,
+                                            caption_text=tweet_text,
+                                            image_urls=imgs,
+                                        )
                                     )
                                     return result
 
@@ -6678,8 +6725,12 @@ class Router:
                                             "event": "x.syndication.defer",
                                             "detail": {
                                                 "tweet_id": tweet_id,
-                                                "syn_keys": sorted(list(syn.keys()))[:30],
-                                                "has_api_client": bool(x_client is not None),
+                                                "syn_keys": sorted(list(syn.keys()))[
+                                                    :30
+                                                ],
+                                                "has_api_client": bool(
+                                                    x_client is not None
+                                                ),
                                             },
                                         },
                                     )
@@ -6737,10 +6788,12 @@ class Router:
                                         syn,
                                         fallback_text=text,
                                     )
-                                    return await self._route_twitter_images_with_caption(
-                                        url=url,
-                                        caption_text=image_text,
-                                        image_urls=sparse_images,
+                                    return (
+                                        await self._route_twitter_images_with_caption(
+                                            url=url,
+                                            caption_text=image_text,
+                                            image_urls=sparse_images,
+                                        )
                                     )
                                 if sparse_kind not in ("video", "image"):
                                     # Last resort for sparse syndication: attempt STT directly on the tweet URL.
@@ -6787,7 +6840,7 @@ class Router:
                                         api_data=api_data,
                                     )
                             else:
-                            # Fall back to text-only ONLY when video was NOT confirmed by syndication [REH]
+                                # Fall back to text-only ONLY when video was NOT confirmed by syndication [REH]
                                 # Prefer API text if available; otherwise fall back to syndication text or composed evidence [REH]
                                 return self._format_x_caption_only_fallback_result(
                                     url=url,
@@ -6822,7 +6875,10 @@ class Router:
                         self, "_x_syn_probe_enabled", True
                     ) and self._is_twitter_status_url(url):
                         try:
-                            status_id, imgs = await self._resolve_and_probe_twitter_images(
+                            (
+                                status_id,
+                                imgs,
+                            ) = await self._resolve_and_probe_twitter_images(
                                 url=url,
                                 tweet_id=tweet_id,
                             )
@@ -6868,7 +6924,9 @@ class Router:
                                     stt_res=stt_res,
                                 )
                                 if formatted:
-                                    return f"Video/audio content from {url}: {formatted}"
+                                    return (
+                                        f"Video/audio content from {url}: {formatted}"
+                                    )
                                 # No-speech in API probe: log and continue with caption-only bundle [REH]
                                 return await self._format_x_no_speech_fallback(
                                     base_text=base,
@@ -6972,7 +7030,9 @@ class Router:
                             if api_text:
                                 lines.extend(["[Tweet Caption]", api_text, ""])
                             lines.extend(notes)
-                            lines.extend(["", self._canonicalize_twitter_status_url(url)])
+                            lines.extend(
+                                ["", self._canonicalize_twitter_status_url(url)]
+                            )
                             return "\n".join(lines).strip()
 
                         return self._format_x_tweet_result(api_data, url)
@@ -7043,7 +7103,10 @@ class Router:
                     f"url.extract.all_failed url={url[:120]} error={getattr(extract_res, 'error', err_detail)}",
                     extra={
                         "event": "url.extract.all_failed",
-                        "detail": {"url": url[:200], "error": getattr(extract_res, "error", err_detail)},
+                        "detail": {
+                            "url": url[:200],
+                            "error": getattr(extract_res, "error", err_detail),
+                        },
                     },
                 )
                 raise DispatchEmptyError(
@@ -7073,12 +7136,13 @@ class Router:
                     f"url.extract.all_failed url={url[:120]} error={getattr(extract_res, 'error', 'no_result')}",
                     extra={
                         "event": "url.extract.all_failed",
-                        "detail": {"url": url[:200], "error": getattr(extract_res, "error", "no_result")},
+                        "detail": {
+                            "url": url[:200],
+                            "error": getattr(extract_res, "error", "no_result"),
+                        },
                     },
                 )
-                raise DispatchEmptyError(
-                    f"Could not extract content from URL: {url}"
-                )
+                raise DispatchEmptyError(f"Could not extract content from URL: {url}")
 
             # Check if smart routing detected media and should route to yt-dlp
             route_to_ytdlp = url_result.get("route_to_ytdlp", False)
@@ -7100,7 +7164,10 @@ class Router:
                     else:
                         self.logger.warning(
                             f"url.ytdlp.stt_failed url={url[:120]}",
-                            extra={"event": "url.ytdlp.stt_failed", "detail": {"url": url[:200]}},
+                            extra={
+                                "event": "url.ytdlp.stt_failed",
+                                "detail": {"url": url[:200]},
+                            },
                         )
                         return ""
 
@@ -7130,20 +7197,19 @@ class Router:
                 f"url.extract.all_failed url={url[:120]} error={getattr(extract_res, 'error', 'no_result')}",
                 extra={
                     "event": "url.extract.all_failed",
-                    "detail": {"url": url[:200], "error": getattr(extract_res, "error", "no_result")},
+                    "detail": {
+                        "url": url[:200],
+                        "error": getattr(extract_res, "error", "no_result"),
+                    },
                 },
             )
-            raise DispatchEmptyError(
-                f"Could not extract content from URL: {url}"
-            )
+            raise DispatchEmptyError(f"Could not extract content from URL: {url}")
 
         except DispatchEmptyError:
             raise
         except Exception as e:
             self.logger.error(f"Error processing general url: {e}", exc_info=True)
-            raise DispatchEmptyError(
-                f"Failed to process URL: {item.payload}"
-            )
+            raise DispatchEmptyError(f"Failed to process URL: {item.payload}")
 
     # ---------------------------------------------------------------------------
     # URL-based media/document handlers (routes URLs through attachment pipelines) [CA][REH]
@@ -8296,16 +8362,26 @@ class Router:
             try:
                 memory_block = await build_memory_prompt_block(
                     user_id=str(message.author.id) if message else None,
-                    guild_id=str(message.guild.id) if getattr(message, "guild", None) else None,
-                    channel_id=str(message.channel.id) if getattr(message, "channel", None) else None,
-                    thread_id=str(message.channel.id) if isinstance(getattr(message, "channel", None), discord.Thread) else None,
+                    guild_id=str(message.guild.id)
+                    if getattr(message, "guild", None)
+                    else None,
+                    channel_id=str(message.channel.id)
+                    if getattr(message, "channel", None)
+                    else None,
+                    thread_id=str(message.channel.id)
+                    if isinstance(getattr(message, "channel", None), discord.Thread)
+                    else None,
                     query=content_str or content,
-                    max_chars=int(self.config.get("PERSISTENT_MEMORY_MAX_PROMPT_CHARS", 1200)),
+                    max_chars=int(
+                        self.config.get("PERSISTENT_MEMORY_MAX_PROMPT_CHARS", 1200)
+                    ),
                     top_k=int(self.config.get("PERSISTENT_MEMORY_TOP_K", 6)),
                 )
                 if memory_block:
                     enhanced_context = (
-                        f"{enhanced_context}\n\n{memory_block}" if enhanced_context else memory_block
+                        f"{enhanced_context}\n\n{memory_block}"
+                        if enhanced_context
+                        else memory_block
                     )
             except Exception as e:
                 self.logger.debug(f"persistent memory retrieval skipped: {e}")
@@ -8447,16 +8523,20 @@ class Router:
                             "[image:",
                             "image analysis",
                         )
-                        starts = [lower_s.find(m) for m in markers if lower_s.find(m) != -1]
+                        starts = [
+                            lower_s.find(m) for m in markers if lower_s.find(m) != -1
+                        ]
                         if starts:
-                            vl_section = s[min(starts):]
+                            vl_section = s[min(starts) :]
                             # Trim at next aggregation/original-text header if present.
                             for marker in ("\n### original message text:",):
                                 pos = vl_section.lower().find(marker)
                                 if pos > 0:
                                     vl_section = vl_section[:pos]
                         if not vl_section.strip() and perception_notes:
-                            vl_section = f"Perception notes:\n{perception_notes.strip()}"
+                            vl_section = (
+                                f"Perception notes:\n{perception_notes.strip()}"
+                            )
                         vl_section = (
                             vl_section.strip()
                             or "Visual analysis available, but failed to synthesize."

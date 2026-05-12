@@ -22,6 +22,7 @@ from urllib.parse import urlparse
 
 from playwright.async_api import async_playwright
 
+
 @dataclass
 class Tweet:
     idx: int
@@ -123,9 +124,15 @@ async def _extract_tweets_from_page(page, author: str) -> List[Tweet]:
     return tweets
 
 
-async def fetch_thread(url: str, *, timeout_ms: int = 25000, engine: str = "chromium") -> List[Tweet]:
+async def fetch_thread(
+    url: str, *, timeout_ms: int = 25000, engine: str = "chromium"
+) -> List[Tweet]:
     author = _parse_handle_from_url(url) or ""
-    engines = [engine] if engine in ("chromium", "firefox", "webkit") else ["chromium", "firefox", "webkit"]
+    engines = (
+        [engine]
+        if engine in ("chromium", "firefox", "webkit")
+        else ["chromium", "firefox", "webkit"]
+    )
     last_err: Optional[Exception] = None
     async with async_playwright() as p:
         for eng in engines:
@@ -135,7 +142,9 @@ async def fetch_thread(url: str, *, timeout_ms: int = 25000, engine: str = "chro
                 try:
                     context = await browser.new_context(java_script_enabled=True)
                     page = await context.new_page()
-                    await page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
+                    await page.goto(
+                        url, wait_until="domcontentloaded", timeout=timeout_ms
+                    )
                     try:
                         await page.wait_for_selector("article", timeout=8000)
                     except Exception:
@@ -154,8 +163,19 @@ async def fetch_thread(url: str, *, timeout_ms: int = 25000, engine: str = "chro
 async def amain() -> None:
     ap = argparse.ArgumentParser(description="Playwright X thread probe (self-replies)")
     ap.add_argument("url", help="X status URL e.g. https://x.com/<handle>/status/<id>")
-    ap.add_argument("--engine", default="auto", choices=["auto", "chromium", "firefox", "webkit"], help="Browser engine to use (auto tries chromium→firefox→webkit)")
-    ap.add_argument("--only", nargs="*", type=int, default=[], help="Specific indices to print (e.g. 7 13 22 26)")
+    ap.add_argument(
+        "--engine",
+        default="auto",
+        choices=["auto", "chromium", "firefox", "webkit"],
+        help="Browser engine to use (auto tries chromium→firefox→webkit)",
+    )
+    ap.add_argument(
+        "--only",
+        nargs="*",
+        type=int,
+        default=[],
+        help="Specific indices to print (e.g. 7 13 22 26)",
+    )
     args = ap.parse_args()
 
     engine = args.engine if args.engine != "auto" else "auto"

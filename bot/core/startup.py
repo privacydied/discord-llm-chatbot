@@ -83,7 +83,9 @@ def check_playwright_browsers(logger) -> None:
     """
     pw_server = os.getenv("PW_SERVER_URL", "").strip()
     if pw_server:
-        logger.info(f"Playwright remote server configured ({pw_server}); validating reachability")
+        logger.info(
+            f"Playwright remote server configured ({pw_server}); validating reachability"
+        )
         _validate_remote_playwright_url(pw_server, logger)
         return
 

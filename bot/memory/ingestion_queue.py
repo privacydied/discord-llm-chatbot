@@ -7,7 +7,7 @@ import logging
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Awaitable, Callable, List, Optional
+from typing import Awaitable, Callable, List
 
 from .curator import MemoryCandidate
 
@@ -43,7 +43,9 @@ class CuratedMemoryIngestionQueue:
         self.workers = max(1, int(workers))
         self.batch_size = max(1, int(batch_size))
         self.enabled = enabled
-        self._queue: asyncio.Queue[MemoryCandidate] = asyncio.Queue(maxsize=self.max_size)
+        self._queue: asyncio.Queue[MemoryCandidate] = asyncio.Queue(
+            maxsize=self.max_size
+        )
         self._worker_tasks: list[asyncio.Task] = []
         self._shutdown = asyncio.Event()
         self._start_lock = asyncio.Lock()
@@ -57,7 +59,9 @@ class CuratedMemoryIngestionQueue:
                 return
             self._shutdown.clear()
             for idx in range(self.workers):
-                task = asyncio.create_task(self._worker_loop(idx), name=f"curated-memory-worker-{idx}")
+                task = asyncio.create_task(
+                    self._worker_loop(idx), name=f"curated-memory-worker-{idx}"
+                )
                 self._worker_tasks.append(task)
             logger.info(
                 "Curated memory workers started",
@@ -102,7 +106,10 @@ class CuratedMemoryIngestionQueue:
                 extra={
                     "subsys": "memory",
                     "event": "memory_queue_overflow",
-                    "detail": {"memory_id": candidate.memory_id, "source": candidate.source},
+                    "detail": {
+                        "memory_id": candidate.memory_id,
+                        "source": candidate.source,
+                    },
                 },
             )
             return False

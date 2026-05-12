@@ -737,7 +737,10 @@ class NovitaAdapter(BaseVisionProvider):
 
         elif status_code == 403:
             # Payment/balance errors - NOT retryable, should trigger immediate failover [REH]
-            if "NOT_ENOUGH_BALANCE" in str(error_data) or "insufficient" in error_message.lower():
+            if (
+                "NOT_ENOUGH_BALANCE" in str(error_data)
+                or "insufficient" in error_message.lower()
+            ):
                 return VisionError(
                     error_type=VisionErrorType.QUOTA_EXCEEDED,
                     message=f"Novita.ai out of balance: {error_message}",

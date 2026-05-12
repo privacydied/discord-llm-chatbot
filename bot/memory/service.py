@@ -28,9 +28,13 @@ class CuratedMemoryService:
         cfg = load_config()
         self.bot = bot
         self.enabled = bool(cfg.get("PERSISTENT_MEMORY_ENABLE", True))
-        self.sqlite_path = Path(cfg.get("PERSISTENT_MEMORY_SQLITE_PATH", "./data/memory.db"))
+        self.sqlite_path = Path(
+            cfg.get("PERSISTENT_MEMORY_SQLITE_PATH", "./data/memory.db")
+        )
         self.chroma_path = Path(cfg.get("PERSISTENT_MEMORY_CHROMA_PATH", "./chroma_db"))
-        self.collection_name = str(cfg.get("PERSISTENT_MEMORY_CHROMA_COLLECTION", "curated_memories"))
+        self.collection_name = str(
+            cfg.get("PERSISTENT_MEMORY_CHROMA_COLLECTION", "curated_memories")
+        )
         self.top_k = int(cfg.get("PERSISTENT_MEMORY_TOP_K", 6))
         self.max_prompt_chars = int(cfg.get("PERSISTENT_MEMORY_MAX_PROMPT_CHARS", 1200))
         self.default_ttl_days = int(cfg.get("PERSISTENT_MEMORY_DEFAULT_TTL_DAYS", 180))
@@ -97,6 +101,7 @@ class CuratedMemoryService:
     ) -> MemoryRecord:
         # Check user's memory preference
         from bot.memory.profiles import get_profile
+
         profile = get_profile(user_id)
         user_pref = profile.get("preferences", {}).get("memory_enabled", True)
         if not user_pref:
@@ -136,6 +141,7 @@ class CuratedMemoryService:
     ) -> bool:
         # Check user's memory preference
         from bot.memory.profiles import get_profile
+
         profile = get_profile(user_id)
         user_pref = profile.get("preferences", {}).get("memory_enabled", True)
         if not user_pref:
@@ -166,7 +172,9 @@ class CuratedMemoryService:
         try:
             await self.semantic_store.delete(memory_id)
         except Exception:
-            logger.warning("Chroma delete failed for memory %s", memory_id, exc_info=True)
+            logger.warning(
+                "Chroma delete failed for memory %s", memory_id, exc_info=True
+            )
         return True
 
     async def wipe_user_memories(self, user_id: str) -> int:
@@ -180,7 +188,9 @@ class CuratedMemoryService:
                 logger.warning("Chroma wipe failed for user %s", user_id, exc_info=True)
         return len(ids)
 
-    async def list_user_memories(self, user_id: str, limit: int = 20) -> List[MemoryRecord]:
+    async def list_user_memories(
+        self, user_id: str, limit: int = 20
+    ) -> List[MemoryRecord]:
         if not self.enabled:
             return []
         return await self.store.list_memories(user_id=user_id, limit=limit)
@@ -230,7 +240,10 @@ class CuratedMemoryService:
 
         top_k = max(3, min(8, int(top_k or self.top_k)))
         scope_filters = self._scope_filters(
-            user_id=user_id, guild_id=guild_id, channel_id=channel_id, thread_id=thread_id
+            user_id=user_id,
+            guild_id=guild_id,
+            channel_id=channel_id,
+            thread_id=thread_id,
         )
         if not scope_filters:
             return []
@@ -238,9 +251,13 @@ class CuratedMemoryService:
         combined: dict[str, Dict[str, Any]] = {}
         for scope_name, where, boost in scope_filters:
             try:
-                results = await self.semantic_store.query(query, top_k=top_k, where=where)
+                results = await self.semantic_store.query(
+                    query, top_k=top_k, where=where
+                )
             except Exception:
-                logger.debug("Semantic query failed for scope %s", scope_name, exc_info=True)
+                logger.debug(
+                    "Semantic query failed for scope %s", scope_name, exc_info=True
+                )
                 continue
             for item in results:
                 metadata = item.get("metadata") or {}
@@ -388,7 +405,9 @@ class CuratedMemoryService:
                 raise
         return {"attempted": len(candidates), "inserted": inserted, "merged": merged}
 
-    async def _dedupe_or_merge(self, candidate: MemoryCandidate) -> Optional[MemoryCandidate]:
+    async def _dedupe_or_merge(
+        self, candidate: MemoryCandidate
+    ) -> Optional[MemoryCandidate]:
         """
         Before inserting an inferred memory, check for near-duplicate.
         - If found, update that existing memory (summary/importance/confidence/timestamp).
@@ -481,11 +500,14 @@ class CuratedMemoryService:
     @staticmethod
     def _normalize_for_dedupe(text: str) -> str:
         import re as _re
+
         t = (text or "").lower().strip()
         t = _re.sub(r"\s+", " ", t)
         return t
 
-    async def _merge_into_existing(self, existing: MemoryRecord, candidate: MemoryCandidate) -> None:
+    async def _merge_into_existing(
+        self, existing: MemoryRecord, candidate: MemoryCandidate
+    ) -> None:
         """
         Merge candidate into existing memory:
         - Update summary if candidate is longer/more specific.
@@ -580,9 +602,13 @@ class CuratedMemoryService:
                 return False
             return True
         if scope_name == "channel":
-            return channel_id is not None and str(metadata.get("channel_id") or "") == str(channel_id)
+            return channel_id is not None and str(
+                metadata.get("channel_id") or ""
+            ) == str(channel_id)
         if scope_name == "thread":
-            return thread_id is not None and str(metadata.get("thread_id") or "") == str(thread_id)
+            return thread_id is not None and str(
+                metadata.get("thread_id") or ""
+            ) == str(thread_id)
         return True
 
     def _scope_filters(

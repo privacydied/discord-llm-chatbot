@@ -6,7 +6,7 @@ Verifies that VISION_FALLBACK_MODELS ladder is used for VL calls.
 import pytest
 import httpx
 
-from bot.enhanced_retry import EnhancedRetryManager, get_retry_manager, ProviderConfig
+from bot.enhanced_retry import EnhancedRetryManager, ProviderConfig
 
 
 def make_httpx_429(retry_after: float = 1.0) -> httpx.HTTPStatusError:
@@ -24,7 +24,7 @@ async def test_enhanced_retry_manager_vision_ladder_fallback():
     """Test that vision ladder falls back from first to second provider."""
     mgr = EnhancedRetryManager()
     mgr.circuit_breakers.clear()
-    
+
     # Configure vision ladder: first fails, second succeeds
     mgr.provider_configs["vision"] = [
         ProviderConfig("openrouter", "vision-fail-a", timeout=2.0, max_attempts=1),
@@ -45,7 +45,7 @@ async def test_enhanced_retry_manager_vision_ladder_fallback():
         return run
 
     res = await mgr.run_with_fallback("vision", factory, per_item_budget=10.0)
-    
+
     assert res.success is True
     assert res.provider_used.endswith(":vision-ok-b")
     assert res.attempts == 2
@@ -59,7 +59,7 @@ async def test_enhanced_retry_manager_vision_ladder_all_fail():
     """Test that vision ladder exhaustion is properly reported."""
     mgr = EnhancedRetryManager()
     mgr.circuit_breakers.clear()
-    
+
     # Configure vision ladder: both providers fail
     mgr.provider_configs["vision"] = [
         ProviderConfig("openrouter", "vision-fail-a", timeout=1.0, max_attempts=1),
@@ -73,7 +73,7 @@ async def test_enhanced_retry_manager_vision_ladder_all_fail():
         return run
 
     res = await mgr.run_with_fallback("vision", factory, per_item_budget=5.0)
-    
+
     assert res.success is False
     assert res.error is not None
     assert res.fallback_occurred is True
@@ -85,7 +85,7 @@ async def test_enhanced_retry_manager_vision_single_provider_success():
     """Test that vision ladder works with a single provider that succeeds."""
     mgr = EnhancedRetryManager()
     mgr.circuit_breakers.clear()
-    
+
     mgr.provider_configs["vision"] = [
         ProviderConfig("openrouter", "vision-single", timeout=5.0, max_attempts=2),
     ]
@@ -102,7 +102,7 @@ async def test_enhanced_retry_manager_vision_single_provider_success():
         return run
 
     res = await mgr.run_with_fallback("vision", factory, per_item_budget=10.0)
-    
+
     assert res.success is True
     assert res.provider_used.endswith(":vision-single")
     assert res.attempts == 1
@@ -114,7 +114,7 @@ async def test_vision_ladder_respects_per_provider_timeouts():
     """Test that per-provider timeouts from ladder config are respected."""
     mgr = EnhancedRetryManager()
     mgr.circuit_breakers.clear()
-    
+
     # Configure with different timeouts
     mgr.provider_configs["vision"] = [
         ProviderConfig("openrouter", "fast-model", timeout=2.0, max_attempts=1),
@@ -125,7 +125,7 @@ async def test_vision_ladder_respects_per_provider_timeouts():
 
     def factory(pc: ProviderConfig):
         timeouts_observed.append(pc.timeout)
-        
+
         async def run():
             if pc.model == "fast-model":
                 raise Exception("429 Too Many Requests")
@@ -134,7 +134,7 @@ async def test_vision_ladder_respects_per_provider_timeouts():
         return run
 
     res = await mgr.run_with_fallback("vision", factory, per_item_budget=20.0)
-    
+
     assert res.success is True
     # Both providers should have been attempted
     assert 2.0 in timeouts_observed
@@ -146,7 +146,7 @@ async def test_vision_ladder_circuit_breaker_skips_failed_provider():
     """Test that circuit breaker skips providers that have recently failed."""
     mgr = EnhancedRetryManager()
     mgr.circuit_breakers.clear()
-    
+
     mgr.provider_configs["vision"] = [
         ProviderConfig("openrouter", "flaky-model", timeout=2.0, max_attempts=1),
         ProviderConfig("openrouter", "stable-model", timeout=2.0, max_attempts=1),
@@ -183,7 +183,9 @@ async def test_vision_ladder_circuit_breaker_skips_failed_provider():
     assert call_count["stable"] == 2
 
 
-def test_env_vision_ladder_is_authoritative_and_not_clobbered(monkeypatch: pytest.MonkeyPatch):
+def test_env_vision_ladder_is_authoritative_and_not_clobbered(
+    monkeypatch: pytest.MonkeyPatch,
+):
     mgr = EnhancedRetryManager()
 
     # Provide 3 env models; regression used to reset ladder to default_vision[:2]
@@ -203,4 +205,3 @@ def test_env_vision_ladder_is_authoritative_and_not_clobbered(monkeypatch: pytes
 
     summary = mgr.refresh_from_env()
     assert summary["vision"] == ["env-vl-1", "env-vl-2", "env-vl-3"]
-

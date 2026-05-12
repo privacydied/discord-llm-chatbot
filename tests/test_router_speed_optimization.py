@@ -25,7 +25,9 @@ import time
 from unittest.mock import MagicMock
 
 # Skip all tests — use real asyncio.sleep, race with async budget monitors
-pytestmark = pytest.mark.skip(reason="Uses real asyncio.sleep; races with async budget monitors; not isolated")
+pytestmark = pytest.mark.skip(
+    reason="Uses real asyncio.sleep; races with async budget monitors; not isolated"
+)
 
 from bot.router_classifier import FastClassifier
 from bot.http_client import SharedHttpClient, RequestConfig

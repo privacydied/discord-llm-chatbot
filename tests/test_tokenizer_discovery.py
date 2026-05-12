@@ -8,7 +8,9 @@ from unittest.mock import patch, MagicMock
 import logging
 
 # Skip all tests in this module — they require system-level tokenizer binaries
-pytestmark = pytest.mark.skip(reason="Requires system-level tokenizer binaries (espeak-ng, phonemizer)")
+pytestmark = pytest.mark.skip(
+    reason="Requires system-level tokenizer binaries (espeak-ng, phonemizer)"
+)
 
 # Add the parent directory to the path so we can import the bot modules
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))

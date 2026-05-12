@@ -217,7 +217,11 @@ class EnhancedRetryManager:
                         )
                     )
                 else:
-                    ladder.append(ProviderConfig(provider, model, timeout=timeout, max_attempts=max_attempts))
+                    ladder.append(
+                        ProviderConfig(
+                            provider, model, timeout=timeout, max_attempts=max_attempts
+                        )
+                    )
             return ladder
 
         # Optimized defaults with faster timeouts [CMV]
@@ -294,6 +298,7 @@ class EnhancedRetryManager:
         text_from_env = bool(text_models)
 
         vl_head = (config.get("VL_MODEL") or "").strip()
+
         def _ensure_head(
             ladder: List[ProviderConfig], head_model: str, default_timeout: float
         ) -> List[ProviderConfig]:

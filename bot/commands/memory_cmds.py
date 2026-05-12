@@ -16,11 +16,9 @@ from ..memory import (
     add_explicit_memory,
     delete_memory,
     get_memory_distiller,
-    get_memory_distiller_status,
     get_profile,
     get_server_profile,
     list_user_memories,
-    run_memory_distiller_once,
     save_profile,
     save_server_profile,
     search_user_memories,
@@ -61,12 +59,22 @@ class MemoryCommands(commands.Cog):
                 user_id=str(ctx.author.id),
                 text=content,
                 guild_id=str(ctx.guild.id) if getattr(ctx, "guild", None) else None,
-                channel_id=str(ctx.channel.id) if getattr(ctx, "channel", None) else None,
-                thread_id=str(ctx.channel.id) if isinstance(ctx.channel, discord.Thread) else None,
-                source_message_id=str(getattr(ctx.message, "id", None)) if getattr(ctx, "message", None) else None,
+                channel_id=str(ctx.channel.id)
+                if getattr(ctx, "channel", None)
+                else None,
+                thread_id=str(ctx.channel.id)
+                if isinstance(ctx.channel, discord.Thread)
+                else None,
+                source_message_id=str(getattr(ctx.message, "id", None))
+                if getattr(ctx, "message", None)
+                else None,
                 context_type=context_type,
                 source="explicit_memory_command",
-                metadata={"command": ctx.command.qualified_name if getattr(ctx, "command", None) else "memory-add"},
+                metadata={
+                    "command": ctx.command.qualified_name
+                    if getattr(ctx, "command", None)
+                    else "memory-add"
+                },
             )
         except Exception as exc:
             logger.error("Failed to persist curated memory: %s", exc, exc_info=True)
@@ -79,7 +87,9 @@ class MemoryCommands(commands.Cog):
         limit = min(max(1, int(limit)), 20)
         records = await list_user_memories(str(ctx.author.id), limit=limit)
         if not records:
-            await ctx.send("You don't have any durable memories yet. Use `!memory-add <content>` to add one!")
+            await ctx.send(
+                "You don't have any durable memories yet. Use `!memory-add <content>` to add one!"
+            )
             return
 
         embed = discord.Embed(
@@ -111,7 +121,9 @@ class MemoryCommands(commands.Cog):
 
         target = matches[0]
         if await delete_memory(target.memory_id):
-            await ctx.send(f"✅ Deleted memory `{target.memory_id[:8]}`: {target.summary}")
+            await ctx.send(
+                f"✅ Deleted memory `{target.memory_id[:8]}`: {target.summary}"
+            )
         else:
             await ctx.send("❌ Failed to delete memory. Please try again.")
 
@@ -129,12 +141,16 @@ class MemoryCommands(commands.Cog):
             await ctx.send("❌ Usage: `!memory-search <query>`")
             return
 
-        records = await search_user_memories(str(ctx.author.id), query, limit=min(max(1, limit), 10))
+        records = await search_user_memories(
+            str(ctx.author.id), query, limit=min(max(1, limit), 10)
+        )
         if not records:
             await ctx.send("No matching durable memories found.")
             return
 
-        embed = discord.Embed(title=f"Memory Search: {query}", color=discord.Color.gold())
+        embed = discord.Embed(
+            title=f"Memory Search: {query}", color=discord.Color.gold()
+        )
         for idx, record in enumerate(records, 1):
             embed.add_field(
                 name=f"{idx}. {record.memory_id[:8]} · {record.context_type}",
@@ -145,7 +161,9 @@ class MemoryCommands(commands.Cog):
 
     @commands.command(name="memory-add")
     async def memory_add_direct(self, ctx, *, content: str):
-        await self._add_curated_memory(ctx, content=content, context_type="user_preference")
+        await self._add_curated_memory(
+            ctx, content=content, context_type="user_preference"
+        )
 
     @commands.command(name="memory-show")
     async def memory_show_direct(self, ctx, limit: int = 5):
@@ -181,18 +199,28 @@ class MemoryCommands(commands.Cog):
         candidate_rejected_count = max(0, rejected_count - skipped_early_count)
         embed = discord.Embed(
             title="Memory Distiller Status",
-            color=discord.Color.blue() if status.get("enabled") else discord.Color.dark_grey(),
+            color=discord.Color.blue()
+            if status.get("enabled")
+            else discord.Color.dark_grey(),
         )
         embed.add_field(name="Enabled", value=str(status.get("enabled")), inline=True)
         embed.add_field(name="Dry run", value=str(status.get("dry_run")), inline=True)
         embed.add_field(name="Started", value=str(status.get("started")), inline=True)
         embed.add_field(name="Running", value=str(running), inline=True)
         embed.add_field(name="Backlog", value=str(status.get("backlog")), inline=True)
-        embed.add_field(name="Batch size", value=str(status.get("batch_size")), inline=True)
-        embed.add_field(name="Interval", value=f"{status.get('interval_seconds')}s", inline=True)
+        embed.add_field(
+            name="Batch size", value=str(status.get("batch_size")), inline=True
+        )
+        embed.add_field(
+            name="Interval", value=f"{status.get('interval_seconds')}s", inline=True
+        )
         embed.add_field(name="Scanned", value=str(scanned_count), inline=True)
-        embed.add_field(name="Skipped early", value=str(skipped_early_count), inline=True)
-        embed.add_field(name="Candidate rejected", value=str(candidate_rejected_count), inline=True)
+        embed.add_field(
+            name="Skipped early", value=str(skipped_early_count), inline=True
+        )
+        embed.add_field(
+            name="Candidate rejected", value=str(candidate_rejected_count), inline=True
+        )
         embed.add_field(name="Accepted", value=str(accepted_count), inline=True)
         embed.add_field(name="Merged", value=str(merged_count), inline=True)
         if last_run:
@@ -234,12 +262,32 @@ class MemoryCommands(commands.Cog):
                     title="Memory Distillation Complete",
                     color=discord.Color.green(),
                 )
-                done_embed.add_field(name="Scanned", value=str(result.get('scanned_count', 0)), inline=True)
-                done_embed.add_field(name="Candidates", value=str(result.get('candidate_count', 0)), inline=True)
-                done_embed.add_field(name="Accepted", value=str(result.get('accepted_count', 0)), inline=True)
-                done_embed.add_field(name="Rejected", value=str(result.get('rejected_count', 0)), inline=True)
-                done_embed.add_field(name="Merged", value=str(result.get('merged_count', 0)), inline=True)
-                done_embed.add_field(name="Dry run", value=str(result.get('dry_run', True)), inline=True)
+                done_embed.add_field(
+                    name="Scanned",
+                    value=str(result.get("scanned_count", 0)),
+                    inline=True,
+                )
+                done_embed.add_field(
+                    name="Candidates",
+                    value=str(result.get("candidate_count", 0)),
+                    inline=True,
+                )
+                done_embed.add_field(
+                    name="Accepted",
+                    value=str(result.get("accepted_count", 0)),
+                    inline=True,
+                )
+                done_embed.add_field(
+                    name="Rejected",
+                    value=str(result.get("rejected_count", 0)),
+                    inline=True,
+                )
+                done_embed.add_field(
+                    name="Merged", value=str(result.get("merged_count", 0)), inline=True
+                )
+                done_embed.add_field(
+                    name="Dry run", value=str(result.get("dry_run", True)), inline=True
+                )
                 await ctx.send(embed=done_embed)
             except Exception as exc:
                 logger.exception("Background memory distillation failed")
@@ -249,7 +297,9 @@ class MemoryCommands(commands.Cog):
                 if task is not None and task.done():
                     self._distill_once_tasks.pop(guild_id, None)
 
-        task = asyncio.create_task(_run_and_report(), name=f"memory-distill-once-{guild_id}")
+        task = asyncio.create_task(
+            _run_and_report(), name=f"memory-distill-once-{guild_id}"
+        )
         self._distill_once_tasks[guild_id] = task
 
         def _cleanup(_task: asyncio.Task) -> None:

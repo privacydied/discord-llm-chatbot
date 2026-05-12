@@ -6,9 +6,6 @@ handler in the extraction protocol (Phase 12).
 
 from __future__ import annotations
 
-from typing import Optional
-
-import discord
 
 from bot.routing.base import RouteContext, RouteHandler, RouteResult
 
@@ -37,7 +34,6 @@ class UnknownHandler(RouteHandler):
             )
 
         text = (
-            f"Unsupported input type detected: {source}. "
-            "Unable to process this item."
+            f"Unsupported input type detected: {source}. Unable to process this item."
         )
         return RouteResult.text_only(text)

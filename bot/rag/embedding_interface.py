@@ -130,9 +130,7 @@ class SentenceTransformerEmbedding(EmbeddingInterface):
         local_path = self._get_local_model_path()
 
         if local_path and self._is_model_locally_cached(local_path):
-            logger.info(
-                f"📂 Loading {self.model_name} from local cache: {local_path}"
-            )
+            logger.info(f"📂 Loading {self.model_name} from local cache: {local_path}")
             self.model = SentenceTransformer(str(local_path), device="cpu")
         else:
             logger.info(
@@ -202,7 +200,9 @@ class SentenceTransformerEmbedding(EmbeddingInterface):
                     snapshots_dir = hub_model_path / "snapshots"
                     if snapshots_dir.exists():
                         for snapshot_dir in snapshots_dir.iterdir():
-                            if snapshot_dir.is_dir() and self._is_model_locally_cached(snapshot_dir):
+                            if snapshot_dir.is_dir() and self._is_model_locally_cached(
+                                snapshot_dir
+                            ):
                                 # Return the exact snapshot directory containing model files
                                 actual_path = getattr(
                                     self, "_cached_model_path", snapshot_dir

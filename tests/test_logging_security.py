@@ -9,7 +9,6 @@ Regression tests for security/logging hardening.
 import logging
 import os
 from unittest.mock import patch
-from unittest.mock import Mock, patch, MagicMock
 
 import pytest
 
@@ -284,18 +283,14 @@ class TestPartialSecretRedaction:
         fake_key = "sk-openai-fake-key-999"
         with patch.dict(os.environ, {"OPENAI_API_KEY": fake_key}):
             f = SensitiveDataFilter()
-            record = _make_log_record(
-                detail={"response": f"Key used: {fake_key}"}
-            )
+            record = _make_log_record(detail={"response": f"Key used: {fake_key}"})
             f.filter(record)
             assert fake_key not in record.detail["response"]
 
     def test_exact_key_still_redacted(self):
         """Keys in SECRET_KEYS still get full redaction regardless of value."""
         f = SensitiveDataFilter()
-        record = _make_log_record(
-            extra_data={"api_key": "some-secret-value"}
-        )
+        record = _make_log_record(extra_data={"api_key": "some-secret-value"})
         f.filter(record)
         assert record.extra_data["api_key"] == "[REDACTED]"
 
@@ -303,6 +298,7 @@ class TestPartialSecretRedaction:
 # ---------------------------------------------------------------------------
 # S8: SECRET_KEYS completeness
 # ---------------------------------------------------------------------------
+
 
 class TestSecretKeysCompleteness:
     """Verify that all secret env vars from config are in SECRET_KEYS."""
@@ -327,14 +323,16 @@ class TestSecretKeysCompleteness:
 
     def test_all_secret_envs_in_redact_list(self):
         """All secret env vars must appear in redact_sensitive_values list [S8]."""
-        import bot.utils.logging as m
+
         # Access the list inside the function
         # We verify by calling redact_sensitive_values with each key's value
         for key in self.EXPECTED_SECRET_ENV_VARS:
             fake_val = f"fake-{key}-value-12345678"
             with patch.dict(os.environ, {key: fake_val}):
                 result = redact_sensitive_values(f"text with {fake_val} inside")
-                assert fake_val not in result, f"redact_sensitive_values didn't redact {key}"
+                assert fake_val not in result, (
+                    f"redact_sensitive_values didn't redact {key}"
+                )
 
 
 # ---------------------------------------------------------------------------

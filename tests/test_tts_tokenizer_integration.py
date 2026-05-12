@@ -7,7 +7,9 @@ Tests for TTS tokenizer integration with espeak-ng and other phoneme systems.
 import pytest
 
 # Skip all tests — require system-level tokenizer binaries (espeak-ng)
-pytestmark = pytest.mark.skip(reason="Requires system-level tokenizer binaries (espeak-ng)")
+pytestmark = pytest.mark.skip(
+    reason="Requires system-level tokenizer binaries (espeak-ng)"
+)
 
 import unittest
 import logging

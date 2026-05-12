@@ -11,9 +11,10 @@ from playwright._impl._errors import Error as PlaywrightError
 
 
 class TestPlaywrightHelpersConfig:
-
     def _run_isolated(self, code: str) -> subprocess.CompletedProcess:
-        return subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+        return subprocess.run(
+            [sys.executable, "-c", code], capture_output=True, text=True
+        )
 
     def test_http_url_is_normalised_to_ws(self) -> None:
         r = self._run_isolated(
@@ -42,11 +43,13 @@ class TestPlaywrightHelpersConfig:
 
 @pytest.mark.asyncio
 class TestPlaywrightHelpersConnectBrowser:
-
-    async def test_connect_browser_uses_remote_when_configured(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def test_connect_browser_uses_remote_when_configured(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setenv("PW_SERVER_URL", "ws://localhost:9999")
         import bot.utils.playwright_helpers as pwh
         import importlib
+
         importlib.reload(pwh)
 
         mock_browser = MagicMock()
@@ -56,13 +59,18 @@ class TestPlaywrightHelpersConnectBrowser:
         result = await pwh.connect_browser(mock_chromium)
 
         assert result is mock_browser
-        mock_chromium.connect.assert_called_once_with("ws://localhost:9999", timeout=30_000)
+        mock_chromium.connect.assert_called_once_with(
+            "ws://localhost:9999", timeout=30_000
+        )
 
-    async def test_connect_browser_raises_on_remote_failure(self, monkeypatch: pytest.MonkeyPatch, caplog) -> None:
+    async def test_connect_browser_raises_on_remote_failure(
+        self, monkeypatch: pytest.MonkeyPatch, caplog
+    ) -> None:
         monkeypatch.setenv("PW_SERVER_URL", "ws://bad-host:9999")
         caplog.set_level("WARNING")
         import bot.utils.playwright_helpers as pwh
         import importlib
+
         importlib.reload(pwh)
 
         mock_chromium = MagicMock()
@@ -72,12 +80,18 @@ class TestPlaywrightHelpersConnectBrowser:
         result = await pwh.connect_browser(mock_chromium)
 
         assert result is None
-        assert any("unreachable" in rec.message.lower() or "refused" in rec.message for rec in caplog.records)
+        assert any(
+            "unreachable" in rec.message.lower() or "refused" in rec.message
+            for rec in caplog.records
+        )
 
-    async def test_connect_browser_returns_none_when_no_server(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def test_connect_browser_returns_none_when_no_server(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.delenv("PW_SERVER_URL", raising=False)
         import bot.utils.playwright_helpers as pwh
         import importlib
+
         importlib.reload(pwh)
 
         mock_chromium = MagicMock()

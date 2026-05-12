@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import sqlite3
 import threading
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence
 
 logger = logging.getLogger(__name__)
 
@@ -504,13 +503,17 @@ class PersistentMemoryStore:
     def _now_iso(self) -> str:
         return datetime.now(timezone.utc).isoformat()
 
-    async def fetch_active_by_ids(self, memory_ids: Sequence[str]) -> List[MemoryRecord]:
+    async def fetch_active_by_ids(
+        self, memory_ids: Sequence[str]
+    ) -> List[MemoryRecord]:
         if not memory_ids:
             return []
         await self.initialize()
         return await asyncio.to_thread(self._fetch_active_by_ids_sync, list(memory_ids))
 
-    def _fetch_active_by_ids_sync(self, memory_ids: Sequence[str]) -> List[MemoryRecord]:
+    def _fetch_active_by_ids_sync(
+        self, memory_ids: Sequence[str]
+    ) -> List[MemoryRecord]:
         placeholders = ",".join(["?"] * len(memory_ids))
         sql = (
             f"SELECT * FROM curated_memories WHERE memory_id IN ({placeholders}) "

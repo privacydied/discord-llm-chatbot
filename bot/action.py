@@ -27,7 +27,11 @@ class BotAction:
         Final safety net to remove any chain-of-thought leakage before Discord send.
         This is a belt-and-suspenders approach that should rarely trigger.
         """
-        from .public_output import extract_public_reply_text, has_reasoning_leakage, sanitize_public_text
+        from .public_output import (
+            extract_public_reply_text,
+            has_reasoning_leakage,
+            sanitize_public_text,
+        )
         from .vl.postprocess import sanitize_model_output, has_reasoning_content
         from .utils.logging import get_logger
 
@@ -50,8 +54,7 @@ class BotAction:
                 sanitized = sanitize_model_output(content)
                 if len(sanitized) < len(content) * 0.8:
                     logger.info(
-                        "VL safety net removed %d chars",
-                        len(content) - len(sanitized)
+                        "VL safety net removed %d chars", len(content) - len(sanitized)
                     )
                     vl_handled = True
                     content = sanitized

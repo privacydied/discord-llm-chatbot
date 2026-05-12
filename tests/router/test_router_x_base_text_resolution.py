@@ -54,7 +54,9 @@ async def test_resolve_x_base_text_falls_back_to_syndication(monkeypatch):
 
     monkeypatch.setattr(Router, "_get_x_api_client", _get_client)
     monkeypatch.setattr(Router, "_get_tweet_via_syndication", _get_syn)
-    monkeypatch.setattr(Router, "_format_syndication_result", lambda _s, _a, _u: "syn-ok")
+    monkeypatch.setattr(
+        Router, "_format_syndication_result", lambda _s, _a, _u: "syn-ok"
+    )
 
     out = await router._resolve_x_base_text_for_url("https://x.com/user/status/1")
     assert out == "syn-ok"

@@ -15,7 +15,7 @@ class TestCleanText:
     def clean_text(self):
         """Import the _clean_text method pattern from interface."""
         import re
-        
+
         def _clean_text(text: str) -> str:
             if not text:
                 return ""
@@ -32,7 +32,12 @@ class TestCleanText:
             text = re.sub(r"(?<!\w)_([^_]+)_(?!\w)", r"\1", text)
             text = re.sub(r"~~(.+?)~~", r"\1", text)
             text = re.sub(r"\|\|(.+?)\|\|", r"\1", text)
-            text = text.replace("**", "").replace("__", "").replace("~~", "").replace("||", "")
+            text = (
+                text.replace("**", "")
+                .replace("__", "")
+                .replace("~~", "")
+                .replace("||", "")
+            )
             text = text.replace(""", '"').replace(""", '"')
             text = text.replace("'", "'").replace("'", "'")
             text = text.replace("—", ", ").replace("–", ", ")
@@ -40,7 +45,7 @@ class TestCleanText:
             text = re.sub(r"[ \t]+", " ", text)
             text = re.sub(r"\n+", " ", text)
             return text.strip()
-        
+
         return _clean_text
 
     def test_discord_user_mention(self, clean_text):
@@ -97,14 +102,14 @@ class TestCleanText:
     def test_unicode_normalization(self, clean_text):
         """Unicode quotes and dashes should be normalized."""
         # Em dash → comma space
-        result = clean_text('one\u2014two')
-        assert 'one' in result and 'two' in result
+        result = clean_text("one\u2014two")
+        assert "one" in result and "two" in result
         # Ellipsis → three dots
-        result = clean_text('wait\u2026')
-        assert 'wait' in result and '...' in result
+        result = clean_text("wait\u2026")
+        assert "wait" in result and "..." in result
         # Smart quotes - just verify content preserved
-        result = clean_text('\u201cHello\u201d')
-        assert 'Hello' in result
+        result = clean_text("\u201cHello\u201d")
+        assert "Hello" in result
 
     def test_whitespace_normalization(self, clean_text):
         """Multiple spaces and newlines should be collapsed."""
@@ -118,6 +123,7 @@ class TestNumberToWords:
     @pytest.fixture
     def number_to_words(self):
         from bot.tts.eng_g2p_local import number_to_words
+
         return number_to_words
 
     def test_small_numbers(self, number_to_words):
@@ -166,14 +172,14 @@ class TestSentenceChunking:
     def split_sentences(self):
         """Standalone implementation of sentence splitting for tests."""
         import re
-        
+
         _MIN_CHUNK_CHARS = 20
         _MAX_CHUNK_CHARS = 400
-        
+
         def _split_into_sentences(text: str):
             if not text or not text.strip():
                 return []
-            raw_sentences = re.split(r'(?<=[.!?])\s+', text.strip())
+            raw_sentences = re.split(r"(?<=[.!?])\s+", text.strip())
             chunks = []
             current_chunk = ""
             for sent in raw_sentences:
@@ -185,7 +191,7 @@ class TestSentenceChunking:
                         chunks.append(current_chunk.strip())
                         current_chunk = ""
                     if len(sent) > _MAX_CHUNK_CHARS:
-                        parts = re.split(r'(?<=[,;])\s+', sent)
+                        parts = re.split(r"(?<=[,;])\s+", sent)
                         for part in parts:
                             part = part.strip()
                             if len(current_chunk) + len(part) + 1 > _MAX_CHUNK_CHARS:
@@ -193,12 +199,20 @@ class TestSentenceChunking:
                                     chunks.append(current_chunk.strip())
                                 current_chunk = part
                             else:
-                                current_chunk = (current_chunk + " " + part).strip() if current_chunk else part
+                                current_chunk = (
+                                    (current_chunk + " " + part).strip()
+                                    if current_chunk
+                                    else part
+                                )
                     else:
                         current_chunk = sent
                 else:
                     if len(current_chunk) + len(sent) + 1 < _MIN_CHUNK_CHARS:
-                        current_chunk = (current_chunk + " " + sent).strip() if current_chunk else sent
+                        current_chunk = (
+                            (current_chunk + " " + sent).strip()
+                            if current_chunk
+                            else sent
+                        )
                     elif current_chunk:
                         chunks.append(current_chunk.strip())
                         current_chunk = sent
@@ -220,7 +234,7 @@ class TestSentenceChunking:
                     merged.append(buffer)
                 chunks = merged
             return chunks
-        
+
         return _split_into_sentences
 
     def test_empty_text(self, split_sentences):
@@ -271,6 +285,7 @@ class TestNormalizeText:
     @pytest.fixture
     def normalize_text(self):
         from bot.tts.eng_g2p_local import normalize_text
+
         return normalize_text
 
     def test_colon_to_comma(self, normalize_text):

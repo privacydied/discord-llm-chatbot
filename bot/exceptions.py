@@ -48,6 +48,7 @@ class BotBaseException(Exception):
 #  Config-level                                                       #
 # ------------------------------------------------------------------ #
 
+
 class ConfigurationError(BotBaseException):
     """Raised for errors in bot configuration."""
 
@@ -55,6 +56,7 @@ class ConfigurationError(BotBaseException):
 # ------------------------------------------------------------------ #
 #  Dispatch-level (not routed through BotError chain)                 #
 # ------------------------------------------------------------------ #
+
 
 class DispatchEmptyError(BotBaseException):
     """Raised when a dispatch returns no result."""
@@ -68,6 +70,7 @@ class DispatchTypeError(BotBaseException):
 #  TTS / file processing                                              #
 # ------------------------------------------------------------------ #
 
+
 class TTSAudioError(BotBaseException):
     """Raised for Text-to-Speech audio errors."""
 
@@ -79,6 +82,7 @@ class FileProcessingError(BotBaseException):
 # ------------------------------------------------------------------ #
 #  Domain errors under BotError                                       #
 # ------------------------------------------------------------------ #
+
 
 class BotError(BotBaseException):
     """General bot domain error; parent of most structured exceptions."""
@@ -165,9 +169,13 @@ def __getattr__(name: str) -> Any:
     """Lazy attribute resolution for VisionError re-export."""
     if name.startswith("Vision") and _VisionError_UNRESOLVED:
         _resolve_vision_exceptions()
-    if name in ("VisionError", "VisionModelUnavailableError",
-                "VisionInputTooLargeError", "VisionUnsupportedMediaError",
-                "VisionErrorType"):
+    if name in (
+        "VisionError",
+        "VisionModelUnavailableError",
+        "VisionInputTooLargeError",
+        "VisionUnsupportedMediaError",
+        "VisionErrorType",
+    ):
         return globals()[name]
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
@@ -185,7 +193,10 @@ def _resolve_vision_exceptions() -> None:
 
     # Shortcut subclasses (if they exist in vision.types, use them;
     # otherwise we just leave them undefined since they are rare)
-    for _name in ("VisionModelUnavailableError", "VisionInputTooLargeError",
-                  "VisionUnsupportedMediaError"):
+    for _name in (
+        "VisionModelUnavailableError",
+        "VisionInputTooLargeError",
+        "VisionUnsupportedMediaError",
+    ):
         if hasattr(_vt, _name):
             globals()[_name] = getattr(_vt, _name)

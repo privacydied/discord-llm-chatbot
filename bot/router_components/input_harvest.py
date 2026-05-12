@@ -137,7 +137,9 @@ def strip_discord_mentions_and_urls(text: str) -> str:
         return (text or "").strip()
 
 
-def existing_url_payloads(items: Sequence[Any], *, strip_payload: bool = False) -> Set[str]:
+def existing_url_payloads(
+    items: Sequence[Any], *, strip_payload: bool = False
+) -> Set[str]:
     """Collect URL payloads from InputItem-like entries into a dedupe set."""
     urls: Set[str] = set()
     for it in items or []:
@@ -169,7 +171,9 @@ def append_unique_url_items(
             key = ""
         if not key or key in seen:
             continue
-        items.append(item_ctor(source_type="url", payload=u, order_index=len(items) + 1))
+        items.append(
+            item_ctor(source_type="url", payload=u, order_index=len(items) + 1)
+        )
         seen.add(key)
         added += 1
     return added

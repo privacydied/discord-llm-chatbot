@@ -20,6 +20,7 @@ def _save_all_data_sync() -> tuple[bool, bool]:
     """Persist all profile data off the event loop."""
     return save_all_profiles(), save_all_server_profiles()
 
+
 logger = logging.getLogger(__name__)
 
 # Global shutdown state

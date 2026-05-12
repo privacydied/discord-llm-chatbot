@@ -351,7 +351,8 @@ class TestMediaIngestionManager:
 
         with patch("bot.web.process_url", return_value=mock_web_result):
             with patch(
-                "bot.web_extraction_service.web_extractor.extract", return_value=tiered_fail
+                "bot.web_extraction_service.web_extractor.extract",
+                return_value=tiered_fail,
             ):
                 result = await manager._process_fallback_path(
                     url, mock_message, fallback_reason
@@ -388,7 +389,8 @@ class TestMediaIngestionManager:
 
         with patch("bot.web.process_url", return_value=mock_web_result):
             with patch(
-                "bot.web_extraction_service.web_extractor.extract", return_value=tiered_ok
+                "bot.web_extraction_service.web_extractor.extract",
+                return_value=tiered_ok,
             ):
                 result = await manager._process_fallback_path(
                     url, mock_message, fallback_reason
@@ -769,9 +771,7 @@ class TestMediaIngestionIntegration:
             "bot.media_ingestion.media_detector.is_media_capable",
             return_value=mock_probe_result,
         ):
-            with patch(
-                "bot.web.process_url", return_value=mock_web_result
-            ):
+            with patch("bot.web.process_url", return_value=mock_web_result):
                 with patch(
                     "bot.media_ingestion.brain_infer", return_value=mock_brain_result
                 ):

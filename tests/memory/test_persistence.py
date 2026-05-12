@@ -6,10 +6,7 @@ Tests for atomic persistence layer.
 """
 
 import json
-import os
-import tempfile
 from pathlib import Path
-import pytest
 
 from bot.memory.persistence import (
     _validate_json,
@@ -19,7 +16,6 @@ from bot.memory.persistence import (
     atomic_save_json,
     load_json_with_recovery,
     validate_profile_integrity,
-    PersistenceError,
 )
 
 
@@ -41,11 +37,11 @@ class TestAtomicWriteFile:
     def test_basic_write(self, tmp_path):
         target = tmp_path / "test.json"
         data = {"key": "value", "number": 42}
-        
+
         result = _atomic_write_file(target, data)
         assert result is True
         assert target.exists()
-        
+
         # Verify content
         with open(target) as f:
             loaded = json.load(f)
@@ -53,16 +49,16 @@ class TestAtomicWriteFile:
 
     def test_atomic_replace(self, tmp_path):
         target = tmp_path / "test.json"
-        
+
         # First write
         data1 = {"version": 1}
         _atomic_write_file(target, data1)
-        
+
         # Replace with new data
         data2 = {"version": 2}
         result = _atomic_write_file(target, data2)
         assert result is True
-        
+
         with open(target) as f:
             loaded = json.load(f)
         assert loaded["version"] == 2
@@ -70,7 +66,7 @@ class TestAtomicWriteFile:
     def test_invalid_json_not_written(self, tmp_path):
         target = tmp_path / "test.json"
         data = {"invalid": set([1, 2, 3])}  # sets can't be JSON serialized
-        
+
         result = _atomic_write_file(target, data)
         assert result is False
         assert not target.exists()
@@ -80,10 +76,10 @@ class TestCreateBackup:
     def test_backup_created(self, tmp_path):
         src = tmp_path / "original.json"
         dst = tmp_path / "backup.json"
-        
+
         # Create source
         src.write_text('{"test": "data"}')
-        
+
         result = _create_backup(src, dst)
         assert result is True
         assert dst.exists()
@@ -92,10 +88,10 @@ class TestCreateBackup:
     def test_overwrite_existing_backup(self, tmp_path):
         src = tmp_path / "original.json"
         dst = tmp_path / "backup.json"
-        
+
         src.write_text('{"v": 2}')
         dst.write_text('{"v": 1}')
-        
+
         result = _create_backup(src, dst)
         assert result is True
         assert json.loads(dst.read_text()) == {"v": 2}
@@ -105,10 +101,10 @@ class TestRestoreFromBackup:
     def test_successful_restore(self, tmp_path):
         backup = tmp_path / "backup.json"
         target = tmp_path / "corrupted.json"
-        
+
         backup.write_text('{"restored": true}')
-        target.write_text('garbage not json')
-        
+        target.write_text("garbage not json")
+
         result = _restore_from_backup(backup, target)
         assert result is True
         assert json.loads(target.read_text()) == {"restored": True}
@@ -116,9 +112,9 @@ class TestRestoreFromBackup:
     def test_restore_from_corrupted_backup_fails(self, tmp_path):
         backup = tmp_path / "backup.json"
         target = tmp_path / "target.json"
-        
-        backup.write_text('also not json')
-        
+
+        backup.write_text("also not json")
+
         result = _restore_from_backup(backup, target)
         assert result is False
 
@@ -150,7 +146,7 @@ class TestAtomicSaveJson:
     def test_save_without_backup(self, tmp_path):
         target = tmp_path / "profile.json"
         data = {"user_id": "456"}
-        
+
         result = atomic_save_json(target, data, create_backup=False)
         assert result is True
         assert target.exists()
@@ -159,14 +155,14 @@ class TestAtomicSaveJson:
     def test_save_invalid_data_fails(self, tmp_path):
         target = tmp_path / "profile.json"
         data = {"invalid": frozenset([1, 2])}  # Cannot be JSON serialized
-        
+
         result = atomic_save_json(target, data, validate_before_write=True)
         assert result is False
 
     def test_save_skips_validation(self, tmp_path):
         target = tmp_path / "profile.json"
         data = {"user_id": "789"}
-        
+
         result = atomic_save_json(target, data, validate_before_write=False)
         assert result is True
 
@@ -176,32 +172,34 @@ class TestLoadJsonWithRecovery:
         target = tmp_path / "profile.json"
         data = {"user_id": "123"}
         target.write_text(json.dumps(data))
-        
+
         result = load_json_with_recovery(target)
         assert result == data
 
     def test_missing_file_returns_default(self, tmp_path):
         target = tmp_path / "missing.json"
         default = {"default": True}
-        
+
         result = load_json_with_recovery(target, default_data=default)
         assert result == default
 
     def test_corrupted_file_with_recovery(self, tmp_path):
         target = tmp_path / "profile.json"
         backup = tmp_path / "profile.json.bak"
-        
+
         target.write_text("not json")
         backup.write_text(json.dumps({"recovered": True}))
-        
+
         result = load_json_with_recovery(target, attempt_recovery=True)
         assert result == {"recovered": True}
 
     def test_corrupted_file_no_recovery(self, tmp_path):
         target = tmp_path / "profile.json"
         target.write_text("not json")
-        
-        result = load_json_with_recovery(target, attempt_recovery=False, default_data={})
+
+        result = load_json_with_recovery(
+            target, attempt_recovery=False, default_data={}
+        )
         assert result == {}
 
 
@@ -243,17 +241,17 @@ class TestValidateProfileIntegrity:
 
 class TestConcurrencyScenarios:
     """Test behavior under concurrent access patterns."""
-    
+
     def test_atomic_semantics_exist(self, tmp_path):
         """Verify atomic write exists and handles replacement."""
         target = tmp_path / "concurrent.json"
-        
+
         # Simulate rapid writes
         for i in range(10):
             data = {"counter": i, "timestamp": i}
             result = _atomic_write_file(target, data)
             assert result is True
-        
+
         # Verify final state is consistent
         with open(target) as f:
             final = json.load(f)
@@ -262,60 +260,61 @@ class TestConcurrencyScenarios:
     def test_concurrent_async_writes_no_corruption(self, tmp_path):
         """Two coroutines writing to the same file should not produce corrupt JSON."""
         import asyncio
+
         target = tmp_path / "concurrent_async.json"
-        
+
         async def writer(data, delay=0.01):
             await asyncio.sleep(delay)
             return _atomic_write_file(target, data)
-        
+
         async def run_concurrent():
             results = await asyncio.gather(
                 writer({"source": "A", "value": 1}, delay=0.0),
                 writer({"source": "B", "value": 2}, delay=0.005),
             )
             return results
-        
+
         results = asyncio.run(run_concurrent())
         assert all(r is True for r in results)
-        
+
         # File must be valid JSON (either A or B, not a mix)
         with open(target) as f:
             data = json.load(f)
         assert data["source"] in ("A", "B")
         assert isinstance(data["value"], int)
-    
+
     def test_interrupted_write_recovery(self, tmp_path):
         """If a write is interrupted (temp file left), load_with_recovery still works."""
         target = tmp_path / "interrupted.json"
-        
+
         # Write valid data first
         _atomic_write_file(target, {"version": 1, "data": "original"})
-        
+
         # Simulate interruption: write a partial/corrupt file directly
-        with open(target, 'w') as f:
+        with open(target, "w") as f:
             f.write('{"version": 2, "data": "corrupt')  # truncated JSON
-        
+
         # load_with_recovery should detect corruption and recover from backup
         result = load_json_with_recovery(target, default_data={"version": 0})
         assert result is not None
         # Either recovered from backup or returned default
         assert result.get("version") in (1, 0)
-    
+
     def test_temp_file_cleanup_on_success(self, tmp_path):
         """Temp files from atomic writes are cleaned up after successful rename."""
         target = tmp_path / "cleanup.json"
         _atomic_write_file(target, {"clean": True})
-        
+
         # No .tmp_ files should remain
         tmp_files = list(tmp_path.glob(".tmp_*"))
         assert len(tmp_files) == 0, f"Stale temp files: {tmp_files}"
-    
+
     def test_lock_file_created_and_cleaned(self, tmp_path):
         """File lock is acquired and released during atomic_save_json."""
         target = tmp_path / "locked.json"
         result = atomic_save_json(target, {"locked": True}, use_lock=True)
         assert result is True
-        
+
         # Lock file may or may not persist (implementation detail)
         # but the data file must be valid
         with open(target) as f:
