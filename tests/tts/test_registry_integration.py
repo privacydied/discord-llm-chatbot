@@ -15,7 +15,7 @@ from unittest.mock import patch, MagicMock
 from pathlib import Path
 
 from bot.tokenizer_registry import select_for_language, Decision
-from bot.tts.kokoro_direct_fixed import KokoroDirect
+from bot.tts.kokoro_direct import KokoroDirect
 from bot.tts.engines.kokoro import KokoroONNXEngine
 
 
@@ -55,7 +55,7 @@ class TestRegistryIntegration:
         # Mock the registry to return phoneme decision
         decision = Decision("phonemes", "həˈloʊ wɝːld", "IPA")
 
-        with patch("bot.tts.kokoro_direct_fixed.KokoroDirect", return_value=kd):
+        with patch("bot.tts.kokoro_direct.KokoroDirect", return_value=kd):
             # This would be called from the engine
             kd.create(
                 phonemes=decision.payload,
@@ -75,7 +75,7 @@ class TestRegistryIntegration:
         caplog.set_level("DEBUG")
 
         # Mock KokoroDirect to avoid actual file operations
-        with patch("bot.tts.kokoro_direct_fixed.KokoroDirect") as mock_kd_class:
+        with patch("bot.tts.kokoro_direct.KokoroDirect") as mock_kd_class:
             mock_kd = MagicMock()
             mock_kd.create.return_value = Path("/tmp/test.wav")
             mock_kd_class.return_value = mock_kd
@@ -87,7 +87,7 @@ class TestRegistryIntegration:
                 )
 
                 # This simulates what happens in KokoroONNXEngine
-                from bot.tts.kokoro_direct_fixed import KokoroDirect
+                from bot.tts.kokoro_direct import KokoroDirect
 
                 kd = KokoroDirect(model_path="test.onnx", voices_path="test.npz")
                 decision = mock_select.return_value
@@ -178,7 +178,7 @@ class TestEngineIntegration:
     def test_engine_uses_registry_decisions(self, mocker):
         """Test that KokoroONNXEngine uses registry decisions for routing."""
         # Mock all the dependencies
-        mock_kd_class = mocker.patch("bot.tts.kokoro_direct_fixed.KokoroDirect")
+        mock_kd_class = mocker.patch("bot.tts.kokoro_direct.KokoroDirect")
         mock_kd = MagicMock()
         mock_kd.create.return_value = Path("/tmp/test.wav")
         mock_kd_class.return_value = mock_kd
@@ -212,7 +212,7 @@ class TestEngineIntegration:
 
     def test_engine_grapheme_path(self, mocker):
         """Test that grapheme decisions route to text path."""
-        mock_kd_class = mocker.patch("bot.tts.kokoro_direct_fixed.KokoroDirect")
+        mock_kd_class = mocker.patch("bot.tts.kokoro_direct.KokoroDirect")
         mock_kd = MagicMock()
         mock_kd.create.return_value = Path("/tmp/test.wav")
         mock_kd_class.return_value = mock_kd

@@ -9,7 +9,7 @@ import soundfile as sf
 from dotenv import load_dotenv
 
 # Import the fixed KokoroDirect implementation
-from bot.tts.kokoro_direct_fixed import KokoroDirect
+from bot.tts.kokoro_direct import KokoroDirect
 
 
 def main():

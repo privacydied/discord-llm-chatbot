@@ -17,7 +17,7 @@ from unittest.mock import patch, MagicMock
 
 # Import the modules we want to test
 from bot.tts.errors import TTSSynthesisError
-from bot.tts.kokoro_direct_fixed import KokoroDirect
+from bot.tts.kokoro_direct import KokoroDirect
 from bot.pdf_utils import PDFProcessor
 
 
@@ -35,10 +35,10 @@ class TestTTSErrorHandling(unittest.TestCase):
         # Clean up temporary directory
         self.temp_dir.cleanup()
 
-    @patch("bot.tts.kokoro_direct_fixed.np.max")
-    @patch("bot.tts.kokoro_direct_fixed.np.sqrt")
-    @patch("bot.tts.kokoro_direct_fixed.np.mean")
-    @patch("bot.tts.kokoro_direct_fixed.np.square")
+    @patch("bot.tts.kokoro_direct.np.max")
+    @patch("bot.tts.kokoro_direct.np.sqrt")
+    @patch("bot.tts.kokoro_direct.np.mean")
+    @patch("bot.tts.kokoro_direct.np.square")
     def test_zero_audio_detection(self, mock_square, mock_mean, mock_sqrt, mock_max):
         """Test that all-zero audio is detected and raises an error."""
         # Mock audio stats to simulate all-zero audio
@@ -57,7 +57,7 @@ class TestTTSErrorHandling(unittest.TestCase):
             patch.object(
                 KokoroDirect, "_get_voice_embedding", return_value=np.zeros((1, 256))
             ),
-            patch("bot.tts.kokoro_direct_fixed.soundfile.write") as mock_write,
+            patch("bot.tts.kokoro_direct.soundfile.write") as mock_write,
             patch.object(KokoroDirect, "sess") as mock_sess,
         ):
             # Mock ONNX session to return all-zero audio

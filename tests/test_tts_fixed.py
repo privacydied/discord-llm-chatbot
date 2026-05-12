@@ -22,7 +22,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 def test_tts_pipeline():
     """Test the TTS pipeline with the fixed KokoroDirect class."""
     KokoroDirect = getattr(
-        importlib.import_module("bot.tts.kokoro_direct_fixed"),
+        importlib.import_module("bot.tts.kokoro_direct"),
         "KokoroDirect",
     )
 

@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
 # Import KokoroDirect here so tests can patch 'bot.tts_manager_fixed.KokoroDirect'
-from .kokoro_direct_fixed import KokoroDirect
+from .kokoro_direct import KokoroDirect
 
 logger = logging.getLogger(__name__)
 

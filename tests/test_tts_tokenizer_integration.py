@@ -21,7 +21,7 @@ import numpy as np
 
 # Import the modules under test
 from bot.tokenizer_registry import TokenizerRegistry
-from bot.tts.kokoro_direct_fixed import KokoroDirect
+from bot.tts.kokoro_direct import KokoroDirect
 from bot.tts.errors import MissingTokeniserError
 
 
@@ -58,8 +58,8 @@ class TestTTSTokenizerIntegration(unittest.TestCase):
         # Clean up temporary directory
         self.temp_dir.cleanup()
 
-    @patch("bot.tts.kokoro_direct_fixed.KokoroDirect._load_model")
-    @patch("bot.tts.kokoro_direct_fixed.KokoroDirect._load_voices")
+    @patch("bot.tts.kokoro_direct.KokoroDirect._load_model")
+    @patch("bot.tts.kokoro_direct.KokoroDirect._load_voices")
     def test_kokoro_english_avoids_registry(self, mock_load_voices, mock_load_model):
         """English path should not call the tokenizer registry and should select 'espeak' placeholder."""
         # Set language to English
@@ -76,8 +76,8 @@ class TestTTSTokenizerIntegration(unittest.TestCase):
             mock_select.assert_not_called()
             self.assertEqual(phonemiser, "espeak")
 
-    @patch("bot.tts.kokoro_direct_fixed.KokoroDirect._load_model")
-    @patch("bot.tts.kokoro_direct_fixed.KokoroDirect._load_voices")
+    @patch("bot.tts.kokoro_direct.KokoroDirect._load_model")
+    @patch("bot.tts.kokoro_direct.KokoroDirect._load_voices")
     def test_kokoro_japanese_avoids_registry(self, mock_load_voices, mock_load_model):
         """Non-English KokoroDirect selection should not require registry; returns 'misaki' for ja."""
         os.environ["TTS_LANGUAGE"] = "ja"
@@ -91,8 +91,8 @@ class TestTTSTokenizerIntegration(unittest.TestCase):
             mock_select.assert_not_called()
             self.assertEqual(phonemiser, "misaki")
 
-    @patch("bot.tts.kokoro_direct_fixed.KokoroDirect._load_model")
-    @patch("bot.tts.kokoro_direct_fixed.KokoroDirect._load_voices")
+    @patch("bot.tts.kokoro_direct.KokoroDirect._load_model")
+    @patch("bot.tts.kokoro_direct.KokoroDirect._load_voices")
     def test_kokoro_uses_env_override(self, mock_load_voices, mock_load_model):
         """Test that KokoroDirect respects TTS_PHONEMISER environment variable."""
         # Set environment variable override
@@ -107,8 +107,8 @@ class TestTTSTokenizerIntegration(unittest.TestCase):
         # Verify environment variable was respected
         self.assertEqual(phonemiser, "custom_tokenizer")
 
-    @patch("bot.tts.kokoro_direct_fixed.KokoroDirect._load_model")
-    @patch("bot.tts.kokoro_direct_fixed.KokoroDirect._load_voices")
+    @patch("bot.tts.kokoro_direct.KokoroDirect._load_model")
+    @patch("bot.tts.kokoro_direct.KokoroDirect._load_voices")
     def test_kokoro_independent_of_registry_errors(
         self, mock_load_voices, mock_load_model
     ):
@@ -172,9 +172,9 @@ class TestTTSTokenizerIntegrationEspeakWrapper(unittest.TestCase):
         result = register_espeak_wrapper()
         self.assertIsInstance(result, bool)
 
-    @patch("bot.tts.kokoro_direct_fixed.KokoroDirect._load_model")
-    @patch("bot.tts.kokoro_direct_fixed.KokoroDirect._load_voices")
-    @patch("bot.tts.kokoro_direct_fixed.KokoroDirect._save_audio_to_wav")
+    @patch("bot.tts.kokoro_direct.KokoroDirect._load_model")
+    @patch("bot.tts.kokoro_direct.KokoroDirect._load_voices")
+    @patch("bot.tts.kokoro_direct.KokoroDirect._save_audio_to_wav")
     def test_kokoro_direct_tokenizer_initialization(
         self, mock_save, mock_load_voices, mock_load_model
     ):
@@ -187,7 +187,7 @@ class TestTTSTokenizerIntegrationEspeakWrapper(unittest.TestCase):
         mock_tokenizer.__class__.__name__ = "EspeakWrapper"
 
         # Import KokoroDirect
-        from bot.tts.kokoro_direct_fixed import KokoroDirect
+        from bot.tts.kokoro_direct import KokoroDirect
 
         # Initialize KokoroDirect with a mocked tokenizer
         with patch("kokoro_onnx.tokenizer.Tokenizer", return_value=mock_tokenizer):
@@ -206,9 +206,9 @@ class TestTTSTokenizerIntegrationEspeakWrapper(unittest.TestCase):
                 f"Kokoro tokenizer is {kokoro.tokenizer.__class__.__name__}, expected EspeakWrapper",
             )
 
-    @patch("bot.tts.kokoro_direct_fixed.KokoroDirect._load_model")
-    @patch("bot.tts.kokoro_direct_fixed.KokoroDirect._load_voices")
-    @patch("bot.tts.kokoro_direct_fixed.KokoroDirect._save_audio_to_wav")
+    @patch("bot.tts.kokoro_direct.KokoroDirect._load_model")
+    @patch("bot.tts.kokoro_direct.KokoroDirect._load_voices")
+    @patch("bot.tts.kokoro_direct.KokoroDirect._save_audio_to_wav")
     def test_english_tokenizer_initialized(
         self, mock_save, mock_load_voices, mock_load_model
     ):
@@ -220,7 +220,7 @@ class TestTTSTokenizerIntegrationEspeakWrapper(unittest.TestCase):
         mock_tokenizer.__class__.__name__ = "EspeakWrapper"
         mock_tokenizer.tokenize.return_value = ["t", "ɛ", "s", "t"]
 
-        from bot.tts.kokoro_direct_fixed import KokoroDirect
+        from bot.tts.kokoro_direct import KokoroDirect
 
         with patch("kokoro_onnx.tokenizer.Tokenizer", return_value=mock_tokenizer):
             kokoro = KokoroDirect(
@@ -230,7 +230,7 @@ class TestTTSTokenizerIntegrationEspeakWrapper(unittest.TestCase):
 
             # Patch audio creation to avoid onnx calls
             with patch(
-                "bot.tts.kokoro_direct_fixed.KokoroDirect._create_audio",
+                "bot.tts.kokoro_direct.KokoroDirect._create_audio",
                 return_value=(np.ones(1000, dtype=np.float32), 24000),
             ):
                 result = kokoro.create(
@@ -245,9 +245,9 @@ class TestTTSTokenizerIntegrationEspeakWrapper(unittest.TestCase):
             self.assertEqual(kokoro.tokenizer.__class__.__name__, "EspeakWrapper")
             self.assertIsInstance(result, Path)
 
-    @patch("bot.tts.kokoro_direct_fixed.KokoroDirect._load_model")
-    @patch("bot.tts.kokoro_direct_fixed.KokoroDirect._load_voices")
-    @patch("bot.tts.kokoro_direct_fixed.KokoroDirect._save_audio_to_wav")
+    @patch("bot.tts.kokoro_direct.KokoroDirect._load_model")
+    @patch("bot.tts.kokoro_direct.KokoroDirect._load_voices")
+    @patch("bot.tts.kokoro_direct.KokoroDirect._save_audio_to_wav")
     def test_no_grapheme_fallback_warning(
         self, mock_save, mock_load_voices, mock_load_model
     ):
@@ -259,7 +259,7 @@ class TestTTSTokenizerIntegrationEspeakWrapper(unittest.TestCase):
         mock_tokenizer.__class__.__name__ = "EspeakWrapper"
 
         # Import KokoroDirect
-        from bot.tts.kokoro_direct_fixed import KokoroDirect
+        from bot.tts.kokoro_direct import KokoroDirect
 
         # Initialize KokoroDirect with a mocked tokenizer
         with patch("kokoro_onnx.tokenizer.Tokenizer", return_value=mock_tokenizer):
@@ -287,7 +287,7 @@ class TestTTSTokenizerIntegrationEspeakWrapper(unittest.TestCase):
                 # Generate text
                 test_text = "This is a test of the English tokenizer."
                 with patch(
-                    "bot.tts.kokoro_direct_fixed.KokoroDirect._create_audio",
+                    "bot.tts.kokoro_direct.KokoroDirect._create_audio",
                     return_value=(np.ones(1000, dtype=np.float32), 24000),
                 ):
                     result = kokoro.create(

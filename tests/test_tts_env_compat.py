@@ -10,7 +10,7 @@ from unittest.mock import patch, MagicMock
 
 # Import the modules we want to test
 from bot.tts.manager_fixed import TTSManager
-from bot.tts.kokoro_direct_fixed import KokoroDirect, TokenizationMethod
+from bot.tts.kokoro_direct import KokoroDirect, TokenizationMethod
 
 
 class TestTTSEnvVarCompat(unittest.TestCase):
@@ -105,8 +105,8 @@ class TestTTSEnvVarCompat(unittest.TestCase):
 class TestTokenizerSelection(unittest.TestCase):
     """Test tokenizer selection and discovery."""
 
-    @patch("bot.tts.kokoro_direct_fixed.importlib.util.find_spec")
-    @patch("bot.tts.kokoro_direct_fixed.shutil.which")
+    @patch("bot.tts.kokoro_direct.importlib.util.find_spec")
+    @patch("bot.tts.kokoro_direct.shutil.which")
     def test_tokenizer_discovery(self, mock_which, mock_find_spec):
         """Test that tokenizer methods are correctly discovered."""
         # Mock tokenizer
