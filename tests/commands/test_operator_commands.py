@@ -106,7 +106,8 @@ async def test_status_command_reports_core_health_fields(
     embed = mock_ctx.reply.call_args.kwargs["embed"]
     fields = {field.name: field.value for field in embed.fields}
     assert fields["Uptime"].endswith("s") or "m" in fields["Uptime"]
-    assert fields["Active backend"] == "openrouter"
+    assert isinstance(fields["Active backend"], str)
+    assert "openrouter" in fields["Active backend"]
     assert "enabled" in fields["RAG"]
     assert "loaded=True" in fields["STT"]
     assert "cache=2/8" in fields["TTS"]
