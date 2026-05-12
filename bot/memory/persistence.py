@@ -26,24 +26,6 @@ _thread_local = threading.local()
 logger = logging.getLogger(__name__)
 
 
-class PersistenceError(Exception):
-    """Raised when persistence operations fail."""
-
-    pass
-
-
-class CorruptionError(PersistenceError):
-    """Raised when data corruption is detected."""
-
-    pass
-
-
-class AtomicWriteError(PersistenceError):
-    """Raised when atomic write fails."""
-
-    pass
-
-
 def _validate_json(data: Any) -> bool:
     """
     Validate that data can be serialized to JSON.

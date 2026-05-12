@@ -30,15 +30,9 @@ class ExtendedMemoryCommands(commands.Cog):
         Owner/admin only for detailed diagnostics.
         """
         try:
-            is_owner = ctx.author.id in self.bot.owner_ids
-            is_admin = False
-            if ctx.guild:
-                is_admin = (
-                    getattr(ctx.author, "guild_permissions", None)
-                    and ctx.author.guild_permissions.administrator
-                )
+            from bot.core.permissions import is_admin_user
 
-            if not (is_owner or is_admin):
+            if not await is_admin_user(ctx.author, self.bot):
                 await ctx.send(
                     "🔒 Memory status is only available to owners and admins."
                 )
@@ -54,9 +48,7 @@ class ExtendedMemoryCommands(commands.Cog):
             embed.add_field(name="Enabled", value=str(enabled), inline=True)
 
             if enabled and service:
-                queue_size = (
-                    len(service.queue._queue) if hasattr(service.queue, "_queue") else 0
-                )
+                queue_size = service.queue.qsize()
                 embed.add_field(name="Queue Depth", value=str(queue_size), inline=True)
 
                 try:
@@ -192,15 +184,9 @@ class ExtendedMemoryCommands(commands.Cog):
         In guilds, only owner/admin can disable.
         """
         try:
-            is_owner = ctx.author.id in self.bot.owner_ids
-            is_guild_admin = False
-            if ctx.guild:
-                is_guild_admin = (
-                    getattr(ctx.author, "guild_permissions", None)
-                    and ctx.author.guild_permissions.administrator
-                )
+            from bot.core.permissions import is_admin_user
 
-            if ctx.guild and not (is_owner or is_guild_admin):
+            if ctx.guild and not await is_admin_user(ctx.author, self.bot):
                 await ctx.send("🔒 In guilds, only owners/admins can disable memory.")
                 return
 
@@ -213,47 +199,6 @@ class ExtendedMemoryCommands(commands.Cog):
             logger.error(f"Error in memory-disable: {e}", exc_info=True)
             await ctx.send("❌ Failed to disable memory.")
 
-    async def memory_disable(self, ctx):
-        """ "Disable memory ingestion for your profile (owner/admin only in guilds).
-
-        In DMs, any user can disable their own memory.
-        In guilds, only owner/admin can disable.
-        """
-        try:
-            is_owner = ctx.author.id in self.bot.owner_ids
-            is_guild_admin = False
-            if ctx.guild:
-                is_guild_admin = (
-                    getattr(ctx.author, "guild_permissions", None)
-                    and ctx.author.guild_permissions.administrator
-                )
-
-            if ctx.guild and not (is_owner or is_guild_admin):
-                await ctx.send("🔒 In guilds, only owners/admins can disable memory.")
-                return
-
-            # Get or create user profile
-            from bot.memory.profiles import get_profile, save_profile
-
-            profile = get_profile(str(ctx.author.id))
-
-            # Set memory preference
-            if "preferences" not in profile:
-                profile["preferences"] = {}
-            profile["preferences"]["memory_enabled"] = False
-
-            # Save profile
-            if save_profile(profile, caller_id=str(ctx.author.id)):
-                await ctx.send(
-                    "✅ Memory ingestion has been disabled for your profile."
-                )
-            else:
-                await ctx.send("❌ Failed to save memory preference.")
-
-        except Exception as e:
-            logger.error(f"Error in memory-disable: {e}", exc_info=True)
-            await ctx.send("❌ Failed to disable memory.")
-
     @commands.command(name="memory-enable", aliases=["mem-enable"])
     async def memory_enable(self, ctx):
         """ "Re-enable memory ingestion for your profile.
@@ -261,15 +206,9 @@ class ExtendedMemoryCommands(commands.Cog):
         Same permission rules as memory-disable.
         """
         try:
-            is_owner = ctx.author.id in self.bot.owner_ids
-            is_guild_admin = False
-            if ctx.guild:
-                is_guild_admin = (
-                    getattr(ctx.author, "guild_permissions", None)
-                    and ctx.author.guild_permissions.administrator
-                )
+            from bot.core.permissions import is_admin_user
 
-            if ctx.guild and not (is_owner or is_guild_admin):
+            if ctx.guild and not await is_admin_user(ctx.author, self.bot):
                 await ctx.send("🔒 In guilds, only owners/admins can enable memory.")
                 return
 

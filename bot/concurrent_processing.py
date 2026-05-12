@@ -206,7 +206,15 @@ async def _process_item_with_coalescing(
         )
 
     # Use coalescing for URL-based operations
-    coalescer = get_url_processing_coalescer()
+    try:
+        from .request_coalescing import get_url_processing_coalescer
+
+        coalescer = get_url_processing_coalescer()
+    except ImportError:
+        # Coalescer not available, process without dedup
+        return await _process_item_with_budget(
+            item, modality, handler_fn, timeout, message
+        )
 
     async def _do_process() -> str:
         return await handler_fn(item, message=message)

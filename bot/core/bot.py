@@ -2925,6 +2925,7 @@ class LLMBot(commands.Bot):
             ("image_upgrade_commands", "ImageUpgradeCommands"),
             ("admin_alert_commands", "AdminAlertCommands"),
             ("archive_commands", "ArchiveCommands"),
+            ("memory_extended_cmds", "ExtendedMemoryCommands"),
         ]
 
         command_modules = []  # List of (module_name, success_status)

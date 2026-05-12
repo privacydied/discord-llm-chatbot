@@ -1,6 +1,6 @@
 """Tests for bot/url_safety.py SSRF and prompt-safety module."""
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -220,3 +220,87 @@ def test_is_metadata_ip():
     assert is_metadata_ip("169.254.170.2")  # AWS ECS credentials
     assert not is_metadata_ip("169.254.0.1")  # generic link-local, not metadata
     assert not is_metadata_ip("8.8.8.8")
+
+
+# ------------------------------------------------------------------ #
+#  validate_redirect_response (post-redirect SSRF check)
+# ------------------------------------------------------------------ #
+
+
+@pytest.mark.asyncio
+async def test_validate_redirect_response_allows_public_url():
+    """Public redirect target should pass."""
+    from bot.url_safety import validate_redirect_response
+
+    resp = MagicMock()
+    resp.url = "https://example.com/final"
+
+    result = await validate_redirect_response(resp)
+    assert result == "https://example.com/final"
+
+
+@pytest.mark.asyncio
+async def test_validate_redirect_response_blocks_redirect_to_localhost():
+    """A public URL redirecting to localhost must be blocked."""
+    from bot.exceptions import UrlSafetyError
+    from bot.url_safety import validate_redirect_response
+
+    resp = MagicMock()
+    resp.url = "http://localhost/admin"
+
+    with pytest.raises(UrlSafetyError):
+        await validate_redirect_response(resp)
+
+
+@pytest.mark.asyncio
+async def test_validate_redirect_response_blocks_redirect_to_loopback():
+    """A public URL redirecting to 127.0.0.1 must be blocked."""
+    from bot.exceptions import UrlSafetyError
+    from bot.url_safety import validate_redirect_response
+
+    resp = MagicMock()
+    resp.url = "http://127.0.0.1/secret"
+
+    with pytest.raises(UrlSafetyError):
+        await validate_redirect_response(resp)
+
+
+@pytest.mark.asyncio
+async def test_validate_redirect_response_blocks_redirect_to_metadata():
+    """A public URL redirecting to 169.254.169.254 must be blocked."""
+    from bot.exceptions import UrlSafetyError
+    from bot.url_safety import validate_redirect_response
+
+    resp = MagicMock()
+    resp.url = "http://169.254.169.254/latest/meta-data/"
+
+    with pytest.raises(UrlSafetyError):
+        await validate_redirect_response(resp)
+
+
+@pytest.mark.asyncio
+async def test_validate_redirect_response_blocks_redirect_to_rfc1918():
+    """A public URL redirecting to a private LAN IP must be blocked."""
+    from bot.exceptions import UrlSafetyError
+    from bot.url_safety import validate_redirect_response
+
+    for ip in ["10.0.0.1", "172.16.0.1", "192.168.1.1"]:
+        resp = MagicMock()
+        resp.url = f"http://{ip}/internal"
+
+        with pytest.raises(UrlSafetyError):
+            await validate_redirect_response(resp)
+
+
+@pytest.mark.asyncio
+@patch("bot.url_safety.validate_url_with_dns")
+async def test_validate_redirect_response_validates_dns(mock_validate):
+    """validate_redirect_response must call validate_url_with_dns, not just validate_url."""
+    from bot.url_safety import validate_redirect_response
+
+    mock_validate.return_value = ("https", "example.com")
+    resp = MagicMock()
+    resp.url = "https://example.com/ok"
+
+    await validate_redirect_response(resp)
+    mock_validate.assert_called_once_with("https://example.com/ok")
