@@ -2304,8 +2304,9 @@ class Router:
 
             if not vision_response:
                 return "❌ Vision processing returned no response"
+            # Reject error-shaped BotAction results (e.g. VL ladder exhausted) [REH]
             if getattr(vision_response, "error", None):
-                return f"❌ Vision processing error: {vision_response.error}"
+                return f"❌ Vision processing error: {vision_response.content}"
             content = getattr(vision_response, "content", "") or ""
             if not content.strip():
                 return "❌ Vision processing returned empty content"
@@ -5596,6 +5597,12 @@ class Router:
                 model_override=model_override,
             )
 
+            # Reject error-shaped BotAction results (e.g. VL ladder exhausted) [REH]
+            if not vision_result or getattr(vision_result, "error", None):
+                self.logger.warning(
+                    f"⚠️ Vision analysis failed for screenshot: {screenshot_path}"
+                )
+                return f"⚠️ Screenshot captured but vision analysis failed for: {url}"
             if (
                 vision_result
                 and hasattr(vision_result, "content")
@@ -5719,6 +5726,12 @@ class Router:
                 image_path=tmp_path, prompt=vl_prompt, model_override=model_override
             )
             if res and getattr(res, "content", None):
+                # Reject error-shaped BotAction results (e.g. VL ladder exhausted) [REH]
+                if getattr(res, "error", None):
+                    self.logger.warning(
+                        f"⚠️ VL inference error for {image_url}: {res.content}"
+                    )
+                    return None
                 return str(res.content).strip()
             self.logger.warning(f"⚠️ VL returned empty content for: {image_url}")
             return None
@@ -8196,6 +8209,12 @@ class Router:
                     and hasattr(vision_result, "content")
                     and vision_result.content
                 ):
+                    # Reject error-shaped BotAction results from see_infer. When the VL
+                    # ladder exhausts (or produces an empty completion) see_infer returns
+                    # a BotAction with a friendly error string AND error=True — that text
+                    # must NOT be injected as perception notes. [REH]
+                    if hasattr(vision_result, "error") and vision_result.error:
+                        return None, "vl_ladder_exhausted"
                     raw_text = str(vision_result.content).strip()
                 else:
                     return None, "provider_empty"
@@ -9932,44 +9951,40 @@ class Router:
                     image_path=downloaded_paths[0], prompt=prompt
                 )
 
-                if (
-                    vision_result
-                    and hasattr(vision_result, "content")
-                    and vision_result.content
-                ):
-                    raw_text = str(vision_result.content).strip()
-
-                    # Optional expand path: if user asked to "expand", return full text (still no files)
-                    instr_lc = (text_instruction or "").strip().lower()
-                    expand_tokens = {
-                        "expand",
-                        "more details",
-                        "more detail",
-                        "more",
-                        "expand please",
-                    }
-                    if instr_lc in expand_tokens:
-                        final_text = raw_text
-                        # Soft guard: Discord 2000 char limit
-                        return BotAction(content=final_text)
-
-                    # Concise path: sanitize and truncate per config
-                    max_chars = 0
-                    try:
-                        max_chars = int(self.config.get("VL_REPLY_MAX_CHARS", 420))
-                    except Exception:
-                        max_chars = 420
-                    strip_reasoning = bool(self.config.get("VL_STRIP_REASONING", True))
-                    final_text = sanitize_vl_reply_text(
-                        raw_text, max_chars=max_chars, strip_reasoning=strip_reasoning
-                    )
-
-                    if not final_text:
-                        final_text = "I can’t produce a concise description. Say ‘expand’ if you want the long version."
-
-                    return BotAction(content=final_text)
-                else:
+                if not vision_result or getattr(vision_result, "error", None):
                     raise Exception("Vision analysis returned no results")
+
+                raw_text = str(vision_result.content).strip()
+
+                # Optional expand path: if user asked to "expand", return full text (still no files)
+                instr_lc = (text_instruction or "").strip().lower()
+                expand_tokens = {
+                    "expand",
+                    "more details",
+                    "more detail",
+                    "more",
+                    "expand please",
+                }
+                if instr_lc in expand_tokens:
+                    final_text = raw_text
+                    # Soft guard: Discord 2000 char limit
+                    return BotAction(content=final_text)
+
+                # Concise path: sanitize and truncate per config
+                max_chars = 0
+                try:
+                    max_chars = int(self.config.get("VL_REPLY_MAX_CHARS", 420))
+                except Exception:
+                    max_chars = 420
+                strip_reasoning = bool(self.config.get("VL_STRIP_REASONING", True))
+                final_text = sanitize_vl_reply_text(
+                    raw_text, max_chars=max_chars, strip_reasoning=strip_reasoning
+                )
+
+                if not final_text:
+                    final_text = "I can't produce a concise description. Say 'expand' if you want the long version."
+
+                return BotAction(content=final_text)
 
             finally:
                 # Cleanup temp files

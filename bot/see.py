@@ -84,7 +84,7 @@ async def see_infer(
                 friendly_text = response.get("text") or (
                     "🔧 The vision service is temporarily unavailable. Please try again in a few minutes."
                 )
-                return BotAction(content=friendly_text)
+                return BotAction(content=friendly_text, error=True)
 
             # Check for non-empty text content [REH][CA]
             vl_text = response.get("text", "")

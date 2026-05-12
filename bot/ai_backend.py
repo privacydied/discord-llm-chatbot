@@ -174,7 +174,17 @@ async def generate_vl_response(
                 max_tokens=max_tokens,
                 **kwargs,
             )
-            logger.info("✅ OpenAI VL backend completed successfully")
+            # Only log success when the result does not carry failure metadata [REH]
+            _vl_ok = not (
+                isinstance(result, dict)
+                and (
+                    result.get("ladder_exhausted")
+                    or result.get("status") == "error"
+                    or (result.get("text") or "").strip() == ""
+                )
+            )
+            if _vl_ok:
+                logger.info("✅ OpenAI VL backend completed successfully")
             return result
         else:
             # For now, Ollama VL is not implemented, fallback to OpenAI
@@ -194,7 +204,16 @@ async def generate_vl_response(
                 max_tokens=max_tokens,
                 **kwargs,
             )
-            logger.info("✅ OpenAI VL fallback completed successfully")
+            _vl_ok = not (
+                isinstance(result, dict)
+                and (
+                    result.get("ladder_exhausted")
+                    or result.get("status") == "error"
+                    or (result.get("text") or "").strip() == ""
+                )
+            )
+            if _vl_ok:
+                logger.info("✅ OpenAI VL fallback completed successfully")
             return result
 
     except Exception as e:
