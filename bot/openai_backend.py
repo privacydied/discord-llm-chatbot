@@ -158,6 +158,66 @@ def _resolve_openai_compatible_endpoint(
     )
 
 
+def _ollama_coro_factory(
+    config: Dict[str, Any],
+    model: str,
+    messages: list,
+    temperature: float,
+    max_tokens: int | None,
+    kwargs: dict,
+    provider_config,
+):
+    """Create a coroutine that calls the local Ollama API.
+
+    Converts the OpenAI-style messages to a single prompt for Ollama,
+    then calls _make_openai_compatible_request to normalize the response
+    to the same shape expected by downstream code.
+    """
+
+    async def _run():
+        from .ollama import OllamaClient
+
+        base_url = (
+            config.get("OLLAMA_HOST")
+            or os.getenv("OLLAMA_HOST")
+            or "http://localhost:11434"
+        )
+        ollama_client = OllamaClient(base_url=base_url)
+
+        # Convert OpenAI messages to a single prompt for Ollama
+        user_parts = []
+        system_parts = []
+        for msg in messages:
+            role = msg.get("role", "")
+            content = msg.get("content", "")
+            if role == "system":
+                system_parts.append(content)
+            elif role == "user":
+                user_parts.append(content)
+            elif role == "assistant":
+                user_parts.append(f"[Assistant previous response]: {content}")
+
+        system_prompt = "\n".join(system_parts) if system_parts else None
+        prompt = "\n".join(user_parts) if user_parts else ""
+
+        try:
+            result = await ollama_client.generate(
+                prompt=prompt,
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                **{k: v for k, v in kwargs.items() if k not in ("stream",)},
+            )
+            text = result.get("response", "")
+            if not text:
+                raise APIError(f"Ollama returned empty response for model {model}")
+            return text
+        finally:
+            await ollama_client.close()
+
+    return _run
+
+
 async def _safe_aclose_openai_client(client: Any) -> None:
     """Best-effort close for OpenAI/httpx async clients without leaking __del__ tasks.
 
@@ -405,6 +465,13 @@ Server Context: {server_context}"""
 
             def _coro_factory(provider_config):
                 selected_model = provider_config.model
+
+                # Ollama provider: route through local Ollama instance
+                if provider_config.name == "ollama":
+                    return _ollama_coro_factory(
+                        config, selected_model, messages, temperature, max_tokens, kwargs, provider_config
+                    )
+
                 attempt_api_key, attempt_base_url, attempt_provider = (
                     _resolve_openai_compatible_endpoint(provider_config.name, config)
                 )

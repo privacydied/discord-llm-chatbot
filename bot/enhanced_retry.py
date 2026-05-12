@@ -259,6 +259,17 @@ class EnhancedRetryManager:
                 max_attempts=1,
             ),
         ]
+        # Ollama as local fallback (only appended when OLLAMA_HOST is reachable)
+        ollama_host = config.get("OLLAMA_HOST") or os.getenv("OLLAMA_HOST")
+        ollama_model = config.get("OLLAMA_MODEL") or os.getenv("OLLAMA_MODEL", "llama3")
+        if ollama_host:
+            try:
+                ollama_timeout = float(config.get("OLLAMA_TIMEOUT") or os.getenv("OLLAMA_TIMEOUT", "60.0"))
+            except Exception:
+                ollama_timeout = 60.0
+            default_text.append(
+                ProviderConfig("ollama", ollama_model, timeout=ollama_timeout, max_attempts=1)
+            )
         # Media tasks (e.g., video/audio downloads) are not LLM calls; they often need longer timeouts
         # and fewer attempts. Use an internal single-step "provider" to reuse the retry harness.
         # Timeout policy:
