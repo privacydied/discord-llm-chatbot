@@ -7450,14 +7450,21 @@ class Router:
     async def _handle_unknown(
         self, item: InputItem, message: Optional[Message] = None
     ) -> str:
+        """Handle unknown or unsupported input items.
+
+        Delegates to the extracted UnknownHandler (Phase 12 extraction).
         """
-        Handle unknown or unsupported input items.
-        Returns appropriate fallback message.
-        """
-        self.logger.warning(
-            f"Unknown input item type: {item.source_type} with payload type {type(item.payload)}"
+        from bot.routing import UnknownHandler, RouteContext
+
+        ctx = RouteContext(
+            message=message,
+            author_id=getattr(message, "author", None),
+            source_type=item.source_type,
+            payload=item.payload,
         )
-        return f"Unsupported input type detected: {item.source_type}. Unable to process this item."
+        handler = UnknownHandler(logger=getattr(self, "logger", None))
+        result = await handler.handle(ctx)
+        return result.text or ""
 
     def _get_input_modality(self, message: Message) -> InputModality:
         """Determine the input modality of a message."""
