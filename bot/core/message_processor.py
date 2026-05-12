@@ -135,7 +135,7 @@ class MessageProcessor:
 
                 try:
                     async with self._optional_typing(message.channel):
-                        await self.bot.router.dispatch_message(message)
+                        await self.bot._process_single_message(message)
                 except Exception:
                     self.logger.error(
                         f"Error processing message {message.id} for user {user_id}",
