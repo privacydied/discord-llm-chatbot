@@ -98,6 +98,7 @@ class TestKokoroDirect:
         with patch("soundfile.write") as mock:
             yield mock
 
+    @pytest.mark.needs_kokoro_assets
     def test_initialization(self, mock_tokenizer, mock_ort, mock_np_load):
         """Test KokoroDirect initialization."""
         assert self.engine.tokenizer is not None

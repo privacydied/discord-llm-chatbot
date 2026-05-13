@@ -5,6 +5,7 @@ These tests verify the core functionality of the bot without requiring
 an actual Discord connection.
 """
 
+import pytest
 import os
 import sys
 import unittest
@@ -191,6 +192,7 @@ class TestTTS(unittest.IsolatedAsyncioTestCase):
         """Clean up test environment."""
         self.test_dir.cleanup()
 
+    @pytest.mark.needs_kokoro_assets
     @patch("subprocess.run")
     async def test_generate_tts(self, mock_run):
         """Test TTS generation with mock subprocess."""

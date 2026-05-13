@@ -76,6 +76,7 @@ class TestTTSManager:
 
 
 # Integration test
+@pytest.mark.needs_kokoro_assets
 @pytest.mark.asyncio
 async def test_tts_integration():
     """Integration test for TTS synthesis."""
