@@ -334,7 +334,60 @@ class ConfigValidator:
                 "PROMETHEUS_PORT must be set when Prometheus HTTP server is enabled"
             )
 
+        # Vision fallback ladder — warn on duplicate entries [Phase 17-23]
+        self._validate_vision_fallback_ladder()
+
+        # Timeout ladder vs fallback ladder mismatch [Phase 17-23]
+        self._validate_timeout_ladder_mismatch()
+
         return errors
+
+    def _validate_vision_fallback_ladder(self) -> None:
+        """Log a warning if VISION_IMAGE_FALLBACK_MODELS contains duplicates."""
+        try:
+            from bot.config import load_config
+
+            cfg = load_config()
+            raw = cfg.get("VISION_IMAGE_FALLBACK_MODELS", "")
+            if not raw:
+                return
+            models = [m.strip() for m in raw.split(",") if m.strip()]
+            seen: set[str] = set()
+            duplicates: list[str] = []
+            for m in models:
+                if m in seen and m not in duplicates:
+                    duplicates.append(m)
+                seen.add(m)
+            if duplicates:
+                self.logger.warning(
+                    "config:vision_fallback_duplicates models=%s",
+                    ", ".join(duplicates),
+                )
+        except Exception:
+            pass
+
+    def _validate_timeout_ladder_mismatch(self) -> None:
+        """Warn when timeout ladder length differs from model ladder length."""
+        try:
+            from bot.config import load_config
+
+            cfg = load_config()
+            raw_models = cfg.get("VISION_IMAGE_FALLBACK_MODELS", "")
+            raw_timeouts = os.getenv("VISION_FALBACK_TIMEOUTS") or os.getenv(
+                "VISION_FALLBACK_TIMEOUTS"
+            )
+            if not raw_models or not raw_timeouts:
+                return
+            model_count = len([m for m in raw_models.split(",") if m.strip()])
+            timeout_count = len([t for t in raw_timeouts.split(",") if t.strip()])
+            if model_count != timeout_count:
+                self.logger.warning(
+                    "config:timeout_ladder_mismatch models=%d timeouts=%d",
+                    model_count,
+                    timeout_count,
+                )
+        except Exception:
+            pass
 
 
 class HealthMonitor:

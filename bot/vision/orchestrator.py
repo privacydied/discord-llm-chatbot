@@ -42,6 +42,9 @@ logger = get_logger(__name__)
 # Resource caps [Phase 12-16]
 _VL_MAX_IMAGES = _low_resource_int("VL_MAX_IMAGES", 5, 2)
 _VL_MAX_IMAGE_DIMENSION = _low_resource_int("VL_MAX_IMAGE_DIMENSION", 2048, 1024)
+_VISION_LOW_RESOURCE_RETRIES = _low_resource_int(
+    "VISION_LOW_RESOURCE_RETRIES", 3, 2
+)
 
 
 class VisionOrchestrator:
@@ -439,6 +442,16 @@ class VisionOrchestrator:
                             usage_data=usage_data,
                             model=None,
                         )
+                        # Guard: never charge zero for a completed paid job [Phase 17-23]
+                        if actual_cost_money.is_zero():
+                            fallback = self.config.get("VISION_BUDGET_PARSE_FALLBACK_COST_USD", 0.02)
+                            actual_cost_money = Money(f"{fallback}")
+                            self.logger.warning(
+                                "vision:cost_zero_on_paid provider=%s "
+                                "fallback_cost=%.4f",
+                                response.provider,
+                                fallback,
+                            )
                         # Validate against estimate
                         try:
                             self.usage_parser.validate_usage_cost(
@@ -453,20 +466,29 @@ class VisionOrchestrator:
                             pass
                     except Exception as parse_exc:
                         # Usage parser failed on a completed job — charge
-                        # conservatively using the estimated cost to avoid
-                        # silently bypassing budget enforcement.
-                        actual_cost_money = self._ensure_money(
-                            job.request.estimated_cost
+                        # conservatively using the configured fallback cost.
+                        fallback = self.config.get(
+                            "VISION_BUDGET_PARSE_FALLBACK_COST_USD", 0.02
                         )
+                        actual_cost_money = Money(f"{fallback}")
                         self.logger.warning(
                             "vision:cost_parse_failed provider=%s error=%s "
-                            "charged_estimate=%s",
+                            "fallback_cost=%.4f",
                             response.provider,
                             type(parse_exc).__name__,
-                            actual_cost_money,
+                            fallback,
                         )
                 else:
                     actual_cost_money = self._ensure_money(response.actual_cost)
+                    # Guard: never charge zero for a completed paid job [Phase 17-23]
+                    if actual_cost_money.is_zero():
+                        fallback = self.config.get("VISION_BUDGET_PARSE_FALLBACK_COST_USD", 0.02)
+                        actual_cost_money = Money(f"{fallback}")
+                        self.logger.warning(
+                            "vision:cost_zero_no_parser provider=unknown "
+                            "fallback_cost=%.4f",
+                            fallback,
+                        )
 
                 # Compute reserved amount: prefer request estimate; if missing, use actual [REH]
                 reserved_value = getattr(job.request, "estimated_cost", None)

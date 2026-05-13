@@ -970,6 +970,18 @@ def load_config():
         "TTS_SKIP_WARMUP": _low_resource_bool(
             "TTS_SKIP_WARMUP", False, True
         ),
+        # Vision parse-fallback: conservative cost when usage parsing fails [Phase 17-23]
+        "VISION_BUDGET_PARSE_FALLBACK_COST_USD": _safe_float(
+            os.getenv("VISION_BUDGET_PARSE_FALLBACK_COST_USD"),
+            "0.02",
+            "VISION_BUDGET_PARSE_FALLBACK_COST_USD",
+        ),
+        "VISION_PARSE_FALLBACK_CHARGE": _low_resource_float(
+            "VISION_PARSE_FALLBACK_CHARGE", 0.01, 0.005
+        ),
+        "VISION_LOW_RESOURCE_RETRIES": _low_resource_int(
+            "VISION_LOW_RESOURCE_RETRIES", 3, 2
+        ),
         # --- Resource caps [Phase 12-16] ---
         "MULTIMODAL_MAX_ITEMS": _low_resource_int(
             "MULTIMODAL_MAX_ITEMS", 5, 2
@@ -1014,6 +1026,24 @@ def load_config():
         # HTTP / aiohttp connector pool size (shared)
         "HTTP_POOL_MAX_CONNECTIONS": _low_resource_int(
             "HTTP_POOL_MAX_CONNECTIONS", 50, 10
+        ),
+        # HTTP response body cap [Phase 17-23]
+        "URL_MAX_RESPONSE_BYTES": _low_resource_int(
+            "URL_MAX_RESPONSE_BYTES", 500 * 1024, 200 * 1024
+        ),
+        "HTTP_READ_TIMEOUT_S": _low_resource_float(
+            "HTTP_READ_TIMEOUT_S", 30.0, 15.0
+        ),
+        # Config watcher debounce [Phase 17-23]
+        "CONFIG_WATCH_DEBOUNCE_S": _low_resource_float(
+            "CONFIG_WATCH_DEBOUNCE_S", 1.0, 2.0
+        ),
+        # Log sanitization [Phase 17-23]
+        "LOG_RATE_LIMIT_WINDOW_S": _safe_int(
+            os.getenv("LOG_RATE_LIMIT_WINDOW_S"), "60", "LOG_RATE_LIMIT_WINDOW_S"
+        ),
+        "LOG_MAX_STRING_LENGTH": _low_resource_int(
+            "LOG_MAX_STRING_LENGTH", 1000, 300
         ),
         # Playwright concurrency (browser instances)
         "PLAYWRIGHT_MAX_CONCURRENT": _low_resource_int(

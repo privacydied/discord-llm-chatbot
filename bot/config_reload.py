@@ -500,8 +500,23 @@ async def _file_watcher_loop() -> None:
     """Main file watcher loop with proper debouncing."""
     env_paths = _candidate_env_paths()
     last_digests: Dict[Path, Optional[str]] = {p: _file_digest(p) for p in env_paths}
+    # Track per-file mtime for quick-noop skip [Phase 17-23]
+    last_mtime: Dict[Path, float] = {}
+    for p in env_paths:
+        try:
+            last_mtime[p] = p.stat().st_mtime if p.exists() else 0.0
+        except OSError:
+            last_mtime[p] = 0.0
     last_reload_time = 0.0
-    debounce_delay = 0.5  # debounce to collapse editor burst events
+    # Configurable debounce — reads from config if available [Phase 17-23]
+    debounce_delay = 0.5  # fallback
+    try:
+        from .config import load_config as _fw_load_config
+
+        _fw_cfg = _fw_load_config()
+        debounce_delay = _fw_cfg.get("CONFIG_WATCH_DEBOUNCE_S", 1.0)
+    except Exception:
+        pass
 
     status = "completed"
     try:
@@ -514,6 +529,15 @@ async def _file_watcher_loop() -> None:
                     try:
                         prev = last_digests.get(p)
                         dig = _file_digest(p) if p.exists() else None
+                        # mtime guard: skip reload if mtime unchanged and digest matches [Phase 17-23]
+                        try:
+                            cur_mtime = p.stat().st_mtime if p.exists() else 0.0
+                            old_mtime = last_mtime.get(p, 0.0)
+                            if cur_mtime == old_mtime and dig == prev:
+                                continue
+                            last_mtime[p] = cur_mtime
+                        except OSError:
+                            pass
                         if (
                             dig != prev
                             and current_time - last_reload_time >= debounce_delay
@@ -526,16 +550,16 @@ async def _file_watcher_loop() -> None:
                         last_digests[p] = last_digests.get(p, None)
 
             except Exception as e:
-                logger.error(f"❌ Error in file watcher: {e}")
+                logger.error(f"Error in file watcher: {e}")
                 await asyncio.sleep(5)  # Wait longer on error
 
     except asyncio.CancelledError:
         status = "cancelled"
-        logger.info("🛑 File watcher cancelled")
+        logger.info("File watcher cancelled")
         raise
     except Exception as e:
         status = "errored"
-        logger.error(f"💥 File watcher crashed: {e}", exc_info=True)
+        logger.error(f"File watcher crashed: {e}", exc_info=True)
     finally:
         try:
             logger.info(

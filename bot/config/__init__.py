@@ -31,6 +31,10 @@ from ._base import (
     CONTEXT_MAX_CHARS_PER_MESSAGE,
     CONTEXT_MAX_TOTAL_CHARS,
     CONTEXT_IGNORE_BOT_CONTINUATION_CHUNKS,
+    # LOW_RESOURCE helpers [Phase 17-23]
+    _low_resource_int,  # noqa: F401
+    _low_resource_float,  # noqa: F401
+    _low_resource_bool,  # noqa: F401
     # Startup / validation helpers (still in _base; extracted incrementally)
     audit_env_file,
     validate_required_env,
