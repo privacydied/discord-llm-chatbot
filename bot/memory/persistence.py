@@ -15,13 +15,9 @@ import logging
 import os
 import shutil
 import tempfile
-import threading
 from pathlib import Path
 from typing import Any, Dict, Optional
 from contextlib import contextmanager
-
-# Thread-local storage for file handles (used during locking)
-_thread_local = threading.local()
 
 logger = logging.getLogger(__name__)
 

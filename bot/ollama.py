@@ -13,13 +13,17 @@ from .exceptions import APIError as OllamaAPIError
 from .memory import get_profile, get_server_profile
 from .utils.logging import get_logger
 
-# Load configuration
-config = load_config()
 logger = get_logger(__name__)
 
-# Ollama API settings
-OLLAMA_BASE_URL = config.get("OLLAMA_BASE_URL", "http://localhost:11434")
-OLLAMA_MODEL = config.get("OLLAMA_MODEL", "llama3")
+
+def _get_ollama_base_url() -> str:
+    return load_config().get("OLLAMA_BASE_URL", "http://localhost:11434")
+
+
+def _get_ollama_model() -> str:
+    return load_config().get("OLLAMA_MODEL", "llama3")
+
+
 DEFAULT_MAX_TOKENS = 2048
 DEFAULT_TEMPERATURE = 0.7
 DEFAULT_TOP_P = 0.9
@@ -39,7 +43,7 @@ class OllamaClient:
 
     def __init__(self, base_url: str = None, api_key: str = None):
         """Initialize the Ollama client."""
-        self.base_url = base_url or OLLAMA_BASE_URL
+        self.base_url = base_url or _get_ollama_base_url()
         self.api_key = api_key
         self.session = None
         self.headers = {
@@ -113,7 +117,7 @@ class OllamaClient:
             Dictionary with the generated text and metadata
         """
         # Apply defaults
-        model = model or OLLAMA_MODEL
+        model = model or _get_ollama_model()
         max_tokens = max_tokens or DEFAULT_MAX_TOKENS
         temperature = temperature if temperature is not None else DEFAULT_TEMPERATURE
         top_p = top_p if top_p is not None else DEFAULT_TOP_P
@@ -211,7 +215,7 @@ class OllamaClient:
             Dictionaries with partial results and metadata
         """
         # Apply defaults
-        model = model or OLLAMA_MODEL
+        model = model or _get_ollama_model()
         max_tokens = max_tokens or DEFAULT_MAX_TOKENS
         temperature = temperature if temperature is not None else DEFAULT_TEMPERATURE
         top_p = top_p if top_p is not None else DEFAULT_TOP_P
@@ -381,9 +385,9 @@ async def generate_response(
                 temperature = user_prefs.get("temperature", DEFAULT_TEMPERATURE)
 
             # Get user's preferred model if set
-            model = user_prefs.get("model", OLLAMA_MODEL)
+            model = user_prefs.get("model", _get_ollama_model())
         else:
-            model = OLLAMA_MODEL
+            model = _get_ollama_model()
 
         # Get server context if guild_id is provided
         server_context = ""

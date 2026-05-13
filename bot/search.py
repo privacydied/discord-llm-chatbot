@@ -19,9 +19,6 @@ from .memory import get_profile, get_server_profile
 # Import from the utils.py module using absolute import to avoid package conflict
 from bot.utils import download_file, is_text_file
 
-# Load configuration
-config = load_config()
-
 # Search result cache
 search_cache = {}
 CACHE_EXPIRY = timedelta(minutes=30)

@@ -12,9 +12,10 @@ Follows existing bot patterns and integrates with Vision orchestration system.
 
 import asyncio
 import discord
+import os
 from discord.ext import commands
 from discord import app_commands
-from typing import Optional, Literal
+from typing import Optional, Literal, Set
 from pathlib import Path
 import tempfile
 import aiohttp
@@ -38,6 +39,9 @@ class VisionCommands(commands.Cog):
         # Initialize orchestrator lazily
         self._orchestrator = None
 
+        # Track temp files created by _download_attachment for cleanup
+        self._temp_files: Set[Path] = set()
+
         self.logger.info("Vision commands cog initialized")
 
     @property
@@ -46,6 +50,17 @@ class VisionCommands(commands.Cog):
         if self._orchestrator is None:
             self._orchestrator = VisionOrchestrator(self.config)
         return self._orchestrator
+
+    async def cog_unload(self) -> None:
+        """Clean up temp files on cog unload."""
+        for path in self._temp_files:
+            try:
+                if path.exists():
+                    path.unlink()
+            except OSError:
+                pass
+        self._temp_files.clear()
+
 
     @app_commands.command(name="image", description="Generate images from text prompts")
     @app_commands.describe(
@@ -303,8 +318,15 @@ class VisionCommands(commands.Cog):
                 self._monitor_job_progress(interaction, job),
                 name=f"vision-monitor-imgedit-{job.job_id}",
             )
+            job_id = job.job_id
             _task.add_done_callback(
-                lambda t: None if not (t.done() and not t.cancelled() and t.exception()) else None
+                lambda t: self.logger.error(
+                    f"imgedit monitor task failed: {t.exception()}",
+                    exc_info=t.exception(),
+                    extra={"detail": {"job_id": job_id}},
+                )
+                if t.done() and not t.cancelled() and t.exception()
+                else None
             )
 
         except Exception as e:
@@ -410,8 +432,15 @@ class VisionCommands(commands.Cog):
                 self._monitor_job_progress(interaction, job, long_running=True),
                 name=f"vision-monitor-video-{job.job_id}",
             )
+            job_id = job.job_id
             _task.add_done_callback(
-                lambda t: None if not (t.done() and not t.cancelled() and t.exception()) else None
+                lambda t: self.logger.error(
+                    f"video monitor task failed: {t.exception()}",
+                    exc_info=t.exception(),
+                    extra={"detail": {"job_id": job_id}},
+                )
+                if t.done() and not t.cancelled() and t.exception()
+                else None
             )
 
         except Exception as e:
@@ -529,8 +558,15 @@ class VisionCommands(commands.Cog):
                 self._monitor_job_progress(interaction, job, long_running=True),
                 name=f"vision-monitor-vidref-{job.job_id}",
             )
+            job_id = job.job_id
             _task.add_done_callback(
-                lambda t: None if not (t.done() and not t.cancelled() and t.exception()) else None
+                lambda t: self.logger.error(
+                    f"vidref monitor task failed: {t.exception()}",
+                    exc_info=t.exception(),
+                    extra={"detail": {"job_id": job_id}},
+                )
+                if t.done() and not t.cancelled() and t.exception()
+                else None
             )
 
         except Exception as e:
@@ -580,6 +616,7 @@ class VisionCommands(commands.Cog):
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
         temp_path = Path(temp_file.name)
         temp_file.close()
+        self._temp_files.add(temp_path)
 
         # Download attachment data
         async with aiohttp.ClientSession() as session:

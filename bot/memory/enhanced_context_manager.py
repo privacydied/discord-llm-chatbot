@@ -256,7 +256,16 @@ class EnhancedContextManager:
         try:
             import asyncio
 
-            asyncio.ensure_future(self._save())
+            loop = asyncio.get_event_loop()
+            task = loop.create_task(self._save())
+            task.add_done_callback(
+                lambda t: logger.warning(
+                    f"Enhanced context save failed: {t.exception()}",
+                    exc_info=t.exception(),
+                )
+                if not t.cancelled() and t.exception()
+                else None
+            )
         except RuntimeError:
             # No event loop — skip save (should not happen in normal bot op)
             pass

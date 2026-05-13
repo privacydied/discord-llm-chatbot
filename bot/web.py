@@ -15,8 +15,6 @@ from trafilatura.settings import use_config
 from .config import load_config
 from .utils.external_api import _is_private_hostname
 
-# Load configuration
-config = load_config()
 
 # Configure trafilatura for better content extraction
 trafilatura_config = use_config()

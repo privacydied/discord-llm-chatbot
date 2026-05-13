@@ -28,9 +28,6 @@ from bot.logger import log_command
 
 logger = logging.getLogger(__name__)
 
-# Load configuration
-config = load_config()
-
 
 class MemoryCommands(commands.Cog):
     """Commands for managing user and server memories."""

@@ -241,8 +241,8 @@ _PUBLIC_DISCLOSURE_SENSITIVE_PATTERNS = [
     # Slurs
     r"\b(?:fag|faggot|nigga|nigger|tranny|retard|spastic)\b",
     # Third-party anecdotes
-    r"\bmy\s+(?:friend|buddy|mate|sis|bro|cousin)\b.*\b(?:got|did|was|had)\b",
-    r"\b(?:someone|somebody)\s+(?:said|told|did|got)\b",
+    r"\bmy\s+(?:friend|buddy|mate|sis|bro|cousin|girlfriend|boyfriend)\b.*\b(?:got|did|was|had)\b",
+    r"\b(?:someone|somebody)\s+(?:said|told|did|got|was|had|took)\b",
 ]
 
 # Compiled regex for is_public_safe — compile once at import.

@@ -30,31 +30,34 @@ async def _load_vector_index(self) -> bool:
         return True
 
     # Thread-safe state transition with lock
+    acquired_loading = False
     with self._index_load_lock:
         # Double-check pattern: verify state hasn't changed while waiting for lock
         if self._index_state == IndexState.LOADED:
             return True
 
         if self._index_state == IndexState.LOADING:
-            # Another thread is already loading, wait for it
+            # Another coroutine is already loading, wait for it — release lock during await
             logger.debug(
                 "[RAG] Vector index already loading, waiting for completion..."
             )
+        else:
+            # We're the first to attempt loading
+            logger.info("[RAG] Starting lazy vector index load...")
+            self._index_state = IndexState.LOADING
+            self._index_load_start_time = time.time()
+            acquired_loading = True
 
-            # Wait for loading to complete (with timeout)
-            start_wait = time.time()
-            while (
-                self._index_state == IndexState.LOADING
-                and time.time() - start_wait < self.config.lazy_load_timeout
-            ):
-                await asyncio.sleep(0.1)
+    # Wait for loading to complete (outside the lock)
+    if not acquired_loading:
+        start_wait = time.time()
+        while (
+            self._index_state == IndexState.LOADING
+            and time.time() - start_wait < self.config.lazy_load_timeout
+        ):
+            await asyncio.sleep(0.1)
 
-            return self._index_state == IndexState.LOADED
-
-        # We're the first to attempt loading
-        logger.info("[RAG] Starting lazy vector index load...")
-        self._index_state = IndexState.LOADING
-        self._index_load_start_time = time.time()
+        return self._index_state == IndexState.LOADED
 
     # Perform the actual loading outside the lock
     try:

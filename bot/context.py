@@ -11,9 +11,6 @@ from discord import Message
 # Import config
 from .config import load_config
 
-# Load configuration
-config = load_config()
-
 
 def _load_int_config(key: str, default: int) -> int:
     """Load an integer config value respecting LOW_RESOURCE_MODE via load_config()."""
@@ -27,11 +24,17 @@ def _load_int_config(key: str, default: int) -> int:
     return default
 
 
+def _get_config_value(key: str, default: Any) -> Any:
+    """Read a config value fresh on each call (avoids stale module-level cache)."""
+    try:
+        return load_config().get(key, default)
+    except Exception:
+        return default
+
+
 # Conversation store for tracking message history
 conversation_store = defaultdict(list)
-CONTEXT_TTL = config.get("CONTEXT_TTL", 900)  # 15 minutes in seconds
 CONTEXT_MAXLEN = _load_int_config("CONTEXT_MAX_MESSAGES", 30)
-CONTEXT_RESET_AFTER = config.get("CONTEXT_RESET_AFTER", 3600)  # 1 hour in seconds
 # Context trimming limits — respect LOW_RESOURCE_MODE via load_config()
 CONTEXT_MAX_CHARS_PER_MESSAGE = _load_int_config("CONTEXT_MAX_CHARS_PER_MESSAGE", 2000)
 CONTEXT_MAX_TOTAL_CHARS = _load_int_config("CONTEXT_MAX_TOTAL_CHARS", 8000)
@@ -78,7 +81,7 @@ def should_reset_context(message: Message) -> bool:
     last_time = last_message_time.get(key, 0)
 
     # If it's been too long since the last message, reset context
-    if time.time() - last_time > CONTEXT_RESET_AFTER:
+    if time.time() - last_time > _get_config_value("CONTEXT_RESET_AFTER", 3600):
         return True
 
     return False
@@ -93,7 +96,7 @@ def add_to_context(message: Message, role: str, content: str, **kwargs):
     conversation_store[key] = [
         msg
         for msg in conversation_store.get(key, [])
-        if current_time - msg.get("timestamp", 0) <= CONTEXT_TTL
+        if current_time - msg.get("timestamp", 0) <= _get_config_value("CONTEXT_TTL", 900)
     ]
 
     # Truncate content to per-message char limit
@@ -154,7 +157,7 @@ def get_conversation_context(
     # Clean up old messages based on TTL
     current_time = time.time()
     context = [
-        msg for msg in context if current_time - msg.get("timestamp", 0) <= CONTEXT_TTL
+        msg for msg in context if current_time - msg.get("timestamp", 0) <= _get_config_value("CONTEXT_TTL", 900)
     ]
 
     # Truncate each message to per-message char limit

@@ -638,6 +638,14 @@ async def start_file_watcher() -> None:
         _file_watcher_task = asyncio.create_task(
             _file_watcher_loop(), name="config_file_watcher"
         )
+        _file_watcher_task.add_done_callback(
+            lambda t: logger.error(
+                f"config file watcher task failed: {t.exception()}",
+                exc_info=t.exception(),
+            )
+            if t.done() and not t.cancelled() and t.exception()
+            else None
+        )
         logger.info(
             "config.watcher.started",
             extra={

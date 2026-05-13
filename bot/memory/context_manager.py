@@ -190,7 +190,16 @@ class ContextManager:
 
         # Fire-and-forget async save (sync caller)
         try:
-            asyncio.ensure_future(self._save())
+            loop = asyncio.get_event_loop()
+            task = loop.create_task(self._save())
+            task.add_done_callback(
+                lambda t: logger.warning(
+                    f"Context save failed: {t.exception()}",
+                    exc_info=t.exception(),
+                )
+                if not t.cancelled() and t.exception()
+                else None
+            )
         except RuntimeError:
             pass
 

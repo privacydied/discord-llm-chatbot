@@ -13,9 +13,6 @@ import logging
 # Import config
 from .config import load_config
 
-# Load configuration
-config = load_config()
-
 
 def clean_response(text: str) -> str:
     """Clean up response text before sending to Discord."""
