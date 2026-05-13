@@ -333,13 +333,15 @@ class CuratedMemoryService:
         query: str,
         max_chars: Optional[int] = None,
         top_k: Optional[int] = None,
+        allow_sensitive: bool = False,
     ) -> str:
         if not self.enabled or not user_id:
             return ""
 
+        requester = str(user_id)
         results = await self.semantic_search(
             query,
-            user_id=user_id,
+            user_id=requester,
             guild_id=guild_id,
             channel_id=channel_id,
             thread_id=thread_id,
@@ -348,10 +350,63 @@ class CuratedMemoryService:
         if not results:
             return ""
 
+        # --- hard owner-scope filter (Python-side post-filter) ---
+        candidates_before = len(results)
+        filtered: list[dict] = []
+        sensitive_count = 0
+        for item in results:
+            record = item.get("record") or {}
+            mem_user_id = str(record.get("user_id") or "")
+            # Drop records with missing user_id
+            if not mem_user_id:
+                continue
+            # Drop records not owned by the requester
+            if mem_user_id != requester:
+                continue
+            # Safe-disclosure filter
+            summary = str(record.get("summary") or item.get("document") or "")
+            if not allow_sensitive:
+                # Import here to avoid circular import in module init
+                from .curator import is_public_safe
+                if not is_public_safe(summary):
+                    sensitive_count += 1
+                    continue
+            filtered.append(item)
+
+        candidates_after = len(filtered)
+
+        # Logging (no memory bodies)
+        try:
+            logger.info(
+                "memory.recall_scope user_id=%s candidates_before=%d candidates_after=%d",
+                requester, candidates_before, candidates_after,
+                extra={
+                    "subsys": "memory",
+                    "event": "recall_scope",
+                    "user_id": requester,
+                    "detail": {
+                        "before": candidates_before,
+                        "after": candidates_after,
+                        "sensitive_filtered": sensitive_count,
+                    },
+                },
+            )
+        except Exception:
+            pass
+
+        if not filtered:
+            # If we had candidates but all were sensitive, acknowledge it
+            if candidates_before > 0 and sensitive_count > 0:
+                return (
+                    "I have some personal memories saved for you, "
+                    "but I won't repeat sensitive details casually here."
+                )
+            return ""
+
         max_chars = int(max_chars or self.max_prompt_chars)
         lines: list[str] = ["Relevant long-term memory:"]
         used = len(lines[0]) + 1
-        for item in results:
+        for item in filtered:
             record = item["record"]
             summary = str(record.get("summary") or item.get("document") or "").strip()
             if not summary:
@@ -688,9 +743,9 @@ async def list_user_memories(user_id: str, limit: int = 20) -> List[MemoryRecord
     return await service.list_user_memories(user_id, limit=limit)
 
 
-async def delete_memory(memory_id: str) -> bool:
+async def delete_memory(memory_id: str, *, owner_id: str | None = None) -> bool:
     service = await get_memory_service()
-    return await service.delete_memory(memory_id)
+    return await service.delete_memory(memory_id, owner_id=owner_id)
 
 
 async def wipe_user_memories(user_id: str) -> int:

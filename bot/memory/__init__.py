@@ -1,4 +1,5 @@
 from .context_manager import ContextManager
+from .identity import is_self_recall_intent, resolve_memory_subject_user_id
 from .profiles import (
     get_profile,
     get_server_profile,
@@ -33,6 +34,8 @@ from .retrieval import build_relevant_memory_block, get_relevant_memories
 
 __all__ = [
     "ContextManager",
+    "is_self_recall_intent",
+    "resolve_memory_subject_user_id",
     "get_profile",
     "get_server_profile",
     "load_all_profiles",

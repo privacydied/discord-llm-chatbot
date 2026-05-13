@@ -436,6 +436,17 @@ class AdminAlertManager:
         self.logger.info(f"📤 Sending alert from session {session.session_id}")
         session.status = AlertSessionStatus.POSTING
 
+        # Hard recipient cap: MAX 20 sends per alert [CAP]
+        MAX_CAP = 20
+        capped = len(session.destinations) > MAX_CAP
+        destinations_iter = session.destinations[:MAX_CAP] if capped else session.destinations
+
+        if capped:
+            self.logger.warning(
+                f"alert:send_alert:recipient_cap total={len(session.destinations)} "
+                f"cap={MAX_CAP} session_id={session.session_id}"
+            )
+
         results = {
             "total_destinations": len(session.destinations),
             "successful_sends": 0,
@@ -456,8 +467,7 @@ class AdminAlertManager:
             )
             embed.set_footer(text="Admin Alert")
 
-        # Send to each destination
-        for dest in session.destinations:
+        for dest in destinations_iter:
             try:
                 channel = self.bot.get_channel(dest.channel_id)
                 if not channel:
@@ -505,6 +515,7 @@ class AdminAlertCommands(commands.Cog):
         self.logger.info("🚨 Admin Alert Commands loaded")
 
     @commands.command(name="alert")
+    @commands.cooldown(2, 300, type=commands.BucketType.user)
     async def alert_command(
         self, ctx: commands.Context, *, message: str = None
     ) -> None:
@@ -597,7 +608,24 @@ class AdminAlertCommands(commands.Cog):
         guilds_skipped = 0
         guilds_failed = 0
 
+        # Hard recipient cap: MAX 20 sends per alert [CAP]
+        MAX_RECIPIENTS = 20
+
+        truncated_guilds = []
         for guild in self.bot.guilds:
+            truncated_guilds.append(guild)
+
+        if len(truncated_guilds) > MAX_RECIPIENTS:
+            self.logger.warning(
+                f"alert:direct_broadcast:recipient_cap guilds={len(truncated_guilds)} cap={MAX_RECIPIENTS}"
+            )
+            await ctx.send(
+                f"⚠️ Alert recipient cap reached ({MAX_RECIPIENTS}). "
+                f"Broadcast truncated from {len(truncated_guilds)} to {MAX_RECIPIENTS} recipients."
+            )
+            truncated_guilds = truncated_guilds[:MAX_RECIPIENTS]
+
+        for guild in truncated_guilds:
             guilds_targeted += 1
 
             # Get bot member to check permissions

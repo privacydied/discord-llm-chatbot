@@ -133,8 +133,10 @@ class SentenceTransformerEmbedding(EmbeddingInterface):
             logger.info(f"📂 Loading {self.model_name} from local cache: {local_path}")
             self.model = SentenceTransformer(str(local_path), device="cpu")
         else:
-            logger.info(
-                f"🌐 Loading {self.model_name} from HuggingFace (first time or cache miss)"
+            logger.warning(
+                "Embedding model %s not in local HF cache; first RAG/memory "
+                "semantic query will download ~90MB",
+                self.model_name,
             )
             self.model = SentenceTransformer(self.model_name, device="cpu")
 

@@ -451,8 +451,11 @@ async def test_retrieval_filters_by_scope(tmp_path):
         top_k=6,
         max_chars=400,
     )
+    # owner-scoped memory is returned
     assert "prefers dark mode fact" in block
-    assert "guild fact" in block
+    # guild-scoped memory from user-2 must NOT leak to user-1 (strict owner-scope)
+    assert "guild fact" not in block
+    # channel-scoped memory in a different channel must also not appear
     assert "channel fact" not in block
 
 

@@ -1,6 +1,10 @@
 """
 Engine adapter for kokoro>=0.8 (KPipeline), which does not require espeak.
 
+STATUS: EXPERIMENTAL — not production-ready.
+The TTS manager routes to kokoro-onnx by default.
+Enable only with explicit TTS_ENGINE=kokoro config.
+
 [RAT][REH][PA][CMV]
 """
 

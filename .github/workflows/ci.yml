@@ -30,14 +30,23 @@ jobs:
       - name: Lint (ruff)
         run: uv run ruff check .
 
+      - name: Format check (ruff)
+        run: uv run ruff format --check .
+
+      - name: Repo hygiene
+        run: uv run python utils/check_repo_hygiene.py
+
+      - name: Security scan (bandit)
+        run: uv run bandit -q -r bot -ll
+
       - name: Import check
         run: |
           python -c "import bot"
           python -c "from bot.core.bot import LLMBot"
           python -c "from bot.router import Router"
 
-      - name: Run tests
-        run: uv run pytest -q --tb=short
+      - name: Run tests (unit only)
+        run: uv run pytest -q --tb=short -m "not integration"
 
       - name: Config validation smoke
         run: |

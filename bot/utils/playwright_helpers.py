@@ -7,13 +7,88 @@ extraction is unavailable -- there is no local-browser fallback.
 
 from __future__ import annotations
 
+import asyncio
+import time
 from typing import Optional
 
 from playwright.async_api import Browser, BrowserType
+from playwright.async_api import Error as PlaywrightError
 
 from .logging import get_logger
 
 logger = get_logger(__name__)
+
+
+# ---- Cached health state --------------------------------------------------
+
+# Health-probe result cache; updated by check_playwright_health().
+_pw_health_available: bool | None = None
+_pw_health_last_check: float = 0.0
+_PW_HEALTH_TTL: float = 30.0  # seconds
+_pw_consecutive_failures: int = 0
+
+
+def get_playwright_health() -> dict:
+    """Return the current Playwright health snapshot (non-blocking).
+
+    Returns a dict with keys: available (bool|None), last_check (float),
+    consecutive_failures (int), degraded (bool).
+    """
+    return {
+        "available": _pw_health_available,
+        "last_check": _pw_health_last_check,
+        "consecutive_failures": _pw_consecutive_failures,
+        "degraded": _pw_consecutive_failures >= 2,
+    }
+
+
+async def check_playwright_health() -> bool:
+    """Cheap health probe: try to connect to remote Playwright with a 2s timeout.
+
+    Results are cached for ~30 seconds to avoid spamming the server.
+    Returns True if Playwright appears available, False otherwise.
+    """
+    global _pw_health_available, _pw_health_last_check, _pw_consecutive_failures
+
+    now = time.monotonic()
+    elapsed = now - _pw_health_last_check
+    if elapsed < _PW_HEALTH_TTL and _pw_health_available is not None:
+        return _pw_health_available
+
+    ws_url = _pw_server_url()
+    if ws_url is None:
+        _pw_health_available = False
+        _pw_health_last_check = now
+        return False
+
+    try:
+        from playwright.async_api import async_playwright
+
+        async with async_playwright() as pw:
+            # Use fast connect attempt; 2s timeout is enough to detect dead server
+            browser = await asyncio.wait_for(
+                pw.chromium.connect_over_cdp(ws_url),
+                timeout=2.0,
+            )
+            try:
+                ctx = await browser.new_context()
+                await ctx.close()
+            finally:
+                await browser.close()
+        _pw_health_available = True
+        _pw_consecutive_failures = 0
+        _pw_health_last_check = now
+        return True
+    except (PlaywrightError, asyncio.TimeoutError, Exception) as exc:
+        _pw_consecutive_failures += 1
+        _pw_health_available = False
+        _pw_health_last_check = now
+        logger.warning(
+            "playwright:health_check consecutive_failures=%d error=%s",
+            _pw_consecutive_failures,
+            type(exc).__name__,
+        )
+        return False
 
 
 def _pw_server_url() -> Optional[str]:

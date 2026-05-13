@@ -288,14 +288,18 @@ class CommandErrorHandler:
         self, ctx: commands.Context, error: commands.CommandOnCooldown
     ) -> None:
         """Handle command cooldown with helpful timing."""
-        template = self.ERROR_MESSAGES["command_on_cooldown"]
-        embed = discord.Embed(
-            title=f"{template['emoji']} {template['title']}",
-            description=template["description"].format(retry_after=error.retry_after),
-            color=template["color"],
+        # Log cooldown hits at WARNING level for monitoring
+        self.logger.warning(
+            f"cooldown:hit user_id={ctx.author.id} user={ctx.author} "
+            f"command={ctx.command.name if ctx.command else 'unknown'} "
+            f"retry_after={error.retry_after:.1f}s "
+            f"bucket={error.cooldown.bucket.type.name if hasattr(error.cooldown, 'bucket') and hasattr(error.cooldown.bucket, 'type') else 'unknown'}"
         )
 
-        await ctx.send(embed=embed, delete_after=min(15, error.retry_after))
+        retry_secs = int(error.retry_after)
+        await ctx.send(
+            f"⏳ This command is on cooldown. Try again in {retry_secs} seconds."
+        )
 
     async def _handle_bad_argument(
         self,

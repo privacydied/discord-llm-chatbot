@@ -152,7 +152,7 @@ def _safe_int(value: str, default: str, var_name: str) -> int:
         clean_value = value.split("#")[0].strip() if value else default
         return int(clean_value)
     except (ValueError, AttributeError):
-        print(f"Warning: Invalid {var_name} value '{value}', using default {default}")
+        logger.warning("Invalid %s value '%s', using default %s", var_name, value, default)
         return int(default)
 
 
@@ -163,7 +163,7 @@ def _safe_float(value: str, default: str, var_name: str) -> float:
         clean_value = value.split("#")[0].strip() if value else default
         return float(clean_value)
     except (ValueError, AttributeError):
-        print(f"Warning: Invalid {var_name} value '{value}', using default {default}")
+        logger.warning("Invalid %s value '%s', using default %s", var_name, value, default)
         return float(default)
 
 

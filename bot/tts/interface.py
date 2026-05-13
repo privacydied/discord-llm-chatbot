@@ -92,6 +92,9 @@ class TTSManager:
             os.getenv("TTS_TIMEOUT_WARM_S", self.config.get("TTS_TIMEOUT_WARM_S", 2.0))
         )
 
+        self._warmup_status = "not_started"  # not_started | running | complete | failed
+        self._warmup_task: asyncio.Task[Any] | None = None
+
         if self.enabled:
             try:
                 self._load_backend()
@@ -100,6 +103,42 @@ class TTSManager:
                 self.degraded_reason = str(exc)
                 self.available = False
                 logger.error("Failed to initialize TTS backend: %s", exc, exc_info=True)
+
+        # Start warm-up in background after backend is loaded (only if event loop is running)
+        if self.is_available():
+            try:
+                loop = asyncio.get_running_loop()
+                self._warmup_task = loop.create_task(self._warm_up(), name="tts-warmup")
+            except RuntimeError:
+                # No running event loop (e.g. during tests or synchronous init).
+                # Warm-up will happen lazily on first synthesize() call.
+                pass
+
+    async def _warm_up(self) -> None:
+        """Synthesise a short phrase after model load to avoid cold-start latency.
+
+        Runs as a background task; failure is non-fatal and logged structurally.
+        Sets _warmup_status to 'complete' or 'failed'.
+        Uses TTS_TIMEOUT_COLD_S as the budget (default 10 s).
+        """
+        self._warmup_status = "running"
+        logger.info("tts:warmup start backend=%s timeout=%.0fs", self.backend, self.timeout_cold_s)
+        try:
+            timeout = max(self.timeout_cold_s, 60.0)
+            await asyncio.wait_for(
+                self.synthesize("hello"),
+                timeout=timeout,
+            )
+            self._warmed_up = True
+            self._warmup_status = "complete"
+            logger.info("tts:warmup ok")
+        except asyncio.TimeoutError:
+            self._warmup_status = "failed"
+            logger.warning("tts:warmup timeout after %.0fs", timeout)
+        except Exception as exc:
+            self._warmup_status = "failed"
+            logger.warning("tts:warmup error=%s", type(exc).__name__)
+        # In all cases: non-fatal, normal synthesis proceeds with cold/warm timeout.
 
     def is_available(self) -> bool:
         return bool(
@@ -121,6 +160,7 @@ class TTSManager:
             "voice": self.voice,
             "cache_dir": str(self.cache_dir),
             "warmed_up": bool(self._warmed_up),
+            "warmup_status": self._warmup_status,
         }
 
     def get_cache_stats(self) -> dict[str, Any]:

@@ -99,6 +99,11 @@ COPY --chown=1026:100 configs/ /app/configs/
 COPY --chown=1026:100 run.py /app/
 COPY --chown=1026:100 pyproject.toml /app/
 
+# Pre-bake SentenceTransformer embedding model so first RAG/memory query does
+# not pay a cold download cost.  Downloaded at build-time; already available
+# when the bot starts.
+RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')"
+
 # Switch to non-root user
 USER botuser
 

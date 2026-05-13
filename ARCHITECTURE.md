@@ -151,3 +151,92 @@ Centralized permission checks in `bot/core/permissions.py`:
 | `TEXT_FALLBACK_TIMEOUTS` | Text fallback timeout ladder |
 | `TEXT_FALLBACK_MAX_ATTEMPTS` | Max fallback attempts |
 
+## Router Component Contract
+
+### Message Entry Path
+
+Messages flow through a strict pipeline with defined boundaries at each layer:
+
+```
+discord.on_message (bot/core/bot.py)
+  └─> MessageProcessor.on_message()          # dedup, archive, bot-self filter
+        └─> MessageProcessor.enqueue()        # per-user asyncio.Queue
+              └─> MessageProcessor._process_user_messages()  # drain queue serially
+                    └─> LLMBot._process_single_message()     # context, memory injection
+                          └─> Router.dispatch_message()      # gate → route → respond
+                                └─> BotAction or ResponseMessage returned
+```
+
+Key invariants:
+- **MessageProcessor** owns per-user queues and deduplication. Do not bypass it.
+- **LLMBot._process_single_message** is the single entry point to the router. It injects conversation context and triggers memory ingestion before calling `Router.dispatch_message()`.
+- **Router.dispatch_message** enforces the *1 IN > 1 OUT* rule: exactly zero or one response is generated per message.
+
+### Route Handler Protocol
+
+Route handlers in `bot/routing/` implement the `RouteHandler` protocol (`bot/routing/base.py`):
+
+```python
+class RouteHandler(Protocol):
+    async def can_handle(self, ctx: RouteContext) -> bool: ...
+    async def handle(self, ctx: RouteContext) -> RouteResult: ...
+```
+
+Rules:
+
+- **`can_handle(ctx)`** — synchronous in behavior, **cheap, no network, no blocking I/O**. Called for *every* message. Check source types, URL patterns, or attachment types here. Return `True` only when this handler is the correct match.
+- **`handle(ctx)`** — async, **may perform bounded I/O** (HTTP calls, file downloads, vision inference). Must respect configured timeouts (see `TIMEOUT`, `VL_REQUEST_TIMEOUT`, and per-provider ladders). Always returns a `RouteResult` (or `ResponseMessage` in the legacy flow); never returns `None` or raises uncaught exceptions.
+
+### First-Match-Wins Routing
+
+The router iterates handlers in **priority order** and stops at the first match where `can_handle` returns `True`. There is no fallback chaining or multi-handler dispatch for a single modality. Ordering matters — more specific handlers must register before broader ones.
+
+### Feature Gates
+
+Handlers must check feature toggles before doing work. The router provides `_feature_gate_response()` which inspects server-level flags for STT, TTS, vision, RAG, and other optional subsystems. When a feature is disabled for the current guild, handlers should return an informative error response rather than silently dropping or attempting the operation.
+
+Use `bot/server_features.is_server_feature_enabled()` or the router's gate helpers — do not read config flags directly in handler code.
+
+### Mention-Gating Invariant (CRITICAL)
+
+This is a hard behavioral contract:
+
+| Context | Behavior |
+|---------|----------|
+| **Guild channels** (text, threads, voice) | Reply **ONLY** when the bot is mentioned (`<@bot_id>` / `<@!bot_id>`) OR explicitly invoked via the configured command prefix (`!`). Unmentioned text in guild channels is ignored by the router. |
+| **DM channels** | No mention or prefix required. The bot responds to every message from the user. |
+
+The gating helpers live in `bot/router_components/gating.py`:
+- `mentions_bot(message, bot_user_id)` — checks Discord `message.mentions` for the bot's user ID.
+- `is_reply_to_bot(message, bot_user_id)` — checks if the message is a reply to a bot-authored message.
+- `strip_leading_bot_mention(content, bot_user_id)` — removes the `<@id>` / `<@!id>` prefix before passing text to downstream handlers.
+
+The `BOT_SPEAKS_ONLY_WHEN_SPOKEN_TO` config flag (default `True`) controls whether the mention gate is enforced in guild contexts.
+
+### How to Add a Handler
+
+1. **Create the handler class** in `bot/routing/`. Implement `can_handle()` and `handle()` matching the `RouteHandler` protocol.
+2. **Export it** from `bot/routing/__init__.py`.
+3. **Register in the routing table** inside `Router.dispatch_message()` in `bot/router.py`, in the correct priority order (specific before general).
+4. **Add tests** in `tests/test_router_*` or `tests/core/test_router.py`.
+5. **Add a feature flag** in `bot/server_features.py` if the handler depends on an optional subsystem.
+
+### Where NOT to Put New Logic
+
+- **Do not** add routing logic to `bot/core/bot.py`. The bot class delegates to `MessageProcessor` and `Router` only.
+- **Do not** create parallel router systems or bypass the `Router.dispatch_message()` pipeline.
+- **Do not** import Discord library types directly into `bot/routing/` handlers — use `RouteContext` which abstracts the Discord message.
+- **Do not** add business logic to `bot/core/message_processor.py` — it owns queuing and dedup only.
+
+### X/Twitter URL Routing Special Case
+
+X/Twitter (twitter.com, x.com, fxtwitter.com, vxtwitter.com) URL routing has its own dedicated pipeline within the router, separate from the generic URL/web extraction path. It includes:
+
+- **Syndication cache** (`_syn_cache` + `_syn_locks`) to avoid redundant API calls for the same tweet.
+- **X API client** (`bot/x_api_client.py`) for direct tweet data retrieval.
+- **STT pipeline for X video**: X video content goes through Whisper transcribe with its own timeout budget (`X_STT_MIN_TIMEOUT_S` = 120s through `X_STT_MAX_TIMEOUT_S` = 900s, RTF-based calculation).
+- **Frontend URL canonicalization**: fx/vx/vx variants are normalized to canonical x.com/twitcher.com status URLs before processing.
+- **Dedicated helper module**: `bot/router_components/` contains 40+ X-specific functions for URL extraction, oEmbed fallbacks, media resolution, tweet text formatting, and syndication payload building.
+
+Do not route X/Twitter URLs through the generic `process_url` or `web_extractor` paths — they have a specialized pipeline with caching, transcription, and media selection semantics.
+

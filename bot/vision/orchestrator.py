@@ -436,9 +436,20 @@ class VisionOrchestrator:
                             )
                         except Exception:
                             pass
-                    except Exception:
-                        # Fallback to provider-reported actual
-                        actual_cost_money = self._ensure_money(response.actual_cost)
+                    except Exception as parse_exc:
+                        # Usage parser failed on a completed job — charge
+                        # conservatively using the estimated cost to avoid
+                        # silently bypassing budget enforcement.
+                        actual_cost_money = self._ensure_money(
+                            job.request.estimated_cost
+                        )
+                        self.logger.warning(
+                            "vision:cost_parse_failed provider=%s error=%s "
+                            "charged_estimate=%s",
+                            response.provider,
+                            type(parse_exc).__name__,
+                            actual_cost_money,
+                        )
                 else:
                     actual_cost_money = self._ensure_money(response.actual_cost)
 

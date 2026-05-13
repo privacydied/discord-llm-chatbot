@@ -186,7 +186,67 @@ _INFERRED_DENYLIST = [
     r"\b(?:(?:he|she|they) (?:said|told|did|got|was|had|took))\b",
     r"\bmy friends\b",
     r"\bmy friend\b",
+    # Sexual / explicit content
+    r"\b(?:porn|xxx|hentai|onlyfans|only\s*fans)\b",
+    r"\b(?:hookup|one.night(?:\s+stand)?)\b",
+    r"\b(?:nude[s]?|naked|nudes)\b",
+    # Slurs (common ones)
+    r"\b(?:fag|faggot|nigga|nigger|tranny|retard)\b",
 ]
+
+
+# ---------------------------------------------------------------------------
+# Public-disclosure sensitive patterns — blocks memories from being casually
+# repeated in normal guild chat answers (tell-me-about-myself).
+# These memories may remain stored for !memories-show (owner only) but are
+# suppressed in normal casual LLM prompt injection.
+# ---------------------------------------------------------------------------
+_PUBLIC_DISCLOSURE_SENSITIVE_PATTERNS = [
+    # Sexual / body-size claims
+    r"\b(?:porn|xxx|hentai|onlyfans|only\s*fans)\b",
+    r"\b(?:hookup|one.night(?:\s+stand)?)\b",
+    r"\b(?:nude[s]?|naked)\b",
+    r"\b(?:sexy|hot|attractive|beautiful)\s+(?:girl|boy|woman|man|body|figure)\b",
+    r"\b(?:weight|bmi|overweight|underweight|obese|skinny)\b",
+    r"\b(?:size|cup|bust)\s+(?:of|is|my|her|his)\b",
+    r"\bmy\s+(?:body|chest|breasts?|dick|cock|penis|vagina|pussy|ass)\b",
+    r"\b(?:big|small|huge|tiny|flat)\s+(?:boobs?|chest|dick|cock|penis|ass)\b",
+    # Drugs / medication / substance claims
+    r"\b(?:coke|cocaine|crack|heroin|meth|mdma|molly|ecstasy|lsd|acid)\b",
+    r"\b(?:xanax|valium|adderall|oxycontin|percocet|tramadol)\b",
+    r"\b(?:weed|marijuana|cannabis|bong|joint|dabs|k2)\b",
+    r"\b(?:shrooms|psilocybin|ketamine|special\s*k)\b",
+    r"\b(?:drug|high|stoned|sober|addict|addiction|overdose)\b",
+    # Medical / mental-health claims
+    r"\b(?:depression|depressed|anxious|anxiety|ptsd|bipolar|schizophrenia)\b",
+    r"\b(?:autism|autistic|adhd|ocd|bpd|disorder)\b",
+    r"\b(?:cancer|diabetes|epilepsy|hiv|aids|heart\s*disease)\b",
+    r"\b(?:suicid|self.harm|selfharm)\b",
+    r"\b(?:therapy|therapist|psychiatrist|medication|pills)\b",
+    # Protected identity claims
+    r"\b(?:race|racial|ethnic|ethnicity)\b",
+    r"\b(?:religion|religious|atheist|catholic|protestant)\b",
+    r"\b(?:sexual\s*orientation|gay|lesbian|bisexual|queer|transgender)\b",
+    r"\b(?:political|politic|republican|democrat|liberal|conservative)\b",
+    # Slurs
+    r"\b(?:fag|faggot|nigga|nigger|tranny|retard|spastic)\b",
+    # Third-party anecdotes
+    r"\bmy\s+(?:friend|buddy|mate|sis|bro|cousin)\b.*\b(?:got|did|was|had)\b",
+    r"\b(?:someone|somebody)\s+(?:said|told|did|got)\b",
+]
+
+
+def is_public_safe(text: str) -> bool:
+    """Return False if the memory text contains content too sensitive for casual guild-chat disclosure.
+
+    This is applied before injecting memories into normal LLM prompts.
+    The memory remains stored for !memories-show (owner only).
+    """
+    lower = (text or "").lower()
+    return not any(
+        re.search(p, lower, flags=re.I)
+        for p in _PUBLIC_DISCLOSURE_SENSITIVE_PATTERNS
+    )
 
 
 @dataclass(slots=True)

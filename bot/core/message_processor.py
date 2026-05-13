@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import collections
 import time
+from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Dict
 
 import discord
@@ -227,6 +228,7 @@ class MessageProcessor:
                         pass
                     return
 
+    @asynccontextmanager
     async def _optional_typing(self, channel):
         """Type indicator context manager, copied from LLMBot."""
         typing_factory = getattr(channel, "typing", None)

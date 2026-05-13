@@ -52,6 +52,7 @@ class OperatorCommands(commands.Cog):
             await ctx.reply("❌ Failed to build status summary.", mention_author=False)
 
     @commands.command(name="feature", aliases=["toggle-feature", "toggle_feature"])
+    @commands.cooldown(2, 300, type=commands.BucketType.user)
     @commands.has_permissions(administrator=True)
     async def feature_command(
         self, ctx: commands.Context, name: str = "", setting: str = ""
@@ -138,6 +139,8 @@ class OperatorCommands(commands.Cog):
         ollama_line = self._get_ollama_status(toggles)
         playwright_line = self._get_playwright_status(toggles)
         queue_line = self._get_queue_status()
+        storage_line = self._get_storage_status()
+        embedding_line = self._get_embedding_model_status()
 
         vision_line = self._get_vision_status(toggles)
         memory_line = self._get_memory_service_status(toggles)
@@ -162,6 +165,8 @@ class OperatorCommands(commands.Cog):
         embed.add_field(name="Ollama", value=ollama_line, inline=False)
         embed.add_field(name="Playwright", value=playwright_line, inline=False)
         embed.add_field(name="Queue / backpressure", value=queue_line, inline=False)
+        embed.add_field(name="Storage", value=storage_line, inline=False)
+        embed.add_field(name="Embedding model", value=embedding_line, inline=False)
 
         feature_lines = [
             f"• {name}: {feature_status_label(enabled)}"
@@ -322,7 +327,8 @@ class OperatorCommands(commands.Cog):
             cache_text += f"/{cache_max}"
         available = engine_status.get("available", False)
         engine = engine_status.get("engine", "unknown")
-        return f"{feature_status_emoji(enabled)} {feature_status_label(enabled)}; engine={engine}; loaded={available}; {cache_text}"
+        warmup_status = engine_status.get("warmup_status", "unknown")
+        return f"{feature_status_emoji(enabled)} {feature_status_label(enabled)}; engine={engine}; loaded={available}; warmup={warmup_status}; {cache_text}"
 
     def _get_ollama_status(self, toggles: Dict[str, bool]) -> str:
         """Return Ollama provider status (if configured)."""
@@ -344,11 +350,16 @@ class OperatorCommands(commands.Cog):
         )
 
     def _get_playwright_status(self, toggles: Dict[str, bool]) -> str:
+        """Return Playwright / web-extraction status including health probe info."""
         try:
-            from ..utils.playwright_helpers import _pw_server_url
+            from ..utils.playwright_helpers import _pw_server_url, get_playwright_health
             from ..web_extraction_service import ENABLE_TIER_B
 
             configured = _pw_server_url() is not None
+            health = get_playwright_health()
+            hw_available = health.get("available")
+            cons_fails = health.get("consecutive_failures", 0)
+            degraded = health.get("degraded", False)
             service = getattr(self.bot, "web_extraction_service", None)
             tier_b_available = (
                 getattr(service, "_tier_b_available", ENABLE_TIER_B)
@@ -356,9 +367,20 @@ class OperatorCommands(commands.Cog):
                 else ENABLE_TIER_B
             )
             enabled = toggles.get("web_extraction", True)
+            health_parts: list[str] = []
+            if hw_available is True:
+                health_parts.append("health=ok")
+            elif hw_available is False:
+                label = "degraded" if degraded else "health=fail"
+                health_parts.append(label)
+            else:
+                health_parts.append("health=unchecked")
+            if cons_fails:
+                health_parts.append(f"fails={cons_fails}")
+            health_str = "; ".join(health_parts) if health_parts else "health=n/a"
             return (
                 f"{feature_status_emoji(enabled)} {feature_status_label(enabled)}; "
-                f"configured={configured}; available={tier_b_available}"
+                f"configured={configured}; available={tier_b_available}; {health_str}"
             )
         except Exception:
             return "unknown"
@@ -377,6 +399,150 @@ class OperatorCommands(commands.Cog):
             queue_sizes.append(size)
         backpressure = "yes" if queued_messages or active_tasks else "no"
         return f"active_tasks={active_tasks}; user_queues={len(user_queues)}; queued={queued_messages}; backpressure={backpressure}"
+
+
+    def _get_storage_status(self) -> str:
+        """Return a concise storage summary: mem_db, chroma, and cache sizes."""
+        # Try diagnostics module first
+        try:
+            from ..maintenance.diagnostics import get_storage_status as _gs
+            result = _gs()
+            if isinstance(result, str) and len(result) < 300:
+                return result
+        except Exception:
+            pass
+
+        parts: list[str] = []
+        # In-memory DB size (if present on bot)
+        mem_db = getattr(self.bot, "_mem_db", None) or getattr(self.bot, "mem_db", None)
+        if mem_db is not None:
+            try:
+                get_status_fn = getattr(mem_db, "get_status", None)
+                if callable(get_status_fn):
+                    status = get_status_fn() or {}
+                    if isinstance(status, dict):
+                        wal_mb = status.get("wal_size_mb", status.get("wal_mb"))
+                        if wal_mb is not None:
+                            parts.append(f"wal={wal_mb}MB")
+                        db_mb = status.get("db_size_mb", status.get("db_mb"))
+                        if db_mb is not None:
+                            parts.append(f"mem_db={db_mb}MB")
+                        entry_count = status.get("entry_count", status.get("entries"))
+                        if entry_count is not None:
+                            parts.append(f"entries={entry_count}")
+                if isinstance(mem_db, dict) and not parts:
+                    parts.append(f"mem_db={len(mem_db)} entries")
+            except Exception:
+                parts.append("mem_db=?")
+        else:
+            parts.append("mem_db=none")
+
+        # Chroma persistent store size
+        memory_svc = getattr(self.bot, "_memory_service", None) or getattr(
+            self.bot, "memory_service", None
+        )
+        store = getattr(memory_svc, "_persistent_store", None) if memory_svc else None
+        if store is not None:
+            try:
+                persist_dir = getattr(store, "_persist_directory", None) or getattr(
+                    store, "persist_directory", None
+                )
+                if persist_dir:
+                    import pathlib
+
+                    total = 0
+                    for p in pathlib.Path(persist_dir).rglob("*"):
+                        try:
+                            if p.is_file():
+                                total += p.stat().st_size
+                        except Exception:
+                            pass
+                    parts.append(f"chroma={total / (1024*1024):.1f}MB")
+                else:
+                    parts.append("chroma=in-memory")
+            except Exception:
+                parts.append("chroma=?")
+        else:
+            parts.append("chroma=none")
+
+        # TTS / general cache
+        tts_mgr = getattr(self.bot, "tts_manager", None)
+        if tts_mgr is not None:
+            try:
+                cache_stats = tts_mgr.get_cache_stats() or {}
+                cache_mb = cache_stats.get("size_mb")
+                cache_files = cache_stats.get("files")
+                if cache_mb is not None:
+                    parts.append(f"cache={cache_mb}MB/{cache_files}f")
+                else:
+                    parts.append("cache=empty")
+            except Exception:
+                parts.append("cache=?")
+
+        result = " | ".join(parts)
+        if len(result) > 300:
+            result = result[:297] + "..."
+        return result
+
+    def _get_embedding_model_status(self) -> str:
+        """Check if the RAG embedding model is cached locally."""
+        import os
+
+        model_name = os.getenv(
+            "RAG_EMBEDDING_MODEL_NAME", "sentence-transformers/all-MiniLM-L6-v2"
+        ).strip()
+        model_type = os.getenv("RAG_EMBEDDING_MODEL_TYPE", "sentence-transformers").strip()
+
+        if model_type != "sentence-transformers":
+            return f"{model_name} (type={model_type}; cache_check=skipped)"
+
+        # Check common huggingface cache locations
+        cache_dirs: list[str] = []
+        hf_home = os.getenv("HF_HOME", "")
+        if hf_home:
+            cache_dirs.append(hf_home)
+        xf_cache = os.getenv("XDG_CACHE_HOME", "")
+        if xf_cache:
+            cache_dirs.append(os.path.join(xf_cache, "huggingface", "hub"))
+        import pathlib
+
+        cache_dirs.append(str(pathlib.Path.home() / ".cache" / "huggingface" / "hub"))
+
+        # Also check bot-level data dirs
+        for candidate in ["data/rag", "data/embeddings"]:
+            cache_dirs.append(candidate)
+
+        cached = False
+        found_at = None
+        for cdir in cache_dirs:
+            try:
+                safe_name = model_name.replace("/", "--")
+                model_path = os.path.join(cdir, f"models--{safe_name}")
+                alt_path = os.path.join(cdir, safe_name)
+                if os.path.exists(model_path) or os.path.exists(alt_path):
+                    cached = True
+                    found_at = cdir
+                    break
+                for root, dirs, files in os.walk(cdir):
+                    if safe_name.lower() in root.lower() or model_name.lower() in root.lower():
+                        if any(
+                            f in files
+                            for f in ("model.safetensors", "pytorch_model.bin", "config.json")
+                        ):
+                            cached = True
+                            found_at = root
+                            break
+                    if cached:
+                        break
+                if cached:
+                    break
+            except Exception:
+                continue
+
+        if cached:
+            loc = found_at or "unknown"
+            return f"{model_name} | cached ({loc})"
+        return f"{model_name} | not cached (first query will download)"
 
 
 async def setup(bot) -> None:
