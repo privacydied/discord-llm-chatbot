@@ -54,7 +54,7 @@ class SearchCommands(commands.Cog):
         logger.info("[Search] ✔ SearchCommands initialized")
 
     @commands.command(name="search", help="Search the web. Usage: !search <query>")
-    @commands.cooldown(5, 120, type=commands.BucketType.user)
+    @commands.cooldown(5, 60, type=commands.BucketType.user)
     async def search(self, ctx: commands.Context, *, query: Optional[str] = None):  # type: ignore[override]
         """Execute a web search using the configured provider and return top results."""
         try:

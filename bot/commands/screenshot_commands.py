@@ -47,7 +47,7 @@ class ScreenshotCommands(commands.Cog):
         return m.group(0) if m else None
 
     @commands.command(name="ss", aliases=["screenshot"])
-    @commands.cooldown(3, 300, type=commands.BucketType.user)
+    @commands.cooldown(3, 60, type=commands.BucketType.user)
     async def screenshot_cmd(
         self, ctx: commands.Context, url: Optional[str] = None
     ) -> None:

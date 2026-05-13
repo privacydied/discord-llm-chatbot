@@ -81,7 +81,7 @@ class TTSCommands(commands.Cog):
             await ctx.send("❌ Invalid setting. Use 'on' or 'off'.")
 
     @commands.command(name="speak")
-    @commands.cooldown(1, 120, type=commands.BucketType.user)
+    @commands.cooldown(3, 60, type=commands.BucketType.user)
     async def speak(
         self, ctx: commands.Context, *, text: Optional[str] = None, pcm16: bool = False
     ):
@@ -131,7 +131,7 @@ class TTSCommands(commands.Cog):
             await ctx.send("🗯️ The next response will be spoken.")
 
     @commands.command(name="say")
-    @commands.cooldown(1, 120, type=commands.BucketType.user)
+    @commands.cooldown(3, 60, type=commands.BucketType.user)
     async def say(
         self,
         ctx: commands.Context,

@@ -397,7 +397,7 @@ class RAGCommands(commands.Cog):
             await ctx.send(f"❌ **Error:** {safe_embed_value(str(e))}")
 
     @rag_group.command(name="clear")
-    @commands.cooldown(1, 300, type=commands.BucketType.user)
+    @commands.cooldown(1, 120, type=commands.BucketType.user)
     @is_admin_user()
     async def rag_clear(self, ctx, *source_patterns: str):
         """Clear documents from the RAG database.
@@ -506,7 +506,7 @@ class RAGCommands(commands.Cog):
             await ctx.send(f"❌ **Error:** {safe_embed_value(str(e))}")
 
     @commands.command(name="index")
-    @commands.cooldown(1, 120, type=commands.BucketType.user)
+    @commands.cooldown(2, 120, type=commands.BucketType.user)
     async def index_message_content(self, ctx, *, text: str = None):
         """Index the current message text, URLs, and supported attachments into RAG."""
         try:

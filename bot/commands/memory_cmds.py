@@ -174,6 +174,7 @@ class MemoryCommands(commands.Cog):
         await self._delete_curated_memory(ctx, query=query)
 
     @commands.command(name="memory-wipe")
+    @commands.cooldown(1, 120, commands.BucketType.user)
     async def memory_wipe_direct(self, ctx):
         await self._wipe_curated_memories(ctx)
 
@@ -453,7 +454,7 @@ class MemoryCommands(commands.Cog):
             log_command(ctx, "memory_list_error", {"error": str(e)}, success=False)
 
     @memory_group.command(name="clear")
-    @commands.cooldown(1, 30, commands.BucketType.user)
+    @commands.cooldown(1, 120, commands.BucketType.user)
     async def clear_memories_cmd(self, ctx):
         """Clear all your memories after confirmation."""
         try:
