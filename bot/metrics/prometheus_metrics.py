@@ -1,4 +1,13 @@
-"""Prometheus-based metrics implementation for bot monitoring and observability."""
+"""Prometheus-based metrics implementation for bot monitoring and observability.
+
+Label-value policy [Phase 19 - Metrics reductions]:
+- Label values are sanitized/capped to prevent high-cardinality label explosions.
+- Values resembling URLs, IPs, or user/guild IDs are rejected with a warning.
+- Max label value length: 128 chars (truncated with ellipsis).
+- Expensive scrape values (e.g., REGISTRY scrape) are not cached by default
+  since prometheus_client's start_http_server delegates to its lightweight
+  MetricsHandler which only iterates in-memory state.
+"""
 
 from typing import Dict, Optional
 import re
@@ -15,6 +24,58 @@ except ImportError as e:
     ) from e
 
 logger = logging.getLogger(__name__)
+
+# --- Constants [CMV] ---
+# Max length for label values to prevent cardinality explosion
+_MAX_LABEL_VALUE_LEN = 128
+
+# Patterns that indicate high-cardinality label values (should never be metric labels)
+_HIGH_CARDINALITY_PATTERNS = re.compile(
+    r"|".join([
+        r"https?://",           # URLs
+        r"\d{7,}",              # Long digit sequences (Discord snowflake IDs)
+        r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}",  # IPv4 addresses
+    ])
+)
+
+
+def sanitize_label_value(value: str) -> str:
+    """Sanitize a label value to keep it low-cardinality.
+
+    - Truncates values exceeding _MAX_LABEL_VALUE_LEN.
+    - Rejects values matching high-cardinality patterns (URLs, IPs, IDs)
+      by returning a placeholder.
+    - Caller receives a safe string that won't blow up cardinality.
+
+    [RAT: PA, CMV] - Performance Awareness, Constants over Magic Values
+    """
+    # Reject high-cardinality patterns entirely
+    if _HIGH_CARDINALITY_PATTERNS.search(value):
+        return "__sanitized__"
+
+    # Truncate overly long values
+    if len(value) > _MAX_LABEL_VALUE_LEN:
+        return value[:_MAX_LABEL_VALUE_LEN - 4] + "..."
+
+    return value
+
+
+def sanitize_labels(labels: Optional[Dict[str, str]]) -> Optional[Dict[str, str]]:
+    """Sanitize all label values in a dict.
+
+    Returns None if labels is None/empty to avoid creating unnecessary dicts.
+    Returns a new dict with sanitized values.
+    """
+    if not labels:
+        return None
+
+    sanitized: Dict[str, str] = {}
+    for key, value in labels.items():
+        if isinstance(value, str):
+            sanitized[key] = sanitize_label_value(value)
+        else:
+            sanitized[key] = str(value)
+    return sanitized if sanitized else None
 
 
 class PrometheusMetrics:
@@ -135,10 +196,11 @@ class PrometheusMetrics:
         Args:
             name: Counter name
             value: Increment value
-            labels: Label values
+            labels: Label values (sanitized to prevent high-cardinality)
         """
         norm_name = self._normalize_metric_name(name)
-        norm_labels = labels or None
+        # Sanitize labels to prevent cardinality explosion
+        norm_labels = sanitize_labels(labels)
         if norm_name in self._counters:
             if norm_labels:
                 self._counters[norm_name].labels(**norm_labels).inc(value)
@@ -154,10 +216,10 @@ class PrometheusMetrics:
 
         Args:
             name: Counter name
-            labels: Label values
+            labels: Label values (sanitized to prevent high-cardinality)
             value: Increment value
         """
-        self.inc(name, value, labels)
+        self.inc(name, value, sanitize_labels(labels))
 
     def observe(
         self, name: str, value: float, labels: Optional[Dict[str, str]] = None
@@ -167,10 +229,11 @@ class PrometheusMetrics:
         Args:
             name: Histogram name
             value: Value to observe
-            labels: Label values
+            labels: Label values (sanitized to prevent high-cardinality)
         """
         norm_name = self._normalize_metric_name(name)
-        norm_labels = labels or None
+        # Sanitize labels to prevent cardinality explosion
+        norm_labels = sanitize_labels(labels)
         if norm_name in self._histograms:
             if norm_labels:
                 self._histograms[norm_name].labels(**norm_labels).observe(value)
@@ -187,10 +250,11 @@ class PrometheusMetrics:
         Args:
             name: Gauge name
             value: Gauge value
-            labels: Label values
+            labels: Label values (sanitized to prevent high-cardinality)
         """
         norm_name = self._normalize_metric_name(name)
-        norm_labels = labels or None
+        # Sanitize labels to prevent cardinality explosion
+        norm_labels = sanitize_labels(labels)
         if norm_name in self._gauges:
             if norm_labels:
                 self._gauges[norm_name].labels(**norm_labels).set(value)
@@ -205,7 +269,7 @@ class PrometheusMetrics:
 
         Args:
             name: Histogram name for timing
-            labels: Label values
+            labels: Label values (sanitized to prevent high-cardinality)
         """
         if name not in self._histograms:
             logger.warning(f"⚠️  Timer histogram '{name}' not defined")
@@ -217,6 +281,7 @@ class PrometheusMetrics:
             yield
         finally:
             duration = time.time() - start_time
+            # observe() will sanitize labels itself, no need to pre-sanitize
             self.observe(name, duration, labels)
 
     def get_registry(self):
