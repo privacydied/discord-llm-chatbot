@@ -110,7 +110,7 @@ class MemoryCommands(commands.Cog):
             await ctx.send("❌ Usage: `!memory-del <id or search>`")
             return
 
-        if await delete_memory(query):
+        if await delete_memory(query, owner_id=str(ctx.author.id)):
             await ctx.send(f"✅ Deleted memory `{query[:8]}`.")
             return
 
@@ -120,7 +120,7 @@ class MemoryCommands(commands.Cog):
             return
 
         target = matches[0]
-        if await delete_memory(target.memory_id):
+        if await delete_memory(target.memory_id, owner_id=str(ctx.author.id)):
             await ctx.send(
                 f"✅ Deleted memory `{target.memory_id[:8]}`: {target.summary}"
             )
